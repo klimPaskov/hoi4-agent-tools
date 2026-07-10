@@ -90,7 +90,7 @@
     "@modelcontextprotocol/inspector": "0.22.0",
     "@types/express": "5.0.6",
     "@types/fontkit": "2.0.9",
-    "@types/node": "22.20.1",
+    "@types/node": "26.1.1",
     "@types/pixelmatch": "5.2.6",
     "@vitest/coverage-v8": "4.1.10",
     "ajv": "8.20.0",
