@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.cache/
+.tmp/
+*.tgz
+*.log
+.env
+.env.*
+!.env.example
+.hoi4-agent/
+artifacts/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

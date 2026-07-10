@@ -1,0 +1,13 @@
+# Architecture decisions
+
+1. [Runtime and language](0001-runtime-and-language.md)
+2. [Lossless source model](0002-lossless-source-model.md)
+3. [Image and font codecs](0003-image-and-font-codecs.md)
+4. [Focus layout](0004-focus-layout.md)
+5. [Offline rendering](0005-offline-rendering.md)
+6. [MCP SDK and protocol](0006-mcp-sdk-and-protocol.md)
+7. [Storage and transactions](0007-storage-and-transactions.md)
+8. [Test strategy](0008-test-strategy.md)
+9. [Packaging and Registry](0009-packaging-and-registry.md)
+10. [Unsupported/refusal policy](0010-unsupported-and-refusal-policy.md)
+11. [HTTP security](0011-http-security.md)
