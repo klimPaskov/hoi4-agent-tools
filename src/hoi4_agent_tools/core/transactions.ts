@@ -19,7 +19,7 @@ import { ServiceError } from './result.js';
 import { decodeSource } from './source/encoding.js';
 import type { ResolvedWorkspace, WorkspaceResolver } from './workspace.js';
 import type { RootKind } from './workspace.js';
-import { containedGeneratedPath, isWithin } from './workspace.js';
+import { containedGeneratedPath, isWithin, resolvedWorkspaceIdentity } from './workspace.js';
 import {
   TRANSACTION_MAX_ARTIFACTS,
   TRANSACTION_MAX_DIAGNOSTICS,
@@ -320,7 +320,7 @@ function manifestAuthenticationPayload(manifest: TransactionManifest): unknown {
 }
 
 export function transactionRootFingerprint(workspace: ResolvedWorkspace): string {
-  return workspace.workspaceIdentity;
+  return resolvedWorkspaceIdentity(workspace);
 }
 
 export class TransactionManager {
