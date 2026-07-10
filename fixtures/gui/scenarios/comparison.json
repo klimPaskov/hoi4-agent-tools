@@ -1,0 +1,128 @@
+{
+  "id": "synthetic-acceptance-comparison",
+  "description": "Comparison baseline with distinct animation, meters, and states",
+  "resolution": {
+    "width": 960,
+    "height": 540
+  },
+  "uiScale": 1,
+  "state": "normal",
+  "language": "l_english",
+  "animationTimeSeconds": 0,
+  "country": {
+    "GetName": "Fixture Republic"
+  },
+  "variables": {
+    "readiness_display": 31
+  },
+  "flags": {
+    "synthetic_modal_open": true
+  },
+  "lists": {
+    "objective_list": [
+      {
+        "id": 1,
+        "label": "Objective 01",
+        "value": 10,
+        "progress": 9
+      },
+      {
+        "id": 2,
+        "label": "Objective 02",
+        "value": 20,
+        "progress": 18
+      },
+      {
+        "id": 3,
+        "label": "Objective 03",
+        "value": 30,
+        "progress": 27
+      },
+      {
+        "id": 4,
+        "label": "Objective 04",
+        "value": 40,
+        "progress": 36
+      },
+      {
+        "id": 5,
+        "label": "Objective 05",
+        "value": 50,
+        "progress": 45
+      },
+      {
+        "id": 6,
+        "label": "Objective 06",
+        "value": 60,
+        "progress": 54
+      },
+      {
+        "id": 7,
+        "label": "Objective 07",
+        "value": 70,
+        "progress": 63
+      },
+      {
+        "id": 8,
+        "label": "Objective 08",
+        "value": 80,
+        "progress": 72
+      },
+      {
+        "id": 9,
+        "label": "Objective 09",
+        "value": 90,
+        "progress": 81
+      },
+      {
+        "id": 10,
+        "label": "Objective 10",
+        "value": 100,
+        "progress": 90
+      }
+    ]
+  },
+  "localisation": {},
+  "scriptedGui": {
+    "synthetic_gui_controller.visible": true,
+    "readiness_meter": 31,
+    "risk_meter": 81,
+    "card_meter_01": 25,
+    "card_meter_02": 30,
+    "card_meter_03": 35,
+    "card_meter_04": 40,
+    "card_meter_05": 45,
+    "card_meter_06": 50,
+    "card_meter_07": 55,
+    "card_meter_08": 60,
+    "card_meter_09": 65,
+    "card_meter_10": 70,
+    "card_meter_11": 75,
+    "card_meter_12": 80
+  },
+  "visibility": {
+    "synthetic_gui_controller": true,
+    "confirmation_modal": true
+  },
+  "elementStates": {
+    "tab_overview": "normal",
+    "tab_operations": "hover",
+    "tab_intelligence": "locked",
+    "tab_diplomacy": "disabled",
+    "readiness_meter": "active",
+    "risk_meter": "warning",
+    "card_action_01": "completed",
+    "modal_confirm": "disabled",
+    "tab_logistics": "selected"
+  },
+  "selectedFrames": {},
+  "scrollOffsets": {
+    "objective_list": 0
+  },
+  "guiCosts": {
+    "modal_confirm": 12
+  },
+  "scriptCosts": {
+    "modal_confirm": 12
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "variants": [
+    {
+      "id": "conflicting-tabs",
+      "scenario": {
+        "elementStates": {
+          "tab_logistics": "selected"
+        }
+      },
+      "expectedDiagnosticCodes": ["GUI_TAB_STATE_CONFLICT"]
+    },
+    {
+      "id": "visible-element-overlap",
+      "sourceReplacements": [
+        {
+          "relativePath": "interface/synthetic_acceptance.gui",
+          "search": "name = \"tab_operations\"\n\t\t\tposition = { x = 220 y = 145 }",
+          "replacement": "name = \"tab_operations\"\n\t\t\tposition = { x = 40 y = 145 }"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_VISIBLE_OVERLAP", "GUI_CONFLICTING_CLICK_REGIONS"]
+    },
+    {
+      "id": "cost-mismatch",
+      "sourceReplacements": [
+        {
+          "relativePath": "common/scripted_guis/synthetic_acceptance.txt",
+          "search": "modal_confirm_click = { add_political_power = -12 }",
+          "replacement": "modal_confirm_click = { add_political_power = -19 }"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_COST_MISMATCH"]
+    },
+    {
+      "id": "cut-scroll-rows",
+      "scenario": {
+        "listRowCount": 14
+      },
+      "expectedDiagnosticCodes": ["GUI_SCROLL_ROW_CUTOFF", "GUI_ACCIDENTAL_CLIPPING"]
+    },
+    {
+      "id": "invalid-animation-sheet",
+      "sourceReplacements": [
+        {
+          "relativePath": "interface/synthetic_acceptance.gfx",
+          "search": "noOfFrames = 6",
+          "replacement": "noOfFrames = 5"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_ANIMATION_SHEET_DIMENSION_INVALID"]
+    },
+    {
+      "id": "animation-source-hash-and-sheet-mismatch",
+      "sourceReplacements": [
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "synthetic_pulse/pulse-frame-5.png",
+          "replacement": "synthetic_pulse/pulse-frame-0.png"
+        }
+      ],
+      "expectedDiagnosticCodes": [
+        "GUI_ANIMATION_SOURCE_HASH_MISMATCH",
+        "GUI_ANIMATION_SOURCE_SHEET_CELL_MISMATCH"
+      ]
+    },
+    {
+      "id": "animation-source-duplicate-frame",
+      "sourceReplacements": [
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "synthetic_pulse/pulse-frame-5.png",
+          "replacement": "synthetic_pulse/pulse-frame-4.png"
+        },
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "1d27301ad9f83a7eae79ed7f790c0f10cfbbfcef3630e07586f9c48de0c719de",
+          "replacement": "87f77e98e229a58cefa9df33c51fe218d5cda919029d4a9a1994f85e118e746c"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_ANIMATION_SOURCE_FRAMES_NOT_DISTINCT"]
+    },
+    {
+      "id": "animation-source-anchor-drift",
+      "sourceReplacements": [
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "\"sha256\": \"1d27301ad9f83a7eae79ed7f790c0f10cfbbfcef3630e07586f9c48de0c719de\",\n      \"anchor\": { \"x\": 24, \"y\": 24 }",
+          "replacement": "\"sha256\": \"1d27301ad9f83a7eae79ed7f790c0f10cfbbfcef3630e07586f9c48de0c719de\",\n      \"anchor\": { \"x\": 23, \"y\": 24 }"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_ANIMATION_SOURCE_ANCHOR_DRIFT"]
+    },
+    {
+      "id": "animation-source-fallback-content",
+      "sourceReplacements": [
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "\"frameIndex\": 0",
+          "replacement": "\"frameIndex\": 1"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_ANIMATION_SOURCE_STATIC_FALLBACK_CONTENT_MISMATCH"]
+    },
+    {
+      "id": "invalid-animation-source-manifest",
+      "sourceReplacements": [
+        {
+          "relativePath": "hoi4_agent/animation_sources/synthetic_pulse/manifest.json",
+          "search": "\"projectOwned\": true",
+          "replacement": "\"projectOwned\": false"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_ANIMATION_SOURCE_MANIFEST_INVALID"]
+    },
+    {
+      "id": "missing-animation-fallback",
+      "sourceReplacements": [
+        {
+          "relativePath": "interface/synthetic_acceptance.gfx",
+          "search": "static_fallback = \"GFX_syn_pulse_static\"",
+          "replacement": "static_fallback = \"GFX_syn_pulse_missing\""
+        },
+        {
+          "relativePath": "interface/synthetic_acceptance.gfx",
+          "search": "name = \"GFX_syn_pulse_static\"",
+          "replacement": "name = \"GFX_syn_pulse_static_broken\""
+        }
+      ],
+      "expectedDiagnosticCodes": [
+        "GUI_ANIMATION_STATIC_FALLBACK_MISSING",
+        "GUI_ANIMATION_STATIC_FALLBACK_INVALID"
+      ]
+    },
+    {
+      "id": "missing-button-binding",
+      "sourceReplacements": [
+        {
+          "relativePath": "common/scripted_guis/synthetic_acceptance.txt",
+          "search": "modal_confirm_click = { add_political_power = -12 }",
+          "replacement": "orphan_confirm_click = { add_political_power = -12 }"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_BUTTON_EFFECT_MISSING"]
+    },
+    {
+      "id": "invalid-script-context",
+      "sourceReplacements": [
+        {
+          "relativePath": "common/scripted_guis/synthetic_acceptance.txt",
+          "search": "context_type = country",
+          "replacement": "context_type = synthetic_void"
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_SCRIPTED_CONTEXT_INVALID"]
+    },
+    {
+      "id": "missing-modal-sprite",
+      "sourceReplacements": [
+        {
+          "relativePath": "interface/synthetic_acceptance.gui",
+          "search": "spriteType = \"GFX_syn_button\"\n\t\t\t\tbuttonText = \"SYN_CONFIRM\"",
+          "replacement": "spriteType = \"GFX_syn_missing_button\"\n\t\t\t\tbuttonText = \"SYN_CONFIRM\""
+        }
+      ],
+      "expectedDiagnosticCodes": ["GUI_MISSING_SPRITE"]
+    }
+  ]
+}

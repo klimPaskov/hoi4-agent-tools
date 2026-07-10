@@ -1,0 +1,37 @@
+{
+  "features": {
+    "automatic": 220,
+    "continuous": 2,
+    "continuousPalettes": 1,
+    "convergence": 11,
+    "crisis": 25,
+    "decisionCategoryLinks": 1,
+    "decisionLinks": 40,
+    "eventLinks": 30,
+    "formableLinks": 1,
+    "helperLinks": 1,
+    "hidden": 25,
+    "mutualExclusionReferences": 20,
+    "pinned": 35,
+    "relative": 21,
+    "sharedSupport": 25
+  },
+  "focusCount": 255,
+  "invalidVariants": [
+    { "expectedDiagnosticCodes": ["FOCUS_PREREQUISITE_CYCLE"], "id": "prerequisite_cycle" },
+    { "expectedDiagnosticCodes": ["FOCUS_PREREQUISITE_MISSING"], "id": "missing_prerequisite" },
+    { "expectedDiagnosticCodes": ["FOCUS_DUPLICATE_COORDINATE"], "id": "duplicate_coordinate" },
+    {
+      "expectedDiagnosticCodes": ["FOCUS_GAMEPLAY_REFERENCE_MISSING"],
+      "id": "missing_event_reference"
+    },
+    { "expectedDiagnosticCodes": ["FOCUS_HIDDEN_WITHOUT_REVEAL"], "id": "hidden_without_reveal" }
+  ],
+  "layoutHash": "009f7ee7b8baa3cd44f0b34593f2a88ed20dd22928f2dbed864cbcf9877ec1bd",
+  "layoutOptions": { "laneSpacing": 2, "nodeSpacing": 1 },
+  "planSha256": "d93f6fe9ffcc9896236aa196ca10f1e1df730813ddc9e41901ab0896e45655ce",
+  "routeFamilyCount": 10,
+  "schemaVersion": 1,
+  "sourceSha256": "687553895cdd67afbd98179f9f0c115af4978f6a7a63834e5fcb63c5ad949990",
+  "treeId": "synthetic_acceptance_tree"
+}

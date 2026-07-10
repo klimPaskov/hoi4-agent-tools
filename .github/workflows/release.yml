@@ -1,0 +1,646 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  CONTAINER_ARTIFACT_DIR: container-release
+  CONTAINER_ARTIFACT_NAME: container-release
+  CONTAINER_IMAGE: ghcr.io/klimpaskov/hoi4-agent-tools
+  RELEASE_ARTIFACT_DIR: release
+  RELEASE_ARTIFACT_NAME: npm-release
+  RELEASE_NODE_VERSION: 24.18.0
+  RELEASE_NPM_VERSION: 11.15.0
+
+jobs:
+  validate_pack:
+    if: github.repository == 'klimPaskov/hoi4-agent-tools'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+      - name: Require the pinned release toolchain
+        shell: bash
+        run: |
+          test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
+          test "$(npm --version)" = "$RELEASE_NPM_VERSION"
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+      - name: Cryptographically verify dependency registry signatures and provenance
+        run: npm audit signatures --ignore-scripts
+      - name: Verify tag, main ancestry, remote peel, and canonical release identity
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "$GITHUB_REF_NAME" = "v${VERSION}"
+          node -e "if (!/^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$/.test(process.argv[1])) process.exit(1)" "$VERSION"
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          DIRECT_COUNT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")"
+          PEELED_COUNT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")"
+          test "$DIRECT_COUNT" -eq 1
+          test "$PEELED_COUNT" -le 1
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then
+            REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          fi
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+          test "$GITHUB_REPOSITORY" = 'klimPaskov/hoi4-agent-tools'
+          EXPECTED_MCP_NAME="io.github.${GITHUB_REPOSITORY_OWNER}/hoi4-agent-tools"
+          test "$(node -p "require('./package.json').version")" = "$VERSION"
+          test "$(node -p "require('./server.json').version")" = "$VERSION"
+          test "$(node -p "require('./package.json').mcpName")" = "$EXPECTED_MCP_NAME"
+          test "$(node -p "require('./server.json').name")" = "$EXPECTED_MCP_NAME"
+      - name: Require a monotonic npm latest release
+        run: npm run release:order:verify
+      - name: Require a public source repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VISIBILITY="$(gh api \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}" \
+            --jq '.visibility')"
+          test "$VISIBILITY" = 'public'
+      - name: Verify public bootstrap through anonymous OCI access and exact runtime platforms
+        shell: bash
+        run: |
+          ANONYMOUS_DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "$ANONYMOUS_DOCKER_CONFIG"' EXIT
+          IMAGE='ghcr.io/klimpaskov/hoi4-agent-tools:bootstrap'
+          MANIFEST="$(DOCKER_CONFIG="$ANONYMOUS_DOCKER_CONFIG" \
+            docker buildx imagetools inspect --raw "$IMAGE")"
+          RUNTIME_PLATFORMS="$(jq --raw-output \
+            '[.manifests[] | select(.platform.os == "linux") | "\(.platform.os)/\(.platform.architecture)"] | unique | sort | join(",")' \
+            <<<"$MANIFEST")"
+          test "$RUNTIME_PLATFORMS" = 'linux/amd64,linux/arm64'
+      - run: npm run check
+      - run: npm run test:coverage
+      - run: npm run inspector
+      - name: Require generated release inputs to remain clean
+        run: git diff --exit-code
+      - name: Pack and bind the single canonical npm release artifact
+        shell: bash
+        run: |
+          mkdir -p "$RELEASE_ARTIFACT_DIR"
+          npm pack --ignore-scripts --json \
+            --pack-destination "$RELEASE_ARTIFACT_DIR" \
+            > "$RELEASE_ARTIFACT_DIR/npm-pack.json"
+          npm run release:artifact:verify
+          TARBALL="$(jq --exit-status --raw-output 'if length == 1 then .[0].filename else error("expected one tarball") end' "$RELEASE_ARTIFACT_DIR/npm-pack.json")"
+          test "$(basename "$TARBALL")" = "$TARBALL"
+          SHA256="$(sha256sum "$RELEASE_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')"
+          SHA512="$(sha512sum "$RELEASE_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')"
+          jq --null-input --sort-keys \
+            --arg package "$(jq --raw-output '.name' package.json)" \
+            --arg version "$(jq --raw-output '.version' package.json)" \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg commit "$GITHUB_SHA" \
+            --arg filename "$TARBALL" \
+            --arg sha256 "$SHA256" \
+            --arg sha512 "$SHA512" \
+            '{package: $package, version: $version, tag: $tag, commit: $commit, filename: $filename, sha256: $sha256, sha512: $sha512, npmAuditSignatures: true}' \
+            > "$RELEASE_ARTIFACT_DIR/release-identity.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
+          path: |
+            ${{ env.RELEASE_ARTIFACT_DIR }}/hoi4-agent-tools-*.tgz
+            ${{ env.RELEASE_ARTIFACT_DIR }}/npm-pack.json
+            ${{ env.RELEASE_ARTIFACT_DIR }}/release-identity.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish_npm:
+    needs: validate_pack
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail closed if the legacy release token exists
+        shell: bash
+        env:
+          FORBIDDEN_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          FORBIDDEN_NPM_BOOTSTRAP_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          if test -n "$FORBIDDEN_NPM_TOKEN" || test -n "$FORBIDDEN_NPM_BOOTSTRAP_TOKEN"; then
+            echo '::error::All npm bearer-token secrets must be deleted before the OIDC release workflow can run.'
+            exit 1
+          fi
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+      - name: Require the npm bundled with the pinned Node distribution
+        shell: bash
+        run: |
+          test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
+          test "$(npm --version)" = "$RELEASE_NPM_VERSION"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
+          path: ${{ env.RELEASE_ARTIFACT_DIR }}
+      - name: Validate the exact downloaded artifact without dependency installation
+        shell: bash
+        run: |
+          IDENTITY="$RELEASE_ARTIFACT_DIR/release-identity.json"
+          VERSION="${GITHUB_REF_NAME#v}"
+          jq --exit-status \
+            --arg sha "$GITHUB_SHA" \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg version "$VERSION" \
+            '.package == "hoi4-agent-tools" and .version == $version and .commit == $sha and .tag == $tag and .npmAuditSignatures == true' \
+            "$IDENTITY" > /dev/null
+          TARBALL="$(jq --exit-status --raw-output '.filename' "$IDENTITY")"
+          test "$(basename "$TARBALL")" = "$TARBALL"
+          test -f "$RELEASE_ARTIFACT_DIR/$TARBALL"
+          test "$(sha256sum "$RELEASE_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha256' "$IDENTITY")"
+          test "$(sha512sum "$RELEASE_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha512' "$IDENTITY")"
+      - name: Recheck monotonic npm state without installing dependencies
+        id: npm_state
+        shell: bash
+        run: |
+          NAME="$(jq --raw-output '.package' "$RELEASE_ARTIFACT_DIR/release-identity.json")"
+          VERSION="$(jq --raw-output '.version' "$RELEASE_ARTIFACT_DIR/release-identity.json")"
+          METADATA="$(mktemp)"
+          trap 'rm -f "$METADATA"' EXIT
+          STATUS="$(curl --silent --show-error --location \
+            --output "$METADATA" --write-out '%{http_code}' \
+            --header 'Accept: application/json' --header 'Cache-Control: no-cache' \
+            "https://registry.npmjs.org/${NAME}")"
+          test "$STATUS" = '200'
+          STATE="$(node - "$METADATA" "$NAME" "$VERSION" <<'NODE'
+          const fs = require('node:fs');
+          const [file, name, version] = process.argv.slice(2);
+          if (!/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(version)) process.exit(1);
+          const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (metadata.name !== name || typeof metadata.versions !== 'object' || metadata.versions === null) process.exit(1);
+          const latest = metadata['dist-tags']?.latest;
+          if (Object.hasOwn(metadata.versions, version)) {
+            if (latest !== version) process.exit(1);
+            process.stdout.write('rerun');
+          } else {
+            if (latest !== undefined) {
+              const parse = (value) => value.split('.').map((part) => BigInt(part));
+              if (!/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(latest)) process.exit(1);
+              const left = parse(version);
+              const right = parse(latest);
+              if (!(left[0] > right[0] || (left[0] === right[0] && (left[1] > right[1] || (left[1] === right[1] && left[2] > right[2]))))) process.exit(1);
+            }
+            process.stdout.write('advance');
+          }
+          NODE
+          )"
+          echo "state=$STATE" >> "$GITHUB_OUTPUT"
+      - name: Publish the exact workflow tarball with OIDC provenance
+        if: steps.npm_state.outputs.state == 'advance'
+        shell: bash
+        run: |
+          IDENTITY="$RELEASE_ARTIFACT_DIR/release-identity.json"
+          TARBALL="$(jq --raw-output '.filename' "$IDENTITY")"
+          EXPECTED_COMMIT="$(jq --raw-output '.commit' "$IDENTITY")"
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          DIRECT_COUNT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")"
+          PEELED_COUNT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")"
+          test "$DIRECT_COUNT" -eq 1
+          test "$PEELED_COUNT" -le 1
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then
+            REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          fi
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+          test "$REMOTE_COMMIT" = "$EXPECTED_COMMIT"
+          npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL" \
+            --access public --ignore-scripts --provenance
+
+  verify_npm:
+    needs: publish_npm
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+      - run: npm audit signatures --ignore-scripts
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
+          path: ${{ env.RELEASE_ARTIFACT_DIR }}
+      - name: Cryptographically verify npm integrity, OIDC identity, and Sigstore inclusion
+        run: npm run publication:verify
+        env:
+          PUBLICATION_VERIFY_SCOPE: npm
+          PUBLICATION_VERIFY_ATTEMPTS: 12
+          PUBLICATION_VERIFY_DELAY_MS: 5000
+
+  publish_image:
+    needs: verify_npm
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+      - run: npm ci --ignore-scripts
+      - run: npm audit signatures --ignore-scripts
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Capture and validate the immutable exact-tag and release state
+        id: image_state
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          TOKEN="$(curl --fail --silent --show-error --location \
+            'https://ghcr.io/token?service=ghcr.io&scope=repository%3Aklimpaskov%2Fhoi4-agent-tools%3Apull' \
+            | jq --exit-status --raw-output '.token')"
+          HEADERS="$(mktemp)"
+          RELEASE_JSON="$(mktemp)"
+          trap 'rm -f "$HEADERS" "$RELEASE_JSON"' EXIT
+          STATUS="$(curl --silent --show-error --dump-header "$HEADERS" --output /dev/null \
+            --write-out '%{http_code}' --header "Authorization: Bearer ${TOKEN}" \
+            --header 'Accept: application/vnd.oci.image.index.v1+json' \
+            "https://ghcr.io/v2/klimpaskov/hoi4-agent-tools/manifests/${VERSION}")"
+          RELEASE_STATUS="$(curl --silent --show-error --location --output "$RELEASE_JSON" \
+            --write-out '%{http_code}' --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2026-03-10' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}")"
+          DIGEST=''
+          if test "$STATUS" = '200'; then
+            DIGEST="$(awk 'tolower($1) == "docker-content-digest:" { gsub("\\r", "", $2); print $2 }' "$HEADERS")"
+            test "$(grep -c -i '^docker-content-digest:' "$HEADERS")" -eq 1
+            test "$(grep -o '^sha256:[0-9a-f]\{64\}$' <<<"$DIGEST")" = "$DIGEST"
+          fi
+          case "${STATUS}:${RELEASE_STATUS}" in
+            200:200)
+              ASSET_URL="$(jq --exit-status --raw-output \
+                '[.assets[] | select(.name == "container-image.json")] | if length == 1 then .[0].browser_download_url else error("missing immutable image record") end' \
+                "$RELEASE_JSON")"
+              EXISTING_MANIFEST="$(mktemp)"
+              trap 'rm -f "$HEADERS" "$RELEASE_JSON" "$EXISTING_MANIFEST"' EXIT
+              curl --fail --silent --show-error --location --output "$EXISTING_MANIFEST" "$ASSET_URL"
+              jq --exit-status \
+                --arg digest "$DIGEST" --arg image "${CONTAINER_IMAGE}:${VERSION}" \
+                --arg commit "$GITHUB_SHA" --arg source "https://github.com/${GITHUB_REPOSITORY}" \
+                '.schemaVersion == 1 and .digest == $digest and .image == $image and .sourceCommit == $commit and .sourceRepository == $source and .platforms == ["linux/amd64", "linux/arm64"]' \
+                "$EXISTING_MANIFEST" > /dev/null
+              echo 'state=complete' >> "$GITHUB_OUTPUT"
+              echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+              ;;
+            200:404)
+              # A previous run may have created the immutable image tag and then
+              # stopped before the GitHub release. Reconstruct its release record;
+              # the anonymous provenance/SBOM verifier below must prove the exact
+              # source tag and GITHUB_SHA before this recovery can continue.
+              echo 'state=recover' >> "$GITHUB_OUTPUT"
+              echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+              ;;
+            404:404)
+              echo 'state=publish' >> "$GITHUB_OUTPUT"
+              ;;
+            404:200)
+              echo '::error::The GitHub release exists without its required immutable image tag.'
+              exit 1
+              ;;
+            *)
+              echo "::error::Unsafe release state: anonymous GHCR=${STATUS}, GitHub release=${RELEASE_STATUS}."
+              exit 1
+              ;;
+          esac
+      - name: Re-query the peeled release tag immediately before the digest push
+        if: steps.image_state.outputs.state == 'publish'
+        shell: bash
+        run: |
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        if: steps.image_state.outputs.state == 'publish'
+        id: build
+        with:
+          outputs: type=image,name=${{ env.CONTAINER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image_state.outputs.version }}
+          platforms: linux/amd64,linux/arm64
+          provenance: mode=max,version=v0.2
+          sbom: true
+      - name: Refuse replacement and create the exact SemVer tag once
+        if: steps.image_state.outputs.state == 'publish'
+        shell: bash
+        env:
+          CANDIDATE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          test "$(grep -o '^sha256:[0-9a-f]\{64\}$' <<<"$CANDIDATE_DIGEST")" = "$CANDIDATE_DIGEST"
+          VERSION="${GITHUB_REF_NAME#v}"
+          TOKEN="$(curl --fail --silent --show-error --location \
+            'https://ghcr.io/token?service=ghcr.io&scope=repository%3Aklimpaskov%2Fhoi4-agent-tools%3Apull' \
+            | jq --exit-status --raw-output '.token')"
+          HEADERS="$(mktemp)"
+          trap 'rm -f "$HEADERS"' EXIT
+          STATUS="$(curl --silent --show-error --dump-header "$HEADERS" --output /dev/null \
+            --write-out '%{http_code}' --header "Authorization: Bearer ${TOKEN}" \
+            --header 'Accept: application/vnd.oci.image.index.v1+json' \
+            "https://ghcr.io/v2/klimpaskov/hoi4-agent-tools/manifests/${VERSION}")"
+          if test "$STATUS" = '200'; then
+            OBSERVED="$(awk 'tolower($1) == "docker-content-digest:" { gsub("\\r", "", $2); print $2 }' "$HEADERS")"
+            test "$OBSERVED" = "$CANDIDATE_DIGEST"
+          else
+            test "$STATUS" = '404'
+            REMOTE_TAGS="$(git ls-remote --exit-code \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+            REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+            if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+            test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+            test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+            test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+            docker buildx imagetools create \
+              --tag "${CONTAINER_IMAGE}:${VERSION}" \
+              "${CONTAINER_IMAGE}@${CANDIDATE_DIGEST}"
+          fi
+      - name: Record the immutable container digest
+        shell: bash
+        env:
+          BUILT_DIGEST: ${{ steps.build.outputs.digest }}
+          EXISTING_DIGEST: ${{ steps.image_state.outputs.digest }}
+        run: |
+          case "${{ steps.image_state.outputs.state }}" in
+            publish) DIGEST="$BUILT_DIGEST" ;;
+            complete|recover) DIGEST="$EXISTING_DIGEST" ;;
+            *)
+              echo '::error::The image state output is missing or invalid.'
+              exit 1
+              ;;
+          esac
+          test "$(grep -o '^sha256:[0-9a-f]\{64\}$' <<<"$DIGEST")" = "$DIGEST"
+          mkdir -p "$CONTAINER_ARTIFACT_DIR"
+          jq --null-input --sort-keys \
+            --arg image "${CONTAINER_IMAGE}:${GITHUB_REF_NAME#v}" \
+            --arg digest "$DIGEST" \
+            --arg commit "$GITHUB_SHA" \
+            --arg source "https://github.com/${GITHUB_REPOSITORY}" \
+            '{schemaVersion: 1, image: $image, digest: $digest, sourceCommit: $commit, sourceRepository: $source, platforms: ["linux/amd64", "linux/arm64"]}' \
+            > "$CONTAINER_ARTIFACT_DIR/container-image.json"
+      - name: Verify anonymous digest, SBOM and provenance subjects, and source SHA
+        run: npm run publication:verify
+        env:
+          PUBLICATION_VERIFY_SCOPE: ghcr
+          PUBLICATION_VERIFY_ATTEMPTS: 12
+          PUBLICATION_VERIFY_DELAY_MS: 5000
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ${{ env.CONTAINER_ARTIFACT_NAME }}
+          path: ${{ env.CONTAINER_ARTIFACT_DIR }}/container-image.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  github_release:
+    needs: publish_image
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
+          path: ${{ env.RELEASE_ARTIFACT_DIR }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.CONTAINER_ARTIFACT_NAME }}
+          path: ${{ env.CONTAINER_ARTIFACT_DIR }}
+      - name: Refuse to mutate an existing GitHub release
+        id: release_state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STATUS="$(curl --silent --show-error --location --output /tmp/release.json \
+            --write-out '%{http_code}' --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2026-03-10' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}")"
+          case "$STATUS" in
+            200) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
+            404) echo 'exists=false' >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+      - name: Re-query the peeled release tag immediately before GitHub release creation
+        if: steps.release_state.outputs.exists != 'true'
+        shell: bash
+        run: |
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+      - uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
+        if: steps.release_state.outputs.exists != 'true'
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            ${{ env.RELEASE_ARTIFACT_DIR }}/hoi4-agent-tools-*.tgz
+            ${{ env.RELEASE_ARTIFACT_DIR }}/npm-pack.json
+            ${{ env.RELEASE_ARTIFACT_DIR }}/release-identity.json
+            ${{ env.CONTAINER_ARTIFACT_DIR }}/container-image.json
+      - name: Verify immutable release state and exact asset bytes before downstream publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_JSON="$(mktemp)"
+          trap 'rm -f "$RELEASE_JSON" /tmp/public-release-asset' EXIT
+          for ATTEMPT in $(seq 1 12); do
+            STATUS="$(curl --silent --show-error --location --output "$RELEASE_JSON" \
+              --write-out '%{http_code}' --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}")"
+            if test "$STATUS" = '200' && jq --exit-status \
+              '.draft == false and .prerelease == false and .immutable == true' \
+              "$RELEASE_JSON" > /dev/null; then
+              break
+            fi
+            test "$ATTEMPT" -lt 12
+            sleep 5
+          done
+          verify_asset() {
+            local file="$1"
+            local name
+            local asset
+            local url
+            name="$(basename "$file")"
+            asset="$(jq --exit-status --compact-output --arg name "$name" \
+              '[.assets[] | select(.name == $name)] | if length == 1 then .[0] else error("missing unique asset") end' \
+              "$RELEASE_JSON")"
+            test "$(jq --raw-output '.size' <<<"$asset")" -eq "$(stat --format='%s' "$file")"
+            test "$(jq --raw-output '.digest' <<<"$asset")" = "sha256:$(sha256sum "$file" | awk '{print $1}')"
+            url="$(jq --exit-status --raw-output '.browser_download_url' <<<"$asset")"
+            curl --fail --silent --show-error --location --output /tmp/public-release-asset "$url"
+            cmp --silent "$file" /tmp/public-release-asset
+          }
+          verify_asset "$RELEASE_ARTIFACT_DIR/$(jq --raw-output '.filename' "$RELEASE_ARTIFACT_DIR/release-identity.json")"
+          verify_asset "$RELEASE_ARTIFACT_DIR/npm-pack.json"
+          verify_asset "$RELEASE_ARTIFACT_DIR/release-identity.json"
+          verify_asset "$CONTAINER_ARTIFACT_DIR/container-image.json"
+
+  publish_registry:
+    needs: github_release
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Install and validate the pinned MCP Registry publisher
+        shell: bash
+        run: |
+          PUBLISHER_VERSION="1.7.9"
+          RELEASE_BASE="https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output mcp-publisher.tar.gz \
+            "${RELEASE_BASE}/mcp-publisher_linux_amd64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output registry-checksums.txt \
+            "${RELEASE_BASE}/registry_${PUBLISHER_VERSION}_checksums.txt"
+          echo "e84c4329507f205b111b35a9b30f330945ef5c329648a65260f15d69fcdbf94d  registry-checksums.txt" | sha256sum --check --strict
+          grep '  mcp-publisher_linux_amd64.tar.gz$' registry-checksums.txt > publisher-checksum.txt
+          sed -i 's#mcp-publisher_linux_amd64.tar.gz#mcp-publisher.tar.gz#' publisher-checksum.txt
+          sha256sum --check --strict publisher-checksum.txt
+          tar --extract --gzip --file mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher --version
+          ./mcp-publisher validate
+      - name: Publish immutable MCP Registry metadata
+        shell: bash
+        run: |
+          SERVER_NAME="$(jq --raw-output '.name' server.json)"
+          VERSION="$(jq --raw-output '.version' server.json)"
+          ENCODED_NAME="$(jq --null-input --raw-output --arg value "$SERVER_NAME" '$value | @uri')"
+          REGISTRY_RESPONSE="$(mktemp)"
+          trap 'rm -f "$REGISTRY_RESPONSE"' EXIT
+          REGISTRY_STATUS="$(curl --silent --show-error --location \
+            --output "$REGISTRY_RESPONSE" --write-out '%{http_code}' \
+            --header 'Accept: application/json' \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/${ENCODED_NAME}/versions/${VERSION}")"
+          case "$REGISTRY_STATUS" in
+            200)
+              echo "${SERVER_NAME}@${VERSION} already exists; final verification will require exact metadata."
+              ;;
+            404)
+              ./mcp-publisher login github-oidc
+              REMOTE_TAGS="$(git ls-remote --exit-code \
+                "https://github.com/${GITHUB_REPOSITORY}.git" \
+                "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+              REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+              if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+              test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+              test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+              test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+              ./mcp-publisher publish
+              ;;
+            *)
+              echo "::error::MCP Registry returned unexpected status ${REGISTRY_STATUS}."
+              exit 1
+              ;;
+          esac
+
+  verify_public:
+    needs: publish_registry
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+      - name: Require the pinned public-verification toolchain
+        shell: bash
+        run: |
+          test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
+          test "$(npm --version)" = "$RELEASE_NPM_VERSION"
+      - run: npm ci --ignore-scripts
+      - run: npm audit signatures --ignore-scripts
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.RELEASE_ARTIFACT_NAME }}
+          path: ${{ env.RELEASE_ARTIFACT_DIR }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.CONTAINER_ARTIFACT_NAME }}
+          path: ${{ env.CONTAINER_ARTIFACT_DIR }}
+      - name: Re-query the peeled release tag immediately before final public verification
+        shell: bash
+        run: |
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+          test "$(awk -v ref="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+      - name: Verify exact npm, GitHub, GHCR, and MCP Registry publication
+        run: npm run publication:verify
+        env:
+          PUBLICATION_VERIFY_SCOPE: all
+          PUBLICATION_VERIFY_ATTEMPTS: 12
+          PUBLICATION_VERIFY_DELAY_MS: 5000
+      - name: Verify clean installation and registry signatures
+        run: npm run publication:install

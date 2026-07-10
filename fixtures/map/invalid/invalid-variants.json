@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "variants": [
+    {
+      "expectedDiagnosticCodes": ["MAP_BITMAP_COLOR_UNREGISTERED"],
+      "id": "unknown_bitmap_color",
+      "patches": [
+        {
+          "color": { "b": 255, "g": 0, "r": 255 },
+          "kind": "bitmap_rectangle",
+          "maxX": 70,
+          "maxY": 10,
+          "minX": 70,
+          "minY": 10,
+          "relativePath": "map/provinces.bmp",
+          "root": "game"
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": ["MAP_DEFINITION_UNUSED"],
+      "id": "orphan_definition",
+      "patches": [
+        {
+          "from": { "b": 0, "g": 180, "r": 0 },
+          "kind": "bitmap_replace_color",
+          "relativePath": "map/provinces.bmp",
+          "root": "game",
+          "to": { "b": 0, "g": 0, "r": 10 }
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": ["MAP_PROVINCE_DISCONNECTED_REVIEW"],
+      "id": "disconnected_component",
+      "patches": [
+        {
+          "color": { "b": 0, "g": 0, "r": 10 },
+          "kind": "bitmap_rectangle",
+          "maxX": 82,
+          "maxY": 22,
+          "minX": 80,
+          "minY": 20,
+          "relativePath": "map/provinces.bmp",
+          "root": "game"
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": ["MAP_PROVINCE_HOLE_REVIEW"],
+      "id": "enclosed_province_hole",
+      "patches": [
+        {
+          "color": { "b": 200, "g": 0, "r": 0 },
+          "kind": "bitmap_rectangle",
+          "maxX": 90,
+          "maxY": 90,
+          "minX": 80,
+          "minY": 80,
+          "relativePath": "map/provinces.bmp",
+          "root": "game"
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": ["MAP_PROVINCE_THIN_CORRIDOR_REVIEW"],
+      "id": "thin_corridor",
+      "patches": [
+        {
+          "color": { "b": 0, "g": 0, "r": 10 },
+          "kind": "bitmap_rectangle",
+          "maxX": 95,
+          "maxY": 100,
+          "minX": 64,
+          "minY": 100,
+          "relativePath": "map/provinces.bmp",
+          "root": "game"
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": [
+        "MAP_STATE_PROVINCE_INVALID",
+        "MAP_REGION_PROVINCE_INVALID",
+        "MAP_ADJACENCY_PROVINCE_INVALID",
+        "MAP_SUPPLY_NODE_INVALID",
+        "MAP_RAILWAY_PROVINCE_INVALID",
+        "MAP_BUILDING_POSITION_INVALID",
+        "MAP_UNIT_POSITION_INVALID",
+        "MAP_WEATHER_REGION_INVALID",
+        "MAP_ENTITY_LOCATOR_DUPLICATE"
+      ],
+      "id": "invalid_references",
+      "patches": [
+        {
+          "kind": "text_replace",
+          "relativePath": "history/states/1-GAME.txt",
+          "replacement": "\tprovinces = { 1 4 999 }",
+          "root": "game",
+          "search": "\tprovinces = { 1 4 }"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/strategicregions/1-REGION.txt",
+          "replacement": "\tprovinces = { 1 2 3 4 999 }",
+          "root": "dependency",
+          "search": "\tprovinces = { 1 2 3 4 }"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/adjacencies.csv",
+          "replacement": "1;999;impassable;-1;-1;-1;-1;-1;;invalid endpoint\n-1;-1;;-1;-1;-1;-1;-1;;\n",
+          "root": "game",
+          "search": "-1;-1;;-1;-1;-1;-1;-1;;\n"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/supply_nodes.txt",
+          "replacement": "1 999\n",
+          "root": "game",
+          "search": "1 1\n"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/railways.txt",
+          "replacement": "1 3 1 4 999\n",
+          "root": "game",
+          "search": "1 3 1 4 2\n"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/buildings.txt",
+          "replacement": "999;bunker;10;0;245;0;0",
+          "root": "game",
+          "search": "1;bunker;10;0;245;0;0"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/unitstacks.txt",
+          "replacement": "999;0;10;0;245;0;0",
+          "root": "game",
+          "search": "1;0;10;0;245;0;0"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/weatherpositions.txt",
+          "replacement": "999;10;0;245;small",
+          "root": "game",
+          "search": "1;10;0;245;small"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "gfx/entities/synthetic_map.asset",
+          "replacement": "entity = { name = synthetic_map_entity locator = { name = synthetic_map_locator position = { 1 2 3 } } }\nentity = { name = synthetic_map_entity locator = { name = synthetic_map_locator position = { 1 2 3 } } }\n",
+          "root": "mod",
+          "search": "entity = { name = synthetic_map_entity locator = { name = synthetic_map_locator position = { 1 2 3 } } }\n"
+        }
+      ]
+    },
+    {
+      "expectedDiagnosticCodes": [
+        "MAP_STATE_LOCALISATION_MISSING",
+        "MAP_COASTAL_MISMATCH",
+        "MAP_PORT_ADJACENT_SEA_INVALID",
+        "MAP_PORT_NOT_COASTAL",
+        "MAP_PORT_LOCATOR_MISSING"
+      ],
+      "id": "localisation_coast_and_ports",
+      "patches": [
+        {
+          "kind": "text_replace",
+          "relativePath": "localisation/english/game_map_l_english.yml",
+          "replacement": "",
+          "root": "game",
+          "search": "STATE_1: \"Game State\"\n"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/definition.csv",
+          "replacement": "1;10;0;0;land;false;plains;1",
+          "root": "dependency",
+          "search": "1;10;0;0;land;true;plains;1"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "map/buildings.txt",
+          "replacement": "1;naval_base_spawn;10;0;245;0;4",
+          "root": "game",
+          "search": "1;naval_base_spawn;10;0;245;0;3"
+        },
+        {
+          "kind": "text_replace",
+          "relativePath": "history/states/1-GAME.txt",
+          "replacement": "\t\t\t4 = { bunker = 1 naval_base = 1 }",
+          "root": "game",
+          "search": "\t\t\t4 = { bunker = 1 }"
+        }
+      ]
+    }
+  ]
+}

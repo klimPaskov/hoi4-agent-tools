@@ -1,0 +1,31 @@
+continuous_focus_palette = {
+	id = synthetic_acceptance_continuous
+	country = {
+		factor = 0
+		modifier = { add = 100 original_tag = SYN }
+	}
+	reset_on_civilwar = no
+	position = { x = 14 y = 32 }
+
+	focus = {
+		id = synthetic_continuous_industry
+		icon = GFX_synthetic_focus
+		available = { original_tag = SYN }
+		enable = { always = yes }
+		modifier = { production_factory_max_efficiency_factor = 0.05 }
+		ai_will_do = { factor = 1 }
+		supports_ai_strategy = ai_focus_military_advancements
+		daily_cost = 1
+	}
+
+	focus = {
+		id = synthetic_continuous_readiness
+		icon = GFX_synthetic_focus
+		available = { original_tag = SYN }
+		enable = { always = yes }
+		modifier = { army_org_factor = 0.05 }
+		ai_will_do = { factor = 1 }
+		supports_ai_strategy = ai_focus_military_advancements
+		daily_cost = 1
+	}
+}

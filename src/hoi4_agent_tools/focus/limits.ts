@@ -1,0 +1,8 @@
+export const FOCUS_GRAPH_MAX_DEPTH = 256;
+export const FOCUS_GRAPH_MAX_NODES = 10_000;
+export const FOCUS_GRAPH_MAX_EDGES = 50_000;
+export const FOCUS_PAIR_COMPARISON_MAX = 2_000_000;
+export const FOCUS_LAYOUT_WORK_MAX = 500_000;
+export const FOCUS_LINT_WORK_MAX = 2_000_000;
+export const FOCUS_DIAGNOSTIC_MAX = 2_000;
+export const FOCUS_CYCLE_SAMPLE_MAX = 128;

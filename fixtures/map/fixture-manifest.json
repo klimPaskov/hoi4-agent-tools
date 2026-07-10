@@ -1,0 +1,182 @@
+{
+  "activeSourceRoots": {
+    "defaultMap": "mod",
+    "definitions": "dependency",
+    "provinceBitmap": "game"
+  },
+  "definitionIds": [0, 1, 2, 3, 4],
+  "dimensions": { "bitsPerPixel": 24, "dibSize": 124, "height": 256, "width": 256 },
+  "invalidVariants": [
+    { "expectedDiagnosticCodes": ["MAP_BITMAP_COLOR_UNREGISTERED"], "id": "unknown_bitmap_color" },
+    { "expectedDiagnosticCodes": ["MAP_DEFINITION_UNUSED"], "id": "orphan_definition" },
+    {
+      "expectedDiagnosticCodes": ["MAP_PROVINCE_DISCONNECTED_REVIEW"],
+      "id": "disconnected_component"
+    },
+    { "expectedDiagnosticCodes": ["MAP_PROVINCE_HOLE_REVIEW"], "id": "enclosed_province_hole" },
+    { "expectedDiagnosticCodes": ["MAP_PROVINCE_THIN_CORRIDOR_REVIEW"], "id": "thin_corridor" },
+    {
+      "expectedDiagnosticCodes": [
+        "MAP_STATE_PROVINCE_INVALID",
+        "MAP_REGION_PROVINCE_INVALID",
+        "MAP_ADJACENCY_PROVINCE_INVALID",
+        "MAP_SUPPLY_NODE_INVALID",
+        "MAP_RAILWAY_PROVINCE_INVALID",
+        "MAP_BUILDING_POSITION_INVALID",
+        "MAP_UNIT_POSITION_INVALID",
+        "MAP_WEATHER_REGION_INVALID",
+        "MAP_ENTITY_LOCATOR_DUPLICATE"
+      ],
+      "id": "invalid_references"
+    },
+    {
+      "expectedDiagnosticCodes": [
+        "MAP_STATE_LOCALISATION_MISSING",
+        "MAP_COASTAL_MISMATCH",
+        "MAP_PORT_ADJACENT_SEA_INVALID",
+        "MAP_PORT_NOT_COASTAL",
+        "MAP_PORT_LOCATOR_MISSING"
+      ],
+      "id": "localisation_coast_and_ports"
+    }
+  ],
+  "provinceBitmapSha256": "d4fbe104275af1ee2305e24b0d74410c1883918f7590f1dd07ef77265034d425",
+  "provincePixelCounts": { "1": 16384, "2": 16384, "3": 16384, "4": 16384 },
+  "schemaVersion": 1,
+  "sourceFiles": [
+    {
+      "relativePath": "history/states/2-DEPENDENCY.txt",
+      "root": "dependency",
+      "sha256": "91801bcd869f7d1513ac3b8f7d448a0dae06c10427693c4f6e209f7d564c01a1",
+      "size": 141
+    },
+    {
+      "relativePath": "localisation/english/dependency_map_l_english.yml",
+      "root": "dependency",
+      "sha256": "3002b26561a206c1bb11068ce9cefc941ccc8a02e4cfde1ba0f2c663fb9f339c",
+      "size": 77
+    },
+    {
+      "relativePath": "map/default.map",
+      "root": "dependency",
+      "sha256": "ab3b878bacb85aa09be2ee86d079a176d3bd2fda5fb9551b3ae3c4d7a93c11cf",
+      "size": 112
+    },
+    {
+      "relativePath": "map/definition.csv",
+      "root": "dependency",
+      "sha256": "1a354fd99f28885e4dcec1bca3962028712c681092ff1d097ab93e3d74db395c",
+      "size": 142
+    },
+    {
+      "relativePath": "map/strategicregions/1-REGION.txt",
+      "root": "dependency",
+      "sha256": "42e4496fb3086f0f730ced3e19c7c8fb65e8b28f53f8720293c23c826237f30e",
+      "size": 84
+    },
+    {
+      "relativePath": "history/states/1-GAME.txt",
+      "root": "game",
+      "sha256": "a15599a6057ea825c42123c92bbfbc5cbce6f79ff328f74acdedd399863026c4",
+      "size": 445
+    },
+    {
+      "relativePath": "localisation/english/game_map_l_english.yml",
+      "root": "game",
+      "sha256": "a9fee690749bf26d4a3cf7b7ecf3c2b2d60d092481a89c844cc2df60cc4986b0",
+      "size": 36
+    },
+    {
+      "relativePath": "map/adjacencies.csv",
+      "root": "game",
+      "sha256": "cfbe4ab4264214e6135f5cc2d91a9083725abba64544c5799539a37c3cce0ed1",
+      "size": 103
+    },
+    {
+      "relativePath": "map/buildings.txt",
+      "root": "game",
+      "sha256": "c4ca1afbf81ebc69538253f8b74e8899cdfbc002541ddb13bb059744864264b8",
+      "size": 99
+    },
+    {
+      "relativePath": "map/default.map",
+      "root": "game",
+      "sha256": "dbfb9454bb06a107096c7f481fe3445fdad801e815df033a0ee72df25a6dd0ea",
+      "size": 123
+    },
+    {
+      "relativePath": "map/game_definitions.csv",
+      "root": "game",
+      "sha256": "f6bb4a4240c77b7dad81c83351bf7163d7b880655f55d6011fc94709f6fe3a48",
+      "size": 32
+    },
+    {
+      "relativePath": "map/provinces.bmp",
+      "root": "game",
+      "sha256": "d4fbe104275af1ee2305e24b0d74410c1883918f7590f1dd07ef77265034d425",
+      "size": 196746
+    },
+    {
+      "relativePath": "map/railways.txt",
+      "root": "game",
+      "sha256": "0e2d68e8ce50ca4423200fbd3256a4ef39f955cd329dbf9fc3f2562248a40206",
+      "size": 10
+    },
+    {
+      "relativePath": "map/supply_nodes.txt",
+      "root": "game",
+      "sha256": "3f11ad6bbc7ecca0b2416b713dee77f1a635c00aaeaa946e14cde1c2bfae56d5",
+      "size": 4
+    },
+    {
+      "relativePath": "map/unitstacks.txt",
+      "root": "game",
+      "sha256": "b8334383e0a2eb5272f33afcf4cec7210ac11051f7dbb645ca8d110eaf58aea5",
+      "size": 17
+    },
+    {
+      "relativePath": "map/weatherpositions.txt",
+      "root": "game",
+      "sha256": "352933ea5f395de53b627e5a236f3590ab634bccedefc3e28f3a89021d3bff53",
+      "size": 33
+    },
+    {
+      "relativePath": "gfx/entities/synthetic_map.asset",
+      "root": "mod",
+      "sha256": "f1da3b7003c44a6286a6d4cb7da036df918f3479dfcef3d9963549e9eef10323",
+      "size": 105
+    },
+    {
+      "relativePath": "history/states/5-MOD.txt",
+      "root": "mod",
+      "sha256": "055d9d037b14bc63b02e90390094b8705b0430500f24217767e32dfe1f9f5ce1",
+      "size": 200
+    },
+    {
+      "relativePath": "localisation/english/mod_map_l_english.yml",
+      "root": "mod",
+      "sha256": "5cfa9b61eab55d18739234b10aeeddd38d18e87dc661624096af0c241566322d",
+      "size": 120
+    },
+    {
+      "relativePath": "map/default.map",
+      "root": "mod",
+      "sha256": "c56bd4cdd143c6ed62f24b90b7ff411fb8068e8abd661f1bb4af062992e6c131",
+      "size": 192
+    },
+    {
+      "relativePath": "map/strategicregions/2-REGION.txt",
+      "root": "mod",
+      "sha256": "cd581438cafc06df3a0b60d6ecae705a6ec979971bec5a37ea87a66cfb18adba",
+      "size": 76
+    },
+    {
+      "relativePath": "notes/untouched.txt",
+      "root": "mod",
+      "sha256": "0c3d208dda15a6ee3979d490575932e43eda762c405c8124254a427fd7c5b1cc",
+      "size": 80
+    }
+  ],
+  "stateIds": [1, 2, 5],
+  "strategicRegionIds": [1, 2]
+}

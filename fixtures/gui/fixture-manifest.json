@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "windowName": "synthetic_gui_window",
+  "minimumVisibleElements": 150,
+  "expected": {
+    "sourceElements": 158,
+    "visibleElements": 203,
+    "tabs": 5,
+    "cards": 12,
+    "listRows": 10,
+    "animationFrames": 6,
+    "states": 14,
+    "resolutions": 3
+  },
+  "goldens": {
+    "guiSourceSha256": "0949098bd6b77fdf379ed9ea87e2de8fcaafd02787f947b9426f0aadf0004c36",
+    "animationStripPngSha256": "28b451b70f307084d6cb038884408991423eff6cf58a5aacafcd9ba24ccf6fa8",
+    "fontAtlasPngSha256": "a4319cfd9578f9293ee04cbde3b734d7a5e1d840e518f75e6edd3900df03f05a",
+    "fullSvgSha256": "d1a67313449ae8d820ae1199217378120d37d36873d8ca528dadb289ce5a423b",
+    "fullPngSha256": "0dcf6e77d66bfe6d7b73f026fd5eca0e703117ad32110c2ec06909a30844b21e",
+    "layoutJsonSha256": "ae446116ffb455983aaac8f486b7950f0137aa471403eb49745081795878250b"
+  },
+  "defectVariantIds": [
+    "conflicting-tabs",
+    "visible-element-overlap",
+    "cost-mismatch",
+    "cut-scroll-rows",
+    "invalid-animation-sheet",
+    "animation-source-hash-and-sheet-mismatch",
+    "animation-source-duplicate-frame",
+    "animation-source-anchor-drift",
+    "animation-source-fallback-content",
+    "invalid-animation-source-manifest",
+    "missing-animation-fallback",
+    "missing-button-binding",
+    "invalid-script-context",
+    "missing-modal-sprite"
+  ]
+}

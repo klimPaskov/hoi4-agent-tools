@@ -24,7 +24,9 @@ Under `<HOI4_ROOT>/documentation`:
 
 - `script_concept_documentation.md`: collections, contextual/formatted localisation, math expressions, and script constants.
 - `triggers_documentation.md`: current trigger names/scopes, state/province/focus/railway references, and dynamic argument support.
-- `effects_documentation.md`: current effect names/scopes and state/province/focus references.
+- `effects_documentation.md`: current effect names/scopes and state/province/focus references. Its
+  553 documented effect identifiers form the bundled Focus Workbench native-effect catalog;
+  headings only were retained, not proprietary documentation prose.
 - `loc_objects_documentation.md` and `loc_formatter_documentation.md`: current province/state objects and font/layout-relevant localisation behavior.
 - `dynamic_variables_documentation.md`, `modifiers_documentation.md`, collection input/operator documentation: tokens and raw constructs the CST must retain.
 
@@ -37,7 +39,8 @@ Official documentation found outside that folder was also consulted, especially:
 
 Representative read-only examples:
 
-- `common/national_focus/generic.txt` and large country trees for repeated prerequisite blocks, OR groups, exclusions, relative positions, raw rewards, continuous focuses, and route AI.
+- `common/national_focus/generic.txt` and large country trees for repeated prerequisite blocks, OR groups, exclusions, relative positions, raw rewards, `continuous_focus_position`, route AI, uppercase `IF`/`ELSE_IF`/`ELSE`, weighted `random_list`, direct scripted-effect calls, scoped country/state/character blocks, decision/formable links, and cosmetic-tag effects.
+- `common/continuous_focus/generic.txt` for the current `continuous_focus_palette = { ... focus = { ... } }` model, palette selection/position, and continuous-focus availability, enablement, modifier, cost, and AI fields.
 - `interface/achievements.gui`, `interface/abilitylist.gui`, scripted-GUI interface files, and paired `.gfx` files for nested containers, lists, click regions, sprite states, and ordering.
 - `common/scripted_guis/*.txt` for decision-category contexts, button effect/trigger naming, AI, dynamic lists, and parent/window connections.
 - `interface/*.gfx`, `gfx/interface/**`, and `gfx/fonts/**` for horizontal frame strips, fractional animation rates, DDS/TGA/PNG textures, vector and bitmap font sources.
@@ -58,4 +61,8 @@ Representative read-only examples:
 - Only land provinces are required to belong to a state; sea provinces and some lakes legitimately do not. Every nonzero province is expected in one strategic region.
 - State source does not expose a generic `capital` field. Map operations distinguish a country's capital-state reference from a state's chief victory-point/capital province and never guess between them.
 - Clausewitz quoted strings decode only escaped quote and backslash. Literal newlines are invalid. Token expressions such as `variable?100` are scalar atoms; only `?=` is an operator.
+- Focus completion rewards call scripted effects directly by identifier; there is no native
+  `scripted_effect = helper_id` wrapper. `set_cosmetic_tag` targets cosmetic identity and is not a
+  formable-decision reference. Formables are decision targets, and
+  `unlock_decision_category_tooltip` targets a top-level decision category.
 - File replacement, duplicate keys, and ordering are database-specific. Same relative indexed filename shadows lower load-order sources; directly indexed files in a `replace_path` directory are removed without treating every descendant asset as removed.

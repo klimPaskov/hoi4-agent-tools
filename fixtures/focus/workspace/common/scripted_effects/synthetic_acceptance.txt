@@ -1,0 +1,4 @@
+# Project-owned synthetic scripted effects for Focus Tree Workbench acceptance tests.
+synthetic_focus_reward_effect = {
+	add_stability = 0.01
+}

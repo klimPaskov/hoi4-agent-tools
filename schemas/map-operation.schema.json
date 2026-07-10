@@ -1,0 +1,2274 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/map-operation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "move_state_provinces"
+        },
+        "sourceStateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "targetStateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "provinceIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "distribution": {
+          "type": "object",
+          "properties": {
+            "stateValues": {
+              "type": "string",
+              "const": "retain-in-current-states"
+            },
+            "ownership": {
+              "type": "string",
+              "const": "retain-in-current-states"
+            },
+            "provinceBuildings": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "victoryPoints": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "ports": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "supplyNodes": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "railways": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "positions": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "strategicRegion": {
+              "type": "string",
+              "enum": [
+                "require-same",
+                "move-to-target-region"
+              ]
+            }
+          },
+          "required": [
+            "stateValues",
+            "ownership",
+            "provinceBuildings",
+            "victoryPoints",
+            "ports",
+            "supplyNodes",
+            "railways",
+            "positions",
+            "strategicRegion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceStateId",
+        "targetStateId",
+        "provinceIds",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "add_normal_adjacency"
+        },
+        "from": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "to": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "pixelTransfers": {
+          "minItems": 1,
+          "maxItems": 1000000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          },
+          "description": "Exact raster recolors; at most 1000000 transfers per operation"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "from",
+        "to",
+        "pixelTransfers"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_normal_adjacency"
+        },
+        "from": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "to": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "pixelTransfers": {
+          "minItems": 1,
+          "maxItems": 1000000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema5"
+          },
+          "description": "Exact raster recolors; at most 1000000 transfers per operation"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "from",
+        "to",
+        "pixelTransfers"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "update_state"
+        },
+        "stateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "changes": {
+          "type": "object",
+          "properties": {
+            "capital": {
+              "description": "Assertion for the capital derived from the exact victoryPoints payload; never writes a state capital field",
+              "$ref": "#/$defs/__schema6"
+            },
+            "manpower": {
+              "type": "number",
+              "minimum": 0
+            },
+            "category": {
+              "type": "string",
+              "minLength": 1
+            },
+            "resources": {
+              "$ref": "#/$defs/__schema7"
+            },
+            "stateBuildings": {
+              "$ref": "#/$defs/__schema7"
+            },
+            "owner": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "controller": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cores": {
+              "maxItems": 10000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema8"
+              }
+            },
+            "claims": {
+              "maxItems": 10000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema9"
+              }
+            },
+            "victoryPoints": {
+              "maxItems": 100000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema10"
+              }
+            },
+            "provinceBuildings": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^\\d+$"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema7"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "stateId",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "split_state"
+        },
+        "sourceStateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "stateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "provinceIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "fileName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "localisation": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema12"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceStateId",
+        "provinceIds",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "create_state"
+        },
+        "sourceStateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "stateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "provinceIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "fileName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "localisation": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema12"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceStateId",
+        "provinceIds",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "merge_states"
+        },
+        "sourceStateIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema2"
+          }
+        },
+        "targetStateId": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "distribution": {
+          "type": "object",
+          "properties": {
+            "stateValues": {
+              "type": "string",
+              "const": "sum-into-target"
+            },
+            "ownership": {
+              "type": "string",
+              "const": "retain-target"
+            },
+            "controller": {
+              "type": "string",
+              "const": "retain-target"
+            },
+            "cores": {
+              "type": "string",
+              "const": "union"
+            },
+            "claims": {
+              "type": "string",
+              "const": "union"
+            },
+            "victoryPoints": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "provinceBuildings": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "ports": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "supplyNodes": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "railways": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "positions": {
+              "type": "string",
+              "const": "follow-province"
+            },
+            "strategicRegion": {
+              "type": "string",
+              "const": "require-same"
+            }
+          },
+          "required": [
+            "stateValues",
+            "ownership",
+            "controller",
+            "cores",
+            "claims",
+            "victoryPoints",
+            "provinceBuildings",
+            "ports",
+            "supplyNodes",
+            "railways",
+            "positions",
+            "strategicRegion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceStateIds",
+        "targetStateId",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "split_province"
+        },
+        "sourceProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "geometry": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "definition": {
+          "$ref": "#/$defs/__schema28"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema32"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceProvinceId",
+        "geometry",
+        "definition",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "create_province"
+        },
+        "sourceProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "geometry": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "definition": {
+          "$ref": "#/$defs/__schema28"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema32"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceProvinceId",
+        "geometry",
+        "definition",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "merge_provinces"
+        },
+        "sourceProvinceIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "targetProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema33"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceProvinceIds",
+        "targetProvinceId",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_province"
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "mergeIntoProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "distribution": {
+          "$ref": "#/$defs/__schema33"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "provinceId",
+        "mergeIntoProvinceId",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "update_province_definition"
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "changes": {
+          "$ref": "#/$defs/__schema29"
+        },
+        "distribution": {
+          "description": "Required complete dependency policy when changes.type crosses land/sea/lake",
+          "$ref": "#/$defs/__schema34"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "provinceId",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "move_region_provinces"
+        },
+        "sourceRegionId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "targetRegionId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "provinceIds": {
+          "minItems": 1,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "distribution": {
+          "type": "string",
+          "const": "move-membership"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "sourceRegionId",
+        "targetRegionId",
+        "provinceIds",
+        "distribution"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "add_adjacency"
+        },
+        "adjacency": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/__schema3"
+            },
+            "to": {
+              "$ref": "#/$defs/__schema3"
+            },
+            "type": {
+              "type": "string"
+            },
+            "through": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "startX": {
+              "type": "number"
+            },
+            "startY": {
+              "type": "number"
+            },
+            "stopX": {
+              "type": "number"
+            },
+            "stopY": {
+              "type": "number"
+            },
+            "rule": {
+              "type": "string"
+            },
+            "comment": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "to",
+            "type",
+            "through",
+            "startX",
+            "startY",
+            "stopX",
+            "stopY",
+            "rule",
+            "comment"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "adjacency"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_adjacency"
+        },
+        "from": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "to": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "add_supply_node"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "provinceId"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_supply_node"
+        },
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "provinceId"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "add_railway"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "provinces": {
+          "minItems": 2,
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "provinces"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_railway"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "index"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "upsert_building_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "stateId": {
+              "$ref": "#/$defs/__schema2"
+            },
+            "building": {
+              "type": "string",
+              "minLength": 1
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "stateId",
+            "building"
+          ],
+          "additionalProperties": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "stateId": {
+              "$ref": "#/$defs/__schema2"
+            },
+            "building": {
+              "type": "string",
+              "minLength": 1
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            },
+            "rotation": {
+              "type": "number"
+            },
+            "adjacentSeaProvince": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "stateId",
+            "building",
+            "x",
+            "y",
+            "z",
+            "rotation",
+            "adjacentSeaProvince"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_building_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "stateId": {
+              "$ref": "#/$defs/__schema2"
+            },
+            "building": {
+              "type": "string",
+              "minLength": 1
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "stateId",
+            "building"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "upsert_unit_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "provinceId": {
+              "$ref": "#/$defs/__schema3"
+            },
+            "type": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "provinceId",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "provinceId": {
+              "$ref": "#/$defs/__schema3"
+            },
+            "type": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            },
+            "rotation": {
+              "type": "number"
+            },
+            "offset": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "provinceId",
+            "type",
+            "x",
+            "y",
+            "z",
+            "rotation",
+            "offset"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_unit_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "provinceId": {
+              "$ref": "#/$defs/__schema3"
+            },
+            "type": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "provinceId",
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "upsert_weather_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "strategicRegionId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "size": {
+              "type": "string"
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "strategicRegionId",
+            "size"
+          ],
+          "additionalProperties": false
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "strategicRegionId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            },
+            "size": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "strategicRegionId",
+            "x",
+            "y",
+            "z",
+            "size"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "remove_weather_position"
+        },
+        "match": {
+          "type": "object",
+          "properties": {
+            "strategicRegionId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "size": {
+              "type": "string"
+            },
+            "occurrence": {
+              "$ref": "#/$defs/__schema35"
+            }
+          },
+          "required": [
+            "strategicRegionId",
+            "size"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "match"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "update_entity_locator"
+        },
+        "entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "position": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "entity",
+        "name",
+        "position"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "__schema1": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "__schema2": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema3": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema4": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "targetProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "sourceProvinceId",
+        "targetProvinceId"
+      ],
+      "additionalProperties": false
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "targetProvinceId": {
+          "$ref": "#/$defs/__schema3"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "sourceProvinceId",
+        "targetProvinceId"
+      ],
+      "additionalProperties": false
+    },
+    "__schema6": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema7": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "__schema8": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema9": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema10": {
+      "type": "object",
+      "properties": {
+        "provinceId": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "value": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "provinceId",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "__schema11": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "existing"
+            },
+            "language": {
+              "type": "string",
+              "const": "l_english"
+            }
+          },
+          "required": [
+            "method",
+            "language"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "upsert"
+            },
+            "language": {
+              "type": "string",
+              "const": "l_english"
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000
+            },
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "method",
+            "language",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema12": {
+      "type": "object",
+      "properties": {
+        "manpower": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "retain-in-source"
+                }
+              },
+              "required": [
+                "method"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "proportional-by-land-pixels"
+                }
+              },
+              "required": [
+                "method"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "exact"
+                },
+                "source": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "destination": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "method",
+                "source",
+                "destination"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "resources": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "stateBuildings": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "owner": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "controller": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "cores": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "claims": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "victoryPoints": {
+          "type": "string",
+          "const": "follow-province"
+        },
+        "provinceBuildings": {
+          "type": "string",
+          "const": "follow-province"
+        },
+        "ports": {
+          "type": "string",
+          "const": "follow-province"
+        },
+        "supplyNodes": {
+          "type": "string",
+          "const": "follow-province"
+        },
+        "railways": {
+          "type": "string",
+          "const": "follow-province"
+        },
+        "positions": {
+          "type": "string",
+          "const": "follow-province"
+        }
+      },
+      "required": [
+        "manpower",
+        "resources",
+        "stateBuildings",
+        "owner",
+        "controller",
+        "cores",
+        "claims",
+        "victoryPoints",
+        "provinceBuildings",
+        "ports",
+        "supplyNodes",
+        "railways",
+        "positions"
+      ],
+      "additionalProperties": false
+    },
+    "__schema13": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "retain-in-source"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "proportional-by-land-pixels"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "exact"
+            },
+            "source": {
+              "$ref": "#/$defs/__schema7"
+            },
+            "destination": {
+              "$ref": "#/$defs/__schema7"
+            }
+          },
+          "required": [
+            "method",
+            "source",
+            "destination"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema14": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "copy-source"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "exact"
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "destination": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "method",
+            "source",
+            "destination"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema15": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "copy-source"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "exact"
+            },
+            "source": {
+              "maxItems": 10000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema16"
+              }
+            },
+            "destination": {
+              "maxItems": 10000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema17"
+              }
+            }
+          },
+          "required": [
+            "method",
+            "source",
+            "destination"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema16": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema17": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema18": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pixels"
+            },
+            "pixels": {
+              "minItems": 1,
+              "maxItems": 1000000,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema19"
+              },
+              "description": "Exact coordinates to recolor; at most 1000000 pixels per operation"
+            }
+          },
+          "required": [
+            "kind",
+            "pixels"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/__schema20"
+            },
+            "width": {
+              "$ref": "#/$defs/__schema21"
+            },
+            "height": {
+              "$ref": "#/$defs/__schema22"
+            },
+            "origin": {
+              "$ref": "#/$defs/__schema19"
+            },
+            "selectedPixelCount": {
+              "$ref": "#/$defs/__schema23"
+            },
+            "sha256": {
+              "$ref": "#/$defs/__schema24"
+            },
+            "data": {
+              "$ref": "#/$defs/__schema25"
+            }
+          },
+          "required": [
+            "kind",
+            "width",
+            "height",
+            "origin",
+            "selectedPixelCount",
+            "sha256",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/__schema26"
+            },
+            "points": {
+              "$ref": "#/$defs/__schema27"
+            }
+          },
+          "required": [
+            "kind",
+            "points"
+          ],
+          "additionalProperties": false,
+          "description": "Polygon rasterization is rejected if it selects more than 1000000 pixels"
+        }
+      ]
+    },
+    "__schema19": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "__schema20": {
+      "type": "string",
+      "const": "mask"
+    },
+    "__schema21": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 16384
+    },
+    "__schema22": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 16384
+    },
+    "__schema23": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 1000000,
+      "description": "Declared selected cells; at most 1000000 pixels per operation"
+    },
+    "__schema24": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "__schema25": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 30000000
+    },
+    "__schema26": {
+      "type": "string",
+      "const": "polygon"
+    },
+    "__schema27": {
+      "minItems": 3,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema19"
+      }
+    },
+    "__schema28": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "inherit-source"
+            },
+            "overrides": {
+              "$ref": "#/$defs/__schema29"
+            }
+          },
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "exact"
+            },
+            "value": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "$ref": "#/$defs/__schema30"
+                },
+                "type": {
+                  "$ref": "#/$defs/__schema31"
+                },
+                "coastal": {
+                  "type": "boolean"
+                },
+                "terrain": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "continent": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "type",
+                "coastal",
+                "terrain",
+                "continent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "method",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema29": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/__schema30"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema31"
+        },
+        "coastal": {
+          "type": "boolean"
+        },
+        "terrain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "continent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "__schema30": {
+      "type": "object",
+      "properties": {
+        "r": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "g": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "b": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "r",
+        "g",
+        "b"
+      ],
+      "additionalProperties": false
+    },
+    "__schema31": {
+      "type": "string",
+      "enum": [
+        "land",
+        "sea",
+        "lake"
+      ]
+    },
+    "__schema32": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "inherit-source",
+            "none"
+          ]
+        },
+        "strategicRegion": {
+          "type": "string",
+          "const": "inherit-source"
+        },
+        "victoryPoints": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "provinceBuildings": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "ports": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "supplyNodes": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "railways": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "adjacencies": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "positions": {
+          "type": "string",
+          "const": "retain-source"
+        },
+        "entityLocators": {
+          "type": "string",
+          "const": "retain-source"
+        }
+      },
+      "required": [
+        "state",
+        "strategicRegion",
+        "victoryPoints",
+        "provinceBuildings",
+        "ports",
+        "supplyNodes",
+        "railways",
+        "adjacencies",
+        "positions",
+        "entityLocators"
+      ],
+      "additionalProperties": false
+    },
+    "__schema33": {
+      "type": "object",
+      "properties": {
+        "membership": {
+          "type": "string",
+          "const": "require-same"
+        },
+        "victoryPoints": {
+          "type": "string",
+          "const": "sum-into-target"
+        },
+        "provinceBuildings": {
+          "type": "string",
+          "const": "sum-into-target"
+        },
+        "references": {
+          "type": "string",
+          "const": "remap-to-target-and-deduplicate"
+        }
+      },
+      "required": [
+        "membership",
+        "victoryPoints",
+        "provinceBuildings",
+        "references"
+      ],
+      "additionalProperties": false
+    },
+    "__schema34": {
+      "type": "object",
+      "properties": {
+        "stateMembership": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "retain"
+                }
+              },
+              "required": [
+                "method"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "remove"
+                },
+                "stateId": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "method",
+                "stateId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "const": "assign"
+                },
+                "stateId": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "method",
+                "stateId"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "stateValues": {
+          "type": "string",
+          "const": "retain-in-current-states"
+        },
+        "strategicRegion": {
+          "type": "string",
+          "const": "retain-membership"
+        },
+        "victoryPoints": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "provinceBuildings": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "ports": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "supplyNodes": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "railways": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove-containing"
+          ]
+        },
+        "buildingPositions": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "unitPositions": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove"
+          ]
+        },
+        "entityLocators": {
+          "type": "string",
+          "const": "retain-at-coordinate"
+        },
+        "adjacencies": {
+          "type": "string",
+          "enum": [
+            "retain-if-valid",
+            "remove-referencing"
+          ]
+        }
+      },
+      "required": [
+        "stateMembership",
+        "stateValues",
+        "strategicRegion",
+        "victoryPoints",
+        "provinceBuildings",
+        "ports",
+        "supplyNodes",
+        "railways",
+        "buildingPositions",
+        "unitPositions",
+        "entityLocators",
+        "adjacencies"
+      ],
+      "additionalProperties": false
+    },
+    "__schema35": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  }
+}

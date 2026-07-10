@@ -1,0 +1,2 @@
+# Dependency root selects the active definition database by its own default.map.
+definitions = "definition.csv"

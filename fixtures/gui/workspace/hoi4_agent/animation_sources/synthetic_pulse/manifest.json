@@ -1,0 +1,57 @@
+{
+  "$schema": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/gui-animation-source.schema.json",
+  "schemaVersion": 1,
+  "projectOwned": true,
+  "sprite": "GFX_syn_pulse",
+  "sheet": {
+    "path": "gfx/interface/synthetic_gui/pulse_animation.png",
+    "sha256": "28b451b70f307084d6cb038884408991423eff6cf58a5aacafcd9ba24ccf6fa8",
+    "frameWidth": 48,
+    "frameHeight": 48
+  },
+  "sourceFrames": [
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-0.png",
+      "sha256": "c75ca7a21deebda7ebb9ae6a3cd31ae896b97f02a9b5436a9183e177d200ff69",
+      "anchor": { "x": 24, "y": 24 }
+    },
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-1.png",
+      "sha256": "69c4dee23052c84aabe09cda134398391b35c7755fa790f8605c0ae05eeb22fb",
+      "anchor": { "x": 24, "y": 24 }
+    },
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-2.png",
+      "sha256": "793405991830e8d30e0ff5c04e9ffebb6706604e7221f2125863542bb02a37c8",
+      "anchor": { "x": 24, "y": 24 }
+    },
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-3.png",
+      "sha256": "8f8dc7ce6f396ff0320e1296fabb4ab49dd541d536fcbe4289ab15fa3d808bcf",
+      "anchor": { "x": 24, "y": 24 }
+    },
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-4.png",
+      "sha256": "87f77e98e229a58cefa9df33c51fe218d5cda919029d4a9a1994f85e118e746c",
+      "anchor": { "x": 24, "y": 24 }
+    },
+    {
+      "path": "hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-5.png",
+      "sha256": "1d27301ad9f83a7eae79ed7f790c0f10cfbbfcef3630e07586f9c48de0c719de",
+      "anchor": { "x": 24, "y": 24 }
+    }
+  ],
+  "animation": {
+    "frameCount": 6,
+    "rateFps": 4,
+    "looping": true,
+    "playOnShow": true,
+    "pauseOnLoop": 0.25
+  },
+  "staticFallback": {
+    "sprite": "GFX_syn_pulse_static",
+    "path": "gfx/interface/synthetic_gui/pulse_static.png",
+    "sha256": "b446108eeb95d57b37fadbb6d940ef2601de3cf3b16d803e63d2c15a1660504b",
+    "frameIndex": 0
+  }
+}

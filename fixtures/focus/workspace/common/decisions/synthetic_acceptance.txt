@@ -1,0 +1,255 @@
+# Project-owned synthetic decisions for Focus Tree Workbench acceptance tests.
+synthetic_acceptance_decisions = {
+	form_synthetic_union = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 1 }
+	}
+
+	synthetic_decision_01_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 2 }
+	}
+
+	synthetic_decision_01_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 3 }
+	}
+
+	synthetic_decision_01_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 4 }
+	}
+
+	synthetic_decision_01_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 5 }
+	}
+
+	synthetic_decision_02_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 6 }
+	}
+
+	synthetic_decision_02_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 7 }
+	}
+
+	synthetic_decision_02_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 8 }
+	}
+
+	synthetic_decision_02_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 9 }
+	}
+
+	synthetic_decision_03_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 10 }
+	}
+
+	synthetic_decision_03_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 11 }
+	}
+
+	synthetic_decision_03_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 12 }
+	}
+
+	synthetic_decision_03_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 13 }
+	}
+
+	synthetic_decision_04_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 14 }
+	}
+
+	synthetic_decision_04_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 15 }
+	}
+
+	synthetic_decision_04_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 16 }
+	}
+
+	synthetic_decision_04_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 17 }
+	}
+
+	synthetic_decision_05_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 18 }
+	}
+
+	synthetic_decision_05_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 19 }
+	}
+
+	synthetic_decision_05_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 20 }
+	}
+
+	synthetic_decision_05_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 21 }
+	}
+
+	synthetic_decision_06_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 22 }
+	}
+
+	synthetic_decision_06_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 23 }
+	}
+
+	synthetic_decision_06_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 24 }
+	}
+
+	synthetic_decision_06_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 25 }
+	}
+
+	synthetic_decision_07_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 26 }
+	}
+
+	synthetic_decision_07_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 27 }
+	}
+
+	synthetic_decision_07_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 28 }
+	}
+
+	synthetic_decision_07_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 29 }
+	}
+
+	synthetic_decision_08_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 30 }
+	}
+
+	synthetic_decision_08_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 31 }
+	}
+
+	synthetic_decision_08_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 32 }
+	}
+
+	synthetic_decision_08_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 33 }
+	}
+
+	synthetic_decision_09_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 34 }
+	}
+
+	synthetic_decision_09_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 35 }
+	}
+
+	synthetic_decision_09_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 36 }
+	}
+
+	synthetic_decision_09_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 37 }
+	}
+
+	synthetic_decision_10_06 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 38 }
+	}
+
+	synthetic_decision_10_12 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 39 }
+	}
+
+	synthetic_decision_10_18 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 40 }
+	}
+
+	synthetic_decision_10_24 = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 41 }
+	}
+
+	synthetic_decision_crisis_reveal = {
+		visible = { always = yes }
+		available = { always = yes }
+		complete_effect = { add_political_power = 42 }
+	}
+
+}

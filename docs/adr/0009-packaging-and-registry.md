@@ -5,7 +5,7 @@
 
 ## Decision
 
-Publish the unscoped npm package `hoi4-agent-tools`, with `mcpName` set to `io.github.klimpaskov/hoi4-agent-tools`. The package exposes stable stdio, HTTP, and setup entry points. Build a reproducible container for self-hosted HTTP. Validate `server.json` against the Registry's 2025-12-11 schema and live validation API before immutable Registry publication.
+Publish the unscoped npm package `hoi4-agent-tools`, with `mcpName` set to `io.github.klimPaskov/hoi4-agent-tools`, matching the canonical case-sensitive GitHub owner used for Registry OIDC namespace ownership. The package exposes stable stdio, HTTP, and setup entry points. Build a reproducible container for self-hosted HTTP from immutable Dockerfile-frontend and base-image digests. Validate `server.json` against the Registry's 2025-12-11 schema and live validation API before immutable Registry publication.
 
 ## Rationale
 
@@ -13,4 +13,4 @@ npm is the native distribution path for the selected runtime and is supported by
 
 ## Consequences
 
-Package, server, schema, changelog, image, and Registry versions remain synchronized for ordinary releases. Publication requires npm and Registry credentials and is never simulated by a local tarball. Release workflows use trusted publishing/provenance when the hosting accounts support it.
+Package, server, schema, changelog, image, and Registry versions remain synchronized for ordinary releases. One workflow-built tarball is the npm payload and GitHub release asset, and public verification binds its bytes to npm integrity, provenance, and Registry metadata. The first npm version uses a short-lived granular access token with read/write access to **All Packages** and bypass-2FA because an unclaimed package cannot yet have a trusted publisher; that token is revoked after public verification, and later releases use the pinned npm 11 OIDC trusted-publishing path with the explicit `npm publish` allowed action. Release jobs do not restore package-manager caches. A one-time non-release GHCR push and interactive visibility change are required before the first release because new personal container packages are private by default.

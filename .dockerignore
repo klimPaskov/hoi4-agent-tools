@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+coverage
+artifacts
+test-results
+fixtures
+specs
+research
+tests
+scripts
+*.tgz
+.env*

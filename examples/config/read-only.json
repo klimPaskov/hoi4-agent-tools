@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "writePolicy": "read-only",
+  "transactionTtlSeconds": 3600,
+  "transactionMaxJournalBytes": 536870912,
+  "transactionMaxJournals": 128,
+  "scanMaxFiles": 20000,
+  "scanMaxBytes": 134217728,
+  "scanMaxFileBytes": 67108864,
+  "artifactMaxBytes": 536870912,
+  "artifactMaxEntries": 5000,
+  "artifactMaxSingleBytes": 134217728,
+  "registrationRoots": ["/projects/hoi4-mods", "/games", "/projects/hoi4-dependencies"],
+  "writableRegistrationRoots": [],
+  "storageRoots": ["/var/lib/hoi4-agent-tools"],
+  "workspaces": [
+    {
+      "id": "example",
+      "name": "Example Mod",
+      "root": "/projects/hoi4-mods/example",
+      "gameRoot": "/games/Hearts of Iron IV",
+      "dependencyRoots": [],
+      "replacePaths": [],
+      "artifactRoot": "/projects/hoi4-mods/example/.hoi4-agent/artifacts",
+      "cacheRoot": "/projects/hoi4-mods/example/.hoi4-agent/cache",
+      "writeEnabled": false
+    }
+  ]
+}

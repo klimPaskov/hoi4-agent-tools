@@ -1,0 +1,3203 @@
+focus_tree = {
+	id = synthetic_acceptance_tree
+	country = {
+		factor = 0
+		modifier = { add = 100 original_tag = SYN }
+	}
+	continuous_focus_position = { x = 14 y = 32 }
+	initial_show_position = { focus = synthetic_root }
+
+	focus = {
+		id = synthetic_root
+		icon = GFX_synthetic_focus
+		x = 14
+		y = 0
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 900001 }
+	}
+
+	focus = {
+		id = synthetic_mandate
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_root }
+		x = 14
+		y = 1
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 900002 }
+	}
+
+	focus = {
+		id = synthetic_route_hub
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_mandate }
+		x = 14
+		y = 2
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 900003 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 0
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1001 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_01_focus_03 }
+		x = 0
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1002 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_01_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_01_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1003 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_02 focus = synthetic_route_01_focus_03 }
+		x = 0
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1004 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_04 }
+		x = 0
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1005 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_05 }
+		x = 0
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1006 activate_decision = synthetic_decision_01_06 activate_decision = form_synthetic_union unlock_decision_category_tooltip = synthetic_acceptance_decisions synthetic_focus_reward_effect = yes set_cosmetic_tag = SYNTHETIC_ACCEPTANCE_COSMETIC }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_06 }
+		x = 0
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1007 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_07 }
+		x = 0
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1008 country_event = { id = synthetic_focus.108 } }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_08 }
+		x = 0
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1009 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_09 }
+		x = 0
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1010 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_10 }
+		x = 0
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1011 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_11 }
+		x = 0
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1012 activate_decision = synthetic_decision_01_12 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_12 }
+		x = 0
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1013 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_13 }
+		x = 0
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1014 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_01_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1015 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_15 }
+		x = 0
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1016 country_event = { id = synthetic_focus.116 } }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_16 }
+		x = 0
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1017 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_17 }
+		x = 0
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1018 activate_decision = synthetic_decision_01_18 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_18 }
+		x = 0
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1019 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_19 }
+		x = 0
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1020 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_20 }
+		x = 0
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1021 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_21 }
+		x = 0
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1022 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_22 }
+		x = 0
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1023 }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_23 }
+		x = 0
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1024 activate_decision = synthetic_decision_01_24 country_event = { id = synthetic_focus.124 } }
+	}
+
+	focus = {
+		id = synthetic_route_01_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_24 }
+		x = 0
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 2 }
+		completion_reward = { add_political_power = 1025 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 2
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2001 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_02_focus_03 }
+		x = 2
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2002 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_02_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_02_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2003 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_02 focus = synthetic_route_02_focus_03 }
+		x = 2
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2004 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_04 }
+		x = 2
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2005 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_05 }
+		x = 2
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2006 activate_decision = synthetic_decision_02_06 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_06 }
+		x = 2
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2007 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_07 }
+		x = 2
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2008 country_event = { id = synthetic_focus.208 } }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_08 }
+		x = 2
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2009 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_09 }
+		x = 2
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2010 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_10 }
+		x = 2
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2011 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_11 }
+		x = 2
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2012 activate_decision = synthetic_decision_02_12 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_12 }
+		x = 2
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2013 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_13 }
+		x = 2
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2014 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_02_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2015 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_15 }
+		x = 2
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2016 country_event = { id = synthetic_focus.216 } }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_16 }
+		x = 2
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2017 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_17 }
+		x = 2
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2018 activate_decision = synthetic_decision_02_18 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_18 }
+		x = 2
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2019 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_19 }
+		x = 2
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2020 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_20 }
+		x = 2
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2021 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_21 }
+		x = 2
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2022 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_22 }
+		x = 2
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2023 }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_23 }
+		x = 2
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2024 activate_decision = synthetic_decision_02_24 country_event = { id = synthetic_focus.224 } }
+	}
+
+	focus = {
+		id = synthetic_route_02_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_02_focus_24 }
+		x = 2
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 3 }
+		completion_reward = { add_political_power = 2025 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 4
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3001 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_03_focus_03 }
+		x = 4
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3002 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_03_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_03_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3003 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_02 focus = synthetic_route_03_focus_03 }
+		x = 4
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3004 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_04 }
+		x = 4
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3005 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_05 }
+		x = 4
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3006 activate_decision = synthetic_decision_03_06 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_06 }
+		x = 4
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3007 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_07 }
+		x = 4
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3008 country_event = { id = synthetic_focus.308 } }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_08 }
+		x = 4
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3009 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_09 }
+		x = 4
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3010 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_10 }
+		x = 4
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3011 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_11 }
+		x = 4
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3012 activate_decision = synthetic_decision_03_12 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_12 }
+		x = 4
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3013 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_13 }
+		x = 4
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3014 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_03_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3015 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_15 }
+		x = 4
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3016 country_event = { id = synthetic_focus.316 } }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_16 }
+		x = 4
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3017 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_17 }
+		x = 4
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3018 activate_decision = synthetic_decision_03_18 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_18 }
+		x = 4
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3019 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_19 }
+		x = 4
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3020 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_20 }
+		x = 4
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3021 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_21 }
+		x = 4
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3022 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_22 }
+		x = 4
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3023 }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_23 }
+		x = 4
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3024 activate_decision = synthetic_decision_03_24 country_event = { id = synthetic_focus.324 } }
+	}
+
+	focus = {
+		id = synthetic_route_03_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_03_focus_24 }
+		x = 4
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 4 }
+		completion_reward = { add_political_power = 3025 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 6
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4001 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_04_focus_03 }
+		x = 6
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4002 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_04_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_04_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4003 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_02 focus = synthetic_route_04_focus_03 }
+		x = 6
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4004 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_04 }
+		x = 6
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4005 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_05 }
+		x = 6
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4006 activate_decision = synthetic_decision_04_06 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_06 }
+		x = 6
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4007 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_07 }
+		x = 6
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4008 country_event = { id = synthetic_focus.408 } }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_08 }
+		x = 6
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4009 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_09 }
+		x = 6
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4010 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_10 }
+		x = 6
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4011 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_11 }
+		x = 6
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4012 activate_decision = synthetic_decision_04_12 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_12 }
+		x = 6
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4013 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_13 }
+		x = 6
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4014 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_04_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4015 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_15 }
+		x = 6
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4016 country_event = { id = synthetic_focus.416 } }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_16 }
+		x = 6
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4017 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_17 }
+		x = 6
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4018 activate_decision = synthetic_decision_04_18 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_18 }
+		x = 6
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4019 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_19 }
+		x = 6
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4020 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_20 }
+		x = 6
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4021 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_21 }
+		x = 6
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4022 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_22 }
+		x = 6
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4023 }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_23 }
+		x = 6
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4024 activate_decision = synthetic_decision_04_24 country_event = { id = synthetic_focus.424 } }
+	}
+
+	focus = {
+		id = synthetic_route_04_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_04_focus_24 }
+		x = 6
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 5 }
+		completion_reward = { add_political_power = 4025 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 8
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5001 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_05_focus_03 }
+		x = 8
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5002 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_05_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_05_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5003 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_02 focus = synthetic_route_05_focus_03 }
+		x = 8
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5004 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_04 }
+		x = 8
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5005 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_05 }
+		x = 8
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5006 activate_decision = synthetic_decision_05_06 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_06 }
+		x = 8
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5007 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_07 }
+		x = 8
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5008 country_event = { id = synthetic_focus.508 } }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_08 }
+		x = 8
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5009 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_09 }
+		x = 8
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5010 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_10 }
+		x = 8
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5011 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_11 }
+		x = 8
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5012 activate_decision = synthetic_decision_05_12 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_12 }
+		x = 8
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5013 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_13 }
+		x = 8
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5014 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_05_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5015 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_15 }
+		x = 8
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5016 country_event = { id = synthetic_focus.516 } }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_16 }
+		x = 8
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5017 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_17 }
+		x = 8
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5018 activate_decision = synthetic_decision_05_18 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_18 }
+		x = 8
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5019 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_19 }
+		x = 8
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5020 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_20 }
+		x = 8
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5021 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_21 }
+		x = 8
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5022 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_22 }
+		x = 8
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5023 }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_23 }
+		x = 8
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5024 activate_decision = synthetic_decision_05_24 country_event = { id = synthetic_focus.524 } }
+	}
+
+	focus = {
+		id = synthetic_route_05_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_05_focus_24 }
+		x = 8
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 6 }
+		completion_reward = { add_political_power = 5025 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 10
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6001 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_06_focus_03 }
+		x = 10
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6002 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_06_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_06_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6003 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_02 focus = synthetic_route_06_focus_03 }
+		x = 10
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6004 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_04 }
+		x = 10
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6005 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_05 }
+		x = 10
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6006 activate_decision = synthetic_decision_06_06 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_06 }
+		x = 10
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6007 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_07 }
+		x = 10
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6008 country_event = { id = synthetic_focus.608 } }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_08 }
+		x = 10
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6009 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_09 }
+		x = 10
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6010 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_10 }
+		x = 10
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6011 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_11 }
+		x = 10
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6012 activate_decision = synthetic_decision_06_12 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_12 }
+		x = 10
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6013 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_13 }
+		x = 10
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6014 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_06_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6015 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_15 }
+		x = 10
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6016 country_event = { id = synthetic_focus.616 } }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_16 }
+		x = 10
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6017 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_17 }
+		x = 10
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6018 activate_decision = synthetic_decision_06_18 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_18 }
+		x = 10
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6019 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_19 }
+		x = 10
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6020 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_20 }
+		x = 10
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6021 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_21 }
+		x = 10
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6022 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_22 }
+		x = 10
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6023 }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_23 }
+		x = 10
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6024 activate_decision = synthetic_decision_06_24 country_event = { id = synthetic_focus.624 } }
+	}
+
+	focus = {
+		id = synthetic_route_06_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_06_focus_24 }
+		x = 10
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_RESEARCH }
+		ai_will_do = { factor = 7 }
+		completion_reward = { add_political_power = 6025 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 12
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7001 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_07_focus_03 }
+		x = 12
+		y = 4
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7002 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_07_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_07_focus_02
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7003 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_02 focus = synthetic_route_07_focus_03 }
+		x = 12
+		y = 5
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7004 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_04 }
+		x = 12
+		y = 6
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7005 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_05 }
+		x = 12
+		y = 7
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7006 activate_decision = synthetic_decision_07_06 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_06 }
+		x = 12
+		y = 8
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7007 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_07 }
+		x = 12
+		y = 9
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7008 country_event = { id = synthetic_focus.708 } }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_08 }
+		x = 12
+		y = 10
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7009 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_09 }
+		x = 12
+		y = 11
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7010 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_10 }
+		x = 12
+		y = 12
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7011 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_11 }
+		x = 12
+		y = 13
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7012 activate_decision = synthetic_decision_07_12 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_12 }
+		x = 12
+		y = 14
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7013 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_13 }
+		x = 12
+		y = 15
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7014 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_07_focus_14
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7015 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_15 }
+		x = 12
+		y = 17
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7016 country_event = { id = synthetic_focus.716 } }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_16 }
+		x = 12
+		y = 18
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7017 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_17 }
+		x = 12
+		y = 19
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7018 activate_decision = synthetic_decision_07_18 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_18 }
+		x = 12
+		y = 20
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7019 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_19 }
+		x = 12
+		y = 21
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7020 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_20 }
+		x = 12
+		y = 22
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7021 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_21 }
+		x = 12
+		y = 23
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7022 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_22 }
+		x = 12
+		y = 24
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7023 }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_23 }
+		x = 12
+		y = 25
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7024 activate_decision = synthetic_decision_07_24 country_event = { id = synthetic_focus.724 } }
+	}
+
+	focus = {
+		id = synthetic_route_07_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_07_focus_24 }
+		x = 12
+		y = 26
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_07_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 8 }
+		completion_reward = { add_political_power = 7025 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 14
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8001 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_08_focus_03 }
+		x = 14
+		y = 4
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8002 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_08_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_08_focus_02
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8003 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_02 focus = synthetic_route_08_focus_03 }
+		x = 14
+		y = 5
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8004 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_04 }
+		x = 14
+		y = 6
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8005 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_05 }
+		x = 14
+		y = 7
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8006 activate_decision = synthetic_decision_08_06 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_06 }
+		x = 14
+		y = 8
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8007 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_07 }
+		x = 14
+		y = 9
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8008 country_event = { id = synthetic_focus.808 } }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_08 }
+		x = 14
+		y = 10
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8009 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_09 }
+		x = 14
+		y = 11
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8010 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_10 }
+		x = 14
+		y = 12
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8011 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_11 }
+		x = 14
+		y = 13
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8012 activate_decision = synthetic_decision_08_12 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_12 }
+		x = 14
+		y = 14
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8013 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_13 }
+		x = 14
+		y = 15
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8014 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_08_focus_14
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8015 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_15 }
+		x = 14
+		y = 17
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8016 country_event = { id = synthetic_focus.816 } }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_16 }
+		x = 14
+		y = 18
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8017 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_17 }
+		x = 14
+		y = 19
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8018 activate_decision = synthetic_decision_08_18 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_18 }
+		x = 14
+		y = 20
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8019 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_19 }
+		x = 14
+		y = 21
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8020 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_20 }
+		x = 14
+		y = 22
+		cost = 6
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8021 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_21 }
+		x = 14
+		y = 23
+		cost = 7
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8022 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_22 }
+		x = 14
+		y = 24
+		cost = 8
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8023 }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_23 }
+		x = 14
+		y = 25
+		cost = 9
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8024 activate_decision = synthetic_decision_08_24 country_event = { id = synthetic_focus.824 } }
+	}
+
+	focus = {
+		id = synthetic_route_08_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_08_focus_24 }
+		x = 14
+		y = 26
+		cost = 5
+		allow_branch = { has_country_flag = synthetic_route_08_revealed }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 9 }
+		completion_reward = { add_political_power = 8025 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 16
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9001 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_09_focus_03 }
+		x = 16
+		y = 4
+		cost = 7
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9002 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_09_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_09_focus_02
+		cost = 8
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9003 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_02 focus = synthetic_route_09_focus_03 }
+		x = 16
+		y = 5
+		cost = 9
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9004 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_04 }
+		x = 16
+		y = 6
+		cost = 5
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9005 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_05 }
+		x = 16
+		y = 7
+		cost = 6
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9006 activate_decision = synthetic_decision_09_06 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_06 }
+		x = 16
+		y = 8
+		cost = 7
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9007 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_07 }
+		x = 16
+		y = 9
+		cost = 8
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9008 country_event = { id = synthetic_focus.908 } }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_08 }
+		x = 16
+		y = 10
+		cost = 9
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9009 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_09 }
+		x = 16
+		y = 11
+		cost = 5
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9010 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_10 }
+		x = 16
+		y = 12
+		cost = 6
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9011 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_11 }
+		x = 16
+		y = 13
+		cost = 7
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9012 activate_decision = synthetic_decision_09_12 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_12 }
+		x = 16
+		y = 14
+		cost = 8
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9013 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_13 }
+		x = 16
+		y = 15
+		cost = 9
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9014 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_09_focus_14
+		cost = 5
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9015 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_15 }
+		x = 16
+		y = 17
+		cost = 6
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9016 country_event = { id = synthetic_focus.916 } }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_16 }
+		x = 16
+		y = 18
+		cost = 7
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9017 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_17 }
+		x = 16
+		y = 19
+		cost = 8
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9018 activate_decision = synthetic_decision_09_18 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_18 }
+		x = 16
+		y = 20
+		cost = 9
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9019 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_19 }
+		x = 16
+		y = 21
+		cost = 5
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9020 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_20 }
+		x = 16
+		y = 22
+		cost = 6
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9021 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_21 }
+		x = 16
+		y = 23
+		cost = 7
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9022 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_22 }
+		x = 16
+		y = 24
+		cost = 8
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9023 }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_23 }
+		x = 16
+		y = 25
+		cost = 9
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9024 activate_decision = synthetic_decision_09_24 country_event = { id = synthetic_focus.924 } }
+	}
+
+	focus = {
+		id = synthetic_route_09_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_09_focus_24 }
+		x = 16
+		y = 26
+		cost = 5
+		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 9025 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_01
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_hub }
+		x = 18
+		y = 3
+		cost = 6
+		available = { has_completed_focus = synthetic_route_hub }
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10001 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_02
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_10_focus_03 }
+		x = 18
+		y = 4
+		cost = 7
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10002 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_03
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_01 }
+		mutually_exclusive = { focus = synthetic_route_10_focus_02 }
+		x = 1
+		y = 0
+		relative_position_id = synthetic_route_10_focus_02
+		cost = 8
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10003 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_04
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_02 focus = synthetic_route_10_focus_03 }
+		x = 18
+		y = 5
+		cost = 9
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10004 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_05
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_04 }
+		x = 18
+		y = 6
+		cost = 5
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10005 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_06
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_05 }
+		x = 18
+		y = 7
+		cost = 6
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10006 activate_decision = synthetic_decision_10_06 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_07
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_06 }
+		x = 18
+		y = 8
+		cost = 7
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10007 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_08
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_07 }
+		x = 18
+		y = 9
+		cost = 8
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10008 country_event = { id = synthetic_focus.1008 } }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_09
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_08 }
+		x = 18
+		y = 10
+		cost = 9
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10009 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_10
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_09 }
+		x = 18
+		y = 11
+		cost = 5
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10010 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_11
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_10 }
+		x = 18
+		y = 12
+		cost = 6
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10011 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_12
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_11 }
+		x = 18
+		y = 13
+		cost = 7
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10012 activate_decision = synthetic_decision_10_12 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_13
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_12 }
+		x = 18
+		y = 14
+		cost = 8
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10013 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_14
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_13 }
+		x = 18
+		y = 15
+		cost = 9
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10014 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_15
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_14 }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_route_10_focus_14
+		cost = 5
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10015 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_16
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_15 }
+		x = 18
+		y = 17
+		cost = 6
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10016 country_event = { id = synthetic_focus.1016 } }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_17
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_16 }
+		x = 18
+		y = 18
+		cost = 7
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10017 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_18
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_17 }
+		x = 18
+		y = 19
+		cost = 8
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10018 activate_decision = synthetic_decision_10_18 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_19
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_18 }
+		x = 18
+		y = 20
+		cost = 9
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10019 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_20
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_19 }
+		x = 18
+		y = 21
+		cost = 5
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10020 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_21
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_20 }
+		x = 18
+		y = 22
+		cost = 6
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10021 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_22
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_21 }
+		x = 18
+		y = 23
+		cost = 7
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10022 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_23
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_22 }
+		x = 18
+		y = 24
+		cost = 8
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10023 }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_24
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_23 }
+		x = 18
+		y = 25
+		cost = 9
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10024 activate_decision = synthetic_decision_10_24 country_event = { id = synthetic_focus.1024 } }
+	}
+
+	focus = {
+		id = synthetic_route_10_focus_25
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_10_focus_24 }
+		x = 18
+		y = 26
+		cost = 5
+		search_filters = { FOCUS_FILTER_MANPOWER }
+		ai_will_do = { factor = 11 }
+		completion_reward = { add_political_power = 10025 }
+	}
+
+	focus = {
+		id = synthetic_global_convergence
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_route_01_focus_25 }
+		prerequisite = { focus = synthetic_route_02_focus_25 }
+		prerequisite = { focus = synthetic_route_03_focus_25 }
+		prerequisite = { focus = synthetic_route_04_focus_25 }
+		prerequisite = { focus = synthetic_route_05_focus_25 }
+		prerequisite = { focus = synthetic_route_06_focus_25 }
+		prerequisite = { focus = synthetic_route_07_focus_25 }
+		prerequisite = { focus = synthetic_route_08_focus_25 }
+		prerequisite = { focus = synthetic_route_09_focus_25 }
+		prerequisite = { focus = synthetic_route_10_focus_25 }
+		x = 14
+		y = 28
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 900004 }
+	}
+
+	focus = {
+		id = synthetic_epilogue
+		icon = GFX_synthetic_focus
+		prerequisite = { focus = synthetic_global_convergence }
+		x = 0
+		y = 1
+		relative_position_id = synthetic_global_convergence
+		cost = 5
+		search_filters = { FOCUS_FILTER_POLITICAL }
+		ai_will_do = { factor = 10 }
+		completion_reward = { add_political_power = 900005 }
+	}
+}

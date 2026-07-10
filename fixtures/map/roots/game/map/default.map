@@ -1,0 +1,2 @@
+# Lower root selects a differently named definition database for allocation evidence.
+definitions = "game_definitions.csv"

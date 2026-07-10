@@ -1,0 +1,1 @@
+entity = { name = synthetic_map_entity locator = { name = synthetic_map_locator position = { 1 2 3 } } }

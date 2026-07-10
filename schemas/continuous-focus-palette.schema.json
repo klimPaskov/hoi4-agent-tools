@@ -1,0 +1,325 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/continuous-focus-palette.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "countryAssignment": {
+      "type": "object",
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "countryTags": {
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        }
+      },
+      "required": [
+        "raw",
+        "countryTags"
+      ],
+      "additionalProperties": false
+    },
+    "default": {
+      "type": "boolean"
+    },
+    "resetOnCivilWar": {
+      "type": "boolean"
+    },
+    "position": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "focuses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "icons": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema5"
+            }
+          },
+          "localisation": {
+            "type": "object",
+            "properties": {
+              "titleKey": {
+                "type": "string"
+              },
+              "descriptionKey": {
+                "type": "string"
+              },
+              "workingLabel": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "titleKey",
+              "descriptionKey"
+            ],
+            "additionalProperties": false
+          },
+          "rawPassthrough": {
+            "maxItems": 20000,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema6"
+            }
+          },
+          "sourceLocation": {
+            "$ref": "#/$defs/__schema2"
+          }
+        },
+        "required": [
+          "id",
+          "icons",
+          "localisation",
+          "rawPassthrough"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "rawPassthrough": {
+      "maxItems": 20000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "sourcePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "importedPlanHash": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "sourcePath",
+        "sourceHash",
+        "importedPlanHash"
+      ],
+      "additionalProperties": false
+    },
+    "sourceLocation": {
+      "$ref": "#/$defs/__schema2"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "default",
+    "focuses",
+    "rawPassthrough",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "referencedFocusIds": {
+          "maxItems": 20000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "sourceLocation": {
+          "$ref": "#/$defs/__schema2"
+        }
+      },
+      "required": [
+        "text",
+        "referencedFocusIds"
+      ],
+      "additionalProperties": false
+    },
+    "__schema1": {
+      "type": "string"
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "start": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "end": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "path",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "string"
+    },
+    "__schema5": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "static"
+            },
+            "sprite": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sourceLocation": {
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "kind",
+            "sprite"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "dynamic"
+            },
+            "sprite": {
+              "type": "string",
+              "minLength": 1
+            },
+            "trigger": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "sourceLocation": {
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "kind",
+            "sprite"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "assignment",
+            "scalar",
+            "block"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "sourceLocation": {
+          "$ref": "#/$defs/__schema2"
+        }
+      },
+      "required": [
+        "kind",
+        "order",
+        "text"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

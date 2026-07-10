@@ -1,0 +1,9 @@
+# Empty project-owned state intentionally makes state IDs sparse across roots.
+state = {
+	id = 5
+	name = "STATE_5"
+	manpower = 50
+	state_category = rural
+	provinces = { }
+	history = { owner = CCC }
+}

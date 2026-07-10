@@ -1,0 +1,50 @@
+# Project-owned synthetic sprite and bitmap-font declarations.
+spriteTypes = {
+	spriteType = {
+		name = "GFX_syn_panel"
+		texturefile = "gfx/interface/synthetic_gui/panel.png"
+	}
+	spriteType = {
+		name = "GFX_syn_card"
+		texturefile = "gfx/interface/synthetic_gui/card.png"
+	}
+	spriteType = {
+		name = "GFX_syn_button"
+		texturefile = "gfx/interface/synthetic_gui/button_states.png"
+		noOfFrames = 4
+	}
+	spriteType = {
+		name = "GFX_syn_icon"
+		texturefile = "gfx/interface/synthetic_gui/icon_states.png"
+		noOfFrames = 4
+	}
+	spriteType = {
+		name = "GFX_syn_meter"
+		texturefile = "gfx/interface/synthetic_gui/meter.png"
+	}
+	frameAnimatedSpriteType = {
+		name = "GFX_syn_pulse"
+		texturefile = "gfx/interface/synthetic_gui/pulse_animation.png"
+		noOfFrames = 6
+		animation_rate_fps = 4
+		looping = yes
+		play_on_show = yes
+		pause_on_loop = 0.25
+		static_fallback = "GFX_syn_pulse_static"
+		size = { width = 48 height = 48 }
+	}
+	spriteType = {
+		name = "GFX_syn_pulse_static"
+		texturefile = "gfx/interface/synthetic_gui/pulse_static.png"
+	}
+	spriteType = {
+		name = "GFX_syn_modal"
+		texturefile = "gfx/interface/synthetic_gui/modal.png"
+	}
+}
+bitmapfonts = {
+	bitmapfont = {
+		name = "synthetic_fixture_font"
+		path = "fonts/synthetic_fixture_font.fnt"
+	}
+}

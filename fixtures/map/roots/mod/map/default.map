@@ -1,0 +1,5 @@
+# Project-owned overlay selecting source databases from all three roots.
+definitions = "definition.csv"
+provinces = "provinces.bmp"
+adjacencies = "adjacencies.csv"
+positions = "positions.txt"

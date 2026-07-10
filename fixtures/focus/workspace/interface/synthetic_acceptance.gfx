@@ -1,0 +1,8 @@
+# Project-owned synthetic sprite definition for Focus Tree Workbench acceptance tests.
+spriteTypes = {
+	spriteType = {
+		name = "GFX_synthetic_focus"
+		texturefile = "gfx/interface/goals/synthetic_focus.png"
+		noOfFrames = 2
+	}
+}

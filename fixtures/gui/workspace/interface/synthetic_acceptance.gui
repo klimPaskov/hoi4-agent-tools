@@ -1,0 +1,742 @@
+# Project-owned synthetic GUI acceptance source. No installed-game or third-party content.
+guiTypes = {
+	containerWindowType = {
+		name = "synthetic_gui_window"
+		position = { x = 210 y = 90 }
+		size = { width = 1500 height = 900 }
+		clipping = yes
+		background = { spriteType = "GFX_syn_panel" }
+
+		instantTextBoxType = {
+			name = "window_title"
+			position = { x = 30 y = 20 }
+			size = { width = 650 height = 32 }
+			text = "SYN_GUI_TITLE"
+			font = "synthetic_fixture_font"
+		}
+		instantTextBoxType = {
+			name = "window_subtitle"
+			position = { x = 30 y = 58 }
+			size = { width = 880 height = 24 }
+			text = "SYN_GUI_SUBTITLE"
+			font = "synthetic_fixture_font"
+		}
+		instantTextBoxType = {
+			name = "readiness_value_text"
+			position = { x = 30 y = 92 }
+			size = { width = 380 height = 20 }
+			text = "SYN_GUI_READINESS_TEXT"
+			font = "synthetic_fixture_font"
+		}
+		instantTextBoxType = {
+			name = "missing_glyph_probe"
+			position = { x = 430 y = 92 }
+			size = { width = 390 height = 20 }
+			text = "SYN_GUI_MISSING_GLYPH"
+			font = "synthetic_fixture_font"
+		}
+		instantTextBoxType = {
+			name = "unresolved_value_probe"
+			position = { x = 840 y = 92 }
+			size = { width = 300 height = 20 }
+			text = "SYN_GUI_UNRESOLVED"
+			font = "synthetic_fixture_font"
+		}
+		instantTextBoxType = {
+			name = "long_localisation_probe"
+			position = { x = 30 y = 118 }
+			size = { width = 900 height = 18 }
+			text = "SYN_GUI_LONG_TEXT"
+			font = "synthetic_fixture_font"
+			fixedsize = yes
+		}
+
+		buttonType = {
+			name = "tab_overview"
+			position = { x = 30 y = 145 }
+			size = { width = 180 height = 30 }
+			spriteType = "GFX_syn_button"
+			buttonText = "SYN_TAB_OVERVIEW"
+			buttonFont = "synthetic_fixture_font"
+			pdx_tooltip = "SYN_TAB_OVERVIEW_TT"
+		}
+		buttonType = {
+			name = "tab_operations"
+			position = { x = 220 y = 145 }
+			size = { width = 180 height = 30 }
+			spriteType = "GFX_syn_button"
+			buttonText = "SYN_TAB_OPERATIONS"
+			buttonFont = "synthetic_fixture_font"
+			pdx_tooltip = "SYN_TAB_OPERATIONS_TT"
+		}
+		buttonType = {
+			name = "tab_logistics"
+			position = { x = 410 y = 145 }
+			size = { width = 180 height = 30 }
+			spriteType = "GFX_syn_button"
+			buttonText = "SYN_TAB_LOGISTICS"
+			buttonFont = "synthetic_fixture_font"
+			pdx_tooltip = "SYN_TAB_LOGISTICS_TT"
+		}
+		buttonType = {
+			name = "tab_intelligence"
+			position = { x = 600 y = 145 }
+			size = { width = 180 height = 30 }
+			spriteType = "GFX_syn_button"
+			buttonText = "SYN_TAB_INTELLIGENCE"
+			buttonFont = "synthetic_fixture_font"
+			pdx_tooltip = "SYN_TAB_INTELLIGENCE_TT"
+		}
+		buttonType = {
+			name = "tab_diplomacy"
+			position = { x = 790 y = 145 }
+			size = { width = 180 height = 30 }
+			spriteType = "GFX_syn_button"
+			buttonText = "SYN_TAB_DIPLOMACY"
+			buttonFont = "synthetic_fixture_font"
+			pdx_tooltip = "SYN_TAB_DIPLOMACY_TT"
+		}
+
+		iconType = {
+			name = "animated_status"
+			position = { x = 960 y = 20 }
+			size = { width = 64 height = 64 }
+			spriteType = "GFX_syn_pulse"
+		}
+		progressbarType = {
+			name = "readiness_meter"
+			position = { x = 1040 y = 24 }
+			size = { width = 380 height = 18 }
+			spriteType = "GFX_syn_meter"
+			minValue = 0
+			maxValue = 100
+			startValue = 50
+		}
+		progressbarType = {
+			name = "risk_meter"
+			position = { x = 1040 y = 54 }
+			size = { width = 380 height = 18 }
+			spriteType = "GFX_syn_meter"
+			minValue = 0
+			maxValue = 100
+			startValue = 20
+		}
+
+		containerWindowType = {
+			name = "status_card_01"
+			position = { x = 30 y = 185 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_01"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_01_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_01"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_01_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_01"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 25
+			}
+			buttonType = {
+				name = "card_action_01"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_01_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_02"
+			position = { x = 355 y = 185 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_02"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_02_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_02"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_02_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_02"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 30
+			}
+			buttonType = {
+				name = "card_action_02"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_02_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_03"
+			position = { x = 680 y = 185 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_03"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_03_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_03"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_03_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_03"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 35
+			}
+			buttonType = {
+				name = "card_action_03"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_03_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_04"
+			position = { x = 30 y = 342 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_04"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_04_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_04"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_04_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_04"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 40
+			}
+			buttonType = {
+				name = "card_action_04"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_04_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_05"
+			position = { x = 355 y = 342 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_05"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_05_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_05"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_05_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_05"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 45
+			}
+			buttonType = {
+				name = "card_action_05"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_05_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_06"
+			position = { x = 680 y = 342 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_06"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_06_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_06"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_06_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_06"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 50
+			}
+			buttonType = {
+				name = "card_action_06"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_06_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_07"
+			position = { x = 30 y = 499 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_07"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_07_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_07"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_07_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_07"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 55
+			}
+			buttonType = {
+				name = "card_action_07"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_07_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_08"
+			position = { x = 355 y = 499 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_08"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_08_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_08"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_08_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_08"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 60
+			}
+			buttonType = {
+				name = "card_action_08"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_08_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_09"
+			position = { x = 680 y = 499 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_09"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_09_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_09"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_09_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_09"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 65
+			}
+			buttonType = {
+				name = "card_action_09"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_09_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_10"
+			position = { x = 30 y = 656 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_10"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_10_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_10"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_10_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_10"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 70
+			}
+			buttonType = {
+				name = "card_action_10"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_10_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_11"
+			position = { x = 355 y = 656 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_11"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_11_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_11"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_11_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_11"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 75
+			}
+			buttonType = {
+				name = "card_action_11"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_11_TT"
+			}
+		}
+		containerWindowType = {
+			name = "status_card_12"
+			position = { x = 680 y = 656 }
+			size = { width = 310 height = 145 }
+			background = { spriteType = "GFX_syn_card" }
+			instantTextBoxType = {
+				name = "card_title_12"
+				position = { x = 14 y = 10 }
+				size = { width = 280 height = 22 }
+				text = "SYN_CARD_12_TITLE"
+				font = "synthetic_fixture_font"
+			}
+			instantTextBoxType = {
+				name = "card_description_12"
+				position = { x = 14 y = 38 }
+				size = { width = 280 height = 34 }
+				text = "SYN_CARD_12_DESC"
+				font = "synthetic_fixture_font"
+			}
+			progressbarType = {
+				name = "card_meter_12"
+				position = { x = 14 y = 82 }
+				size = { width = 282 height = 14 }
+				spriteType = "GFX_syn_meter"
+				minValue = 0
+				maxValue = 100
+				startValue = 80
+			}
+			buttonType = {
+				name = "card_action_12"
+				position = { x = 14 y = 108 }
+				size = { width = 282 height = 27 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CARD_ACTION"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CARD_12_TT"
+			}
+		}
+
+		listboxType = {
+			name = "objective_list"
+			position = { x = 1030 y = 185 }
+			size = { width = 430 height = 470 }
+			clipping = yes
+			spacing = { x = 0 y = 4 }
+			buttonType = {
+				name = "objective_row"
+				position = { x = 10 y = 0 }
+				size = { width = 410 height = 42 }
+				spriteType = "GFX_syn_button"
+				pdx_tooltip = "SYN_OBJECTIVE_ROW_TT"
+				iconType = {
+					name = "objective_row_icon"
+					position = { x = 6 y = 6 }
+					size = { width = 30 height = 30 }
+					spriteType = "GFX_syn_icon"
+				}
+				instantTextBoxType = {
+					name = "objective_row_label"
+					position = { x = 45 y = 8 }
+					size = { width = 155 height = 24 }
+					text = "SYN_OBJECTIVE_ROW_LABEL"
+					font = "synthetic_fixture_font"
+				}
+				instantTextBoxType = {
+					name = "objective_row_value"
+					position = { x = 205 y = 8 }
+					size = { width = 70 height = 24 }
+					text = "SYN_OBJECTIVE_ROW_VALUE"
+					font = "synthetic_fixture_font"
+					format = right
+				}
+				progressbarType = {
+					name = "objective_row_meter"
+					position = { x = 285 y = 13 }
+					size = { width = 115 height = 14 }
+					spriteType = "GFX_syn_meter"
+					minValue = 0
+					maxValue = 100
+					startValue = 50
+				}
+			}
+		}
+
+		containerWindowType = {
+			name = "confirmation_modal"
+			position = { x = 1030 y = 670 }
+			size = { width = 430 height = 180 }
+			priority = 100
+			background = { spriteType = "GFX_syn_modal" }
+			instantTextBoxType = {
+				name = "modal_title"
+				position = { x = 18 y = 14 }
+				size = { width = 394 height = 26 }
+				text = "SYN_MODAL_TITLE"
+				font = "synthetic_fixture_font"
+				format = center
+			}
+			instantTextBoxType = {
+				name = "modal_body"
+				position = { x = 22 y = 48 }
+				size = { width = 386 height = 54 }
+				text = "SYN_MODAL_BODY"
+				font = "synthetic_fixture_font"
+				format = center
+			}
+			buttonType = {
+				name = "modal_confirm"
+				position = { x = 32 y = 126 }
+				size = { width = 170 height = 34 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CONFIRM"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CONFIRM_TT"
+			}
+			buttonType = {
+				name = "modal_cancel"
+				position = { x = 228 y = 126 }
+				size = { width = 170 height = 34 }
+				spriteType = "GFX_syn_button"
+				buttonText = "SYN_CANCEL"
+				buttonFont = "synthetic_fixture_font"
+				pdx_tooltip = "SYN_CANCEL_TT"
+			}
+		}
+
+		iconType = { name = "state_marker_01" position = { x = 30 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" rotation = 5 }
+		iconType = { name = "state_marker_02" position = { x = 56 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_03" position = { x = 82 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_04" position = { x = 108 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_05" position = { x = 134 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_06" position = { x = 160 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_07" position = { x = 186 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_08" position = { x = 212 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_09" position = { x = 238 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_10" position = { x = 264 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_11" position = { x = 290 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_12" position = { x = 316 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_13" position = { x = 342 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_14" position = { x = 368 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_15" position = { x = 394 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_16" position = { x = 420 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_17" position = { x = 446 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_18" position = { x = 472 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_19" position = { x = 498 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_20" position = { x = 524 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_21" position = { x = 550 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_22" position = { x = 576 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_23" position = { x = 602 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_24" position = { x = 628 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_25" position = { x = 654 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_26" position = { x = 680 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_27" position = { x = 706 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_28" position = { x = 732 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_29" position = { x = 758 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_30" position = { x = 784 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_31" position = { x = 810 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_32" position = { x = 836 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_33" position = { x = 862 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_34" position = { x = 888 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_35" position = { x = 914 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_36" position = { x = 940 y = 820 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_37" position = { x = 30 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_38" position = { x = 56 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_39" position = { x = 82 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_40" position = { x = 108 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_41" position = { x = 134 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_42" position = { x = 160 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_43" position = { x = 186 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_44" position = { x = 212 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_45" position = { x = 238 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_46" position = { x = 264 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_47" position = { x = 290 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_48" position = { x = 316 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_49" position = { x = 342 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_50" position = { x = 368 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_51" position = { x = 394 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_52" position = { x = 420 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_53" position = { x = 446 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_54" position = { x = 472 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_55" position = { x = 498 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_56" position = { x = 524 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_57" position = { x = 550 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_58" position = { x = 576 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_59" position = { x = 602 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_60" position = { x = 628 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_61" position = { x = 654 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_62" position = { x = 680 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_63" position = { x = 706 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_64" position = { x = 732 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_65" position = { x = 758 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_66" position = { x = 784 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_67" position = { x = 810 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_68" position = { x = 836 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_69" position = { x = 862 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_70" position = { x = 888 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_71" position = { x = 914 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+		iconType = { name = "state_marker_72" position = { x = 940 y = 847 } size = { width = 18 height = 18 } spriteType = "GFX_syn_icon" }
+	}
+}

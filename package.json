@@ -1,0 +1,111 @@
+{
+  "name": "hoi4-agent-tools",
+  "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
+  "version": "0.1.0",
+  "description": "Source-preserving HOI4 workbench exposed as a safe Model Context Protocol server for coding agents",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "HOI4 Agent Tools contributors",
+  "homepage": "https://github.com/klimPaskov/hoi4-agent-tools#readme",
+  "bugs": "https://github.com/klimPaskov/hoi4-agent-tools/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klimPaskov/hoi4-agent-tools.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "hearts-of-iron-iv",
+    "hoi4",
+    "modding",
+    "coding-agents"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "files": [
+    "dist/",
+    "docs/",
+    "schemas/",
+    "server.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas/*": "./schemas/*"
+  },
+  "bin": {
+    "hoi4-agent-tools": "./dist/bin/stdio.js",
+    "hoi4-agent-tools-http": "./dist/bin/http.js",
+    "hoi4-agent-tools-setup": "./dist/bin/setup.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:local": "tsx scripts/run-local-tests.ts",
+    "test:coverage": "vitest run --coverage",
+    "benchmark": "node --expose-gc --import tsx scripts/benchmark.ts",
+    "fixtures:generate": "npm run fixtures:generate:focus && npm run fixtures:generate:gui && npm run fixtures:generate:map",
+    "fixtures:generate:focus": "tsx scripts/generate-fixtures.ts",
+    "fixtures:generate:gui": "tsx scripts/generate-gui-fixture.ts",
+    "fixtures:generate:map": "tsx scripts/generate-map-fixture.ts",
+    "fixtures:check": "npm run fixtures:generate && tsx scripts/check-generated.ts fixtures",
+    "schemas:generate": "tsx scripts/generate-schemas.ts",
+    "schemas:check": "tsx scripts/generate-schemas.ts && tsx scripts/check-generated.ts schemas",
+    "registry:validate": "tsx scripts/validate-registry.ts",
+    "publication:verify": "tsx scripts/verify-publication.ts",
+    "publication:install": "tsx scripts/verify-public-install.ts",
+    "release:artifact:verify": "tsx scripts/verify-release-artifact.ts",
+    "release:order:verify": "tsx scripts/verify-npm-release-order.ts",
+    "pack:check": "tsx scripts/check-package.ts",
+    "inspector": "tsx scripts/run-inspector.ts",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run fixtures:check && npm run schemas:check && npm run build && npm run pack:check && npm run registry:validate",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@fontsource-variable/roboto": "5.2.10",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "express": "5.2.1",
+    "fast-glob": "3.3.3",
+    "fontkit": "2.0.4",
+    "iconv-lite": "0.7.3",
+    "jose": "6.1.3",
+    "sharp": "0.35.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/inspector": "0.22.0",
+    "@types/express": "5.0.6",
+    "@types/fontkit": "2.0.9",
+    "@types/node": "22.20.1",
+    "@types/pixelmatch": "5.2.6",
+    "@vitest/coverage-v8": "4.1.10",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "eslint": "10.6.0",
+    "fast-check": "4.9.0",
+    "pixelmatch": "7.2.0",
+    "prettier": "3.9.5",
+    "tsx": "4.23.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0",
+    "vitest": "4.1.10"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "projectOwned": true,
+  "generator": "scripts/generate-gui-fixture.ts",
+  "animation": {
+    "kind": "six independently-authored source frames composed into one horizontal sheet",
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "frameCount": 6,
+    "sourceFrames": [
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-0.png",
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-1.png",
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-2.png",
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-3.png",
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-4.png",
+      "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-5.png"
+    ],
+    "output": "workspace/gfx/interface/synthetic_gui/pulse_animation.png"
+  },
+  "outputSha256": {
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/manifest.json": "36942f81d825c557729a5d7f3f3dd931dacbde3d468ff456a935358c9d94e4e7",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-0.png": "c75ca7a21deebda7ebb9ae6a3cd31ae896b97f02a9b5436a9183e177d200ff69",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-1.png": "69c4dee23052c84aabe09cda134398391b35c7755fa790f8605c0ae05eeb22fb",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-2.png": "793405991830e8d30e0ff5c04e9ffebb6706604e7221f2125863542bb02a37c8",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-3.png": "8f8dc7ce6f396ff0320e1296fabb4ab49dd541d536fcbe4289ab15fa3d808bcf",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-4.png": "87f77e98e229a58cefa9df33c51fe218d5cda919029d4a9a1994f85e118e746c",
+    "workspace/hoi4_agent/animation_sources/synthetic_pulse/pulse-frame-5.png": "1d27301ad9f83a7eae79ed7f790c0f10cfbbfcef3630e07586f9c48de0c719de",
+    "workspace/fonts/synthetic_fixture_font.png": "a4319cfd9578f9293ee04cbde3b734d7a5e1d840e518f75e6edd3900df03f05a",
+    "workspace/gfx/interface/synthetic_gui/button_states.png": "1ff5b68655e68d126f7303b9956d80b6750c2e86753e455388feaf4053b0341a",
+    "workspace/gfx/interface/synthetic_gui/card.png": "5e407de635a136ea1703b5213dacbcf294c20c002feb16753bdac94fcb799205",
+    "workspace/gfx/interface/synthetic_gui/icon_states.png": "3c90e1de9ee7c91a58250263259a3e07c67e32d9219ea16b8852d86e66808807",
+    "workspace/gfx/interface/synthetic_gui/meter.png": "7ccfe21bfb731102a1aa9116a0aeafa27ad5a31da24d64197c575d923c05c84c",
+    "workspace/gfx/interface/synthetic_gui/modal.png": "a041878d0743bda4e334813bae41fd5e270d91cae7fe9e60a7e90527506cf95c",
+    "workspace/gfx/interface/synthetic_gui/panel.png": "aa626ed6d1903eb8abbfea60f2dbab886b97c9a3ed7dbb54d4764530293c2525",
+    "workspace/gfx/interface/synthetic_gui/pulse_animation.png": "28b451b70f307084d6cb038884408991423eff6cf58a5aacafcd9ba24ccf6fa8",
+    "workspace/gfx/interface/synthetic_gui/pulse_static.png": "b446108eeb95d57b37fadbb6d940ef2601de3cf3b16d803e63d2c15a1660504b"
+  }
+}

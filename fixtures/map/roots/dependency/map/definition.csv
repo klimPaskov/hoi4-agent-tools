@@ -1,0 +1,5 @@
+0;0;0;0;sea;false;ocean;0
+1;10;0;0;land;true;plains;1
+2;0;0;200;land;true;plains;1
+3;0;160;220;sea;true;ocean;0
+4;0;180;0;land;false;forest;1

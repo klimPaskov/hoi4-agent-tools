@@ -1,0 +1,344 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/operation-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "blocked",
+        "error"
+      ]
+    },
+    "code": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "workspaceId": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "filesScanned": {
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
+    "proposedFiles": {
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema1"
+      }
+    },
+    "changedFiles": {
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema2"
+      }
+    },
+    "diagnostics": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema3"
+      }
+    },
+    "transactionId": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "planHash": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "artifacts": {
+      "maxItems": 512,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "checks": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema7"
+          }
+        }
+      },
+      "required": [
+        "passed",
+        "checks"
+      ],
+      "additionalProperties": false
+    },
+    "blockers": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema8"
+      }
+    },
+    "rollbackStatus": {
+      "type": "string",
+      "enum": [
+        "not-required",
+        "available",
+        "applied",
+        "failed"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "additionalProperties": {}
+    }
+  },
+  "required": [
+    "status",
+    "code",
+    "workspaceId",
+    "filesScanned",
+    "proposedFiles",
+    "changedFiles",
+    "diagnostics",
+    "artifacts",
+    "validation",
+    "blockers",
+    "data"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "__schema1": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "__schema2": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error",
+            "blocker"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "syntax",
+            "reference",
+            "layout",
+            "design",
+            "rendering",
+            "security",
+            "transaction",
+            "map",
+            "configuration"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "location": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "related": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "operationId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "details": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "category",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "start": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "end": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "path",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "additionalProperties": false
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "maxLength": 4096,
+          "format": "uri"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "uri",
+        "name",
+        "mimeType"
+      ],
+      "additionalProperties": false
+    },
+    "__schema7": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "id",
+        "passed",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "__schema8": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "details": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

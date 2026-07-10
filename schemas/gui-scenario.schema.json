@@ -1,0 +1,298 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/gui-scenario.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "description": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "resolution": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "uiScale": {
+      "$ref": "#/$defs/__schema5"
+    },
+    "state": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "language": {
+      "$ref": "#/$defs/__schema8"
+    },
+    "animationTimeSeconds": {
+      "$ref": "#/$defs/__schema9"
+    },
+    "visibleTimeSeconds": {
+      "$ref": "#/$defs/__schema10"
+    },
+    "country": {
+      "$ref": "#/$defs/__schema11"
+    },
+    "stateValues": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "variables": {
+      "$ref": "#/$defs/__schema14"
+    },
+    "flags": {
+      "$ref": "#/$defs/__schema15"
+    },
+    "lists": {
+      "$ref": "#/$defs/__schema16"
+    },
+    "localisation": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "scriptedGui": {
+      "$ref": "#/$defs/__schema18"
+    },
+    "visibility": {
+      "$ref": "#/$defs/__schema19"
+    },
+    "elementStates": {
+      "$ref": "#/$defs/__schema20"
+    },
+    "selectedFrames": {
+      "$ref": "#/$defs/__schema21"
+    },
+    "scrollOffsets": {
+      "$ref": "#/$defs/__schema22"
+    },
+    "guiCosts": {
+      "$ref": "#/$defs/__schema23"
+    },
+    "scriptCosts": {
+      "$ref": "#/$defs/__schema24"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "__schema1": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "__schema2": {
+      "default": {
+        "width": 1920,
+        "height": 1080
+      },
+      "type": "object",
+      "properties": {
+        "width": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "height": {
+          "$ref": "#/$defs/__schema4"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "__schema3": {
+      "type": "integer",
+      "minimum": 320,
+      "maximum": 16384
+    },
+    "__schema4": {
+      "type": "integer",
+      "minimum": 200,
+      "maximum": 16384
+    },
+    "__schema5": {
+      "default": 1,
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 4
+    },
+    "__schema6": {
+      "default": "normal",
+      "$ref": "#/$defs/__schema7"
+    },
+    "__schema7": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "hover",
+        "selected",
+        "locked",
+        "disabled",
+        "warning",
+        "active",
+        "completed",
+        "empty-list",
+        "full-list",
+        "minimum-value",
+        "maximum-value",
+        "long-text",
+        "missing-localisation"
+      ]
+    },
+    "__schema8": {
+      "default": "l_english",
+      "type": "string",
+      "pattern": "^l_[a-z_]+$"
+    },
+    "__schema9": {
+      "default": 0,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 86400
+    },
+    "__schema10": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 86400
+    },
+    "__schema11": {
+      "$ref": "#/$defs/__schema12"
+    },
+    "__schema12": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 16384
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    },
+    "__schema13": {
+      "$ref": "#/$defs/__schema12"
+    },
+    "__schema14": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "__schema15": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "__schema16": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "maxItems": 10000,
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/__schema12"
+        }
+      }
+    },
+    "__schema17": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "__schema18": {
+      "default": {},
+      "$ref": "#/$defs/__schema12"
+    },
+    "__schema19": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "__schema20": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema7"
+      }
+    },
+    "__schema21": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "__schema22": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "__schema23": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "__schema24": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+dist/
+coverage/
+node_modules/
+fixtures/generated/
+fixtures/**/*.yml
+schemas/*.json
+*.bmp
+*.png
+*.svg
+*.html
+package-lock.json

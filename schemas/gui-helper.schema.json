@@ -1,0 +1,167 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/gui-helper.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "default": 1,
+      "type": "number",
+      "const": 1
+    },
+    "root": {
+      "$ref": "#/$defs/__schema0"
+    }
+  },
+  "required": [
+    "root"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "anchor",
+            "row",
+            "column",
+            "stack",
+            "grid",
+            "card",
+            "tabs",
+            "scroll-list",
+            "target-row",
+            "meter",
+            "status-panel",
+            "modal",
+            "overlay",
+            "element"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "elementType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gap": {
+          "default": 0,
+          "type": "number"
+        },
+        "columns": {
+          "default": 1,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "padding": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "margin": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "orientation": {
+          "type": "string"
+        },
+        "sprite": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "font": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "attributes": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        },
+        "raw": {
+          "type": "string"
+        },
+        "children": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "__schema1": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "top": {
+              "default": 0,
+              "type": "number"
+            },
+            "right": {
+              "default": 0,
+              "type": "number"
+            },
+            "bottom": {
+              "default": 0,
+              "type": "number"
+            },
+            "left": {
+              "default": 0,
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

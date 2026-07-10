@@ -1,0 +1,204 @@
+name: Bootstrap npm trusted publishing
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: bootstrap-npm
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  BOOTSTRAP_ARTIFACT_DIR: npm-bootstrap
+  BOOTSTRAP_ARTIFACT_NAME: npm-bootstrap
+  BOOTSTRAP_PACKAGE: hoi4-agent-tools
+  BOOTSTRAP_TAG: npm-bootstrap-v0.0.0-bootstrap.0
+  BOOTSTRAP_VERSION: 0.0.0-bootstrap.0
+  RELEASE_NODE_VERSION: 24.18.0
+  RELEASE_NPM_VERSION: 11.15.0
+
+jobs:
+  prepare:
+    if: github.repository == 'klimPaskov/hoi4-agent-tools'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+      - name: Require the one-time immutable bootstrap tag
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/tags/${BOOTSTRAP_TAG}"
+          test "$GITHUB_REF_NAME" = "$BOOTSTRAP_TAG"
+          test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
+          test "$(npm --version)" = "$RELEASE_NPM_VERSION"
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${BOOTSTRAP_TAG}" "refs/tags/${BOOTSTRAP_TAG}^{}")"
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+          test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+          test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+      - name: Cryptographically verify dependency registry signatures and provenance
+        run: npm audit signatures --ignore-scripts
+      - run: npm run check
+      - name: Prove the npm namespace is still unclaimed
+        shell: bash
+        run: |
+          for ATTEMPT in 1 2 3; do
+            STATUS="$(curl --silent --show-error --location --output /dev/null \
+              --write-out '%{http_code}' --header 'Accept: application/json' \
+              --header 'Cache-Control: no-cache' \
+              "https://registry.npmjs.org/${BOOTSTRAP_PACKAGE}")"
+            test "$STATUS" = '404'
+            if test "$ATTEMPT" != '3'; then sleep 1; fi
+          done
+      - name: Build a non-executable namespace-claim artifact
+        shell: bash
+        run: |
+          SOURCE_DIR="$(mktemp -d)"
+          trap 'rm -rf "$SOURCE_DIR"' EXIT
+          export SOURCE_DIR
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const directory = process.env.SOURCE_DIR;
+          const packageJson = {
+            name: process.env.BOOTSTRAP_PACKAGE,
+            version: process.env.BOOTSTRAP_VERSION,
+            description: 'One-time non-executable namespace claim for OIDC trusted-publisher setup.',
+            license: 'Apache-2.0',
+            repository: {
+              type: 'git',
+              url: 'git+https://github.com/klimPaskov/hoi4-agent-tools.git',
+            },
+            files: ['README.md'],
+            publishConfig: { access: 'public', provenance: false, tag: 'bootstrap' },
+          };
+          fs.writeFileSync(path.join(directory, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
+          fs.writeFileSync(path.join(directory, 'README.md'), '# npm namespace bootstrap\n\nThis package version contains no executable code. It exists only to configure OIDC trusted publishing before the first stable release.\n');
+          NODE
+          mkdir -p "$BOOTSTRAP_ARTIFACT_DIR"
+          npm pack "$SOURCE_DIR" --ignore-scripts --json \
+            --pack-destination "$BOOTSTRAP_ARTIFACT_DIR" \
+            > "$BOOTSTRAP_ARTIFACT_DIR/npm-pack.json"
+          TARBALL="$(jq --exit-status --raw-output 'if length == 1 then .[0].filename else error("expected one tarball") end' "$BOOTSTRAP_ARTIFACT_DIR/npm-pack.json")"
+          test "$(basename "$TARBALL")" = "$TARBALL"
+          test "$(jq --raw-output '.[0].name' "$BOOTSTRAP_ARTIFACT_DIR/npm-pack.json")" = "$BOOTSTRAP_PACKAGE"
+          test "$(jq --raw-output '.[0].version' "$BOOTSTRAP_ARTIFACT_DIR/npm-pack.json")" = "$BOOTSTRAP_VERSION"
+          tar --list --gzip --file "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | sort > "$BOOTSTRAP_ARTIFACT_DIR/tar-entries.txt"
+          printf '%s\n' package/README.md package/package.json | sort > "$BOOTSTRAP_ARTIFACT_DIR/expected-entries.txt"
+          diff --unified "$BOOTSTRAP_ARTIFACT_DIR/expected-entries.txt" "$BOOTSTRAP_ARTIFACT_DIR/tar-entries.txt"
+          rm "$BOOTSTRAP_ARTIFACT_DIR/expected-entries.txt" "$BOOTSTRAP_ARTIFACT_DIR/tar-entries.txt"
+          SHA256="$(sha256sum "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')"
+          SHA512="$(sha512sum "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')"
+          jq --null-input --sort-keys \
+            --arg package "$BOOTSTRAP_PACKAGE" --arg version "$BOOTSTRAP_VERSION" \
+            --arg tag "$BOOTSTRAP_TAG" --arg commit "$GITHUB_SHA" \
+            --arg filename "$TARBALL" --arg sha256 "$SHA256" --arg sha512 "$SHA512" \
+            '{package: $package, version: $version, sourceTag: $tag, sourceCommit: $commit, filename: $filename, sha256: $sha256, sha512: $sha512, executableCode: false}' \
+            > "$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ${{ env.BOOTSTRAP_ARTIFACT_NAME }}
+          path: |
+            ${{ env.BOOTSTRAP_ARTIFACT_DIR }}/hoi4-agent-tools-*.tgz
+            ${{ env.BOOTSTRAP_ARTIFACT_DIR }}/npm-pack.json
+            ${{ env.BOOTSTRAP_ARTIFACT_DIR }}/bootstrap-identity.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish_once:
+    needs: prepare
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse the ordinary release token in the bootstrap path
+        shell: bash
+        env:
+          FORBIDDEN_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -z "$FORBIDDEN_NPM_TOKEN"
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ env.BOOTSTRAP_ARTIFACT_NAME }}
+          path: ${{ env.BOOTSTRAP_ARTIFACT_DIR }}
+      - name: Validate the exact one-time artifact
+        shell: bash
+        run: |
+          test "$(node --version)" = "v${RELEASE_NODE_VERSION}"
+          test "$(npm --version)" = "$RELEASE_NPM_VERSION"
+          IDENTITY="$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json"
+          jq --exit-status \
+            --arg package "$BOOTSTRAP_PACKAGE" --arg version "$BOOTSTRAP_VERSION" \
+            --arg tag "$BOOTSTRAP_TAG" --arg commit "$GITHUB_SHA" \
+            '.package == $package and .version == $version and .sourceTag == $tag and .sourceCommit == $commit and .executableCode == false' \
+            "$IDENTITY" > /dev/null
+          TARBALL="$(jq --exit-status --raw-output '.filename' "$IDENTITY")"
+          test "$(basename "$TARBALL")" = "$TARBALL"
+          test "$(sha256sum "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha256' "$IDENTITY")"
+          test "$(sha512sum "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha512' "$IDENTITY")"
+          tar --list --gzip --file "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" | sort > /tmp/bootstrap-entries.txt
+          printf '%s\n' package/README.md package/package.json | sort > /tmp/bootstrap-expected.txt
+          diff --unified /tmp/bootstrap-expected.txt /tmp/bootstrap-entries.txt
+      - name: Publish the namespace claim exactly once without OIDC
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          STATUS="$(curl --silent --show-error --location --output /dev/null \
+            --write-out '%{http_code}' --header 'Accept: application/json' \
+            --header 'Cache-Control: no-cache' \
+            "https://registry.npmjs.org/${BOOTSTRAP_PACKAGE}")"
+          test "$STATUS" = '404'
+          REMOTE_TAGS="$(git ls-remote --exit-code \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${BOOTSTRAP_TAG}" "refs/tags/${BOOTSTRAP_TAG}^{}")"
+          REMOTE_COMMIT="$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"
+          if test -z "$REMOTE_COMMIT"; then REMOTE_COMMIT="$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}" '$2 == ref { print $1 }' <<<"$REMOTE_TAGS")"; fi
+          test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -eq 1
+          test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
+          test "$REMOTE_COMMIT" = "$GITHUB_SHA"
+          TARBALL="$(jq --raw-output '.filename' "$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json")"
+          npm publish "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" \
+            --access public --ignore-scripts --provenance=false --tag bootstrap
+      - name: Verify public bytes and registry signature without the token
+        shell: bash
+        run: |
+          unset NODE_AUTH_TOKEN NPM_TOKEN
+          METADATA="$(mktemp)"
+          PUBLIC_TARBALL="$(mktemp)"
+          TEMPORARY="$(mktemp -d)"
+          trap 'rm -f "$METADATA" "$PUBLIC_TARBALL"; rm -rf "$TEMPORARY"' EXIT
+          for ATTEMPT in $(seq 1 12); do
+            STATUS="$(curl --silent --show-error --location --output "$METADATA" \
+              --write-out '%{http_code}' --header 'Accept: application/json' \
+              --header 'Cache-Control: no-cache' \
+              "https://registry.npmjs.org/${BOOTSTRAP_PACKAGE}/${BOOTSTRAP_VERSION}")"
+            if test "$STATUS" = '200'; then break; fi
+            test "$ATTEMPT" -lt 12
+            sleep 5
+          done
+          TARBALL_URL="$(jq --exit-status --raw-output '.dist.tarball' "$METADATA")"
+          curl --fail --silent --show-error --location --output "$PUBLIC_TARBALL" "$TARBALL_URL"
+          test "$(sha256sum "$PUBLIC_TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha256' "$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json")"
+          printf '%s\n' '{"private":true,"dependencies":{"hoi4-agent-tools":"0.0.0-bootstrap.0"}}' > "$TEMPORARY/package.json"
+          npm install --prefix "$TEMPORARY" --ignore-scripts --no-audit --no-fund --save-exact
+          npm audit signatures --prefix "$TEMPORARY" --ignore-scripts

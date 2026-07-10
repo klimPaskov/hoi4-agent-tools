@@ -1,0 +1,343 @@
+# Project-owned synthetic events for Focus Tree Workbench acceptance tests.
+add_namespace = synthetic_focus
+
+country_event = {
+	id = synthetic_focus.1008
+	title = synthetic_focus.1008.t
+	desc = synthetic_focus.1008.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.1008.a
+		add_political_power = 1
+	}
+}
+
+country_event = {
+	id = synthetic_focus.1016
+	title = synthetic_focus.1016.t
+	desc = synthetic_focus.1016.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.1016.a
+		add_political_power = 2
+	}
+}
+
+country_event = {
+	id = synthetic_focus.1024
+	title = synthetic_focus.1024.t
+	desc = synthetic_focus.1024.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.1024.a
+		add_political_power = 3
+	}
+}
+
+country_event = {
+	id = synthetic_focus.108
+	title = synthetic_focus.108.t
+	desc = synthetic_focus.108.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.108.a
+		add_political_power = 4
+	}
+}
+
+country_event = {
+	id = synthetic_focus.116
+	title = synthetic_focus.116.t
+	desc = synthetic_focus.116.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.116.a
+		add_political_power = 5
+	}
+}
+
+country_event = {
+	id = synthetic_focus.124
+	title = synthetic_focus.124.t
+	desc = synthetic_focus.124.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.124.a
+		add_political_power = 6
+	}
+}
+
+country_event = {
+	id = synthetic_focus.208
+	title = synthetic_focus.208.t
+	desc = synthetic_focus.208.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.208.a
+		add_political_power = 7
+	}
+}
+
+country_event = {
+	id = synthetic_focus.216
+	title = synthetic_focus.216.t
+	desc = synthetic_focus.216.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.216.a
+		add_political_power = 8
+	}
+}
+
+country_event = {
+	id = synthetic_focus.224
+	title = synthetic_focus.224.t
+	desc = synthetic_focus.224.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.224.a
+		add_political_power = 9
+	}
+}
+
+country_event = {
+	id = synthetic_focus.308
+	title = synthetic_focus.308.t
+	desc = synthetic_focus.308.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.308.a
+		add_political_power = 10
+	}
+}
+
+country_event = {
+	id = synthetic_focus.316
+	title = synthetic_focus.316.t
+	desc = synthetic_focus.316.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.316.a
+		add_political_power = 11
+	}
+}
+
+country_event = {
+	id = synthetic_focus.324
+	title = synthetic_focus.324.t
+	desc = synthetic_focus.324.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.324.a
+		add_political_power = 12
+	}
+}
+
+country_event = {
+	id = synthetic_focus.408
+	title = synthetic_focus.408.t
+	desc = synthetic_focus.408.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.408.a
+		add_political_power = 13
+	}
+}
+
+country_event = {
+	id = synthetic_focus.416
+	title = synthetic_focus.416.t
+	desc = synthetic_focus.416.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.416.a
+		add_political_power = 14
+	}
+}
+
+country_event = {
+	id = synthetic_focus.424
+	title = synthetic_focus.424.t
+	desc = synthetic_focus.424.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.424.a
+		add_political_power = 15
+	}
+}
+
+country_event = {
+	id = synthetic_focus.508
+	title = synthetic_focus.508.t
+	desc = synthetic_focus.508.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.508.a
+		add_political_power = 16
+	}
+}
+
+country_event = {
+	id = synthetic_focus.516
+	title = synthetic_focus.516.t
+	desc = synthetic_focus.516.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.516.a
+		add_political_power = 17
+	}
+}
+
+country_event = {
+	id = synthetic_focus.524
+	title = synthetic_focus.524.t
+	desc = synthetic_focus.524.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.524.a
+		add_political_power = 18
+	}
+}
+
+country_event = {
+	id = synthetic_focus.608
+	title = synthetic_focus.608.t
+	desc = synthetic_focus.608.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.608.a
+		add_political_power = 19
+	}
+}
+
+country_event = {
+	id = synthetic_focus.616
+	title = synthetic_focus.616.t
+	desc = synthetic_focus.616.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.616.a
+		add_political_power = 20
+	}
+}
+
+country_event = {
+	id = synthetic_focus.624
+	title = synthetic_focus.624.t
+	desc = synthetic_focus.624.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.624.a
+		add_political_power = 21
+	}
+}
+
+country_event = {
+	id = synthetic_focus.708
+	title = synthetic_focus.708.t
+	desc = synthetic_focus.708.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.708.a
+		add_political_power = 22
+	}
+}
+
+country_event = {
+	id = synthetic_focus.716
+	title = synthetic_focus.716.t
+	desc = synthetic_focus.716.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.716.a
+		add_political_power = 23
+	}
+}
+
+country_event = {
+	id = synthetic_focus.724
+	title = synthetic_focus.724.t
+	desc = synthetic_focus.724.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.724.a
+		add_political_power = 24
+	}
+}
+
+country_event = {
+	id = synthetic_focus.808
+	title = synthetic_focus.808.t
+	desc = synthetic_focus.808.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.808.a
+		add_political_power = 25
+	}
+}
+
+country_event = {
+	id = synthetic_focus.816
+	title = synthetic_focus.816.t
+	desc = synthetic_focus.816.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.816.a
+		add_political_power = 26
+	}
+}
+
+country_event = {
+	id = synthetic_focus.824
+	title = synthetic_focus.824.t
+	desc = synthetic_focus.824.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.824.a
+		add_political_power = 27
+	}
+}
+
+country_event = {
+	id = synthetic_focus.907
+	title = synthetic_focus.907.t
+	desc = synthetic_focus.907.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.907.a
+		add_political_power = 28
+	}
+}
+
+country_event = {
+	id = synthetic_focus.908
+	title = synthetic_focus.908.t
+	desc = synthetic_focus.908.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.908.a
+		add_political_power = 29
+	}
+}
+
+country_event = {
+	id = synthetic_focus.916
+	title = synthetic_focus.916.t
+	desc = synthetic_focus.916.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.916.a
+		add_political_power = 30
+	}
+}
+
+country_event = {
+	id = synthetic_focus.924
+	title = synthetic_focus.924.t
+	desc = synthetic_focus.924.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_focus.924.a
+		add_political_power = 31
+	}
+}

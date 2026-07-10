@@ -1,0 +1,1 @@
+This project-owned file is outside the map scan and must remain byte-identical.

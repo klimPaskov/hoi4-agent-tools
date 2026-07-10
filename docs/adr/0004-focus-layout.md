@@ -5,7 +5,7 @@
 
 ## Decision
 
-Use a small project-owned layered constraint solver with integer coordinates, deterministic tie-breaking, stable route lanes, pinned-node constraints, incremental movement penalties, crossing counts, and explicit unsatisfied-constraint reports.
+Use a small project-owned layered constraint solver with integer coordinates, deterministic tie-breaking, stable route lanes, pinned-node constraints, mutual-exclusion spacing, incremental stability anchors, crossing counts, and explicit unsatisfied-constraint reports.
 
 ## Rationale
 
@@ -13,4 +13,4 @@ ELK and Dagre were evaluated. They are strong general graph-layout libraries, bu
 
 ## Consequences
 
-The solver does not change prerequisites or stack nodes to force success. Hard constraints block the layout. Crossing reduction and design-quality rules are deterministic heuristics and are labelled as warnings rather than semantic errors.
+The solver does not change prerequisites or stack nodes to force success. New automatic nodes reject visible overlaps and mutual-exclusion gaps smaller than `nodeSpacing`, then minimize connector crossings across deterministic integer candidates. Fixed, relative, pinned, and prior-layout nodes are never moved for these presentation heuristics. When their authored constraints leave a mutual-exclusion gap or connector crossing unsatisfied, the result identifies the preserved and still-movable endpoints. These presentation findings remain warnings rather than semantic errors.

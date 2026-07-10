@@ -5,7 +5,7 @@
 
 ## Decision
 
-HTTP binds to `127.0.0.1` by default. Every request is authenticated. Loopback deployments may use long static bearer tokens loaded from environment variables. Non-loopback deployment requires an HTTPS public resource URL and JWT verification against configured OAuth/OIDC issuer, JWKS, audience, algorithms, and scopes. Protected-resource metadata is published, present origins are allowlisted, Host is validated, sessions use cryptographically secure IDs bound to principals, and body/rate/concurrency/session limits are enforced.
+HTTP binds to `127.0.0.1` by default. Every request is authenticated. Loopback deployments may use long static bearer tokens loaded from environment variables. Non-loopback deployment requires an HTTPS public resource URL and JWT verification against configured OAuth/OIDC issuer, JWKS, audience, algorithms, expiry, and scopes. Protected-resource metadata is published and linked from Bearer challenges. Write-scoped tool calls are rejected at the transport with an MCP 2025-11-25 step-up challenge while the corresponding handlers independently enforce the same scope. Present origins are allowlisted, Host is validated, sessions use cryptographically secure IDs bound to principals, clients, and a monotonic scope set, and body/rate/concurrency/session limits are enforced.
 
 ## Rationale
 

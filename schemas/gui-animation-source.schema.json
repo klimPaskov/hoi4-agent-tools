@@ -1,0 +1,176 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.0/schemas/gui-animation-source.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "projectOwned": {
+      "type": "boolean",
+      "const": true
+    },
+    "sprite": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "sheet": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "frameWidth": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 16384
+        },
+        "frameHeight": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 16384
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "frameWidth",
+        "frameHeight"
+      ],
+      "additionalProperties": false
+    },
+    "sourceFrames": {
+      "minItems": 2,
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema2"
+      }
+    },
+    "animation": {
+      "type": "object",
+      "properties": {
+        "frameCount": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1024
+        },
+        "rateFps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10000
+        },
+        "looping": {
+          "type": "boolean"
+        },
+        "playOnShow": {
+          "type": "boolean"
+        },
+        "pauseOnLoop": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 86400
+        }
+      },
+      "required": [
+        "frameCount",
+        "rateFps",
+        "looping",
+        "playOnShow"
+      ],
+      "additionalProperties": false
+    },
+    "staticFallback": {
+      "type": "object",
+      "properties": {
+        "sprite": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "path": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "frameIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1023
+        }
+      },
+      "required": [
+        "sprite",
+        "path",
+        "sha256",
+        "frameIndex"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectOwned",
+    "sprite",
+    "sheet",
+    "sourceFrames",
+    "animation",
+    "staticFallback"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "__schema1": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "anchor": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "anchor"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

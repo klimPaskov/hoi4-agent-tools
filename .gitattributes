@@ -1,6 +1,10 @@
 * text=auto eol=lf
 *.bmp binary
+*.dds binary
+*.gif binary
 *.png binary
+*.tga binary
+*.webp binary
 *.ttf binary
 *.otf binary
 *.woff binary

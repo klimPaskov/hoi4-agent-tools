@@ -1,0 +1,7 @@
+defined_text = {
+	name = GetSyntheticReadinessLabel
+	text = {
+		trigger = { always = yes }
+		localisation_key = SYN_GUI_READINESS_TEXT
+	}
+}

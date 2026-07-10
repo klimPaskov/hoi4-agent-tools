@@ -1,0 +1,72 @@
+# Synthetic scripted-GUI bindings for the acceptance fixture.
+scripted_gui = {
+	synthetic_gui_controller = {
+		context_type = country
+		window_name = synthetic_gui_window
+		visible = { always = yes }
+		effects = {
+			tab_overview_click = { }
+			tab_operations_click = { }
+			tab_logistics_click = { }
+			tab_intelligence_click = { }
+			tab_diplomacy_click = { }
+			card_action_01_click = { }
+			card_action_02_click = { }
+			card_action_03_click = { }
+			card_action_04_click = { }
+			card_action_05_click = { }
+			card_action_06_click = { }
+			card_action_07_click = { }
+			card_action_08_click = { }
+			card_action_09_click = { }
+			card_action_10_click = { }
+			card_action_11_click = { }
+			card_action_12_click = { }
+			objective_row_click = { }
+			modal_confirm_click = { add_political_power = -12 }
+			modal_cancel_click = { }
+		}
+		triggers = {
+			tab_overview_click_enabled = { always = yes }
+			tab_operations_click_enabled = { always = yes }
+			tab_logistics_click_enabled = { always = yes }
+			tab_intelligence_click_enabled = { always = yes }
+			tab_diplomacy_click_enabled = { always = yes }
+			card_action_01_click_enabled = { always = yes }
+			card_action_02_click_enabled = { always = yes }
+			card_action_03_click_enabled = { always = yes }
+			card_action_04_click_enabled = { always = yes }
+			card_action_05_click_enabled = { always = yes }
+			card_action_06_click_enabled = { always = yes }
+			card_action_07_click_enabled = { always = yes }
+			card_action_08_click_enabled = { always = yes }
+			card_action_09_click_enabled = { always = yes }
+			card_action_10_click_enabled = { always = yes }
+			card_action_11_click_enabled = { always = yes }
+			card_action_12_click_enabled = { always = yes }
+			objective_row_click_enabled = { always = yes }
+			modal_confirm_click_enabled = { always = yes }
+			modal_cancel_click_enabled = { always = yes }
+		}
+		properties = {
+			readiness_meter = { }
+			risk_meter = { }
+			card_meter_01 = { }
+			card_meter_02 = { }
+			card_meter_03 = { }
+			card_meter_04 = { }
+			card_meter_05 = { }
+			card_meter_06 = { }
+			card_meter_07 = { }
+			card_meter_08 = { }
+			card_meter_09 = { }
+			card_meter_10 = { }
+			card_meter_11 = { }
+			card_meter_12 = { }
+		}
+		dynamic_lists = {
+			objective_list = { }
+		}
+		ai_enabled = { always = yes }
+	}
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "variants": [
+    {
+      "expectedDiagnosticCodes": ["FOCUS_PREREQUISITE_CYCLE"],
+      "id": "prerequisite_cycle",
+      "mutation": {
+        "focusId": "synthetic_route_01_focus_01",
+        "focusIds": ["synthetic_route_01_focus_25"],
+        "kind": "replace_prerequisites"
+      }
+    },
+    {
+      "expectedDiagnosticCodes": ["FOCUS_PREREQUISITE_MISSING"],
+      "id": "missing_prerequisite",
+      "mutation": {
+        "focusId": "synthetic_route_03_focus_05",
+        "focusIds": ["synthetic_missing_focus"],
+        "kind": "replace_prerequisites"
+      }
+    },
+    {
+      "expectedDiagnosticCodes": ["FOCUS_DUPLICATE_COORDINATE"],
+      "id": "duplicate_coordinate",
+      "mutation": {
+        "focusId": "synthetic_route_02_focus_01",
+        "kind": "replace_position",
+        "position": { "mode": "fixed", "pinned": true, "x": 14, "y": 0 }
+      }
+    },
+    {
+      "expectedDiagnosticCodes": ["FOCUS_GAMEPLAY_REFERENCE_MISSING"],
+      "id": "missing_event_reference",
+      "mutation": {
+        "focusId": "synthetic_route_01_focus_08",
+        "from": "synthetic_focus.108",
+        "kind": "replace_link_target",
+        "to": "synthetic_focus.999999"
+      }
+    },
+    {
+      "expectedDiagnosticCodes": ["FOCUS_HIDDEN_WITHOUT_REVEAL"],
+      "id": "hidden_without_reveal",
+      "mutation": { "focusId": "synthetic_route_08_focus_05", "kind": "remove_reveal" }
+    }
+  ]
+}

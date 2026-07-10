@@ -1,0 +1,5 @@
+strategic_region = {
+	id = 2
+	name = "STRATEGICREGION_2"
+	provinces = { }
+}
