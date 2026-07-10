@@ -19,9 +19,11 @@ MCP input, file paths, manifest content, client annotations, session IDs, Origin
 - Traversal, absolute paths, UNC/device paths, NULs, alternate data streams, ambiguous trailing characters, and device names are rejected.
 - Existing symlinks and junctions are resolved; an escape outside the root is rejected.
 - Artifact shards, transaction journals, blobs, and lock descendants are re-canonicalized before access. A symlink or junction observed in artifact/journal enumeration is rejected.
-- Transaction mode requires a canonical, non-linked `serverStateRoot` that does not overlap any
-  source, registration capability, generated-storage root, or runtime-nominated root. Its random
-  journal key and protected revision heads are never returned through MCP.
+- Transaction mode requires an absolute `serverStateRoot` whose existing components are non-linked
+  and whose canonical target does not overlap any source, registration capability,
+  generated-storage root, or runtime-nominated root. Harmless native path-spelling aliases are
+  normalized only after the link check. Its random journal key and protected revision heads are
+  never returned through MCP.
 - Writes target the canonical mod root only. Game, dependency, fixture, and unrelated user files are never writable.
 - Runtime mod registration requires a separate, default-empty `writableRegistrationRoots`
   capability. A caller cannot relabel a game/dependency path from the read-only

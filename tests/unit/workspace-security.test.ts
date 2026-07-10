@@ -8,7 +8,7 @@ import {
 } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceScanner } from '../../src/hoi4_agent_tools/core/scanner.js';
-import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { canonicalPath, WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
 async function fixture() {
   const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-workspace-'));
@@ -31,7 +31,7 @@ describe('workspace path policy', () => {
   it('resolves relative paths in allowlisted roots', async () => {
     const { resolver, mod } = await fixture();
     await expect(resolver.resolvePath('test', 'inside.txt', 'read')).resolves.toMatchObject({
-      path: path.join(mod, 'inside.txt'),
+      path: await canonicalPath(path.join(mod, 'inside.txt')),
     });
   });
 
@@ -162,6 +162,19 @@ describe('workspace path policy', () => {
     });
   });
 
+  it('normalizes native server-state path spellings after rejecting linked components', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-server-state-native-path-'));
+    const requestedRoot = path.join(base, 'server-state');
+    const configuration = serverConfigurationSchema.parse({
+      version: 1,
+      writePolicy: 'transactions',
+      serverStateRoot: requestedRoot,
+    });
+
+    const resolver = await WorkspaceResolver.create(configuration);
+    expect(resolver.serverState()?.root).toBe(await canonicalPath(requestedRoot));
+  });
+
   it('keeps game and dependency roots read-only', async () => {
     const { resolver } = await fixture();
     await expect(resolver.resolvePath('test', 'new.txt', 'write', ['game'])).rejects.toThrow();
@@ -227,7 +240,11 @@ describe('workspace path policy', () => {
           gameRoot: allowedGame,
         }),
       ),
-    ).resolves.toMatchObject({ id: 'safe-runtime', modRoot: mod, gameRoot: allowedGame });
+    ).resolves.toMatchObject({
+      id: 'safe-runtime',
+      modRoot: await canonicalPath(mod),
+      gameRoot: await canonicalPath(allowedGame),
+    });
   });
 
   it('does not let runtime callers relabel a read-only source root as a mod', async () => {
@@ -406,7 +423,11 @@ describe('workspace path policy', () => {
         }),
         'runtime-user',
       ),
-    ).resolves.toMatchObject({ writeEnabled: false, artifactRoot: artifacts, cacheRoot: cache });
+    ).resolves.toMatchObject({
+      writeEnabled: false,
+      artifactRoot: await canonicalPath(artifacts),
+      cacheRoot: await canonicalPath(cache),
+    });
     await expect(lstat(path.join(game, '.hoi4-agent'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -491,7 +512,10 @@ describe('workspace path policy', () => {
         }),
         'runtime-user',
       ),
-    ).resolves.toMatchObject({ id: 'shared-game-safe', gameRoot: sharedGame });
+    ).resolves.toMatchObject({
+      id: 'shared-game-safe',
+      gameRoot: await canonicalPath(sharedGame),
+    });
   });
 
   it('rejects generated-root overlap before creating directories in another workspace', async () => {
@@ -787,7 +811,7 @@ describe('workspace path policy', () => {
     const aliased = { ...registration, artifactRoot: artifactAlias };
     await expect(
       (await WorkspaceResolver.create(configuration)).register(aliased, 'alice'),
-    ).resolves.toMatchObject({ artifactRoot: artifacts });
+    ).resolves.toMatchObject({ artifactRoot: await canonicalPath(artifacts) });
     await expect(
       (await WorkspaceResolver.create(configuration)).register(aliased, 'bob'),
     ).rejects.toMatchObject({ code: 'WORKSPACE_REGISTRATION_CONFLICT' });

@@ -58,8 +58,11 @@ function isNotFound(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
 
-function samePath(left: string, right: string): boolean {
-  return path.relative(left, right) === '' && path.relative(right, left) === '';
+function sameFileIdentity(
+  left: { dev: bigint; ino: bigint },
+  right: { dev: bigint; ino: bigint },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 async function assertNoLinkComponents(absolutePath: string): Promise<void> {
@@ -145,23 +148,39 @@ export class ServerState {
     await assertNoLinkComponents(absoluteRoot);
     await mkdir(absoluteRoot, { recursive: true, mode: 0o700 });
     await assertNoLinkComponents(absoluteRoot);
-    const metadata = await lstat(absoluteRoot);
+    const metadata = await lstat(absoluteRoot, { bigint: true });
     if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
       throw stateError('SERVER_STATE_ROOT_INVALID', 'Server state root must be a real directory');
     }
-    if (process.platform !== 'win32' && (metadata.mode & 0o077) !== 0) {
+    if (process.platform !== 'win32' && (metadata.mode & 0o077n) !== 0n) {
       throw stateError(
         'SERVER_STATE_ROOT_PERMISSIONS',
         'Server state root permissions must exclude group and other access',
       );
     }
     const canonicalRoot = path.normalize(await realpath(absoluteRoot));
-    if (!samePath(absoluteRoot, canonicalRoot)) {
+    await assertNoLinkComponents(absoluteRoot);
+    await assertNoLinkComponents(canonicalRoot);
+    const [currentMetadata, canonicalMetadata] = await Promise.all([
+      lstat(absoluteRoot, { bigint: true }),
+      lstat(canonicalRoot, { bigint: true }),
+    ]);
+    if (
+      currentMetadata.isSymbolicLink() ||
+      !currentMetadata.isDirectory() ||
+      canonicalMetadata.isSymbolicLink() ||
+      !canonicalMetadata.isDirectory() ||
+      !sameFileIdentity(metadata, currentMetadata) ||
+      !sameFileIdentity(metadata, canonicalMetadata)
+    ) {
       throw stateError(
         'SERVER_STATE_ROOT_NOT_CANONICAL',
-        'Server state root must not resolve through an alias, symbolic link, or junction',
+        'Server state root changed while its canonical identity was being established',
       );
     }
+    // Windows realpath expands harmless 8.3 names (for example RUNNER~1 on hosted runners).
+    // Component checks and the identity comparison above accept only that native spelling
+    // normalization while symbolic links, junctions, and replacement races fail closed.
 
     const keyPath = path.join(canonicalRoot, journalKeyFile);
     let key: Buffer;

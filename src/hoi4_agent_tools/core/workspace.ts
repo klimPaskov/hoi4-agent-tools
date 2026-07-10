@@ -589,7 +589,7 @@ export class WorkspaceResolver {
       const generatedRoot =
         configuredRoot ??
         (registration.kind === 'mod'
-          ? path.join(candidateRoot, '.hoi4-agent', generatedKind)
+          ? path.join(registration.root, '.hoi4-agent', generatedKind)
           : undefined);
       if (generatedRoot === undefined) continue;
       this.assertLexicalGeneratedPath(registration, generatedRoot, generatedKind);

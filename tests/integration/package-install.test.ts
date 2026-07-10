@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -214,9 +214,11 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     );
     expect(new Set(discoveryResult.candidates).size).toBe(discoveryResult.candidates.length);
     expect(discoveryResult.candidates).toEqual(
-      expect.arrayContaining([path.resolve(discoveredGame), path.resolve(discoveredMod)]),
+      expect.arrayContaining(
+        await Promise.all([realpath(discoveredGame), realpath(discoveredMod)]),
+      ),
     );
-    expect(discoveryResult.candidates).not.toContain(path.resolve(nonDirectory));
+    expect(discoveryResult.candidates).not.toContain(await realpath(nonDirectory));
     expect(await readFile(nonDirectory, 'utf8')).toBe('unchanged\n');
 
     const setupWorkspace = path.join(temporaryRoot, 'setup-workspace');
@@ -305,7 +307,7 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     expect(JSON.parse(writeDiagnosis.stdout)).toMatchObject({
       status: 'ok',
       serverState: {
-        root: path.resolve(setupServerStateRoot),
+        root: await realpath(setupServerStateRoot),
         readable: true,
         writable: true,
       },

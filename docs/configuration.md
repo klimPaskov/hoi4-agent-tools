@@ -79,8 +79,10 @@ The configuration also rejects unsafe combined budgets: `scanMaxBytes` multiplie
 simultaneous offline renders cannot exceed the supported process-safety model.
 
 `serverStateRoot` is mandatory whenever `writePolicy` is `"transactions"`. It must be absolute,
-canonical, and free of symbolic links or junctions, and it must not overlap any configured or
-runtime source, fixture, artifact, cache, registration, writable-registration, or storage root.
+resolve to a canonical directory through components that contain no symbolic links or junctions,
+and it must not overlap any configured or runtime source, fixture, artifact, cache, registration,
+writable-registration, or storage root. The server stores the native canonical spelling, including
+expanding harmless Windows 8.3 names, only after checking every existing component for links.
 The server creates one random 32-byte journal HMAC key there with mode `0600`; the surrounding
 POSIX directory must exclude group/other access. Windows operators must grant only the dedicated
 server account access through the directory DACL. Keep the same state root when restarting or
