@@ -443,7 +443,7 @@ describe('offline package and Registry metadata', () => {
     );
     const push = workflow.indexOf('push: true');
     const platformVerification = workflow.indexOf(
-      'Verify the bootstrap tag and exact runtime platforms',
+      'Verify the published bootstrap tag and exact runtime platforms',
     );
     const secretReferences = [...workflow.matchAll(/secrets\.([A-Za-z0-9_]+)/gu)].map(
       ([, secret]) => secret,

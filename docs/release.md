@@ -50,14 +50,18 @@ presence deliberately blocks the OIDC publisher.
 GitHub creates the first personal-account container package as private. Run the pinned manual
 `Bootstrap GHCR` workflow from public `main`, then change package visibility to **Public** in the
 package settings. The bootstrap uses only the repository-scoped `GITHUB_TOKEN`, publishes only
-the `bootstrap` tag, and verifies anonymous `linux/amd64` and `linux/arm64` access.
+the `bootstrap` tag, and verifies the authenticated index contains exact `linux/amd64` and
+`linux/arm64` runtime manifests. GitHub exposes no supported API for changing a personal GHCR
+package's visibility, so the bootstrap cannot prove anonymous access until an administrator makes
+that newly created package public in the package settings.
 
 ```bash
 gh workflow run bootstrap-ghcr.yml --repo klimPaskov/hoi4-agent-tools --ref main
 gh run watch --repo klimPaskov/hoi4-agent-tools
 ```
 
-Verify visibility with a Docker configuration that contains no credentials:
+After changing visibility to **Public**, prove anonymous visibility and both runtime manifests with
+a Docker configuration that contains no credentials:
 
 ```bash
 ANONYMOUS_DOCKER_CONFIG="$(mktemp -d)"
