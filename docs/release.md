@@ -14,7 +14,7 @@ The peeled commit must equal `GITHUB_SHA` and the commit recorded in the release
 - the npm namespace bootstrap completed and the trusted publisher configured;
 - GitHub Actions OIDC available for ordinary npm and MCP Registry publication.
 
-The release workflow uses the npm 11.15.0 CLI bundled with the pinned Node 24.18.0 LTS distribution.
+The release workflow uses the npm 11.16.0 CLI bundled with the pinned Node 24.18.0 LTS distribution.
 No release job upgrades npm globally. The ordinary npm OIDC publisher does not check out source,
 run `npm ci`, execute dependency lifecycle scripts, or install any package. It downloads the one
 artifact made by `validate_pack`, checks its recorded commit and SHA-256/SHA-512 digests, rechecks

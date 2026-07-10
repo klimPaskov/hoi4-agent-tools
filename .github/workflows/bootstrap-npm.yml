@@ -16,7 +16,7 @@ env:
   BOOTSTRAP_TAG: npm-bootstrap-v0.0.0-bootstrap.0
   BOOTSTRAP_VERSION: 0.0.0-bootstrap.0
   RELEASE_NODE_VERSION: 24.18.0
-  RELEASE_NPM_VERSION: 11.15.0
+  RELEASE_NPM_VERSION: 11.16.0
 
 jobs:
   prepare:

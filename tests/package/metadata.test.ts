@@ -237,7 +237,7 @@ describe('offline package and Registry metadata', () => {
     expect(workflow).toContain('git merge-base --is-ancestor "$GITHUB_SHA"');
     expect(workflow).toContain('EXPECTED_MCP_NAME="io.github.${GITHUB_REPOSITORY_OWNER}');
     expect(workflow).toContain('RELEASE_NODE_VERSION: 24.18.0');
-    expect(workflow).toContain('RELEASE_NPM_VERSION: 11.15.0');
+    expect(workflow).toContain('RELEASE_NPM_VERSION: 11.16.0');
     expect(workflow).toContain('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"');
     expect(workflow).toContain('npm pack --ignore-scripts --json');
     expect(workflow).toContain('PUBLICATION_VERIFY_SCOPE: npm');

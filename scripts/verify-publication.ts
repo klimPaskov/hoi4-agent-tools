@@ -231,7 +231,7 @@ async function officialSigstoreVerifier(): Promise<SigstoreBundleVerifier> {
   const npmMetadata = JSON.parse(await readFile(path.join(npmRoot, 'package.json'), 'utf8')) as {
     version?: unknown;
   };
-  const expectedVersion = process.env.RELEASE_NPM_VERSION ?? '11.15.0';
+  const expectedVersion = process.env.RELEASE_NPM_VERSION ?? '11.16.0';
   if (npmMetadata.version !== expectedVersion) {
     throw new Error(`Publication verification requires npm ${expectedVersion}`);
   }
