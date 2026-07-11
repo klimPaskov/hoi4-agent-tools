@@ -749,8 +749,20 @@ describe('release artifact verification', () => {
         buildType: 'https://mobyproject.org/buildkit@v1',
         invocation: {
           configSource: {
-            uri: `${expected.sourceRepository}.git#${expected.sourceTag}`,
+            uri: `${expected.sourceRepository}.git#${expected.sourceCommit}`,
             digest: { sha1: expected.sourceCommit },
+            entryPoint: 'Dockerfile',
+          },
+          environment: {
+            github_event_name: 'push',
+            github_job: 'publish_image',
+            github_ref: expected.sourceTag,
+            github_ref_name: 'v0.1.0',
+            github_ref_type: 'tag',
+            github_repository: 'klimPaskov/hoi4-agent-tools',
+            github_workflow_ref:
+              'klimPaskov/hoi4-agent-tools/.github/workflows/release.yml@refs/tags/v0.1.0',
+            github_workflow_sha: expected.sourceCommit,
           },
         },
       },
@@ -764,9 +776,71 @@ describe('release artifact verification', () => {
     expect(() =>
       verifyContainerAttestationStatement(provenance, 'https://slsa.dev/provenance/v0.2', expected),
     ).not.toThrow();
+    const tagResolvedProvenance = structuredClone(provenance);
+    tagResolvedProvenance.predicate.invocation.configSource.uri = `${expected.sourceRepository}.git#${expected.sourceTag}`;
+    expect(() =>
+      verifyContainerAttestationStatement(
+        tagResolvedProvenance,
+        'https://slsa.dev/provenance/v0.2',
+        expected,
+      ),
+    ).not.toThrow();
     expect(() =>
       verifyContainerAttestationStatement(sbom, 'https://spdx.dev/Document', expected),
     ).not.toThrow();
+    const invalidSourceMutations: Array<(candidate: typeof provenance) => void> = [
+      (candidate) => {
+        candidate.predicate.invocation.configSource.uri = `${expected.sourceRepository}.git#${'c'.repeat(40)}`;
+      },
+      (candidate) => {
+        candidate.predicate.invocation.configSource.uri = `https://github.com/attacker/hoi4-agent-tools.git#${expected.sourceCommit}`;
+      },
+      (candidate) => {
+        candidate.predicate.invocation.configSource.uri = `${expected.sourceRepository}.git#refs/tags/v9.9.9`;
+      },
+      (candidate) => {
+        candidate.predicate.invocation.configSource.digest.sha1 = 'c'.repeat(40);
+      },
+      (candidate) => {
+        candidate.predicate.invocation.configSource.entryPoint = 'attacker.Dockerfile';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_event_name = 'pull_request';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_job = 'attacker';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_ref = 'refs/heads/main';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_ref_name = 'main';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_ref_type = 'branch';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_repository = 'attacker/repository';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_workflow_ref =
+          'klimPaskov/hoi4-agent-tools/.github/workflows/attacker.yml@refs/tags/v0.1.0';
+      },
+      (candidate) => {
+        candidate.predicate.invocation.environment.github_workflow_sha = 'c'.repeat(40);
+      },
+    ];
+    for (const mutate of invalidSourceMutations) {
+      const candidate = structuredClone(provenance);
+      mutate(candidate);
+      expect(() =>
+        verifyContainerAttestationStatement(
+          candidate,
+          'https://slsa.dev/provenance/v0.2',
+          expected,
+        ),
+      ).toThrow(/source tag or commit/iu);
+    }
     expect(() =>
       verifyContainerAttestationStatement(provenance, 'https://slsa.dev/provenance/v0.2', {
         ...expected,

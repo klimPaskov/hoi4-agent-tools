@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.4] - 2026-07-11
+
+### Fixed
+
+- Verified BuildKit's commit-resolved Git context URI and digest while independently requiring the exact release tag, repository, release workflow ref, workflow SHA, push event, and `publish_image` job recorded in container provenance.
+- Added refusal coverage for altered container source URIs, digests, Dockerfile entry points, event/job identities, tag refs, repository identities, workflow refs, and workflow SHAs.
+- Preserved the immutable `v0.1.3` npm package and GHCR image whose post-push provenance verifier stopped before GitHub Release or MCP Registry publication, then advanced every synchronized release surface for the fix-forward release.
+
 ## [0.1.3] - 2026-07-11
 
 ### Fixed

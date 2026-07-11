@@ -516,9 +516,41 @@ function matchingContainerSource(
   const source = record(invocation.configSource, 'container provenance configSource');
   const digest = record(source.digest, 'container provenance configSource.digest');
   if (digest.sha1 !== expected.sourceCommit || typeof source.uri !== 'string') return false;
-  const expectedPrefix = `${expected.sourceRepository}.git#${expected.sourceTag}`;
-  const alternativePrefix = `${expected.sourceRepository}#${expected.sourceTag}`;
-  return source.uri === expectedPrefix || source.uri === alternativePrefix;
+  const tagPrefix = 'refs/tags/';
+  if (!expected.sourceTag.startsWith(tagPrefix)) return false;
+  const tagName = expected.sourceTag.slice(tagPrefix.length);
+  if (tagName.length === 0) return false;
+  const repositoryPrefix = 'https://github.com/';
+  if (!expected.sourceRepository.startsWith(repositoryPrefix)) return false;
+  const repository = expected.sourceRepository.slice(repositoryPrefix.length);
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) return false;
+  const sourceUris = [
+    `${expected.sourceRepository}.git#${expected.sourceTag}`,
+    `${expected.sourceRepository}#${expected.sourceTag}`,
+    `${expected.sourceRepository}.git#${expected.sourceCommit}`,
+    `${expected.sourceRepository}#${expected.sourceCommit}`,
+  ];
+  if (!sourceUris.includes(source.uri) || source.entryPoint !== 'Dockerfile') return false;
+  const environmentValue = invocation.environment;
+  if (
+    typeof environmentValue !== 'object' ||
+    environmentValue === null ||
+    Array.isArray(environmentValue)
+  ) {
+    return false;
+  }
+  const environment = environmentValue as Record<string, unknown>;
+  return (
+    environment.github_event_name === 'push' &&
+    environment.github_job === 'publish_image' &&
+    environment.github_ref === expected.sourceTag &&
+    environment.github_ref_name === tagName &&
+    environment.github_ref_type === 'tag' &&
+    environment.github_repository === repository &&
+    environment.github_workflow_ref ===
+      `${repository}/.github/workflows/release.yml@${expected.sourceTag}` &&
+    environment.github_workflow_sha === expected.sourceCommit
+  );
 }
 
 export function verifyContainerAttestationStatement(

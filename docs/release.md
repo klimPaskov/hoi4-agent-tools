@@ -59,7 +59,7 @@ stable package is published, the normal strict stable-version monotonic and exac
 ## Immutable fix-forward history
 
 Stable tags and public package versions are never moved, deleted, or overwritten after a failed
-release attempt. The retained history before `0.1.3` is:
+release attempt. The retained history before `0.1.4` is:
 
 - `v0.1.0` stopped during prepublication validation, before any public writer ran;
 - `v0.1.1` stopped before npm accepted bytes because npm interpreted a slash-containing relative
@@ -69,9 +69,16 @@ release attempt. The retained history before `0.1.3` is:
   Registry URL without its trailing slash while the strict verifier required the canonical
   slash-terminated spelling. npm signatures and attestations themselves verified successfully;
   GHCR, GitHub Release, and MCP Registry writers were skipped.
+- `v0.1.3` published and independently verified npm, then published the exact two-platform GHCR
+  image with SPDX SBOM and SLSA v0.2 provenance for both runtime manifests. Its post-push verifier
+  incorrectly required BuildKit's `configSource.uri` to retain the Git tag even though the action
+  resolves the default Git context to the immutable commit. The provenance digest and URI were
+  commit-bound, and its environment separately carried the exact tag, repository, release workflow,
+  workflow SHA, event, and job. GitHub Release and MCP Registry writers were skipped.
 
-`0.1.3` centralizes the exact canonical Registry URL used by the subprocess and verifier. The
-normal stable-version monotonic gate treats the public `0.1.2` package as immutable history and
+`0.1.4` accepts only the exact tag- or commit-resolved repository URI while requiring the source
+commit digest and the independent tag/workflow environment bindings. The normal stable-version
+monotonic gate treats the public `0.1.3` package as immutable history and
 permits only a strictly newer version. Rerunning or fixing a release never authorizes rewriting a
 tag, package version, image tag, release asset, or Registry version.
 

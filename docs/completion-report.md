@@ -1,6 +1,6 @@
-# Completion report: 0.1.3 release candidate
+# Completion report: 0.1.4 release candidate
 
-- Candidate version: `0.1.3`
+- Candidate version: `0.1.4`
 - Report date: 2026-07-11
 - Status: fix-forward implementation in qualification; public delivery incomplete
 
@@ -43,16 +43,24 @@ slash-terminated spelling. npm's signature audit itself verified 448 registry si
 attestations. The workflow correctly skipped GHCR, GitHub Release, MCP Registry, and final public
 verification. The public npm `0.1.2` bytes and tag are retained as immutable audit evidence.
 
+The immutable `v0.1.3` release attempt published and independently verified npm, then published
+the exact two-platform GHCR image with SPDX SBOM and SLSA v0.2 provenance attached to each runtime
+manifest. BuildKit correctly resolved its Git context URI to the immutable commit while recording
+the exact release tag and workflow identity in the provenance environment; the verifier had
+incorrectly required the URI itself to retain the tag. GitHub Release, MCP Registry, and final
+public verification were skipped. The npm `0.1.3` bytes, GHCR `0.1.3` digest, and tag are retained
+as immutable audit evidence.
+
 No complete multi-surface public release is claimed in this report. The following evidence remains
-pending until the `0.1.3` fix-forward workflow finishes:
+pending until the `0.1.4` fix-forward workflow finishes:
 
 | Surface        | Required completion evidence                                                                              | Status       |
 | -------------- | --------------------------------------------------------------------------------------------------------- | ------------ |
-| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.3` tag                       | Pending      |
-| npm            | Public `hoi4-agent-tools@0.1.3` with exact tarball integrity and SLSA provenance                          | `0.1.2` only |
-| GitHub release | Immutable `v0.1.3` release containing the exact npm and container digest manifests                        | Pending      |
-| GHCR           | Public anonymous `0.1.3` digest with two runtime platforms and source-bound SBOM/provenance subjects      | Pending      |
-| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.3` metadata with official `active` and `isLatest` status | Pending      |
+| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.4` tag                       | Pending      |
+| npm            | Public `hoi4-agent-tools@0.1.4` with exact tarball integrity and SLSA provenance                          | `0.1.3` only |
+| GitHub release | Immutable `v0.1.4` release containing the exact npm and container digest manifests                        | Pending      |
+| GHCR           | Public anonymous `0.1.4` digest with two runtime platforms and source-bound SBOM/provenance subjects      | `0.1.3` only |
+| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.4` metadata with official `active` and `isLatest` status | Pending      |
 | Public install | Clean registry installation, signature audit, MCP initialization, and tool discovery                      | Pending      |
 
 ## First-release completion sequence
@@ -61,8 +69,8 @@ pending until the `0.1.3` fix-forward workflow finishes:
 2. Run the manual GHCR bootstrap workflow, make the new package public in GitHub, and verify the bootstrap index without saved credentials.
 3. Create `npm-bootstrap-v0.0.0-bootstrap.1`, store a shortest-lived npm granular token only as `NPM_BOOTSTRAP_TOKEN`, and run the manual non-OIDC npm bootstrap workflow from that tag. The earlier immutable `.0` attempt stopped before publication; it is retained as audit evidence rather than rewritten.
 4. Revoke and delete `NPM_BOOTSTRAP_TOKEN`, then configure npm trusted publishing for `klimPaskov/hoi4-agent-tools`, `release.yml`, and the explicit `npm publish` allowed action.
-5. Preserve `v0.1.0` and `v0.1.1`, plus the immutable `v0.1.2` tag and public npm package whose independent verification stopped before any downstream writer. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
-6. Qualify the synchronized `0.1.3` fix-forward commit, including the shared canonical npm Registry constant and strict refusal coverage, then create `v0.1.3` only from an exact green commit.
+5. Preserve `v0.1.0` and `v0.1.1`, the immutable `v0.1.2` npm-only state, and the immutable `v0.1.3` npm-plus-GHCR state. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
+6. Qualify the synchronized `0.1.4` fix-forward commit, including strict commit-resolved BuildKit provenance plus independent tag/workflow bindings, then create `v0.1.4` only from an exact green commit.
 7. Allow the release workflow to publish and verify npm, digest-immutable GHCR, the immutable GitHub release, and MCP Registry in its enforced order.
 8. Update this report with the commit, workflow run, public URLs, npm and image digests, and Registry status. Only then is public delivery complete.
 
