@@ -166,7 +166,7 @@ describe('offline package and Registry metadata', () => {
     expect(release).toContain('read/write access to **All Packages**');
     expect(release).toContain('bypass-2FA enabled');
     expect(release).toContain('NPM_BOOTSTRAP_TOKEN');
-    expect(release).toContain('0.0.0-bootstrap.0');
+    expect(release).toContain('0.0.0-bootstrap.1');
     expect(release).toContain('no `id-token` permission');
     expect(release).toContain('Revoke the granular token immediately');
     expect(release).toContain('explicitly select the required allowed action `npm publish`');
@@ -463,17 +463,17 @@ describe('offline package and Registry metadata', () => {
     expect(workflow).toContain('permissions: {}');
     expect(workflow).not.toContain('id-token:');
     expect(workflow).toContain('NPM_BOOTSTRAP_TOKEN');
-    expect(workflow).toContain('0.0.0-bootstrap.0');
+    expect(workflow).toContain('0.0.0-bootstrap.1');
     expect(workflow).toContain('--provenance=false --tag bootstrap');
     expect(workflow).toContain('executableCode: false');
     expect(workflow).toContain('npm audit signatures --ignore-scripts');
     expect(workflow.indexOf('npm audit signatures --ignore-scripts')).toBeLessThan(
-      workflow.indexOf('npm publish "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL"'),
+      workflow.indexOf('npm publish "./$BOOTSTRAP_ARTIFACT_DIR/$TARBALL"'),
     );
     expect(
       workflow.lastIndexOf(
         'git ls-remote --exit-code',
-        workflow.indexOf('npm publish "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL"'),
+        workflow.indexOf('npm publish "./$BOOTSTRAP_ARTIFACT_DIR/$TARBALL"'),
       ),
     ).toBeGreaterThan(0);
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}');

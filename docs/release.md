@@ -26,9 +26,11 @@ before requesting or using trusted-publisher credentials.
 
 An unclaimed package cannot have a trusted publisher configured. The one-time manual
 `Bootstrap npm trusted publishing` workflow claims the namespace with the non-executable
-prerelease `0.0.0-bootstrap.0`; it never publishes a stable release.
+prerelease `0.0.0-bootstrap.1`; it never publishes a stable release. The `.1` suffix preserves
+the immutable audit trail of an earlier `.0` tag whose run stopped before npm accepted any
+publication.
 
-1. Create the immutable tag `npm-bootstrap-v0.0.0-bootstrap.0` on the reviewed `main` commit.
+1. Create the immutable tag `npm-bootstrap-v0.0.0-bootstrap.1` on the reviewed `main` commit.
 2. Create a short-lived npm granular access token with read/write access to **All Packages** and
    bypass-2FA enabled. This broad initial scope is an npm limitation for an unclaimed namespace.
    Give it the shortest practical expiry and store it only as `NPM_BOOTSTRAP_TOKEN`.

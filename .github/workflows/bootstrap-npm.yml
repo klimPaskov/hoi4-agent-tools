@@ -13,8 +13,8 @@ env:
   BOOTSTRAP_ARTIFACT_DIR: npm-bootstrap
   BOOTSTRAP_ARTIFACT_NAME: npm-bootstrap
   BOOTSTRAP_PACKAGE: hoi4-agent-tools
-  BOOTSTRAP_TAG: npm-bootstrap-v0.0.0-bootstrap.0
-  BOOTSTRAP_VERSION: 0.0.0-bootstrap.0
+  BOOTSTRAP_TAG: npm-bootstrap-v0.0.0-bootstrap.1
+  BOOTSTRAP_VERSION: 0.0.0-bootstrap.1
   RELEASE_NODE_VERSION: 24.18.0
   RELEASE_NPM_VERSION: 11.16.0
 
@@ -177,7 +177,7 @@ jobs:
           test "$(awk -v ref="refs/tags/${BOOTSTRAP_TAG}^{}" '$2 == ref { count++ } END { print count + 0 }' <<<"$REMOTE_TAGS")" -le 1
           test "$REMOTE_COMMIT" = "$GITHUB_SHA"
           TARBALL="$(jq --raw-output '.filename' "$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json")"
-          npm publish "$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" \
+          npm publish "./$BOOTSTRAP_ARTIFACT_DIR/$TARBALL" \
             --access public --ignore-scripts --provenance=false --tag bootstrap
       - name: Verify public bytes and registry signature without the token
         shell: bash
@@ -199,6 +199,6 @@ jobs:
           TARBALL_URL="$(jq --exit-status --raw-output '.dist.tarball' "$METADATA")"
           curl --fail --silent --show-error --location --output "$PUBLIC_TARBALL" "$TARBALL_URL"
           test "$(sha256sum "$PUBLIC_TARBALL" | awk '{print $1}')" = "$(jq --raw-output '.sha256' "$BOOTSTRAP_ARTIFACT_DIR/bootstrap-identity.json")"
-          printf '%s\n' '{"private":true,"dependencies":{"hoi4-agent-tools":"0.0.0-bootstrap.0"}}' > "$TEMPORARY/package.json"
+          printf '%s\n' '{"private":true,"dependencies":{"hoi4-agent-tools":"0.0.0-bootstrap.1"}}' > "$TEMPORARY/package.json"
           npm install --prefix "$TEMPORARY" --ignore-scripts --no-audit --no-fund --save-exact
           npm audit signatures --prefix "$TEMPORARY" --ignore-scripts

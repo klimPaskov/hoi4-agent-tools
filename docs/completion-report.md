@@ -51,7 +51,7 @@ No public endpoint is claimed as complete in this report. The following evidence
 
 1. Commit the tested candidate on `main` and push it to the canonical public repository.
 2. Run the manual GHCR bootstrap workflow, make the new package public in GitHub, and verify the bootstrap index without saved credentials.
-3. Create `npm-bootstrap-v0.0.0-bootstrap.0`, store a shortest-lived npm granular token only as `NPM_BOOTSTRAP_TOKEN`, and run the manual non-OIDC npm bootstrap workflow from that tag.
+3. Create `npm-bootstrap-v0.0.0-bootstrap.1`, store a shortest-lived npm granular token only as `NPM_BOOTSTRAP_TOKEN`, and run the manual non-OIDC npm bootstrap workflow from that tag. The earlier immutable `.0` attempt stopped before publication; it is retained as audit evidence rather than rewritten.
 4. Revoke and delete `NPM_BOOTSTRAP_TOKEN`, then configure npm trusted publishing for `klimPaskov/hoi4-agent-tools`, `release.yml`, and the explicit `npm publish` allowed action.
 5. Create and push the immutable `v0.1.0` tag only after CI passes on the tagged commit. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
 6. Allow the release workflow to publish and verify npm, digest-immutable GHCR, the immutable GitHub release, and MCP Registry in its enforced order.
