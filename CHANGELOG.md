@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.3] - 2026-07-11
+
+### Fixed
+
+- Centralized the canonical slash-terminated npm Registry URL used by both the pinned npm audit subprocess and the strict provenance verifier, preventing equivalent configuration serialization from blocking verified publication.
+- Added refusal coverage for no-slash, insecure, credential-bearing, path-bearing, query-bearing, fragment-bearing, and lookalike npm Registry values.
+- Preserved the immutable `v0.1.2` tag and public npm package whose downstream verification stopped before GHCR, GitHub Release, or MCP Registry publication, then advanced every synchronized release surface for the fix-forward release.
+
 ## [0.1.2] - 2026-07-11
 
 ### Fixed

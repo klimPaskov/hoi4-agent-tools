@@ -8,6 +8,7 @@ import process from 'node:process';
 import { promisify } from 'node:util';
 import { isDeepStrictEqual } from 'node:util';
 import {
+  OFFICIAL_NPM_REGISTRY,
   verifyContainerAttestationStatement,
   verifyContainerReleaseManifest,
   verifyNpmReleaseOrder,
@@ -189,7 +190,7 @@ async function runNpm(args: string[], cwd: string): Promise<string> {
       NODE_AUTH_TOKEN: '',
       NPM_TOKEN: '',
       npm_config_ignore_scripts: 'true',
-      npm_config_registry: 'https://registry.npmjs.org',
+      npm_config_registry: OFFICIAL_NPM_REGISTRY,
     },
     maxBuffer: 64 * 1024 * 1024,
     windowsHide: true,

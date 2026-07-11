@@ -1,8 +1,8 @@
-# Completion report: 0.1.2 release candidate
+# Completion report: 0.1.3 release candidate
 
-- Candidate version: `0.1.2`
+- Candidate version: `0.1.3`
 - Report date: 2026-07-11
-- Status: implementation and local release qualification complete; public delivery pending
+- Status: fix-forward implementation in qualification; public delivery incomplete
 
 ## Implemented scope
 
@@ -12,7 +12,7 @@ The npm payload is explicitly limited to compiled entry points, documentation, s
 
 ## Qualification evidence
 
-The candidate has passed all 46 portable test files: 494 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.44% statements, 78.25% branches, 91.28% functions, and 89.90% lines.
+The candidate has passed all 46 portable test files: 495 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.44% statements, 78.25% branches, 91.28% functions, and 89.90% lines.
 
 Release-specific qualification also covers:
 
@@ -36,16 +36,24 @@ Known refusal cases and intentional boundaries remain documented in [Known limit
 
 ## Public delivery status
 
-No public endpoint is claimed as complete in this report. The following evidence remains pending until the first release workflow finishes:
+The immutable `v0.1.2` release attempt published npm with trusted-publisher provenance and then
+stopped in independent verification because the pinned npm subprocess reported the configured
+official Registry URL without a trailing slash while the strict verifier required the canonical
+slash-terminated spelling. npm's signature audit itself verified 448 registry signatures and 128
+attestations. The workflow correctly skipped GHCR, GitHub Release, MCP Registry, and final public
+verification. The public npm `0.1.2` bytes and tag are retained as immutable audit evidence.
 
-| Surface        | Required completion evidence                                                                              | Status  |
-| -------------- | --------------------------------------------------------------------------------------------------------- | ------- |
-| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.2` tag                       | Pending |
-| npm            | Public `hoi4-agent-tools@0.1.2` with exact tarball integrity and SLSA provenance                          | Pending |
-| GitHub release | Immutable `v0.1.2` release containing the exact npm and container digest manifests                        | Pending |
-| GHCR           | Public anonymous `0.1.2` digest with two runtime platforms and source-bound SBOM/provenance subjects      | Pending |
-| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.2` metadata with official `active` and `isLatest` status | Pending |
-| Public install | Clean registry installation, signature audit, MCP initialization, and tool discovery                      | Pending |
+No complete multi-surface public release is claimed in this report. The following evidence remains
+pending until the `0.1.3` fix-forward workflow finishes:
+
+| Surface        | Required completion evidence                                                                              | Status       |
+| -------------- | --------------------------------------------------------------------------------------------------------- | ------------ |
+| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.3` tag                       | Pending      |
+| npm            | Public `hoi4-agent-tools@0.1.3` with exact tarball integrity and SLSA provenance                          | `0.1.2` only |
+| GitHub release | Immutable `v0.1.3` release containing the exact npm and container digest manifests                        | Pending      |
+| GHCR           | Public anonymous `0.1.3` digest with two runtime platforms and source-bound SBOM/provenance subjects      | Pending      |
+| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.3` metadata with official `active` and `isLatest` status | Pending      |
+| Public install | Clean registry installation, signature audit, MCP initialization, and tool discovery                      | Pending      |
 
 ## First-release completion sequence
 
@@ -53,8 +61,9 @@ No public endpoint is claimed as complete in this report. The following evidence
 2. Run the manual GHCR bootstrap workflow, make the new package public in GitHub, and verify the bootstrap index without saved credentials.
 3. Create `npm-bootstrap-v0.0.0-bootstrap.1`, store a shortest-lived npm granular token only as `NPM_BOOTSTRAP_TOKEN`, and run the manual non-OIDC npm bootstrap workflow from that tag. The earlier immutable `.0` attempt stopped before publication; it is retained as audit evidence rather than rewritten.
 4. Revoke and delete `NPM_BOOTSTRAP_TOKEN`, then configure npm trusted publishing for `klimPaskov/hoi4-agent-tools`, `release.yml`, and the explicit `npm publish` allowed action.
-5. Preserve the immutable `v0.1.0` tag whose run stopped in prepublication validation and `v0.1.1` whose OIDC job stopped before npm accepted bytes because npm parsed a relative tarball path as a Git shorthand. Qualify the synchronized `0.1.2` fix-forward commit and create `v0.1.2`. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
-6. Allow the release workflow to publish and verify npm, digest-immutable GHCR, the immutable GitHub release, and MCP Registry in its enforced order.
-7. Update this report with the commit, workflow run, public URLs, npm and image digests, and Registry status. Only then is public delivery complete.
+5. Preserve `v0.1.0` and `v0.1.1`, plus the immutable `v0.1.2` tag and public npm package whose independent verification stopped before any downstream writer. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
+6. Qualify the synchronized `0.1.3` fix-forward commit, including the shared canonical npm Registry constant and strict refusal coverage, then create `v0.1.3` only from an exact green commit.
+7. Allow the release workflow to publish and verify npm, digest-immutable GHCR, the immutable GitHub release, and MCP Registry in its enforced order.
+8. Update this report with the commit, workflow run, public URLs, npm and image digests, and Registry status. Only then is public delivery complete.
 
 Detailed commands and failure behavior are documented in [Release and MCP Registry publication](release.md).

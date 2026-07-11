@@ -73,6 +73,8 @@ export interface ContainerReleaseManifest {
 
 export type NpmReleaseOrder = 'advance' | 'rerun';
 
+export const OFFICIAL_NPM_REGISTRY = 'https://registry.npmjs.org/';
+
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -294,7 +296,7 @@ function verifiedNpmAttestation(
     throw new Error('npm audit signatures did not uniquely verify the released package');
   }
   const verified = matches[0]!;
-  if (verified.registry !== 'https://registry.npmjs.org/') {
+  if (verified.registry !== OFFICIAL_NPM_REGISTRY) {
     throw new Error('npm audit signatures used an unexpected package registry');
   }
   const bundles = records(

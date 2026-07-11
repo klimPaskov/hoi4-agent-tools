@@ -10,6 +10,7 @@ import {
   type ReleaseAssetDownloader,
 } from '../../scripts/distribution/github-release-state.js';
 import {
+  OFFICIAL_NPM_REGISTRY,
   sha512Integrity,
   verifyContainerAttestationStatement,
   verifyNpmReleaseOrder,
@@ -33,7 +34,10 @@ interface MutableProvenanceEntry {
 }
 
 interface MutableAuditReport {
-  verified: Array<{ attestationBundles: MutableProvenanceEntry[] }>;
+  verified: Array<{
+    attestationBundles: MutableProvenanceEntry[];
+    registry: unknown;
+  }>;
 }
 
 interface MutableRegistryResponse {
@@ -113,7 +117,7 @@ function provenanceFixture(): {
         {
           name: expected.packageName,
           version: expected.version,
-          registry: 'https://registry.npmjs.org/',
+          registry: OFFICIAL_NPM_REGISTRY,
           attestationBundles: [provenance],
         },
       ],
@@ -614,6 +618,32 @@ describe('release artifact verification', () => {
         verifier,
       ),
     ).rejects.toThrow(/release commit/iu);
+  });
+
+  it('requires the exact canonical npm registry for audited provenance', async () => {
+    expect(OFFICIAL_NPM_REGISTRY).toBe('https://registry.npmjs.org/');
+    for (const registry of [
+      'https://registry.npmjs.org',
+      'http://registry.npmjs.org/',
+      'https://registry.npmjs.org.attacker.invalid/',
+      'https://user:password@registry.npmjs.org/',
+      'https://registry.npmjs.org/packages',
+      'https://registry.npmjs.org/?mirror=attacker',
+      'https://registry.npmjs.org/#attacker',
+    ]) {
+      const fixture = provenanceFixture();
+      const audit = structuredClone(fixture.audit) as MutableAuditReport;
+      audit.verified[0]!.registry = registry;
+      await expect(
+        verifySlsaProvenance(
+          audit,
+          fixture.registry,
+          fixture.sha512,
+          fixture.expected,
+          vi.fn<SigstoreBundleVerifier>(),
+        ),
+      ).rejects.toThrow(/unexpected package registry/iu);
+    }
   });
 
   it('rejects unsigned, invalidly signed, unlogged, and replayed npm provenance', async () => {

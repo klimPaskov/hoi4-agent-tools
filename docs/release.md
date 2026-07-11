@@ -56,6 +56,25 @@ the only dist-tags are `bootstrap` and `latest`, both naming that version. Any e
 different prerelease, missing bootstrap tag, or malformed state stops publication. Once the first
 stable package is published, the normal strict stable-version monotonic and exact-rerun rules apply.
 
+## Immutable fix-forward history
+
+Stable tags and public package versions are never moved, deleted, or overwritten after a failed
+release attempt. The retained history before `0.1.3` is:
+
+- `v0.1.0` stopped during prepublication validation, before any public writer ran;
+- `v0.1.1` stopped before npm accepted bytes because npm interpreted a slash-containing relative
+  tarball operand as GitHub repository shorthand;
+- `v0.1.2` published the exact npm package with trusted-publisher provenance, then stopped in the
+  independent verifier because the pinned npm subprocess had been configured with the official
+  Registry URL without its trailing slash while the strict verifier required the canonical
+  slash-terminated spelling. npm signatures and attestations themselves verified successfully;
+  GHCR, GitHub Release, and MCP Registry writers were skipped.
+
+`0.1.3` centralizes the exact canonical Registry URL used by the subprocess and verifier. The
+normal stable-version monotonic gate treats the public `0.1.2` package as immutable history and
+permits only a strictly newer version. Rerunning or fixing a release never authorizes rewriting a
+tag, package version, image tag, release asset, or Registry version.
+
 ## Required pre-tag immutability check
 
 GitHub's immutable-release settings endpoint requires repository `Administration:read`, which
