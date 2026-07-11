@@ -9,6 +9,7 @@ import {
   PACKAGE_BIN_TARGETS,
   REQUIRED_PACKAGE_FILES,
 } from '../../scripts/distribution/package-fixture.js';
+import { focusTreePlanSchema } from '../../src/hoi4_agent_tools/schemas/focus.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -69,6 +70,20 @@ async function sourceFiles(current: string): Promise<string[]> {
 }
 
 describe('offline package and Registry metadata', () => {
+  it('ships a schema-valid new focus-tree authoring example', async () => {
+    const workflow = await readFile(path.join(projectRoot, 'docs', 'focus-workflow.md'), 'utf8');
+    const example = /This minimal national plan[\s\S]*?```json\r?\n([\s\S]*?)\r?\n```/u.exec(
+      workflow,
+    )?.[1];
+    expect(example).toBeDefined();
+    const plan = focusTreePlanSchema.parse(JSON.parse(example ?? ''));
+    expect(plan.provenance).toEqual({
+      sourcePath: 'plan:example_tree',
+      sourceHash: '0'.repeat(64),
+      importedPlanHash: '0'.repeat(64),
+    });
+  });
+
   it('keeps package, Registry, source, schemas, README, lock, and changelog versions aligned', async () => {
     const packageJson = await json<PackageJson>('package.json');
     const packageLock = await json<PackageLock>('package-lock.json');
@@ -128,7 +143,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'Source-preserving HOI4 focus, scripted GUI, and map tools with safe transactions.',
+        'Agent-first, source-preserving HOI4 focus, scripted GUI, and map tools with safe transactions.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -144,7 +159,7 @@ describe('offline package and Registry metadata', () => {
             {
               name: 'HOI4_AGENT_CONFIG',
               description:
-                'Absolute path to a reviewed HOI4 Agent Tools server configuration file.',
+                'Absolute path to a persistent allowlisted HOI4 Agent Tools server configuration file.',
               format: 'filepath',
               isRequired: true,
               placeholder: '/absolute/path/to/config.json',

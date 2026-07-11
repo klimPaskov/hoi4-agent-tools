@@ -89,7 +89,7 @@ The server is designed for MCP-compatible coding agents. Provide:
 
 Do not require Chaos Redux skills or subagents. The standalone repository may include generic agent guidance and MCP prompts, but it must not depend on another repository's `.agents` folder.
 
-Humans may install the package, register workspaces, approve permissions, and prompt their coding agent. They do not directly operate a focus editor, GUI editor, map editor, or full tool CLI.
+Operators may install the package, register workspaces, and define client permission policy. Coding agents decide when to use the registered MCP capabilities. The product does not expose a directly operated focus editor, GUI editor, map editor, or full tool CLI.
 
 ## Completion standard
 

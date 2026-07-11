@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.6/schemas/focus-planning-sidecar.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.7/schemas/focus-planning-sidecar.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -113,7 +113,7 @@
                 "maxItems": 10000,
                 "type": "array",
                 "items": {
-                  "$ref": "#/$defs/__schema4"
+                  "$ref": "#/$defs/__schema9"
                 }
               },
               "description": {
@@ -129,7 +129,7 @@
                     "maxItems": 20000,
                     "type": "array",
                     "items": {
-                      "$ref": "#/$defs/__schema5"
+                      "$ref": "#/$defs/__schema10"
                     }
                   },
                   "sourceLocation": {
@@ -141,10 +141,10 @@
                         "maxLength": 4096
                       },
                       "start": {
-                        "$ref": "#/$defs/__schema6"
+                        "$ref": "#/$defs/__schema11"
                       },
                       "end": {
-                        "$ref": "#/$defs/__schema6"
+                        "$ref": "#/$defs/__schema11"
                       },
                       "symbol": {
                         "type": "string",
@@ -299,26 +299,19 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/__schema4"
         },
         "label": {
-          "type": "string"
+          "$ref": "#/$defs/__schema5"
         },
         "order": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/__schema6"
         },
         "minimumX": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/__schema7"
         },
         "maximumX": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/__schema8"
         }
       },
       "required": [
@@ -329,12 +322,34 @@
       "additionalProperties": false
     },
     "__schema4": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "__schema5": {
       "type": "string"
     },
     "__schema6": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "__schema7": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "__schema8": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "__schema9": {
+      "type": "string"
+    },
+    "__schema10": {
+      "type": "string"
+    },
+    "__schema11": {
       "type": "object",
       "properties": {
         "line": {

@@ -219,6 +219,31 @@ describe('load-order scanner and shared index', () => {
     expect(index.find('formable', 'form_fixture')).toBeDefined();
   });
 
+  it('indexes only top-level event definitions, not nested event calls', () => {
+    const index = SymbolIndex.build([
+      scannedSourceFile(
+        'events/nested-call.txt',
+        [
+          'country_event = {',
+          '\tid = caller.1',
+          '\timmediate = { country_event = { id = called.2 days = 1 } }',
+          '}',
+          'country_event = { id = called.2 title = called.2.t }',
+          '',
+        ].join('\n'),
+      ),
+    ]);
+
+    expect(index.findAll('event', 'caller.1')).toHaveLength(1);
+    expect(index.findAll('event', 'called.2')).toHaveLength(1);
+    expect(
+      index.diagnostics.some(
+        ({ code, message }) =>
+          code === 'INDEX_SYMBOL_COLLISION' && message.includes('event:called.2'),
+      ),
+    ).toBe(false);
+  });
+
   it('skips a source instead of indexing its partial tree after the nesting ceiling', () => {
     const depth = 5_000;
     const source = `root = ${'{ nested = '.repeat(depth)}yes${' }'.repeat(depth)}\n`;

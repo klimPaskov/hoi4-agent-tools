@@ -2,7 +2,7 @@ import { compareCodeUnits } from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { DiagnosticCollector } from '../core/diagnostic-collector.js';
-import type { SymbolIndex } from '../core/index.js';
+import type { SymbolIndex, SymbolKind } from '../core/index.js';
 import { ServiceError } from '../core/result.js';
 import { focusConnectorSegmentsProperlyCross, focusNodesVisiblyOverlap } from './geometry.js';
 import { layoutFocusTree } from './layout.js';
@@ -113,6 +113,25 @@ function referenceSet(
   const values = catalog?.[kind];
   if (values === undefined) return undefined;
   return values instanceof Set ? values : new Set(values);
+}
+
+function referenceSymbolKind(kind: FocusReferenceKind): SymbolKind {
+  switch (kind) {
+    case 'decision':
+      return 'decision';
+    case 'decision_category':
+      return 'decision_category';
+    case 'event':
+      return 'event';
+    case 'idea':
+      return 'idea';
+    case 'leader':
+      return 'leader';
+    case 'formable':
+      return 'formable';
+    case 'helper':
+      return 'scripted_effect';
+  }
 }
 
 function graphCycles(
@@ -771,11 +790,14 @@ export function lintFocusTree(plan: FocusTreePlan, options: FocusLintOptions = {
     for (const icon of focus.icons) {
       if (options.index === undefined || options.index.find('sprite', icon.sprite) !== undefined)
         continue;
+      const partial = options.index.hasSkippedSourceForKind('sprite');
       diagnostics.push({
-        code: 'FOCUS_ICON_REFERENCE_MISSING',
-        severity: 'error',
+        code: partial ? 'FOCUS_ICON_REFERENCE_PARTIAL' : 'FOCUS_ICON_REFERENCE_MISSING',
+        severity: partial ? 'warning' : 'error',
         category: 'reference',
-        message: `Focus ${focus.id} references missing sprite ${icon.sprite}`,
+        message: partial
+          ? `The partial shared inventory cannot verify sprite ${icon.sprite} for focus ${focus.id}`
+          : `Focus ${focus.id} references missing sprite ${icon.sprite}`,
         ...(icon.sourceLocation === undefined
           ? withFocusLocation(focus)
           : { location: icon.sourceLocation }),
@@ -796,11 +818,16 @@ export function lintFocusTree(plan: FocusTreePlan, options: FocusLintOptions = {
       const language = options.localisationLanguage ?? 'l_english';
       for (const key of [focus.localisation.titleKey, focus.localisation.descriptionKey]) {
         if (options.index.find('localisation', `${language}:${key}`) !== undefined) continue;
+        const partial = options.index.hasSkippedSourceForKind('localisation');
         diagnostics.push({
-          code: 'FOCUS_LOCALISATION_REFERENCE_MISSING',
+          code: partial
+            ? 'FOCUS_LOCALISATION_REFERENCE_PARTIAL'
+            : 'FOCUS_LOCALISATION_REFERENCE_MISSING',
           severity: 'warning',
           category: 'reference',
-          message: `Focus ${focus.id} has no ${language} localisation for ${key}`,
+          message: partial
+            ? `The partial shared inventory cannot verify ${language} localisation ${key} for focus ${focus.id}`
+            : `Focus ${focus.id} has no ${language} localisation for ${key}`,
           ...withFocusLocation(focus),
           details: { language, key },
         });
@@ -832,11 +859,15 @@ export function lintFocusTree(plan: FocusTreePlan, options: FocusLintOptions = {
     for (const link of focus.links) {
       const available = referenceSet(options.references, link.kind);
       if (available === undefined || available.has(link.target)) continue;
+      const partial =
+        options.index?.hasSkippedSourceForKind(referenceSymbolKind(link.kind)) ?? false;
       diagnostics.push({
-        code: 'FOCUS_GAMEPLAY_REFERENCE_MISSING',
-        severity: 'error',
+        code: partial ? 'FOCUS_GAMEPLAY_REFERENCE_PARTIAL' : 'FOCUS_GAMEPLAY_REFERENCE_MISSING',
+        severity: partial ? 'warning' : 'error',
         category: 'reference',
-        message: `Focus ${focus.id} references missing ${link.kind} ${link.target}`,
+        message: partial
+          ? `The partial shared inventory cannot verify ${link.kind} ${link.target} for focus ${focus.id}`
+          : `Focus ${focus.id} references missing ${link.kind} ${link.target}`,
         ...(link.sourceLocation === undefined
           ? withFocusLocation(focus)
           : { location: link.sourceLocation }),

@@ -647,7 +647,7 @@ export function registerBaseTools(
               passed: true,
               message: snapshot.complete
                 ? `${snapshot.index.symbols.length} symbols indexed from a complete inventory`
-                : `${snapshot.index.symbols.length} symbols indexed; ${snapshot.skippedSourceCount} over-limit source(s) were skipped`,
+                : `${snapshot.index.symbols.length} symbols indexed from an incomplete inventory; ${snapshot.skippedSourceCount} over-limit source(s) were recorded and aggregate index ceilings may also apply`,
             },
           ],
         };

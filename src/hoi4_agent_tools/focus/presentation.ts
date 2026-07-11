@@ -205,11 +205,16 @@ export async function resolveFocusPresentation(
         relevantPaths.add(symbol.path);
         continue;
       }
+      const partial = input.index.hasSkippedSourceForKind('localisation');
       diagnostics.push({
-        code: 'FOCUS_LOCALISATION_REFERENCE_MISSING',
+        code: partial
+          ? 'FOCUS_LOCALISATION_REFERENCE_PARTIAL'
+          : 'FOCUS_LOCALISATION_REFERENCE_MISSING',
         severity: 'warning',
         category: 'reference',
-        message: `Focus ${target.id} has no ${language} localisation for ${key}`,
+        message: partial
+          ? `The partial shared inventory cannot verify ${language} localisation ${key} for focus ${target.id}`
+          : `Focus ${target.id} has no ${language} localisation for ${key}`,
         ...(target.sourceLocation === undefined ? {} : { location: target.sourceLocation }),
         details: { language, key, focusId: target.id },
       });
@@ -217,11 +222,14 @@ export async function resolveFocusPresentation(
     if (target.sprite === undefined || icons[target.sprite] !== undefined) continue;
     const sprite = relevantSprite(target.sprite, graph.sprites, input.index);
     if (sprite === undefined) {
+      const partial = input.index.hasSkippedSourceForKind('sprite');
       diagnostics.push({
-        code: 'FOCUS_ICON_REFERENCE_MISSING',
-        severity: 'error',
+        code: partial ? 'FOCUS_ICON_REFERENCE_PARTIAL' : 'FOCUS_ICON_REFERENCE_MISSING',
+        severity: partial ? 'warning' : 'error',
         category: 'reference',
-        message: `Focus ${target.id} references missing sprite ${target.sprite}`,
+        message: partial
+          ? `The partial shared inventory cannot verify sprite ${target.sprite} for focus ${target.id}`
+          : `Focus ${target.id} references missing sprite ${target.sprite}`,
         ...diagnosticLocation(target),
         details: { focusId: target.id, sprite: target.sprite },
       });

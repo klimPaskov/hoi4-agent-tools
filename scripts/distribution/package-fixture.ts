@@ -28,6 +28,7 @@ export const REQUIRED_PACKAGE_FILES = [
   'LICENSE',
   'README.md',
   'SECURITY.md',
+  'docs/agent-integration.md',
   'dist/index.d.ts',
   'dist/index.js',
   ...Object.values(PACKAGE_BIN_TARGETS).map((target) => target.replace(/^\.\//u, '')),

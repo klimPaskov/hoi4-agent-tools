@@ -4,7 +4,7 @@
 
 Give coding agents MCP tools for building and verifying very large HOI4 interfaces and scripted GUI systems. The module should improve hierarchy, alignment, state coverage, reference tracking, and iteration speed without simplifying the intended interface.
 
-The studio renders GUI artifacts for the coding agent. It must not launch, automate, control, or capture screenshots from Hearts of Iron IV. It must not provide a human-facing GUI editor.
+The studio renders GUI artifacts for the coding agent. It must not launch, automate, control, or capture screenshots from Hearts of Iron IV. It must not provide an interactive GUI editor.
 
 ## Source graph
 

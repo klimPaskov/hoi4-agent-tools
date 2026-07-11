@@ -26,8 +26,11 @@ interface LayoutContext {
   previous: Map<string, FocusLayoutNode>;
   placed: Map<string, FocusLayoutNode>;
   occupied: Map<string, string>;
+  connectorDefinitionsByFocus: Map<string, LayoutConnectorDefinition[]>;
+  placedConnectors: Map<number, LayoutConnector>;
   mutualExclusions: Map<string, Set<string>>;
   laneBases: Map<string, number>;
+  laneBounds: Map<string, LayoutLaneBounds>;
   laneIds: Map<string, string>;
   nodeSpacing: number;
   minimumMutualExclusionSpacing: number;
@@ -91,6 +94,17 @@ interface LayoutConnector {
   child: FocusLayoutNode;
 }
 
+interface LayoutConnectorDefinition {
+  key: number;
+  parentId: string;
+  childId: string;
+}
+
+interface LayoutLaneBounds {
+  minimumX: number;
+  maximumX: number;
+}
+
 interface CandidateConflicts {
   visibleOverlaps: string[];
   mutualExclusions: string[];
@@ -143,6 +157,44 @@ function laneBases(
   );
 }
 
+function laneBounds(plan: FocusTreePlan): Map<string, LayoutLaneBounds> {
+  return new Map(
+    plan.laneGroups.map((lane) => {
+      const minimumX = lane.minimumX ?? -Infinity;
+      const maximumX = lane.maximumX ?? Infinity;
+      if (minimumX > maximumX) {
+        throw new ServiceError(
+          'FOCUS_LAYOUT_LANE_BOUNDS_INVALID',
+          'Focus lane minimumX must be less than or equal to maximumX',
+          { laneId: lane.id, minimumX, maximumX },
+        );
+      }
+      return [lane.id, { minimumX, maximumX }];
+    }),
+  );
+}
+
+function boundsForFocus(context: LayoutContext, focusId: string): LayoutLaneBounds {
+  return (
+    context.laneBounds.get(context.laneIds.get(focusId) ?? 'default') ?? {
+      minimumX: -Infinity,
+      maximumX: Infinity,
+    }
+  );
+}
+
+function coordinateWithinLane(context: LayoutContext, focusId: string, x: number): boolean {
+  const bounds = boundsForFocus(context, focusId);
+  return x >= bounds.minimumX && x <= bounds.maximumX;
+}
+
+function finiteLaneBoundDetails(bounds: LayoutLaneBounds): Partial<LayoutLaneBounds> {
+  return {
+    ...(Number.isFinite(bounds.minimumX) ? { minimumX: bounds.minimumX } : {}),
+    ...(Number.isFinite(bounds.maximumX) ? { maximumX: bounds.maximumX } : {}),
+  };
+}
+
 function prerequisiteIds(focus: FocusNodePlan): string[] {
   return focus.prerequisites.groups.flatMap(({ focusIds }) => focusIds);
 }
@@ -162,26 +214,34 @@ function mutualExclusionMap(focuses: Map<string, FocusNodePlan>): Map<string, Se
   return result;
 }
 
-function* connectorEdges(
-  context: LayoutContext,
-  candidate?: FocusLayoutNode,
-): LayoutSteps<LayoutConnector[]> {
-  const nodeFor = (focusId: string): FocusLayoutNode | undefined =>
-    candidate?.id === focusId ? candidate : context.placed.get(focusId);
-  const edges: LayoutConnector[] = [];
-  let focusIndex = 0;
-  for (const focus of context.focuses.values()) {
-    context.work.spend('connector edge construction');
-    yield* cancellationCheckpoint(context.signal, focusIndex, 32);
-    focusIndex += 1;
-    const child = nodeFor(focus.id);
-    if (child === undefined) continue;
+function connectorDefinitionsByFocus(
+  focuses: Map<string, FocusNodePlan>,
+): Map<string, LayoutConnectorDefinition[]> {
+  const definitions = new Map<string, LayoutConnectorDefinition[]>();
+  let key = 0;
+  for (const focus of focuses.values()) {
     for (const parentId of prerequisiteIds(focus)) {
-      context.work.spend('connector edge construction');
-      const parent = nodeFor(parentId);
-      if (parent === undefined) continue;
-      edges.push({ parentId, childId: focus.id, parent, child });
+      if (!focuses.has(parentId)) continue;
+      const definition = { key, parentId, childId: focus.id };
+      key += 1;
+      for (const focusId of new Set([parentId, focus.id])) {
+        const adjacent = definitions.get(focusId) ?? [];
+        adjacent.push(definition);
+        definitions.set(focusId, adjacent);
+      }
     }
+  }
+  return definitions;
+}
+
+function* connectorEdges(context: LayoutContext): LayoutSteps<LayoutConnector[]> {
+  const edges: LayoutConnector[] = [];
+  let edgeIndex = 0;
+  for (const edge of context.placedConnectors.values()) {
+    context.work.spend('connector edge snapshot');
+    yield* cancellationCheckpoint(context.signal, edgeIndex, 32);
+    edgeIndex += 1;
+    edges.push(edge);
   }
   return edges.sort(
     (left, right) =>
@@ -225,6 +285,7 @@ function* crossingCountForCandidate(
   focusId: string,
   x: number,
   y: number,
+  stopAt = Infinity,
 ): LayoutSteps<number> {
   yield* cancellationCheckpoint(context.signal);
   const focus = context.focuses.get(focusId);
@@ -236,18 +297,30 @@ function* crossingCountForCandidate(
     preserved: false,
     sourceMode: focus?.position.mode ?? 'auto',
   };
-  const edges = yield* connectorEdges(context, candidate);
-  const candidateEdges = edges.filter(
-    (edge) => edge.parentId === focusId || edge.childId === focusId,
-  );
-  const existingEdges = edges.filter(
-    (edge) => edge.parentId !== focusId && edge.childId !== focusId,
-  );
+  const candidateEdges: LayoutConnector[] = [];
+  for (const definition of context.connectorDefinitionsByFocus.get(focusId) ?? []) {
+    context.work.spend('candidate connector edge construction');
+    const parent =
+      definition.parentId === focusId ? candidate : context.placed.get(definition.parentId);
+    const child =
+      definition.childId === focusId ? candidate : context.placed.get(definition.childId);
+    if (parent !== undefined && child !== undefined) {
+      candidateEdges.push({
+        parentId: definition.parentId,
+        childId: definition.childId,
+        parent,
+        child,
+      });
+    }
+  }
+  const existingEdges = context.placedConnectors.values();
   let crossings = 0;
   for (const [candidateIndex, candidateEdge] of candidateEdges.entries()) {
     yield* cancellationCheckpoint(context.signal, candidateIndex, 16);
-    for (const [existingIndex, existingEdge] of existingEdges.entries()) {
+    let existingIndex = 0;
+    for (const existingEdge of existingEdges) {
       yield* cancellationCheckpoint(context.signal, existingIndex, 64);
+      existingIndex += 1;
       context.work.spend('candidate connector crossing comparison');
       if (connectorsShareEndpoint(candidateEdge, existingEdge)) continue;
       if (
@@ -257,8 +330,10 @@ function* crossingCountForCandidate(
           existingEdge.parent,
           existingEdge.child,
         )
-      )
+      ) {
         crossings += 1;
+        if (crossings >= stopAt) return crossings;
+      }
     }
   }
   return crossings;
@@ -270,13 +345,13 @@ function candidateConflicts(
   x: number,
   y: number,
 ): CandidateConflicts {
-  const candidate = { x, y };
-  const visibleOverlaps: string[] = [];
-  for (const placed of context.placed.values()) {
-    context.work.spend('candidate overlap comparison');
-    if (focusNodesVisiblyOverlap(candidate, placed)) visibleOverlaps.push(placed.id);
-  }
-  visibleOverlaps.sort((left, right) => compareCodeUnits(left, right));
+  context.work.spend('candidate overlap lookup');
+  // Focus coordinates are integers and the rendered node is smaller than one
+  // grid step on both axes, so visible overlap is exactly a coordinate-key
+  // collision. Use the maintained spatial index instead of rescanning every
+  // placed node for every automatic candidate.
+  const occupiedBy = context.occupied.get(coordinateKey(x, y));
+  const visibleOverlaps = occupiedBy === undefined || occupiedBy === focusId ? [] : [occupiedBy];
   const mutualExclusions: string[] = [];
   for (const otherId of context.mutualExclusions.get(focusId) ?? []) {
     context.work.spend('candidate mutual-exclusion comparison');
@@ -323,6 +398,23 @@ function recordOccupied(context: LayoutContext, node: FocusLayoutNode): void {
   }
 }
 
+function recordPlaced(context: LayoutContext, node: FocusLayoutNode): void {
+  context.placed.set(node.id, node);
+  recordOccupied(context, node);
+  for (const definition of context.connectorDefinitionsByFocus.get(node.id) ?? []) {
+    context.work.spend('connector adjacency update');
+    const parent = context.placed.get(definition.parentId);
+    const child = context.placed.get(definition.childId);
+    if (parent === undefined || child === undefined) continue;
+    context.placedConnectors.set(definition.key, {
+      parentId: definition.parentId,
+      childId: definition.childId,
+      parent,
+      child,
+    });
+  }
+}
+
 function* availableX(
   context: LayoutContext,
   focusId: string,
@@ -331,20 +423,39 @@ function* availableX(
 ): LayoutSteps<CandidateCoordinate> {
   const conflictsAtPreferred = candidateConflicts(context, focusId, preferred, y);
   const crossingsAtPreferred = yield* crossingCountForCandidate(context, focusId, preferred, y);
-  let best: { x: number; crossings: number; distance: number; directionOrder: number } | undefined;
-  const optimizationSteps = Math.max(32, context.focuses.size * 2);
+  if (!conflictsCandidate(conflictsAtPreferred) && crossingsAtPreferred === 0) {
+    return {
+      x: preferred,
+      moved: false,
+      conflictsAtPreferred,
+      crossingsAtPreferred,
+      crossings: 0,
+    };
+  }
+  let best: { x: number; crossings: number; distance: number; directionOrder: number } | undefined =
+    conflictsCandidate(conflictsAtPreferred)
+      ? undefined
+      : { x: preferred, crossings: crossingsAtPreferred, distance: 0, directionOrder: 0 };
+  // Crossing optimization is deliberately local to the declared lane or
+  // preferred coordinate. Scaling the radius with total tree size made one
+  // unavoidable crossing consume the entire global work budget on large
+  // authored trees. Thirty-two spacing steps still cover a 129-column search
+  // window with the default spacing while keeping every node's soft search
+  // predictably bounded.
+  const optimizationSteps = 32;
 
-  for (let distance = 0; distance <= optimizationSteps; distance += 1) {
+  for (let distance = 1; distance <= optimizationSteps; distance += 1) {
     yield* cancellationCheckpoint(context.signal, distance, 8);
-    const offsets = distance === 0 ? [0] : [distance, -distance];
+    const offsets = [distance, -distance];
     for (let directionOrder = 0; directionOrder < offsets.length; directionOrder += 1) {
       const offset = offsets[directionOrder];
       if (offset === undefined) continue;
       context.work.spend('automatic placement candidate');
       const x = preferred + offset * context.nodeSpacing;
+      if (!coordinateWithinLane(context, focusId, x)) continue;
       const conflicts = candidateConflicts(context, focusId, x, y);
       if (conflictsCandidate(conflicts)) continue;
-      const crossings = yield* crossingCountForCandidate(context, focusId, x, y);
+      const crossings = yield* crossingCountForCandidate(context, focusId, x, y, best?.crossings);
       if (
         best === undefined ||
         crossings < best.crossings ||
@@ -382,6 +493,7 @@ function* availableX(
     for (const offset of [distance, -distance]) {
       context.work.spend('automatic placement fallback candidate');
       const x = preferred + offset * context.nodeSpacing;
+      if (!coordinateWithinLane(context, focusId, x)) continue;
       if (conflictsCandidate(candidateConflicts(context, focusId, x, y))) continue;
       return {
         x,
@@ -392,7 +504,13 @@ function* availableX(
       };
     }
   }
-  throw new Error('Unable to find a free focus coordinate');
+  const laneId = context.laneIds.get(focusId) ?? 'default';
+  const bounds = boundsForFocus(context, focusId);
+  throw new ServiceError(
+    'FOCUS_LAYOUT_LANE_CAPACITY_BLOCKED',
+    'No collision-free coordinate is available inside the focus lane bounds',
+    { focusId, laneId, ...finiteLaneBoundDetails(bounds) },
+  );
 }
 
 function* placeFocus(
@@ -424,8 +542,7 @@ function* placeFocus(
       preserved: false,
       sourceMode: focus.position.mode,
     };
-    context.placed.set(focusId, fallback);
-    recordOccupied(context, fallback);
+    recordPlaced(context, fallback);
     return fallback;
   }
   if (inheritedStack.size >= FOCUS_GRAPH_MAX_DEPTH) {
@@ -511,8 +628,10 @@ function* placeFocus(
         focus.convergence && parents.length > 1
           ? Math.floor(parents.reduce((total, parent) => total + parent.x, 0) / parents.length)
           : undefined;
-      const preferredX =
+      const requestedPreferredX =
         focus.position.preferredX ?? convergenceX ?? context.laneBases.get(laneId) ?? 0;
+      const bounds = boundsForFocus(context, focusId);
+      const preferredX = Math.max(bounds.minimumX, Math.min(bounds.maximumX, requestedPreferredX));
       const preferredY = Math.max(requiredY, focus.position.preferredY ?? requiredY);
       const coordinate = yield* availableX(context, focusId, preferredX, preferredY);
       node = {
@@ -524,6 +643,11 @@ function* placeFocus(
         sourceMode: 'auto',
       };
       const explanations: string[] = [];
+      if (preferredX !== requestedPreferredX) {
+        explanations.push(
+          `lane ${laneId} bounds clamped x ${requestedPreferredX} -> ${preferredX}`,
+        );
+      }
       if (coordinate.conflictsAtPreferred.visibleOverlaps.length > 0) {
         explanations.push(
           `visible overlap with ${coordinate.conflictsAtPreferred.visibleOverlaps.join(', ')}`,
@@ -549,16 +673,15 @@ function* placeFocus(
         focusId,
         kind: coordinate.moved ? movedKind : 'placed',
         message: coordinate.moved
-          ? `Moved from preferred (${preferredX}, ${preferredY}) to (${node.x}, ${node.y}) to resolve ${explanations.join(' and ')}`
-          : `Placed in lane ${laneId} at (${node.x}, ${node.y}); connector crossings ${coordinate.crossings}`,
+          ? `Moved from preferred (${requestedPreferredX}, ${preferredY}) to (${node.x}, ${node.y}) to resolve ${explanations.join(' and ')}`
+          : `Placed in lane ${laneId} at (${node.x}, ${node.y}); connector crossings ${coordinate.crossings}${preferredX === requestedPreferredX ? '' : `; requested x ${requestedPreferredX} was clamped to lane bounds`}`,
       });
     }
   }
 
   const cycleFallback = context.placed.get(focusId);
   if (cycleFallback !== undefined) return cycleFallback;
-  context.placed.set(focusId, node);
-  recordOccupied(context, node);
+  recordPlaced(context, node);
   return node;
 }
 
@@ -702,6 +825,32 @@ function* parentOrderDiagnostics(context: LayoutContext): LayoutSteps<void> {
   }
 }
 
+function* laneBoundsDiagnostics(context: LayoutContext): LayoutSteps<void> {
+  let nodeIndex = 0;
+  for (const node of context.placed.values()) {
+    context.work.spend('lane-bounds diagnostic');
+    yield* cancellationCheckpoint(context.signal, nodeIndex, 32);
+    nodeIndex += 1;
+    const bounds = boundsForFocus(context, node.id);
+    if (node.x >= bounds.minimumX && node.x <= bounds.maximumX) continue;
+    const focus = context.focuses.get(node.id);
+    context.diagnostics.push({
+      code: 'FOCUS_LAYOUT_LANE_BOUNDS_VIOLATION',
+      severity: 'error',
+      category: 'layout',
+      message: `Focus ${node.id} is at x ${node.x}, outside lane ${node.laneId} bounds ${bounds.minimumX} through ${bounds.maximumX}`,
+      ...(focus?.sourceLocation === undefined ? {} : { location: focus.sourceLocation }),
+      details: {
+        focusId: node.id,
+        laneId: node.laneId,
+        x: node.x,
+        ...finiteLaneBoundDetails(bounds),
+        preserved: node.preserved,
+      },
+    });
+  }
+}
+
 function* layoutFocusTreeSteps(
   plan: FocusTreePlan,
   options: FocusLayoutOptions = {},
@@ -767,8 +916,11 @@ function* layoutFocusTreeSteps(
     previous: new Map(options.previous?.nodes.map((node) => [node.id, node]) ?? []),
     placed: new Map(),
     occupied: new Map(),
+    connectorDefinitionsByFocus: connectorDefinitionsByFocus(focuses),
+    placedConnectors: new Map(),
     mutualExclusions: mutualExclusionMap(focuses),
     laneBases: laneBases(plan, discoveredLanes, options.laneSpacing ?? 8),
+    laneBounds: laneBounds(plan),
     laneIds,
     nodeSpacing: options.nodeSpacing ?? 2,
     minimumMutualExclusionSpacing: options.nodeSpacing ?? 2,
@@ -791,6 +943,7 @@ function* layoutFocusTreeSteps(
     yield* placeFocus(context, focus.id);
   }
   yield* parentOrderDiagnostics(context);
+  yield* laneBoundsDiagnostics(context);
   yield* visibleOverlapDiagnostics(context);
   yield* mutualExclusionSpacingDiagnostics(context);
   yield* connectorCrossingDiagnostics(context);

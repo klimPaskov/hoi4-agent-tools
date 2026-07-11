@@ -128,6 +128,9 @@ describe('MCP discovery', () => {
       });
     }
     const focusLayout = tools.tools.find(({ name }) => name === 'hoi4.focus_layout');
+    expect(focusLayout?.description).toContain('position.mode "auto"');
+    const focusPlanChanges = tools.tools.find(({ name }) => name === 'hoi4.focus_plan_changes');
+    expect(focusPlanChanges?.description).toContain('createIfMissing: true');
     for (const kind of ['moved_for_mutual_exclusion', 'moved_to_reduce_crossings']) {
       expect(JSON.stringify(focusLayout?.inputSchema)).toContain(kind);
       expect(JSON.stringify(focusLayout?.outputSchema)).toContain(kind);
@@ -176,6 +179,7 @@ describe('MCP discovery', () => {
     );
     expect(resources.resources.map(({ uri }) => uri)).toEqual(
       expect.arrayContaining([
+        'hoi4-agent://docs/agent-integration',
         'hoi4-agent://docs/security',
         'hoi4-agent://schema/continuous-focus-palette',
         'hoi4-agent://schema/focus-planning-sidecar',
@@ -210,6 +214,19 @@ describe('MCP discovery', () => {
     expect(focusPromptText).toContain('mode "continuous"');
     expect(focusPromptText).toContain('bitmap comparison');
     expect(focusPromptText).toContain('every transaction_diff nextCursor');
+    expect(focusPromptText).toContain(
+      'preserve prerequisites, exclusions, rewards, and raw blocks',
+    );
+    expect(focusPromptText).toContain('position.mode "auto"');
+    expect(focusPromptText).toContain('createIfMissing: true');
+    expect(focusPromptText).toContain("coding-agent host's configured write and approval policy");
+    expect(focusPromptText).not.toContain('ask for approval');
+    const agentGuide = await client.readResource({ uri: 'hoi4-agent://docs/agent-integration' });
+    expect(agentGuide.contents[0]).toMatchObject({ mimeType: 'text/markdown' });
+    expect('text' in agentGuide.contents[0]!).toBe(true);
+    expect('text' in agentGuide.contents[0]! ? agentGuide.contents[0].text : '').toContain(
+      'Autonomous selection rules',
+    );
     const schema = await client.readResource({ uri: 'hoi4-agent://schema/focus-plan' });
     expect(schema.contents[0]).toMatchObject({ mimeType: 'application/schema+json' });
     expect(JSON.parse('text' in schema.contents[0]! ? schema.contents[0].text : '')).toMatchObject({

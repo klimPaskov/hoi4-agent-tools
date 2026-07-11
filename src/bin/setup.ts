@@ -21,7 +21,7 @@ function usage(): string {
   return `HOI4 Agent Tools setup utility
 
 Usage:
-  hoi4-agent-tools-setup --init-config PATH [--workspace ROOT] [--game ROOT] [--enable-writes --server-state ROOT]
+  hoi4-agent-tools-setup --init-config PATH [--workspace ROOT] [--workspace-id ID] [--workspace-name NAME] [--game ROOT] [--enable-writes --server-state ROOT]
   hoi4-agent-tools-setup --discover
   hoi4-agent-tools-setup --diagnose [--config PATH]
   hoi4-agent-tools-setup --print-client-config [--config PATH]
@@ -78,6 +78,8 @@ async function discover(): Promise<void> {
 async function initializeConfig(target: string): Promise<void> {
   const workspaceRoot = argument('--workspace');
   const gameRoot = argument('--game');
+  const requestedWorkspaceId = argument('--workspace-id');
+  const requestedWorkspaceName = argument('--workspace-name');
   const writeEnabled = process.argv.includes('--enable-writes');
   const requestedServerStateRoot = argument('--server-state');
   if (
@@ -89,6 +91,29 @@ async function initializeConfig(target: string): Promise<void> {
   if (writeEnabled && requestedServerStateRoot === undefined) {
     throw new Error('--enable-writes requires an explicit --server-state ROOT');
   }
+  for (const [flag, value] of [
+    ['--workspace-id', requestedWorkspaceId],
+    ['--workspace-name', requestedWorkspaceName],
+  ] as const) {
+    if (process.argv.includes(flag) && (value === undefined || value.startsWith('--'))) {
+      throw new Error(`${flag} requires a value`);
+    }
+  }
+  if (
+    workspaceRoot === undefined &&
+    (requestedWorkspaceId !== undefined || requestedWorkspaceName !== undefined)
+  ) {
+    throw new Error('--workspace-id and --workspace-name require --workspace ROOT');
+  }
+  const workspaceId = requestedWorkspaceId ?? 'mod';
+  if (!/^[a-z][a-z0-9_-]{0,63}$/u.test(workspaceId)) {
+    throw new Error('--workspace-id must match [a-z][a-z0-9_-]{0,63}');
+  }
+  const workspaceName =
+    requestedWorkspaceName ?? (workspaceRoot === undefined ? '' : path.basename(workspaceRoot));
+  if (workspaceRoot !== undefined && (workspaceName.length < 1 || workspaceName.length > 200)) {
+    throw new Error('--workspace-name must contain 1 through 200 characters');
+  }
   const registrationRoots =
     workspaceRoot === undefined ? [] : [path.dirname(path.resolve(workspaceRoot))];
   const workspaces =
@@ -96,8 +121,8 @@ async function initializeConfig(target: string): Promise<void> {
       ? []
       : [
           {
-            id: 'mod',
-            name: path.basename(workspaceRoot),
+            id: workspaceId,
+            name: workspaceName,
             root: path.resolve(workspaceRoot),
             ...(gameRoot === undefined ? {} : { gameRoot: path.resolve(gameRoot) }),
             writeEnabled,
@@ -181,12 +206,20 @@ function printClientConfig(configPath: string): void {
     args: ['-y', `hoi4-agent-tools@${PACKAGE_VERSION}`],
     env: { HOI4_AGENT_CONFIG: absolute },
   };
+  const installedCommand = windows ? 'hoi4-agent-tools.cmd' : 'hoi4-agent-tools';
+  const installed = {
+    command: installedCommand,
+    args: [],
+    env: { HOI4_AGENT_CONFIG: absolute },
+  };
   process.stdout.write(
     `${JSON.stringify(
       {
         note: 'Review and paste one example into your MCP client; this utility does not edit client settings.',
         generic: { mcpServers: { hoi4_agent_tools: common } },
+        globalInstall: { mcpServers: { hoi4_agent_tools: installed } },
         codexToml: `[mcp_servers.hoi4_agent_tools]\ncommand = "${command}"\nargs = ["-y", "hoi4-agent-tools@${PACKAGE_VERSION}"]\nenv = { HOI4_AGENT_CONFIG = ${JSON.stringify(absolute)} }`,
+        codexTomlGlobal: `[mcp_servers.hoi4_agent_tools]\ncommand = "${installedCommand}"\nenv = { HOI4_AGENT_CONFIG = ${JSON.stringify(absolute)} }`,
       },
       null,
       2,

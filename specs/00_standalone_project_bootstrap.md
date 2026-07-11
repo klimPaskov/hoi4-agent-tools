@@ -16,9 +16,9 @@ Run `git init` in this folder and treat it as an independent public project with
 
 The product is an MCP server built for coding agents. The focus, GUI, and map capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
 
-Humans do not operate a focus editor, GUI editor, map editor, dashboard, or full command line application. A human installs or configures the MCP server, connects it to a compatible coding agent, describes the modding task, and reviews the agent's proposed changes through the client.
+The product does not provide an interactive focus editor, GUI editor, map editor, dashboard, or full command line application. An operator installs and configures the MCP server once; compatible coding agents then select its capabilities autonomously while working in registered external workspaces. Proposed writes remain subject to the coding-agent host's configured approval policy.
 
-The repository may contain process entry points, maintenance scripts, test harnesses, and package diagnostics. These are infrastructure for launching and validating the MCP server. They are not separate human-facing versions of the tools.
+The repository may contain process entry points, maintenance scripts, test harnesses, and package diagnostics. These are infrastructure for launching and validating the MCP server. They are not separate interactive versions of the tools.
 
 ## Proposed repository structure
 

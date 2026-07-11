@@ -111,7 +111,11 @@ const decisionCategoryFields = new Set([
   'visible_when_empty',
 ]);
 
-const INDEX_RECORD_LIMIT = 250_000;
+// A current HOI4 installation plus one feature-rich mod exceeds 250k symbols
+// before the higher-precedence mod roots are reached. Keep the inventory
+// bounded, but leave enough headroom for the supported game build and a large
+// external workspace so valid mod symbols are never discarded behind vanilla.
+const INDEX_RECORD_LIMIT = 500_000;
 const INDEX_DIAGNOSTIC_LIMIT = 10_000;
 const INDEX_RELATED_LOCATION_LIMIT = 100;
 const INDEX_TABLE_RECORD_LIMIT = 100_000;
@@ -396,6 +400,7 @@ export class SymbolIndex {
   private addSymbol(record: Omit<SymbolRecord, 'overridden' | 'sourceShadowed'>): void {
     if (this.symbols.length >= INDEX_RECORD_LIMIT) {
       this.#complete = false;
+      this.#skippedPossibleSymbolKinds.add(record.kind);
       if (!this.#symbolLimitReported) {
         this.#symbolLimitReported = true;
         this.addDiagnostic({
@@ -643,7 +648,12 @@ export class SymbolIndex {
             path: file.displayPath,
             location: nodeLocation(document, icon, id),
           });
-      } else if (sourcePath.startsWith('events/') && eventBlockKeys.has(key) && id !== undefined) {
+      } else if (
+        sourcePath.startsWith('events/') &&
+        ancestors.length === 0 &&
+        eventBlockKeys.has(key) &&
+        id !== undefined
+      ) {
         this.addSymbol({
           kind: 'event',
           id,

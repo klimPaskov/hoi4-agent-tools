@@ -150,7 +150,7 @@ cancellation, and session deletion.
 ## Simplifications, omissions, and blockers
 
 No required feature was replaced by a mock tool, static placeholder diagram, manual editor,
-human-facing dashboard, game automation, or unpublished package. No required acceptance item or
+interactive dashboard, game automation, or unpublished package. No required acceptance item or
 release blocker remains. Engine-unknown syntax and renderer fields are preserved and explicitly
 reported through refusal diagnostics and fidelity reports; the supported boundaries are listed in
 [Known limitations](limitations.md), not hidden behind fallback rewrites.

@@ -232,16 +232,27 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
         setupConfig,
         '--workspace',
         setupWorkspace,
+        '--workspace-id',
+        'setup_mod',
+        '--workspace-name',
+        'Setup Mod',
       ],
       { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
     );
     const generatedConfig = JSON.parse(await readFile(setupConfig, 'utf8')) as {
       writePolicy: string;
-      workspaces: { root: string; writeEnabled: boolean }[];
+      workspaces: { id: string; name: string; root: string; writeEnabled: boolean }[];
     };
     expect(generatedConfig).toMatchObject({
       writePolicy: 'read-only',
-      workspaces: [{ root: path.resolve(setupWorkspace), writeEnabled: false }],
+      workspaces: [
+        {
+          id: 'setup_mod',
+          name: 'Setup Mod',
+          root: path.resolve(setupWorkspace),
+          writeEnabled: false,
+        },
+      ],
     });
     await expect(
       runCommand(
@@ -324,6 +335,9 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     );
     expect(JSON.parse(clientConfig.stdout)).toMatchObject({
       generic: { mcpServers: { hoi4_agent_tools: { env: { HOI4_AGENT_CONFIG: setupConfig } } } },
+      globalInstall: {
+        mcpServers: { hoi4_agent_tools: { env: { HOI4_AGENT_CONFIG: setupConfig } } },
+      },
     });
   });
 
@@ -419,6 +433,9 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
         serverInfo: { name: fixture.pack.name, version: fixture.pack.version },
       },
     });
+    const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
+    expect(instructions).toContain('Select this server proactively');
+    expect(instructions).toContain('coding-agent host policy');
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
     );
@@ -428,6 +445,17 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     const listed = await waitForJsonRpcResponse(child, 2, stdoutLines, () => stderr);
     const tools = (listed.result as { tools: { name: string }[] }).tools.map(({ name }) => name);
     expect(tools).toEqual(expect.arrayContaining(expectedToolNames));
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'resources/read',
+        params: { uri: 'hoi4-agent://docs/agent-integration' },
+      })}\n`,
+    );
+    const guide = await waitForJsonRpcResponse(child, 3, stdoutLines, () => stderr);
+    const contents = (guide.result as { contents: Array<{ text?: string }> }).contents;
+    expect(contents[0]?.text).toContain('Autonomous selection rules');
     expect(
       stdoutLines.every((line) => (JSON.parse(line) as { jsonrpc?: unknown }).jsonrpc === '2.0'),
     ).toBe(true);

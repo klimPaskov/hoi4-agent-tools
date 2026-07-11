@@ -745,7 +745,7 @@ export function registerFocusTools(
     {
       title: 'Plan stable focus layout',
       description:
-        'Create a deterministic constraint layout while preserving pinned, relative, and previous automatic positions.',
+        'Create a deterministic constraint layout while preserving pinned, relative, and previous automatic positions. Imported authored coordinates remain fixed; a full existing-tree repair must submit a complete plan whose movable nodes use position.mode "auto".',
       inputSchema: focusPathInput
         .extend({
           previous: focusLayoutSchema.optional(),
@@ -958,7 +958,7 @@ export function registerFocusTools(
     {
       title: 'Dry-run focus source changes',
       description:
-        'Compile a validated national tree or continuous palette plan into source and create a hash-bound dry-run transaction; never applies it. Omit mode for national behavior.',
+        'Compile a validated national tree or continuous palette plan into source and create a hash-bound dry-run transaction; never applies it. Omit mode for national behavior. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.',
       inputSchema: focusPlanInput,
       outputSchema: focusPlanOutputSchema,
       annotations: {

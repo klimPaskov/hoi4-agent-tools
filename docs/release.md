@@ -59,7 +59,7 @@ stable package is published, the normal strict stable-version monotonic and exac
 ## Immutable fix-forward history
 
 Stable tags and public package versions are never moved, deleted, or overwritten after a failed
-release attempt. The retained history before `0.1.6` is:
+release attempt. The retained history before the `0.1.7` candidate is:
 
 - `v0.1.0` stopped during prepublication validation, before any public writer ran;
 - `v0.1.1` stopped before npm accepted bytes because npm interpreted a slash-containing relative
@@ -85,12 +85,15 @@ release attempt. The retained history before `0.1.6` is:
   cross-surface verifier rejected the Registry's omission of explicit `isSecret: false`, although
   the pinned official schema defines false as that field's default and every public object passed
   its preceding publication gate. All public objects remain unchanged as audit evidence.
+- `v0.1.6` completed the ordered workflow and independent verification across npm, GHCR, the
+  immutable GitHub Release, and the official MCP Registry. Its exact public evidence is retained in
+  [the 0.1.6 completion report](completion-report.md).
 
-`0.1.6` omits the redundant false default from checked-in Registry metadata so the strict verifier
-can continue comparing the complete published server record without normalization. The normal
-stable-version monotonic gate treats the public `0.1.5` package as immutable history and permits
-only a strictly newer version. Rerunning or fixing a release never authorizes rewriting a tag,
-package version, image tag, release asset, or Registry version.
+`0.1.7` is the next strictly monotonic candidate. It adds agent-first discovery/setup guidance and
+corrects shared event indexing and partial-inventory focus diagnostics. The normal stable-version
+gate treats the public `0.1.6` package as immutable history and permits only a strictly newer
+version. Rerunning or fixing a release never authorizes rewriting a tag, package version, image
+tag, release asset, or Registry version.
 
 ## Required pre-tag immutability check
 

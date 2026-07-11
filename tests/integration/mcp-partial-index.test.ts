@@ -118,6 +118,48 @@ describe('MCP partial shared-index inventory', () => {
       skippedSources: [{ path: 'mod:interface/partial.gfx', reasonCodes: ['SOURCE_TOKEN_LIMIT'] }],
     });
 
+    for (const [tool, expectedCode] of [
+      ['hoi4.focus_scan', 'FOCUS_SCANNED'],
+      ['hoi4.focus_lint', 'FOCUS_LINTED'],
+    ] as const) {
+      const focusResponse = await client.callTool({
+        name: tool,
+        arguments: {
+          workspaceId: 'partial',
+          relativePath: 'common/national_focus/partial.txt',
+          ...(tool === 'hoi4.focus_lint' ? { treeId: 'partial_tree' } : {}),
+        },
+      });
+      const focusResult = focusResponse.structuredContent as {
+        code: string;
+        diagnostics: Array<{ code: string; severity: string }>;
+        validation: { passed: boolean };
+      };
+      expect(focusResult).toMatchObject({ code: expectedCode, validation: { passed: true } });
+      expect(focusResult.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'FOCUS_ICON_REFERENCE_PARTIAL',
+            severity: 'warning',
+          }),
+        ]),
+      );
+      expect(
+        focusResult.diagnostics.some(({ code }) => code === 'FOCUS_ICON_REFERENCE_MISSING'),
+      ).toBe(false);
+      expect(focusResult.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'FOCUS_LOCALISATION_REFERENCE_MISSING',
+            severity: 'warning',
+          }),
+        ]),
+      );
+      expect(
+        focusResult.diagnostics.some(({ code }) => code === 'FOCUS_LOCALISATION_REFERENCE_PARTIAL'),
+      ).toBe(false);
+    }
+
     const guiResponse = await client.callTool({
       name: 'hoi4.gui_scan',
       arguments: { workspaceId: 'partial' },

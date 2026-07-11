@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Source-preserving HOI4 workbench exposed as a safe Model Context Protocol server for coding agents",
   "type": "module",
   "license": "Apache-2.0",
@@ -18,7 +18,11 @@
     "hearts-of-iron-iv",
     "hoi4",
     "modding",
-    "coding-agents"
+    "coding-agents",
+    "clausewitz",
+    "focus-trees",
+    "scripted-gui",
+    "hoi4-map"
   ],
   "engines": {
     "node": "^22.0.0 || ^24.0.0"

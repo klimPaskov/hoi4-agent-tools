@@ -2,6 +2,25 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.7] - 2026-07-11
+
+### Added
+
+- Shipped an agent-integration guide as package documentation and an MCP resource, with persistent stdio registration, autonomous capability-selection rules, ranged artifact reads, and complete large focus-tree repair and creation workflows.
+- Added setup flags for stable workspace IDs and display names, plus both pinned `npx` and global-install client registration output.
+
+### Changed
+
+- Made MCP initialization instructions, prompts, metadata, and public documentation explicitly agent-first: coding agents proactively select HOI4 capabilities, while the separate hash-bound apply call remains governed by the coding-agent host's configured write policy.
+- Documented and advertised the fixed-to-automatic position transition required to opt an imported authored tree into full deterministic layout cleanup without silently moving source coordinates.
+
+### Fixed
+
+- Indexed only top-level event definitions instead of treating nested event calls as definitions, eliminating false event collisions and preventing valid mod symbols from being crowded out by game references.
+- Raised the bounded shared inventory to 500,000 symbols/references so a current game plus a feature-rich mod fits with safe headroom, and recorded the affected kind when a symbol ceiling drops a definition.
+- Reported unresolved focus sprites, localisation, and gameplay links as partial warnings only when an intentionally skipped source family could define that exact symbol kind; genuinely missing references remain missing diagnostics.
+- Made large-tree automatic layout reuse a coordinate occupancy index and incrementally cached connectors, bounded crossing optimization to a local 129-column window, and stopped evaluating a candidate as soon as it cannot beat the current crossing count. Complex 200+ focus plans now fit beneath the unchanged 500,000-operation safety ceiling instead of letting one unavoidable crossing exhaust the request.
+
 ## [0.1.6] - 2026-07-11
 
 ### Fixed

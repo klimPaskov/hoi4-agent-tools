@@ -315,6 +315,45 @@ describe('Focus Tree Workbench project-owned acceptance fixture', () => {
     expect(hardDiagnostics(presentation.diagnostics)).toEqual([]);
   });
 
+  it('repairs a 255-node authored layout through deterministic fixed-to-auto planning', () => {
+    const baseline = workbench.layout(plan, manifest.layoutOptions);
+    const baselineNodes = new Map(baseline.nodes.map((node) => [node.id, node]));
+    const authored = structuredClone(plan);
+    for (const focus of authored.focuses) {
+      const node = baselineNodes.get(focus.id)!;
+      focus.position = { mode: 'fixed', x: node.x, y: node.y, pinned: false };
+    }
+    const proposed = structuredClone(authored);
+    for (const focus of proposed.focuses) {
+      const position = focus.position;
+      if (position.mode !== 'fixed') throw new Error('Expected authored fixed coordinate');
+      focus.position = {
+        mode: 'auto',
+        pinned: false,
+        preferredX: position.x,
+        preferredY: position.y,
+      };
+    }
+
+    const first = workbench.layout(proposed, manifest.layoutOptions);
+    const repeated = workbench.layout(proposed, manifest.layoutOptions);
+    expect(first.nodes).toHaveLength(manifest.focusCount);
+    expect(first.layoutHash).toBe(repeated.layoutHash);
+    expect(overlapPairs(first)).toEqual([]);
+    expect(new Set(first.nodes.map(({ x, y }) => `${x},${y}`)).size).toBe(manifest.focusCount);
+    const nodes = new Map(first.nodes.map((node) => [node.id, node]));
+    for (const focus of proposed.focuses) {
+      const child = nodes.get(focus.id)!;
+      for (const group of focus.prerequisites.groups) {
+        for (const parentId of group.focusIds) {
+          const parent = nodes.get(parentId);
+          if (parent !== undefined)
+            expect(parent.y, `${parentId} -> ${focus.id}`).toBeLessThan(child.y);
+        }
+      }
+    }
+  });
+
   it('produces byte-stable layouts without coordinate collisions, visible overlaps, or cycles', () => {
     const first = workbench.layout(plan, manifest.layoutOptions);
     const second = workbench.layout(plan, manifest.layoutOptions);

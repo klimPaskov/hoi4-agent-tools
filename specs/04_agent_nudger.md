@@ -4,7 +4,7 @@
 
 Create an MCP map-modification system for coding agents. It must support safe state and province work through headless agent calls, declarative transactions, map renders, and machine-readable diagnostics.
 
-There is no human-facing map editor. Visual outputs are artifacts that help the coding agent inspect geography, IDs, layers, and proposed changes.
+There is no interactive map editor. Visual outputs are artifacts that help the coding agent inspect geography, IDs, layers, and proposed changes.
 
 ## Indexed map surface
 

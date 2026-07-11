@@ -256,6 +256,7 @@ export function registerMcpResources(
 
   const packageRoot = path.resolve(import.meta.dirname, '../../../..');
   const documentation = new Map<string, string>([
+    ['agent-integration', 'docs/agent-integration.md'],
     ['architecture', 'docs/architecture.md'],
     ['artifacts', 'docs/artifacts.md'],
     ['compatibility', 'docs/compatibility.md'],

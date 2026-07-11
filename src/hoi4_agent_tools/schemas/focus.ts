@@ -207,7 +207,20 @@ export const focusTreePlanSchema = z
             minimumX: z.number().int().optional(),
             maximumX: z.number().int().optional(),
           })
-          .strict(),
+          .strict()
+          .superRefine((lane, context) => {
+            if (
+              lane.minimumX !== undefined &&
+              lane.maximumX !== undefined &&
+              lane.minimumX > lane.maximumX
+            ) {
+              context.addIssue({
+                code: 'custom',
+                path: ['minimumX'],
+                message: 'minimumX must be less than or equal to maximumX',
+              });
+            }
+          }),
       )
       .max(10_000),
     entryFocusIds: z.array(z.string()).max(10_000),

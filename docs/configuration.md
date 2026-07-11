@@ -1,6 +1,10 @@
 # Configuration and workspaces
 
-Pass a config with `--config PATH` or `HOI4_AGENT_CONFIG`. Unknown fields are rejected.
+Pass a config with `--config PATH` or `HOI4_AGENT_CONFIG`. Without either override, the server uses
+`~/.config/hoi4-agent-tools/config.json` on every platform (for example,
+`C:\\Users\\name\\.config\\hoi4-agent-tools\\config.json` on Windows). A different durable absolute
+path is equally valid when the client registration sets `HOI4_AGENT_CONFIG`. Unknown fields are
+rejected.
 The read-only setup discovery command also checks `HOI4_GAME_ROOT` and the path-delimited `HOI4_MOD_ROOTS`; it reports candidates without registering or modifying them.
 
 The stdio executable accepts newline-delimited JSON-RPC frames up to a fixed 16,777,216-byte
@@ -97,7 +101,7 @@ protocol when those primitives are unavailable.
 | Field             | Default                         | Validation and behavior                                                                                                                      |
 | ----------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`              | required                        | Lowercase identifier matching `[a-z][a-z0-9_-]{0,63}`; unique in the configuration.                                                          |
-| `name`            | required                        | Human-readable name, 1 through 200 characters.                                                                                               |
+| `name`            | required                        | Display name, 1 through 200 characters.                                                                                                      |
 | `root`            | required                        | Primary source root. Its root kind is selected by `kind`.                                                                                    |
 | `kind`            | `"mod"`                         | `"mod"`, `"game"`, or `"dependency"`. Only a mod primary root can ever be writable.                                                          |
 | `gameRoot`        | omitted                         | Optional additional read-only base-game source; it must not overlap another source in the workspace.                                         |

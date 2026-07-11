@@ -900,7 +900,7 @@ describe('Focus Tree Workbench layout', () => {
   it('yields to the event loop and observes a real mid-layout abort', async () => {
     const focuses = [
       focusNode('timer_root', { mode: 'fixed', x: 0, y: 0, pinned: true }),
-      ...Array.from({ length: 160 }, (_, index) =>
+      ...Array.from({ length: 1_000 }, (_, index) =>
         focusNode(
           `timer_child_${String(index).padStart(3, '0')}`,
           { mode: 'auto', pinned: false, preferredX: 0, preferredY: 1 },
@@ -946,7 +946,7 @@ describe('Focus Tree Workbench layout', () => {
   });
 
   it('blocks dense automatic placement when the shared layout work budget is exhausted', () => {
-    const focuses = Array.from({ length: 180 }, (_, index) =>
+    const focuses = Array.from({ length: 2_000 }, (_, index) =>
       focusNode(`dense_${String(index).padStart(3, '0')}`, {
         mode: 'auto',
         pinned: false,
@@ -1155,6 +1155,61 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
+  it('enforces lane bounds for automatic and authored coordinates', () => {
+    const bounded = focusNode(
+      'bounded_auto',
+      { mode: 'auto', pinned: false, preferredX: 100, preferredY: 0 },
+      { laneId: 'bounded' },
+    );
+    const boundedPlan = focusPlan([bounded], {
+      laneGroups: [{ id: 'bounded', label: 'Bounded lane', order: 0, minimumX: -2, maximumX: 2 }],
+    });
+    expect(layoutFocusTree(boundedPlan).nodes).toEqual([
+      expect.objectContaining({ id: bounded.id, x: 2 }),
+    ]);
+
+    const authored = focusNode(
+      'bounded_authored',
+      { mode: 'fixed', x: 3, y: 0, pinned: true },
+      { laneId: 'bounded' },
+    );
+    const authoredLayout = layoutFocusTree(
+      focusPlan([authored], { laneGroups: boundedPlan.laneGroups }),
+    );
+    expect(authoredLayout.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'FOCUS_LAYOUT_LANE_BOUNDS_VIOLATION',
+          severity: 'error',
+          details: expect.objectContaining({ minimumX: -2, maximumX: 2, x: 3 }),
+        }),
+      ]),
+    );
+
+    const occupied = focusNode(
+      'bounded_occupied',
+      { mode: 'fixed', x: 0, y: 0, pinned: true },
+      { laneId: 'exact' },
+    );
+    const noCapacity = focusNode(
+      'bounded_no_capacity',
+      { mode: 'auto', pinned: false, preferredX: 0, preferredY: 0 },
+      { laneId: 'exact' },
+    );
+    expect(() =>
+      layoutFocusTree(
+        focusPlan([occupied, noCapacity], {
+          laneGroups: [{ id: 'exact', label: 'Exact lane', order: 0, minimumX: 0, maximumX: 0 }],
+        }),
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'FOCUS_LAYOUT_LANE_CAPACITY_BLOCKED' }));
+
+    const invalidBounds = structuredClone(boundedPlan);
+    invalidBounds.laneGroups[0]!.minimumX = 5;
+    invalidBounds.laneGroups[0]!.maximumX = -5;
+    expect(focusTreePlanSchema.safeParse(invalidBounds).success).toBe(false);
+  });
+
   it('reduces avoidable connector crossings without moving fixed or prior-stable nodes', () => {
     const leftParent = focusNode('crossing_left_parent', {
       mode: 'fixed',
@@ -1231,6 +1286,46 @@ describe('Focus Tree Workbench layout', () => {
           }),
         }),
       ]),
+    );
+  });
+
+  it('bounds a large authored crossing search without exhausting the layout budget', () => {
+    const edgeCount = 200;
+    const fixed = Array.from({ length: edgeCount }, (_, index) => {
+      const parentId = `authored_parent_${String(index).padStart(3, '0')}`;
+      const childId = `authored_child_${String(index).padStart(3, '0')}`;
+      return [
+        focusNode(parentId, { mode: 'fixed', x: index * 2, y: 0, pinned: true }),
+        focusNode(
+          childId,
+          { mode: 'fixed', x: (edgeCount - index) * 2, y: 3, pinned: true },
+          {
+            prerequisites: {
+              operator: 'and',
+              groups: [{ operator: 'or', focusIds: [parentId], rawPassthrough: [] }],
+            },
+          },
+        ),
+      ];
+    }).flat();
+    const movable = focusNode(
+      'authored_movable',
+      { mode: 'auto', pinned: false, preferredX: edgeCount, preferredY: 2 },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: ['authored_parent_000'], rawPassthrough: [] }],
+        },
+      },
+    );
+    const plan = focusPlan([...fixed, movable]);
+
+    const first = layoutFocusTree(plan);
+    const repeated = layoutFocusTree(plan);
+    expect(first.nodes).toHaveLength(edgeCount * 2 + 1);
+    expect(first.layoutHash).toBe(repeated.layoutHash);
+    expect(first.nodes.find(({ id }) => id === movable.id)).toEqual(
+      expect.objectContaining({ sourceMode: 'auto' }),
     );
   });
 });

@@ -4,7 +4,7 @@
 
 Make the complete HOI4 agent workbench available through a public Model Context Protocol server. Coding agents connect to the server and call structured tools while working on registered HOI4 mod workspaces.
 
-The MCP server is the product interface. There is no separate supported human-facing focus, GUI, or map application. Internal service calls, launch entry points, test harnesses, and maintenance scripts may exist, but they cannot become a second behavior model.
+The MCP server is the product interface. There is no separate supported interactive focus, GUI, or map application. Internal service calls, launch entry points, test harnesses, and maintenance scripts may exist, but they cannot become a second behavior model.
 
 ## Architecture
 
@@ -113,7 +113,7 @@ Create and maintain:
 
 Publish metadata to the official MCP Registry after the package or image is publicly available.
 
-Provide a minimal setup utility or installation flow that can discover paths, register a workspace, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, or map tools for direct human use and must not silently edit another application's settings.
+Provide a minimal setup utility or installation flow that can discover paths, register a workspace, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, or map tools for direct interactive use and must not silently edit another application's settings.
 
 ## Versioning and compatibility
 
@@ -145,4 +145,4 @@ Required tests:
 - registry metadata validation
 - agent workflow tests covering focus, GUI, and map operations end to end
 
-The MCP server is incomplete if it wraps mock tools, bypasses transaction safety, requires hand-written client glue, exposes a separate human editor, or cannot be installed from its published package.
+The MCP server is incomplete if it wraps mock tools, bypasses transaction safety, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.

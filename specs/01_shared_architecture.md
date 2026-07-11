@@ -73,7 +73,7 @@ The index must understand vanilla, the active mod workspace, configured dependen
 
 ## Agent service contract
 
-All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported human-facing focus, GUI, or map application.
+All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, or map application.
 
 Every MCP operation must return structured results containing:
 
@@ -115,4 +115,4 @@ Generated previews are evidence for the coding agent. The HOI4 source files rema
 
 ## Non-goals
 
-Do not build a shallow content generator. Do not replace gameplay design. Do not require a runtime framework inside HOI4. Do not create a human-facing dashboard or editor. Do not put core behavior into transport code. The MCP server calls the shared engine and remains the only supported external tool interface.
+Do not build a shallow content generator. Do not replace gameplay design. Do not require a runtime framework inside HOI4. Do not create an interactive dashboard or editor. Do not put core behavior into transport code. The MCP server calls the shared engine and remains the only supported external tool interface.

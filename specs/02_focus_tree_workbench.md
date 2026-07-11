@@ -54,7 +54,7 @@ The visualizer should show:
 - missing icons and localisation
 - warnings linked to source locations
 
-HTML artifacts may support search, zoom, branch hiding, route filters, and node inspection. They are review artifacts returned through MCP resources, not a separate human-operated editor.
+HTML artifacts may support search, zoom, branch hiding, route filters, and node inspection. They are review artifacts returned through MCP resources, not a separate interactive editor.
 
 ## Linting
 
