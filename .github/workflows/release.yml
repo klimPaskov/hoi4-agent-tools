@@ -203,7 +203,7 @@ jobs:
           const latest = tags.latest;
           if (typeof latest !== 'string' || latest.length === 0) process.exit(1);
           const bootstrap = '0.0.0-bootstrap.1';
-          const firstStable = '0.1.1';
+          const firstStable = '0.1.2';
           if (latest === bootstrap) {
             const versionKeys = Object.keys(versions).sort();
             const tagKeys = Object.keys(tags).sort();
@@ -236,6 +236,10 @@ jobs:
         run: |
           IDENTITY="$RELEASE_ARTIFACT_DIR/release-identity.json"
           TARBALL="$(jq --raw-output '.filename' "$IDENTITY")"
+          test "$(basename "$TARBALL")" = "$TARBALL"
+          ARTIFACT_ROOT="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR")"
+          TARBALL_PATH="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR/$TARBALL")"
+          test "$(dirname "$TARBALL_PATH")" = "$ARTIFACT_ROOT"
           EXPECTED_COMMIT="$(jq --raw-output '.commit' "$IDENTITY")"
           REMOTE_TAGS="$(git ls-remote --exit-code \
             "https://github.com/${GITHUB_REPOSITORY}.git" \
@@ -250,7 +254,7 @@ jobs:
           fi
           test "$REMOTE_COMMIT" = "$GITHUB_SHA"
           test "$REMOTE_COMMIT" = "$EXPECTED_COMMIT"
-          npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL" \
+          npm publish "$TARBALL_PATH" \
             --access public --ignore-scripts --provenance
 
   verify_npm:

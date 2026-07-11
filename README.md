@@ -15,7 +15,7 @@ The MCP server is the product interface. There is no focus editor, GUI editor, m
 Requires Node.js 22 or 24.
 
 ```bash
-npm install --global hoi4-agent-tools@0.1.1
+npm install --global hoi4-agent-tools@0.1.2
 hoi4-agent-tools-setup --init-config /path/to/config.json --workspace /path/to/mod --game /path/to/game
 hoi4-agent-tools-setup --diagnose --config /path/to/config.json
 hoi4-agent-tools-setup --print-client-config --config /path/to/config.json
@@ -26,7 +26,7 @@ The generated configuration is read-only. Add `--enable-writes --server-state /s
 For one-shot stdio installation, clients can launch:
 
 ```text
-npx -y hoi4-agent-tools@0.1.1
+npx -y hoi4-agent-tools@0.1.2
 ```
 
 with `HOI4_AGENT_CONFIG` set to the reviewed config path.
@@ -66,7 +66,7 @@ Generic JSON-based clients:
   "mcpServers": {
     "hoi4_agent_tools": {
       "command": "npx",
-      "args": ["-y", "hoi4-agent-tools@0.1.1"],
+      "args": ["-y", "hoi4-agent-tools@0.1.2"],
       "env": { "HOI4_AGENT_CONFIG": "/absolute/path/to/config.json" }
     }
   }
@@ -78,7 +78,7 @@ Codex `config.toml`:
 ```toml
 [mcp_servers.hoi4_agent_tools]
 command = "npx"
-args = ["-y", "hoi4-agent-tools@0.1.1"]
+args = ["-y", "hoi4-agent-tools@0.1.2"]
 env = { HOI4_AGENT_CONFIG = "/absolute/path/to/config.json" }
 ```
 

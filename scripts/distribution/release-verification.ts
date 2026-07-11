@@ -116,7 +116,7 @@ function compareStrictSemver(left: string, right: string): number {
 }
 
 const FIRST_RELEASE_BOOTSTRAP_VERSION = '0.0.0-bootstrap.1';
-const FIRST_STABLE_VERSION = '0.1.1';
+const FIRST_STABLE_VERSION = '0.1.2';
 
 function requireExactFirstReleaseBootstrapState(
   versions: Record<string, unknown>,

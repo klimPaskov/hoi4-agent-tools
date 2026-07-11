@@ -18,8 +18,10 @@ The release workflow uses the npm 11.16.0 CLI bundled with the pinned Node 24.18
 No release job upgrades npm globally. The ordinary npm OIDC publisher does not check out source,
 run `npm ci`, execute dependency lifecycle scripts, or install any package. It downloads the one
 artifact made by `validate_pack`, checks its recorded commit and SHA-256/SHA-512 digests, rechecks
-the public npm state and peeled Git tag, and publishes that exact tarball with `--ignore-scripts`
-and provenance. If either the legacy `NPM_TOKEN` or one-use `NPM_BOOTSTRAP_TOKEN` repository secret exists, the ordinary release fails
+the public npm state and peeled Git tag, resolves the validated basename to a contained absolute
+artifact path, and publishes that exact tarball with `--ignore-scripts` and provenance. The
+absolute path is required because npm can parse a slash-containing relative path as a GitHub
+repository shorthand. If either the legacy `NPM_TOKEN` or one-use `NPM_BOOTSTRAP_TOKEN` repository secret exists, the ordinary release fails
 before requesting or using trusted-publisher credentials.
 
 ## One-time npm namespace bootstrap
@@ -129,8 +131,9 @@ published package with `npm audit signatures --json --include-attestations`.
    creates one tarball, `npm-pack.json`, and `release-identity.json` bound to the tarball digests
    and source commit. This job has no OIDC permission.
 2. `publish_npm` is the minimal OIDC job. It rejects both npm bearer-token secrets, downloads and validates the
-   exact artifact, rechecks npm ordering and the remote peeled tag, then publishes only when the
-   version is absent. It performs no checkout or dependency installation.
+   exact artifact, rechecks npm ordering and the remote peeled tag, resolves the tarball to a
+   contained absolute file path, then publishes only when the version is absent. It performs no
+   checkout or dependency installation.
 3. `verify_npm` has no OIDC permission. It downloads the public tarball byte-for-byte, runs the
    official npm signature verifier, and passes the exact returned Sigstore bundle to npm's bundled
    official Sigstore verifier with the expected Fulcio issuer and workflow certificate identity.

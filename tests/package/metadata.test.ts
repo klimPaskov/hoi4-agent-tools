@@ -253,7 +253,16 @@ describe('offline package and Registry metadata', () => {
     expect(workflow).toContain('EXPECTED_MCP_NAME="io.github.${GITHUB_REPOSITORY_OWNER}');
     expect(workflow).toContain('RELEASE_NODE_VERSION: 24.18.0');
     expect(workflow).toContain('RELEASE_NPM_VERSION: 11.16.0');
-    expect(workflow).toContain('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"');
+    expect(workflow).toContain(
+      'ARTIFACT_ROOT="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR")"',
+    );
+    expect(workflow).toContain(
+      'TARBALL_PATH="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR/$TARBALL")"',
+    );
+    expect(workflow).toContain('test "$(dirname "$TARBALL_PATH")" = "$ARTIFACT_ROOT"');
+    expect(workflow).toContain('npm publish "$TARBALL_PATH"');
+    expect(workflow).not.toContain('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"');
+    expect(workflow.match(/\bnpm publish /gu)).toHaveLength(1);
     expect(workflow).toContain('npm pack --ignore-scripts --json');
     expect(workflow).toContain('PUBLICATION_VERIFY_SCOPE: npm');
     expect(workflow).not.toContain('cache: npm');
@@ -264,6 +273,21 @@ describe('offline package and Registry metadata', () => {
       workflow.indexOf('\n  publish_npm:'),
       workflow.indexOf('\n  verify_npm:'),
     );
+    const basenameCheck = publisher.indexOf('test "$(basename "$TARBALL")" = "$TARBALL"');
+    const artifactRoot = publisher.indexOf(
+      'ARTIFACT_ROOT="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR")"',
+    );
+    const tarballPath = publisher.indexOf(
+      'TARBALL_PATH="$(realpath --canonicalize-existing "$RELEASE_ARTIFACT_DIR/$TARBALL")"',
+    );
+    const containment = publisher.indexOf('test "$(dirname "$TARBALL_PATH")" = "$ARTIFACT_ROOT"');
+    const publish = publisher.indexOf('npm publish "$TARBALL_PATH"');
+    expect(basenameCheck).toBeGreaterThan(0);
+    expect(artifactRoot).toBeGreaterThan(basenameCheck);
+    expect(tarballPath).toBeGreaterThan(artifactRoot);
+    expect(containment).toBeGreaterThan(tarballPath);
+    expect(publish).toBeGreaterThan(containment);
+    expect(publisher).not.toContain('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"');
     expect(publisher).toContain('id-token: write');
     expect(publisher).toContain('FORBIDDEN_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}');
     expect(publisher).toContain(
@@ -276,8 +300,80 @@ describe('offline package and Registry metadata', () => {
     expect(workflow).not.toContain('npm install --global');
     expect(workflow).toContain('npm audit signatures --ignore-scripts');
     expect(workflow.indexOf('npm audit signatures --ignore-scripts')).toBeLessThan(
-      workflow.indexOf('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"'),
+      workflow.indexOf('npm publish "$TARBALL_PATH"'),
     );
+  });
+
+  it('passes an absolute local tarball spec to npm without Git shorthand resolution', async () => {
+    const npmCli = process.env.npm_execpath;
+    expect(npmCli).toBeTruthy();
+    if (npmCli === undefined) throw new Error('npm_execpath is required for npm path regression');
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-tools-absolute-tarball-'));
+    try {
+      const isolatedUserConfig = path.join(temporary, 'empty.npmrc');
+      await writeFile(isolatedUserConfig, '', 'utf8');
+      const npmEnvironment: NodeJS.ProcessEnv = {
+        ...process.env,
+        GIT_ALLOW_PROTOCOL: 'file',
+        npm_config_audit: 'false',
+        npm_config_cache: path.join(temporary, 'npm-cache'),
+        npm_config_fund: 'false',
+        npm_config_update_notifier: 'false',
+        npm_config_userconfig: isolatedUserConfig,
+      };
+      delete npmEnvironment.NODE_AUTH_TOKEN;
+      delete npmEnvironment.NPM_BOOTSTRAP_TOKEN;
+      delete npmEnvironment.NPM_TOKEN;
+      await writeFile(
+        path.join(temporary, 'package.json'),
+        `${JSON.stringify({
+          name: 'hoi4-agent-tools-absolute-path-regression',
+          version: '0.0.0',
+          license: 'Apache-2.0',
+          files: ['index.js'],
+        })}\n`,
+        'utf8',
+      );
+      await writeFile(path.join(temporary, 'index.js'), 'export {};\n', 'utf8');
+      const pack = spawnSync(process.execPath, [npmCli, 'pack', '--ignore-scripts', '--json'], {
+        cwd: temporary,
+        encoding: 'utf8',
+        env: npmEnvironment,
+      });
+      expect(pack.status, pack.stderr).toBe(0);
+      const result = JSON.parse(pack.stdout) as Array<{ filename?: string }>;
+      const filename = result[0]?.filename;
+      expect(filename).toBeTruthy();
+      if (filename === undefined) throw new Error('npm pack omitted the tarball filename');
+      const tarballPath = path.resolve(temporary, filename);
+      expect(path.isAbsolute(tarballPath)).toBe(true);
+      const publish = spawnSync(
+        process.execPath,
+        [
+          npmCli,
+          'publish',
+          tarballPath,
+          '--access',
+          'public',
+          '--dry-run',
+          '--ignore-scripts',
+          '--provenance=false',
+          '--json',
+        ],
+        { cwd: temporary, encoding: 'utf8', env: npmEnvironment },
+      );
+      expect(publish.status, publish.stderr).toBe(0);
+      expect(JSON.parse(publish.stdout)).toMatchObject({
+        id: 'hoi4-agent-tools-absolute-path-regression@0.0.0',
+        name: 'hoi4-agent-tools-absolute-path-regression',
+        version: '0.0.0',
+      });
+      expect(`${publish.stdout}\n${publish.stderr}`).not.toMatch(
+        /git ls-remote|github\.com.*\.git/iu,
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 
   it('stages, verifies, and publishes an immutable GitHub release without replacing draft assets', async () => {
@@ -480,6 +576,7 @@ describe('offline package and Registry metadata', () => {
       ),
     ).toBeGreaterThan(0);
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}');
+    expect(workflow.match(/\bnpm publish /gu)).toHaveLength(1);
   });
 
   it('behavior-tests the dependency-free OIDC npm state recheck embedded in release.yml', async () => {
@@ -506,7 +603,7 @@ describe('offline package and Registry metadata', () => {
       versions: { [bootstrap]: manifest(bootstrap) },
       'dist-tags': { bootstrap, latest: bootstrap },
     };
-    const run = async (metadata: unknown, version = '0.1.1') => {
+    const run = async (metadata: unknown, version = '0.1.2') => {
       await writeFile(metadataPath, `${JSON.stringify(metadata)}\n`, 'utf8');
       return spawnSync(process.execPath, ['-', metadataPath, 'hoi4-agent-tools', version], {
         encoding: 'utf8',
@@ -527,24 +624,26 @@ describe('offline package and Registry metadata', () => {
       ]) {
         expect((await run(invalid)).status).not.toBe(0);
       }
-      expect((await run(exact, '0.1.2')).status).not.toBe(0);
+      for (const invalidCandidate of ['0.1.1', '0.1.3']) {
+        expect((await run(exact, invalidCandidate)).status).not.toBe(0);
+      }
 
       const published = {
         name: 'hoi4-agent-tools',
-        versions: { [bootstrap]: manifest(bootstrap), '0.1.1': manifest('0.1.1') },
-        'dist-tags': { bootstrap, latest: '0.1.1' },
+        versions: { [bootstrap]: manifest(bootstrap), '0.1.2': manifest('0.1.2') },
+        'dist-tags': { bootstrap, latest: '0.1.2' },
       };
       const rerun = await run(published);
       expect(rerun.status).toBe(0);
       expect(rerun.stdout).toBe('rerun');
-      const next = await run(published, '0.1.2');
+      const next = await run(published, '0.1.3');
       expect(next.status).toBe(0);
       expect(next.stdout).toBe('advance');
       expect(
         (
           await run({
             ...published,
-            versions: { [bootstrap]: manifest(bootstrap), '0.1.2': manifest('0.1.2') },
+            versions: { [bootstrap]: manifest(bootstrap), '0.1.3': manifest('0.1.3') },
           })
         ).status,
       ).not.toBe(0);

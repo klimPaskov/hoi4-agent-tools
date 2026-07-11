@@ -2,6 +2,13 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.2] - 2026-07-11
+
+### Fixed
+
+- Canonicalized the downloaded release artifact to a contained absolute path before calling npm, preventing npm from interpreting a slash-containing relative tarball path as a GitHub repository shorthand.
+- Preserved the immutable failed `v0.1.1` tag as audit evidence and advanced every synchronized release surface for the first public stable publication.
+
 ## [0.1.1] - 2026-07-11
 
 ### Fixed
