@@ -308,6 +308,13 @@ describe('offline package and Registry metadata', () => {
     const npmCli = process.env.npm_execpath;
     expect(npmCli).toBeTruthy();
     if (npmCli === undefined) throw new Error('npm_execpath is required for npm path regression');
+    const packageName = 'hoi4-agent-tools-absolute-path-regression';
+    const packageVersion = '0.0.0';
+    const expectedPublication = {
+      id: `${packageName}@${packageVersion}`,
+      name: packageName,
+      version: packageVersion,
+    };
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-tools-absolute-tarball-'));
     try {
       const isolatedUserConfig = path.join(temporary, 'empty.npmrc');
@@ -327,8 +334,8 @@ describe('offline package and Registry metadata', () => {
       await writeFile(
         path.join(temporary, 'package.json'),
         `${JSON.stringify({
-          name: 'hoi4-agent-tools-absolute-path-regression',
-          version: '0.0.0',
+          name: packageName,
+          version: packageVersion,
           license: 'Apache-2.0',
           files: ['index.js'],
         })}\n`,
@@ -363,11 +370,9 @@ describe('offline package and Registry metadata', () => {
         { cwd: temporary, encoding: 'utf8', env: npmEnvironment },
       );
       expect(publish.status, publish.stderr).toBe(0);
-      expect(JSON.parse(publish.stdout)).toMatchObject({
-        id: 'hoi4-agent-tools-absolute-path-regression@0.0.0',
-        name: 'hoi4-agent-tools-absolute-path-regression',
-        version: '0.0.0',
-      });
+      const publication = JSON.parse(publish.stdout) as Record<string, unknown>;
+      const publicationIdentity = 'id' in publication ? publication : publication[packageName];
+      expect(publicationIdentity).toMatchObject(expectedPublication);
       expect(`${publish.stdout}\n${publish.stderr}`).not.toMatch(
         /git ls-remote|github\.com.*\.git/iu,
       );
