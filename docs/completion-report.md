@@ -1,6 +1,6 @@
-# Completion report: 0.1.0 release candidate
+# Completion report: 0.1.1 release candidate
 
-- Candidate version: `0.1.0`
+- Candidate version: `0.1.1`
 - Report date: 2026-07-11
 - Status: implementation and local release qualification complete; public delivery pending
 
@@ -12,7 +12,7 @@ The npm payload is explicitly limited to compiled entry points, documentation, s
 
 ## Qualification evidence
 
-The candidate has passed all 46 portable test files: 491 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.44% statements, 78.25% branches, 91.28% functions, and 89.90% lines.
+The candidate has passed all 46 portable test files: 493 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.44% statements, 78.25% branches, 91.28% functions, and 89.90% lines.
 
 Release-specific qualification also covers:
 
@@ -40,11 +40,11 @@ No public endpoint is claimed as complete in this report. The following evidence
 
 | Surface        | Required completion evidence                                                                              | Status  |
 | -------------- | --------------------------------------------------------------------------------------------------------- | ------- |
-| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.0` tag                       | Pending |
-| npm            | Public `hoi4-agent-tools@0.1.0` with exact tarball integrity and SLSA provenance                          | Pending |
-| GitHub release | Immutable `v0.1.0` release containing the exact npm and container digest manifests                        | Pending |
-| GHCR           | Public anonymous `0.1.0` digest with two runtime platforms and source-bound SBOM/provenance subjects      | Pending |
-| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.0` metadata with official `active` and `isLatest` status | Pending |
+| GitHub source  | Public canonical repository containing the tested commit and immutable `v0.1.1` tag                       | Pending |
+| npm            | Public `hoi4-agent-tools@0.1.1` with exact tarball integrity and SLSA provenance                          | Pending |
+| GitHub release | Immutable `v0.1.1` release containing the exact npm and container digest manifests                        | Pending |
+| GHCR           | Public anonymous `0.1.1` digest with two runtime platforms and source-bound SBOM/provenance subjects      | Pending |
+| MCP Registry   | Exact `io.github.klimPaskov/hoi4-agent-tools@0.1.1` metadata with official `active` and `isLatest` status | Pending |
 | Public install | Clean registry installation, signature audit, MCP initialization, and tool discovery                      | Pending |
 
 ## First-release completion sequence
@@ -53,7 +53,7 @@ No public endpoint is claimed as complete in this report. The following evidence
 2. Run the manual GHCR bootstrap workflow, make the new package public in GitHub, and verify the bootstrap index without saved credentials.
 3. Create `npm-bootstrap-v0.0.0-bootstrap.1`, store a shortest-lived npm granular token only as `NPM_BOOTSTRAP_TOKEN`, and run the manual non-OIDC npm bootstrap workflow from that tag. The earlier immutable `.0` attempt stopped before publication; it is retained as audit evidence rather than rewritten.
 4. Revoke and delete `NPM_BOOTSTRAP_TOKEN`, then configure npm trusted publishing for `klimPaskov/hoi4-agent-tools`, `release.yml`, and the explicit `npm publish` allowed action.
-5. Create and push the immutable `v0.1.0` tag only after CI passes on the tagged commit. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
+5. Preserve the immutable `v0.1.0` tag whose run stopped in prepublication validation, qualify the synchronized `0.1.1` fix-forward commit, and create `v0.1.1`. Do not create `NPM_TOKEN`; the OIDC workflow rejects it.
 6. Allow the release workflow to publish and verify npm, digest-immutable GHCR, the immutable GitHub release, and MCP Registry in its enforced order.
 7. Update this report with the commit, workflow run, public URLs, npm and image digests, and Registry status. Only then is public delivery complete.
 

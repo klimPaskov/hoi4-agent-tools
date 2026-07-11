@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Source-preserving HOI4 workbench exposed as a safe Model Context Protocol server for coding agents",
   "type": "module",
   "license": "Apache-2.0",

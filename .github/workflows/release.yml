@@ -193,21 +193,38 @@ jobs:
           STATE="$(node - "$METADATA" "$NAME" "$VERSION" <<'NODE'
           const fs = require('node:fs');
           const [file, name, version] = process.argv.slice(2);
-          if (!/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(version)) process.exit(1);
+          const strict = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/;
+          if (!strict.test(version)) process.exit(1);
           const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
-          if (metadata.name !== name || typeof metadata.versions !== 'object' || metadata.versions === null) process.exit(1);
-          const latest = metadata['dist-tags']?.latest;
+          const versions = metadata.versions;
+          const tags = metadata['dist-tags'];
+          if (metadata.name !== name || typeof versions !== 'object' || versions === null || Array.isArray(versions)) process.exit(1);
+          if (typeof tags !== 'object' || tags === null || Array.isArray(tags)) process.exit(1);
+          const latest = tags.latest;
+          if (typeof latest !== 'string' || latest.length === 0) process.exit(1);
+          const bootstrap = '0.0.0-bootstrap.1';
+          const firstStable = '0.1.1';
+          if (latest === bootstrap) {
+            const versionKeys = Object.keys(versions).sort();
+            const tagKeys = Object.keys(tags).sort();
+            const manifest = versions[bootstrap];
+            if (version !== firstStable || tags.bootstrap !== bootstrap) process.exit(1);
+            if (versionKeys.length !== 1 || versionKeys[0] !== bootstrap) process.exit(1);
+            if (tagKeys.length !== 2 || tagKeys[0] !== 'bootstrap' || tagKeys[1] !== 'latest') process.exit(1);
+            if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) process.exit(1);
+            if (manifest.name !== name || manifest.version !== bootstrap) process.exit(1);
+            process.stdout.write('advance');
+            process.exit(0);
+          }
+          if (!strict.test(latest) || !Object.hasOwn(versions, latest)) process.exit(1);
           if (Object.hasOwn(metadata.versions, version)) {
             if (latest !== version) process.exit(1);
             process.stdout.write('rerun');
           } else {
-            if (latest !== undefined) {
-              const parse = (value) => value.split('.').map((part) => BigInt(part));
-              if (!/^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(latest)) process.exit(1);
-              const left = parse(version);
-              const right = parse(latest);
-              if (!(left[0] > right[0] || (left[0] === right[0] && (left[1] > right[1] || (left[1] === right[1] && left[2] > right[2]))))) process.exit(1);
-            }
+            const parse = (value) => value.split('.').map((part) => BigInt(part));
+            const left = parse(version);
+            const right = parse(latest);
+            if (!(left[0] > right[0] || (left[0] === right[0] && (left[1] > right[1] || (left[1] === right[1] && left[2] > right[2]))))) process.exit(1);
             process.stdout.write('advance');
           }
           NODE

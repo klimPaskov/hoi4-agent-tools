@@ -47,6 +47,13 @@ The ordinary release workflow never supports token fallback. Do not create an `N
 secret, and delete `NPM_BOOTSTRAP_TOKEN` immediately after the namespace claim; either secret's
 presence deliberately blocks the OIDC publisher.
 
+On an entirely new npm package, the registry can additionally assign the sole bootstrap version
+to `latest` even when the publish command explicitly selects `bootstrap`. The first stable release
+accepts only the exact observed recovery state: versions contains only `0.0.0-bootstrap.1`, and
+the only dist-tags are `bootstrap` and `latest`, both naming that version. Any extra version, tag,
+different prerelease, missing bootstrap tag, or malformed state stops publication. Once the first
+stable package is published, the normal strict stable-version monotonic and exact-rerun rules apply.
+
 ## Required pre-tag immutability check
 
 GitHub's immutable-release settings endpoint requires repository `Administration:read`, which

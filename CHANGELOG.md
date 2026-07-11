@@ -2,6 +2,13 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.1] - 2026-07-11
+
+### Fixed
+
+- Allowed the first stable OIDC release only when npm reports the exact two-tag, one-version bootstrap state created by `0.0.0-bootstrap.1`; all additional, altered, stale, or ambiguous prerelease states still fail closed.
+- Preserved the immutable failed `v0.1.0` tag as audit evidence and advanced the synchronized package, server, Registry, schema, documentation, and client surfaces for the first public stable release.
+
 ## [0.1.0] - 2026-07-11
 
 ### Added

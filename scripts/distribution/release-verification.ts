@@ -115,6 +115,38 @@ function compareStrictSemver(left: string, right: string): number {
   return 0;
 }
 
+const FIRST_RELEASE_BOOTSTRAP_VERSION = '0.0.0-bootstrap.1';
+const FIRST_STABLE_VERSION = '0.1.1';
+
+function requireExactFirstReleaseBootstrapState(
+  versions: Record<string, unknown>,
+  distTags: Record<string, unknown>,
+  expectedPackageName: string,
+): void {
+  const publishedVersions = Object.keys(versions).sort();
+  const tagNames = Object.keys(distTags).sort();
+  if (
+    distTags.bootstrap !== FIRST_RELEASE_BOOTSTRAP_VERSION ||
+    publishedVersions.length !== 1 ||
+    publishedVersions[0] !== FIRST_RELEASE_BOOTSTRAP_VERSION ||
+    tagNames.length !== 2 ||
+    tagNames[0] !== 'bootstrap' ||
+    tagNames[1] !== 'latest'
+  ) {
+    throw new Error('npm prerelease latest does not match the exact first-release bootstrap state');
+  }
+  const bootstrapManifest = record(
+    versions[FIRST_RELEASE_BOOTSTRAP_VERSION],
+    'npm bootstrap version manifest',
+  );
+  if (
+    bootstrapManifest.name !== expectedPackageName ||
+    bootstrapManifest.version !== FIRST_RELEASE_BOOTSTRAP_VERSION
+  ) {
+    throw new Error('npm bootstrap version manifest identity is invalid');
+  }
+}
+
 /** Fail closed when a release would overwrite npm's latest tag with an older or ambiguous version. */
 export function verifyNpmReleaseOrder(
   metadata: unknown,
@@ -129,12 +161,16 @@ export function verifyNpmReleaseOrder(
   const versions = record(root.versions, 'npm package metadata.versions');
   const distTags = record(root['dist-tags'], 'npm package metadata.dist-tags');
   if (distTags.latest === undefined) {
-    if (Object.hasOwn(versions, candidateVersion)) {
-      throw new Error('Published npm version is missing from the latest dist-tag');
-    }
-    return 'advance';
+    throw new Error('Published npm package metadata is missing the latest dist-tag');
   }
   const latest = string(distTags.latest, 'npm package metadata.dist-tags.latest');
+  if (latest === FIRST_RELEASE_BOOTSTRAP_VERSION) {
+    if (candidateVersion !== FIRST_STABLE_VERSION) {
+      throw new Error(`npm bootstrap state may advance only to ${FIRST_STABLE_VERSION}`);
+    }
+    requireExactFirstReleaseBootstrapState(versions, distTags, expectedPackageName);
+    return 'advance';
+  }
   strictSemverParts(latest, 'Current npm latest version');
   if (!Object.hasOwn(versions, latest)) {
     throw new Error('npm latest tag does not name a published package version');

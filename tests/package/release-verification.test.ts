@@ -387,13 +387,13 @@ describe('release artifact verification', () => {
     expect(verifyNpmReleaseOrder(metadata('0.1.0', ['0.1.0']), 'hoi4-agent-tools', '0.2.0')).toBe(
       'advance',
     );
-    expect(
+    expect(() =>
       verifyNpmReleaseOrder(
         metadata(undefined, ['0.0.0-bootstrap.0']),
         'hoi4-agent-tools',
         '0.1.0',
       ),
-    ).toBe('advance');
+    ).toThrow(/missing the latest/iu);
     expect(() =>
       verifyNpmReleaseOrder(metadata('0.2.0', ['0.1.0', '0.2.0']), 'hoi4-agent-tools', '0.1.0'),
     ).toThrow(/stale release rerun/iu);
@@ -406,6 +406,109 @@ describe('release artifact verification', () => {
     expect(() =>
       verifyNpmReleaseOrder(metadata('0.2.0', ['0.1.0']), 'hoi4-agent-tools', '0.3.0'),
     ).toThrow(/does not name/iu);
+  });
+
+  it('permits only the exact immutable bootstrap state before the first stable release', () => {
+    const metadata = (distTags: Record<string, string>, versions: string[]) => ({
+      name: 'hoi4-agent-tools',
+      'dist-tags': distTags,
+      versions: Object.fromEntries(
+        versions.map((version) => [version, { name: 'hoi4-agent-tools', version }]),
+      ),
+    });
+    const bootstrapVersion = '0.0.0-bootstrap.1';
+    const exactTags = { bootstrap: bootstrapVersion, latest: bootstrapVersion };
+    const exact = metadata(exactTags, [bootstrapVersion]);
+
+    expect(verifyNpmReleaseOrder(exact, 'hoi4-agent-tools', '0.1.1')).toBe('advance');
+    for (const candidate of ['0.1.0', '0.1.2']) {
+      expect(() => verifyNpmReleaseOrder(exact, 'hoi4-agent-tools', candidate)).toThrow(
+        /may advance only to 0\.1\.1/iu,
+      );
+    }
+    expect(() => verifyNpmReleaseOrder(exact, 'hoi4-agent-tools', '0.1.1-rc.1')).toThrow(
+      /strict stable semantic version/iu,
+    );
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata({ bootstrap: bootstrapVersion }, [bootstrapVersion]),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/missing the latest/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata({ latest: bootstrapVersion }, [bootstrapVersion]),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata({ bootstrap: '0.0.0-bootstrap.0', latest: bootstrapVersion }, [bootstrapVersion]),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata({ ...exactTags, next: bootstrapVersion }, [bootstrapVersion]),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(metadata(exactTags, []), 'hoi4-agent-tools', '0.1.1'),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata(exactTags, [bootstrapVersion, '0.0.0-bootstrap.2']),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata(exactTags, [bootstrapVersion, '0.1.0']),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/exact first-release bootstrap state/iu);
+    for (const invalidManifest of [
+      null,
+      { name: 'attacker', version: bootstrapVersion },
+      { name: 'hoi4-agent-tools', version: '0.0.0-bootstrap.0' },
+    ]) {
+      expect(() =>
+        verifyNpmReleaseOrder(
+          { ...exact, versions: { [bootstrapVersion]: invalidManifest } },
+          'hoi4-agent-tools',
+          '0.1.1',
+        ),
+      ).toThrow(/bootstrap version manifest/iu);
+    }
+    expect(() =>
+      verifyNpmReleaseOrder(
+        metadata({ bootstrap: '0.0.0-bootstrap.2', latest: '0.0.0-bootstrap.2' }, [
+          '0.0.0-bootstrap.2',
+        ]),
+        'hoi4-agent-tools',
+        '0.1.1',
+      ),
+    ).toThrow(/strict stable semantic version/iu);
+    expect(() =>
+      verifyNpmReleaseOrder({ ...exact, 'dist-tags': null }, 'hoi4-agent-tools', '0.1.1'),
+    ).toThrow(/dist-tags/iu);
+    expect(() =>
+      verifyNpmReleaseOrder({ ...exact, versions: null }, 'hoi4-agent-tools', '0.1.1'),
+    ).toThrow(/versions/iu);
+
+    const published = metadata({ bootstrap: bootstrapVersion, latest: '0.1.1' }, [
+      bootstrapVersion,
+      '0.1.1',
+    ]);
+    expect(verifyNpmReleaseOrder(published, 'hoi4-agent-tools', '0.1.1')).toBe('rerun');
+    expect(verifyNpmReleaseOrder(published, 'hoi4-agent-tools', '0.1.2')).toBe('advance');
   });
 
   it('binds npm-pack.json to the exact tarball bytes and identity', () => {

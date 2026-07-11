@@ -1,5 +1,8 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   GENERATED_SCHEMA_FILES,
@@ -477,6 +480,77 @@ describe('offline package and Registry metadata', () => {
       ),
     ).toBeGreaterThan(0);
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}');
+  });
+
+  it('behavior-tests the dependency-free OIDC npm state recheck embedded in release.yml', async () => {
+    const workflow = await readFile(
+      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      'utf8',
+    );
+    const marker = `<<'NODE'\n`;
+    const scriptStart = workflow.indexOf(marker, workflow.indexOf('Recheck monotonic npm state'));
+    const scriptEnd = workflow.indexOf('\n          NODE', scriptStart + marker.length);
+    expect(scriptStart).toBeGreaterThan(0);
+    expect(scriptEnd).toBeGreaterThan(scriptStart);
+    const script = workflow
+      .slice(scriptStart + marker.length, scriptEnd)
+      .split('\n')
+      .map((line) => line.replace(/^ {10}/u, ''))
+      .join('\n');
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-tools-npm-state-'));
+    const metadataPath = path.join(temporary, 'metadata.json');
+    const bootstrap = '0.0.0-bootstrap.1';
+    const manifest = (version: string, name = 'hoi4-agent-tools') => ({ name, version });
+    const exact = {
+      name: 'hoi4-agent-tools',
+      versions: { [bootstrap]: manifest(bootstrap) },
+      'dist-tags': { bootstrap, latest: bootstrap },
+    };
+    const run = async (metadata: unknown, version = '0.1.1') => {
+      await writeFile(metadataPath, `${JSON.stringify(metadata)}\n`, 'utf8');
+      return spawnSync(process.execPath, ['-', metadataPath, 'hoi4-agent-tools', version], {
+        encoding: 'utf8',
+        input: `${script}\n`,
+      });
+    };
+
+    try {
+      const advance = await run(exact);
+      expect(advance.status).toBe(0);
+      expect(advance.stdout).toBe('advance');
+      for (const invalid of [
+        { ...exact, 'dist-tags': { latest: bootstrap } },
+        { ...exact, 'dist-tags': { bootstrap, latest: bootstrap, next: bootstrap } },
+        { ...exact, versions: { [bootstrap]: manifest(bootstrap, 'attacker') } },
+        { ...exact, versions: { [bootstrap]: manifest(bootstrap), '0.1.0': manifest('0.1.0') } },
+        { ...exact, 'dist-tags': { bootstrap } },
+      ]) {
+        expect((await run(invalid)).status).not.toBe(0);
+      }
+      expect((await run(exact, '0.1.2')).status).not.toBe(0);
+
+      const published = {
+        name: 'hoi4-agent-tools',
+        versions: { [bootstrap]: manifest(bootstrap), '0.1.1': manifest('0.1.1') },
+        'dist-tags': { bootstrap, latest: '0.1.1' },
+      };
+      const rerun = await run(published);
+      expect(rerun.status).toBe(0);
+      expect(rerun.stdout).toBe('rerun');
+      const next = await run(published, '0.1.2');
+      expect(next.status).toBe(0);
+      expect(next.stdout).toBe('advance');
+      expect(
+        (
+          await run({
+            ...published,
+            versions: { [bootstrap]: manifest(bootstrap), '0.1.2': manifest('0.1.2') },
+          })
+        ).status,
+      ).not.toBe(0);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 
   it('re-queries a peeled remote tag before every release writer and final verification', async () => {
