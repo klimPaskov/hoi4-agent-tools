@@ -106,12 +106,13 @@ const guiCompareOutputSchema = strictOperationResultSchema(
     })
     .strict(),
 );
-const guiPlanOutputSchema = strictOperationResultSchema(
+export const guiPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
       mode: z.enum(['source', 'helpers', 'patches']),
       expiresAt: z.iso.datetime(),
       nodeCount: nonNegativeIntegerSchema.optional(),
+      templateInstanceCount: nonNegativeIntegerSchema.optional(),
       rawEscapeCount: nonNegativeIntegerSchema.optional(),
       transactionFileCount: nonNegativeIntegerSchema,
       transactionArtifactCount: nonNegativeIntegerSchema,
@@ -721,6 +722,7 @@ export function registerGuiTools(
             ? {}
             : {
                 nodeCount: planned.compilation.nodeCount,
+                templateInstanceCount: planned.compilation.templateInstanceCount,
                 rawEscapeCount: planned.compilation.rawEscapeCount,
               }),
         });

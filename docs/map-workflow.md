@@ -11,15 +11,17 @@ The shared scan connects province bitmap and definitions, states, strategic regi
 Province geometry apply requires one exact representation:
 
 - selected existing province IDs;
-- polygon with declared coordinates and fill rule;
+- polygon with integer raster-boundary coordinates and explicit `fillRule: "even-odd"`;
 - raster mask manifest with dimensions, origin, exact selected-pixel count, SHA-256, and canonical Base64 data;
 - explicit absolute pixel region (`kind: pixels`).
 
 Natural-language descriptions can guide a coding agent, but are not accepted as apply geometry.
 
+Polygon vertices describe raster cell boundaries, not pixel indices. For a raster of `width` by `height`, every vertex must use an integer `x` from `0` through `width` and an integer `y` from `0` through `height`; the right and bottom boundary values `width` and `height` are valid. A greater coordinate is rejected with `MAP_GEOMETRY_OUT_OF_BOUNDS` before bounding-box or raster-work allocation, and polygon geometry is never silently clipped. Rasterization samples each candidate pixel at its center, `(x + 0.5, y + 0.5)`, using the required even-odd fill rule. Every selected center must still belong to the declared source province.
+
 Raster-mask `data` is one byte per cell in row-major order. Every byte is exactly `0` or `1`; the SHA-256 is computed over those decoded bytes. The declared rectangle must fit the active raster, its byte length must equal `width * height`, and both the selected count and hash must match before every selected absolute pixel is checked against the source province. A mask may describe at most 20,000,000 cells, while any one split, mask, polygon, normal-adjacency transfer set, whole-province color update, or merge may select/recolor at most 1,000,000 pixels. Polygon admission also stops at 50,000,000 cell-point comparisons. Counts known from the manifest or indexed province geometry are checked before decoding, raster scanning, or selection-buffer allocation; an over-limit operation returns `MAP_SELECTED_PIXEL_BUDGET_BLOCKED` without proposing changes.
 
-Selected geometry is represented internally as deterministic row-major numeric offsets rather than coordinate strings or `{x, y, color}` object arrays. The fixed 1,000,000-pixel ceiling keeps the primary four-byte offset buffer below 4 MiB (4,000,000 bytes), and uniform recolors copy the BMP once and write directly through those offsets. Explicit-coordinate duplicates and normal-adjacency transfer duplicates are detected by numeric offset. Polygon rasterization uses the documented map origin and pixel-center inclusion rule. Source BMP operations use exact colors without antialiasing, interpolation, resizing, alpha conversion, or palette quantization. Untouched bytes and pixels remain identical.
+Selected geometry is represented internally as deterministic row-major numeric offsets rather than coordinate strings or `{x, y, color}` object arrays. The fixed 1,000,000-pixel ceiling keeps the primary four-byte offset buffer below 4 MiB (4,000,000 bytes), and uniform recolors copy the BMP once and write directly through those offsets. Explicit-coordinate duplicates and normal-adjacency transfer duplicates are detected by numeric offset. Source BMP operations use exact colors without antialiasing, interpolation, resizing, alpha conversion, or palette quantization. Untouched bytes and pixels remain identical.
 
 ## State payload policies
 

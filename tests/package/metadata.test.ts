@@ -174,6 +174,18 @@ describe('offline package and Registry metadata', () => {
     expect(release).toContain('Do not create an `NPM_TOKEN`');
   });
 
+  it('requires an authenticated owner immutability check immediately before a stable tag', async () => {
+    const release = await readFile(path.join(projectRoot, 'docs', 'release.md'), 'utf8');
+
+    expect(release).toContain('## Required pre-tag immutability check');
+    expect(release).toContain('repos/klimPaskov/hoi4-agent-tools/immutable-releases');
+    expect(release).toContain("--jq '.enabled'");
+    expect(release).toContain("= 'true'");
+    expect(release).toContain('immediately before pushing each stable release tag');
+    expect(release).toContain('cannot undo a mutable release');
+    expect(release).toMatch(/offers no\s+conditional publish operation/u);
+  });
+
   it('declares stable public exports, all bins, and an explicit package payload', async () => {
     const packageJson = await json<PackageJson>('package.json');
     expect(packageJson.bin).toEqual(PACKAGE_BIN_TARGETS);
@@ -263,6 +275,70 @@ describe('offline package and Registry metadata', () => {
     expect(workflow.indexOf('npm audit signatures --ignore-scripts')).toBeLessThan(
       workflow.indexOf('npm publish "$RELEASE_ARTIFACT_DIR/$TARBALL"'),
     );
+  });
+
+  it('stages, verifies, and publishes an immutable GitHub release without replacing draft assets', async () => {
+    const workflow = await readFile(
+      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      'utf8',
+    );
+    const releaseDocs = await readFile(path.join(projectRoot, 'docs', 'release.md'), 'utf8');
+    const releaseJob = workflow.slice(
+      workflow.indexOf('\n  github_release:'),
+      workflow.indexOf('\n  publish_registry:'),
+    );
+    const staging = releaseJob.slice(
+      releaseJob.indexOf('uses: softprops/action-gh-release@'),
+      releaseJob.indexOf('Verify the staged draft has exactly the four release assets'),
+    );
+    const stagedVerification = releaseJob.indexOf(
+      'scripts/distribution/github-release-state.ts draft-exact',
+    );
+    const justInTimeDraftVerification = releaseJob.indexOf(
+      'Reverify the unique exact draft immediately before publication',
+    );
+    const publish = releaseJob.indexOf('--request PATCH');
+    const finalVerification = releaseJob.indexOf(
+      'scripts/distribution/github-release-state.ts complete-exact',
+    );
+
+    expect(releaseJob).toContain('scripts/distribution/github-release-state.ts classify');
+    expect(releaseJob.match(/github-release-state\.ts select-list/gu)?.length).toBe(4);
+    expect(releaseJob.match(/github-release-state\.ts cross-check/gu)?.length).toBe(4);
+    expect(releaseJob.match(/releases\?per_page=100/gu)?.length).toBe(4);
+    expect(releaseJob).toContain('gh api --paginate');
+    expect(releaseJob).toContain('absent|draft|complete)');
+    expect(staging).toContain('draft: true');
+    expect(staging).toContain('name: HOI4 Agent Tools ${{ github.ref_name }}');
+    expect(staging).toContain('body_path: CHANGELOG.md');
+    expect(staging).not.toContain('generate_release_notes: true');
+    expect(staging).toContain('overwrite_files: false');
+    expect(staging).toContain('fail_on_unmatched_files: true');
+    expect(staging).toContain('id: stage_release');
+    expect(releaseJob).not.toContain('--request DELETE');
+    expect(stagedVerification).toBeGreaterThan(
+      releaseJob.indexOf('uses: softprops/action-gh-release@'),
+    );
+    expect(publish).toBeGreaterThan(stagedVerification);
+    expect(justInTimeDraftVerification).toBeGreaterThan(stagedVerification);
+    expect(publish).toBeGreaterThan(justInTimeDraftVerification);
+    expect(releaseJob).toContain('ACTION_RELEASE_ID: ${{ steps.stage_release.outputs.id }}');
+    expect(releaseJob).toContain('test "$RELEASE_ID" = "$ACTION_RELEASE_ID"');
+    expect(releaseJob).toContain('test "$OBSERVED_RELEASE_ID" = "$EXPECTED_RELEASE_ID"');
+    expect(releaseJob).toContain(
+      'steps.draft_state.outputs.release_id || steps.release_state.outputs.release_id',
+    );
+    expect(
+      releaseJob.match(/test "\$OBSERVED_RELEASE_ID" = "\$EXPECTED_RELEASE_ID"/gu)?.length,
+    ).toBe(2);
+    expect(releaseJob.lastIndexOf('git ls-remote --exit-code', publish)).toBeGreaterThan(
+      justInTimeDraftVerification,
+    );
+    expect(finalVerification).toBeGreaterThan(publish);
+    expect(releaseJob.match(/container-image\.json/gu)?.length).toBeGreaterThanOrEqual(4);
+    expect(releaseDocs).toContain('fully paginated List releases endpoint');
+    expect(releaseDocs).toContain('failed GitHub upload left in `starter` state');
+    expect(releaseDocs).toMatch(/manual\s+draft-cleanup blocker/u);
   });
 
   it('pins the reproducible container frontend and multi-platform base', async () => {
@@ -428,10 +504,9 @@ describe('offline package and Registry metadata', () => {
     const image = job('publish_image', 'github_release');
     requireTagCheckBefore(image, 'uses: docker/build-push-action@');
     requireTagCheckBefore(image, 'docker buildx imagetools create');
-    requireTagCheckBefore(
-      job('github_release', 'publish_registry'),
-      'uses: softprops/action-gh-release@',
-    );
+    const githubRelease = job('github_release', 'publish_registry');
+    requireTagCheckBefore(githubRelease, 'uses: softprops/action-gh-release@');
+    requireTagCheckBefore(githubRelease, '--request PATCH');
     requireTagCheckBefore(job('publish_registry', 'verify_public'), './mcp-publisher publish');
     requireTagCheckBefore(job('verify_public', undefined), 'npm run publication:verify');
   });

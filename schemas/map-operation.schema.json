@@ -501,10 +501,10 @@
           "$ref": "#/$defs/__schema18"
         },
         "definition": {
-          "$ref": "#/$defs/__schema28"
+          "$ref": "#/$defs/__schema29"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema32"
+          "$ref": "#/$defs/__schema33"
         }
       },
       "required": [
@@ -540,10 +540,10 @@
           "$ref": "#/$defs/__schema18"
         },
         "definition": {
-          "$ref": "#/$defs/__schema28"
+          "$ref": "#/$defs/__schema29"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema32"
+          "$ref": "#/$defs/__schema33"
         }
       },
       "required": [
@@ -581,7 +581,7 @@
           "$ref": "#/$defs/__schema3"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema33"
+          "$ref": "#/$defs/__schema34"
         }
       },
       "required": [
@@ -613,7 +613,7 @@
           "$ref": "#/$defs/__schema3"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema33"
+          "$ref": "#/$defs/__schema34"
         }
       },
       "required": [
@@ -642,11 +642,11 @@
           "$ref": "#/$defs/__schema3"
         },
         "changes": {
-          "$ref": "#/$defs/__schema29"
+          "$ref": "#/$defs/__schema30"
         },
         "distribution": {
           "description": "Required complete dependency policy when changes.type crosses land/sea/lake",
-          "$ref": "#/$defs/__schema34"
+          "$ref": "#/$defs/__schema35"
         }
       },
       "required": [
@@ -944,7 +944,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1025,7 +1025,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1067,7 +1067,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1148,7 +1148,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1190,7 +1190,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1263,7 +1263,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema36"
             }
           },
           "required": [
@@ -1841,16 +1841,20 @@
             "kind": {
               "$ref": "#/$defs/__schema26"
             },
-            "points": {
+            "fillRule": {
               "$ref": "#/$defs/__schema27"
+            },
+            "points": {
+              "$ref": "#/$defs/__schema28"
             }
           },
           "required": [
             "kind",
+            "fillRule",
             "points"
           ],
           "additionalProperties": false,
-          "description": "Polygon rasterization is rejected if it selects more than 1000000 pixels"
+          "description": "Even-odd polygon rasterization samples pixel centers and is rejected if it selects more than 1000000 pixels"
         }
       ]
     },
@@ -1908,14 +1912,20 @@
       "const": "polygon"
     },
     "__schema27": {
+      "type": "string",
+      "const": "even-odd",
+      "description": "Required deterministic polygon fill rule used for pixel-center sampling"
+    },
+    "__schema28": {
       "minItems": 3,
       "maxItems": 4096,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema19"
-      }
+      },
+      "description": "Integer raster-boundary coordinates; runtime bounds are x from 0 through raster width and y from 0 through raster height"
     },
-    "__schema28": {
+    "__schema29": {
       "oneOf": [
         {
           "type": "object",
@@ -1925,7 +1935,7 @@
               "const": "inherit-source"
             },
             "overrides": {
-              "$ref": "#/$defs/__schema29"
+              "$ref": "#/$defs/__schema30"
             }
           },
           "required": [
@@ -1944,10 +1954,10 @@
               "type": "object",
               "properties": {
                 "color": {
-                  "$ref": "#/$defs/__schema30"
+                  "$ref": "#/$defs/__schema31"
                 },
                 "type": {
-                  "$ref": "#/$defs/__schema31"
+                  "$ref": "#/$defs/__schema32"
                 },
                 "coastal": {
                   "type": "boolean"
@@ -1979,14 +1989,14 @@
         }
       ]
     },
-    "__schema29": {
+    "__schema30": {
       "type": "object",
       "properties": {
         "color": {
-          "$ref": "#/$defs/__schema30"
+          "$ref": "#/$defs/__schema31"
         },
         "type": {
-          "$ref": "#/$defs/__schema31"
+          "$ref": "#/$defs/__schema32"
         },
         "coastal": {
           "type": "boolean"
@@ -2003,7 +2013,7 @@
       },
       "additionalProperties": false
     },
-    "__schema30": {
+    "__schema31": {
       "type": "object",
       "properties": {
         "r": {
@@ -2029,7 +2039,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema31": {
+    "__schema32": {
       "type": "string",
       "enum": [
         "land",
@@ -2037,7 +2047,7 @@
         "lake"
       ]
     },
-    "__schema32": {
+    "__schema33": {
       "type": "object",
       "properties": {
         "state": {
@@ -2098,7 +2108,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema33": {
+    "__schema34": {
       "type": "object",
       "properties": {
         "membership": {
@@ -2126,7 +2136,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema34": {
+    "__schema35": {
       "type": "object",
       "properties": {
         "stateMembership": {
@@ -2265,7 +2275,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema35": {
+    "__schema36": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991

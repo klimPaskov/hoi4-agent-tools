@@ -8,8 +8,16 @@
       "type": "number",
       "const": 1
     },
+    "templates": {
+      "default": [],
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
     "root": {
-      "$ref": "#/$defs/__schema0"
+      "$ref": "#/$defs/__schema1"
     }
   },
   "required": [
@@ -22,12 +30,32 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "root": {
+          "$ref": "#/$defs/__schema1"
+        }
+      },
+      "required": [
+        "id",
+        "root"
+      ],
+      "additionalProperties": false
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
         },
         "kind": {
           "type": "string",
           "enum": [
             "raw",
+            "template",
             "anchor",
             "row",
             "column",
@@ -44,13 +72,20 @@
             "element"
           ]
         },
+        "templateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
         "name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 256
         },
         "elementType": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 256
         },
         "x": {
           "type": "number"
@@ -67,55 +102,85 @@
           "minimum": 0
         },
         "gap": {
-          "default": 0,
-          "type": "number"
+          "type": "number",
+          "minimum": 0
         },
         "columns": {
-          "default": 1,
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 10000
         },
         "padding": {
-          "$ref": "#/$defs/__schema1"
+          "$ref": "#/$defs/__schema2"
         },
         "margin": {
-          "$ref": "#/$defs/__schema1"
+          "$ref": "#/$defs/__schema2"
         },
         "orientation": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "origo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "flow": {
+          "type": "string",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ]
         },
         "sprite": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
+        },
+        "backgroundSprite": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scrollbar": {
+          "type": "string",
+          "minLength": 1
         },
         "text": {
           "type": "string"
         },
         "font": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "state": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "stateVariants": {
+          "default": [],
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "minValue": {
+          "type": "number"
+        },
+        "maxValue": {
+          "type": "number"
+        },
+        "value": {
+          "type": "number"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10000
         },
         "attributes": {
-          "default": {},
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              }
-            ]
-          }
+          "$ref": "#/$defs/__schema9"
         },
         "raw": {
           "type": "string"
@@ -124,7 +189,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema0"
+            "$ref": "#/$defs/__schema1"
           }
         }
       },
@@ -134,7 +199,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema1": {
+    "__schema2": {
       "anyOf": [
         {
           "type": "number"
@@ -162,6 +227,75 @@
           "additionalProperties": false
         }
       ]
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "frame": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "sprite": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "text": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "font": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "attributes": {
+          "$ref": "#/$defs/__schema9"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "__schema5": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema6": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema7": {
+      "type": "string"
+    },
+    "__schema8": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema9": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
     }
   }
 }

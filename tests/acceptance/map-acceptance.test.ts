@@ -807,6 +807,7 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
           provinceId: 5,
           geometry: {
             kind: 'polygon',
+            fillRule: 'even-odd',
             points: [
               { x: 80, y: 64 },
               { x: 96, y: 64 },

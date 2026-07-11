@@ -1,7 +1,7 @@
 # Completion report: 0.1.0 release candidate
 
 - Candidate version: `0.1.0`
-- Report date: 2026-07-10
+- Report date: 2026-07-11
 - Status: implementation and local release qualification complete; public delivery pending
 
 ## Implemented scope
@@ -12,7 +12,7 @@ The npm payload is explicitly limited to compiled entry points, documentation, s
 
 ## Qualification evidence
 
-The candidate has passed all 45 portable test files: 450 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.16% statements, 77.78% branches, 91.23% functions, and 89.72% lines.
+The candidate has passed all 46 portable test files: 491 tests passed and one POSIX case was intentionally skipped on Windows. The latest enforced coverage is 88.44% statements, 78.25% branches, 91.28% functions, and 89.90% lines.
 
 Release-specific qualification also covers:
 
@@ -22,10 +22,13 @@ Release-specific qualification also covers:
 - npm dependency audit, registry signatures, and attestations;
 - live validation against the official MCP Registry API and pinned schema;
 - official MCP Inspector discovery against the production stdio entry point;
-- a production Docker build and protocol-only container stdio initialization/discovery, with local image digest `sha256:bd4dacc98870d59ddf6ec649f797880d829af46756377cd5235541c63e0fc127`;
+- a production Docker build and protocol-only container stdio initialization/discovery; the release workflow records the final non-self-referential image digest in `container-image.json` rather than embedding an obsolete candidate digest into documentation copied inside that image;
 - immutable GitHub Action references, workflow and shell linting, strict release ordering, and byte-for-byte npm/GitHub release verification;
 - pinned Dockerfile-frontend and Node base-image digests, a multi-platform base supporting `linux/amd64` and `linux/arm64`, and a warning-free Docker build check;
-- read-only production-container checks proving OAuth metadata discovery, unauthenticated `401`, invalid-Origin `403`, protocol-only stdio initialization/discovery, and a real `hoi4.project_status` call;
+- read-only production-container checks proving OAuth metadata discovery, unauthenticated `401`, invalid-Origin `403`, protocol-only stdio initialization/discovery of all 26 tools, and a real read-only `hoi4.project_status` call from the non-root Node 22.23.1 runtime;
+- reusable bounded GUI helper templates, source-valid typed helper output, explicit state variants, deterministic scrolling and static meter handoffs, and refusal tests for unsafe or ambiguous helper compilation;
+- explicit even-odd province polygons with raster-boundary bounds checking before rasterization, pixel-center sampling, and refusal rather than clipping;
+- interrupted GitHub release recovery through a uniquely selected, byte-verified draft without asset overwrite or deletion, followed by exact immutable-release verification;
 - three installed-data qualifications covering a large vanilla/external focus workflow, a real GUI/GFX/font graph with deterministic full/annotated renders, and full province-map scan/render/storage without launching the game; the 302,497,021-byte canonical GUI graph was stored exactly as three bounded resources plus its one-read index while the default 128 MiB per-object ceiling remained enabled;
 - deterministic cold/warm benchmark output for the 255-focus, 203-visible-element GUI, and all-layer map workloads, including same-size/same-mtime content-hash invalidation.
 

@@ -22,6 +22,7 @@ import {
   indexWithProposedChanges,
   planMapOperations,
   planMapOperationsAsync,
+  type MapOperation,
   type MoveStateDistributionPolicy,
   type ProvinceTypeDistributionPolicy,
   type SplitProvinceDistributionPolicy,
@@ -1069,11 +1070,36 @@ describe('Agent Nudger map model and operations', () => {
       definition: { method: 'inherit-source' as const },
       distribution: splitProvincePolicy,
     };
+    const polygonPoints = [
+      { x: 96, y: 0 },
+      { x: 112, y: 0 },
+      { x: 112, y: 16 },
+      { x: 96, y: 16 },
+    ];
+    expect(
+      mapOperationSchema.safeParse({
+        ...baseOperation,
+        geometry: { kind: 'polygon', points: polygonPoints },
+      }).success,
+    ).toBe(false);
+    expect(
+      mapOperationSchema.safeParse({
+        ...baseOperation,
+        geometry: { kind: 'polygon', fillRule: 'nonzero', points: polygonPoints },
+      }).success,
+    ).toBe(false);
+    expect(
+      mapOperationSchema.safeParse({
+        ...baseOperation,
+        geometry: { kind: 'polygon', fillRule: 'even-odd', points: polygonPoints },
+      }).success,
+    ).toBe(true);
     expect(
       mapOperationSchema.safeParse({
         ...baseOperation,
         geometry: {
           kind: 'polygon',
+          fillRule: 'even-odd',
           points: Array.from({ length: 4_097 }, (_, index) => ({ x: index, y: index })),
         },
       }).success,
@@ -1122,6 +1148,93 @@ describe('Agent Nudger map model and operations', () => {
     ).toBe(false);
 
     const { snapshot } = await setup();
+    const missingFillRule = planMapOperations(snapshot.index, [
+      {
+        ...baseOperation,
+        id: 'missing-polygon-fill-rule',
+        geometry: { kind: 'polygon', points: polygonPoints },
+      } as unknown as MapOperation,
+    ]);
+    const unsupportedFillRule = planMapOperations(snapshot.index, [
+      {
+        ...baseOperation,
+        id: 'unsupported-polygon-fill-rule',
+        geometry: { kind: 'polygon', fillRule: 'nonzero', points: polygonPoints },
+      } as unknown as MapOperation,
+    ]);
+    expect(missingFillRule.blockers).toMatchObject([
+      { code: 'MAP_POLYGON_FILL_RULE_UNSUPPORTED', details: { fillRule: null } },
+    ]);
+    expect(unsupportedFillRule.blockers).toMatchObject([
+      { code: 'MAP_POLYGON_FILL_RULE_UNSUPPORTED', details: { fillRule: 'nonzero' } },
+    ]);
+    expect(missingFillRule.changes).toEqual([]);
+    expect(unsupportedFillRule.changes).toEqual([]);
+
+    const rightOverflow = planMapOperations(snapshot.index, [
+      {
+        ...baseOperation,
+        id: 'polygon-right-overflow',
+        geometry: {
+          kind: 'polygon',
+          fillRule: 'even-odd',
+          points: [...polygonPoints.slice(0, 3), { x: 257, y: 16 }],
+        },
+      },
+    ]);
+    const bottomOverflow = planMapOperations(snapshot.index, [
+      {
+        ...baseOperation,
+        id: 'polygon-bottom-overflow',
+        geometry: {
+          kind: 'polygon',
+          fillRule: 'even-odd',
+          points: [...polygonPoints.slice(0, 3), { x: 96, y: 257 }],
+        },
+      },
+    ]);
+    expect(rightOverflow.blockers).toMatchObject([
+      {
+        code: 'MAP_GEOMETRY_OUT_OF_BOUNDS',
+        details: { vertex: { x: 257, y: 16 }, allowed: { maxX: 256, maxY: 256 } },
+      },
+    ]);
+    expect(bottomOverflow.blockers).toMatchObject([
+      {
+        code: 'MAP_GEOMETRY_OUT_OF_BOUNDS',
+        details: { vertex: { x: 96, y: 257 }, allowed: { maxX: 256, maxY: 256 } },
+      },
+    ]);
+    expect(rightOverflow.changes).toEqual([]);
+    expect(bottomOverflow.changes).toEqual([]);
+
+    const rightBottomBoundary = planMapOperations(snapshot.index, [
+      {
+        ...baseOperation,
+        id: 'polygon-right-bottom-boundary',
+        sourceProvinceId: 3,
+        geometry: {
+          kind: 'polygon',
+          fillRule: 'even-odd',
+          points: [
+            { x: 240, y: 240 },
+            { x: 256, y: 240 },
+            { x: 256, y: 256 },
+            { x: 240, y: 256 },
+          ],
+        },
+        distribution: { ...splitProvincePolicy, state: 'none' },
+      },
+    ]);
+    expect(rightBottomBoundary.blockers).toEqual([]);
+    expect(rightBottomBoundary.expectedChangedBounds).toEqual({
+      minX: 240,
+      minY: 240,
+      maxX: 255,
+      maxY: 255,
+      count: 256,
+    });
+
     const oversizedMask = planMapOperations(snapshot.index, [
       {
         ...baseOperation,
@@ -1157,11 +1270,13 @@ describe('Agent Nudger map model and operations', () => {
             : { x: 0, y: 255 },
     );
     expect(
-      mapOperationSchema.safeParse({ ...baseOperation, geometry: { kind: 'polygon', points } })
-        .success,
+      mapOperationSchema.safeParse({
+        ...baseOperation,
+        geometry: { kind: 'polygon', fillRule: 'even-odd', points },
+      }).success,
     ).toBe(true);
     const plan = planMapOperations(snapshot.index, [
-      { ...baseOperation, geometry: { kind: 'polygon', points } },
+      { ...baseOperation, geometry: { kind: 'polygon', fillRule: 'even-odd', points } },
     ]);
     expect(plan.blockers).toMatchObject([{ code: 'MAP_POLYGON_WORK_LIMIT' }]);
   });

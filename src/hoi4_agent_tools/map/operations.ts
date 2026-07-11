@@ -202,7 +202,7 @@ export type ProvinceGeometrySelection =
       sha256: string;
       data: string;
     }
-  | { kind: 'polygon'; points: PixelPoint[] };
+  | { kind: 'polygon'; fillRule: 'even-odd'; points: PixelPoint[] };
 
 export interface SplitProvinceDistributionPolicy {
   state: 'inherit-source' | 'none';
@@ -2357,7 +2357,7 @@ function applyMergeStates(
   );
 }
 
-function pointInPolygon(x: number, y: number, points: readonly PixelPoint[]): boolean {
+function pointInEvenOddPolygon(x: number, y: number, points: readonly PixelPoint[]): boolean {
   let inside = false;
   for (
     let current = 0, previous = points.length - 1;
@@ -2571,6 +2571,33 @@ function* selectedPixels(
         'MAP_POLYGON_INVALID',
         'Province polygon requires at least three points',
       );
+    if ((geometry as { fillRule?: unknown }).fillRule !== 'even-odd') {
+      throw new ServiceError(
+        'MAP_POLYGON_FILL_RULE_UNSUPPORTED',
+        'Province polygon geometry requires the explicit even-odd fill rule',
+        { fillRule: (geometry as { fillRule?: unknown }).fillRule ?? null },
+      );
+    }
+    for (const [vertexIndex, point] of geometry.points.entries()) {
+      if (!Number.isInteger(point.x) || !Number.isInteger(point.y)) {
+        throw new ServiceError(
+          'MAP_POLYGON_INVALID',
+          'Province polygon vertices must use integer raster-boundary coordinates',
+          { vertexIndex, vertex: point },
+        );
+      }
+      if (point.x < 0 || point.x > raster.width || point.y < 0 || point.y > raster.height) {
+        throw new ServiceError(
+          'MAP_GEOMETRY_OUT_OF_BOUNDS',
+          'Province polygon vertex is outside the active raster boundary coordinates',
+          {
+            vertexIndex,
+            vertex: point,
+            allowed: { minX: 0, minY: 0, maxX: raster.width, maxY: raster.height },
+          },
+        );
+      }
+    }
     let rawMinX = Number.POSITIVE_INFINITY;
     let rawMaxX = Number.NEGATIVE_INFINITY;
     let rawMinY = Number.POSITIVE_INFINITY;
@@ -2581,10 +2608,12 @@ function* selectedPixels(
       rawMinY = Math.min(rawMinY, point.y);
       rawMaxY = Math.max(rawMaxY, point.y);
     }
-    const minX = Math.max(0, Math.floor(rawMinX));
-    const maxX = Math.min(raster.width - 1, Math.ceil(rawMaxX));
-    const minY = Math.max(0, Math.floor(rawMinY));
-    const maxY = Math.min(raster.height - 1, Math.ceil(rawMaxY));
+    // Vertices are cell-boundary coordinates. The maximum boundary is exclusive
+    // for pixel centers, so width/height are valid vertices without clipping.
+    const minX = rawMinX;
+    const maxX = rawMaxX - 1;
+    const minY = rawMinY;
+    const maxY = rawMaxY - 1;
     const width = Math.max(0, maxX - minX + 1);
     const height = Math.max(0, maxY - minY + 1);
     const cells = width * height;
@@ -2603,7 +2632,7 @@ function* selectedPixels(
       for (let x = minX; x <= maxX; x += 1) {
         yield* cancellationCheckpoint(signal, examined, 4_096);
         examined += 1;
-        if (!pointInPolygon(x + 0.5, y + 0.5, geometry.points)) continue;
+        if (!pointInEvenOddPolygon(x + 0.5, y + 0.5, geometry.points)) continue;
         if (selectedCount >= MAP_SELECTED_PIXEL_LIMIT) {
           assertSelectedPixelBudget(selectedCount + 1, 'Polygon geometry');
         }

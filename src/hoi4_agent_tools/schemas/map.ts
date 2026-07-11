@@ -177,10 +177,22 @@ const provinceGeometrySchema = z.discriminatedUnion('kind', [
       }
     }),
   z
-    .object({ kind: z.literal('polygon'), points: z.array(pointSchema).min(3).max(4_096) })
+    .object({
+      kind: z.literal('polygon'),
+      fillRule: z
+        .literal('even-odd')
+        .describe('Required deterministic polygon fill rule used for pixel-center sampling'),
+      points: z
+        .array(pointSchema)
+        .min(3)
+        .max(4_096)
+        .describe(
+          'Integer raster-boundary coordinates; runtime bounds are x from 0 through raster width and y from 0 through raster height',
+        ),
+    })
     .strict()
     .describe(
-      `Polygon rasterization is rejected if it selects more than ${MAP_SELECTED_PIXEL_LIMIT} pixels`,
+      `Even-odd polygon rasterization samples pixel centers and is rejected if it selects more than ${MAP_SELECTED_PIXEL_LIMIT} pixels`,
     ),
 ]);
 const provinceDefinitionSchema = z.discriminatedUnion('method', [

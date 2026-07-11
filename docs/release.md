@@ -45,6 +45,27 @@ The ordinary release workflow never supports token fallback. Do not create an `N
 secret, and delete `NPM_BOOTSTRAP_TOKEN` immediately after the namespace claim; either secret's
 presence deliberately blocks the OIDC publisher.
 
+## Required pre-tag immutability check
+
+GitHub's immutable-release settings endpoint requires repository `Administration:read`, which
+the short-lived repository `GITHUB_TOKEN` cannot request. Do not add a long-lived administration
+token to Actions for this check. Instead, the repository owner must run the authenticated check
+below immediately before pushing each stable release tag:
+
+```bash
+test "$(gh api \
+  --header 'X-GitHub-Api-Version: 2026-03-10' \
+  repos/klimPaskov/hoi4-agent-tools/immutable-releases \
+  --jq '.enabled')" = 'true'
+```
+
+This owner check is a release prerequisite and must pass before the first public writer starts.
+The workflow also requires the completed release to report `immutable: true` before MCP Registry
+publication and final verification. That post-publication gate detects a skipped prerequisite,
+but it cannot undo a mutable release; an administrator changing the setting between the owner
+check and release publication is an external GitHub settings race that the release API offers no
+conditional publish operation to close.
+
 ## One-time GHCR visibility bootstrap
 
 GitHub creates the first personal-account container package as private. Run the pinned manual
@@ -117,9 +138,24 @@ published package with `npm audit signatures --json --include-attestations`.
    release asset, or any failed provenance check stops the chain. A first publication builds from
    the action's default Git context, pushes by digest without a tag, rechecks the Git tag, then
    creates the exact SemVer tag once. No mutable major/minor tag is published.
-5. `github_release` creates a release only when none exists and attaches the npm tarball, both npm
-   manifests, and `container-image.json`. A rerun never overwrites release assets. Repository-level
-   release immutability protects the assets and Git tag after creation.
+5. `github_release` uses the authenticated, fully paginated List releases endpoint because
+   GitHub's by-tag endpoint exposes published releases but not drafts. It requires zero or one
+   exact tag match, cross-checks the published endpoint, and classifies the state as absent, a
+   mutable draft, or an already-complete immutable release. Drafts and publications must be owned
+   by the canonical GitHub Actions bot, use the exact tag-derived title and checked-in changelog
+   body, and expose no asset-label override. An existing draft may contain only a byte-for-byte
+   verified subset of the four expected uploaded assets from that same bot; unexpected,
+   duplicate, differently uploaded, non-uploaded, or differing assets stop the workflow without
+   deletion or replacement. The pinned release action stages missing assets with overwrite
+   disabled, canonicalizes the title and body, and leaves the release as a draft. Its numeric
+   release ID must match the unique authenticated listing. The workflow then requires the exact
+   npm tarball, both npm manifests, and `container-image.json`, repeats the unique-ID, metadata,
+   and byte checks, rechecks the peeled tag, and publishes that verified draft once.
+   Repository-level release immutability protects the assets and Git tag after publication. An
+   exact uploaded subset is resumable; a failed GitHub upload left in `starter` state or a draft
+   with noncanonical authorship or labels is a manual draft-cleanup blocker rather than permission
+   to overwrite or delete assets automatically. A completed rerun must match the one listed/public
+   release ID, canonical metadata, and all four immutable assets exactly.
 6. `publish_registry` validates a checksum-pinned official publisher, uses GitHub OIDC, rechecks
    the peeled tag after login, and publishes the exact `server.json` only when absent.
 7. `verify_public` re-queries the peeled tag and verifies npm, immutable GitHub release assets,

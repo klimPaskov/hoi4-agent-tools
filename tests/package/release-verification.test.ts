@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  classifyGitHubRelease,
+  crossCheckPublishedGitHubRelease,
+  selectGitHubReleaseByTag,
+  validateGitHubReleaseAssets,
+  validateGitHubReleaseMetadata,
+  type ExpectedGitHubReleaseAsset,
+  type ReleaseAssetDownloader,
+} from '../../scripts/distribution/github-release-state.js';
+import {
   sha512Integrity,
   verifyContainerAttestationStatement,
   verifyNpmReleaseOrder,
@@ -114,6 +123,255 @@ function provenanceFixture(): {
     sha512,
   };
 }
+
+describe('immutable GitHub release state verification', () => {
+  const tag = 'v0.1.0';
+  const canonicalBody = '# Changelog\n';
+  const githubActionsBot = {
+    id: 41_898_282,
+    login: 'github-actions[bot]',
+    type: 'Bot',
+  };
+  const baseRelease = {
+    assets: [],
+    author: githubActionsBot,
+    body: canonicalBody,
+    id: 123,
+    immutable: false,
+    name: `HOI4 Agent Tools ${tag}`,
+    prerelease: false,
+    draft: true,
+    tag_name: tag,
+  };
+
+  it('requires canonical release title, body, and GitHub Actions authorship', () => {
+    expect(() => validateGitHubReleaseMetadata(baseRelease, tag, canonicalBody)).not.toThrow();
+    expect(() =>
+      validateGitHubReleaseMetadata(
+        { ...baseRelease, name: 'Untrusted title' },
+        tag,
+        canonicalBody,
+      ),
+    ).toThrow(/canonical title/iu);
+    expect(() =>
+      validateGitHubReleaseMetadata({ ...baseRelease, body: 'Untrusted body' }, tag, canonicalBody),
+    ).toThrow(/canonical changelog/iu);
+    expect(() =>
+      validateGitHubReleaseMetadata(
+        { ...baseRelease, author: { id: 1, login: 'attacker', type: 'User' } },
+        tag,
+        canonicalBody,
+      ),
+    ).toThrow(/canonical GitHub Actions bot/iu);
+    expect(() =>
+      classifyGitHubRelease(
+        200,
+        { ...baseRelease, author: { id: 1, login: 'github-actions[bot]', type: 'Bot' } },
+        tag,
+      ),
+    ).toThrow(/canonical GitHub Actions bot/iu);
+  });
+
+  it('classifies only absent, mutable-draft, and immutable-complete states', () => {
+    expect(classifyGitHubRelease(404, { message: 'Not Found' }, tag)).toBe('absent');
+    expect(classifyGitHubRelease(200, baseRelease, tag)).toBe('draft');
+    expect(classifyGitHubRelease(200, { ...baseRelease, draft: false, immutable: true }, tag)).toBe(
+      'complete',
+    );
+
+    expect(() => classifyGitHubRelease(500, baseRelease, tag)).toThrow(/unsafe status/iu);
+    expect(() => classifyGitHubRelease(200, { ...baseRelease, tag_name: 'v0.1.1' }, tag)).toThrow(
+      /workflow tag/iu,
+    );
+    expect(() => classifyGitHubRelease(200, { ...baseRelease, prerelease: true }, tag)).toThrow(
+      /prerelease/iu,
+    );
+    expect(() =>
+      classifyGitHubRelease(200, { ...baseRelease, draft: false, immutable: false }, tag),
+    ).toThrow(/neither/iu);
+    expect(() =>
+      classifyGitHubRelease(200, { ...baseRelease, draft: true, immutable: true }, tag),
+    ).toThrow(/neither/iu);
+  });
+
+  it('selects one exact draft or publication from an authenticated paginated listing', () => {
+    const unrelated = { ...baseRelease, id: 122, tag_name: 'v0.0.9' };
+    expect(selectGitHubReleaseByTag([unrelated, baseRelease], tag)).toEqual({
+      status: 200,
+      release: baseRelease,
+    });
+    expect(selectGitHubReleaseByTag([unrelated], tag)).toEqual({
+      status: 404,
+      release: { message: 'Not Found' },
+    });
+    expect(() => selectGitHubReleaseByTag([baseRelease, { ...baseRelease, id: 124 }], tag)).toThrow(
+      /ambiguous releases/iu,
+    );
+    expect(() =>
+      selectGitHubReleaseByTag([baseRelease, { ...unrelated, id: baseRelease.id }], tag),
+    ).toThrow(/duplicate release id/iu);
+    expect(() => selectGitHubReleaseByTag([{ ...baseRelease, tag_name: '' }], tag)).toThrow(
+      /tag_name must be a non-empty string/iu,
+    );
+    expect(() => selectGitHubReleaseByTag({ releases: [baseRelease] }, tag)).toThrow(
+      /must be an array/iu,
+    );
+  });
+
+  it('cross-checks list state against the published-by-tag endpoint', () => {
+    const absent = { message: 'Not Found' };
+    const complete = { ...baseRelease, draft: false, immutable: true };
+
+    expect(() => crossCheckPublishedGitHubRelease(404, absent, 404, absent, tag)).not.toThrow();
+    expect(() =>
+      crossCheckPublishedGitHubRelease(200, baseRelease, 404, absent, tag),
+    ).not.toThrow();
+    expect(() => crossCheckPublishedGitHubRelease(200, complete, 200, complete, tag)).not.toThrow();
+    expect(() => crossCheckPublishedGitHubRelease(200, baseRelease, 200, complete, tag)).toThrow(
+      /published-release lookup returned 200 for draft/iu,
+    );
+    expect(() => crossCheckPublishedGitHubRelease(200, complete, 404, absent, tag)).toThrow(
+      /did not return an immutable publication/iu,
+    );
+    expect(() =>
+      crossCheckPublishedGitHubRelease(
+        200,
+        complete,
+        200,
+        { ...complete, id: complete.id + 1 },
+        tag,
+      ),
+    ).toThrow(/disagree on release id/iu);
+  });
+
+  it('resumes only exact-byte partial drafts and requires all four assets before publication', async () => {
+    const contents = new Map([
+      ['hoi4-agent-tools-0.1.0.tgz', Buffer.from('tarball', 'utf8')],
+      ['npm-pack.json', Buffer.from('pack', 'utf8')],
+      ['release-identity.json', Buffer.from('identity', 'utf8')],
+      ['container-image.json', Buffer.from('container', 'utf8')],
+    ]);
+    const expected = new Map<string, ExpectedGitHubReleaseAsset>(
+      [...contents].map(([name, bytes]) => [name, { bytes, name }]),
+    );
+    const asset = (name: string, id: number) => {
+      const bytes = contents.get(name)!;
+      return {
+        digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        id,
+        label: null,
+        name,
+        size: bytes.byteLength,
+        state: 'uploaded',
+        uploader: githubActionsBot,
+        url: `https://api.github.com/repos/klimPaskov/hoi4-agent-tools/releases/assets/${id}`,
+      };
+    };
+    const allAssets = [...contents.keys()].map((name, index) => asset(name, index + 1));
+    const downloads = new Map(allAssets.map((entry) => [entry.url, contents.get(entry.name)!]));
+    const download = vi.fn<ReleaseAssetDownloader>(async (url) => downloads.get(url)!);
+    const partialDraft = { ...baseRelease, assets: allAssets.slice(0, 2) };
+
+    await expect(
+      validateGitHubReleaseAssets(partialDraft, expected, 'subset', download),
+    ).resolves.toBeUndefined();
+    await expect(
+      validateGitHubReleaseAssets(partialDraft, expected, 'exact', download),
+    ).rejects.toThrow(/exact expected asset count/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        { ...baseRelease, assets: allAssets },
+        expected,
+        'exact',
+        download,
+      ),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [...allAssets.slice(0, 3), { ...allAssets[3]!, name: 'unexpected.json' }],
+        },
+        expected,
+        'exact',
+        download,
+      ),
+    ).rejects.toThrow(/unexpected asset/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [{ ...allAssets[0]!, digest: `sha256:${'0'.repeat(64)}` }],
+        },
+        expected,
+        'subset',
+        download,
+      ),
+    ).rejects.toThrow(/wrong digest/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [allAssets[0]!, { ...allAssets[1]!, id: allAssets[0]!.id }],
+        },
+        expected,
+        'subset',
+        download,
+      ),
+    ).rejects.toThrow(/duplicate asset id/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [{ ...allAssets[0]!, url: allAssets[1]!.url }],
+        },
+        expected,
+        'subset',
+        download,
+      ),
+    ).rejects.toThrow(/canonical release-asset API URL/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [{ ...allAssets[0]!, label: 'Misleading download' }],
+        },
+        expected,
+        'subset',
+        download,
+      ),
+    ).rejects.toThrow(/canonical filename/iu);
+    await expect(
+      validateGitHubReleaseAssets(
+        {
+          ...baseRelease,
+          assets: [
+            {
+              ...allAssets[0]!,
+              uploader: { id: 1, login: 'attacker', type: 'User' },
+            },
+          ],
+        },
+        expected,
+        'subset',
+        download,
+      ),
+    ).rejects.toThrow(/canonical GitHub Actions bot/iu);
+    const changedDownload: ReleaseAssetDownloader = async (url) => {
+      const bytes = downloads.get(url)!;
+      return url === allAssets[0]!.url ? Buffer.from('changed', 'utf8') : bytes;
+    };
+    await expect(
+      validateGitHubReleaseAssets(
+        { ...baseRelease, assets: [allAssets[0]!] },
+        expected,
+        'subset',
+        changedDownload,
+      ),
+    ).rejects.toThrow(/bytes differ/iu);
+  });
+});
 
 describe('release artifact verification', () => {
   it('permits only a monotonic npm latest advance or exact latest rerun', () => {

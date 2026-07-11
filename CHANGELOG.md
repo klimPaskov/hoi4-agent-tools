@@ -2,19 +2,22 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
-## [0.1.0] - 2026-07-10
+## [0.1.0] - 2026-07-11
 
 ### Added
 
 - Lossless Clausewitz source model, cross-root symbol index, diagnostics, content-addressed artifacts, hash-bound transactions, crash recovery, and byte-exact rollback.
 - Focus Tree Workbench with planning models, stable layouts, route linting, source maps, continuous-focus palettes, and HTML/SVG/PNG/JSON review artifacts.
 - Scripted GUI Studio with connected GUI/GFX/script/localisation graphs, source-frame animation provenance, state and resolution galleries, comparisons, click and hierarchy reports, and per-render fidelity reports.
+- Bounded declarative GUI templates with deterministic expansion, type-aware HOI4 element compilation, explicit state variants, anchored layouts, grid-backed scroll-list handoffs, frame-based meters, and a counted raw escape hatch.
 - Agent Nudger declarative state, province geometry, strategic-region, adjacency, supply, railway, position, locator, ID, color, and map-rendering workflows.
 - Namespaced MCP tools, prompts, opaque resources, stdio and secured Streamable HTTP transports, setup diagnostics, package metadata, container publishing, and official MCP Registry release automation.
 
 ### Fixed
 
 - Hardened generated artifact and transaction storage against descendant symlink/junction and Windows device-path escapes, restored interrupted runtime registrations before reuse, bounded artifact chunk and aggregate HTTP memory, sanitized internal MCP errors, corrected IPv6 loopback endpoints, rejected aliased transaction targets and opaque origins, separated writable runtime-mod roots from read-only source registration, and serialized monotonic releases.
+- Defined polygon edits with an explicit even-odd fill rule and integer raster-boundary coordinates, accepting the right/bottom edge while refusing overflow before raster work or allocation.
+- Made interrupted GitHub release publication recover through authenticated paginated draft discovery, unique release-ID binding, canonical bot-authored title/body/asset metadata, exact uploaded-asset verification, and immutable completed-rerun checks.
 
 ### Security
 
