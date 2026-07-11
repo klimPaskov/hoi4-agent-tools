@@ -128,7 +128,7 @@ place it beneath any source, capability, artifact, cache, fixture, or `storageRo
 ## Container
 
 ```bash
-docker build -t hoi4-agent-tools:0.1.4 .
+docker build -t hoi4-agent-tools:0.1.5 .
 docker run --read-only --rm -p 127.0.0.1:3210:3210 \
   -e HOI4_AGENT_CONFIG=/config/config.json \
   -v /srv/hoi4/config:/config:ro \
@@ -136,7 +136,7 @@ docker run --read-only --rm -p 127.0.0.1:3210:3210 \
   -v /srv/hoi4/workspaces:/srv/hoi4/workspaces \
   -v /var/lib/hoi4-agent-tools:/var/lib/hoi4-agent-tools \
   -v /var/lib/hoi4-agent-tools-state:/var/lib/hoi4-agent-tools-state \
-  hoi4-agent-tools:0.1.4
+  hoi4-agent-tools:0.1.5
 ```
 
 Port publishing reaches the container through a non-loopback interface. The mounted configuration

@@ -218,7 +218,7 @@ export async function validateGitHubReleaseAssets(
     if (asset.state !== 'uploaded') {
       throw new Error(`GitHub release asset ${name} is not uploaded`);
     }
-    if (asset.label !== null) {
+    if (asset.label !== null && asset.label !== '') {
       throw new Error(`GitHub release asset ${name} must not override its canonical filename`);
     }
     assertGitHubActionsBot(asset.uploader, `GitHub release asset ${name} uploader`);

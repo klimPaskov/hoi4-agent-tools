@@ -1,4 +1,4 @@
 [mcp_servers.hoi4_agent_tools]
 command = "npx"
-args = ["-y", "hoi4-agent-tools@0.1.4"]
+args = ["-y", "hoi4-agent-tools@0.1.5"]
 env = { HOI4_AGENT_CONFIG = "/absolute/path/to/config.json" }

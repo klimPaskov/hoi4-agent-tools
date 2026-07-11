@@ -263,7 +263,7 @@ describe('immutable GitHub release state verification', () => {
       return {
         digest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
         id,
-        label: null,
+        label: '',
         name,
         size: bytes.byteLength,
         state: 'uploaded',
@@ -287,6 +287,14 @@ describe('immutable GitHub release state verification', () => {
         { ...baseRelease, assets: allAssets },
         expected,
         'exact',
+        download,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      validateGitHubReleaseAssets(
+        { ...baseRelease, assets: [{ ...allAssets[0]!, label: null }] },
+        expected,
+        'subset',
         download,
       ),
     ).resolves.toBeUndefined();
@@ -335,17 +343,19 @@ describe('immutable GitHub release state verification', () => {
         download,
       ),
     ).rejects.toThrow(/canonical release-asset API URL/iu);
-    await expect(
-      validateGitHubReleaseAssets(
-        {
-          ...baseRelease,
-          assets: [{ ...allAssets[0]!, label: 'Misleading download' }],
-        },
-        expected,
-        'subset',
-        download,
-      ),
-    ).rejects.toThrow(/canonical filename/iu);
+    for (const label of ['Misleading download', ' ', 0, false, undefined, {}, []]) {
+      await expect(
+        validateGitHubReleaseAssets(
+          {
+            ...baseRelease,
+            assets: [{ ...allAssets[0]!, label }],
+          },
+          expected,
+          'subset',
+          download,
+        ),
+      ).rejects.toThrow(/canonical filename/iu);
+    }
     await expect(
       validateGitHubReleaseAssets(
         {

@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.5] - 2026-07-11
+
+### Fixed
+
+- Accepted the live GitHub Releases API's empty-string representation for an omitted optional asset label while continuing to reject every non-empty alternate label.
+- Added coverage for both canonical no-label representations and retained strict name, count, uploader, upload state, size, digest, API URL, and downloaded-byte verification for every release asset.
+- Preserved the immutable `v0.1.4` npm package and GHCR image plus its exact unpublished GitHub draft after the draft verifier stopped before Release publication or MCP Registry publication, then advanced every synchronized release surface for the fix-forward release.
+
 ## [0.1.4] - 2026-07-11
 
 ### Fixed

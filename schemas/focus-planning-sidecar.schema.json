@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.4/schemas/focus-planning-sidecar.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.1.5/schemas/focus-planning-sidecar.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
