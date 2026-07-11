@@ -59,7 +59,7 @@ stable package is published, the normal strict stable-version monotonic and exac
 ## Immutable fix-forward history
 
 Stable tags and public package versions are never moved, deleted, or overwritten after a failed
-release attempt. The retained history before `0.1.5` is:
+release attempt. The retained history before `0.1.6` is:
 
 - `v0.1.0` stopped during prepublication validation, before any public writer ran;
 - `v0.1.1` stopped before npm accepted bytes because npm interpreted a slash-containing relative
@@ -80,12 +80,17 @@ release attempt. The retained history before `0.1.5` is:
   asset label as an empty string while the verifier accepted only `null`, so the draft remained
   unpublished and MCP Registry publication was skipped. The tag, npm package, image, draft, and
   draft assets remain unchanged as audit evidence.
+- `v0.1.5` published and independently verified npm, the exact two-platform GHCR image, an
+  immutable four-asset GitHub Release, and an active/latest MCP Registry record. The final
+  cross-surface verifier rejected the Registry's omission of explicit `isSecret: false`, although
+  the pinned official schema defines false as that field's default and every public object passed
+  its preceding publication gate. All public objects remain unchanged as audit evidence.
 
-`0.1.5` accepts only `null` or the empty string as the API's no-label representation and continues
-to reject every non-empty alternate asset label. The normal stable-version monotonic gate treats
-the public `0.1.4` package as immutable history and permits only a strictly newer version. Rerunning
-or fixing a release never authorizes rewriting a tag, package version, image tag, release asset, or
-Registry version.
+`0.1.6` omits the redundant false default from checked-in Registry metadata so the strict verifier
+can continue comparing the complete published server record without normalization. The normal
+stable-version monotonic gate treats the public `0.1.5` package as immutable history and permits
+only a strictly newer version. Rerunning or fixing a release never authorizes rewriting a tag,
+package version, image tag, release asset, or Registry version.
 
 ## Required pre-tag immutability check
 

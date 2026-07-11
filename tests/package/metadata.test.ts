@@ -39,7 +39,7 @@ interface ServerJson {
       description: string;
       format: string;
       isRequired: boolean;
-      isSecret: boolean;
+      isSecret?: boolean;
       placeholder: string;
     }[];
     identifier: string;
@@ -147,7 +147,6 @@ describe('offline package and Registry metadata', () => {
                 'Absolute path to a reviewed HOI4 Agent Tools server configuration file.',
               format: 'filepath',
               isRequired: true,
-              isSecret: false,
               placeholder: '/absolute/path/to/config.json',
             },
           ],
@@ -156,6 +155,7 @@ describe('offline package and Registry metadata', () => {
       ],
     });
     expect(serverText).toBe(`${JSON.stringify(server, null, 2)}\n`);
+    expect(server.packages[0]?.environmentVariables?.[0]).not.toHaveProperty('isSecret');
     expect(server.name).toMatch(/^[A-Za-z0-9.-]+\/[a-z0-9._-]+$/u);
     expect(new URL(server.repository.url).protocol).toBe('https:');
     expect(new URL(server.websiteUrl).protocol).toBe('https:');

@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.1.6] - 2026-07-11
+
+### Fixed
+
+- Omitted the redundant explicit `isSecret: false` environment-variable value because the pinned official Registry schema defines the field's default as false and the Registry canonically omits that default from published metadata.
+- Kept strict byte-structural equality between checked-in `server.json` and the official Registry response instead of weakening verification with a broad normalizer.
+- Preserved the immutable complete `v0.1.5` npm, GHCR, GitHub Release, and MCP Registry publication whose final cross-surface verifier stopped only on the schema-default serialization difference, then advanced every synchronized release surface for the fix-forward release.
+
 ## [0.1.5] - 2026-07-11
 
 ### Fixed

@@ -3,7 +3,7 @@
   "name": "io.github.klimPaskov/hoi4-agent-tools",
   "title": "HOI4 Agent Tools",
   "description": "Source-preserving HOI4 focus, scripted GUI, and map tools with safe transactions.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "repository": {
     "url": "https://github.com/klimPaskov/hoi4-agent-tools",
     "source": "github"
@@ -13,14 +13,13 @@
     {
       "registryType": "npm",
       "identifier": "hoi4-agent-tools",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "environmentVariables": [
         {
           "name": "HOI4_AGENT_CONFIG",
           "description": "Absolute path to a reviewed HOI4 Agent Tools server configuration file.",
           "format": "filepath",
           "isRequired": true,
-          "isSecret": false,
           "placeholder": "/absolute/path/to/config.json"
         }
       ],
