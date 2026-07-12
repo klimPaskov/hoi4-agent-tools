@@ -107,6 +107,7 @@ async function overflowConfig(prefix: string): Promise<string> {
     config,
     `${JSON.stringify({
       version: 1,
+      serverStateRoot: path.join(temporary, 'server-state'),
       workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
     })}\n`,
   );
@@ -123,6 +124,7 @@ describe('local stdio transport', () => {
       config,
       `${JSON.stringify({
         version: 1,
+        serverStateRoot: path.join(temporary, 'server-state'),
         workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
       })}\n`,
     );
@@ -147,7 +149,7 @@ describe('local stdio transport', () => {
       jsonrpc: '2.0',
       result: {
         protocolVersion: '2025-11-25',
-        serverInfo: { name: 'hoi4-agent-tools', version: '0.2.0' },
+        serverInfo: { name: 'hoi4-agent-tools', version: '1.0.0' },
       },
     });
     child.stdin.write(
@@ -309,6 +311,7 @@ describe('local stdio transport', () => {
       config,
       `${JSON.stringify({
         version: 1,
+        serverStateRoot: path.join(temporary, 'server-state'),
         workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
       })}\n`,
     );

@@ -7,7 +7,7 @@ export type DiagnosticCategory =
   | 'design'
   | 'rendering'
   | 'security'
-  | 'transaction'
+  | 'validation'
   | 'map'
   | 'configuration';
 

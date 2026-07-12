@@ -161,7 +161,7 @@ beforeAll(async () => {
   plan = JSON.parse(planBytes.toString('utf8')) as FocusTreePlan;
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'read-only',
+    serverStateRoot: path.join(temporaryRoot, 'server-state'),
     storageRoots: [path.join(temporaryRoot, 'artifacts'), path.join(temporaryRoot, 'cache')],
     workspaces: [
       {
@@ -171,7 +171,6 @@ beforeAll(async () => {
         kind: 'mod',
         artifactRoot: path.join(temporaryRoot, 'artifacts'),
         cacheRoot: path.join(temporaryRoot, 'cache'),
-        writeEnabled: false,
       },
     ],
   });

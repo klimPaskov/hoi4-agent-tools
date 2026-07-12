@@ -1,12 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
-import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
-import { canonicalJson } from '../../core/canonical.js';
+import {
+  boundedSourceHashEvidence,
+  publicArtifactLink,
+  type ArtifactWrite,
+} from '../../core/artifacts.js';
+import { canonicalJson, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
 import { emptyServiceResult } from '../../core/result.js';
 import {
   AgentNudger,
   allocateMapIdentifiersAsync,
+  exportProvinceGeometryRowRuns,
+  MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT,
   type AllocationEvidence,
   type MapAllocationRequest,
   type MapOperation,
@@ -16,15 +22,10 @@ import {
 import { workspaceIdSchema } from '../../schemas/common.js';
 import { mapAllocationRequestSchema, mapOperationSchema } from '../../schemas/map.js';
 import { PACKAGE_VERSION } from '../../version.js';
-import {
-  requireServerScope,
-  transactionResourceLink,
-  type ServerContext,
-} from '../server/base-tools.js';
+import { requireServerScope, type ServerContext } from '../server/base-tools.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
-  autonomousWrites,
   executePlannedTransaction,
 } from '../server/transaction-execution.js';
 import {
@@ -42,13 +43,6 @@ import {
   toolResult,
 } from '../server/result.js';
 
-const rgbSchema = z
-  .object({
-    r: z.number().int().min(0).max(255),
-    g: z.number().int().min(0).max(255),
-    b: z.number().int().min(0).max(255),
-  })
-  .strict();
 const changedBoundsSchema = z
   .object({
     minX: nonNegativeIntegerSchema,
@@ -103,7 +97,7 @@ const mapSemanticDiffSchema = z
     normalAdjacenciesChanged: z.boolean(),
   })
   .strict();
-const mapScanOutputSchema = strictOperationResultSchema(
+const mapWorkspaceInspectOutputSchema = strictOperationResultSchema(
   z
     .object({
       revision: sha256Schema,
@@ -114,26 +108,19 @@ const mapScanOutputSchema = strictOperationResultSchema(
       states: nonNegativeIntegerSchema,
       regions: nonNegativeIntegerSchema,
       ports: nonNegativeIntegerSchema,
-    })
-    .strict(),
-);
-const mapInspectOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      revision: sha256Schema,
-      provinceCount: nonNegativeIntegerSchema,
-      stateCount: nonNegativeIntegerSchema,
-      regionCount: nonNegativeIntegerSchema,
-    })
-    .strict(),
-);
-const mapAllocationOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      stateId: nonNegativeIntegerSchema.optional(),
-      provinceId: nonNegativeIntegerSchema.optional(),
-      color: rgbSchema.optional(),
-      evidence: z.array(allocationEvidenceSchema).max(16),
+      inspectedProvinceCount: nonNegativeIntegerSchema,
+      inspectedStateCount: nonNegativeIntegerSchema,
+      inspectedRegionCount: nonNegativeIntegerSchema,
+      allocationCount: nonNegativeIntegerSchema,
+      provinceGeometryCount: nonNegativeIntegerSchema,
+      provinceGeometryPixelCount: nonNegativeIntegerSchema,
+      provinceGeometryRowRunCount: nonNegativeIntegerSchema,
+      unknownProvinceIds: z
+        .array(nonNegativeIntegerSchema)
+        .max(MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT),
+      missingGeometryProvinceIds: z
+        .array(nonNegativeIntegerSchema)
+        .max(MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT),
     })
     .strict(),
 );
@@ -148,13 +135,10 @@ const mapRenderOutputSchema = strictOperationResultSchema(
     })
     .strict(),
 );
-const mapValidateOutputSchema = strictOperationResultSchema(
-  z.object({ revision: sha256Schema, diagnosticCount: nonNegativeIntegerSchema }).strict(),
-);
 const mapPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
-      execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
+      execution: z.enum(['applied', 'blocked', 'unchanged']),
       allocations: z.array(allocationEvidenceSchema).max(100),
       operationBlockers: z.array(operationBlockerDataSchema).max(100),
       expectedChangedBounds: changedBoundsSchema.nullable(),
@@ -163,9 +147,8 @@ const mapPlanOutputSchema = strictOperationResultSchema(
       semanticDiff: mapSemanticDiffSchema,
       semanticDiffCounts: z.record(z.string().max(256), nonNegativeIntegerSchema),
       semanticDiffTruncated: z.boolean(),
-      expiresAt: z.iso.datetime(),
-      transactionFileCount: nonNegativeIntegerSchema,
-      transactionArtifactCount: nonNegativeIntegerSchema,
+      fileCount: nonNegativeIntegerSchema,
+      artifactCount: nonNegativeIntegerSchema,
     })
     .strict(),
 );
@@ -336,75 +319,274 @@ function mapArtifactSourceEvidence(files: readonly { displayPath: string; sha256
   return { complete, bounded: boundedSourceHashEvidence(complete) };
 }
 
+function selectedMapEntities(
+  snapshot: Awaited<ReturnType<AgentNudger['scan']>>,
+  provinceIds: readonly number[],
+  stateIds: readonly number[],
+  regionIds: readonly number[],
+) {
+  const provinces = [...new Set(provinceIds)]
+    .sort((a, b) => a - b)
+    .map((id) => {
+      const definition = snapshot.index.definitionsById.get(id);
+      const geometry = snapshot.index.raster?.geometry.get(id);
+      return {
+        id,
+        definition:
+          definition === undefined
+            ? null
+            : {
+                color: definition.color,
+                type: definition.type,
+                coastal: definition.coastal,
+                terrain: definition.terrain,
+                continent: definition.continent,
+              },
+        geometry: geometry ?? null,
+        stateIds: snapshot.index.stateForProvince(id).map(({ id: state }) => state),
+        regionIds: snapshot.index.regionForProvince(id).map(({ id: region }) => region),
+        victoryPoints:
+          snapshot.index.victoryPointsByProvince
+            .get(id)
+            ?.map(({ stateId: state, value }) => ({ stateId: state, value })) ?? [],
+        provinceBuildings:
+          snapshot.index.provinceBuildingsByProvince
+            .get(id)
+            ?.map(({ stateId: state, buildings }) => ({
+              stateId: state,
+              buildings: Object.fromEntries(buildings),
+            })) ?? [],
+        port: (() => {
+          const port = snapshot.index.ports.find(({ provinceId }) => provinceId === id);
+          return port === undefined
+            ? null
+            : {
+                stateId: port.stateId,
+                provinceId: port.provinceId,
+                level: port.level,
+                coastal: port.coastal,
+                adjacentSeaProvinceIds: port.adjacentSeaProvinceIds,
+                positions: port.positions.map(
+                  ({ stateId, building, x, y, z, rotation, adjacentSeaProvince }) => ({
+                    stateId,
+                    building,
+                    x,
+                    y,
+                    z,
+                    rotation,
+                    adjacentSeaProvince,
+                  }),
+                ),
+              };
+        })(),
+      };
+    });
+  const states = [...new Set(stateIds)]
+    .sort((a, b) => a - b)
+    .map((id) => {
+      const state = snapshot.index.statesById.get(id);
+      return state === undefined
+        ? { id, value: null }
+        : {
+            id,
+            value: {
+              name: state.name,
+              capital: state.capital ?? null,
+              manpower: state.manpower,
+              category: state.category,
+              provinces: state.provinces,
+              resources: Object.fromEntries(state.resources),
+              owner: state.owner ?? null,
+              controller: state.controller ?? null,
+              cores: state.cores,
+              claims: state.claims,
+              victoryPoints: state.victoryPoints.map(({ provinceId, value }) => ({
+                provinceId,
+                value,
+              })),
+              stateBuildings: Object.fromEntries(state.stateBuildings),
+              provinceBuildings: Object.fromEntries(
+                [...state.provinceBuildings].map(([provinceId, buildings]) => [
+                  String(provinceId),
+                  Object.fromEntries(buildings),
+                ]),
+              ),
+            },
+          };
+    });
+  const regions = [...new Set(regionIds)]
+    .sort((a, b) => a - b)
+    .map((id) => {
+      const region = snapshot.index.regionsById.get(id);
+      return region === undefined
+        ? { id, value: null }
+        : {
+            id,
+            value: {
+              name: region.name,
+              provinces: region.provinces,
+              navalTerrain: region.navalTerrain ?? null,
+            },
+          };
+    });
+  return { provinces, states, regions };
+}
+
 export function registerMapTools(
   server: McpServer,
   engine: CoreEngine,
   context: ServerContext,
 ): void {
-  const autonomous = autonomousWrites(engine);
   const nudger = new AgentNudger(engine);
 
   server.registerTool(
-    'hoi4.map_scan',
+    'hoi4.map_inspect',
     {
-      title: 'Scan HOI4 map sources',
+      title: 'Inspect HOI4 map',
       description:
-        'Index province geometry, definitions, states, regions, ownership, networks, adjacencies, positions, locators, ports, and localisation across active roots.',
-      inputSchema: z.object({ workspaceId: workspaceIdSchema }).strict(),
-      outputSchema: mapScanOutputSchema,
+        'Inspect map geometry and records for creation and cleanup, validate the complete map, return selected province/state/region details, preview requested free IDs and province colors, and export exact canonical province row runs when provinceIds are supplied.',
+      inputSchema: z
+        .object({
+          workspaceId: workspaceIdSchema,
+          provinceIds: z
+            .array(z.number().int().min(0))
+            .max(MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT)
+            .default([])
+            .describe(
+              `Optional exact-geometry selector; exports row runs for at most ${MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT} province IDs`,
+            ),
+          stateIds: z.array(z.number().int().positive()).max(1_000).default([]),
+          regionIds: z.array(z.number().int().positive()).max(1_000).default([]),
+          allocationRequests: z.array(mapAllocationRequestSchema).max(100).default([]),
+        })
+        .strict(),
+      outputSchema: mapWorkspaceInspectOutputSchema,
       annotations: artifactProducing,
     },
-    async ({ workspaceId }, extra) => {
+    async ({ workspaceId, provinceIds, stateIds, regionIds, allocationRequests }, extra) => {
       try {
         const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Scanning shared and map indexes');
+        await progress.report(0, 3, 'Inspecting and validating the map');
         const [shared, { snapshot, validation }] = await Promise.all([
           engine.scan(workspaceId, {}, context.principal, progress.signal),
           nudger.validate(workspaceId, context.principal, progress.signal),
         ]);
+        const selected = selectedMapEntities(snapshot, provinceIds, stateIds, regionIds);
+        const provinceGeometry =
+          provinceIds.length === 0
+            ? undefined
+            : await exportProvinceGeometryRowRuns(snapshot.index, provinceIds, progress.signal);
+        const allocationPreviews = [];
+        for (const request of allocationRequests) {
+          allocationPreviews.push({
+            request,
+            allocation: await allocateMapIdentifiersAsync(
+              snapshot.index,
+              request as MapAllocationRequest,
+              progress.signal,
+            ),
+          });
+        }
         const workspace = engine.resolver.get(workspaceId, context.principal);
         const sourceEvidence = mapArtifactSourceEvidence(snapshot.files);
-        const artifact = await engine.artifacts.putChunked(
-          workspace,
-          `map-scan.${snapshot.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({
-            schemaVersion: 1,
-            revision: snapshot.revision,
+        const inspectionProvenance = {
+          kind: 'map-inspect',
+          toolVersion: PACKAGE_VERSION,
+          schemaVersion: 'map-inspect.v1',
+          sourceHashes: sourceEvidence.bounded.sourceHashes,
+          metadata: {
             sharedRevision: shared.revision,
-            dimensions:
-              snapshot.index.raster === undefined
-                ? null
-                : {
-                    width: snapshot.index.raster.width,
-                    height: snapshot.index.raster.height,
-                    bitsPerPixel: snapshot.index.provinceBitmap?.bitsPerPixel,
-                    dibSize: snapshot.index.provinceBitmap?.dibSize,
-                  },
-            counts: {
-              definitions: snapshot.index.definitions.length,
-              states: snapshot.index.states.length,
-              regions: snapshot.index.regions.length,
-              adjacencies: snapshot.index.adjacencies.length,
-              supplyNodes: snapshot.index.supplyNodes.length,
-              railways: snapshot.index.railways.length,
-              ports: snapshot.index.ports.length,
-              locators: snapshot.index.entityLocators.length,
-            },
-            validation,
-            sourceHashes: sourceEvidence.complete,
-          })}\n`,
-          {
-            kind: 'map-scan',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'map-scan.v1',
-            sourceHashes: sourceEvidence.bounded.sourceHashes,
-            metadata: {
-              sharedRevision: shared.revision,
-              sourceHashInventory: sourceEvidence.bounded.inventory,
-            },
+            sourceHashInventory: sourceEvidence.bounded.inventory,
           },
-          'Complete map scan and validation summary',
+        };
+        const artifactWrites: ArtifactWrite[] = [
+          {
+            name: `map-inspect.${snapshot.revision.slice(0, 16)}.json`,
+            mimeType: 'application/json',
+            content: `${canonicalJson({
+              schemaVersion: 1,
+              revision: snapshot.revision,
+              sharedRevision: shared.revision,
+              dimensions:
+                snapshot.index.raster === undefined
+                  ? null
+                  : {
+                      width: snapshot.index.raster.width,
+                      height: snapshot.index.raster.height,
+                      bitsPerPixel: snapshot.index.provinceBitmap?.bitsPerPixel,
+                      dibSize: snapshot.index.provinceBitmap?.dibSize,
+                    },
+              counts: {
+                definitions: snapshot.index.definitions.length,
+                states: snapshot.index.states.length,
+                regions: snapshot.index.regions.length,
+                adjacencies: snapshot.index.adjacencies.length,
+                supplyNodes: snapshot.index.supplyNodes.length,
+                railways: snapshot.index.railways.length,
+                ports: snapshot.index.ports.length,
+                locators: snapshot.index.entityLocators.length,
+              },
+              selected,
+              allocationPreviews,
+              validation,
+              sourceHashes: sourceEvidence.complete,
+            })}\n`,
+            provenance: inspectionProvenance,
+            description:
+              'Complete map inspection, validation, selected records, and allocation previews',
+          },
+        ];
+        if (provinceGeometry !== undefined) {
+          const {
+            width,
+            height,
+            requestedProvinceIds,
+            unknownProvinceIds,
+            missingGeometryProvinceIds,
+            pixelCount,
+            rowRunCount,
+            provinces,
+          } = provinceGeometry;
+          const selectorHash = hashCanonical(requestedProvinceIds).slice(0, 16);
+          artifactWrites.push({
+            name: `map-province-geometry.${snapshot.revision.slice(0, 16)}.${selectorHash}.json`,
+            mimeType: 'application/json',
+            content: `${canonicalJson({
+              schemaVersion: 1,
+              revision: snapshot.revision,
+              dimensions: { width, height },
+              coordinateSystem: {
+                origin: 'top-left',
+                xDirection: 'right',
+                yDirection: 'down',
+              },
+              rowRunFormat: ['y', 'startX', 'endXExclusive'],
+              requestedProvinceIds,
+              unknownProvinceIds,
+              missingGeometryProvinceIds,
+              pixelCount,
+              rowRunCount,
+              provinces,
+              sourceHashes: sourceEvidence.complete,
+            })}\n`,
+            provenance: {
+              kind: 'map-province-geometry',
+              toolVersion: PACKAGE_VERSION,
+              schemaVersion: 'map-province-geometry.v1',
+              sourceHashes: sourceEvidence.bounded.sourceHashes,
+              metadata: {
+                requestedProvinceIds,
+                sourceHashInventory: sourceEvidence.bounded.inventory,
+              },
+            },
+            description:
+              'Exact canonical province row runs for deriving bounded split or create geometry',
+          });
+        }
+        const artifacts = await engine.artifacts.withAtomicChunkedWrites(
+          workspace,
+          artifactWrites,
+          (stored) => Promise.resolve([...stored]),
           progress.signal,
         );
         const result = emptyServiceResult(workspaceId, {
@@ -416,246 +598,25 @@ export function registerMapTools(
           states: snapshot.index.states.length,
           regions: snapshot.index.regions.length,
           ports: snapshot.index.ports.length,
-        });
-        result.code = 'MAP_SCANNED';
-        setInlineFilesScanned(
-          result,
-          snapshot.files.map(({ displayPath }) => displayPath),
-        );
-        result.diagnostics = validation.diagnostics.slice(0, 100);
-        result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = validationSummary(validation);
-        await progress.report(3, 3, 'Map scan complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.map_inspect',
-    {
-      title: 'Inspect indexed map entities',
-      description:
-        'Return bounded semantic details for selected province, state, and strategic-region IDs as a resource artifact.',
-      inputSchema: z
-        .object({
-          workspaceId: workspaceIdSchema,
-          provinceIds: z.array(z.number().int().min(0)).max(1000).default([]),
-          stateIds: z.array(z.number().int().positive()).max(1000).default([]),
-          regionIds: z.array(z.number().int().positive()).max(1000).default([]),
-        })
-        .strict(),
-      outputSchema: mapInspectOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId, provinceIds, stateIds, regionIds }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Scanning map index for selected entities');
-        const snapshot = await nudger.scan(workspaceId, context.principal, progress.signal);
-        const provinces = [...new Set(provinceIds)]
-          .sort((a, b) => a - b)
-          .map((id) => {
-            const definition = snapshot.index.definitionsById.get(id);
-            const geometry = snapshot.index.raster?.geometry.get(id);
-            return {
-              id,
-              definition:
-                definition === undefined
-                  ? null
-                  : {
-                      color: definition.color,
-                      type: definition.type,
-                      coastal: definition.coastal,
-                      terrain: definition.terrain,
-                      continent: definition.continent,
-                    },
-              geometry: geometry ?? null,
-              stateIds: snapshot.index.stateForProvince(id).map(({ id: state }) => state),
-              regionIds: snapshot.index.regionForProvince(id).map(({ id: region }) => region),
-              victoryPoints:
-                snapshot.index.victoryPointsByProvince
-                  .get(id)
-                  ?.map(({ stateId: state, value }) => ({ stateId: state, value })) ?? [],
-              provinceBuildings:
-                snapshot.index.provinceBuildingsByProvince
-                  .get(id)
-                  ?.map(({ stateId: state, buildings }) => ({
-                    stateId: state,
-                    buildings: Object.fromEntries(buildings),
-                  })) ?? [],
-              port: (() => {
-                const port = snapshot.index.ports.find(({ provinceId }) => provinceId === id);
-                return port === undefined
-                  ? null
-                  : {
-                      stateId: port.stateId,
-                      provinceId: port.provinceId,
-                      level: port.level,
-                      coastal: port.coastal,
-                      adjacentSeaProvinceIds: port.adjacentSeaProvinceIds,
-                      positions: port.positions.map(
-                        ({ stateId, building, x, y, z, rotation, adjacentSeaProvince }) => ({
-                          stateId,
-                          building,
-                          x,
-                          y,
-                          z,
-                          rotation,
-                          adjacentSeaProvince,
-                        }),
-                      ),
-                    };
-              })(),
-            };
-          });
-        const states = [...new Set(stateIds)]
-          .sort((a, b) => a - b)
-          .map((id) => {
-            const state = snapshot.index.statesById.get(id);
-            return state === undefined
-              ? { id, value: null }
-              : {
-                  id,
-                  value: {
-                    name: state.name,
-                    capital: state.capital ?? null,
-                    manpower: state.manpower,
-                    category: state.category,
-                    provinces: state.provinces,
-                    resources: Object.fromEntries(state.resources),
-                    owner: state.owner ?? null,
-                    controller: state.controller ?? null,
-                    cores: state.cores,
-                    claims: state.claims,
-                    victoryPoints: state.victoryPoints.map(({ provinceId, value }) => ({
-                      provinceId,
-                      value,
-                    })),
-                    stateBuildings: Object.fromEntries(state.stateBuildings),
-                    provinceBuildings: Object.fromEntries(
-                      [...state.provinceBuildings].map(([provinceId, buildings]) => [
-                        String(provinceId),
-                        Object.fromEntries(buildings),
-                      ]),
-                    ),
-                  },
-                };
-          });
-        const regions = [...new Set(regionIds)]
-          .sort((a, b) => a - b)
-          .map((id) => {
-            const region = snapshot.index.regionsById.get(id);
-            return region === undefined
-              ? { id, value: null }
-              : {
-                  id,
-                  value: {
-                    name: region.name,
-                    provinces: region.provinces,
-                    navalTerrain: region.navalTerrain ?? null,
-                  },
-                };
-          });
-        const data = { schemaVersion: 1, revision: snapshot.revision, provinces, states, regions };
-        await progress.report(2, 3, 'Writing bounded map inspection evidence');
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const sourceEvidence = mapArtifactSourceEvidence(snapshot.files);
-        const artifact = await engine.artifacts.putChunked(
-          workspace,
-          `map-inspect.${snapshot.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({ ...data, sourceHashes: sourceEvidence.complete })}\n`,
-          {
-            kind: 'map-inspect',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'map-inspect.v1',
-            sourceHashes: sourceEvidence.bounded.sourceHashes,
-            metadata: { sourceHashInventory: sourceEvidence.bounded.inventory },
-          },
-          'Selected map entity details',
-          progress.signal,
-        );
-        const result = emptyServiceResult(workspaceId, {
-          revision: snapshot.revision,
-          provinceCount: provinces.length,
-          stateCount: states.length,
-          regionCount: regions.length,
+          inspectedProvinceCount: selected.provinces.length,
+          inspectedStateCount: selected.states.length,
+          inspectedRegionCount: selected.regions.length,
+          allocationCount: allocationPreviews.length,
+          provinceGeometryCount: provinceGeometry?.provinces.length ?? 0,
+          provinceGeometryPixelCount: provinceGeometry?.pixelCount ?? 0,
+          provinceGeometryRowRunCount: provinceGeometry?.rowRunCount ?? 0,
+          unknownProvinceIds: provinceGeometry?.unknownProvinceIds ?? [],
+          missingGeometryProvinceIds: provinceGeometry?.missingGeometryProvinceIds ?? [],
         });
         result.code = 'MAP_INSPECTED';
         setInlineFilesScanned(
           result,
           snapshot.files.map(({ displayPath }) => displayPath),
         );
-        result.artifacts = [publicArtifactLink(artifact)];
+        result.diagnostics = validation.diagnostics.slice(0, 100);
+        result.artifacts = artifacts.map(publicArtifactLink);
+        result.validation = validationSummary(validation);
         await progress.report(3, 3, 'Map inspection complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.map_allocate',
-    {
-      title: 'Preview map ID and color allocation',
-      description:
-        'Scan every configured root, then deterministically preview a free state ID or contiguous province ID and collision-free color without writing.',
-      inputSchema: z
-        .object({ workspaceId: workspaceIdSchema, request: mapAllocationRequestSchema })
-        .strict(),
-      outputSchema: mapAllocationOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId, request }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Scanning every map source for identifiers and colors');
-        const snapshot = await nudger.scan(workspaceId, context.principal, progress.signal);
-        const allocation = await allocateMapIdentifiersAsync(
-          snapshot.index,
-          request as MapAllocationRequest,
-          progress.signal,
-        );
-        progress.signal.throwIfAborted();
-        await progress.report(2, 3, 'Writing allocation evidence');
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const sourceEvidence = mapArtifactSourceEvidence(snapshot.files);
-        const artifact = await engine.artifacts.putChunked(
-          workspace,
-          `map-allocation.${snapshot.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({
-            schemaVersion: 1,
-            revision: snapshot.revision,
-            request,
-            allocation,
-            sourceHashes: sourceEvidence.complete,
-          })}\n`,
-          {
-            kind: 'map-allocation',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'map-allocation.v1',
-            sourceHashes: sourceEvidence.bounded.sourceHashes,
-            metadata: { sourceHashInventory: sourceEvidence.bounded.inventory },
-          },
-          'Allocation evidence from every active source root',
-          progress.signal,
-        );
-        const result = emptyServiceResult(workspaceId, {
-          ...allocation,
-          evidence: allocation.evidence.map(compactAllocationEvidence),
-        });
-        result.code = 'MAP_ALLOCATION_PREVIEWED';
-        setInlineFilesScanned(
-          result,
-          snapshot.files.map(({ displayPath }) => displayPath),
-        );
-        result.artifacts = [publicArtifactLink(artifact)];
-        await progress.report(3, 3, 'Map allocation preview complete');
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
@@ -668,7 +629,7 @@ export function registerMapTools(
     {
       title: 'Render map inspection artifacts',
       description:
-        'Generate deterministic offline PNG, JSON, and pan-and-zoom HTML for one semantic layer and bounded overlays.',
+        'Render deterministic PNG, JSON, and pan-and-zoom HTML artifacts for map creation and cleanup review, with one semantic layer and bounded overlays.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -710,74 +671,11 @@ export function registerMapTools(
   );
 
   server.registerTool(
-    'hoi4.map_validate',
+    'hoi4.map_rewrite',
     {
-      title: 'Validate map workspace',
+      title: 'Create or clean up map content',
       description:
-        'Run static map, bitmap, membership, network, coast, port, locator, reference, and localisation validation without launching the game.',
-      inputSchema: z.object({ workspaceId: workspaceIdSchema }).strict(),
-      outputSchema: mapValidateOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Scanning and validating map sources');
-        const { snapshot, validation } = await nudger.validate(
-          workspaceId,
-          context.principal,
-          progress.signal,
-        );
-        await progress.report(2, 3, 'Writing map validation evidence');
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const sourceEvidence = mapArtifactSourceEvidence(snapshot.files);
-        const artifact = await engine.artifacts.putChunked(
-          workspace,
-          `map-validation.${snapshot.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({
-            schemaVersion: 1,
-            revision: snapshot.revision,
-            validation,
-            sourceHashes: sourceEvidence.complete,
-          })}\n`,
-          {
-            kind: 'map-validation',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'map-validation.v1',
-            sourceHashes: sourceEvidence.bounded.sourceHashes,
-            metadata: { sourceHashInventory: sourceEvidence.bounded.inventory },
-          },
-          'Complete source-linked map validation report',
-          progress.signal,
-        );
-        const result = emptyServiceResult(workspaceId, {
-          revision: snapshot.revision,
-          diagnosticCount: validation.diagnostics.length,
-        });
-        result.code = 'MAP_VALIDATED';
-        setInlineFilesScanned(
-          result,
-          snapshot.files.map(({ displayPath }) => displayPath),
-        );
-        result.diagnostics = validation.diagnostics.slice(0, 100);
-        result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = validationSummary(validation);
-        await progress.report(3, 3, 'Map validation complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    autonomous ? 'hoi4.map_rewrite' : 'hoi4.map_plan',
-    {
-      title: autonomous ? 'Apply declarative map operations' : 'Dry-run declarative map operations',
-      description: autonomous
-        ? 'Validate, journal, and immediately apply exact state/localisation, province, hash-bound mask, bitmap-normal/special adjacency, region, network, position, and locator changes with pixel/semantic evidence in one call.'
-        : 'Plan exact state/localisation, province, hash-bound mask, bitmap-normal/special adjacency, region, network, position, and locator changes with pixel/semantic diffs; it does not apply them.',
+        'Create or clean up states, provinces, regions, adjacencies, networks, positions, locators, and localisation with exact declarative operations, apply them in one call, and return pixel and semantic review artifacts.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -788,7 +686,7 @@ export function registerMapTools(
       outputSchema: mapPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: autonomous,
+        destructiveHint: true,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -799,26 +697,16 @@ export function registerMapTools(
         const progress = progressReporter(extra);
         await progress.report(0, 5, 'Planning map operations and visual diff');
         const typedOperations = operations as MapOperation[];
-        const diff = await nudger.renderDiffAndStore(workspaceId, typedOperations, {
-          ...(diffScale === undefined ? {} : { scale: diffScale }),
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          signal: progress.signal,
-        });
-        await progress.report(3, 5, 'Creating hash-bound map transaction');
-        const planned = await nudger.plan({
+        const planned = await nudger.planRewriteWithDiff({
           workspaceId,
           operations: typedOperations,
-          artifacts: diff.artifacts.map(publicArtifactLink),
+          ...(diffScale === undefined ? {} : { diffScale }),
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: progress.signal,
         });
-        await progress.report(
-          4,
-          5,
-          autonomous
-            ? 'Applying and post-validating map rewrite'
-            : 'Finalizing reviewed transaction',
-        );
+        const diff = planned;
+        await progress.report(3, 5, 'Preparing the map rewrite');
+        await progress.report(4, 5, 'Applying and validating the map rewrite');
         const execution = await executePlannedTransaction(
           engine,
           planned.transaction,
@@ -839,9 +727,8 @@ export function registerMapTools(
           semanticDiff: compactSemantic.semantic,
           semanticDiffCounts: compactSemantic.counts,
           semanticDiffTruncated: compactSemantic.truncated,
-          expiresAt: transaction.expiresAt,
-          transactionFileCount: transaction.files.length,
-          transactionArtifactCount: transaction.artifacts.length,
+          fileCount: transaction.files.length,
+          artifactCount: transaction.artifacts.length,
         });
         result.status = transaction.validation.passed ? 'ok' : 'blocked';
         result.code =
@@ -849,23 +736,14 @@ export function registerMapTools(
             ? 'MAP_CHANGES_APPLIED'
             : execution.outcome === 'unchanged'
               ? 'MAP_CHANGES_UNCHANGED'
-              : transaction.validation.passed
-                ? 'MAP_CHANGES_PLANNED'
-                : 'MAP_CHANGES_BLOCKED';
+              : 'MAP_CHANGES_BLOCKED';
         setInlineFilesScanned(result, diff.filesScanned);
         result.proposedFiles = transaction.files
           .slice(0, 100)
           .map(({ relativePath }) => relativePath);
         result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        if (autonomous) {
-          result.artifacts = autonomousResultArtifacts(execution);
-        } else {
-          result.transactionId = transaction.transactionId;
-          result.planHash = transaction.planHash;
-          result.artifacts = [transactionResourceLink(transaction)];
-          result.rollbackStatus = transaction.rollbackStatus;
-        }
+        result.artifacts = autonomousResultArtifacts(execution);
         result.validation = transaction.validation;
         result.blockers = [
           ...planned.plan.blockers.map(({ code, message }) => ({
@@ -886,8 +764,8 @@ export function registerMapTools(
           execution.outcome === 'applied'
             ? 'Map rewrite complete'
             : execution.outcome === 'unchanged'
-              ? 'Map sources already satisfied the operations'
-              : 'Map transaction planned',
+              ? 'Map content already satisfied the operations'
+              : 'Map rewrite blocked',
         );
         return toolResult(result);
       } catch (error) {

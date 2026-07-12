@@ -44,6 +44,7 @@ async function instrumentedServer(factory: () => McpServer): Promise<HttpServerH
   process.env.HOI4_AGENT_STREAM_TOKEN = token;
   const configuration = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(root, 'server-state'),
     workspaces: [{ id: 'stream', name: 'Stream fixture', root: mod }],
     http: {
       host: '127.0.0.1',

@@ -46,7 +46,7 @@ export const diagnosticSchema = z
       'design',
       'rendering',
       'security',
-      'transaction',
+      'validation',
       'map',
       'configuration',
     ]),

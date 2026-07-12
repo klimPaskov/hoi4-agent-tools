@@ -5,18 +5,15 @@ import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
-  GENERATED_SCHEMA_FILES,
   PACKAGE_BIN_TARGETS,
   REQUIRED_PACKAGE_FILES,
 } from '../../scripts/distribution/package-fixture.js';
-import { focusTreePlanSchema } from '../../src/hoi4_agent_tools/schemas/focus.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 
 interface PackageJson {
   bin: Record<string, string>;
   engines: { node: string };
-  exports: Record<string, unknown>;
   files: string[];
   mcpName: string;
   name: string;
@@ -70,20 +67,6 @@ async function sourceFiles(current: string): Promise<string[]> {
 }
 
 describe('offline package and Registry metadata', () => {
-  it('ships a schema-valid new focus-tree authoring example', async () => {
-    const workflow = await readFile(path.join(projectRoot, 'docs', 'focus-workflow.md'), 'utf8');
-    const example = /This minimal national plan[\s\S]*?```json\r?\n([\s\S]*?)\r?\n```/u.exec(
-      workflow,
-    )?.[1];
-    expect(example).toBeDefined();
-    const plan = focusTreePlanSchema.parse(JSON.parse(example ?? ''));
-    expect(plan.provenance).toEqual({
-      sourcePath: 'plan:example_tree',
-      sourceHash: '0'.repeat(64),
-      importedPlanHash: '0'.repeat(64),
-    });
-  });
-
   it('keeps package, Registry, source, schemas, README, lock, and changelog versions aligned', async () => {
     const packageJson = await json<PackageJson>('package.json');
     const packageLock = await json<PackageLock>('package-lock.json');
@@ -103,7 +86,7 @@ describe('offline package and Registry metadata', () => {
     expect(server.version).toBe(version);
     expect(server.packages).toContainEqual(expect.objectContaining({ version }));
     expect(versionSource).toContain(`export const PACKAGE_VERSION = '${version}';`);
-    expect(changelog).toContain(`## [${version}]`);
+    expect(changelog).toContain(`## ${version}`);
 
     const documentedVersions = [...readme.matchAll(/hoi4-agent-tools@(\d+\.\d+\.\d+)/gu)].map(
       ([, documented]) => documented,
@@ -111,7 +94,11 @@ describe('offline package and Registry metadata', () => {
     expect(documentedVersions.length).toBeGreaterThan(0);
     expect(new Set(documentedVersions)).toEqual(new Set([version]));
 
-    for (const fileName of GENERATED_SCHEMA_FILES) {
+    const schemaFiles = (await readdir(path.join(projectRoot, 'schemas')))
+      .filter((fileName) => fileName.endsWith('.schema.json'))
+      .sort();
+    expect(schemaFiles.length).toBeGreaterThan(0);
+    for (const fileName of schemaFiles) {
       const filePath = path.join(projectRoot, 'schemas', fileName);
       const contents = await readFile(filePath, 'utf8');
       const schema = JSON.parse(contents) as { $id: string; $schema: string };
@@ -142,8 +129,7 @@ describe('offline package and Registry metadata', () => {
       $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
-      description:
-        'Agent-first HOI4 focus, scripted GUI, and map tools with workspace-authorized autonomous rewrites.',
+      description: 'Create and clean HOI4 focus trees, scripted GUIs, and maps with coding agents.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -155,66 +141,29 @@ describe('offline package and Registry metadata', () => {
           registryType: 'npm',
           identifier: packageJson.name,
           version: packageJson.version,
-          environmentVariables: [
-            {
-              name: 'HOI4_AGENT_CONFIG',
-              description:
-                'Absolute path to a persistent allowlisted HOI4 Agent Tools server configuration file.',
-              format: 'filepath',
-              isRequired: true,
-              placeholder: '/absolute/path/to/config.json',
-            },
-          ],
           transport: { type: 'stdio' },
         },
       ],
     });
     expect(serverText).toBe(`${JSON.stringify(server, null, 2)}\n`);
-    expect(server.packages[0]?.environmentVariables?.[0]).not.toHaveProperty('isSecret');
+    expect(server.packages[0]).not.toHaveProperty('environmentVariables');
     expect(server.name).toMatch(/^[A-Za-z0-9.-]+\/[a-z0-9._-]+$/u);
     expect(new URL(server.repository.url).protocol).toBe('https:');
     expect(new URL(server.websiteUrl).protocol).toBe('https:');
   });
 
-  it('documents the isolated non-OIDC namespace bootstrap and token revocation', async () => {
-    const release = await readFile(path.join(projectRoot, 'docs', 'release.md'), 'utf8');
-
-    expect(release).not.toMatch(/automation token/iu);
-    expect(release).toContain('short-lived npm granular access token');
-    expect(release).toContain('read/write access to **All Packages**');
-    expect(release).toContain('bypass-2FA enabled');
-    expect(release).toContain('NPM_BOOTSTRAP_TOKEN');
-    expect(release).toContain('0.0.0-bootstrap.1');
-    expect(release).toContain('no `id-token` permission');
-    expect(release).toContain('Revoke the granular token immediately');
-    expect(release).toContain('explicitly select the required allowed action `npm publish`');
-    expect(release).toContain('after May 20, 2026');
-    expect(release).toContain('Do not create an `NPM_TOKEN`');
-  });
-
-  it('requires an authenticated owner immutability check immediately before a stable tag', async () => {
-    const release = await readFile(path.join(projectRoot, 'docs', 'release.md'), 'utf8');
-
-    expect(release).toContain('## Required pre-tag immutability check');
-    expect(release).toContain('repos/klimPaskov/hoi4-agent-tools/immutable-releases');
-    expect(release).toContain("--jq '.enabled'");
-    expect(release).toContain("= 'true'");
-    expect(release).toContain('immediately before pushing each stable release tag');
-    expect(release).toContain('cannot undo a mutable release');
-    expect(release).toMatch(/offers no\s+conditional publish operation/u);
-  });
-
-  it('declares stable public exports, all bins, and an explicit package payload', async () => {
+  it('ships only the three executable bins and the concise runtime payload', async () => {
     const packageJson = await json<PackageJson>('package.json');
     expect(packageJson.bin).toEqual(PACKAGE_BIN_TARGETS);
-    expect(packageJson.exports).toEqual({
-      '.': { types: './dist/index.d.ts', import: './dist/index.js' },
-      './schemas/*': './schemas/*',
-    });
     expect(packageJson.files).toEqual([
       'dist/',
-      'docs/',
-      'schemas/',
+      'docs/README.md',
+      'docs/setup.md',
+      'docs/focus.md',
+      'docs/gui.md',
+      'docs/map.md',
+      'docs/http.md',
+      'docs/development.md',
       'server.json',
       'README.md',
       'CHANGELOG.md',
@@ -401,7 +350,6 @@ describe('offline package and Registry metadata', () => {
       path.join(projectRoot, '.github', 'workflows', 'release.yml'),
       'utf8',
     );
-    const releaseDocs = await readFile(path.join(projectRoot, 'docs', 'release.md'), 'utf8');
     const releaseJob = workflow.slice(
       workflow.indexOf('\n  github_release:'),
       workflow.indexOf('\n  publish_registry:'),
@@ -455,9 +403,6 @@ describe('offline package and Registry metadata', () => {
     );
     expect(finalVerification).toBeGreaterThan(publish);
     expect(releaseJob.match(/container-image\.json/gu)?.length).toBeGreaterThanOrEqual(4);
-    expect(releaseDocs).toContain('fully paginated List releases endpoint');
-    expect(releaseDocs).toContain('failed GitHub upload left in `starter` state');
-    expect(releaseDocs).toMatch(/manual\s+draft-cleanup blocker/u);
   });
 
   it('pins the reproducible container frontend and multi-platform base', async () => {

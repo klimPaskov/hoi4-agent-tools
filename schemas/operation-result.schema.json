@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v0.2.0/schemas/operation-result.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.0.0/schemas/operation-result.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -47,14 +47,6 @@
         "$ref": "#/$defs/__schema3"
       }
     },
-    "transactionId": {
-      "type": "string",
-      "maxLength": 128
-    },
-    "planHash": {
-      "type": "string",
-      "maxLength": 128
-    },
     "artifacts": {
       "maxItems": 512,
       "type": "array",
@@ -88,15 +80,6 @@
       "items": {
         "$ref": "#/$defs/__schema8"
       }
-    },
-    "rollbackStatus": {
-      "type": "string",
-      "enum": [
-        "not-required",
-        "available",
-        "applied",
-        "failed"
-      ]
     },
     "data": {
       "type": "object",
@@ -160,7 +143,7 @@
             "design",
             "rendering",
             "security",
-            "transaction",
+            "validation",
             "map",
             "configuration"
           ]

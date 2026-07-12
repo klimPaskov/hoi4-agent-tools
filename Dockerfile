@@ -5,8 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-COPY docs ./docs
-COPY schemas ./schemas
+COPY docs/README.md docs/setup.md docs/focus.md docs/gui.md docs/map.md docs/http.md docs/development.md ./docs/
 COPY server.json README.md LICENSE SECURITY.md CHANGELOG.md ./
 RUN npm run build && npm prune --omit=dev
 
@@ -20,7 +19,6 @@ COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/docs ./docs
-COPY --from=build --chown=node:node /app/schemas ./schemas
 COPY --from=build --chown=node:node /app/server.json /app/README.md /app/LICENSE /app/SECURITY.md /app/CHANGELOG.md ./
 USER node
 EXPOSE 3210

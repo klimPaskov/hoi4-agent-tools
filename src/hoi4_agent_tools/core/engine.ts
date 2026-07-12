@@ -1,11 +1,14 @@
 import { compareCodeUnits, hashCanonical } from './canonical.js';
-import type { WorkspaceRegistration } from './configuration.js';
 import type { Diagnostic } from './diagnostics.js';
 import { SymbolIndex, type IndexSkippedSource } from './index.js';
 import { WorkspaceScanner, type ScanOptions, type ScannedFile } from './scanner.js';
 import { ArtifactStore } from './artifacts.js';
 import { TransactionManager } from './transactions.js';
 import type { WorkspaceResolver } from './workspace.js';
+
+const RECOVERY_TTL_SECONDS = 3_600;
+const RECOVERY_MAX_BYTES = 536_870_912;
+const RECOVERY_MAX_RECORDS = 128;
 
 export interface ScanSnapshot {
   workspaceId: string;
@@ -22,8 +25,7 @@ export interface WorkspaceStatus {
   id: string;
   name: string;
   kind: string;
-  writeEnabled: boolean;
-  writePolicy: 'read-only' | 'transactions' | 'autonomous';
+  writable: boolean;
   rootKinds: string[];
   dependencyCount: number;
   replacePaths: string[];
@@ -134,38 +136,18 @@ export class CoreEngine {
       new TransactionManager(
         resolver,
         this.artifacts,
-        resolver.config().transactionTtlSeconds,
-        resolver.config().transactionMaxJournalBytes,
-        resolver.config().transactionMaxJournals,
+        RECOVERY_TTL_SECONDS,
+        RECOVERY_MAX_BYTES,
+        RECOVERY_MAX_RECORDS,
         resolver.serverState(),
       );
   }
 
   async initialize(): Promise<void> {
     for (const workspace of this.resolver.list()) {
-      // Recovery is a safety repair, not a newly authorized write. An interrupted
-      // transaction must be restored even if the operator restarts read-only.
+      // Recovery repairs an interrupted internal rewrite before the workspace is exposed.
       await this.transactions.recover(workspace.id);
     }
-  }
-
-  async register(
-    registration: WorkspaceRegistration,
-    principal?: string,
-    signal?: AbortSignal,
-  ): Promise<WorkspaceStatus> {
-    signal?.throwIfAborted();
-    const workspace = await this.resolver.register(registration, principal, signal);
-    // Runtime registrations are intentionally not persisted, so startup could not
-    // discover an interrupted journal for this root. Recover it before exposing the
-    // workspace or allowing another write transaction.
-    try {
-      await this.transactions.recover(workspace.id, principal, signal);
-    } catch (error) {
-      this.resolver.unregisterRuntime(workspace.id, principal);
-      throw error;
-    }
-    return this.status(workspace.id, principal);
   }
 
   status(workspaceId: string, principal?: string): WorkspaceStatus {
@@ -174,8 +156,7 @@ export class CoreEngine {
       id: workspace.id,
       name: workspace.name,
       kind: workspace.registration.kind,
-      writeEnabled: workspace.writeEnabled,
-      writePolicy: this.resolver.config().writePolicy,
+      writable: workspace.writeEnabled,
       rootKinds: [...new Set(workspace.roots.map(({ kind }) => kind))].sort((a, b) =>
         compareCodeUnits(a, b),
       ),

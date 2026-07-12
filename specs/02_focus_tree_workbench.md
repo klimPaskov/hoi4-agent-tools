@@ -83,7 +83,7 @@ Separate script errors, reference errors, layout warnings, and design warnings. 
 
 ## MCP operations
 
-Expose agent tools for scan, import, lint, layout plan, render, one-call source rewrite, and export. `focus_rewrite` accepts the complete source-preserving plan, performs proposal validation and review-artifact generation internally, and returns only after the rewrite and post-write validation succeed or exact source bytes have been restored automatically. Exact public schemas belong in `06_public_mcp_server.md` and the shared schema package.
+Expose agent tools for scan, import, lint, layout plan, render, one-call source rewrite, and export. `focus_rewrite` accepts the complete focus plan, performs proposal validation and review-artifact generation internally, and returns only after the rewrite and post-write validation succeed or exact source bytes have been restored automatically. Exact public schemas belong in `06_public_mcp_server.md`.
 
 Every generated focus block needs a source map back to its plan node. Every rewrite needs an internal authenticated journal and recovery record, but the coding agent must not be required to manage a transaction ID, expected plan hash, separate apply request, or rollback request.
 

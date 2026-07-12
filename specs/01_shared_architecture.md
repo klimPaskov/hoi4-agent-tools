@@ -94,7 +94,7 @@ Scanning, linting, rendering, and preview generation are read-only.
 
 Every write operation must:
 
-1. verify that the canonical mod workspace is operator-authorized for effective `writePolicy: "autonomous"`
+1. verify that the target is a canonical startup-configured mod workspace
 2. enforce the authenticated principal, workspace grant, transport write scope, and path-containment boundaries
 3. calculate the complete affected-file set
 4. validate the proposed result in memory and refuse blockers before source mutation
@@ -106,7 +106,7 @@ Every write operation must:
 10. restore exact original bytes automatically when any required write or validation step fails
 11. return the completed rewrite outcome, diagnostics, changed-file list, and evidence resources in the same MCP call
 
-The primary MCP contract must not require a coding agent to receive or resubmit a transaction ID or plan hash, page through a transaction diff, call a separate apply operation, or invoke rollback. Internal transaction manifests remain implementation and recovery records rather than caller authorization tokens. A manually staged `writePolicy: "transactions"` mode may remain available as an explicitly enabled compatibility surface, but the public documentation, prompts, and acceptance path use autonomous one-call rewrites.
+The MCP contract does not expose transaction IDs, plan hashes, manual apply operations, or rollback. Internal transaction manifests remain implementation and recovery records rather than caller authorization tokens.
 
 ## Generated workspace
 

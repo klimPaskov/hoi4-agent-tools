@@ -5,7 +5,7 @@
 
 ## Decision
 
-Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register strict tools, opaque resources, resource templates, and prompts through the official SDK.
+Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register the ten strict domain tools and the content-addressed artifact resource template through the official SDK. Do not register prompts.
 
 ## Rationale
 

@@ -2,18 +2,16 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest minor release. A supported-version table is maintained in each release note.
+Security fixes are provided for the latest release.
 
 ## Reporting a vulnerability
 
 Do not open a public issue for a suspected vulnerability. Use GitHub private vulnerability reporting for this repository. Include the affected version, transport, configuration, reproduction steps, and expected impact. Reports are acknowledged within seven days; disclosure is coordinated after a fix is available.
 
-## Security model
+## Security boundary
 
-The server is read-only by default. In the recommended `"autonomous"` policy, the domain rewrite tools validate proposed bytes, persist an authenticated recovery journal, apply under a workspace lock, post-validate, and automatically restore the original bytes on failure in one call. The optional `"transactions"` compatibility policy retains a separate reviewed plan/diff/apply sequence. Both require an allowlisted canonical write-enabled mod workspace and an isolated operator state root. Remote operation additionally requires authentication, origin validation, request and concurrency limits, and principal-to-workspace authorization.
+HOI4 Agent Tools can read only configured mod, game, and dependency roots. Only configured mod roots can be changed; game and dependency data remain read-only. The server rejects paths outside those roots, unsafe links, stale edits, cross-mod access, and arbitrary command execution.
 
-MCP tool annotations describe risk but do not mandate per-tool confirmation. Autonomous rewrite tools advertise `destructiveHint: true`; the server cannot suppress, require, or override prompts and filesystem restrictions imposed by the MCP host.
+Offline renders may contain information derived from the configured workspace but do not expose raw installed-game assets as downloads. The server does not launch or control Hearts of Iron IV.
 
-The server never executes commands supplied by a caller. It rejects path traversal, symlink escapes, stale source revisions, cross-workspace writes, and resource reads outside configured roots. Secrets and proprietary game assets are not exposed as resources. Git should retain project history, while the internal journal and recovery blobs protect an in-progress multi-file rewrite from partial failure.
-
-See `docs/security.md` for deployment guidance and threat-model details.
+Local stdio is the recommended transport. Shared or remote HTTP deployments require authentication, exact origin checks, explicit mod access, HTTPS, and narrow filesystem mounts. See [HTTP setup](docs/http.md).

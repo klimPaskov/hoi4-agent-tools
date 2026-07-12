@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HTTP_DEFAULT_SESSION_EVENT_BYTES,
+  serverConfigurationSchema,
+} from '../../src/hoi4_agent_tools/core/configuration.js';
+import {
   BoundedEventStore,
   SharedEventStoreBudget,
 } from '../../src/hoi4_agent_tools/mcp/transports/event-store.js';
@@ -83,6 +87,37 @@ describe('bounded Streamable HTTP event store', () => {
     });
     expect(await store.getStreamIdForEventId(second)).toBe('stream-a');
     expect(await store.getStreamIdForEventId(oversized)).toBeUndefined();
+  });
+
+  it('retains one maximum raw artifact chunk under the default session budget', async () => {
+    const http = serverConfigurationSchema.parse({ version: 1 }).http;
+    expect(http.maxSessionEventBytes).toBe(HTTP_DEFAULT_SESSION_EVENT_BYTES);
+    expect(http.maxEventStoreBytes).toBe(16_777_216);
+    const message = {
+      jsonrpc: '2.0' as const,
+      id: 1,
+      result: {
+        contents: [
+          {
+            uri: 'artifact://limited/review.bin',
+            mimeType: 'application/octet-stream',
+            blob: Buffer.alloc(1_048_576).toString('base64'),
+          },
+        ],
+      },
+    };
+    const serializedBytes = Buffer.byteLength(JSON.stringify(message));
+    expect(serializedBytes).toBeGreaterThan(1_048_576);
+    expect(serializedBytes).toBeLessThan(http.maxSessionEventBytes);
+
+    const store = new BoundedEventStore(
+      1000,
+      60_000,
+      http.maxSessionEventBytes,
+      new SharedEventStoreBudget(http.maxEventStoreBytes),
+    );
+    const eventId = await store.storeEvent('stream-a', message);
+    await expect(store.getStreamIdForEventId(eventId)).resolves.toBe('stream-a');
   });
 
   it('shares one global byte ceiling across session stores and releases it on close', async () => {

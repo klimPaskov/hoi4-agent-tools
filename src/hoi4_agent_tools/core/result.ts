@@ -28,12 +28,9 @@ export interface ServiceResult<T = Record<string, never>> {
   proposedFiles: string[];
   changedFiles: string[];
   diagnostics: Diagnostic[];
-  transactionId?: string;
-  planHash?: string;
   artifacts: ArtifactLink[];
   validation: ValidationSummary;
   blockers: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
-  rollbackStatus?: 'not-required' | 'available' | 'applied' | 'failed';
   data: T;
 }
 

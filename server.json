@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.klimPaskov/hoi4-agent-tools",
   "title": "HOI4 Agent Tools",
-  "description": "Agent-first HOI4 focus, scripted GUI, and map tools with workspace-authorized autonomous rewrites.",
-  "version": "0.2.0",
+  "description": "Create and clean HOI4 focus trees, scripted GUIs, and maps with coding agents.",
+  "version": "1.0.0",
   "repository": {
     "url": "https://github.com/klimPaskov/hoi4-agent-tools",
     "source": "github"
@@ -13,16 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "hoi4-agent-tools",
-      "version": "0.2.0",
-      "environmentVariables": [
-        {
-          "name": "HOI4_AGENT_CONFIG",
-          "description": "Absolute path to a persistent allowlisted HOI4 Agent Tools server configuration file.",
-          "format": "filepath",
-          "isRequired": true,
-          "placeholder": "/absolute/path/to/config.json"
-        }
-      ],
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
       }

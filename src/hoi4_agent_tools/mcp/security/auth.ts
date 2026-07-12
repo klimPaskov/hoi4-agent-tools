@@ -196,7 +196,7 @@ export async function authenticate(
         principal: configured.principal,
         clientId: configured.principal,
         credentialId: presentedCredentialId,
-        scopes: ['hoi4:read', ...(configuration.writePolicy !== 'read-only' ? ['hoi4:write'] : [])],
+        scopes: ['hoi4:read', 'hoi4:write'],
       };
       requireScopes(principal.scopes, normalizedRequiredScopes);
       return principal;

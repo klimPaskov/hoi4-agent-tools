@@ -175,7 +175,7 @@ async function createEngine(
 ): Promise<{ resolver: WorkspaceResolver; engine: CoreEngine }> {
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'read-only',
+    serverStateRoot: path.join(runtimeRoot, 'server-state'),
     storageRoots: [runtimeRoot],
     workspaces: [
       {
@@ -187,7 +187,6 @@ async function createEngine(
         ...(extra.dependencyRoots === undefined ? {} : { dependencyRoots: extra.dependencyRoots }),
         artifactRoot: path.join(runtimeRoot, 'artifacts'),
         cacheRoot: path.join(runtimeRoot, 'cache'),
-        writeEnabled: false,
       },
     ],
   });

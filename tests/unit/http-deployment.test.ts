@@ -229,17 +229,7 @@ describe('Streamable HTTP deployment policy', () => {
       version: 1,
       http: { publicUrl: 'https://tools.example.test/mcp', oauth },
     });
-    const writeTools = [
-      'hoi4.project_register',
-      'hoi4.focus_plan_changes',
-      'hoi4.focus_rewrite',
-      'hoi4.gui_plan_changes',
-      'hoi4.gui_rewrite',
-      'hoi4.map_plan',
-      'hoi4.map_rewrite',
-      'hoi4.transaction_apply',
-      'hoi4.transaction_rollback',
-    ];
+    const writeTools = ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite'];
     for (const name of writeTools) {
       expect(
         requiredScopesForMcpRequest(config, {
@@ -255,7 +245,7 @@ describe('Streamable HTTP deployment policy', () => {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
-        params: { name: 'hoi4.project_scan', arguments: {} },
+        params: { name: 'hoi4.mods', arguments: {} },
       }),
     ).toEqual(['hoi4:read']);
   });

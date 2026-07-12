@@ -17,6 +17,26 @@ import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js
 
 const cleanup: Array<() => Promise<void>> = [];
 const resourceChunkBytes = 1_048_576;
+const artifactChunkMetadataKey = 'io.github.klimpaskov/hoi4-agent-tools.artifact-byte-range';
+
+interface ArtifactByteRangeMetadata {
+  version: number;
+  unit: string;
+  totalSize: number;
+  returnedRange: { offset: number; length: number; endExclusive: number };
+  complete: boolean;
+  continuationUri: string | null;
+}
+
+function byteRangeMetadata(
+  content: { _meta?: Record<string, unknown> | undefined } | undefined,
+): ArtifactByteRangeMetadata {
+  const metadata = content?._meta?.[artifactChunkMetadataKey];
+  if (metadata === null || typeof metadata !== 'object') {
+    throw new Error('Artifact byte-range metadata is missing');
+  }
+  return metadata as ArtifactByteRangeMetadata;
+}
 
 afterEach(async () => Promise.all(cleanup.splice(0).map((callback) => callback())));
 
@@ -28,6 +48,7 @@ describe('MCP artifact resources', () => {
     await Promise.all([mkdir(mod), mkdir(artifactRoot)]);
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(root, 'server-state'),
       storageRoots: [artifactRoot],
       workspaces: [{ id: 'range', name: 'Range', root: mod, artifactRoot }],
     });
@@ -69,6 +90,19 @@ describe('MCP artifact resources', () => {
         sourceHashes: {},
       },
     );
+    const smallText = 'complete small resource\n';
+    const smallTextArtifact = await engine.artifacts.put(
+      workspace,
+      'small.txt',
+      'text/plain',
+      Buffer.from(smallText, 'utf8'),
+      {
+        kind: 'test',
+        toolVersion: 'test',
+        schemaVersion: 'test.v1',
+        sourceHashes: {},
+      },
+    );
     const server = createMcpServer(engine);
     const client = new Client({ name: 'artifact-range-test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -80,51 +114,51 @@ describe('MCP artifact resources', () => {
       async () => rm(root, { recursive: true, force: true }),
     );
 
-    const beforeDescribe = await client.callTool({
-      name: 'hoi4.artifact_list',
-      arguments: { workspaceId: 'range' },
-    });
-    const described = await client.callTool({
-      name: 'hoi4.artifact_describe',
-      arguments: { workspaceId: 'range', uri: artifact.uri },
-    });
-    expect(described.structuredContent).toMatchObject({
-      status: 'ok',
-      code: 'ARTIFACT_DESCRIBE',
-      data: {
-        artifact: {
-          provenance: {
-            sourceHashCount: 150,
-            sourceHashesTruncated: true,
-            sourceHashes: expect.any(Array),
-          },
-          description: 'd'.repeat(1_024),
-          descriptionTruncated: true,
-        },
-      },
-    });
-    const describedContent = described.structuredContent as {
-      artifacts: Array<{ uri: string; name: string }>;
-      data: { artifact: { provenance: { sourceHashes: unknown[] } } };
-    };
-    expect(describedContent.data.artifact.provenance.sourceHashes).toHaveLength(100);
-    const provenanceLink = describedContent.artifacts.find(({ name }) =>
-      name.endsWith('.manifest.json'),
-    );
-    expect(provenanceLink).toBeDefined();
-    const provenanceResource = await client.readResource({ uri: provenanceLink!.uri });
+    const provenanceUri = new URL(artifact.uri);
+    provenanceUri.searchParams.set('metadata', 'manifest');
+    const provenanceResource = await client.readResource({ uri: provenanceUri.href });
     const provenanceContent = provenanceResource.contents[0];
     expect(provenanceContent !== undefined && 'text' in provenanceContent).toBe(true);
-    const provenanceManifest = JSON.parse(
-      provenanceContent !== undefined && 'text' in provenanceContent ? provenanceContent.text : '',
-    ) as { description: string; provenance: { sourceHashes: Record<string, string> } };
+    const provenanceText =
+      provenanceContent !== undefined && 'text' in provenanceContent ? provenanceContent.text : '';
+    const provenanceManifest = JSON.parse(provenanceText) as {
+      description: string;
+      provenance: { sourceHashes: Record<string, string> };
+    };
     expect(provenanceManifest.description).toHaveLength(4_096);
     expect(Object.keys(provenanceManifest.provenance.sourceHashes)).toHaveLength(150);
-    const afterDescribe = await client.callTool({
-      name: 'hoi4.artifact_list',
-      arguments: { workspaceId: 'range' },
+    expect(byteRangeMetadata(provenanceContent)).toEqual({
+      version: 1,
+      unit: 'byte',
+      totalSize: Buffer.byteLength(provenanceText, 'utf8'),
+      returnedRange: {
+        offset: 0,
+        length: Buffer.byteLength(provenanceText, 'utf8'),
+        endExclusive: Buffer.byteLength(provenanceText, 'utf8'),
+      },
+      complete: true,
+      continuationUri: null,
     });
-    expect(afterDescribe.structuredContent).toMatchObject(beforeDescribe.structuredContent ?? {});
+
+    const partialManifest = await client.readResource({
+      uri: `${artifact.uri}?metadata=manifest&length=1`,
+    });
+    const partialManifestContent = partialManifest.contents[0];
+    expect(partialManifestContent !== undefined && 'blob' in partialManifestContent).toBe(true);
+    expect(
+      Buffer.from(
+        partialManifestContent !== undefined && 'blob' in partialManifestContent
+          ? partialManifestContent.blob
+          : '',
+        'base64',
+      ),
+    ).toEqual(Buffer.from(provenanceText, 'utf8').subarray(0, 1));
+    expect(byteRangeMetadata(partialManifestContent)).toMatchObject({
+      totalSize: Buffer.byteLength(provenanceText, 'utf8'),
+      returnedRange: { offset: 0, length: 1, endExclusive: 1 },
+      complete: false,
+      continuationUri: `${artifact.uri}?offset=1&length=1&metadata=manifest`,
+    });
 
     const first = await client.readResource({ uri: artifact.uri });
     const firstContent = first.contents[0];
@@ -135,11 +169,23 @@ describe('MCP artifact resources', () => {
       'base64',
     );
     expect(firstBytes).toEqual(bytes.subarray(0, resourceChunkBytes));
+    const firstMetadata = byteRangeMetadata(firstContent);
+    expect(firstMetadata).toEqual({
+      version: 1,
+      unit: 'byte',
+      totalSize: bytes.length,
+      returnedRange: {
+        offset: 0,
+        length: resourceChunkBytes,
+        endExclusive: resourceChunkBytes,
+      },
+      complete: false,
+      continuationUri: `${artifact.uri}?offset=${resourceChunkBytes}&length=${resourceChunkBytes}`,
+    });
+    const repeated = await client.readResource({ uri: artifact.uri });
+    expect(repeated.contents[0]).toEqual(firstContent);
 
-    const remainderUri = new URL(artifact.uri);
-    remainderUri.searchParams.set('offset', String(resourceChunkBytes));
-    remainderUri.searchParams.set('length', String(resourceChunkBytes));
-    const remainder = await client.readResource({ uri: remainderUri.href });
+    const remainder = await client.readResource({ uri: firstMetadata.continuationUri! });
     const remainderContent = remainder.contents[0];
     expect(remainderContent !== undefined && 'blob' in remainderContent).toBe(true);
     const remainderBytes = Buffer.from(
@@ -149,6 +195,34 @@ describe('MCP artifact resources', () => {
     const reconstructed = Buffer.concat([firstBytes, remainderBytes]);
     expect(reconstructed).toEqual(bytes);
     expect(sha256Bytes(reconstructed)).toBe(sha256Bytes(bytes));
+    expect(byteRangeMetadata(remainderContent)).toEqual({
+      version: 1,
+      unit: 'byte',
+      totalSize: bytes.length,
+      returnedRange: {
+        offset: resourceChunkBytes,
+        length: bytes.length - resourceChunkBytes,
+        endExclusive: bytes.length,
+      },
+      complete: false,
+      continuationUri: null,
+    });
+
+    const completeSmallText = await client.readResource({ uri: smallTextArtifact.uri });
+    const completeSmallTextContent = completeSmallText.contents[0];
+    expect(completeSmallTextContent).toMatchObject({ mimeType: 'text/plain', text: smallText });
+    expect(byteRangeMetadata(completeSmallTextContent)).toEqual({
+      version: 1,
+      unit: 'byte',
+      totalSize: Buffer.byteLength(smallText, 'utf8'),
+      returnedRange: {
+        offset: 0,
+        length: Buffer.byteLength(smallText, 'utf8'),
+        endExclusive: Buffer.byteLength(smallText, 'utf8'),
+      },
+      complete: true,
+      continuationUri: null,
+    });
 
     const invalidUtf8 = await client.readResource({ uri: invalidUtf8Artifact.uri });
     const invalidUtf8Content = invalidUtf8.contents[0];
@@ -162,21 +236,15 @@ describe('MCP artifact resources', () => {
       ),
     ).toEqual(Buffer.from([0xff]));
 
-    const queriedDescribe = await client.callTool({
-      name: 'hoi4.artifact_describe',
-      arguments: { workspaceId: 'range', uri: `${artifact.uri}?offset=1` },
-    });
-    expect(queriedDescribe.structuredContent).toMatchObject({
-      status: 'error',
-      code: 'ARTIFACT_URI_INVALID',
-    });
-
     await expect(client.readResource({ uri: `${artifact.uri}?offset=0&offset=1` })).rejects.toThrow(
       /repeated/u,
     );
     await expect(client.readResource({ uri: `${artifact.uri}?unknown=1` })).rejects.toThrow(
       /not supported/u,
     );
+    await expect(
+      client.readResource({ uri: `${artifact.uri}?length=${resourceChunkBytes + 1}` }),
+    ).rejects.toThrow(/byte range/u);
     await expect(client.readResource({ uri: `${artifact.uri}#fragment` })).rejects.toThrow(
       /canonical/u,
     );
@@ -189,6 +257,7 @@ describe('MCP artifact resources', () => {
     await Promise.all([mkdir(mod), mkdir(artifactRoot)]);
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(root, 'server-state'),
       storageRoots: [artifactRoot],
       workspaces: [{ id: 'bundle', name: 'Bundle', root: mod, artifactRoot }],
     });
@@ -250,7 +319,7 @@ describe('MCP artifact resources', () => {
     expect(Buffer.concat(reconstructed)).toEqual(original);
   });
 
-  it('returns a reconstructable chunk index when gui_scan produces a large graph', async () => {
+  it('returns a reconstructable chunk index when gui_inspect produces a large graph', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-gui-graph-bundle-'));
     const mod = path.join(root, 'mod');
     const interfaceRoot = path.join(mod, 'interface');
@@ -270,6 +339,7 @@ describe('MCP artifact resources', () => {
     );
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(root, 'server-state'),
       storageRoots: [artifactRoot],
       workspaces: [{ id: 'gui-bundle', name: 'GUI bundle', root: mod, artifactRoot }],
     });
@@ -289,7 +359,7 @@ describe('MCP artifact resources', () => {
     );
 
     const scanned = await client.callTool({
-      name: 'hoi4.gui_scan',
+      name: 'hoi4.gui_inspect',
       arguments: { workspaceId: 'gui-bundle' },
     });
     const output = scanned.structuredContent as {

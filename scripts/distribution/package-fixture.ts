@@ -10,29 +10,19 @@ export const PACKAGE_BIN_TARGETS = {
   'hoi4-agent-tools-setup': './dist/bin/setup.js',
 } as const;
 
-export const GENERATED_SCHEMA_FILES = [
-  'configuration.schema.json',
-  'continuous-focus-palette.schema.json',
-  'focus-plan.schema.json',
-  'focus-planning-sidecar.schema.json',
-  'gui-animation-source.schema.json',
-  'gui-helper.schema.json',
-  'gui-scenario.schema.json',
-  'map-operation.schema.json',
-  'operation-result.schema.json',
-  'transaction-manifest.schema.json',
-] as const;
-
 export const REQUIRED_PACKAGE_FILES = [
   'CHANGELOG.md',
   'LICENSE',
   'README.md',
   'SECURITY.md',
-  'docs/agent-integration.md',
-  'dist/index.d.ts',
-  'dist/index.js',
+  'docs/README.md',
+  'docs/setup.md',
+  'docs/focus.md',
+  'docs/gui.md',
+  'docs/map.md',
+  'docs/http.md',
+  'docs/development.md',
   ...Object.values(PACKAGE_BIN_TARGETS).map((target) => target.replace(/^\.\//u, '')),
-  ...GENERATED_SCHEMA_FILES.map((name) => `schemas/${name}`),
   'package.json',
   'server.json',
 ] as const;
@@ -52,6 +42,7 @@ const forbiddenPackageRoots = new Set([
   'node_modules',
   'prompts',
   'research',
+  'schemas',
   'scripts',
   'source_review',
   'specs',
@@ -166,6 +157,9 @@ export function forbiddenPackedPaths(files: readonly PackedFile[]): string[] {
       return (
         (root !== undefined && forbiddenPackageRoots.has(root.toLowerCase())) ||
         /(?:^|\/)\.hoi4-agent(?:\/|$)/u.test(filePath) ||
+        filePath === 'dist/index.js' ||
+        filePath.endsWith('.d.ts') ||
+        filePath.endsWith('.map') ||
         /\.(?:bmp|dds|tga)$/iu.test(filePath)
       );
     })

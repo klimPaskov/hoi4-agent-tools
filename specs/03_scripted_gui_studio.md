@@ -107,7 +107,7 @@ The renderer may produce selected-frame and animated review artifacts from the r
 
 ## MCP operations
 
-Expose agent tools for scan, lint, render, render-state matrix, compare, and one-call source rewrite. `gui_rewrite` performs source-preserving proposal compilation, reparsing, rendering, validation, journaling, mutation, and post-write validation inside one authorized request. Rendering and standalone validation remain source-read-only. The primary workflow has no caller-managed transaction diff, transaction ID, plan hash, separate apply, or rollback call.
+Expose agent tools for scan, lint, render, render-state matrix, compare, and one-call source rewrite. `gui_rewrite` performs proposal compilation, reparsing, rendering, validation, journaling, mutation, and post-write validation inside one authorized request. The primary workflow has no caller-managed transaction diff, transaction ID, plan hash, separate apply, or rollback call.
 
 ## Acceptance fixture
 

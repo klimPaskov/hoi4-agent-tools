@@ -753,40 +753,6 @@ export class TransactionManager {
     });
   }
 
-  async rollback(
-    workspaceId: string,
-    transactionId: string,
-    expectedPlanHash: string,
-    principal?: string,
-    signal?: AbortSignal,
-  ): Promise<TransactionManifest> {
-    signal?.throwIfAborted();
-    const workspace = this.resolver.get(workspaceId, principal);
-    if (!workspace.writeEnabled)
-      throw new ServiceError('WRITE_POLICY_DISABLED', 'Workspace writes are not enabled');
-    const manifest = await this.load(workspace, transactionId, {
-      headMode: 'reconcile',
-      ...(signal === undefined ? {} : { signal }),
-    });
-    this.assertBinding(manifest, workspace, expectedPlanHash, principal);
-    if (manifest.state !== 'applied')
-      throw new ServiceError(
-        'TRANSACTION_NOT_APPLIED',
-        'Only applied transactions can be rolled back',
-      );
-    return this.withWorkspaceLock(workspace, transactionId, async () => {
-      signal?.throwIfAborted();
-      await this.verifyCurrentFiles(workspace, manifest, 'after', principal, signal);
-      signal?.throwIfAborted();
-      // Restoring source bytes and advancing the authenticated journal are one
-      // non-cancellable critical phase once preflight has completed.
-      await this.restoreBeforeState(workspace, manifest, principal);
-      manifest.state = 'rolled_back';
-      await this.writeManifest(workspace, manifest);
-      return manifest;
-    });
-  }
-
   async status(
     workspaceId: string,
     transactionId: string,
@@ -1216,8 +1182,7 @@ export class TransactionManager {
         Number.isSafeInteger(prospectiveBytes) &&
         Number.isSafeInteger(transactionWorkBytes) &&
         transactionWorkBytes <= this.maxJournalBytes &&
-        retentionLimitReached() &&
-        this.resolver.config().writePolicy === 'autonomous'
+        retentionLimitReached()
       ) {
         await this.pruneExpiredJournals(workspace, transactionsDirectory, true);
         usage = await this.journalUsage(transactionsDirectory);
@@ -1308,11 +1273,7 @@ export class TransactionManager {
         }
         continue;
       }
-      if (
-        reclaimApplied &&
-        manifest.state === 'applied' &&
-        this.resolver.config().writePolicy === 'autonomous'
-      ) {
+      if (reclaimApplied && manifest.state === 'applied') {
         await this.reclaimAutonomousAppliedJournal(workspace, transactionsDirectory, entry.name);
       } else if (
         Date.parse(manifest.expiresAt) <= now &&

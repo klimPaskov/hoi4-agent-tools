@@ -58,6 +58,22 @@ describe('MCP error privacy', () => {
     expect(blocked.isError).toBeUndefined();
   });
 
+  it('keeps internal recovery identifiers out of public errors', () => {
+    const failed = errorResult(
+      new ServiceError('WRITE_FAILED', 'Write failed', {
+        transactionId: 'txn_00000000-0000-4000-8000-000000000000',
+        planHash: 'a'.repeat(64),
+        rollbackStatus: 'available',
+        safe: 'retained',
+      }),
+      'test',
+    );
+    expect(failed.structuredContent).toMatchObject({
+      blockers: [{ details: { safe: 'retained' } }],
+    });
+    expect(JSON.stringify(failed.structuredContent)).not.toContain('txn_');
+  });
+
   it('bounds inline source inventories and reports the complete count', () => {
     const result = emptyServiceResult('test', {});
     const files = Array.from(

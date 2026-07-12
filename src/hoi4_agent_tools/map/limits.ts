@@ -10,6 +10,9 @@ export const MAP_MASK_CELL_LIMIT = 20_000_000;
  */
 export const MAP_SELECTED_PIXEL_LIMIT = 1_000_000;
 
+/** Maximum provinces one exact row-run inspection may export in one request. */
+export const MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT = 32;
+
 /** Maximum polygon cell/edge comparisons before rasterization is refused. */
 export const MAP_POLYGON_WORK_LIMIT = 50_000_000;
 

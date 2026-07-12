@@ -1,8 +1,8 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "0.2.0",
-  "description": "Source-preserving HOI4 workbench with workspace-authorized autonomous rewrites for coding agents",
+  "version": "1.0.0",
+  "description": "MCP tools for coding agents to create and clean HOI4 focus trees, scripted GUIs, and maps",
   "type": "module",
   "license": "Apache-2.0",
   "author": "HOI4 Agent Tools contributors",
@@ -29,27 +29,26 @@
   },
   "files": [
     "dist/",
-    "docs/",
-    "schemas/",
+    "docs/README.md",
+    "docs/setup.md",
+    "docs/focus.md",
+    "docs/gui.md",
+    "docs/map.md",
+    "docs/http.md",
+    "docs/development.md",
     "server.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
     "SECURITY.md"
   ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./schemas/*": "./schemas/*"
-  },
   "bin": {
     "hoi4-agent-tools": "./dist/bin/stdio.js",
     "hoi4-agent-tools-http": "./dist/bin/http.js",
     "hoi4-agent-tools-setup": "./dist/bin/setup.js"
   },
   "scripts": {
+    "prebuild": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",

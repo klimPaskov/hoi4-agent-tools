@@ -71,6 +71,7 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(path.dirname(root), `${path.basename(root)}-server-state`),
       workspaces: [
         {
           id: 'custom',

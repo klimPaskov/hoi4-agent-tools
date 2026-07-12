@@ -16,7 +16,7 @@ Run `git init` in this folder and treat it as an independent public project with
 
 The product is an MCP server built for coding agents. The focus, GUI, and map capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
 
-The product does not provide an interactive focus editor, GUI editor, map editor, dashboard, or full command line application. An operator installs and configures the MCP server once; compatible coding agents then select its capabilities autonomously while working in registered external workspaces. Workspaces are read-only by default. When the operator explicitly grants an effective `writePolicy` of `autonomous` to a canonical mod workspace, the coding agent may complete a supported source rewrite through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call.
+The product does not provide an interactive focus editor, GUI editor, map editor, dashboard, or full command line application. An operator installs and configures the MCP server once; compatible coding agents then select its capabilities while working in configured external workspaces. Canonical mod workspaces are writable; game, dependency, fixture, artifact, cache, and unrelated roots are not source-write targets. Supported rewrites complete through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call.
 
 The repository may contain process entry points, maintenance scripts, test harnesses, and package diagnostics. These are infrastructure for launching and validating the MCP server. They are not separate interactive versions of the tools.
 
@@ -50,7 +50,7 @@ The final language-specific package files should be selected after the architect
 
 ## External workspaces
 
-The server operates on registered external workspaces. A workspace may point to:
+The server operates on startup-configured external workspaces. Workspaces come from explicit `workspaces` entries or direct-child mod discovery beneath `modRoots`; there is no runtime registration API. A workspace may point to:
 
 - a HOI4 mod repository
 - an installed game directory used as read-only reference material
@@ -61,7 +61,7 @@ The first development workspace may be Chaos Redux, but no Chaos Redux code, pat
 
 Every registered mod workspace keeps its own source files. The MCP server reads those files through allowlisted paths and edits only an operator-authorized mod workspace. An autonomous rewrite still uses the shared internal validation, durable journal, exact-before-byte, stale-check, locking, post-validation, and automatic-recovery services. It never copies a mod into the MCP project.
 
-Installed-game, dependency, and fixture roots remain read-only. Remote access additionally remains subject to authentication, origin and Host validation, transport write scope, and principal-to-workspace grants; an autonomous write policy does not broaden any root or principal boundary.
+Installed-game, dependency, and fixture roots remain read-only. Remote access additionally remains subject to authentication, origin and Host validation, transport write scope, and principal-to-workspace grants. `allowDiscoveredMods` grants only discovered mod IDs and does not broaden configured roots or grant unrelated explicit workspaces.
 
 ## Repository foundations
 

@@ -31,7 +31,7 @@ describe('CoreEngine scan cache', () => {
       await utimes(sourcePath, firstTime, firstTime);
       const configuration = serverConfigurationSchema.parse({
         version: 1,
-        writePolicy: 'read-only',
+        serverStateRoot: path.join(temporaryRoot, 'server-state'),
         storageRoots: [path.join(temporaryRoot, 'artifacts'), path.join(temporaryRoot, 'cache')],
         workspaces: [
           {
@@ -40,7 +40,6 @@ describe('CoreEngine scan cache', () => {
             root: workspaceRoot,
             artifactRoot: path.join(temporaryRoot, 'artifacts'),
             cacheRoot: path.join(temporaryRoot, 'cache'),
-            writeEnabled: false,
           },
         ],
       });
@@ -90,6 +89,7 @@ describe('CoreEngine scan cache', () => {
       await writeFile(sourcePath, 'focus_tree = { id = flight_tree }\n');
       const configuration = serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'server-state'),
         workspaces: [{ id: 'flight', name: 'Flight', root: workspaceRoot }],
       });
       const resolver = await WorkspaceResolver.create(configuration);
@@ -126,6 +126,7 @@ describe('CoreEngine scan cache', () => {
       await writeFile(sourcePath, 'focus_tree = { id = before_generation }\n');
       const configuration = serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'server-state'),
         workspaces: [{ id: 'generation', name: 'Generation', root: workspaceRoot }],
       });
       const resolver = await WorkspaceResolver.create(configuration);
@@ -178,6 +179,7 @@ describe('CoreEngine scan cache', () => {
       await writeFile(sourcePath, 'focus_tree = { id = admission_tree }\n');
       const configuration = serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'server-state'),
         workspaces: [{ id: 'admission', name: 'Admission', root: workspaceRoot }],
       });
       const resolver = await WorkspaceResolver.create(configuration);

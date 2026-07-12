@@ -27,6 +27,7 @@ async function fixture() {
   const resolver = await WorkspaceResolver.create(
     serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(base, 'server-state'),
       workspaces: [{ id: 'test', name: 'Test', root: mod }],
     }),
   );
@@ -345,6 +346,7 @@ describe('content-addressed artifacts', () => {
     const resolver = await WorkspaceResolver.create(
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.join(base, 'server-state'),
         workspaces: [{ id: 'test', name: 'Test', root: mod }],
       }),
     );
@@ -383,6 +385,7 @@ describe('content-addressed artifacts', () => {
     const configured = (root: string) =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.join(base, 'server-state'),
         storageRoots: [storage],
         workspaces: [
           {

@@ -281,10 +281,8 @@ async function setup(overrides: Readonly<Record<string, string | Buffer | null>>
   }
   const config = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'transactions',
     serverStateRoot: path.join(base, 'server-state'),
-    transactionTtlSeconds: 3600,
-    workspaces: [{ id: 'map-test', name: 'Map Test', root: mod, writeEnabled: true }],
+    workspaces: [{ id: 'map-test', name: 'Map Test', root: mod }],
   });
   const resolver = await WorkspaceResolver.create(config);
   const transactions = new TransactionManager(resolver);
@@ -2080,8 +2078,8 @@ describe('Agent Nudger map model and operations', () => {
     ).toEqual([]);
   });
 
-  it('applies and rolls back a multi-source arbitrary-ID merge byte-for-byte', async () => {
-    const { mod, nudger, transactions } = await setup(provinceRenumberFixtureFiles());
+  it('applies a multi-source arbitrary-ID merge through the shared transaction manager', async () => {
+    const { nudger, transactions } = await setup(provinceRenumberFixtureFiles());
     const result = await nudger.plan({
       workspaceId: 'map-test',
       operations: [
@@ -2138,14 +2136,6 @@ describe('Agent Nudger map model and operations', () => {
       ),
     ).toEqual([1, 0]);
 
-    const originals = new Map(
-      await Promise.all(
-        result.transaction.files.map(
-          async ({ relativePath }) =>
-            [relativePath, await readFile(path.join(mod, relativePath))] as const,
-        ),
-      ),
-    );
     const applied = await transactions.apply(
       'map-test',
       result.transaction.transactionId,
@@ -2158,15 +2148,6 @@ describe('Agent Nudger map model and operations', () => {
       [...appliedSnapshot.index.definitionsById.keys()].sort((left, right) => left - right),
     ).toEqual([0, 1, 2]);
     expect(appliedSnapshot.index.statesById.get(1)?.provinces).toEqual([2]);
-
-    const rolledBack = await transactions.rollback(
-      'map-test',
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    for (const [relativePath, original] of originals)
-      expect(await readFile(path.join(mod, relativePath))).toEqual(original);
   });
 
   it('merges state IDs with explicit sum/union/follow policies', async () => {
@@ -2383,7 +2364,7 @@ describe('Agent Nudger map model and operations', () => {
     expect(plan.finalIndex.entityLocators[0]?.position).toEqual([4, 5, 6]);
   });
 
-  it('chains every row removal through dry-run, apply, and byte-exact rollback', async () => {
+  it('chains every row removal through dry-run and apply', async () => {
     const sources = {
       'map/adjacencies.csv': [
         'From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment',
@@ -2528,16 +2509,6 @@ describe('Agent Nudger map model and operations', () => {
     for (const [relativePath, exactText] of Object.entries(expected)) {
       expect(await readFile(path.join(mod, relativePath), 'utf8')).toBe(exactText);
     }
-
-    const rolledBack = await transactions.rollback(
-      'map-test',
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    for (const [relativePath, original] of originals) {
-      expect(await readFile(path.join(mod, relativePath))).toEqual(original);
-    }
   });
 
   it('returns operation-specific blockers when each removable row is absent', async () => {
@@ -2627,14 +2598,12 @@ describe('Agent Nudger map model and operations', () => {
     }
     const config = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
       workspaces: [
         {
           id: 'custom-map',
           name: 'Custom Map',
           root: mod,
-          writeEnabled: true,
           roots: {
             map: ['geography'],
             states: ['data/states'],
@@ -2735,7 +2704,66 @@ describe('Agent Nudger map model and operations', () => {
     expect(diff.semantic.definitions).toMatchObject([{ id: 4 }]);
   });
 
-  it('plans only through the shared transaction manager, applies hash-bound changes, and rolls back exact bytes', async () => {
+  it('binds rewrite review evidence and the transaction to one source revision', async () => {
+    const { mod, nudger, transactions } = await setup();
+    const statePath = path.join(mod, 'history', 'states', '1-ONE.txt');
+    const original = await readFile(statePath, 'utf8');
+    const concurrent = original.replace('\tmanpower = 1000', '\tmanpower = 1100');
+    expect(concurrent).not.toBe(original);
+
+    const scan = vi.spyOn(nudger, 'scan');
+    const storeReviewArtifacts = nudger.artifacts.withAtomicChunkedWrites.bind(nudger.artifacts);
+    vi.spyOn(nudger.artifacts, 'withAtomicChunkedWrites').mockImplementation(
+      async (workspace, writes, commit, signal) => {
+        const result = await storeReviewArtifacts(workspace, writes, commit, signal);
+        await writeFile(statePath, concurrent, 'utf8');
+        return result;
+      },
+    );
+
+    const result = await nudger.planRewriteWithDiff({
+      workspaceId: 'map-test',
+      operations: [
+        {
+          id: 'revision-bound-state-update',
+          kind: 'update_state',
+          stateId: 1,
+          changes: { manpower: 1200 },
+        },
+      ],
+    });
+
+    expect(scan).toHaveBeenCalledTimes(1);
+    const stateDiff = result.bundle.semantic.states.find(({ key }) => key === '1');
+    expect(stateDiff).toBeDefined();
+    expect(JSON.parse(stateDiff?.before ?? 'null')).toMatchObject({ manpower: 1000 });
+    expect(JSON.parse(stateDiff?.after ?? 'null')).toMatchObject({ manpower: 1200 });
+    expect(result.transaction.readDependencies).toContainEqual(
+      expect.objectContaining({
+        rootKind: 'mod',
+        relativePath: 'history/states/1-ONE.txt',
+        sha256: sha256Bytes(Buffer.from(original, 'utf8')),
+      }),
+    );
+    for (const artifact of result.artifacts) {
+      expect(result.transaction.artifacts).toContainEqual(
+        expect.objectContaining({ uri: artifact.uri }),
+      );
+    }
+    await expect(
+      transactions.apply(
+        'map-test',
+        result.transaction.transactionId,
+        result.transaction.planHash,
+        {
+          postValidate,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_SOURCE_STALE' });
+    expect(await readFile(statePath, 'utf8')).toBe(concurrent);
+  });
+
+  it('rejects stale or unbound writes before applying a hash-bound state split', async () => {
     const { mod, nudger, transactions } = await setup();
     const sourcePath = path.join(mod, 'history', 'states', '1-ONE.txt');
     const original = await readFile(sourcePath);
@@ -2765,6 +2793,16 @@ describe('Agent Nudger map model and operations', () => {
         postValidate,
       }),
     ).rejects.toThrow();
+    await writeFile(sourcePath, Buffer.concat([original, Buffer.from('# external edit\n')]));
+    await expect(
+      transactions.apply(
+        'map-test',
+        result.transaction.transactionId,
+        result.transaction.planHash,
+        { postValidate },
+      ),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_SOURCE_STALE' });
+    await writeFile(sourcePath, original);
     const applied = await transactions.apply(
       'map-test',
       result.transaction.transactionId,
@@ -2779,19 +2817,9 @@ describe('Agent Nudger map model and operations', () => {
     );
     expect(createdStateSource).toContain('id = 3');
     expect(createdStateSource).not.toContain('capital =');
-    const rolledBack = await transactions.rollback(
-      'map-test',
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(await readFile(sourcePath)).toEqual(original);
-    await expect(
-      readFile(path.join(mod, 'history', 'states', '3-AGENT_STATE.txt')),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('applies and rolls back a multi-file province type migration byte-for-byte', async () => {
+  it('automatically restores a multi-file migration after post-write validation fails', async () => {
     const { mod, nudger, transactions } = await setup();
     const relativePaths = ['history/states/1-ONE.txt', 'map/definition.csv', 'map/railways.txt'];
     const originals = new Map(
@@ -2817,30 +2845,42 @@ describe('Agent Nudger map model and operations', () => {
     expect(result.plan.blockers).toEqual([]);
     expect(result.transaction.validation.passed).toBe(true);
     expect(result.transaction.files.map(({ relativePath }) => relativePath)).toEqual(relativePaths);
-    const applied = await transactions.apply(
-      'map-test',
-      result.transaction.transactionId,
-      result.transaction.planHash,
-      { postValidate },
-    );
-    expect(applied.state).toBe('applied');
-    const appliedSnapshot = await nudger.scan('map-test');
-    expect(appliedSnapshot.index.definitionsById.get(4)).toMatchObject({
-      type: 'sea',
-      terrain: 'ocean',
-      continent: 0,
+    await expect(
+      transactions.apply(
+        'map-test',
+        result.transaction.transactionId,
+        result.transaction.planHash,
+        {
+          postValidate: () =>
+            Promise.resolve({
+              diagnostics: [
+                {
+                  code: 'TEST_MAP_POST_WRITE_INVALID',
+                  severity: 'error' as const,
+                  category: 'validation' as const,
+                  message: 'Synthetic post-write map validation failure',
+                },
+              ],
+              checks: [
+                {
+                  id: 'test-map-post-write',
+                  passed: false,
+                  message: 'Synthetic post-write map validation failed',
+                },
+              ],
+            }),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_POST_VALIDATION_FAILED' });
+    await expect(
+      transactions.status('map-test', result.transaction.transactionId),
+    ).resolves.toMatchObject({
+      state: 'rolled_back',
+      rollbackStatus: 'applied',
     });
-    expect(appliedSnapshot.index.statesById.get(1)?.provinces).toEqual([1]);
-    expect(appliedSnapshot.index.railways).toEqual([]);
-
-    const rolledBack = await transactions.rollback(
-      'map-test',
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    for (const [relativePath, original] of originals)
+    for (const [relativePath, original] of originals) {
       expect(await readFile(path.join(mod, relativePath))).toEqual(original);
+    }
   });
 
   it('attributes a post-plan validation error to the manifest operation that owns its source', async () => {

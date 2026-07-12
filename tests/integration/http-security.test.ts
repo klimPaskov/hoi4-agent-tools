@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -26,10 +26,16 @@ afterEach(async () => {
 async function server(host = '127.0.0.1'): Promise<HttpServerHandle> {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-http-'));
   const mod = path.join(root, 'mod');
-  await mkdir(mod);
+  const focusDirectory = path.join(mod, 'common', 'national_focus');
+  await mkdir(focusDirectory, { recursive: true });
+  await writeFile(
+    path.join(focusDirectory, 'http_test.txt'),
+    'focus_tree = {\n\tid = http_test_tree\n\tdefault = no\n\tcontinuous_focus_position = { x = 0 y = 0 }\n\tfocus = { id = http_test_focus x = 0 y = 0 cost = 10 }\n}\n',
+  );
   process.env.HOI4_AGENT_TEST_TOKEN = secret;
   const config = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(root, 'state'),
     workspaces: [{ id: 'test', name: 'Test', root: mod }],
     http: {
       host,
@@ -54,18 +60,24 @@ async function server(host = '127.0.0.1'): Promise<HttpServerHandle> {
 async function isolatedServer(): Promise<{
   handle: HttpServerHandle;
   alphaSecret: string;
+  discoveredWorkspaceId: string;
   betaSecret: string;
 }> {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-isolation-'));
   const alpha = path.join(root, 'alpha');
   const beta = path.join(root, 'beta');
-  await Promise.all([mkdir(alpha), mkdir(beta)]);
+  const modRoot = path.join(root, 'mods');
+  const discovered = path.join(modRoot, 'discovered');
+  await Promise.all([mkdir(alpha), mkdir(beta), mkdir(discovered, { recursive: true })]);
   const alphaSecret = 'alpha-secret-that-is-at-least-thirty-two-characters';
   const betaSecret = 'beta-secret-that-is-at-least-thirty-two-characters';
   process.env.HOI4_AGENT_ALPHA_TOKEN = alphaSecret;
   process.env.HOI4_AGENT_BETA_TOKEN = betaSecret;
   const config = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(root, 'server-state'),
+    modRoots: [modRoot],
+    workspaceStorageRoot: path.join(root, 'workspace-storage'),
     workspaces: [
       { id: 'alpha', name: 'Alpha', root: alpha },
       { id: 'beta', name: 'Beta', root: beta },
@@ -79,6 +91,7 @@ async function isolatedServer(): Promise<{
           principal: 'alpha-user',
           tokenEnv: 'HOI4_AGENT_ALPHA_TOKEN',
           workspaceIds: ['alpha'],
+          allowDiscoveredMods: true,
         },
         {
           principal: 'beta-user',
@@ -90,9 +103,10 @@ async function isolatedServer(): Promise<{
     },
   });
   const engine = new CoreEngine(await WorkspaceResolver.create(config));
+  const discoveredWorkspaceId = engine.list().find(({ name }) => name === 'discovered')!.id;
   const handle = await startHttpServer(engine, config, createMcpServer);
   handles.push(handle);
-  return { handle, alphaSecret, betaSecret };
+  return { handle, alphaSecret, discoveredWorkspaceId, betaSecret };
 }
 
 async function httpClient(
@@ -147,10 +161,13 @@ describe('secured Streamable HTTP', () => {
     // the shared Transport declaration predates exactOptionalPropertyTypes.
     await client.connect(transport as unknown as Transport);
     const tools = await client.listTools();
-    expect(tools.tools.some(({ name }) => name === 'hoi4.project_scan')).toBe(true);
+    expect(tools.tools.some(({ name }) => name === 'hoi4.focus_inspect')).toBe(true);
     const progress: number[] = [];
     await client.callTool(
-      { name: 'hoi4.project_scan', arguments: { workspaceId: 'test' } },
+      {
+        name: 'hoi4.focus_inspect',
+        arguments: { workspaceId: 'test', treeId: 'http_test_tree' },
+      },
       undefined,
       { onprogress: ({ progress: value }) => progress.push(value) },
     );
@@ -181,21 +198,36 @@ describe('secured Streamable HTTP', () => {
   });
 
   it('isolates workspace discovery, tool access, and sessions between principals', async () => {
-    const { handle, alphaSecret, betaSecret } = await isolatedServer();
+    const { handle, alphaSecret, discoveredWorkspaceId, betaSecret } = await isolatedServer();
     const alpha = await httpClient(handle.url, alphaSecret);
     const beta = await httpClient(handle.url, betaSecret);
     const alphaStatus = await alpha.client.callTool({
-      name: 'hoi4.project_status',
+      name: 'hoi4.mods',
       arguments: {},
     });
     expect((alphaStatus.structuredContent as Record<string, unknown>).data).toMatchObject({
-      workspaces: [expect.objectContaining({ id: 'alpha' })],
+      mods: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]),
     });
     const forbidden = await alpha.client.callTool({
-      name: 'hoi4.project_status',
+      name: 'hoi4.mods',
       arguments: { workspaceId: 'beta' },
     });
     expect(forbidden).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'WORKSPACE_INACCESSIBLE' },
+    });
+    const discoveredForAlpha = await alpha.client.callTool({
+      name: 'hoi4.mods',
+      arguments: { workspaceId: discoveredWorkspaceId },
+    });
+    expect(discoveredForAlpha).toMatchObject({
+      structuredContent: { status: 'ok', code: 'MODS_LISTED' },
+    });
+    const discoveredForBeta = await beta.client.callTool({
+      name: 'hoi4.mods',
+      arguments: { workspaceId: discoveredWorkspaceId },
+    });
+    expect(discoveredForBeta).toMatchObject({
       isError: true,
       structuredContent: { code: 'WORKSPACE_INACCESSIBLE' },
     });

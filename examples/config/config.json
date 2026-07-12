@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "serverStateRoot": "/var/lib/hoi4-agent-tools-state",
+  "modRoots": ["/projects/hoi4-mods"],
+  "gameRoot": "/games/Hearts of Iron IV",
+  "workspaceStorageRoot": "/var/lib/hoi4-agent-tools"
+}

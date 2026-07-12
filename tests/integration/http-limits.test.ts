@@ -4,9 +4,15 @@ import path from 'node:path';
 import { createConnection } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import {
+  HTTP_MAX_BODY_BYTES,
+  serverConfigurationSchema,
+} from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { SOURCE_MAX_BYTES } from '../../src/hoi4_agent_tools/core/source/limits.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { GUI_TEXT_PACKAGE_MAX_BYTES } from '../../src/hoi4_agent_tools/gui/studio.js';
+import { MAP_MASK_CELL_LIMIT } from '../../src/hoi4_agent_tools/map/limits.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import {
   startHttpServer,
@@ -49,6 +55,7 @@ async function limitedServer(
   process.env.HOI4_AGENT_LIMIT_TOKEN = token;
   const configuration = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(root, 'server-state'),
     workspaces: [{ id: 'limited', name: 'Limited', root: mod }],
     http: {
       host: '127.0.0.1',
@@ -159,6 +166,63 @@ describe('Streamable HTTP deployment limits', () => {
       id: null,
     });
   });
+
+  it('admits escaped full GUI packages and maximum map-mask envelopes under defaults', async () => {
+    const handle = await limitedServer({});
+    const session = await initializeSession(handle);
+    const sourceFile = '\n'.repeat(SOURCE_MAX_BYTES);
+    expect(SOURCE_MAX_BYTES * 2).toBe(GUI_TEXT_PACKAGE_MAX_BYTES);
+    const guiRequest = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'limits/escaped-package-probe',
+      params: {
+        source: sourceFile,
+        additionalFiles: [{ relativePath: 'interface/large_additional.gui', source: sourceFile }],
+      },
+    });
+    const guiRequestBytes = Buffer.byteLength(guiRequest);
+    expect(guiRequestBytes).toBeGreaterThan(GUI_TEXT_PACKAGE_MAX_BYTES);
+    expect(guiRequestBytes).toBeLessThan(HTTP_MAX_BODY_BYTES);
+
+    const mapMaskBase64Bytes = Math.ceil(MAP_MASK_CELL_LIMIT / 3) * 4;
+    const mapEnvelopeBytes =
+      Buffer.byteLength(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'hoi4.map_rewrite',
+            arguments: {
+              workspaceId: 'limited',
+              operations: [
+                {
+                  geometry: {
+                    kind: 'mask',
+                    width: 5_000,
+                    height: 4_000,
+                    origin: { x: 0, y: 0 },
+                    selectedPixelCount: 1_000_000,
+                    sha256: '0'.repeat(64),
+                    data: '',
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      ) + mapMaskBase64Bytes;
+    expect(mapEnvelopeBytes).toBeLessThan(HTTP_MAX_BODY_BYTES);
+
+    const response = await fetch(handle.url, {
+      method: 'POST',
+      headers: headers({ 'mcp-session-id': session }),
+      body: guiRequest,
+    });
+    expect(response.status).toBe(200);
+    await response.body?.cancel();
+  }, 30_000);
 
   it('enforces the body limit on established sessions and rejects alternate JSON-like media types', async () => {
     const handle = await limitedServer({ maxBodyBytes: 1024 });
@@ -523,6 +587,7 @@ describe('Streamable HTTP deployment limits', () => {
     process.env.HOI4_AGENT_SECOND_LIMIT_TOKEN = secondToken;
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(root, 'server-state'),
       workspaces: [{ id: 'limited', name: 'Limited', root: mod }],
       http: {
         host: '127.0.0.1',

@@ -8,7 +8,7 @@ import { PACKAGE_VERSION } from '../../version.js';
 import { postValidateTransaction } from './base-tools.js';
 import { MAX_INLINE_ARTIFACT_LINKS } from './result.js';
 
-export type TransactionExecutionOutcome = 'planned' | 'applied' | 'blocked' | 'unchanged';
+export type TransactionExecutionOutcome = 'applied' | 'blocked' | 'unchanged';
 
 export class AutonomousRewriteError extends ServiceError {
   public constructor(
@@ -17,12 +17,19 @@ export class AutonomousRewriteError extends ServiceError {
     public readonly artifacts: ArtifactLink[] = [],
   ) {
     const restored = manifest.state === 'rolled_back' && manifest.rollbackStatus === 'applied';
-    super(cause.code, cause.message, {
-      ...cause.details,
-      execution: 'failed',
-      automaticRecovery: restored ? 'restored' : 'incomplete',
-      failure: manifest.failure ?? null,
-    });
+    const code = cause.code.startsWith('TRANSACTION_')
+      ? `REWRITE_${cause.code.slice('TRANSACTION_'.length)}`
+      : cause.code;
+    super(
+      code,
+      restored
+        ? 'Rewrite verification failed and the original files were restored'
+        : 'Rewrite failed and automatic recovery could not be completed',
+      {
+        execution: 'failed',
+        automaticRecovery: restored ? 'restored' : 'incomplete',
+      },
+    );
     this.name = 'AutonomousRewriteError';
   }
 }
@@ -32,10 +39,6 @@ export interface AutonomousFailureContext {
   changedFiles?: string[];
   artifacts?: ServiceResult['artifacts'];
   validation?: ServiceResult['validation'];
-}
-
-export function autonomousWrites(engine: CoreEngine): boolean {
-  return engine.resolver.config().writePolicy === 'autonomous';
 }
 
 async function storeAutonomousValidationEvidence(
@@ -89,7 +92,7 @@ async function storeAutonomousValidationEvidence(
         sourceHashInventory: sourceEvidence.inventory,
       },
     },
-    'Complete source-linked autonomous rewrite and post-write validation evidence',
+    'Complete rewrite and post-write validation evidence',
     signal,
   );
   return publicArtifactLink(artifact);
@@ -112,9 +115,8 @@ export interface TransactionExecutionResult {
 }
 
 /**
- * Complete a validated domain transaction inside the same MCP tool call when the operator has
- * selected autonomous writes. Planning, hash checks, journaling, post-write validation, and
- * automatic failure recovery remain identical to reviewed transaction mode.
+ * Complete a validated domain rewrite inside one MCP tool call. Hash checks, durable recovery,
+ * post-write validation, and automatic failure recovery remain internal guarantees.
  */
 export async function executePlannedTransaction(
   engine: CoreEngine,
@@ -126,7 +128,6 @@ export async function executePlannedTransaction(
     return { transaction, outcome: 'blocked', artifacts: [] };
   }
   if (transaction.files.length === 0) return { transaction, outcome: 'unchanged', artifacts: [] };
-  if (!autonomousWrites(engine)) return { transaction, outcome: 'planned', artifacts: [] };
   let executionArtifacts: ArtifactLink[] = [];
   try {
     const applied = await engine.transactions.apply(
@@ -142,7 +143,6 @@ export async function executePlannedTransaction(
             manifest,
             principal,
             validationSignal,
-            true,
           );
           executionArtifacts = [...validation.artifacts];
           executionArtifacts.unshift(

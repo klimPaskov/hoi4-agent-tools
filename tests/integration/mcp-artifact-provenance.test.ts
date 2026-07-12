@@ -69,6 +69,7 @@ async function connect(
   const cacheRoot = workspace.cacheRoot as string;
   const configuration = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(temporary, 'server-state'),
     storageRoots: [artifactRoot, cacheRoot],
     workspaces: [workspace],
   });
@@ -102,24 +103,15 @@ async function readJsonResource(client: Client, uri: string): Promise<Record<str
 
 async function readArtifactManifest(
   client: Client,
-  workspaceId: string,
   artifact: ArtifactLink,
 ): Promise<ArtifactManifestResource> {
-  const described = toolOutput(
-    await client.callTool({
-      name: 'hoi4.artifact_describe',
-      arguments: { workspaceId, uri: artifact.uri },
-    }),
-  );
-  expect(described).toMatchObject({ status: 'ok', code: 'ARTIFACT_DESCRIBE' });
-  const manifest = described.artifacts.find(({ name }) => name.endsWith('.manifest.json'));
-  expect(manifest).toBeDefined();
-  return (await readJsonResource(client, manifest!.uri)) as unknown as ArtifactManifestResource;
+  const manifestUri = new URL(artifact.uri);
+  manifestUri.searchParams.set('metadata', 'manifest');
+  return (await readJsonResource(client, manifestUri.href)) as unknown as ArtifactManifestResource;
 }
 
 async function expectBoundManifestEvidence(
   client: Client,
-  workspaceId: string,
   artifact: ArtifactLink,
   completeSourceHashes: Readonly<Record<string, string>>,
 ): Promise<void> {
@@ -133,7 +125,7 @@ async function expectBoundManifestEvidence(
   });
   expect(expected.inventory.digest).toMatch(/^[a-f0-9]{64}$/u);
 
-  const manifest = await readArtifactManifest(client, workspaceId, artifact);
+  const manifest = await readArtifactManifest(client, artifact);
   expect(manifest.name).toBe(artifact.name);
   expect(manifest.provenance.sourceHashes).toEqual(expected.sourceHashes);
   expect(manifest.provenance.metadata).toMatchObject({
@@ -142,62 +134,6 @@ async function expectBoundManifestEvidence(
 }
 
 describe('MCP broad artifact provenance', () => {
-  it('keeps every project source hash in readable content while bounding the digest-backed manifest', async () => {
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-project-provenance-'));
-    const mod = path.join(temporary, 'mod');
-    const scriptedEffects = path.join(mod, 'common', 'scripted_effects');
-    const artifactRoot = path.join(temporary, 'runtime', 'artifacts');
-    const cacheRoot = path.join(temporary, 'runtime', 'cache');
-    await Promise.all([
-      mkdir(scriptedEffects, { recursive: true }),
-      mkdir(artifactRoot, { recursive: true }),
-      mkdir(cacheRoot, { recursive: true }),
-    ]);
-    const sourceCount = 2_048;
-    await writeInBatches(sourceCount, async (index) => {
-      const suffix = String(index).padStart(4, '0');
-      await writeFile(
-        path.join(scriptedEffects, `bulk-${suffix}.txt`),
-        `bulk_effect_${suffix} = { set_country_flag = bulk_flag_${suffix} }\n`,
-      );
-    });
-
-    const { client, engine } = await connect(temporary, {
-      id: 'project-provenance',
-      name: 'Broad project provenance fixture',
-      root: mod,
-      artifactRoot,
-      cacheRoot,
-    });
-    const snapshot = await engine.scan('project-provenance');
-    const expectedSourceHashes = sourceHashes(snapshot.files);
-    expect(snapshot.files).toHaveLength(sourceCount);
-
-    const scanned = toolOutput(
-      await client.callTool({
-        name: 'hoi4.project_scan',
-        arguments: { workspaceId: 'project-provenance' },
-      }),
-    );
-    expect(scanned).toMatchObject({ status: 'ok', code: 'WORKSPACE_SCANNED' });
-    expect(scanned.artifacts).toHaveLength(1);
-
-    const content = await readJsonResource(client, scanned.artifacts[0]!.uri);
-    const inventory = Object.fromEntries(
-      (content.files as Array<{ displayPath: string; sha256: string }>).map(
-        ({ displayPath, sha256 }) => [displayPath, sha256],
-      ),
-    );
-    expect(inventory).toEqual(expectedSourceHashes);
-    expect(Object.keys(inventory)).toHaveLength(sourceCount);
-    await expectBoundManifestEvidence(
-      client,
-      'project-provenance',
-      scanned.artifacts[0]!,
-      expectedSourceHashes,
-    );
-  }, 60_000);
-
   it('binds every map evidence call site to complete readable source inventories', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-map-provenance-'));
     const fixtureRoots = path.join(repositoryRoot, 'fixtures', 'map', 'roots');
@@ -239,26 +175,11 @@ describe('MCP broad artifact provenance', () => {
     const results = [
       toolOutput(
         await client.callTool({
-          name: 'hoi4.map_scan',
-          arguments: { workspaceId: 'map-provenance' },
-        }),
-      ),
-      toolOutput(
-        await client.callTool({
           name: 'hoi4.map_inspect',
-          arguments: { workspaceId: 'map-provenance' },
-        }),
-      ),
-      toolOutput(
-        await client.callTool({
-          name: 'hoi4.map_allocate',
-          arguments: { workspaceId: 'map-provenance', request: { kind: 'state' } },
-        }),
-      ),
-      toolOutput(
-        await client.callTool({
-          name: 'hoi4.map_validate',
-          arguments: { workspaceId: 'map-provenance' },
+          arguments: {
+            workspaceId: 'map-provenance',
+            allocationRequests: [{ kind: 'state' }],
+          },
         }),
       ),
       toolOutput(
@@ -268,7 +189,7 @@ describe('MCP broad artifact provenance', () => {
         }),
       ),
     ];
-    expect(results.map(({ status }) => status)).toEqual(['ok', 'ok', 'ok', 'ok', 'ok']);
+    expect(results.map(({ status }) => status)).toEqual(['ok', 'ok']);
 
     const structuredArtifacts = results.map((result) => {
       const artifact = result.artifacts.find(({ mimeType }) => mimeType === 'application/json');
@@ -278,7 +199,7 @@ describe('MCP broad artifact provenance', () => {
     for (const artifact of structuredArtifacts) {
       const content = await readJsonResource(client, artifact.uri);
       expect(content.sourceHashes).toEqual(expectedSourceHashes);
-      await expectBoundManifestEvidence(client, 'map-provenance', artifact, expectedSourceHashes);
+      await expectBoundManifestEvidence(client, artifact, expectedSourceHashes);
     }
 
     const renderArtifacts = results.at(-1)!.artifacts;
@@ -286,7 +207,7 @@ describe('MCP broad artifact provenance', () => {
       expect.arrayContaining(['application/json', 'image/png', 'text/html']),
     );
     for (const artifact of renderArtifacts) {
-      await expectBoundManifestEvidence(client, 'map-provenance', artifact, expectedSourceHashes);
+      await expectBoundManifestEvidence(client, artifact, expectedSourceHashes);
     }
   }, 60_000);
 });

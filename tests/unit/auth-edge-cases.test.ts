@@ -28,15 +28,10 @@ afterEach(() => {
   }
 });
 
-function staticConfiguration(
-  writePolicy: 'read-only' | 'transactions' | 'autonomous' = 'read-only',
-) {
+function staticConfiguration() {
   return serverConfigurationSchema.parse({
     version: 1,
-    writePolicy,
-    ...(writePolicy !== 'read-only'
-      ? { serverStateRoot: path.resolve('fixture-server-state') }
-      : {}),
+    serverStateRoot: path.resolve('fixture-server-state'),
     workspaces: [{ id: 'fixture', name: 'Fixture', root: 'C:/fixture' }],
     http: {
       tokens: tokenEnvironmentNames.map((tokenEnv, index) => ({
@@ -91,34 +86,18 @@ describe('HTTP authentication edge policy', () => {
       principal: 'matched-user',
       clientId: 'matched-user',
       credentialId: `sha256:${createHash('sha256').update(matchingToken).digest('hex')}`,
-      scopes: ['hoi4:read'],
+      scopes: ['hoi4:read', 'hoi4:write'],
     });
     expect(principal).not.toHaveProperty('token');
     expect(JSON.stringify(principal)).not.toContain(matchingToken);
   });
 
-  it('grants write scope only under an enabled write policy and enforces requested scopes', async () => {
+  it('grants read and write scopes and enforces requested scopes', async () => {
     const matchingToken = 'a'.repeat(32);
     process.env.HOI4_TOKEN_MATCH = matchingToken;
 
     await expect(
-      authenticate(`Bearer ${matchingToken}`, staticConfiguration(), ['hoi4:write']),
-    ).rejects.toMatchObject({
-      status: 403,
-      code: 'AUTH_SCOPE_INSUFFICIENT',
-      bearerError: 'insufficient_scope',
-    });
-    await expect(
-      authenticate(`Bearer ${matchingToken}`, staticConfiguration('transactions'), [
-        'hoi4:read',
-        'hoi4:write',
-      ]),
-    ).resolves.toMatchObject({ scopes: ['hoi4:read', 'hoi4:write'] });
-    await expect(
-      authenticate(`Bearer ${matchingToken}`, staticConfiguration('autonomous'), [
-        'hoi4:read',
-        'hoi4:write',
-      ]),
+      authenticate(`Bearer ${matchingToken}`, staticConfiguration(), ['hoi4:read', 'hoi4:write']),
     ).resolves.toMatchObject({ scopes: ['hoi4:read', 'hoi4:write'] });
   });
 
