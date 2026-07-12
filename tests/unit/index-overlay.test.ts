@@ -57,6 +57,7 @@ describe('load-order scanner and shared index', () => {
       await WorkspaceResolver.create(
         serverConfigurationSchema.parse({
           version: 1,
+          serverStateRoot: path.join(root, 'server-state'),
           workspaces: [{ id: 'test', name: 'Test', root: mod, gameRoot: game }],
         }),
       ),
@@ -110,6 +111,7 @@ describe('load-order scanner and shared index', () => {
     );
     const config = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(root, 'server-state'),
       workspaces: [
         {
           id: 'test',
@@ -194,6 +196,7 @@ describe('load-order scanner and shared index', () => {
     }
     const config = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(path.dirname(root), `${path.basename(root)}-server-state`),
       workspaces: [{ id: 'test', name: 'Test', root }],
     });
     const engine = new CoreEngine(await WorkspaceResolver.create(config));

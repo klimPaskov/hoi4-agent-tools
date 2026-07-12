@@ -1,18 +1,12 @@
-import { link, lstat, mkdir, open, readFile, realpath, unlink } from 'node:fs/promises';
+import { lstat, mkdir, opendir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { z } from 'zod/v4';
 import {
   WORKSPACE_MAX_REGISTRATIONS,
+  workspaceRegistrationSchema,
   type ServerConfiguration,
   type WorkspaceRegistration,
 } from './configuration.js';
-import {
-  compareCodeUnits,
-  canonicalJson,
-  hashCanonical,
-  secureId,
-  sha256Bytes,
-} from './canonical.js';
+import { compareCodeUnits, hashCanonical, sha256Bytes } from './canonical.js';
 import { ServiceError } from './result.js';
 import { ServerState } from './server-state.js';
 
@@ -41,32 +35,9 @@ export interface ResolvedWorkspace {
   writeEnabled: boolean;
   /** SHA-256 binding for the canonical root topology and source-resolution behavior. */
   workspaceIdentity: string;
-  /** Shared configured-workspace identity or principal-scoped runtime owner identity. */
+  /** Configured-workspace identity used to isolate generated artifacts. */
   ownerIdentity: string;
 }
-
-interface RuntimeOwner {
-  principal: string | undefined;
-  signal?: AbortSignal;
-}
-
-interface RuntimeRegistrationClaim {
-  version: 1;
-  workspaceIdentity: string;
-  ownerIdentity: string;
-  claimHash: string;
-}
-
-const runtimeRegistrationClaimFile = '.runtime-registration-owner.json';
-const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
-const runtimeRegistrationClaimSchema = z
-  .object({
-    version: z.literal(1),
-    workspaceIdentity: sha256Schema,
-    ownerIdentity: sha256Schema,
-    claimHash: sha256Schema,
-  })
-  .strict();
 
 async function exists(value: string, signal?: AbortSignal): Promise<boolean> {
   signal?.throwIfAborted();
@@ -120,6 +91,18 @@ function pathsOverlap(left: string, right: string): boolean {
   return isWithin(left, right) || isWithin(right, left);
 }
 
+function discoveredWorkspaceId(rootPath: string): string {
+  const basename = path.basename(rootPath);
+  const slug = basename
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '')
+    .slice(0, 40);
+  const identityPath = process.platform === 'win32' ? rootPath.toLowerCase() : rootPath;
+  return `mod_${slug.length === 0 ? 'workspace' : slug}_${sha256Bytes(identityPath).slice(0, 12)}`;
+}
+
 /**
  * Hash the resolved root topology without persisting canonical host paths. Canonicalization happens
  * before this function is called, so filesystem aliases converge on the same stable identity.
@@ -151,133 +134,6 @@ function configuredOwnerIdentity(workspaceIdentity: string): string {
     domain: 'hoi4-agent-configured-workspace-owner-v1',
     workspaceIdentity,
   });
-}
-
-function runtimeOwnerIdentity(workspaceIdentity: string, principal?: string): string {
-  return hashCanonical({
-    domain: 'hoi4-agent-runtime-workspace-owner-v1',
-    workspaceIdentity,
-    principal: principal ?? null,
-  });
-}
-
-function runtimeClaimHash(claim: Omit<RuntimeRegistrationClaim, 'claimHash'>): string {
-  return hashCanonical(claim);
-}
-
-function registrationClaimConflict(): ServiceError {
-  return new ServiceError(
-    'WORKSPACE_REGISTRATION_CONFLICT',
-    'Runtime workspace registration conflicts with an existing registration',
-  );
-}
-
-async function readRuntimeRegistrationClaim(
-  claimPath: string,
-  signal?: AbortSignal,
-): Promise<RuntimeRegistrationClaim | undefined> {
-  signal?.throwIfAborted();
-  let claimStatus;
-  try {
-    claimStatus = await lstat(claimPath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw registrationClaimConflict();
-  }
-  signal?.throwIfAborted();
-  if (claimStatus.isSymbolicLink() || !claimStatus.isFile() || claimStatus.size > 4_096) {
-    throw registrationClaimConflict();
-  }
-
-  let parsed: unknown;
-  try {
-    const text =
-      signal === undefined
-        ? await readFile(claimPath, 'utf8')
-        : await readFile(claimPath, { encoding: 'utf8', signal });
-    signal?.throwIfAborted();
-    parsed = JSON.parse(text) as unknown;
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') throw error;
-    throw registrationClaimConflict();
-  }
-  signal?.throwIfAborted();
-  const validated = runtimeRegistrationClaimSchema.safeParse(parsed);
-  if (!validated.success) throw registrationClaimConflict();
-  const claim = validated.data;
-  if (
-    runtimeClaimHash({
-      version: claim.version,
-      workspaceIdentity: claim.workspaceIdentity,
-      ownerIdentity: claim.ownerIdentity,
-    }) !== claim.claimHash
-  ) {
-    throw registrationClaimConflict();
-  }
-  return claim;
-}
-
-async function assertRuntimeRegistrationClaim(
-  workspace: ResolvedWorkspace,
-  signal?: AbortSignal,
-): Promise<void> {
-  signal?.throwIfAborted();
-  const claimRoot = await containedGeneratedPath(workspace.artifactRoot);
-  signal?.throwIfAborted();
-  const claimPath = path.join(claimRoot, runtimeRegistrationClaimFile);
-  const expectedWithoutHash = {
-    version: 1 as const,
-    workspaceIdentity: workspace.workspaceIdentity,
-    ownerIdentity: workspace.ownerIdentity,
-  };
-  const expected: RuntimeRegistrationClaim = {
-    ...expectedWithoutHash,
-    claimHash: runtimeClaimHash(expectedWithoutHash),
-  };
-  const assertMatches = (claim: RuntimeRegistrationClaim): void => {
-    if (
-      claim.workspaceIdentity !== expected.workspaceIdentity ||
-      claim.ownerIdentity !== expected.ownerIdentity ||
-      claim.claimHash !== expected.claimHash
-    ) {
-      throw registrationClaimConflict();
-    }
-  };
-
-  const existing = await readRuntimeRegistrationClaim(claimPath, signal);
-  if (existing !== undefined) {
-    assertMatches(existing);
-    return;
-  }
-
-  signal?.throwIfAborted();
-  const temporaryPath = path.join(claimRoot, `.runtime-registration-${secureId('claim')}.tmp`);
-  let temporaryHandle: Awaited<ReturnType<typeof open>> | undefined;
-  try {
-    temporaryHandle = await open(temporaryPath, 'wx', 0o600);
-    await temporaryHandle.writeFile(`${canonicalJson(expected)}\n`, 'utf8');
-    await temporaryHandle.sync();
-    await temporaryHandle.close();
-    temporaryHandle = undefined;
-    signal?.throwIfAborted();
-    try {
-      // A hard link publishes fully flushed bytes without replacing a competing claim.
-      await link(temporaryPath, claimPath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        throw registrationClaimConflict();
-      }
-      const racedClaim = await readRuntimeRegistrationClaim(claimPath, signal);
-      if (racedClaim === undefined) throw registrationClaimConflict();
-      assertMatches(racedClaim);
-    }
-  } catch (error) {
-    if (error instanceof ServiceError || (error as Error).name === 'AbortError') throw error;
-    throw registrationClaimConflict();
-  } finally {
-    await temporaryHandle?.close().catch(() => undefined);
-    await unlink(temporaryPath).catch(() => undefined);
-  }
 }
 
 function containsAsciiControlCharacter(value: string): boolean {
@@ -350,18 +206,12 @@ function assertRelative(relativePath: string): void {
 
 export class WorkspaceResolver {
   readonly #byId = new Map<string, ResolvedWorkspace>();
-  readonly #runtimePrincipalWorkspaces = new Map<string, Set<string>>();
-  readonly #runtimeWorkspaceIds = new Set<string>();
-  readonly #runtimeWorkspaceOwners = new Map<string, string | undefined>();
-  #registrationRoots: string[] = [];
-  #registrationLexicalRoots: string[] = [];
-  #writableRegistrationRoots: string[] = [];
-  #writableRegistrationLexicalRoots: string[] = [];
+  readonly #discoveredWorkspaceIds = new Set<string>();
   #storageRoots: string[] = [];
-  #storageLexicalRoots: string[] = [];
+  #modRoots: string[] = [];
+  #workspaceStorageRoot?: string;
   #serverStateRoot?: string;
   #serverState?: ServerState;
-  #registrationQueue: Promise<void> = Promise.resolve();
 
   private constructor(private readonly configuration: ServerConfiguration) {}
 
@@ -370,45 +220,46 @@ export class WorkspaceResolver {
     if (configuration.serverStateRoot !== undefined) {
       resolver.#serverStateRoot = await canonicalPath(configuration.serverStateRoot);
     }
-    resolver.#registrationLexicalRoots = configuration.registrationRoots.map((root) =>
-      path.normalize(path.resolve(root)),
-    );
-    resolver.#registrationRoots = await Promise.all(
-      configuration.registrationRoots.map((root) => canonicalPath(root)),
-    );
-    resolver.#writableRegistrationLexicalRoots = configuration.writableRegistrationRoots.map(
-      (root) => path.normalize(path.resolve(root)),
-    );
-    resolver.#writableRegistrationRoots = await Promise.all(
-      configuration.writableRegistrationRoots.map((root) => canonicalPath(root)),
-    );
-    for (const candidate of resolver.#writableRegistrationLexicalRoots) {
-      if (!resolver.#registrationLexicalRoots.some((root) => isWithin(root, candidate))) {
-        throw new ServiceError(
-          'WORKSPACE_WRITABLE_REGISTRATION_ROOT_FORBIDDEN',
-          'Writable runtime registration roots must be lexical descendants of registration roots',
-        );
-      }
-    }
-    for (const candidate of resolver.#writableRegistrationRoots) {
-      if (!resolver.#registrationRoots.some((root) => isWithin(root, candidate))) {
-        throw new ServiceError(
-          'WORKSPACE_WRITABLE_REGISTRATION_ROOT_FORBIDDEN',
-          'Writable runtime registration roots must resolve beneath registration roots',
-        );
-      }
-    }
-    resolver.#storageLexicalRoots = configuration.storageRoots.map((root) =>
-      path.normalize(path.resolve(root)),
-    );
     resolver.#storageRoots = await Promise.all(
       configuration.storageRoots.map((root) => canonicalPath(root)),
     );
+    resolver.#modRoots = await Promise.all(
+      configuration.modRoots.map(async (root) => {
+        const status = await lstat(root).catch(() => undefined);
+        if (status === undefined || !status.isDirectory() || status.isSymbolicLink()) {
+          throw new ServiceError(
+            'WORKSPACE_MOD_ROOT_UNSAFE',
+            'Configured mod roots must be existing real directories',
+          );
+        }
+        return canonicalPath(root);
+      }),
+    );
+    for (const [index, candidate] of resolver.#modRoots.entries()) {
+      if (resolver.#modRoots.slice(0, index).some((root) => pathsOverlap(root, candidate))) {
+        throw new ServiceError(
+          'WORKSPACE_MOD_ROOT_OVERLAP',
+          'Configured mod roots must be distinct and non-overlapping',
+        );
+      }
+    }
+    if (configuration.workspaceStorageRoot !== undefined) {
+      resolver.#workspaceStorageRoot = await canonicalPath(configuration.workspaceStorageRoot);
+      if (resolver.#modRoots.some((root) => pathsOverlap(root, resolver.#workspaceStorageRoot!))) {
+        throw new ServiceError(
+          'WORKSPACE_STORAGE_ROOT_OVERLAP',
+          'Workspace storage root must not overlap a configured mod root',
+        );
+      }
+      resolver.#storageRoots.push(resolver.#workspaceStorageRoot);
+    }
     if (resolver.#serverStateRoot !== undefined) {
       for (const root of [
-        ...resolver.#registrationRoots,
-        ...resolver.#writableRegistrationRoots,
         ...resolver.#storageRoots,
+        ...resolver.#modRoots,
+        ...(configuration.gameRoot === undefined
+          ? []
+          : [await canonicalPath(configuration.gameRoot)]),
       ]) {
         if (pathsOverlap(resolver.#serverStateRoot, root)) {
           throw new ServiceError(
@@ -418,7 +269,8 @@ export class WorkspaceResolver {
         }
       }
     }
-    for (const registration of configuration.workspaces) {
+    for (const configured of configuration.workspaces) {
+      const registration = resolver.withGlobalWorkspaceDefaults(configured);
       const workspace = await resolver.resolveRegistration(registration);
       if (resolver.#byId.has(workspace.id)) {
         throw new ServiceError('WORKSPACE_DUPLICATE', `Duplicate workspace ID: ${workspace.id}`);
@@ -426,6 +278,7 @@ export class WorkspaceResolver {
       resolver.assertWorkspaceIsolation(workspace);
       resolver.#byId.set(workspace.id, workspace);
     }
+    await resolver.discoverModWorkspaces();
     if (configuration.serverStateRoot !== undefined) {
       resolver.#serverState = await ServerState.create(configuration.serverStateRoot);
       resolver.#serverStateRoot = resolver.#serverState.root;
@@ -441,268 +294,72 @@ export class WorkspaceResolver {
     return this.#serverState;
   }
 
-  async register(
-    registration: WorkspaceRegistration,
-    principal?: string,
-    signal?: AbortSignal,
-  ): Promise<ResolvedWorkspace> {
-    signal?.throwIfAborted();
-    let release!: () => void;
-    const previous = this.#registrationQueue;
-    this.#registrationQueue = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    signal?.throwIfAborted();
-    try {
-      return await this.registerExclusive(registration, principal, signal);
-    } finally {
-      release();
-    }
+  private withGlobalWorkspaceDefaults(registration: WorkspaceRegistration): WorkspaceRegistration {
+    const gameRoot =
+      registration.kind === 'mod' && registration.gameRoot === undefined
+        ? this.configuration.gameRoot
+        : registration.gameRoot;
+    const storageBase =
+      this.#workspaceStorageRoot === undefined
+        ? undefined
+        : path.join(this.#workspaceStorageRoot, registration.id);
+    return {
+      ...registration,
+      ...(gameRoot === undefined ? {} : { gameRoot }),
+      ...(registration.artifactRoot !== undefined || storageBase === undefined
+        ? {}
+        : { artifactRoot: path.join(storageBase, 'artifacts') }),
+      ...(registration.cacheRoot !== undefined || storageBase === undefined
+        ? {}
+        : { cacheRoot: path.join(storageBase, 'cache') }),
+    };
   }
 
-  private async registerExclusive(
-    registration: WorkspaceRegistration,
-    principal?: string,
-    signal?: AbortSignal,
-  ): Promise<ResolvedWorkspace> {
-    signal?.throwIfAborted();
-    if (principal !== undefined && !this.registrationAllowed(principal)) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_FORBIDDEN',
-        'Principal cannot register workspaces',
-      );
-    }
-    const registrationConflict = (code: string, message: string): ServiceError =>
-      principal === undefined
-        ? new ServiceError(code, message)
-        : new ServiceError(
-            'WORKSPACE_REGISTRATION_CONFLICT',
-            'Runtime workspace registration conflicts with an existing registration',
+  private async discoverModWorkspaces(): Promise<void> {
+    const registrations: WorkspaceRegistration[] = [];
+    for (const modRoot of this.#modRoots) {
+      const directory = await opendir(modRoot);
+      for await (const entry of directory) {
+        if (entry.name.startsWith('.') || entry.isSymbolicLink() || !entry.isDirectory()) continue;
+        const lexicalCandidate = path.normalize(path.join(modRoot, entry.name));
+        if (!isWithin(modRoot, lexicalCandidate)) continue;
+        const candidateStatus = await lstat(lexicalCandidate).catch(() => undefined);
+        if (
+          candidateStatus === undefined ||
+          candidateStatus.isSymbolicLink() ||
+          !candidateStatus.isDirectory()
+        ) {
+          continue;
+        }
+        const candidate = await canonicalPath(lexicalCandidate);
+        if (!isWithin(modRoot, candidate)) continue;
+        if ([...this.#byId.values()].some((workspace) => workspace.modRoot === candidate)) continue;
+        if (this.#byId.size + registrations.length >= WORKSPACE_MAX_REGISTRATIONS) {
+          throw new ServiceError(
+            'WORKSPACE_REGISTRATION_LIMIT',
+            'Workspace registration limit has been reached',
           );
-    if (this.#byId.has(registration.id)) {
-      throw registrationConflict(
-        'WORKSPACE_DUPLICATE',
-        `Workspace ID is already registered: ${registration.id}`,
-      );
-    }
-    if (this.#byId.size >= WORKSPACE_MAX_REGISTRATIONS) {
-      throw registrationConflict(
-        'WORKSPACE_REGISTRATION_LIMIT',
-        'Workspace registration limit has been reached',
-      );
-    }
-    this.assertLexicalRegistrationPath(
-      registration.root,
-      'workspace root',
-      'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-    );
-    if (registration.kind === 'mod') this.assertLexicalWritableRegistrationPath(registration.root);
-    const candidateRoot = await canonicalPath(registration.root, signal);
-    signal?.throwIfAborted();
-    if (!this.#registrationRoots.some((root) => isWithin(root, candidateRoot))) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-        'Workspace is outside configured registration roots',
-        {
-          workspaceId: registration.id,
-        },
-      );
-    }
-    if (
-      registration.kind === 'mod' &&
-      !this.#writableRegistrationRoots.some((root) => isWithin(root, candidateRoot))
-    ) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-        'Runtime mod roots require an operator-approved writable registration root',
-      );
-    }
-    const readRoots = [
-      registration.gameRoot,
-      ...registration.dependencyRoots,
-      ...registration.dependencies.map(({ root }) => root),
-      registration.fixtureRoot,
-    ].filter((value): value is string => value !== undefined);
-    const canonicalReadRoots: string[] = [];
-    for (const requestedRoot of readRoots) {
-      signal?.throwIfAborted();
-      this.assertLexicalRegistrationPath(
-        requestedRoot,
-        'workspace source root',
-        'WORKSPACE_REGISTRATION_SOURCE_ROOT_FORBIDDEN',
-      );
-      const candidate = await canonicalPath(requestedRoot, signal);
-      if (!this.#registrationRoots.some((root) => isWithin(root, candidate))) {
-        throw new ServiceError(
-          'WORKSPACE_REGISTRATION_SOURCE_ROOT_FORBIDDEN',
-          'A requested game, dependency, or fixture root is outside configured registration roots',
-          { workspaceId: registration.id },
-        );
+        }
+        const id = discoveredWorkspaceId(candidate);
+        const registration = workspaceRegistrationSchema.parse({
+          id,
+          name: entry.name.slice(0, 200),
+          root: candidate,
+          kind: 'mod',
+        });
+        registrations.push(this.withGlobalWorkspaceDefaults(registration));
       }
-      canonicalReadRoots.push(candidate);
     }
 
-    for (const existing of this.#byId.values()) {
-      signal?.throwIfAborted();
-      if (existing.roots.some((root) => pathsOverlap(candidateRoot, root.path))) {
-        throw registrationConflict(
-          'WORKSPACE_REGISTRATION_ROOT_OVERLAP',
-          'Runtime workspace root overlaps an existing registered workspace root',
-        );
+    registrations.sort((left, right) => compareCodeUnits(left.id, right.id));
+    for (const registration of registrations) {
+      if (this.#byId.has(registration.id)) {
+        throw new ServiceError('WORKSPACE_DUPLICATE', `Duplicate workspace ID: ${registration.id}`);
       }
-      const protectedRoots = existing.roots.filter((root) =>
-        ['mod', 'artifact', 'cache'].includes(root.kind),
-      );
-      if (
-        canonicalReadRoots.some((requestedRoot) =>
-          protectedRoots.some((root) => pathsOverlap(requestedRoot, root.path)),
-        )
-      ) {
-        throw registrationConflict(
-          'WORKSPACE_REGISTRATION_SOURCE_OVERLAP',
-          'Runtime source root overlaps an existing workspace-owned root',
-        );
-      }
-    }
-    for (const [index, requestedRoot] of canonicalReadRoots.entries()) {
-      signal?.throwIfAborted();
-      if (
-        pathsOverlap(candidateRoot, requestedRoot) ||
-        canonicalReadRoots
-          .slice(0, index)
-          .some((existingRequestedRoot) => pathsOverlap(requestedRoot, existingRequestedRoot))
-      ) {
-        throw new ServiceError(
-          'WORKSPACE_REGISTRATION_INTERNAL_OVERLAP',
-          'Runtime workspace roots must be distinct and non-overlapping',
-          { workspaceId: registration.id },
-        );
-      }
-    }
-    const generatedCandidates = new Map<'artifacts' | 'cache', string>();
-    for (const [generatedKind, configuredRoot] of [
-      ['artifacts', registration.artifactRoot],
-      ['cache', registration.cacheRoot],
-    ] as const) {
-      signal?.throwIfAborted();
-      const generatedRoot =
-        configuredRoot ??
-        (registration.kind === 'mod'
-          ? path.join(registration.root, '.hoi4-agent', generatedKind)
-          : undefined);
-      if (generatedRoot === undefined) continue;
-      this.assertLexicalGeneratedPath(registration, generatedRoot, generatedKind);
-      const candidate = await canonicalPath(generatedRoot, signal);
-      const relativeToPrimary = path
-        .relative(candidateRoot, candidate)
-        .replaceAll('\\', '/')
-        .toLowerCase();
-      const allowed =
-        (registration.kind === 'mod' &&
-          isWithin(candidateRoot, candidate) &&
-          (relativeToPrimary === `.hoi4-agent/${generatedKind}` ||
-            relativeToPrimary.startsWith(`.hoi4-agent/${generatedKind}/`))) ||
-        this.#storageRoots.some((root) => isWithin(root, candidate));
-      if (!allowed) {
-        throw new ServiceError(
-          'WORKSPACE_REGISTRATION_GENERATED_ROOT_FORBIDDEN',
-          'Runtime artifact and cache roots must remain inside the registered workspace',
-          { workspaceId: registration.id },
-        );
-      }
-      generatedCandidates.set(generatedKind, candidate);
-    }
-    const artifactCandidate = generatedCandidates.get('artifacts');
-    const cacheCandidate = generatedCandidates.get('cache');
-    if (
-      artifactCandidate !== undefined &&
-      cacheCandidate !== undefined &&
-      pathsOverlap(artifactCandidate, cacheCandidate)
-    ) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_GENERATED_ROOT_FORBIDDEN',
-        'Runtime artifact and cache roots must be distinct and non-overlapping',
-        { workspaceId: registration.id },
-      );
-    }
-    for (const candidate of generatedCandidates.values()) {
-      signal?.throwIfAborted();
-      const overlapsOwnSources =
-        (registration.kind !== 'mod' && pathsOverlap(candidateRoot, candidate)) ||
-        (registration.kind === 'mod' &&
-          !isWithin(candidateRoot, candidate) &&
-          pathsOverlap(candidateRoot, candidate)) ||
-        canonicalReadRoots.some((sourceRoot) => pathsOverlap(sourceRoot, candidate));
-      if (overlapsOwnSources) {
-        throw new ServiceError(
-          'WORKSPACE_REGISTRATION_GENERATED_ROOT_FORBIDDEN',
-          'Runtime generated storage must not overlap a source root',
-          { workspaceId: registration.id },
-        );
-      }
-      if (
-        [...this.#byId.values()].some((existing) =>
-          existing.roots.some((root) => pathsOverlap(candidate, root.path)),
-        )
-      ) {
-        throw registrationConflict(
-          'WORKSPACE_REGISTRATION_GENERATED_ROOT_OVERLAP',
-          'Runtime generated storage overlaps an existing workspace root',
-        );
-      }
-    }
-    const workspace = await this.resolveRegistration(registration, {
-      principal,
-      ...(signal === undefined ? {} : { signal }),
-    });
-    signal?.throwIfAborted();
-    if (this.#byId.has(registration.id)) {
-      throw registrationConflict(
-        'WORKSPACE_DUPLICATE',
-        `Workspace ID is already registered: ${registration.id}`,
-      );
-    }
-    this.assertResolvedRuntimeRegistration(workspace);
-    try {
+      const workspace = await this.resolveRegistration(registration);
       this.assertWorkspaceIsolation(workspace);
-    } catch (error) {
-      if (principal !== undefined && error instanceof ServiceError) {
-        throw registrationConflict(error.code, error.message);
-      }
-      throw error;
-    }
-    signal?.throwIfAborted();
-    await assertRuntimeRegistrationClaim(workspace, signal);
-    signal?.throwIfAborted();
-    this.#byId.set(workspace.id, workspace);
-    this.#runtimeWorkspaceIds.add(workspace.id);
-    this.#runtimeWorkspaceOwners.set(workspace.id, principal);
-    if (principal !== undefined) {
-      const ids = this.#runtimePrincipalWorkspaces.get(principal) ?? new Set<string>();
-      ids.add(workspace.id);
-      this.#runtimePrincipalWorkspaces.set(principal, ids);
-    }
-    return workspace;
-  }
-
-  unregisterRuntime(workspaceId: string, principal?: string): void {
-    if (
-      this.#runtimeWorkspaceIds.has(workspaceId) &&
-      this.#runtimeWorkspaceOwners.get(workspaceId) !== principal
-    ) {
-      throw new ServiceError(
-        'WORKSPACE_INACCESSIBLE',
-        'Workspace is unavailable to the authenticated principal',
-      );
-    }
-    if (!this.#runtimeWorkspaceIds.delete(workspaceId)) return;
-    this.#runtimeWorkspaceOwners.delete(workspaceId);
-    this.#byId.delete(workspaceId);
-    if (principal !== undefined) {
-      const ids = this.#runtimePrincipalWorkspaces.get(principal);
-      ids?.delete(workspaceId);
-      if (ids?.size === 0) this.#runtimePrincipalWorkspaces.delete(principal);
+      this.#byId.set(workspace.id, workspace);
+      this.#discoveredWorkspaceIds.add(workspace.id);
     }
   }
 
@@ -829,100 +486,19 @@ export class WorkspaceResolver {
     return new Set([
       ...(token?.workspaceIds ?? []),
       ...(oauth?.workspaceIds ?? []),
-      ...(this.#runtimePrincipalWorkspaces.get(principal) ?? []),
+      ...(this.discoveredModsAllowed(principal) ? this.#discoveredWorkspaceIds : []),
     ]);
   }
 
-  private registrationAllowed(principal: string): boolean {
+  private discoveredModsAllowed(principal: string): boolean {
     return (
       this.configuration.http.tokens.some(
-        (entry) => entry.principal === principal && entry.allowRegistration,
+        (entry) => entry.principal === principal && entry.allowDiscoveredMods,
       ) ||
       this.configuration.http.principals.some(
-        (entry) => entry.principal === principal && entry.allowRegistration,
+        (entry) => entry.principal === principal && entry.allowDiscoveredMods,
       )
     );
-  }
-
-  private assertLexicalRegistrationPath(value: string, label: string, code: string): void {
-    const candidate = path.normalize(path.resolve(value));
-    if (!this.#registrationLexicalRoots.some((root) => isWithin(root, candidate))) {
-      throw new ServiceError(
-        code,
-        `Runtime ${label} is lexically outside configured registration roots`,
-      );
-    }
-  }
-
-  private assertLexicalWritableRegistrationPath(value: string): void {
-    const candidate = path.normalize(path.resolve(value));
-    if (!this.#writableRegistrationLexicalRoots.some((root) => isWithin(root, candidate))) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-        'Runtime mod roots are lexically outside operator-approved writable registration roots',
-      );
-    }
-  }
-
-  private assertLexicalGeneratedPath(
-    registration: WorkspaceRegistration,
-    value: string,
-    generatedKind: 'artifacts' | 'cache',
-  ): void {
-    const candidate = path.normalize(path.resolve(value));
-    const primary = path.normalize(path.resolve(registration.root));
-    const expectedRoot = path.join(primary, '.hoi4-agent', generatedKind);
-    const insideWritableMod = registration.kind === 'mod' && isWithin(expectedRoot, candidate);
-    const insideStorage = this.#storageLexicalRoots.some((root) => isWithin(root, candidate));
-    if (!insideWritableMod && !insideStorage) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_GENERATED_ROOT_FORBIDDEN',
-        'Runtime generated storage is outside the writable mod or configured storage roots',
-      );
-    }
-  }
-
-  private assertResolvedRuntimeRegistration(workspace: ResolvedWorkspace): void {
-    const allowed = (candidate: string): boolean =>
-      this.#registrationRoots.some((root) => isWithin(root, candidate));
-    if (!allowed(workspace.modRoot)) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-        'Resolved runtime workspace is outside configured registration roots',
-      );
-    }
-    if (
-      workspace.registration.kind === 'mod' &&
-      !this.#writableRegistrationRoots.some((root) => isWithin(root, workspace.modRoot))
-    ) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_ROOT_FORBIDDEN',
-        'Resolved runtime mod root is outside operator-approved writable registration roots',
-      );
-    }
-    for (const root of workspace.roots.filter((candidate) =>
-      ['game', 'dependency', 'fixture'].includes(candidate.kind),
-    )) {
-      if (!allowed(root.path)) {
-        throw new ServiceError(
-          'WORKSPACE_REGISTRATION_SOURCE_ROOT_FORBIDDEN',
-          'Resolved runtime source is outside configured registration roots',
-        );
-      }
-    }
-    const generatedAllowed = (candidate: string, generatedKind: 'artifacts' | 'cache'): boolean =>
-      (workspace.registration.kind === 'mod' &&
-        isWithin(path.join(workspace.modRoot, '.hoi4-agent', generatedKind), candidate)) ||
-      this.#storageRoots.some((root) => isWithin(root, candidate));
-    if (
-      !generatedAllowed(workspace.artifactRoot, 'artifacts') ||
-      !generatedAllowed(workspace.cacheRoot, 'cache')
-    ) {
-      throw new ServiceError(
-        'WORKSPACE_REGISTRATION_GENERATED_ROOT_FORBIDDEN',
-        'Resolved runtime generated storage must remain inside its workspace',
-      );
-    }
   }
 
   private assertWorkspaceIsolation(workspace: ResolvedWorkspace): void {
@@ -970,29 +546,23 @@ export class WorkspaceResolver {
 
   private async resolveRegistration(
     registration: WorkspaceRegistration,
-    runtimeOwner?: RuntimeOwner,
   ): Promise<ResolvedWorkspace> {
-    const signal = runtimeOwner?.signal;
-    signal?.throwIfAborted();
-    const modRoot = await canonicalPath(registration.root, signal);
-    if (!(await exists(modRoot, signal))) {
+    const modRoot = await canonicalPath(registration.root);
+    if (!(await exists(modRoot))) {
       throw new ServiceError(
         'WORKSPACE_ROOT_MISSING',
         `Workspace root does not exist: ${registration.root}`,
       );
     }
     const gameRoot =
-      registration.gameRoot === undefined
-        ? undefined
-        : await canonicalPath(registration.gameRoot, signal);
+      registration.gameRoot === undefined ? undefined : await canonicalPath(registration.gameRoot);
     const dependencyRegistrations =
       registration.dependencies.length > 0
         ? registration.dependencies
         : registration.dependencyRoots.map((root) => ({ root, replacePaths: [] }));
     const dependencyRoots = await Promise.all(
-      dependencyRegistrations.map(({ root }) => canonicalPath(root, signal)),
+      dependencyRegistrations.map(({ root }) => canonicalPath(root)),
     );
-    signal?.throwIfAborted();
     if (
       registration.kind !== 'mod' &&
       (registration.artifactRoot === undefined || registration.cacheRoot === undefined)
@@ -1005,17 +575,14 @@ export class WorkspaceResolver {
     }
     const artifactRoot = await canonicalPath(
       registration.artifactRoot ?? path.join(modRoot, '.hoi4-agent', 'artifacts'),
-      signal,
     );
     const cacheRoot = await canonicalPath(
       registration.cacheRoot ?? path.join(modRoot, '.hoi4-agent', 'cache'),
-      signal,
     );
     const fixtureRoot =
       registration.fixtureRoot === undefined
         ? undefined
-        : await canonicalPath(registration.fixtureRoot, signal);
-    signal?.throwIfAborted();
+        : await canonicalPath(registration.fixtureRoot);
     const generatedAllowed = (candidate: string, generatedKind: 'artifacts' | 'cache'): boolean =>
       (registration.kind === 'mod' &&
         isWithin(path.join(modRoot, '.hoi4-agent', generatedKind), candidate)) ||
@@ -1044,8 +611,7 @@ export class WorkspaceResolver {
     for (const sourceRoot of [gameRoot, ...dependencyRoots, fixtureRoot].filter(
       (value): value is string => value !== undefined,
     )) {
-      signal?.throwIfAborted();
-      if (!(await exists(sourceRoot, signal))) {
+      if (!(await exists(sourceRoot))) {
         throw new ServiceError(
           'WORKSPACE_SOURCE_ROOT_MISSING',
           'Configured game, dependency, or fixture root does not exist',
@@ -1098,9 +664,7 @@ export class WorkspaceResolver {
       );
     }
     await mkdir(artifactRoot, { recursive: true });
-    signal?.throwIfAborted();
     await mkdir(cacheRoot, { recursive: true });
-    signal?.throwIfAborted();
 
     const roots: ResolvedRoot[] = [
       {
@@ -1156,8 +720,7 @@ export class WorkspaceResolver {
     ];
 
     for (const root of roots) {
-      signal?.throwIfAborted();
-      root.path = await canonicalPath(root.path, signal);
+      root.path = await canonicalPath(root.path);
     }
     const workspaceBase = {
       id: registration.id,
@@ -1170,19 +733,13 @@ export class WorkspaceResolver {
       artifactRoot,
       cacheRoot,
       ...(fixtureRoot === undefined ? {} : { fixtureRoot }),
-      writeEnabled:
-        registration.kind === 'mod' &&
-        this.configuration.writePolicy !== 'read-only' &&
-        registration.writeEnabled,
+      writeEnabled: registration.kind === 'mod',
     };
     const workspaceIdentity = resolvedWorkspaceIdentity(workspaceBase);
     return {
       ...workspaceBase,
       workspaceIdentity,
-      ownerIdentity:
-        runtimeOwner === undefined
-          ? configuredOwnerIdentity(workspaceIdentity)
-          : runtimeOwnerIdentity(workspaceIdentity, runtimeOwner.principal),
+      ownerIdentity: configuredOwnerIdentity(workspaceIdentity),
     };
   }
 }

@@ -238,7 +238,6 @@ async function createFocusTransactionFixture(
   await writeFile(focusPath, source, 'utf8');
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'transactions',
     serverStateRoot: path.join(temporary, 'server-state'),
     workspaces: [
       {
@@ -246,7 +245,6 @@ async function createFocusTransactionFixture(
         name: 'Fixture',
         root: modRoot,
         kind: 'mod',
-        writeEnabled: true,
       },
     ],
   });
@@ -2012,7 +2010,7 @@ describe('Focus Tree Workbench rendering', () => {
 });
 
 describe('Focus Tree Workbench transactions', () => {
-  it('plans, applies, and rolls back source-preserving changes through TransactionManager', async () => {
+  it('plans and applies targeted changes through TransactionManager', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-focus-workbench-'));
     temporaryRoots.push(temporary);
     const modRoot = path.join(temporary, 'mod');
@@ -2022,7 +2020,6 @@ describe('Focus Tree Workbench transactions', () => {
     await writeFile(focusPath, sampleSource, 'utf8');
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(temporary, 'server-state'),
       workspaces: [
         {
@@ -2030,7 +2027,6 @@ describe('Focus Tree Workbench transactions', () => {
           name: 'Fixture',
           root: modRoot,
           kind: 'mod',
-          writeEnabled: true,
         },
       ],
     });
@@ -2090,17 +2086,6 @@ describe('Focus Tree Workbench transactions', () => {
     ) as { focuses: unknown[]; sourceHash: string };
     expect(sidecar.focuses).toHaveLength(plan.focuses.length);
     expect(sidecar.sourceHash).toMatch(/^[a-f0-9]{64}$/u);
-
-    const rolledBack = await transactions.rollback(
-      'fixture',
-      planned.transaction.transactionId,
-      planned.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(await readFile(focusPath, 'utf8')).toBe(sampleSource);
-    await expect(
-      readFile(path.join(focusDirectory, 'fixture.focus-plan.json')),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('patches changed structured fields without regenerating surrounding source', async () => {
@@ -2142,13 +2127,6 @@ describe('Focus Tree Workbench transactions', () => {
     expect(changed).toContain('custom_focus_field = { preserve = this_too }');
     expect(changed.match(/custom_tree_field/g)).toHaveLength(1);
     expect(changed.match(/custom_focus_field/g)).toHaveLength(1);
-
-    await transactions.rollback(
-      'fixture',
-      planned.transaction.transactionId,
-      planned.transaction.planHash,
-    );
-    expect(await readFile(focusPath, 'utf8')).toBe(sampleSource);
   });
 
   it('refuses to regenerate a changed structured field that contains comments', async () => {

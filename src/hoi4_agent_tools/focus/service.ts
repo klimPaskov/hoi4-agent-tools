@@ -144,7 +144,7 @@ function boundedFocusTransactionDiagnostics(
     {
       code: 'FOCUS_VALIDATION_DIAGNOSTICS_IN_RESOURCE',
       severity: omittedHard > 0 ? 'blocker' : 'warning',
-      category: 'transaction',
+      category: 'validation',
       message: `Complete proposed-focus validation contains ${diagnostics.length} diagnostics and is stored in ${evidenceArtifactName}`,
       details: {
         total: diagnostics.length,
@@ -410,7 +410,7 @@ export class FocusWorkbench {
     const drift = targetCreated
       ? missingTargetDrift(input.plan, document)
       : detectFocusDrift(input.plan, document, input.references);
-    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority);
+    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority ?? 'plan');
     const layout =
       input.layout ??
       (await layoutFocusTreeAsync(
@@ -467,7 +467,7 @@ export class FocusWorkbench {
             {
               code: 'FOCUS_PROPOSED_SOURCE_MISSING',
               severity: 'blocker',
-              category: 'transaction',
+              category: 'validation',
               message: `Proposed source is missing ${input.relativePath}`,
               operationId,
             },
@@ -509,7 +509,7 @@ export class FocusWorkbench {
         diagnostics.push({
           code: 'FOCUS_PROPOSED_TREE_MISSING',
           severity: 'blocker',
-          category: 'transaction',
+          category: 'validation',
           message: `Compiled source does not contain focus tree ${input.plan.id}`,
           operationId,
         });
@@ -690,7 +690,7 @@ export class FocusWorkbench {
     const drift = targetCreated
       ? missingTargetDrift(input.plan, document)
       : detectContinuousFocusDrift(input.plan, document);
-    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority);
+    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority ?? 'plan');
     const after = updateContinuousFocusPaletteSource(
       document,
       targetCreated ? undefined : drift.currentSourcePlan,
@@ -766,7 +766,7 @@ export class FocusWorkbench {
               {
                 code: 'FOCUS_PROPOSED_SOURCE_MISSING',
                 severity: 'blocker' as const,
-                category: 'transaction' as const,
+                category: 'validation' as const,
                 message: `Proposed source is missing ${input.relativePath}`,
                 operationId,
               },
@@ -792,7 +792,7 @@ export class FocusWorkbench {
           diagnostics.push({
             code: 'CONTINUOUS_FOCUS_PROPOSED_PALETTE_MISSING',
             severity: 'blocker',
-            category: 'transaction',
+            category: 'validation',
             message: `Compiled source does not contain continuous focus palette ${input.plan.id}`,
             operationId,
           });

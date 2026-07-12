@@ -1,13 +1,19 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  HTTP_MAX_AGGREGATE_BODY_BYTES,
+  HTTP_MAX_BODY_BYTES,
   loadConfiguration,
   serverConfigurationSchema,
   workspaceRegistrationSchema,
 } from '../../src/hoi4_agent_tools/core/configuration.js';
-import { configurationPath, createEngine } from '../../src/hoi4_agent_tools/runtime.js';
+import {
+  configurationPath,
+  createEngine,
+  defaultConfigurationPath,
+} from '../../src/hoi4_agent_tools/runtime.js';
 
 const temporaryRoots: string[] = [];
 const originalConfigPath = process.env.HOI4_AGENT_CONFIG;
@@ -60,7 +66,7 @@ describe('configuration loading and path selection', () => {
     ).toBe(true);
   });
 
-  it('rejects HTTP concurrency and combined body budgets outside the fixed memory envelope', () => {
+  it('keeps HTTP concurrency and JSON body budgets within the fixed memory envelope', () => {
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
@@ -70,49 +76,50 @@ describe('configuration loading and path selection', () => {
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
-        http: { maxConcurrentRequests: 2, maxBodyBytes: 16_777_216 },
+        http: { maxConcurrentRequests: 2, maxBodyBytes: HTTP_MAX_BODY_BYTES + 1 },
       }).success,
     ).toBe(false);
-    expect(
-      serverConfigurationSchema.safeParse({
-        version: 1,
-        http: { maxConcurrentRequests: 2, maxBodyBytes: 8_388_608 },
-      }).success,
-    ).toBe(true);
+    const maximum = serverConfigurationSchema.safeParse({
+      version: 1,
+      http: { maxConcurrentRequests: 2, maxBodyBytes: HTTP_MAX_BODY_BYTES },
+    });
+    expect(maximum.success).toBe(true);
+    if (maximum.success) {
+      expect(maximum.data.http.maxBodyBytes).toBe(HTTP_MAX_BODY_BYTES);
+      expect(maximum.data.http.maxBodyBytes * maximum.data.http.maxConcurrentRequests).toBe(
+        HTTP_MAX_AGGREGATE_BODY_BYTES,
+      );
+    }
   });
 
-  it('requires absolute operator state for reviewed and autonomous writes and bounds collections', () => {
+  it('requires isolated state for writable mods and bounds collections', () => {
     expect(
       serverConfigurationSchema.safeParse({ version: 1, writePolicy: 'transactions' }).success,
     ).toBe(false);
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
-        writePolicy: 'transactions',
         serverStateRoot: 'relative/server-state',
+        modRoots: [path.resolve('mods')],
       }).success,
     ).toBe(false);
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
-        writePolicy: 'transactions',
-        serverStateRoot: path.resolve('server-state'),
+        workspaces: [workspace],
       }).success,
-    ).toBe(true);
-    expect(
-      serverConfigurationSchema.safeParse({ version: 1, writePolicy: 'autonomous' }).success,
     ).toBe(false);
-    expect(
-      serverConfigurationSchema.safeParse({
-        version: 1,
-        writePolicy: 'autonomous',
-        serverStateRoot: path.resolve('autonomous-server-state'),
-      }).success,
-    ).toBe(true);
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
         registrationRoots: Array.from({ length: 17 }, (_, index) => `/root-${index}`),
+      }).success,
+    ).toBe(false);
+    expect(
+      serverConfigurationSchema.safeParse({
+        version: 1,
+        serverStateRoot: path.resolve('server-state'),
+        modRoots: Array.from({ length: 17 }, (_, index) => `/mods-${index}`),
       }).success,
     ).toBe(false);
     expect(
@@ -133,9 +140,28 @@ describe('configuration loading and path selection', () => {
     ).toBe(false);
   });
 
+  it('makes automatic mod-root discovery writable by default and requires isolated state', () => {
+    expect(
+      serverConfigurationSchema.safeParse({
+        version: 1,
+        modRoots: [path.resolve('mods')],
+      }).success,
+    ).toBe(false);
+    const automatic = serverConfigurationSchema.safeParse({
+      version: 1,
+      serverStateRoot: path.resolve('server-state'),
+      modRoots: [path.resolve('mods')],
+      gameRoot: path.resolve('game'),
+      workspaceStorageRoot: path.resolve('workspace-storage'),
+    });
+    expect(automatic.success).toBe(true);
+    if (automatic.success) expect(automatic.data.modRoots).toEqual([path.resolve('mods')]);
+  });
+
   it('loads defaults and validates known static-token and OAuth-principal grants', async () => {
     const filePath = await configurationFile({
       version: 1,
+      serverStateRoot: path.resolve('server-state'),
       workspaces: [workspace],
       http: {
         tokens: [
@@ -150,12 +176,13 @@ describe('configuration loading and path selection', () => {
     });
 
     await expect(loadConfiguration(filePath)).resolves.toMatchObject({
-      writePolicy: 'read-only',
-      writableRegistrationRoots: [],
-      workspaces: [expect.objectContaining({ id: 'fixture', writeEnabled: false })],
+      modRoots: [],
+      workspaces: [expect.objectContaining({ id: 'fixture' })],
       http: {
-        tokens: [expect.objectContaining({ principal: 'static-user' })],
-        principals: [expect.objectContaining({ principal: 'oauth-user' })],
+        tokens: [expect.objectContaining({ principal: 'static-user', allowDiscoveredMods: false })],
+        principals: [
+          expect.objectContaining({ principal: 'oauth-user', allowDiscoveredMods: false }),
+        ],
       },
     });
   });
@@ -179,6 +206,7 @@ describe('configuration loading and path selection', () => {
   it('rejects duplicate workspaces and unknown token or principal grants', async () => {
     const duplicate = await configurationFile({
       version: 1,
+      serverStateRoot: path.resolve('server-state'),
       workspaces: [workspace, { ...workspace, name: 'Duplicate fixture' }],
     });
     await expect(loadConfiguration(duplicate)).rejects.toMatchObject({
@@ -187,6 +215,7 @@ describe('configuration loading and path selection', () => {
 
     const unknownToken = await configurationFile({
       version: 1,
+      serverStateRoot: path.resolve('server-state'),
       workspaces: [workspace],
       http: {
         tokens: [
@@ -205,6 +234,7 @@ describe('configuration loading and path selection', () => {
 
     const unknownPrincipal = await configurationFile({
       version: 1,
+      serverStateRoot: path.resolve('server-state'),
       workspaces: [workspace],
       http: {
         principals: [{ principal: 'oauth-user', workspaceIds: ['missing'] }],
@@ -225,6 +255,7 @@ describe('configuration loading and path selection', () => {
     expect(() =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.resolve('server-state'),
         workspaces: [workspace],
         http: { tokens: [token('duplicate', 'TOKEN_ONE'), token('duplicate', 'TOKEN_TWO')] },
       }),
@@ -232,6 +263,7 @@ describe('configuration loading and path selection', () => {
     expect(() =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.resolve('server-state'),
         workspaces: [workspace],
         http: { tokens: [token('one', 'SHARED_TOKEN'), token('two', 'SHARED_TOKEN')] },
       }),
@@ -239,6 +271,7 @@ describe('configuration loading and path selection', () => {
     expect(() =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.resolve('server-state'),
         workspaces: [workspace],
         http: {
           principals: [
@@ -251,6 +284,7 @@ describe('configuration loading and path selection', () => {
     expect(() =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.resolve('server-state'),
         workspaces: [workspace],
         http: {
           tokens: [token('shared-user', 'SHARED_USER_TOKEN')],
@@ -261,6 +295,7 @@ describe('configuration loading and path selection', () => {
     expect(() =>
       serverConfigurationSchema.parse({
         version: 1,
+        serverStateRoot: path.resolve('server-state'),
         workspaces: [workspace],
         http: {
           tokens: [token('static-user', 'STATIC_USER_TOKEN')],
@@ -303,8 +338,6 @@ describe('configuration loading and path selection', () => {
     expect(engine.resolver.list()).toEqual([]);
 
     delete process.env.HOI4_AGENT_CONFIG;
-    expect(configurationPath([])).toBe(
-      path.join(homedir(), '.config', 'hoi4-agent-tools', 'config.json'),
-    );
+    expect(configurationPath([])).toBe(defaultConfigurationPath());
   });
 });

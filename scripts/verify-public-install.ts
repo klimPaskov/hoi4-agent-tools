@@ -16,6 +16,42 @@ const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-public-instal
 const httpOrigin = 'https://public-install.example.test';
 const httpToken = randomBytes(32).toString('hex');
 const httpTokenEnvironment = 'PUBLIC_INSTALL_HTTP_TOKEN';
+const focusRelativePath = 'common/national_focus/public_install_focus.txt';
+const publicToolNames = [
+  'hoi4.mods',
+  'hoi4.focus_inspect',
+  'hoi4.focus_render',
+  'hoi4.focus_rewrite',
+  'hoi4.gui_inspect',
+  'hoi4.gui_render',
+  'hoi4.gui_rewrite',
+  'hoi4.map_inspect',
+  'hoi4.map_render',
+  'hoi4.map_rewrite',
+] as const;
+const focusFixture = `focus_tree = {
+\tid = public_install_focus
+\tcountry = {
+\t\tfactor = 0
+\t}
+
+\tfocus = {
+\t\tid = public_install_root
+\t\ticon = GFX_goal_generic_construct_civ_factory
+\t\tx = 0
+\t\ty = 0
+\t\tcost = 10
+
+\t\tcompletion_reward = {
+\t\t\tadd_political_power = 50
+\t\t}
+\t}
+}
+`;
+
+function sameNames(actual: readonly string[], expected: readonly string[]): boolean {
+  return JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort());
+}
 
 async function runNode(
   args: string[],
@@ -60,28 +96,26 @@ try {
   }
   await runNode([npmCli, 'audit', 'signatures', '--registry=https://registry.npmjs.org']);
 
-  const mod = path.join(temporary, 'mod');
-  await mkdir(mod);
+  const modRoot = path.join(temporary, 'mods');
+  const mod = path.join(modRoot, 'public');
+  const focusRoot = path.join(mod, 'common', 'national_focus');
   const storage = path.join(temporary, 'storage');
-  await mkdir(storage);
+  await Promise.all([mkdir(focusRoot, { recursive: true }), mkdir(storage)]);
+  await writeFile(path.join(mod, focusRelativePath), focusFixture);
   const configuration = path.join(temporary, 'config.json');
   await writeFile(
     configuration,
     `${JSON.stringify({
       version: 1,
-      writePolicy: 'autonomous',
       serverStateRoot: path.join(temporary, 'state'),
-      registrationRoots: [mod],
-      writableRegistrationRoots: [mod],
-      storageRoots: [storage],
+      modRoots: [modRoot],
+      workspaceStorageRoot: storage,
       workspaces: [
         {
           id: 'public',
           name: 'Public package smoke test',
           root: mod,
-          artifactRoot: path.join(storage, 'public', 'artifacts'),
-          cacheRoot: path.join(storage, 'public', 'cache'),
-          writeEnabled: true,
+          kind: 'mod',
         },
       ],
       http: {
@@ -122,12 +156,24 @@ try {
         if (line.length === 0) continue;
         const message = JSON.parse(line) as {
           id?: number;
-          result?: { serverInfo?: { version?: string }; tools?: Array<{ name?: string }> };
+          result?: {
+            capabilities?: { prompts?: unknown; resources?: unknown };
+            serverInfo?: { version?: string };
+            tools?: Array<{ name?: string }>;
+          };
         };
         if (message.id === 1) {
           if (message.result?.serverInfo?.version !== ownPackage.version) {
             clearTimeout(timeout);
             reject(new Error('Published stdio server reported the wrong version'));
+            return;
+          }
+          if (
+            message.result.capabilities?.prompts !== undefined ||
+            message.result.capabilities?.resources === undefined
+          ) {
+            clearTimeout(timeout);
+            reject(new Error('Published stdio server reported the wrong discovery capabilities'));
             return;
           }
           child.stdin.write(
@@ -137,17 +183,11 @@ try {
             `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
           );
         } else if (message.id === 2) {
-          const names = message.result?.tools?.map(({ name }) => name) ?? [];
-          if (
-            !names.includes('hoi4.focus_render') ||
-            !names.includes('hoi4.focus_rewrite') ||
-            !names.includes('hoi4.gui_rewrite') ||
-            !names.includes('hoi4.map_rewrite') ||
-            names.includes('hoi4.map_plan') ||
-            names.includes('hoi4.transaction_apply')
-          ) {
+          const names =
+            message.result?.tools?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
+          if (!sameNames(names, publicToolNames)) {
             clearTimeout(timeout);
-            reject(new Error('Published stdio server is missing required public tools'));
+            reject(new Error(`Published stdio tools do not match the ten-tool public surface`));
             return;
           }
           validated = true;
@@ -186,16 +226,9 @@ try {
     cwd: temporary,
     entryPath: path.join(installedRoot, 'dist', 'bin', 'http.js'),
     environment: httpEnvironment,
-    expectedPromptNames: ['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow'],
-    expectedResourceUri: 'hoi4-agent://schema/focus-plan',
     expectedServerName: ownPackage.name,
     expectedServerVersion: ownPackage.version,
-    expectedToolNames: [
-      'hoi4.focus_render',
-      'hoi4.focus_rewrite',
-      'hoi4.gui_rewrite',
-      'hoi4.map_rewrite',
-    ],
+    focusRelativePath,
     origin: httpOrigin,
     token: httpToken,
     workspaceId: 'public',

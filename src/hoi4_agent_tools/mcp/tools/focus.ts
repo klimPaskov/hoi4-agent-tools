@@ -13,9 +13,6 @@ import {
   FocusWorkbench,
   FOCUS_RENDER_MAX_OUTPUT_SCALE,
   FOCUS_RENDER_MIN_OUTPUT_SCALE,
-  assertFocusPlanAuthority,
-  detectContinuousFocusDrift,
-  detectFocusDrift,
   focusPlanHash,
   focusPresentationEvidence,
   focusPlanningSidecarPath,
@@ -35,7 +32,6 @@ import {
 } from '../../focus/index.js';
 import {
   continuousFocusPaletteSchema,
-  focusLayoutDecisionSchema,
   focusLayoutSchema,
   focusTreePlanSchema,
 } from '../../schemas/focus.js';
@@ -53,23 +49,20 @@ import {
   strictOperationResultSchema,
   toolResult,
 } from '../server/result.js';
-import {
-  requireServerScope,
-  transactionResourceLink,
-  type ServerContext,
-} from '../server/base-tools.js';
+import { requireServerScope, type ServerContext } from '../server/base-tools.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
-  autonomousWrites,
   executePlannedTransaction,
 } from '../server/transaction-execution.js';
 
-const focusScanOutputSchema = strictOperationResultSchema(
+const focusInspectOutputSchema = strictOperationResultSchema(
   z
     .object({
+      mode: z.enum(['national', 'continuous']),
       revision: sha256Schema,
       treeCount: nonNegativeIntegerSchema,
+      paletteCount: nonNegativeIntegerSchema,
       trees: z
         .array(
           z
@@ -81,41 +74,25 @@ const focusScanOutputSchema = strictOperationResultSchema(
               continuousPaletteCount: nonNegativeIntegerSchema,
               continuousFocusCount: nonNegativeIntegerSchema,
               resolvedTitleCount: nonNegativeIntegerSchema,
+              layoutHash: sha256Schema,
+              layoutDecisionCount: nonNegativeIntegerSchema,
+              diagnosticCount: nonNegativeIntegerSchema,
             })
             .strict(),
         )
         .max(100),
-    })
-    .strict(),
-);
-const focusLintOutputSchema = strictOperationResultSchema(
-  z.discriminatedUnion('mode', [
-    z
-      .object({
-        mode: z.literal('national'),
-        treeId: z.string().max(256),
-        focusCount: nonNegativeIntegerSchema,
-        layoutHash: sha256Schema,
-        diagnosticCount: nonNegativeIntegerSchema,
-      })
-      .strict(),
-    z
-      .object({
-        mode: z.literal('continuous'),
-        paletteId: z.string().max(256),
-        focusCount: nonNegativeIntegerSchema,
-        diagnosticCount: nonNegativeIntegerSchema,
-      })
-      .strict(),
-  ]),
-);
-const focusLayoutOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      treeId: z.string().max(256),
-      layoutHash: sha256Schema,
-      nodeCount: nonNegativeIntegerSchema,
-      decisions: z.array(focusLayoutDecisionSchema).max(100),
+      palettes: z
+        .array(
+          z
+            .object({
+              id: z.string().max(256),
+              sourcePath: z.string().max(4096),
+              focusCount: nonNegativeIntegerSchema,
+              diagnosticCount: nonNegativeIntegerSchema,
+            })
+            .strict(),
+        )
+        .max(100),
     })
     .strict(),
 );
@@ -157,12 +134,6 @@ const focusDriftBaseOutputSchema = z
     ]),
     sourceChanged: z.boolean(),
     planChanged: z.boolean(),
-    requiresAuthority: z.boolean(),
-    savedPlanHash: sha256Schema,
-    currentPlanHash: z.string().max(256),
-    importedPlanHash: sha256Schema,
-    savedSourceHash: sha256Schema,
-    currentSourceHash: sha256Schema,
   })
   .strict();
 const focusDriftOutputSchema = focusDriftBaseOutputSchema;
@@ -175,11 +146,10 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         treeId: z.string().max(256),
         drift: focusDriftOutputSchema,
         created: z.boolean(),
-        execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
+        execution: z.enum(['applied', 'blocked', 'unchanged']),
         layoutHash: sha256Schema,
-        expiresAt: z.iso.datetime(),
-        transactionFileCount: nonNegativeIntegerSchema,
-        transactionArtifactCount: nonNegativeIntegerSchema,
+        fileCount: nonNegativeIntegerSchema,
+        artifactCount: nonNegativeIntegerSchema,
       })
       .strict(),
     z
@@ -188,30 +158,24 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         paletteId: z.string().max(256),
         drift: continuousFocusDriftOutputSchema,
         created: z.boolean(),
-        execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
-        expiresAt: z.iso.datetime(),
-        transactionFileCount: nonNegativeIntegerSchema,
-        transactionArtifactCount: nonNegativeIntegerSchema,
+        execution: z.enum(['applied', 'blocked', 'unchanged']),
+        fileCount: nonNegativeIntegerSchema,
+        artifactCount: nonNegativeIntegerSchema,
       })
       .strict(),
   ]),
 );
 
-const focusPathInput = z
-  .object({
-    workspaceId: workspaceIdSchema,
-    relativePath: workspaceRelativePathSchema,
-    treeId: z.string().min(1).max(256).optional(),
-  })
-  .strict();
-
-const focusLintInput = z
+const focusInspectInput = z
   .object({
     mode: z.enum(['national', 'continuous']).optional(),
     workspaceId: workspaceIdSchema,
-    relativePath: workspaceRelativePathSchema,
+    relativePath: workspaceRelativePathSchema.optional(),
     treeId: z.string().min(1).max(256).optional(),
     paletteId: z.string().min(1).max(256).optional(),
+    previous: focusLayoutSchema.optional(),
+    laneSpacing: z.number().int().min(1).max(100).optional(),
+    nodeSpacing: z.number().int().min(1).max(100).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -227,6 +191,22 @@ const focusLintInput = z
         code: 'custom',
         path: ['treeId'],
         message: 'treeId is only valid in national mode',
+      });
+    if (mode === 'continuous') {
+      for (const field of ['previous', 'laneSpacing', 'nodeSpacing'] as const) {
+        if (value[field] !== undefined)
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} is only valid in national mode`,
+          });
+      }
+    }
+    if (value.previous !== undefined && value.treeId === undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['previous'],
+        message: 'previous requires treeId so it applies to exactly one tree',
       });
   });
 
@@ -284,7 +264,6 @@ const focusPlanInput = z
     workspaceId: workspaceIdSchema,
     relativePath: workspaceRelativePathSchema,
     plan: z.union([focusTreePlanSchema, continuousFocusPaletteSchema]),
-    authority: z.enum(['plan', 'source']).optional(),
     createIfMissing: z.boolean().default(false),
     horizontalSpacing: z.number().int().min(80).max(1000).optional(),
     verticalSpacing: z.number().int().min(60).max(1000).optional(),
@@ -316,7 +295,7 @@ const focusPlanInput = z
           context.addIssue({
             code: 'custom',
             path: [field],
-            message: `${field} is only valid for national focus transaction review renders`,
+            message: `${field} is only valid for national focus review renders`,
           });
       }
     }
@@ -329,11 +308,19 @@ const artifactProducing = {
   openWorldHint: false,
 } as const;
 
-function compactDrift<T extends { currentSourcePlan?: unknown }>(
-  drift: T,
-): Omit<T, 'currentSourcePlan'> {
-  const { currentSourcePlan: _currentSourcePlan, ...summary } = drift;
-  return summary;
+const LARGE_FOCUS_RENDER_NODE_THRESHOLD = 200;
+const LARGE_FOCUS_RENDER_SCALE = 0.5;
+
+function automaticFocusRenderScale(focusCount: number): number {
+  return focusCount >= LARGE_FOCUS_RENDER_NODE_THRESHOLD ? LARGE_FOCUS_RENDER_SCALE : 1;
+}
+
+function compactDrift(drift: { status: string; sourceChanged: boolean; planChanged: boolean }) {
+  return {
+    status: drift.status,
+    sourceChanged: drift.sourceChanged,
+    planChanged: drift.planChanged,
+  };
 }
 
 function normalizedRoot(value: string): string {
@@ -541,30 +528,134 @@ export function registerFocusTools(
   engine: CoreEngine,
   context: ServerContext,
 ): void {
-  const autonomous = autonomousWrites(engine);
   const workbench = new FocusWorkbench(engine.resolver, engine.transactions, engine.artifacts);
 
   server.registerTool(
-    'hoi4.focus_scan',
+    'hoi4.focus_inspect',
     {
-      title: 'Scan focus trees',
+      title: 'Inspect focus trees',
       description:
-        'Import active focus-tree source through the shared lossless parser and return compact summaries plus a full resource artifact.',
-      inputSchema: z
-        .object({
-          workspaceId: workspaceIdSchema,
-          relativePath: workspaceRelativePathSchema.optional(),
-        })
-        .strict(),
-      outputSchema: focusScanOutputSchema,
+        'Inspect national trees or continuous palettes for creation and cleanup, including complete plans, references, diagnostics, and stable layout decisions.',
+      inputSchema: focusInspectInput,
+      outputSchema: focusInspectOutputSchema,
       annotations: artifactProducing,
     },
-    async ({ workspaceId, relativePath }, extra) => {
+    async (input, extra) => {
+      const { workspaceId, relativePath } = input;
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building shared workspace index');
         const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
         const workspace = engine.resolver.get(workspaceId, context.principal);
+        if (input.mode === 'continuous') {
+          const selectedFiles = activeContinuousFocusFiles(snapshot).filter(
+            (file) => relativePath === undefined || file.relativePath === relativePath,
+          );
+          if (selectedFiles.length === 0) {
+            throw new ServiceError(
+              'CONTINUOUS_FOCUS_SOURCE_NOT_FOUND',
+              'No active continuous focus source matched the request',
+            );
+          }
+          const diagnostics = [] as FocusImportResult['diagnostics'];
+          const importedPalettes: ContinuousFocusPalettePlan[] = [];
+          for (const file of selectedFiles) {
+            progress.signal.throwIfAborted();
+            const imported = importContinuousFocusPalettes(
+              parseClausewitz(file.bytes, file.displayPath),
+            );
+            importedPalettes.push(...imported.continuousFocusPalettes);
+            diagnostics.push(...imported.diagnostics);
+          }
+          const palettes = importedPalettes.filter(
+            ({ id }) => input.paletteId === undefined || id === input.paletteId,
+          );
+          if (palettes.length === 0) {
+            throw new ServiceError(
+              'CONTINUOUS_FOCUS_PALETTE_NOT_FOUND',
+              input.paletteId === undefined
+                ? 'The selected source contains no continuous focus palette'
+                : `Continuous focus palette was not found: ${input.paletteId}`,
+            );
+          }
+          const paletteDiagnosticCounts = new Map<string, number>();
+          for (const palette of palettes) {
+            const lintDiagnostics = workbench.lintContinuous(palette);
+            paletteDiagnosticCounts.set(palette.id, lintDiagnostics.length);
+            diagnostics.push(...lintDiagnostics);
+          }
+          const presentation = await resolveFocusPresentation({
+            plans: [],
+            palettes,
+            files: snapshot.files,
+            index: snapshot.index,
+            scanner: engine.scanner,
+            workspace,
+            signal: progress.signal,
+          });
+          diagnostics.push(...presentation.diagnostics);
+          await progress.report(2, 3, 'Writing continuous focus inspection');
+          const completeSourceHashes = Object.fromEntries(
+            Object.entries({
+              ...Object.fromEntries(
+                selectedFiles.map(({ displayPath, sha256 }) => [displayPath, sha256]),
+              ),
+              ...presentation.sourceHashes,
+            }).sort(([left], [right]) => compareCodeUnits(left, right)),
+          );
+          const sourceEvidence = boundedSourceHashEvidence(completeSourceHashes);
+          const artifact = await engine.artifacts.putChunked(
+            workspace,
+            `focus-inspect.${snapshot.revision.slice(0, 16)}.json`,
+            'application/json',
+            `${canonicalJson({
+              schemaVersion: 1,
+              mode: 'continuous',
+              revision: snapshot.revision,
+              continuousFocusPalettes: palettes,
+              presentation: focusPresentationEvidence(presentation),
+              sourceHashes: completeSourceHashes,
+              diagnostics,
+            })}\n`,
+            {
+              kind: 'focus-inspect',
+              toolVersion: PACKAGE_VERSION,
+              schemaVersion: 'focus-inspect.v1',
+              sourceHashes: sourceEvidence.sourceHashes,
+              metadata: { sourceHashInventory: sourceEvidence.inventory },
+            },
+            'Continuous focus plans and diagnostics',
+            progress.signal,
+          );
+          const result = emptyServiceResult(workspaceId, {
+            mode: 'continuous' as const,
+            revision: snapshot.revision,
+            treeCount: 0,
+            paletteCount: palettes.length,
+            trees: [],
+            palettes: palettes.slice(0, 100).map((palette) => ({
+              id: palette.id,
+              sourcePath: palette.provenance.sourcePath,
+              focusCount: palette.focuses.length,
+              diagnosticCount: paletteDiagnosticCounts.get(palette.id) ?? 0,
+            })),
+          });
+          result.code = 'FOCUS_INSPECTED';
+          setInlineFilesScanned(
+            result,
+            [
+              ...new Set([
+                ...selectedFiles.map(({ displayPath }) => displayPath),
+                ...presentation.filesScanned,
+              ]),
+            ].sort((left, right) => compareCodeUnits(left, right)),
+          );
+          result.diagnostics = diagnostics.slice(0, 100);
+          result.artifacts = [publicArtifactLink(artifact)];
+          result.validation = validationFromDiagnostics(diagnostics);
+          await progress.report(3, 3, 'Continuous focus inspection complete');
+          return toolResult(result);
+        }
         const selectedFiles = activeFocusFiles(snapshot, workspace.registration.roots.focus).filter(
           (file) => relativePath === undefined || file.relativePath === relativePath,
         );
@@ -578,15 +669,48 @@ export function registerFocusTools(
           const resolved = activeSidecar(snapshot, file);
           return resolved === undefined ? [] : [resolved.file];
         });
-        const plans: FocusTreePlan[] = [];
+        const importedPlans: FocusTreePlan[] = [];
         const diagnostics = [] as FocusImportResult['diagnostics'];
         const paletteImport = continuousPalettes(snapshot);
         diagnostics.push(...paletteImport.diagnostics);
         for (const file of selectedFiles) {
           progress.signal.throwIfAborted();
           const imported = importFocusFile(snapshot, file, paletteImport.palettes);
-          plans.push(...imported.plans);
+          importedPlans.push(...imported.plans);
           diagnostics.push(...imported.diagnostics);
+        }
+        const plans = importedPlans.filter(
+          ({ id }) => input.treeId === undefined || id === input.treeId,
+        );
+        if (plans.length === 0) {
+          throw new ServiceError(
+            'FOCUS_TREE_NOT_FOUND',
+            input.treeId === undefined
+              ? 'The selected source contains no national focus tree'
+              : `Focus tree was not found: ${input.treeId}`,
+          );
+        }
+        const inspectedPlans: Array<{
+          plan: FocusTreePlan;
+          layout: FocusLayoutResult;
+          diagnosticCount: number;
+        }> = [];
+        for (const plan of plans) {
+          const layout = await workbench.layoutAsync(plan, {
+            ...(input.previous === undefined
+              ? {}
+              : { previous: input.previous as FocusLayoutResult }),
+            ...(input.laneSpacing === undefined ? {} : { laneSpacing: input.laneSpacing }),
+            ...(input.nodeSpacing === undefined ? {} : { nodeSpacing: input.nodeSpacing }),
+            signal: progress.signal,
+          });
+          const lintDiagnostics = workbench.lint(plan, {
+            index: snapshot.index,
+            references: referenceCatalog(snapshot),
+            layout,
+          });
+          diagnostics.push(...lintDiagnostics);
+          inspectedPlans.push({ plan, layout, diagnosticCount: lintDiagnostics.length });
         }
         const presentation = await resolveFocusPresentation({
           plans,
@@ -598,7 +722,7 @@ export function registerFocusTools(
           signal: progress.signal,
         });
         diagnostics.push(...presentation.diagnostics);
-        await progress.report(2, 3, 'Writing imported planning models');
+        await progress.report(2, 3, 'Writing focus plans, diagnostics, and layouts');
         const completeSourceHashes = Object.fromEntries(
           Object.entries({
             ...Object.fromEntries(
@@ -614,31 +738,38 @@ export function registerFocusTools(
         const sourceEvidence = boundedSourceHashEvidence(completeSourceHashes);
         const artifact = await engine.artifacts.putChunked(
           workspace,
-          `focus-scan.${snapshot.revision.slice(0, 16)}.json`,
+          `focus-inspect.${snapshot.revision.slice(0, 16)}.json`,
           'application/json',
           `${canonicalJson({
             schemaVersion: 1,
             revision: snapshot.revision,
             plans,
+            layouts: inspectedPlans.map(({ plan, layout, diagnosticCount }) => ({
+              treeId: plan.id,
+              layout,
+              diagnosticCount,
+            })),
             continuousFocusPalettes: paletteImport.palettes,
             presentation: focusPresentationEvidence(presentation),
             sourceHashes: completeSourceHashes,
             diagnostics,
           })}\n`,
           {
-            kind: 'focus-scan',
+            kind: 'focus-inspect',
             toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'focus-scan.v1',
+            schemaVersion: 'focus-inspect.v1',
             sourceHashes: sourceEvidence.sourceHashes,
             metadata: { sourceHashInventory: sourceEvidence.inventory },
           },
-          'Imported focus planning models and source-linked diagnostics',
+          'Focus plans, diagnostics, and stable layout decisions',
           progress.signal,
         );
         const result = emptyServiceResult(workspaceId, {
+          mode: 'national' as const,
           revision: snapshot.revision,
           treeCount: plans.length,
-          trees: plans.slice(0, 100).map((plan) => ({
+          paletteCount: paletteImport.palettes.length,
+          trees: inspectedPlans.slice(0, 100).map(({ plan, layout, diagnosticCount }) => ({
             id: plan.id,
             sourcePath: plan.provenance.sourcePath,
             focusCount: plan.focuses.length,
@@ -648,9 +779,13 @@ export function registerFocusTools(
             resolvedTitleCount: plan.focuses.filter(
               ({ id }) => presentation.entries[id]?.titleSourceLocation !== undefined,
             ).length,
+            layoutHash: layout.layoutHash,
+            layoutDecisionCount: layout.decisions.length,
+            diagnosticCount,
           })),
+          palettes: [],
         });
-        result.code = 'FOCUS_SCANNED';
+        result.code = 'FOCUS_INSPECTED';
         setInlineFilesScanned(
           result,
           [
@@ -665,189 +800,7 @@ export function registerFocusTools(
         result.diagnostics = diagnostics.slice(0, 100);
         result.artifacts = [publicArtifactLink(artifact)];
         result.validation = validationFromDiagnostics(diagnostics);
-        await progress.report(3, 3, 'Focus scan complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.focus_lint',
-    {
-      title: 'Lint focus source',
-      description:
-        'Lint one national focus tree or continuous focus palette. Omit mode for backward-compatible national behavior.',
-      inputSchema: focusLintInput,
-      outputSchema: focusLintOutputSchema,
-      annotations: artifactProducing,
-    },
-    async (input, extra) => {
-      const { workspaceId, relativePath } = input;
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Importing and indexing focus source');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        if (input.mode === 'continuous') {
-          selectedContinuousFocusFile(snapshot, relativePath);
-          const imported = await workbench.importContinuousPath(
-            workspaceId,
-            relativePath,
-            context.principal,
-          );
-          const plan = selectContinuousPlan(imported.result, input.paletteId);
-          const diagnostics = [...imported.result.diagnostics, ...workbench.lintContinuous(plan)];
-          await progress.report(2, 3, 'Writing continuous focus lint evidence');
-          const artifact = await engine.artifacts.put(
-            workspace,
-            `${plan.id.replace(/[^A-Za-z0-9._-]/gu, '_')}.continuous-focus-lint.json`,
-            'application/json',
-            `${canonicalJson({ schemaVersion: 1, mode: 'continuous', paletteId: plan.id, diagnostics })}\n`,
-            {
-              kind: 'continuous-focus-lint',
-              toolVersion: PACKAGE_VERSION,
-              schemaVersion: 'continuous-focus-lint.v1',
-              sourceHashes: { [plan.provenance.sourcePath]: plan.provenance.sourceHash },
-            },
-            'Complete continuous focus lint report',
-            progress.signal,
-          );
-          const result = emptyServiceResult(workspaceId, {
-            mode: 'continuous' as const,
-            paletteId: plan.id,
-            focusCount: plan.focuses.length,
-            diagnosticCount: diagnostics.length,
-          });
-          result.code = 'CONTINUOUS_FOCUS_LINTED';
-          setInlineFilesScanned(result, [plan.provenance.sourcePath]);
-          result.diagnostics = diagnostics.slice(0, 100);
-          result.artifacts = [publicArtifactLink(artifact)];
-          result.validation = validationFromDiagnostics(diagnostics);
-          await progress.report(3, 3, 'Continuous focus lint complete');
-          return toolResult(result);
-        }
-        const paletteImport = continuousPalettes(snapshot);
-        const imported = importFocusFile(
-          snapshot,
-          selectedFocusFile(snapshot, workspace.registration.roots.focus, relativePath),
-          paletteImport.palettes,
-        );
-        const plan = selectPlan(imported, input.treeId);
-        const layout = await workbench.layoutAsync(plan, { signal: progress.signal });
-        const diagnostics = [
-          ...paletteImport.diagnostics,
-          ...imported.diagnostics,
-          ...workbench.lint(plan, {
-            index: snapshot.index,
-            references: referenceCatalog(snapshot),
-            layout,
-          }),
-        ];
-        await progress.report(2, 3, 'Writing focus lint evidence');
-        const artifact = await engine.artifacts.put(
-          workspace,
-          `${plan.id.replace(/[^A-Za-z0-9._-]/gu, '_')}.focus-lint.json`,
-          'application/json',
-          `${canonicalJson({ schemaVersion: 1, treeId: plan.id, layoutHash: layout.layoutHash, diagnostics })}\n`,
-          {
-            kind: 'focus-lint',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'focus-lint.v1',
-            sourceHashes: { [plan.provenance.sourcePath]: plan.provenance.sourceHash },
-          },
-          'Complete focus lint report',
-          progress.signal,
-        );
-        const result = emptyServiceResult(workspaceId, {
-          mode: 'national' as const,
-          treeId: plan.id,
-          focusCount: plan.focuses.length,
-          layoutHash: layout.layoutHash,
-          diagnosticCount: diagnostics.length,
-        });
-        result.code = 'FOCUS_LINTED';
-        setInlineFilesScanned(result, [plan.provenance.sourcePath]);
-        result.diagnostics = diagnostics.slice(0, 100);
-        result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = validationFromDiagnostics(diagnostics);
-        await progress.report(3, 3, 'Focus lint complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.focus_layout',
-    {
-      title: 'Plan stable focus layout',
-      description:
-        'Create a deterministic constraint layout while preserving pinned, relative, and previous automatic positions. Imported authored coordinates remain fixed; a full existing-tree repair must submit a complete plan whose movable nodes use position.mode "auto".',
-      inputSchema: focusPathInput
-        .extend({
-          previous: focusLayoutSchema.optional(),
-          laneSpacing: z.number().int().min(1).max(100).optional(),
-          nodeSpacing: z.number().int().min(1).max(100).optional(),
-        })
-        .strict(),
-      outputSchema: focusLayoutOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId, relativePath, treeId, previous, laneSpacing, nodeSpacing }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Importing and indexing focus source');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const paletteImport = continuousPalettes(snapshot);
-        const imported = importFocusFile(
-          snapshot,
-          selectedFocusFile(snapshot, workspace.registration.roots.focus, relativePath),
-          paletteImport.palettes,
-        );
-        const plan = selectPlan(imported, treeId);
-        const layout = await workbench.layoutAsync(plan, {
-          ...(previous === undefined ? {} : { previous: previous as FocusLayoutResult }),
-          ...(laneSpacing === undefined ? {} : { laneSpacing }),
-          ...(nodeSpacing === undefined ? {} : { nodeSpacing }),
-          signal: progress.signal,
-        });
-        progress.signal.throwIfAborted();
-        await progress.report(2, 3, 'Writing stable focus layout evidence');
-        const artifact = await engine.artifacts.put(
-          workspace,
-          `${plan.id.replace(/[^A-Za-z0-9._-]/gu, '_')}.focus-layout.json`,
-          'application/json',
-          `${canonicalJson(layout)}\n`,
-          {
-            kind: 'focus-layout',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'focus-layout.v1',
-            sourceHashes: { [plan.provenance.sourcePath]: plan.provenance.sourceHash },
-          },
-          'Stable focus layout decisions and diagnostics',
-          progress.signal,
-        );
-        const diagnostics = [
-          ...paletteImport.diagnostics,
-          ...imported.diagnostics,
-          ...layout.diagnostics,
-        ];
-        const result = emptyServiceResult(workspaceId, {
-          treeId: plan.id,
-          layoutHash: layout.layoutHash,
-          nodeCount: layout.nodes.length,
-          decisions: layout.decisions.slice(0, 100),
-        });
-        result.code = 'FOCUS_LAYOUT_PLANNED';
-        setInlineFilesScanned(result, [plan.provenance.sourcePath]);
-        result.diagnostics = diagnostics.slice(0, 100);
-        result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = validationFromDiagnostics(diagnostics);
-        await progress.report(3, 3, 'Focus layout complete');
+        await progress.report(3, 3, 'Focus inspection complete');
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
@@ -860,7 +813,7 @@ export function registerFocusTools(
     {
       title: 'Render focus review artifacts',
       description:
-        'Generate deterministic HTML, SVG, genuine PNG, JSON, and source-map artifacts for a national tree or continuous palette. Omit mode for national behavior. National renders accept a uniform reviewScale from 0.25 through 1.0 so very large trees can fit bounded artifacts without changing logical node geometry or source coordinates.',
+        'Render a national tree or continuous palette for creation and cleanup review as deterministic HTML, SVG, PNG, JSON, and source-map artifacts. Omit mode for national behavior. National trees with at least 200 focuses use reviewScale 0.5 by default; set 0.25 through 1.0 explicitly when needed.',
       inputSchema: focusRenderInput,
       outputSchema: focusRenderOutputSchema,
       annotations: artifactProducing,
@@ -945,6 +898,8 @@ export function registerFocusTools(
           signal: progress.signal,
         });
         await progress.report(1, 3, 'Rendering focus artifacts');
+        const effectiveReviewScale =
+          input.reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
         const rendered = await workbench.renderAndStore(workspaceId, plan, {
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           index: snapshot.index,
@@ -958,10 +913,10 @@ export function registerFocusTools(
             ? {}
             : { verticalSpacing: input.verticalSpacing }),
           ...(input.padding === undefined ? {} : { padding: input.padding }),
-          ...(input.reviewScale === undefined ? {} : { outputScale: input.reviewScale }),
+          outputScale: effectiveReviewScale,
           renderProfile: {
             sourceRevision: snapshot.revision,
-            ...(input.reviewScale === undefined ? {} : { reviewScale: input.reviewScale }),
+            reviewScale: effectiveReviewScale,
           },
           budget: renderBudget,
           signal: progress.signal,
@@ -998,19 +953,16 @@ export function registerFocusTools(
   );
 
   server.registerTool(
-    autonomous ? 'hoi4.focus_rewrite' : 'hoi4.focus_plan_changes',
+    'hoi4.focus_rewrite',
     {
-      title: autonomous ? 'Rewrite focus source' : 'Dry-run focus source changes',
-      description: `${
-        autonomous
-          ? 'Compile, validate, journal, and immediately apply a national tree or continuous palette plan in one call. No transaction approval or follow-up apply call is required.'
-          : 'Compile a validated national tree or continuous palette plan into source and create a hash-bound reviewed transaction; it does not apply the transaction.'
-      } Omit mode for national behavior. National plans accept the same bounded horizontalSpacing, verticalSpacing, and padding controls as focus_render plus a uniform reviewScale that preserves logical SVG geometry while reducing both before/proposed raster outputs. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.`,
+      title: 'Create or clean up focus content',
+      description:
+        'Create or clean up a national tree or continuous palette from a complete plan, validate the result, apply it in one call, and return before-and-after review artifacts. Omit mode for national behavior. National plans accept bounded horizontalSpacing, verticalSpacing, padding, and reviewScale controls. Set createIfMissing for a new file.',
       inputSchema: focusPlanInput,
       outputSchema: focusPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: autonomous,
+        destructiveHint: true,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -1019,7 +971,6 @@ export function registerFocusTools(
       const {
         workspaceId,
         relativePath,
-        authority,
         createIfMissing,
         horizontalSpacing,
         verticalSpacing,
@@ -1029,7 +980,7 @@ export function registerFocusTools(
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
-        await progress.report(0, 5, 'Validating shared index and source authority');
+        await progress.report(0, 5, 'Validating shared index and current source');
         const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
         const workspace = engine.resolver.get(workspaceId, context.principal);
         if (input.mode === 'continuous') {
@@ -1071,11 +1022,6 @@ export function registerFocusTools(
               'CONTINUOUS_FOCUS_CREATE_REQUIRES_NEW_SOURCE',
               'Creating a continuous-focus palette requires a new mod source file so unrelated existing source is never repurposed',
               { relativePath, paletteId: plan.id },
-            );
-          if (currentPlan !== undefined && imported !== undefined)
-            assertFocusPlanAuthority(
-              detectContinuousFocusDrift(plan, imported.document),
-              authority,
             );
           const renderBudget = new RenderBudget();
           const presentation = await resolveFocusPresentation({
@@ -1172,25 +1118,19 @@ export function registerFocusTools(
             ...proposed.artifacts.map(publicArtifactLink),
             ...comparisonArtifacts.map(publicArtifactLink),
           ];
-          await progress.report(3, 5, 'Creating hash-bound continuous focus transaction');
+          await progress.report(3, 5, 'Preparing the continuous focus rewrite');
           const planned = await workbench.planContinuousChanges({
             workspaceId,
             relativePath,
             plan,
             createIfMissing,
-            ...(authority === undefined ? {} : { authority }),
+            authority: 'plan',
             ...(context.principal === undefined ? {} : { principal: context.principal }),
             artifacts: reviewArtifacts,
             readDependencies: readDependenciesFromScannedFiles(snapshot.files),
             signal: progress.signal,
           });
-          await progress.report(
-            4,
-            5,
-            autonomous
-              ? 'Applying and post-validating continuous focus rewrite'
-              : 'Finalizing reviewed transaction',
-          );
+          await progress.report(4, 5, 'Applying and validating the continuous focus rewrite');
           const execution = await executePlannedTransaction(
             engine,
             planned.transaction,
@@ -1204,9 +1144,8 @@ export function registerFocusTools(
             drift: compactDrift(planned.drift),
             created: planned.drift.status === 'target_missing',
             execution: execution.outcome,
-            expiresAt: transaction.expiresAt,
-            transactionFileCount: transaction.files.length,
-            transactionArtifactCount: transaction.artifacts.length,
+            fileCount: transaction.files.length,
+            artifactCount: transaction.artifacts.length,
           });
           result.status = transaction.validation.passed ? 'ok' : 'blocked';
           result.code =
@@ -1214,9 +1153,7 @@ export function registerFocusTools(
               ? 'CONTINUOUS_FOCUS_CHANGES_APPLIED'
               : execution.outcome === 'unchanged'
                 ? 'CONTINUOUS_FOCUS_CHANGES_UNCHANGED'
-                : transaction.validation.passed
-                  ? 'CONTINUOUS_FOCUS_CHANGES_PLANNED'
-                  : 'CONTINUOUS_FOCUS_CHANGES_BLOCKED';
+                : 'CONTINUOUS_FOCUS_CHANGES_BLOCKED';
           setInlineFilesScanned(
             result,
             [
@@ -1231,14 +1168,7 @@ export function registerFocusTools(
             .map(({ relativePath: file }) => file);
           result.changedFiles = transaction.appliedFiles.slice(0, 100);
           result.diagnostics = transaction.diagnostics.slice(0, 100);
-          if (autonomous) {
-            result.artifacts = transaction.artifacts;
-          } else {
-            result.transactionId = transaction.transactionId;
-            result.planHash = transaction.planHash;
-            result.artifacts = [transactionResourceLink(transaction)];
-            result.rollbackStatus = transaction.rollbackStatus;
-          }
+          result.artifacts = autonomousResultArtifacts(execution);
           result.validation = transaction.validation;
           result.blockers = transaction.diagnostics
             .filter(({ severity }) => severity === 'error' || severity === 'blocker')
@@ -1253,8 +1183,8 @@ export function registerFocusTools(
             execution.outcome === 'applied'
               ? 'Continuous focus rewrite complete'
               : execution.outcome === 'unchanged'
-                ? 'Continuous focus source already satisfied the plan'
-                : 'Continuous focus transaction planned',
+                ? 'Continuous focus content already satisfied the plan'
+                : 'Continuous focus rewrite blocked',
           );
           return toolResult(result);
         }
@@ -1309,20 +1239,19 @@ export function registerFocusTools(
             'Creating a national focus tree requires a new mod source file so an existing source and its planning sidecar cannot be repurposed',
             { relativePath, treeId: plan.id },
           );
-        if (currentPlan !== undefined && imported !== undefined)
-          assertFocusPlanAuthority(detectFocusDrift(plan, imported.document, catalog), authority);
         const renderBudget = new RenderBudget();
+        const effectiveReviewScale = reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
         const reviewRenderOptions = {
           ...(horizontalSpacing === undefined ? {} : { horizontalSpacing }),
           ...(verticalSpacing === undefined ? {} : { verticalSpacing }),
           ...(padding === undefined ? {} : { padding }),
-          ...(reviewScale === undefined ? {} : { outputScale: reviewScale }),
+          outputScale: effectiveReviewScale,
         };
         const reviewRenderProfile = {
           ...(horizontalSpacing === undefined ? {} : { horizontalSpacing }),
           ...(verticalSpacing === undefined ? {} : { verticalSpacing }),
           ...(padding === undefined ? {} : { padding }),
-          ...(reviewScale === undefined ? {} : { reviewScale }),
+          reviewScale: effectiveReviewScale,
         };
         const presentation = await resolveFocusPresentation({
           plans: [...(currentPlan === undefined ? [] : [currentPlan]), plan],
@@ -1440,13 +1369,13 @@ export function registerFocusTools(
           ...proposed.artifacts.map(publicArtifactLink),
           ...comparisonArtifacts.map(publicArtifactLink),
         ];
-        await progress.report(3, 5, 'Creating hash-bound focus transaction');
+        await progress.report(3, 5, 'Preparing the focus-tree rewrite');
         const planned = await workbench.planChanges({
           workspaceId,
           relativePath,
           plan,
           createIfMissing,
-          ...(authority === undefined ? {} : { authority }),
+          authority: 'plan',
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           index: snapshot.index,
           references: catalog,
@@ -1454,13 +1383,7 @@ export function registerFocusTools(
           readDependencies: readDependenciesFromScannedFiles(snapshot.files),
           signal: progress.signal,
         });
-        await progress.report(
-          4,
-          5,
-          autonomous
-            ? 'Applying and post-validating focus rewrite'
-            : 'Finalizing reviewed transaction',
-        );
+        await progress.report(4, 5, 'Applying and validating the focus-tree rewrite');
         const execution = await executePlannedTransaction(
           engine,
           planned.transaction,
@@ -1475,9 +1398,8 @@ export function registerFocusTools(
           created: planned.drift.status === 'target_missing',
           execution: execution.outcome,
           layoutHash: planned.layout.layoutHash,
-          expiresAt: transaction.expiresAt,
-          transactionFileCount: transaction.files.length,
-          transactionArtifactCount: transaction.artifacts.length,
+          fileCount: transaction.files.length,
+          artifactCount: transaction.artifacts.length,
         });
         result.status = transaction.validation.passed ? 'ok' : 'blocked';
         result.code =
@@ -1485,9 +1407,7 @@ export function registerFocusTools(
             ? 'FOCUS_CHANGES_APPLIED'
             : execution.outcome === 'unchanged'
               ? 'FOCUS_CHANGES_UNCHANGED'
-              : transaction.validation.passed
-                ? 'FOCUS_CHANGES_PLANNED'
-                : 'FOCUS_CHANGES_BLOCKED';
+              : 'FOCUS_CHANGES_BLOCKED';
         setInlineFilesScanned(
           result,
           [
@@ -1502,14 +1422,7 @@ export function registerFocusTools(
           .map(({ relativePath: file }) => file);
         result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        if (autonomous) {
-          result.artifacts = autonomousResultArtifacts(execution);
-        } else {
-          result.transactionId = transaction.transactionId;
-          result.planHash = transaction.planHash;
-          result.artifacts = [transactionResourceLink(transaction)];
-          result.rollbackStatus = transaction.rollbackStatus;
-        }
+        result.artifacts = autonomousResultArtifacts(execution);
         result.validation = transaction.validation;
         result.blockers = transaction.diagnostics
           .filter(({ severity }) => severity === 'error' || severity === 'blocker')
@@ -1524,8 +1437,8 @@ export function registerFocusTools(
           execution.outcome === 'applied'
             ? 'Focus rewrite complete'
             : execution.outcome === 'unchanged'
-              ? 'Focus source already satisfied the plan'
-              : 'Focus transaction planned',
+              ? 'Focus content already satisfied the plan'
+              : 'Focus rewrite blocked',
         );
         return toolResult(result);
       } catch (error) {

@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 describe('MCP partial shared-index inventory', () => {
-  it('returns an ok partial project scan and a bounded completeness resource', async () => {
+  it('keeps focus and GUI inspection useful when one indexed source hits a parser limit', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-mcp-partial-index-'));
     const mod = path.join(temporary, 'mod');
     const artifactRoot = path.join(temporary, 'artifacts');
@@ -40,6 +40,7 @@ describe('MCP partial shared-index inventory', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(temporary, 'server-state'),
       storageRoots: [artifactRoot, cacheRoot],
       workspaces: [
         {
@@ -64,104 +65,53 @@ describe('MCP partial shared-index inventory', () => {
       async () => rm(temporary, { recursive: true, force: true }),
     );
 
-    const response = await client.callTool({
-      name: 'hoi4.project_scan',
-      arguments: { workspaceId: 'partial' },
+    const focusResponse = await client.callTool({
+      name: 'hoi4.focus_inspect',
+      arguments: {
+        workspaceId: 'partial',
+        relativePath: 'common/national_focus/partial.txt',
+        treeId: 'partial_tree',
+      },
     });
-    const result = response.structuredContent as {
+    const focusResult = focusResponse.structuredContent as {
       status: string;
       code: string;
       diagnostics: Array<{ code: string; severity: string }>;
       artifacts: Array<{ uri: string }>;
       validation: { passed: boolean };
-      data: {
-        complete: boolean;
-        skippedSourceCount: number;
-        skippedSources: Array<{ path: string; reasonCodes: string[] }>;
-      };
+      data: { treeCount: number };
     };
-    expect(result).toMatchObject({
+    expect(focusResult).toMatchObject({
       status: 'ok',
-      code: 'WORKSPACE_SCANNED_PARTIAL',
+      code: 'FOCUS_INSPECTED',
       validation: { passed: true },
-      data: {
-        complete: false,
-        skippedSourceCount: 1,
-        skippedSources: [
-          {
-            path: 'mod:interface/partial.gfx',
-            reasonCodes: ['SOURCE_TOKEN_LIMIT'],
-          },
-        ],
-      },
+      data: { treeCount: 1 },
     });
-    expect(result.diagnostics).toEqual(
+    expect(focusResult.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'INDEX_SOURCE_SKIPPED_LIMIT', severity: 'warning' }),
+        expect.objectContaining({ code: 'FOCUS_ICON_REFERENCE_PARTIAL', severity: 'warning' }),
         expect.objectContaining({
-          code: 'INDEX_UNRESOLVED_REFERENCE_PARTIAL',
+          code: 'FOCUS_LOCALISATION_REFERENCE_MISSING',
           severity: 'warning',
         }),
       ]),
     );
-    expect(result.diagnostics.some(({ severity }) => severity === 'error')).toBe(false);
-    expect(result.artifacts).toHaveLength(1);
+    expect(
+      focusResult.diagnostics.some(({ code }) => code === 'FOCUS_ICON_REFERENCE_MISSING'),
+    ).toBe(false);
+    expect(focusResult.artifacts).toHaveLength(1);
 
-    const resource = await client.readResource({ uri: result.artifacts[0]!.uri });
-    const content = resource.contents[0];
-    expect(content).toHaveProperty('text');
-    if (content === undefined || !('text' in content)) throw new Error('Expected JSON artifact');
-    const inventory = JSON.parse(content.text) as Record<string, unknown>;
-    expect(inventory).toMatchObject({
-      complete: false,
-      skippedSourceCount: 1,
-      skippedSources: [{ path: 'mod:interface/partial.gfx', reasonCodes: ['SOURCE_TOKEN_LIMIT'] }],
+    const focusResource = await client.readResource({ uri: focusResult.artifacts[0]!.uri });
+    const focusContent = focusResource.contents[0];
+    if (focusContent === undefined || !('text' in focusContent))
+      throw new Error('Expected focus inspection JSON');
+    const focusInspection = JSON.parse(focusContent.text) as Record<string, unknown>;
+    expect(focusInspection).toMatchObject({
+      plans: [expect.objectContaining({ id: 'partial_tree' })],
     });
 
-    for (const [tool, expectedCode] of [
-      ['hoi4.focus_scan', 'FOCUS_SCANNED'],
-      ['hoi4.focus_lint', 'FOCUS_LINTED'],
-    ] as const) {
-      const focusResponse = await client.callTool({
-        name: tool,
-        arguments: {
-          workspaceId: 'partial',
-          relativePath: 'common/national_focus/partial.txt',
-          ...(tool === 'hoi4.focus_lint' ? { treeId: 'partial_tree' } : {}),
-        },
-      });
-      const focusResult = focusResponse.structuredContent as {
-        code: string;
-        diagnostics: Array<{ code: string; severity: string }>;
-        validation: { passed: boolean };
-      };
-      expect(focusResult).toMatchObject({ code: expectedCode, validation: { passed: true } });
-      expect(focusResult.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'FOCUS_ICON_REFERENCE_PARTIAL',
-            severity: 'warning',
-          }),
-        ]),
-      );
-      expect(
-        focusResult.diagnostics.some(({ code }) => code === 'FOCUS_ICON_REFERENCE_MISSING'),
-      ).toBe(false);
-      expect(focusResult.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'FOCUS_LOCALISATION_REFERENCE_MISSING',
-            severity: 'warning',
-          }),
-        ]),
-      );
-      expect(
-        focusResult.diagnostics.some(({ code }) => code === 'FOCUS_LOCALISATION_REFERENCE_PARTIAL'),
-      ).toBe(false);
-    }
-
     const guiResponse = await client.callTool({
-      name: 'hoi4.gui_scan',
+      name: 'hoi4.gui_inspect',
       arguments: { workspaceId: 'partial' },
     });
     const guiResult = guiResponse.structuredContent as {
@@ -178,7 +128,7 @@ describe('MCP partial shared-index inventory', () => {
     };
     expect(guiResult).toMatchObject({
       status: 'ok',
-      code: 'GUI_SCANNED_PARTIAL',
+      code: 'GUI_INSPECTED_PARTIAL',
       validation: { passed: true },
       data: {
         complete: false,
@@ -229,6 +179,7 @@ describe('MCP partial shared-index inventory', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      serverStateRoot: path.join(temporary, 'server-state'),
       storageRoots: [artifactRoot, cacheRoot],
       workspaces: [
         {
@@ -254,7 +205,7 @@ describe('MCP partial shared-index inventory', () => {
     );
 
     const response = await client.callTool({
-      name: 'hoi4.map_scan',
+      name: 'hoi4.map_inspect',
       arguments: { workspaceId: 'blocked-map-selector' },
     });
     const result = response.structuredContent as {

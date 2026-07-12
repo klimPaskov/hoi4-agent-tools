@@ -3,10 +3,6 @@ import path from 'node:path';
 import process from 'node:process';
 import Ajv from 'ajv/dist/ajv.js';
 import addFormats from 'ajv-formats/dist/index.js';
-import {
-  MCP_REGISTRY_IDENTITY,
-  MCP_REGISTRY_SCHEMA_URL,
-} from '../src/hoi4_agent_tools/mcp/registry/metadata.js';
 
 type Validator = ((value: unknown) => boolean) & { errors?: unknown };
 interface AjvLike {
@@ -32,9 +28,6 @@ if (typeof serverName !== 'string') throw new Error('server.json must contain a 
 if (!schemaUrl.startsWith('https://static.modelcontextprotocol.io/schemas/')) {
   throw new Error('server.json must reference a pinned official MCP Registry schema');
 }
-if (schemaUrl !== MCP_REGISTRY_SCHEMA_URL) {
-  throw new Error('server.json and the compiled Registry schema baseline differ');
-}
 const response = await fetch(schemaUrl);
 if (!response.ok) throw new Error(`Unable to fetch Registry schema: ${response.status}`);
 const schema = (await response.json()) as object;
@@ -47,9 +40,8 @@ if (!validate(server))
 
 const version = String(packageJson.version);
 if (
-  packageJson.name !== MCP_REGISTRY_IDENTITY.packageName ||
-  version !== MCP_REGISTRY_IDENTITY.version ||
-  serverName !== MCP_REGISTRY_IDENTITY.name
+  packageJson.name !== 'hoi4-agent-tools' ||
+  serverName !== 'io.github.klimPaskov/hoi4-agent-tools'
 ) {
   throw new Error('Registry source identity differs from package.json or server.json');
 }

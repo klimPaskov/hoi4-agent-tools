@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
-import { canonicalJson } from '../../core/canonical.js';
+import { canonicalJson, compareCodeUnits } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
 import {
   renderDimensionViolation,
@@ -9,26 +9,22 @@ import {
   RENDER_MAX_DIMENSION,
 } from '../../core/render-budget.js';
 import { emptyServiceResult, ServiceError } from '../../core/result.js';
+import { SOURCE_MAX_BYTES } from '../../core/source/index.js';
 import {
   GuiHelperDocumentSchema,
   GuiPreviewScenarioSchema,
+  GUI_TEXT_PACKAGE_MAX_FILES,
   ScriptedGuiStudio,
   compileGuiHelpers,
-  guiArtifactProvenance,
   type GuiPreviewState,
   type GuiValidationResult,
 } from '../../gui/index.js';
 import { workspaceIdSchema, workspaceRelativePathSchema } from '../../schemas/common.js';
 import { PACKAGE_VERSION } from '../../version.js';
-import {
-  requireServerScope,
-  transactionResourceLink,
-  type ServerContext,
-} from '../server/base-tools.js';
+import { requireServerScope, type ServerContext } from '../server/base-tools.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
-  autonomousWrites,
   executePlannedTransaction,
 } from '../server/transaction-execution.js';
 import {
@@ -58,17 +54,10 @@ const guiScanOutputSchema = strictOperationResultSchema(
       sprites: nonNegativeIntegerSchema,
       fonts: nonNegativeIntegerSchema,
       scriptedGuis: nonNegativeIntegerSchema,
-    })
-    .strict(),
-);
-const guiLintOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      windowName: z.string().max(256),
-      scenarioId: z.string().max(256),
-      sourceRevision: sha256Schema,
-      elementCount: nonNegativeIntegerSchema,
-      fidelityCounts: countRecordSchema,
+      windowName: z.string().max(256).optional(),
+      scenarioId: z.string().max(256).optional(),
+      inspectedElementCount: nonNegativeIntegerSchema.optional(),
+      fidelityCounts: countRecordSchema.optional(),
     })
     .strict(),
 );
@@ -100,29 +89,16 @@ const guiRenderOutputSchema = strictOperationResultSchema(
     })
     .strict(),
 );
-const guiCompareOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      windowName: z.string().max(256),
-      beforeScenario: z.string().max(256),
-      afterScenario: z.string().max(256),
-      changedPixels: nonNegativeIntegerSchema,
-      changedRatio: z.number().min(0).max(1),
-      offlineRepresentation: z.literal(true),
-    })
-    .strict(),
-);
 export const guiPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
       mode: z.enum(['source', 'helpers', 'patches']),
-      execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
-      expiresAt: z.iso.datetime(),
+      execution: z.enum(['applied', 'blocked', 'unchanged']),
       nodeCount: nonNegativeIntegerSchema.optional(),
       templateInstanceCount: nonNegativeIntegerSchema.optional(),
       rawEscapeCount: nonNegativeIntegerSchema.optional(),
-      transactionFileCount: nonNegativeIntegerSchema,
-      transactionArtifactCount: nonNegativeIntegerSchema,
+      fileCount: nonNegativeIntegerSchema,
+      artifactCount: nonNegativeIntegerSchema,
     })
     .strict(),
 );
@@ -159,6 +135,30 @@ const guiBaseInput = z
   })
   .strict();
 
+const guiInspectInput = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    windowName: z.string().min(1).max(256).optional(),
+    scenario: GuiPreviewScenarioSchema.optional(),
+    relatedScenarios: z.array(GuiPreviewScenarioSchema).max(32).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.windowName === undefined) !== (value.scenario === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'windowName and scenario must be provided together',
+      });
+    }
+    if (value.relatedScenarios !== undefined && value.scenario === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['relatedScenarios'],
+        message: 'relatedScenarios requires a window scenario',
+      });
+    }
+  });
+
 const resolutionSchema = z
   .object({
     width: z.number().int().min(320).max(RENDER_MAX_DIMENSION),
@@ -187,185 +187,133 @@ function validationSummary(validation: GuiValidationResult): {
   };
 }
 
-function safeSlug(value: string): string {
-  return (
-    value
-      .replace(/[^A-Za-z0-9._-]+/gu, '-')
-      .replace(/^-+|-+$/gu, '')
-      .slice(0, 48) || 'gui'
-  );
-}
-
 export function registerGuiTools(
   server: McpServer,
   engine: CoreEngine,
   context: ServerContext,
 ): void {
-  const autonomous = autonomousWrites(engine);
   const studio = new ScriptedGuiStudio(engine);
 
   server.registerTool(
-    'hoi4.gui_scan',
+    'hoi4.gui_inspect',
     {
-      title: 'Scan scripted GUI graph',
+      title: 'Inspect scripted GUI',
       description:
-        'Connect active GUI, GFX, scripted GUI, localisation, sprites, fonts, contexts, triggers, effects, decisions, and animation sources.',
-      inputSchema: z.object({ workspaceId: workspaceIdSchema }).strict(),
+        'Inspect GUI, GFX, scripted logic, localisation, sprites, fonts, interactions, and animation sources for creation and cleanup. Provide a window scenario to include visual, state, click, AI, and cost diagnostics.',
+      inputSchema: guiInspectInput,
       outputSchema: guiScanOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Building shared index and GUI source graph');
-        const [shared, scanned] = await Promise.all([
-          engine.scan(workspaceId, {}, context.principal, progress.signal),
-          studio.scan(workspaceId, context.principal, progress.signal),
-        ]);
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const sourceEvidence = boundedSourceHashEvidence(scanned.graph.sourceHashes);
-        const artifact = await engine.artifacts.putChunked(
-          workspace,
-          `gui-source-graph.${shared.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({
-            schemaVersion: 1,
-            sharedRevision: shared.revision,
-            offline: true,
-            graph: scanned.graph,
-          })}\n`,
-          {
-            kind: 'gui-source-graph',
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'gui-source-graph.v1',
-            sourceHashes: sourceEvidence.sourceHashes,
-            metadata: {
-              sharedRevision: shared.revision,
-              offline: true,
-              complete: scanned.graph.complete,
-              skippedSourceCount: scanned.graph.skippedSourceCount,
-              sourceHashInventory: sourceEvidence.inventory,
-            },
-          },
-          'Offline scripted-GUI source graph with bounded inventory completeness metadata',
-          progress.signal,
-        );
-        const diagnostics = [...shared.diagnostics, ...scanned.graph.diagnostics];
-        const result = emptyServiceResult(workspaceId, {
-          sharedRevision: shared.revision,
-          complete: scanned.graph.complete,
-          skippedSourceCount: scanned.graph.skippedSourceCount,
-          skippedSources: scanned.graph.skippedSources,
-          nodes: scanned.graph.nodes.length,
-          edges: scanned.graph.edges.length,
-          elements: scanned.graph.elements.length,
-          sprites: scanned.graph.sprites.length,
-          fonts: scanned.graph.fonts.length,
-          scriptedGuis: scanned.graph.scriptedGuis.length,
-        });
-        result.code = scanned.graph.complete ? 'GUI_SCANNED' : 'GUI_SCANNED_PARTIAL';
-        setInlineFilesScanned(result, scanned.graph.filesScanned);
-        result.diagnostics = diagnostics.slice(0, 100);
-        result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = {
-          passed: !diagnostics.some(
-            ({ severity }) => severity === 'error' || severity === 'blocker',
-          ),
-          checks: [
-            {
-              id: 'gui-source-graph',
-              passed: true,
-              message: scanned.graph.complete
-                ? `${scanned.graph.nodes.length} GUI graph nodes connected from a complete inventory`
-                : `${scanned.graph.nodes.length} GUI graph nodes connected; ${scanned.graph.skippedSourceCount} over-limit source(s) were skipped`,
-            },
-          ],
-        };
-        await progress.report(3, 3, 'GUI scan complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.gui_lint',
-    {
-      title: 'Lint scripted GUI scene',
-      description:
-        'Validate source references, visual bounds, text, clicks, animation, states, resolutions, AI, and costs for an offline preview scenario.',
-      inputSchema: guiBaseInput
-        .extend({ relatedScenarios: z.array(GuiPreviewScenarioSchema).max(32).optional() })
-        .strict(),
-      outputSchema: guiLintOutputSchema,
       annotations: artifactProducing,
     },
     async ({ workspaceId, windowName, scenario, relatedScenarios }, extra) => {
       try {
         const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Building shared index and GUI scene');
-        const [shared, linted] = await Promise.all([
+        await progress.report(0, 3, 'Building shared index and GUI inspection');
+        const inspection =
+          windowName === undefined || scenario === undefined
+            ? studio
+                .scan(workspaceId, context.principal, progress.signal)
+                .then(({ graph }) => ({ graph, linted: undefined }))
+            : studio
+                .lint({
+                  workspaceId,
+                  windowName,
+                  scenario,
+                  ...(relatedScenarios === undefined ? {} : { relatedScenarios }),
+                  ...(context.principal === undefined ? {} : { principal: context.principal }),
+                  signal: progress.signal,
+                })
+                .then((linted) => ({ graph: linted.graph, linted }));
+        const [shared, inspected] = await Promise.all([
           engine.scan(workspaceId, {}, context.principal, progress.signal),
-          studio.lint({
-            workspaceId,
-            windowName,
-            scenario,
-            ...(relatedScenarios === undefined ? {} : { relatedScenarios }),
-            ...(context.principal === undefined ? {} : { principal: context.principal }),
-            signal: progress.signal,
-          }),
+          inspection,
         ]);
+        const { graph, linted } = inspected;
         const workspace = engine.resolver.get(workspaceId, context.principal);
-        const sourceEvidence = boundedSourceHashEvidence(linted.graph.sourceHashes);
-        const artifact = await engine.artifacts.put(
+        const sourceEvidence = boundedSourceHashEvidence(graph.sourceHashes);
+        const artifact = await engine.artifacts.putChunked(
           workspace,
-          `${safeSlug(windowName)}-gui-lint.json`,
+          `gui-inspect.${shared.revision.slice(0, 16)}.json`,
           'application/json',
           `${canonicalJson({
             schemaVersion: 1,
+            sharedRevision: shared.revision,
             offline: true,
-            scenario: linted.scene.scenario,
-            fidelity: linted.scene.fidelity,
-            validation: linted.validation,
+            graph,
+            ...(linted === undefined
+              ? {}
+              : {
+                  scenario: linted.scene.scenario,
+                  fidelity: linted.scene.fidelity,
+                  validation: linted.validation,
+                }),
           })}\n`,
           {
-            kind: 'gui-lint',
+            kind: 'gui-inspect',
             toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'gui-lint.v1',
+            schemaVersion: 'gui-inspect.v1',
             sourceHashes: sourceEvidence.sourceHashes,
-            renderProfile: {
-              offline: true,
-              resolution: linted.scene.resolution,
-              state: linted.scene.scenario.state,
-            },
             metadata: {
               sharedRevision: shared.revision,
+              offline: true,
+              complete: graph.complete,
+              skippedSourceCount: graph.skippedSourceCount,
               sourceHashInventory: sourceEvidence.inventory,
             },
           },
-          'Complete scripted-GUI lint and fidelity report',
+          'Scripted GUI graph, diagnostics, and optional scenario fidelity inspection',
           progress.signal,
         );
-        const diagnostics = [...shared.diagnostics, ...linted.validation.diagnostics];
+        const diagnostics = [
+          ...shared.diagnostics,
+          ...(linted === undefined ? graph.diagnostics : linted.validation.diagnostics),
+        ];
         const result = emptyServiceResult(workspaceId, {
-          windowName,
-          scenarioId: linted.scene.scenario.id,
-          sourceRevision: linted.scene.sourceRevision,
-          elementCount: linted.scene.elements.length,
-          fidelityCounts: Object.fromEntries(
-            Object.entries(linted.scene.fidelity).map(([key, values]) => [key, values.length]),
-          ),
+          sharedRevision: shared.revision,
+          complete: graph.complete,
+          skippedSourceCount: graph.skippedSourceCount,
+          skippedSources: graph.skippedSources,
+          nodes: graph.nodes.length,
+          edges: graph.edges.length,
+          elements: graph.elements.length,
+          sprites: graph.sprites.length,
+          fonts: graph.fonts.length,
+          scriptedGuis: graph.scriptedGuis.length,
+          ...(linted === undefined
+            ? {}
+            : {
+                windowName,
+                scenarioId: linted.scene.scenario.id,
+                inspectedElementCount: linted.scene.elements.length,
+                fidelityCounts: Object.fromEntries(
+                  Object.entries(linted.scene.fidelity).map(([key, values]) => [
+                    key,
+                    values.length,
+                  ]),
+                ),
+              }),
         });
-        result.code = 'GUI_LINTED';
-        setInlineFilesScanned(result, linted.graph.filesScanned);
+        result.code = graph.complete ? 'GUI_INSPECTED' : 'GUI_INSPECTED_PARTIAL';
+        setInlineFilesScanned(result, graph.filesScanned);
         result.diagnostics = diagnostics.slice(0, 100);
         result.artifacts = [publicArtifactLink(artifact)];
-        result.validation = validationSummary({
-          diagnostics,
-          checks: linted.validation.checks,
-        });
-        await progress.report(3, 3, 'GUI lint complete');
+        result.validation =
+          linted === undefined
+            ? {
+                passed: !diagnostics.some(
+                  ({ severity }) => severity === 'error' || severity === 'blocker',
+                ),
+                checks: [
+                  {
+                    id: 'gui-inspection',
+                    passed: true,
+                    message: graph.complete
+                      ? `${graph.nodes.length} GUI graph nodes connected from a complete inventory`
+                      : `${graph.nodes.length} GUI graph nodes connected; ${graph.skippedSourceCount} over-limit source(s) were skipped`,
+                  },
+                ],
+              }
+            : validationSummary({ diagnostics, checks: linted.validation.checks });
+        await progress.report(3, 3, 'GUI inspection complete');
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
@@ -503,7 +451,7 @@ export function registerGuiTools(
     {
       title: 'Render scripted GUI artifacts',
       description:
-        'Render deterministic full, cropped, annotated, click, source-map, hierarchy, state, resolution, comparison, and fidelity artifacts offline.',
+        'Render deterministic full, cropped, annotated, click, hierarchy, state, resolution, comparison, and fidelity artifacts for GUI creation and cleanup review.',
       inputSchema: renderInput,
       outputSchema: guiRenderOutputSchema,
       annotations: artifactProducing,
@@ -512,112 +460,11 @@ export function registerGuiTools(
   );
 
   server.registerTool(
-    'hoi4.gui_render_states',
+    'hoi4.gui_rewrite',
     {
-      title: 'Render scripted GUI state matrix',
+      title: 'Create or clean up scripted GUI',
       description:
-        'Render a bounded deterministic matrix of GUI states and resolution/UI-scale scenarios with fidelity reports.',
-      inputSchema: renderInput,
-      outputSchema: guiRenderOutputSchema,
-      annotations: artifactProducing,
-    },
-    (input, extra) => render(input, extra, 'GUI_STATES_RENDERED'),
-  );
-
-  server.registerTool(
-    'hoi4.gui_compare',
-    {
-      title: 'Compare GUI scenarios',
-      description:
-        'Render two offline scenarios and return a deterministic bitmap diff as content-addressed resources.',
-      inputSchema: z
-        .object({
-          workspaceId: workspaceIdSchema,
-          windowName: z.string().min(1).max(256),
-          before: GuiPreviewScenarioSchema,
-          after: GuiPreviewScenarioSchema,
-        })
-        .strict(),
-      outputSchema: guiCompareOutputSchema,
-      annotations: artifactProducing,
-    },
-    async ({ workspaceId, windowName, before, after }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 4, 'Scanning and rendering both GUI scenarios');
-        const compared = await studio.compare({
-          workspaceId,
-          windowName,
-          before,
-          after,
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          signal: progress.signal,
-        });
-        await progress.report(2, 4, 'Bitmap comparison and fidelity evidence complete');
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const slug = safeSlug(windowName);
-        const provenance = guiArtifactProvenance(
-          compared.graph,
-          'gui-scenario-comparison',
-          compared.before,
-          [compared.before, compared.after],
-          {
-            comparison: {
-              changedPixels: compared.comparison.changedPixels,
-              changedRatio: compared.comparison.changedRatio,
-            },
-          },
-        );
-        await progress.report(3, 4, 'Storing comparison resources');
-        const comparisonArtifacts = await engine.artifacts.withAtomicChunkedWrites(
-          workspace,
-          [
-            {
-              name: `${slug}-comparison.png`,
-              mimeType: 'image/png',
-              content: compared.comparison.png,
-              provenance: { ...provenance, kind: 'gui-comparison-png' },
-            },
-            {
-              name: `${slug}-comparison.json`,
-              mimeType: 'application/json',
-              content: compared.evidenceJson,
-              provenance: { ...provenance, kind: 'gui-comparison-json' },
-            },
-          ],
-          (stored) => Promise.resolve([...stored]),
-          progress.signal,
-        );
-        const result = emptyServiceResult(workspaceId, {
-          windowName,
-          beforeScenario: compared.before.scenario.id,
-          afterScenario: compared.after.scenario.id,
-          changedPixels: compared.comparison.changedPixels,
-          changedRatio: compared.comparison.changedRatio,
-          offlineRepresentation: true,
-        });
-        result.code = 'GUI_COMPARED';
-        setInlineFilesScanned(result, compared.graph.filesScanned);
-        result.diagnostics = [...compared.before.diagnostics, ...compared.after.diagnostics].slice(
-          0,
-          100,
-        );
-        result.artifacts = comparisonArtifacts.map(publicArtifactLink);
-        await progress.report(4, 4, 'GUI comparison complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    autonomous ? 'hoi4.gui_rewrite' : 'hoi4.gui_plan_changes',
-    {
-      title: autonomous ? 'Rewrite scripted GUI source' : 'Dry-run scripted GUI source changes',
-      description: autonomous
-        ? 'Validate, journal, and immediately apply source-preserving GUI source, patch, or declarative helper changes in one call; no follow-up apply call is required.'
-        : 'Create a source-preserving hash-bound reviewed transaction from explicit GUI source or declarative build-time helpers; it does not apply the transaction.',
+        'Create or replace a bounded scripted-GUI text package, or clean up one mod-owned .gui with exact patches. Source/helper mode accepts a main .gui plus additional .gui, .gfx, common/scripted_guis .txt, and localisation .yml source; binary art is referenced by those files, not uploaded. The complete package is validated, rendered, and applied in one call.',
       inputSchema: z
         .object({
           mode: z.enum(['source', 'helpers', 'patches']),
@@ -625,8 +472,19 @@ export function registerGuiTools(
           relativePath: workspaceRelativePathSchema,
           windowName: z.string().min(1).max(256),
           scenario: GuiPreviewScenarioSchema,
-          source: z.string().max(20_000_000).optional(),
+          source: z.string().max(SOURCE_MAX_BYTES).optional(),
           helper: GuiHelperDocumentSchema.optional(),
+          additionalFiles: z
+            .array(
+              z
+                .object({
+                  relativePath: workspaceRelativePathSchema,
+                  source: z.string().max(SOURCE_MAX_BYTES),
+                })
+                .strict(),
+            )
+            .max(GUI_TEXT_PACKAGE_MAX_FILES - 1)
+            .optional(),
           expectedSourceHash: z
             .string()
             .regex(/^[a-f0-9]{64}$/u)
@@ -681,18 +539,20 @@ export function registerGuiTools(
           }
           if (
             value.mode === 'patches' &&
-            (value.source !== undefined || value.helper !== undefined)
+            (value.source !== undefined ||
+              value.helper !== undefined ||
+              value.additionalFiles !== undefined)
           ) {
             context.addIssue({
               code: 'custom',
-              message: 'source and helper are forbidden in patches mode',
+              message: 'source, helper, and additionalFiles are forbidden in patches mode',
             });
           }
         }),
       outputSchema: guiPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: autonomous,
+        destructiveHint: true,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -702,7 +562,7 @@ export function registerGuiTools(
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Validating GUI dry run');
+        await progress.report(0, 3, 'Validating the requested GUI result');
         const compilation = input.mode === 'helpers' ? compileGuiHelpers(input.helper!) : undefined;
         const plannedTransaction = await studio.planSource({
           workspaceId,
@@ -712,19 +572,18 @@ export function registerGuiTools(
                 expectedSourceHash: input.expectedSourceHash!,
                 patches: input.patches!,
               }
-            : { source: input.mode === 'source' ? input.source! : compilation!.source }),
+            : {
+                source: input.mode === 'source' ? input.source! : compilation!.source,
+                ...(input.additionalFiles === undefined
+                  ? {}
+                  : { additionalFiles: input.additionalFiles }),
+              }),
           windowName,
           scenario,
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: progress.signal,
         });
-        await progress.report(
-          2,
-          3,
-          autonomous
-            ? 'Applying and post-validating GUI rewrite'
-            : 'Finalizing reviewed transaction',
-        );
+        await progress.report(2, 3, 'Applying and validating the GUI rewrite');
         const execution = await executePlannedTransaction(
           engine,
           plannedTransaction,
@@ -739,9 +598,8 @@ export function registerGuiTools(
         const result = emptyServiceResult(workspaceId, {
           mode: input.mode,
           execution: execution.outcome,
-          expiresAt: transaction.expiresAt,
-          transactionFileCount: transaction.files.length,
-          transactionArtifactCount: transaction.artifacts.length,
+          fileCount: transaction.files.length,
+          artifactCount: transaction.artifacts.length,
           ...(planned.compilation === undefined
             ? {}
             : {
@@ -756,23 +614,20 @@ export function registerGuiTools(
             ? 'GUI_CHANGES_APPLIED'
             : execution.outcome === 'unchanged'
               ? 'GUI_CHANGES_UNCHANGED'
-              : transaction.validation.passed
-                ? 'GUI_CHANGES_PLANNED'
-                : 'GUI_CHANGES_BLOCKED';
-        setInlineFilesScanned(result, [relativePath]);
+              : 'GUI_CHANGES_BLOCKED';
+        setInlineFilesScanned(
+          result,
+          [
+            relativePath,
+            ...(input.additionalFiles ?? []).map(({ relativePath: file }) => file),
+          ].sort((left, right) => compareCodeUnits(left, right)),
+        );
         result.proposedFiles = transaction.files
           .slice(0, 100)
           .map(({ relativePath: file }) => file);
         result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        if (autonomous) {
-          result.artifacts = autonomousResultArtifacts(execution);
-        } else {
-          result.transactionId = transaction.transactionId;
-          result.planHash = transaction.planHash;
-          result.artifacts = [transactionResourceLink(transaction)];
-          result.rollbackStatus = transaction.rollbackStatus;
-        }
+        result.artifacts = autonomousResultArtifacts(execution);
         result.validation = transaction.validation;
         result.blockers = transaction.diagnostics
           .filter(({ severity }) => severity === 'error' || severity === 'blocker')
@@ -787,8 +642,8 @@ export function registerGuiTools(
           execution.outcome === 'applied'
             ? 'GUI rewrite complete'
             : execution.outcome === 'unchanged'
-              ? 'GUI source already satisfied the rewrite'
-              : 'GUI transaction planned',
+              ? 'GUI content already satisfied the rewrite'
+              : 'GUI rewrite blocked',
         );
         return toolResult(result);
       } catch (error) {

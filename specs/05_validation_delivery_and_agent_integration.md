@@ -17,7 +17,7 @@ Implement in this order:
 11. Agent Nudger static and engine-compatible validation
 12. MCP server with stdio and Streamable HTTP transports
 13. package publication, Registry metadata, installer, diagnostics, and coding-agent configuration examples
-14. documentation, MCP prompts, and agent integration guides
+14. concise documentation and agent integration guides
 15. final fixtures, audits, and completion report
 
 Do not build separate parsers or transaction models for the three modules.
@@ -30,7 +30,7 @@ Add:
 
 - unit tests
 - parser round-trip tests
-- source-preservation tests
+- targeted-edit and unchanged-file tests
 - schema tests
 - golden-output tests
 - negative fixtures
@@ -43,7 +43,7 @@ Add:
 - bitmap pixel-diff tests
 - local vanilla source integration tests
 - external mod workspace integration tests
-- MCP tool, resource, and prompt discovery tests
+- exact MCP tool and resource-template discovery tests
 - MCP stdio and Streamable HTTP transport tests
 - MCP security, workspace isolation, autonomous-policy, and stale-source rewrite tests
 - clean-environment package installation tests
@@ -59,8 +59,8 @@ Create documentation for:
 
 - standalone architecture and dependency decisions
 - MCP installation and coding-agent connection
-- workspace registration and permissions
-- security and operator-controlled autonomous write policy
+- workspace discovery, explicit startup configuration, and permissions
+- security and principal-to-workspace authorization
 - focus-tree agent workflow
 - GUI source graph and rendering workflow
 - GUI preview scenarios and fidelity reports
@@ -80,18 +80,15 @@ The server is designed for MCP-compatible coding agents. Provide:
 
 - strict tool schemas
 - concise tool descriptions
-- MCP prompts for focus, GUI, and map workflows
 - resource templates for generated artifacts
 - example client configuration for common coding-agent hosts
 - tool annotations for read-only, mutating, destructive, and idempotent behavior
 - clear progress and cancellation behavior
-- one-call autonomous rewrite patterns that rely on explicit operator workspace policy rather than a caller-managed approval transaction
+- one-call rewrite patterns that rely on configured mod roots and principal grants rather than a caller-managed approval transaction
 
-Do not require Chaos Redux skills or subagents. The standalone repository may include generic agent guidance and MCP prompts, but it must not depend on another repository's `.agents` folder.
+Do not require Chaos Redux skills, subagents, prompts, rules, or documentation structures. The standalone repository must not depend on another repository's `.agents` folder.
 
-Operators may install the package, register workspaces, and define client permission policy. Workspaces remain read-only unless the operator explicitly enables effective `writePolicy: "autonomous"`. Coding agents decide when to use the registered MCP capabilities and may then complete a supported domain rewrite in one call. Remote calls still require authentication, transport write scope, and an explicit principal-to-workspace grant. The product does not expose a directly operated focus editor, GUI editor, map editor, or full tool CLI.
-
-A manually staged `writePolicy: "transactions"` mode may remain for compatibility, but it is not the primary documented workflow and acceptance does not depend on its transaction IDs, plan hashes, diff/apply sequence, or explicit rollback surface.
+Operators may install the package, configure explicit workspaces or mod-discovery roots at startup, and define client permission policy. Canonical mod workspaces support one-call domain rewrites; non-mod source workspaces remain read-only. Remote calls still require authentication, transport write scope, and an explicit principal-to-workspace grant. `allowDiscoveredMods` grants only discovered mod IDs and never unrelated explicit workspaces. The product does not expose runtime workspace registration, a directly operated focus editor, GUI editor, map editor, or full tool CLI.
 
 ## Completion standard
 
@@ -101,7 +98,7 @@ The goal is complete only when:
 - all three modules are callable through the public MCP server
 - local stdio and secured Streamable HTTP transports work
 - the server is installable from a public package and has valid `server.json` Registry metadata
-- MCP tools, resources, prompts, annotations, progress, cancellation, security gates, and artifact links pass acceptance tests
+- the exact ten MCP tools, one artifact resource template, annotations, progress, cancellation, security gates, and artifact links pass acceptance tests
 - all three modules use the shared parser, resolver, index, diagnostics, artifact, and transaction system
 - each focus, GUI, and map source mutation completes through one authorized domain rewrite call, returns source/visual evidence, and restores exact original bytes automatically on failure
 - large focus-tree rendering and linting pass the acceptance fixture

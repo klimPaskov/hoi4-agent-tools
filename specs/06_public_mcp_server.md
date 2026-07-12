@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Make the complete HOI4 agent workbench available through a public Model Context Protocol server. Coding agents connect to the server and call structured tools while working on registered HOI4 mod workspaces.
+Make the complete HOI4 agent workbench available through a public Model Context Protocol server. Coding agents connect to the server and call structured tools while working on configured HOI4 mod workspaces.
 
 The MCP server is the product interface. There is no separate supported interactive focus, GUI, or map application. Internal service calls, launch entry points, test harnesses, and maintenance scripts may exist, but they cannot become a second behavior model.
 
@@ -17,9 +17,7 @@ src/hoi4_agent_tools/
     transports/
     tools/
     resources/
-    prompts/
     security/
-    registry/
 ```
 
 MCP handlers call typed core services directly. They must not scrape command output or duplicate focus, GUI, map, parser, transaction, rendering, or validation logic.
@@ -40,56 +38,43 @@ Streamable HTTP is mandatory for controlled self-hosted, team, container, and ho
 
 Local HTTP binds to `127.0.0.1` by default. Public binding requires explicit configuration, authentication, origin validation, request limits, secure session identifiers, and deployment documentation.
 
-A remote server accesses only workspaces mounted or registered on that server. It cannot reach a developer's local mod or game installation through the MCP client.
+A remote server accesses only workspaces mounted and configured on that server. It cannot reach a developer's local mod or game installation through the MCP client.
 
 ## MCP tool surface
 
-Expose a small, stable tool family. Tool names should be namespaced and versionable.
+Expose exactly these ten namespaced tools:
 
-Required tool groups:
+- `hoi4.mods`
+- `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_rewrite`
+- `hoi4.gui_inspect`, `hoi4.gui_render`, `hoi4.gui_rewrite`
+- `hoi4.map_inspect`, `hoi4.map_render`, `hoi4.map_rewrite`
 
-- `project_register`, `project_scan`, `project_status`
-- `focus_scan`, `focus_lint`, `focus_layout`, `focus_render`, `focus_rewrite`
-- `gui_scan`, `gui_lint`, `gui_render`, `gui_render_states`, `gui_compare`, `gui_rewrite`
-- `map_scan`, `map_inspect`, `map_allocate`, `map_render`, `map_validate`, `map_rewrite`
-- `artifact_list`, `artifact_describe`
-
-The final schema may merge closely related read-only operations when that reduces context use without hiding behavior.
+Workspace discovery happens from startup configuration; large evidence is read through artifact resources.
 
 Every tool has strict input and output schemas, bounded defaults, deterministic error codes, source-linked diagnostics, and accurate annotations. Long operations support progress and cancellation where the protocol and SDK permit it.
 
-## Resources and prompts
+## Resources
 
 Use MCP resources for large or reusable outputs.
 
-Provide stable resource URIs for:
-
-- workspace summaries and capability reports
-- diagnostics
-- rewrite receipts, source/visual diffs, and validation evidence
-- focus HTML, SVG, PNG, and JSON renders
-- GUI renders, state galleries, hierarchy reports, and fidelity reports
-- map previews, pixel diffs, and validation reports
-- documentation and schema references
+Provide one stable content-addressed resource template for focus HTML/SVG/PNG/JSON, GUI renders/fidelity reports, map geometry/previews/diffs, diagnostics, and rewrite evidence.
 
 Tool calls return compact summaries plus resource links with MIME type and size when known.
 
-Provide MCP prompts for focus-tree, scripted-GUI, and map-editing workflows. Prompts guide coding agents but never replace tool validation or operator-owned workspace policy. In an autonomous workspace, prompts direct the agent to the appropriate one-call domain rewrite and must not require a caller-managed transaction review, plan hash, separate apply, or rollback step.
+Do not register MCP prompts. Coding agents decide when to use the tools from their own task context.
 
 ## Write safety
 
-The server starts read-only.
-
 The primary write path requires:
 
-1. explicit operator configuration whose effective policy for the mod workspace is `writePolicy: "autonomous"`
+1. a canonical mod workspace loaded from explicit startup configuration or direct-child discovery beneath `modRoots`
 2. a canonical allowlisted mod workspace root; game, dependency, fixture, cache, artifact, and unrelated roots remain non-writable
 3. an authenticated and authorized principal with access to that workspace and, for remote transports, the write scope
 4. one `focus_rewrite`, `gui_rewrite`, or `map_rewrite` request containing the complete declarative edit input
 
 Within that one request, the server calculates the complete affected-file set, validates the proposal in memory, creates relevant diff/render evidence, acquires the workspace lock, rechecks roots and every source hash, persists an authenticated journal with exact before bytes, performs recoverable atomic replacement, rebuilds the affected index, and runs post-write validation. A blocker returns before source mutation. A write or validation failure restores exact original bytes automatically before returning whenever safe recovery is possible. Stale, changed-root, cross-workspace, and cross-principal requests fail closed.
 
-The autonomous caller never needs to receive or resubmit a transaction ID or plan hash, page through a transaction diff, call a separate apply operation, or invoke rollback. A manually staged `writePolicy: "transactions"` mode and its legacy tools may remain available as an explicitly enabled compatibility surface, but it is not required by discovery, prompts, examples, or primary acceptance.
+The caller never receives or resubmits a transaction ID or plan hash, pages through a transaction diff, calls a separate apply operation, or invokes rollback. Journals and exact-byte restoration remain internal.
 
 Prevent path traversal, symlink escape, arbitrary command execution, unrestricted environment access, and access outside registered workspace, dependency, game, cache, and artifact roots. Never expose secrets, client configuration files, unrelated user files, or proprietary game assets as downloadable resources.
 
@@ -113,7 +98,7 @@ Create and maintain:
 
 Publish metadata to the official MCP Registry after the package or image is publicly available.
 
-Provide a minimal setup utility or installation flow that can discover paths, register a workspace, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, or map tools for direct interactive use and must not silently edit another application's settings.
+Provide a minimal setup utility or installation flow that can discover and configure mod roots, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, or map tools for direct interactive use and must not silently edit another application's settings.
 
 ## Versioning and compatibility
 
@@ -129,14 +114,13 @@ Test with the official MCP Inspector and automated protocol clients.
 
 Required tests:
 
-- tool, resource, and prompt discovery
+- exact ten-tool and one-resource-template discovery
 - capability negotiation
 - stdio framing and stderr-only logging
 - Streamable HTTP request and streaming behavior
 - origin rejection and authentication behavior
 - concurrent users and isolated workspaces
-- read-only default policy
-- explicit autonomous workspace-policy enforcement
+- automatic writable mod discovery and non-mod root protection
 - one-call focus, GUI, and map rewrites with no caller transaction choreography
 - stale-source and changed-root rejection inside the rewrite call
 - exact automatic recovery after injected write and post-validation failures
@@ -148,4 +132,4 @@ Required tests:
 - registry metadata validation
 - agent workflow tests covering focus, GUI, and map operations end to end
 
-The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback for the primary workflow, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.
+The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, exposes prompts or legacy transaction tools, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.

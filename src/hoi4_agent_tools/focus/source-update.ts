@@ -395,7 +395,7 @@ function continuousPaletteProjection(plan: ContinuousFocusPalettePlan): Record<s
   };
 }
 
-/** Source-preserving update for one real continuous_focus_palette block. */
+/** Targeted update for one real continuous_focus_palette block. */
 export function updateContinuousFocusPaletteSource(
   document: SourceDocument,
   currentPlan: ContinuousFocusPalettePlan | undefined,

@@ -128,7 +128,7 @@ let harness: Harness;
 async function createHarness(root: string, id: string, runtimeRoot: string): Promise<Harness> {
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'read-only',
+    serverStateRoot: path.join(runtimeRoot, 'server-state'),
     storageRoots: [path.join(runtimeRoot, 'artifacts'), path.join(runtimeRoot, 'cache')],
     workspaces: [
       {
@@ -138,7 +138,6 @@ async function createHarness(root: string, id: string, runtimeRoot: string): Pro
         kind: 'mod',
         artifactRoot: path.join(runtimeRoot, 'artifacts'),
         cacheRoot: path.join(runtimeRoot, 'cache'),
-        writeEnabled: false,
       },
     ],
   });

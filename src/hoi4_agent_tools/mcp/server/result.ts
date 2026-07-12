@@ -26,8 +26,6 @@ const operationResultBaseSchema = z
     proposedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_PROPOSED_FILES),
     changedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_CHANGED_FILES),
     diagnostics: z.array(diagnosticSchema).max(MAX_INLINE_DIAGNOSTICS),
-    transactionId: z.string().max(128).optional(),
-    planHash: z.string().max(128).optional(),
     artifacts: z.array(artifactLinkSchema).max(MAX_INLINE_ARTIFACT_LINKS),
     validation: validationSummarySchema,
     blockers: z
@@ -41,7 +39,6 @@ const operationResultBaseSchema = z
           .strict(),
       )
       .max(MAX_INLINE_BLOCKERS),
-    rollbackStatus: z.enum(['not-required', 'available', 'applied', 'failed']).optional(),
   })
   .strict();
 
@@ -104,15 +101,6 @@ function boundedResult(
   result: ServiceResult<unknown>,
   actualBytes: number,
 ): ServiceResult<unknown> {
-  const transactionArtifact =
-    result.transactionId === undefined
-      ? undefined
-      : {
-          uri: `hoi4-agent://workspace/${encodeURIComponent(result.workspaceId)}/transaction/${encodeURIComponent(result.transactionId)}`,
-          name: `${result.transactionId}.manifest.json`,
-          mimeType: 'application/json',
-          description: 'Complete authenticated transaction manifest and rollback status',
-        };
   const truncationDiagnostic: Diagnostic = {
     code: 'MCP_RESPONSE_TRUNCATED',
     severity: 'warning',
@@ -129,14 +117,9 @@ function boundedResult(
     proposedFiles: [],
     changedFiles: [],
     diagnostics: [truncationDiagnostic],
-    ...(result.transactionId === undefined
-      ? {}
-      : { transactionId: result.transactionId.slice(0, 128) }),
-    ...(result.planHash === undefined ? {} : { planHash: result.planHash.slice(0, 128) }),
-    artifacts:
-      transactionArtifact === undefined
-        ? result.artifacts.slice(0, 1).map(({ description: _description, ...artifact }) => artifact)
-        : [transactionArtifact],
+    artifacts: result.artifacts
+      .slice(0, 1)
+      .map(({ description: _description, ...artifact }) => artifact),
     validation: { passed: result.validation.passed, checks: [] },
     blockers:
       result.status === 'ok'
@@ -153,7 +136,6 @@ function boundedResult(
               },
             },
           ],
-    rollbackStatus: result.rollbackStatus ?? 'not-required',
     data: {},
   };
 }
@@ -256,7 +238,7 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
           code: 'MCP_INLINE_VALIDATION_TRUNCATED',
           severity: 'info',
           category: 'configuration',
-          message: `Inline validation is limited to ${MAX_INLINE_VALIDATION_CHECKS} checks; use the linked artifact or transaction manifest for the complete validation record`,
+          message: `Inline validation is limited to ${MAX_INLINE_VALIDATION_CHECKS} checks; use the linked artifact for the complete validation record`,
           details: {
             total: result.validation.checks.length,
             returned: MAX_INLINE_VALIDATION_CHECKS,
@@ -323,8 +305,6 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
     status: selected.status,
     code: selected.code,
     workspaceId: selected.workspaceId,
-    ...(selected.transactionId === undefined ? {} : { transactionId: selected.transactionId }),
-    ...(selected.planHash === undefined ? {} : { planHash: selected.planHash }),
     artifactCount: selected.artifacts.length,
   });
   return {
@@ -367,13 +347,10 @@ export function errorResult(
   error: unknown,
   workspaceId = '',
   context: {
-    transactionId?: string;
-    planHash?: string;
     proposedFiles?: string[];
     changedFiles?: string[];
     artifacts?: ServiceResult['artifacts'];
     validation?: ServiceResult['validation'];
-    rollbackStatus?: ServiceResult['rollbackStatus'];
     data?: unknown;
   } = {},
 ): ReturnType<typeof toolResult> {
@@ -381,25 +358,39 @@ export function errorResult(
     error instanceof ServiceError
       ? error
       : new ServiceError('INTERNAL_ERROR', 'Unexpected internal error');
-  const publicDetails = Object.fromEntries(
-    Object.entries(serviceError.details).filter(
-      ([key]) => !['cause', 'stack', 'absolutePath'].includes(key),
-    ),
-  );
+  const internalWriteError = serviceError.code.startsWith('TRANSACTION_');
+  const publicCode = internalWriteError
+    ? `REWRITE_${serviceError.code.slice('TRANSACTION_'.length)}`
+    : serviceError.code;
+  const publicMessage = internalWriteError
+    ? 'Rewrite could not be completed'
+    : serviceError.message;
+  const publicDetails = internalWriteError
+    ? {}
+    : Object.fromEntries(
+        Object.entries(serviceError.details).filter(
+          ([key]) =>
+            ![
+              'cause',
+              'stack',
+              'absolutePath',
+              'transactionId',
+              'planHash',
+              'rollbackStatus',
+            ].includes(key),
+        ),
+      );
   return toolResult({
-    status: serviceError.code.includes('BLOCKED') ? 'blocked' : 'error',
-    code: serviceError.code,
+    status: publicCode.includes('BLOCKED') ? 'blocked' : 'error',
+    code: publicCode,
     workspaceId,
     filesScanned: [],
     proposedFiles: context.proposedFiles ?? [],
     changedFiles: context.changedFiles ?? [],
     diagnostics: [],
-    ...(context.transactionId === undefined ? {} : { transactionId: context.transactionId }),
-    ...(context.planHash === undefined ? {} : { planHash: context.planHash }),
     artifacts: context.artifacts ?? [],
     validation: context.validation ?? { passed: false, checks: [] },
-    blockers: [{ code: serviceError.code, message: serviceError.message, details: publicDetails }],
-    ...(context.rollbackStatus === undefined ? {} : { rollbackStatus: context.rollbackStatus }),
+    blockers: [{ code: publicCode, message: publicMessage, details: publicDetails }],
     data: context.data ?? {},
   });
 }

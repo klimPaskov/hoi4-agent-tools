@@ -95,7 +95,6 @@ describe('autonomous MCP rewrite workflows', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'autonomous',
       serverStateRoot: path.join(temporary, 'server-state'),
       storageRoots: [runtime],
       workspaces: [
@@ -107,7 +106,6 @@ describe('autonomous MCP rewrite workflows', () => {
           dependencyRoots: [dependency],
           artifactRoot: path.join(runtime, 'artifacts'),
           cacheRoot: path.join(runtime, 'cache'),
-          writeEnabled: true,
         },
       ],
     });
@@ -126,20 +124,18 @@ describe('autonomous MCP rewrite workflows', () => {
 
     const tools = await client.listTools();
     const toolNames = tools.tools.map(({ name }) => name);
-    expect(toolNames).toEqual(
-      expect.arrayContaining(['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']),
-    );
-    expect(toolNames).not.toEqual(
-      expect.arrayContaining([
-        'hoi4.focus_plan_changes',
-        'hoi4.gui_plan_changes',
-        'hoi4.map_plan',
-        'hoi4.transaction_diff',
-        'hoi4.transaction_apply',
-        'hoi4.transaction_rollback',
-        'hoi4.transaction_status',
-      ]),
-    );
+    expect(toolNames).toEqual([
+      'hoi4.mods',
+      'hoi4.focus_inspect',
+      'hoi4.focus_render',
+      'hoi4.focus_rewrite',
+      'hoi4.gui_inspect',
+      'hoi4.gui_render',
+      'hoi4.gui_rewrite',
+      'hoi4.map_inspect',
+      'hoi4.map_render',
+      'hoi4.map_rewrite',
+    ]);
     for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
         readOnlyHint: false,
@@ -148,28 +144,11 @@ describe('autonomous MCP rewrite workflows', () => {
         openWorldHint: false,
       });
     }
-    const prompts = await client.listPrompts();
-    expect(prompts.prompts.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow']),
-    );
-    for (const [promptName, toolName] of [
-      ['hoi4.focus-workflow', 'hoi4.focus_rewrite'],
-      ['hoi4.gui-workflow', 'hoi4.gui_rewrite'],
-      ['hoi4.map-workflow', 'hoi4.map_rewrite'],
-    ] as const) {
-      const prompt = await client.getPrompt({
-        name: promptName,
-        arguments: { workspaceId: 'autonomous' },
-      });
-      const promptText = prompt.messages
-        .map(({ content }) => ('text' in content ? content.text : ''))
-        .join('\n');
-      expect(promptText).toContain(toolName);
-    }
+    await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
 
     const scannedFocus = resultOf(
       await client.callTool({
-        name: 'hoi4.focus_scan',
+        name: 'hoi4.focus_inspect',
         arguments: { workspaceId: 'autonomous', relativePath: focusRelativePath },
       }),
     );
@@ -224,7 +203,7 @@ describe('autonomous MCP rewrite workflows', () => {
     const appliedFocusBytes = await readFile(focusPath);
     const rescannedFocus = resultOf(
       await client.callTool({
-        name: 'hoi4.focus_scan',
+        name: 'hoi4.focus_inspect',
         arguments: { workspaceId: 'autonomous', relativePath: focusRelativePath },
       }),
     );
@@ -401,14 +380,12 @@ describe('autonomous MCP rewrite workflows', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'autonomous',
       serverStateRoot: path.join(temporary, 'server-state'),
       workspaces: [
         {
           id: 'recovery',
           name: 'Autonomous recovery fixture',
           root: mod,
-          writeEnabled: true,
         },
       ],
     });
@@ -453,7 +430,7 @@ describe('autonomous MCP rewrite workflows', () => {
       failure = error;
     }
     expect(failure).toMatchObject({
-      code: 'TRANSACTION_POST_VALIDATION_FAILED',
+      code: 'REWRITE_POST_VALIDATION_FAILED',
       details: {
         execution: 'failed',
         automaticRecovery: 'restored',
@@ -466,7 +443,7 @@ describe('autonomous MCP rewrite workflows', () => {
     ).structuredContent;
     expect(publicFailure).toMatchObject({
       status: 'error',
-      code: 'TRANSACTION_POST_VALIDATION_FAILED',
+      code: 'REWRITE_POST_VALIDATION_FAILED',
       workspaceId: 'recovery',
       changedFiles: [],
       blockers: [

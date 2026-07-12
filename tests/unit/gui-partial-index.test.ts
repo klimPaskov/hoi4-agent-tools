@@ -59,6 +59,7 @@ async function studioFor(source: Buffer): Promise<{
   await writeFile(sourcePath, source);
   const configuration = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(temporary, 'server-state'),
     workspaces: [{ id: 'partial', name: 'Partial GUI inventory', root: mod }],
   });
   const engine = new CoreEngine(await WorkspaceResolver.create(configuration));

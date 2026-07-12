@@ -177,14 +177,13 @@ describe('GUI helper templates and state variants', () => {
 
   it('exposes template-instance evidence in the MCP GUI plan output contract', () => {
     const output = emptyServiceResult('fixture', {
-      execution: 'planned' as const,
+      execution: 'applied' as const,
       mode: 'helpers' as const,
-      expiresAt: '2026-07-11T00:00:00.000Z',
       nodeCount: 5,
       templateInstanceCount: 2,
       rawEscapeCount: 0,
-      transactionFileCount: 1,
-      transactionArtifactCount: 0,
+      fileCount: 1,
+      artifactCount: 0,
     });
     expect(guiPlanOutputSchema.parse(output).data).toMatchObject({ templateInstanceCount: 2 });
   });

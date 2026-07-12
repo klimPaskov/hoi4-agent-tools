@@ -20,10 +20,7 @@ import {
   hashCanonical,
   sha256Bytes,
 } from '../../src/hoi4_agent_tools/core/canonical.js';
-import {
-  serverConfigurationSchema,
-  workspaceRegistrationSchema,
-} from '../../src/hoi4_agent_tools/core/configuration.js';
+import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import {
   TransactionManager,
@@ -33,7 +30,7 @@ import {
 } from '../../src/hoi4_agent_tools/core/transactions.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
-async function setup(writePolicy: 'transactions' | 'autonomous' = 'transactions') {
+async function setup() {
   const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-transaction-'));
   const mod = path.join(base, 'mod');
   await mkdir(path.join(mod, 'common'), { recursive: true });
@@ -41,10 +38,8 @@ async function setup(writePolicy: 'transactions' | 'autonomous' = 'transactions'
   await writeFile(path.join(mod, 'map.bmp'), Buffer.from([0x42, 0x4d, 1, 2, 3, 4]));
   const config = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy,
     serverStateRoot: path.join(base, 'server-state'),
-    transactionTtlSeconds: 3600,
-    workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+    workspaces: [{ id: 'test', name: 'Test', root: mod }],
   });
   const resolver = await WorkspaceResolver.create(config);
   return { base, mod, resolver, manager: testManager(new TransactionManager(resolver)) };
@@ -84,7 +79,6 @@ function testManager(core: TransactionManager) {
         ...options,
         postValidate: options.postValidate ?? validPostWrite,
       }),
-    rollback: core.rollback.bind(core),
     status: core.status.bind(core),
     recover: core.recover.bind(core),
   };
@@ -166,9 +160,8 @@ describe('transaction manager', () => {
     await writeFile(path.join(mod, 'common', 'one.txt'), 'before\n');
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
       http: {
         principals: [
           { principal: 'alice', workspaceIds: ['test'] },
@@ -291,31 +284,6 @@ describe('transaction manager', () => {
     expect(await artifactStore.list(workspace)).toHaveLength(0);
   });
 
-  it('starts read-only and refuses apply even when a workspace asks for writes', async () => {
-    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-read-only-'));
-    const mod = path.join(base, 'mod');
-    await mkdir(path.join(mod, 'common'), { recursive: true });
-    await writeFile(path.join(mod, 'common', 'one.txt'), 'before\n');
-    const config = serverConfigurationSchema.parse({
-      version: 1,
-      serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
-    });
-    const manager = testManager(new TransactionManager(await WorkspaceResolver.create(config)));
-    const plan = await manager.plan({
-      workspaceId: 'test',
-      operationKind: 'test',
-      operations,
-      changes: [
-        { relativePath: 'common/one.txt', content: Buffer.from('after\n'), operationIds: ['op-1'] },
-      ],
-    });
-    await expect(manager.apply('test', plan.transactionId, plan.planHash)).rejects.toMatchObject({
-      code: 'WRITE_POLICY_DISABLED',
-    });
-    expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('before\n');
-  });
-
   it('rejects a transaction cache descendant that escapes through a symlink or junction', async () => {
     const { base, mod, manager } = await setup();
     const outside = path.join(base, 'outside');
@@ -412,10 +380,9 @@ describe('transaction manager', () => {
     },
   );
 
-  it('dry-runs, requires hash-bound apply, writes text and binary, and rolls back every byte', async () => {
+  it('dry-runs, requires hash-bound apply, and writes text and binary atomically', async () => {
     const { base, mod, manager } = await setup();
     const originalText = await readFile(path.join(mod, 'common', 'one.txt'));
-    const originalBitmap = await readFile(path.join(mod, 'map.bmp'));
     const plan = await manager.plan({
       workspaceId: 'test',
       operationKind: 'test',
@@ -453,10 +420,6 @@ describe('transaction manager', () => {
     expect(await readFile(path.join(mod, 'map.bmp'))).toEqual(
       Buffer.from([0x42, 0x4d, 9, 8, 7, 6]),
     );
-    const rolledBack = await manager.rollback('test', plan.transactionId, plan.planHash);
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(await readFile(path.join(mod, 'common', 'one.txt'))).toEqual(originalText);
-    expect(await readFile(path.join(mod, 'map.bmp'))).toEqual(originalBitmap);
   });
 
   it('rejects stale source after planning', async () => {
@@ -517,7 +480,6 @@ describe('transaction manager', () => {
     await writeFile(source, sourceBefore);
     const config = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
       workspaces: [
         {
@@ -525,7 +487,6 @@ describe('transaction manager', () => {
           name: 'Test',
           root: mod,
           gameRoot: game,
-          writeEnabled: true,
         },
       ],
     });
@@ -588,9 +549,8 @@ describe('transaction manager', () => {
     await writeFile(path.join(mod, 'common', 'one.txt'), 'before\n');
     const config = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
       http: {
         tokens: [
           { principal: 'alice', tokenEnv: 'ALICE_TOKEN', workspaceIds: ['test'] },
@@ -869,75 +829,7 @@ describe('transaction manager', () => {
     });
   });
 
-  it('recovers an interrupted runtime-registered workspace before exposing it again', async () => {
-    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-runtime-recovery-'));
-    const allowed = path.join(base, 'allowed');
-    const mod = path.join(allowed, 'mod');
-    await mkdir(path.join(mod, 'common'), { recursive: true });
-    const target = path.join(mod, 'common', 'one.txt');
-    await writeFile(target, 'runtime before\n');
-    const configuration = serverConfigurationSchema.parse({
-      version: 1,
-      writePolicy: 'transactions',
-      serverStateRoot: path.join(base, 'server-state'),
-      registrationRoots: [allowed],
-      writableRegistrationRoots: [allowed],
-      http: {
-        principals: [
-          {
-            principal: 'runtime-user',
-            workspaceIds: [],
-            allowRegistration: true,
-          },
-        ],
-      },
-    });
-    const registration = workspaceRegistrationSchema.parse({
-      id: 'runtime',
-      name: 'Runtime',
-      root: mod,
-      writeEnabled: true,
-    });
-    const firstEngine = new CoreEngine(await WorkspaceResolver.create(configuration));
-    await firstEngine.register(registration, 'runtime-user');
-    const plan = await firstEngine.transactions.plan({
-      workspaceId: 'runtime',
-      principal: 'runtime-user',
-      operationKind: 'test',
-      operations,
-      changes: [
-        {
-          relativePath: 'common/one.txt',
-          content: Buffer.from('runtime interrupted\n'),
-          operationIds: ['op-1'],
-        },
-      ],
-      validate: validDryRun,
-    });
-    await writeFile(target, 'runtime interrupted\n');
-    const manifestPath = path.join(
-      mod,
-      '.hoi4-agent',
-      'cache',
-      'transactions',
-      plan.transactionId,
-      'manifest.json',
-    );
-    await updateJournal(firstEngine.resolver, manifestPath, (manifest) => {
-      manifest.state = 'applying';
-      manifest.appliedFiles = ['common/one.txt'];
-    });
-
-    const restarted = new CoreEngine(await WorkspaceResolver.create(configuration));
-    await restarted.initialize();
-    await restarted.register(registration, 'runtime-user');
-    expect(await readFile(target, 'utf8')).toBe('runtime before\n');
-    await expect(
-      restarted.transactions.status('runtime', plan.transactionId, 'runtime-user'),
-    ).resolves.toMatchObject({ state: 'rolled_back', rollbackStatus: 'applied' });
-  });
-
-  it('clears a crashed-process lock and recovers after a read-only restart', async () => {
+  it('clears a crashed-process lock and recovers a configured workspace after restart', async () => {
     const { mod, resolver, manager } = await setup();
     const target = path.join(mod, 'common', 'one.txt');
     const original = await readFile(target);
@@ -973,13 +865,12 @@ describe('transaction manager', () => {
       }),
     );
 
-    const readOnlyConfiguration = serverConfigurationSchema.parse({
+    const restartedConfiguration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'read-only',
       serverStateRoot: path.join(path.dirname(mod), 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: false }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
-    const engine = new CoreEngine(await WorkspaceResolver.create(readOnlyConfiguration));
+    const engine = new CoreEngine(await WorkspaceResolver.create(restartedConfiguration));
     await engine.initialize();
 
     expect(await readFile(target)).toEqual(original);
@@ -1095,28 +986,6 @@ describe('transaction manager', () => {
       code: 'TRANSACTION_LOCKED',
     });
     expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('value = before\n');
-  });
-
-  it('refuses rollback over a later external edit', async () => {
-    const { mod, manager } = await setup();
-    const plan = await manager.plan({
-      workspaceId: 'test',
-      operationKind: 'test',
-      operations,
-      changes: [
-        {
-          relativePath: 'common/one.txt',
-          content: Buffer.from('applied\n'),
-          operationIds: ['op-1'],
-        },
-      ],
-    });
-    await manager.apply('test', plan.transactionId, plan.planHash);
-    await writeFile(path.join(mod, 'common', 'one.txt'), 'later edit\n');
-    await expect(manager.rollback('test', plan.transactionId, plan.planHash)).rejects.toMatchObject(
-      { code: 'TRANSACTION_WRITE_MISMATCH' },
-    );
-    expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('later edit\n');
   });
 
   it('recomputes the plan hash and rejects a changed persisted file set', async () => {
@@ -1257,8 +1126,8 @@ describe('transaction manager', () => {
     });
   });
 
-  it('rejects replay of an authenticated planned revision after rollback', async () => {
-    const { mod, manager } = await setup();
+  it('rejects replay of an authenticated planned revision after automatic recovery', async () => {
+    const { mod, resolver, manager } = await setup();
     const target = path.join(mod, 'common', 'one.txt');
     const plan = await manager.plan({
       workspaceId: 'test',
@@ -1281,8 +1150,14 @@ describe('transaction manager', () => {
       'manifest.json',
     );
     const plannedManifest = await readFile(manifestPath);
-    await manager.apply('test', plan.transactionId, plan.planHash);
-    await manager.rollback('test', plan.transactionId, plan.planHash);
+    await writeFile(target, 'replay-protected\n');
+    await updateJournal(resolver, manifestPath, (manifest) => {
+      manifest.state = 'applying';
+      manifest.appliedFiles = ['common/one.txt'];
+    });
+    await expect(manager.recover('test')).resolves.toMatchObject([
+      { transactionId: plan.transactionId, state: 'rolled_back', rollbackStatus: 'applied' },
+    ]);
     await writeFile(manifestPath, plannedManifest);
 
     await expect(manager.status('test', plan.transactionId)).rejects.toMatchObject({
@@ -1321,9 +1196,8 @@ describe('transaction manager', () => {
     });
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
     const restarted = new CoreEngine(await WorkspaceResolver.create(configuration));
     await expect(restarted.initialize()).rejects.toMatchObject({
@@ -1367,9 +1241,8 @@ describe('transaction manager', () => {
     );
     const configuration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
     const restarted = new CoreEngine(await WorkspaceResolver.create(configuration));
     const workspace = restarted.resolver.get('test');
@@ -1513,7 +1386,7 @@ describe('transaction manager', () => {
               ? Array.from({ length: 100 }, (_, index) => ({
                   code: `PLAN_WARNING_${index}`,
                   severity: 'warning' as const,
-                  category: 'transaction' as const,
+                  category: 'validation' as const,
                   message: 'bounded',
                 }))
               : [],
@@ -1529,7 +1402,7 @@ describe('transaction manager', () => {
                     {
                       code: 'POST_WARNING',
                       severity: 'warning' as const,
-                      category: 'transaction' as const,
+                      category: 'validation' as const,
                       message: 'bounded',
                     },
                   ]
@@ -1675,47 +1548,10 @@ describe('transaction manager', () => {
     expect(await byteArtifactStore.list(byteSetup.resolver.get('test'))).toHaveLength(0);
   });
 
-  it('reclaims applied journals at autonomous admission but retains reviewed rollback data', async () => {
-    const reviewed = await setup();
-    const reviewedManager = testManager(
-      new TransactionManager(reviewed.resolver, undefined, 3600, 16_777_216, 1),
-    );
-    const reviewedPlan = await reviewedManager.plan({
-      workspaceId: 'test',
-      operationKind: 'test',
-      operations,
-      changes: [
-        {
-          relativePath: 'common/one.txt',
-          content: Buffer.from('reviewed applied\n'),
-          operationIds: ['op-1'],
-        },
-      ],
-    });
-    await reviewedManager.apply('test', reviewedPlan.transactionId, reviewedPlan.planHash);
-    await expect(
-      reviewedManager.plan({
-        workspaceId: 'test',
-        operationKind: 'test',
-        operations,
-        changes: [
-          {
-            relativePath: 'common/one.txt',
-            content: Buffer.from('reviewed next\n'),
-            operationIds: ['op-1'],
-          },
-        ],
-      }),
-    ).rejects.toMatchObject({ code: 'TRANSACTION_JOURNAL_LIMIT' });
-    await expect(reviewedManager.status('test', reviewedPlan.transactionId)).resolves.toMatchObject(
-      { state: 'applied', rollbackStatus: 'available' },
-    );
-
-    const autonomous = await setup('autonomous');
-    const autonomousManager = testManager(
-      new TransactionManager(autonomous.resolver, undefined, 3600, 16_777_216, 1),
-    );
-    const autonomousPlan = await autonomousManager.plan({
+  it('reclaims applied journals at autonomous admission', async () => {
+    const { mod, resolver } = await setup();
+    const manager = testManager(new TransactionManager(resolver, undefined, 3600, 16_777_216, 1));
+    const appliedPlan = await manager.plan({
       workspaceId: 'test',
       operationKind: 'test',
       operations,
@@ -1727,9 +1563,9 @@ describe('transaction manager', () => {
         },
       ],
     });
-    await autonomousManager.apply('test', autonomousPlan.transactionId, autonomousPlan.planHash);
+    await manager.apply('test', appliedPlan.transactionId, appliedPlan.planHash);
     await expect(
-      autonomousManager.plan({
+      manager.plan({
         workspaceId: 'test',
         operationKind: 'test',
         operations,
@@ -1742,16 +1578,16 @@ describe('transaction manager', () => {
         ],
       }),
     ).resolves.toMatchObject({ state: 'planned' });
-    await expect(
-      autonomousManager.status('test', autonomousPlan.transactionId),
-    ).rejects.toMatchObject({ code: 'TRANSACTION_NOT_FOUND' });
-    await expect(readFile(path.join(autonomous.mod, 'common', 'one.txt'), 'utf8')).resolves.toBe(
+    await expect(manager.status('test', appliedPlan.transactionId)).rejects.toMatchObject({
+      code: 'TRANSACTION_NOT_FOUND',
+    });
+    await expect(readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).resolves.toBe(
       'autonomous applied\n',
     );
   });
 
-  it('finishes a rename-first autonomous reclaim after a read-only restart', async () => {
-    const { base, mod, resolver } = await setup('autonomous');
+  it('finishes a rename-first autonomous reclaim after restart', async () => {
+    const { base, mod, resolver } = await setup();
     const manager = testManager(new TransactionManager(resolver, undefined, 3600, 16_777_216, 1));
     const applied = await manager.plan({
       workspaceId: 'test',
@@ -1773,13 +1609,12 @@ describe('transaction manager', () => {
       path.join(transactionsDirectory, `.reclaiming-${applied.transactionId}`),
     );
 
-    const readOnlyConfiguration = serverConfigurationSchema.parse({
+    const restartedConfiguration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'read-only',
       serverStateRoot: path.join(base, 'server-state'),
       workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
-    const restarted = new CoreEngine(await WorkspaceResolver.create(readOnlyConfiguration));
+    const restarted = new CoreEngine(await WorkspaceResolver.create(restartedConfiguration));
     await expect(restarted.initialize()).resolves.toBeUndefined();
     await expect(readdir(transactionsDirectory)).resolves.not.toContain(applied.transactionId);
     await expect(readdir(transactionsDirectory)).resolves.not.toContain(
@@ -1859,14 +1694,12 @@ describe('transaction manager', () => {
     });
     const changedConfiguration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
       workspaces: [
         {
           id: 'test',
           name: 'Test',
           root: mod,
-          writeEnabled: true,
           roots: { focus: ['custom/focus'] },
         },
       ],
@@ -1895,7 +1728,6 @@ describe('transaction manager', () => {
       ],
     });
     await manager.apply('test', plan.transactionId, plan.planHash);
-    await manager.rollback('test', plan.transactionId, plan.planHash);
     const key = await lstat(path.join(base, 'server-state', 'journal-hmac.key'));
     expect(key.isFile()).toBe(true);
     expect(key.size).toBe(32);
@@ -1914,15 +1746,14 @@ describe('transaction manager', () => {
 
     const restartedConfiguration = serverConfigurationSchema.parse({
       version: 1,
-      writePolicy: 'transactions',
       serverStateRoot: path.join(base, 'server-state'),
-      workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
     const restarted = new TransactionManager(
       await WorkspaceResolver.create(restartedConfiguration),
     );
     await expect(restarted.status('test', plan.transactionId)).resolves.toMatchObject({
-      state: 'rolled_back',
+      state: 'applied',
     });
   });
 
@@ -2092,33 +1923,6 @@ describe('transaction manager', () => {
     ).rejects.toMatchObject({ code: 'TRANSACTION_STRUCTURE_LIMIT' });
   });
 
-  it('cancels rollback preflight before entering the restore critical phase', async () => {
-    const { mod, manager } = await setup();
-    const target = path.join(mod, 'common', 'one.txt');
-    const plan = await manager.plan({
-      workspaceId: 'test',
-      operationKind: 'test',
-      operations,
-      changes: [
-        {
-          relativePath: 'common/one.txt',
-          content: Buffer.from('applied-before-cancel\n'),
-          operationIds: ['op-1'],
-        },
-      ],
-    });
-    await manager.apply('test', plan.transactionId, plan.planHash);
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      manager.rollback('test', plan.transactionId, plan.planHash, undefined, controller.signal),
-    ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(await readFile(target, 'utf8')).toBe('applied-before-cancel\n');
-    await expect(manager.status('test', plan.transactionId)).resolves.toMatchObject({
-      state: 'applied',
-    });
-  });
-
   it('renders legacy source diffs with the detected encoding', async () => {
     const { mod, manager } = await setup();
     const target = path.join(mod, 'common', 'one.txt');
@@ -2197,34 +2001,5 @@ describe('transaction manager', () => {
         metadata: { beforeState: 'present', afterState: 'deleted' },
       },
     });
-  });
-
-  it('leaves applied source untouched when rollback data is corrupt', async () => {
-    const { mod, manager } = await setup();
-    const target = path.join(mod, 'common', 'one.txt');
-    const plan = await manager.plan({
-      workspaceId: 'test',
-      operationKind: 'test',
-      operations,
-      changes: [
-        {
-          relativePath: 'common/one.txt',
-          content: Buffer.from('applied bytes\n'),
-          operationIds: ['op-1'],
-        },
-      ],
-    });
-    await manager.apply('test', plan.transactionId, plan.planHash);
-    const beforeBlob = plan.files[0]?.beforeBlob;
-    if (beforeBlob === null || beforeBlob === undefined) throw new Error('missing before blob');
-    await writeFile(
-      path.join(mod, '.hoi4-agent', 'cache', 'transactions', plan.transactionId, beforeBlob),
-      'corrupt',
-    );
-
-    await expect(manager.rollback('test', plan.transactionId, plan.planHash)).rejects.toMatchObject(
-      { code: 'TRANSACTION_BLOB_INTEGRITY_FAILED' },
-    );
-    expect(await readFile(target, 'utf8')).toBe('applied bytes\n');
   });
 });

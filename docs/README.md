@@ -1,24 +1,10 @@
 # Documentation
 
-- [Architecture and shared engine](architecture.md)
-- [Architecture decisions](adr/README.md)
-- [Configuration and workspace registration](configuration.md)
-- [Agent integration and autonomous tool selection](agent-integration.md)
-- [Security and threat model](security.md)
-- [Autonomous rewrites, transactions, and recovery](transactions.md)
-- [Focus Tree Workbench](focus-workflow.md)
-- [Scripted GUI Studio](gui-workflow.md)
-- [Agent Nudger map workflow](map-workflow.md)
-- [Artifact resources](artifacts.md)
-- [Self-hosted Streamable HTTP](self-hosting.md)
-- [Testing, fixtures, and local integration](testing.md)
-- [Performance benchmark](performance.md)
-- [Compatibility and versioning](compatibility.md)
-- [Known limitations](limitations.md)
-- [Third-party notices](third-party-notices.md)
-- [Troubleshooting](troubleshooting.md)
-- [0.2.0 autonomous release completion report](autonomous-release-report.md)
-- [0.1.7 completion report](completion-report.md)
-- [Release and MCP Registry publication](release.md)
-- [HOI4 research ledger](research/source-ledger.md)
-- [MCP research review](research/mcp-2026-07-10.md)
+- [Setup](setup.md): install the server, configure HOI4 paths, and connect an MCP client.
+- [Focus trees](focus.md): inspect, create, render, and clean national or continuous focus content.
+- [Scripted GUIs](gui.md): inspect linked UI source, render states, and create or repair GUIs.
+- [Maps](map.md): inspect and edit provinces, states, regions, adjacency, supply, and railways.
+- [HTTP](http.md): run the MCP server for shared or remote access.
+- [Development](development.md): build, test, and contribute.
+
+For vulnerability reporting, see the repository [Security Policy](../SECURITY.md).

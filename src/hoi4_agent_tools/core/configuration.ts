@@ -5,7 +5,9 @@ import { CONFIG_VERSION } from '../version.js';
 import { ServiceError } from './result.js';
 
 export const HTTP_MAX_SAFE_CONCURRENT_REQUESTS = 2;
-export const HTTP_MAX_AGGREGATE_BODY_BYTES = 16_777_216;
+export const HTTP_MAX_BODY_BYTES = 67_108_864;
+export const HTTP_MAX_AGGREGATE_BODY_BYTES = 134_217_728;
+export const HTTP_DEFAULT_SESSION_EVENT_BYTES = 2_097_152;
 export const WORKSPACE_MAX_REGISTRATIONS = 1_000;
 const WORKSPACE_MAX_SOURCE_ROOTS = 16;
 const WORKSPACE_MAX_PATHS = 1_000;
@@ -103,7 +105,6 @@ export const workspaceRegistrationSchema = z
     artifactRoot: z.string().min(1).optional(),
     cacheRoot: z.string().min(1).optional(),
     fixtureRoot: z.string().min(1).optional(),
-    writeEnabled: z.boolean().default(false),
   })
   .strict()
   .superRefine((value, context) => {
@@ -120,8 +121,8 @@ const tokenSchema = z
   .object({
     principal: z.string().regex(/^[A-Za-z0-9._@-]{1,128}$/),
     tokenEnv: z.string().regex(/^[A-Z][A-Z0-9_]{1,127}$/),
-    workspaceIds: z.array(z.string()).min(1).max(WORKSPACE_MAX_REGISTRATIONS),
-    allowRegistration: z.boolean().default(false),
+    workspaceIds: z.array(z.string()).max(WORKSPACE_MAX_REGISTRATIONS).default([]),
+    allowDiscoveredMods: z.boolean().default(false),
   })
   .strict();
 
@@ -129,29 +130,20 @@ const principalSchema = z
   .object({
     principal: z.string().regex(/^[A-Za-z0-9._@:-]{1,256}$/),
     workspaceIds: z.array(z.string()).max(WORKSPACE_MAX_REGISTRATIONS).default([]),
-    allowRegistration: z.boolean().default(false),
+    allowDiscoveredMods: z.boolean().default(false),
   })
   .strict();
 
 export const serverConfigurationSchema = z
   .object({
     version: z.literal(CONFIG_VERSION),
-    writePolicy: z.enum(['read-only', 'transactions', 'autonomous']).default('read-only'),
     serverStateRoot: z
       .string()
       .min(1)
       .refine((value) => path.isAbsolute(value), {
-        message: 'Server state root must be an absolute operator-controlled path',
+        message: 'Server state root must be an absolute private path',
       })
       .optional(),
-    transactionTtlSeconds: z.number().int().min(60).max(86_400).default(3600),
-    transactionMaxJournalBytes: z
-      .number()
-      .int()
-      .min(1_048_576)
-      .max(Number.MAX_SAFE_INTEGER)
-      .default(536_870_912),
-    transactionMaxJournals: z.number().int().min(1).max(10_000).default(128),
     scanMaxFiles: z.number().int().min(1).max(1_000_000).default(20_000),
     scanMaxBytes: z.number().int().min(1_048_576).max(Number.MAX_SAFE_INTEGER).default(134_217_728),
     scanMaxFileBytes: z.number().int().min(65_536).max(Number.MAX_SAFE_INTEGER).default(67_108_864),
@@ -168,11 +160,9 @@ export const serverConfigurationSchema = z
       .min(1_048_576)
       .max(Number.MAX_SAFE_INTEGER)
       .default(134_217_728),
-    registrationRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
-    writableRegistrationRoots: z
-      .array(z.string().min(1))
-      .max(WORKSPACE_MAX_SOURCE_ROOTS)
-      .default([]),
+    modRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
+    gameRoot: z.string().min(1).optional(),
+    workspaceStorageRoot: z.string().min(1).optional(),
     storageRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     workspaces: z.array(workspaceRegistrationSchema).max(WORKSPACE_MAX_REGISTRATIONS).default([]),
     http: z
@@ -197,7 +187,12 @@ export const serverConfigurationSchema = z
           })
           .strict()
           .optional(),
-        maxBodyBytes: z.number().int().min(1024).max(16_777_216).default(1_048_576),
+        maxBodyBytes: z
+          .number()
+          .int()
+          .min(1024)
+          .max(HTTP_MAX_BODY_BYTES)
+          .default(HTTP_MAX_BODY_BYTES),
         headersTimeoutMs: z.number().int().min(1_000).max(120_000).default(10_000),
         requestTimeoutMs: z.number().int().min(1_000).max(300_000).default(30_000),
         keepAliveTimeoutMs: z.number().int().min(1_000).max(120_000).default(5_000),
@@ -213,7 +208,12 @@ export const serverConfigurationSchema = z
         maxSessionsPerPrincipal: z.number().int().min(1).max(10_000).default(32),
         maxEventStreams: z.number().int().min(1).max(10_000).default(32),
         maxEventStreamsPerPrincipal: z.number().int().min(1).max(10_000).default(4),
-        maxSessionEventBytes: z.number().int().min(65_536).max(67_108_864).default(1_048_576),
+        maxSessionEventBytes: z
+          .number()
+          .int()
+          .min(65_536)
+          .max(67_108_864)
+          .default(HTTP_DEFAULT_SESSION_EVENT_BYTES),
         maxEventStoreBytes: z.number().int().min(65_536).max(268_435_456).default(16_777_216),
         requestsPerMinute: z.number().int().min(1).max(100_000).default(120),
         sessionTtlSeconds: z.number().int().min(60).max(86_400).default(3600),
@@ -274,7 +274,7 @@ export const serverConfigurationSchema = z
         trustedProxyAddresses: [],
         tokens: [],
         principals: [],
-        maxBodyBytes: 1_048_576,
+        maxBodyBytes: HTTP_MAX_BODY_BYTES,
         headersTimeoutMs: 10_000,
         requestTimeoutMs: 30_000,
         keepAliveTimeoutMs: 5_000,
@@ -285,7 +285,7 @@ export const serverConfigurationSchema = z
         maxSessionsPerPrincipal: 32,
         maxEventStreams: 32,
         maxEventStreamsPerPrincipal: 4,
-        maxSessionEventBytes: 1_048_576,
+        maxSessionEventBytes: HTTP_DEFAULT_SESSION_EVENT_BYTES,
         maxEventStoreBytes: 16_777_216,
         requestsPerMinute: 120,
         sessionTtlSeconds: 3600,
@@ -293,11 +293,12 @@ export const serverConfigurationSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.writePolicy !== 'read-only' && value.serverStateRoot === undefined) {
+    const hasModWorkspace = value.workspaces.some(({ kind }) => kind === 'mod');
+    if ((value.modRoots.length > 0 || hasModWorkspace) && value.serverStateRoot === undefined) {
       context.addIssue({
         code: 'custom',
         path: ['serverStateRoot'],
-        message: 'Write policies require an operator-controlled server state root',
+        message: 'Writable mod workspaces require a separate private server state root',
       });
     }
     if (value.scanMaxFileBytes > value.scanMaxBytes) {
@@ -351,7 +352,7 @@ export const serverConfigurationSchema = z
       context.addIssue({
         code: 'custom',
         path: ['http', 'maxBodyBytes'],
-        message: 'HTTP body-byte ceiling multiplied by concurrency must not exceed 16 MiB',
+        message: 'HTTP body-byte ceiling multiplied by concurrency must not exceed 128 MiB',
       });
     }
   });

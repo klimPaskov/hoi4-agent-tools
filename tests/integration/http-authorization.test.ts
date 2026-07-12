@@ -1,4 +1,6 @@
 import { createServer, type Server } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -177,6 +179,15 @@ describe('MCP Streamable HTTP authorization challenges', () => {
     );
     expect(initialized.status).toBe(202);
 
+    const focusPlan = JSON.parse(
+      await readFile(
+        path.resolve(
+          import.meta.dirname,
+          '../../fixtures/focus/plans/synthetic_acceptance.plan.json',
+        ),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
     const writeCall = {
       jsonrpc: '2.0',
       id: 2,
@@ -185,8 +196,9 @@ describe('MCP Streamable HTTP authorization challenges', () => {
         name: 'hoi4.focus_rewrite',
         arguments: {
           workspaceId: 'not-registered',
-          transactionId: 'not-present',
-          expectedPlanHash: 'a'.repeat(64),
+          relativePath: 'common/national_focus/authorization-test.txt',
+          plan: focusPlan,
+          createIfMissing: true,
         },
       },
     };

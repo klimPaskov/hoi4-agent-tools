@@ -24,7 +24,11 @@ import type { ScannedFile } from '../core/scanner.js';
 import { WorkspaceScanner } from '../core/scanner.js';
 import {
   applyReplacements,
+  decodeSource,
+  encodeSource,
   parseClausewitz,
+  parseLocalisation,
+  SOURCE_MAX_BYTES,
   sourcePartialLimitDiagnostics,
   type SourceReplacement,
 } from '../core/source/index.js';
@@ -37,7 +41,6 @@ import type { ResolvedWorkspace, WorkspaceResolver } from '../core/workspace.js'
 import { PACKAGE_VERSION } from '../version.js';
 import { isSafeAnimationSourcePath } from './animation-manifest.js';
 import { GuiAssetCatalog, parseBmFont } from './assets.js';
-import { planGuiHelperCompilation, type PlanGuiHelperInput } from './helpers.js';
 import { buildGuiScene } from './layout.js';
 import { GUI_VALIDATION_MAX_DIAGNOSTICS } from './limits.js';
 import {
@@ -70,6 +73,24 @@ const staticGuiDefinitionPatterns = [
   'hoi4_agent/animation_sources/**/*.json',
 ] as const;
 
+export const GUI_TEXT_PACKAGE_MAX_FILES = 32;
+export const GUI_TEXT_PACKAGE_MAX_BYTES = 16_777_216;
+
+type GuiTextPackageFileKind = 'gui' | 'gfx' | 'scripted-gui' | 'localisation';
+
+export interface GuiTextPackageFileInput {
+  relativePath: string;
+  source: string;
+}
+
+interface PreparedGuiTextPackageFile {
+  relativePath: string;
+  kind: GuiTextPackageFileKind;
+  bytes: Buffer;
+  absolutePath: string;
+  loadOrder: number;
+}
+
 function normalizeConfiguredRoot(value: string): string {
   const normalized = value.replaceAll('\\', '/').replace(/^\.\//u, '').replace(/\/$/u, '');
   if (!isSafeAnimationSourcePath(normalized)) {
@@ -79,6 +100,112 @@ function normalizeConfiguredRoot(value: string): string {
     );
   }
   return normalized;
+}
+
+function portableSourcePathKey(value: string): string {
+  return value.toLocaleLowerCase('en-US');
+}
+
+function pathIsUnder(relativePath: string, roots: readonly string[]): boolean {
+  const candidate = portableSourcePathKey(relativePath);
+  return roots.some((root) => {
+    const normalizedRoot = portableSourcePathKey(normalizeConfiguredRoot(root));
+    return candidate.startsWith(`${normalizedRoot}/`);
+  });
+}
+
+function guiTextPackageFileKind(
+  workspace: ResolvedWorkspace,
+  relativePath: string,
+  main: boolean,
+): GuiTextPackageFileKind {
+  if (
+    !isSafeAnimationSourcePath(relativePath) ||
+    relativePath.split('/').some((segment) => segment === '.')
+  ) {
+    throw new ServiceError(
+      'GUI_TEXT_PACKAGE_PATH_INVALID',
+      'GUI text-package paths must be safe workspace-relative paths using forward slashes',
+      { relativePath },
+    );
+  }
+  const lower = relativePath.toLocaleLowerCase('en-US');
+  const roots = workspace.registration.roots;
+  const kind =
+    lower.endsWith('.gui') && pathIsUnder(relativePath, roots.interface)
+      ? 'gui'
+      : lower.endsWith('.gfx') && pathIsUnder(relativePath, [...roots.interface, ...roots.gfx])
+        ? 'gfx'
+        : lower.endsWith('.txt') && pathIsUnder(relativePath, roots.scriptedGui)
+          ? 'scripted-gui'
+          : lower.endsWith('.yml') && pathIsUnder(relativePath, roots.localisation)
+            ? 'localisation'
+            : undefined;
+  if (kind === undefined || (main && kind !== 'gui')) {
+    throw new ServiceError(
+      'GUI_TEXT_PACKAGE_PATH_UNSUPPORTED',
+      main
+        ? 'The main GUI text-package file must be a .gui file under a configured interface root'
+        : 'Additional GUI text-package files must be interface .gui/.gfx, configured GFX .gfx, common/scripted_guis .txt, or localisation .yml files',
+      { relativePath },
+    );
+  }
+  return kind;
+}
+
+function parseGuiTextPackageFile(
+  file: Pick<PreparedGuiTextPackageFile, 'bytes' | 'kind' | 'relativePath'>,
+) {
+  const sourcePath = `mod:${file.relativePath}`;
+  return file.kind === 'localisation'
+    ? parseLocalisation(file.bytes, sourcePath)
+    : parseClausewitz(file.bytes, sourcePath);
+}
+
+function overlayGuiTextPackageFiles(
+  files: readonly ScannedFile[],
+  prepared: readonly PreparedGuiTextPackageFile[],
+): ScannedFile[] {
+  const replacements = new Map(
+    prepared.map((file) => [portableSourcePathKey(file.relativePath), file] as const),
+  );
+  const replaced = new Set<string>();
+  const proposed = files.map((file) => {
+    const key = portableSourcePathKey(file.relativePath);
+    const replacement = replacements.get(key);
+    if (replacement === undefined) return file;
+    const displayPath = `mod:${replacement.relativePath}`;
+    if (file.rootKind !== 'mod') return { ...file, shadowedBy: displayPath };
+    replaced.add(key);
+    const { shadowedBy: _shadowedBy, ...activeFile } = file;
+    void _shadowedBy;
+    return {
+      ...activeFile,
+      absolutePath: replacement.absolutePath,
+      displayPath,
+      relativePath: replacement.relativePath,
+      bytes: replacement.bytes,
+      size: replacement.bytes.length,
+      modifiedMs: 0,
+      sha256: sha256Bytes(replacement.bytes),
+    };
+  });
+  for (const replacement of prepared) {
+    const key = portableSourcePathKey(replacement.relativePath);
+    if (replaced.has(key)) continue;
+    proposed.push({
+      absolutePath: replacement.absolutePath,
+      displayPath: `mod:${replacement.relativePath}`,
+      relativePath: replacement.relativePath,
+      rootKind: 'mod',
+      loadOrder: replacement.loadOrder,
+      size: replacement.bytes.length,
+      modifiedMs: 0,
+      sha256: sha256Bytes(replacement.bytes),
+      bytes: replacement.bytes,
+    });
+  }
+  return mergeScannedFiles(proposed);
 }
 
 function under(roots: readonly string[], suffixes: readonly string[]): string[] {
@@ -363,6 +490,7 @@ export interface PlanGuiSourceInput {
   workspaceId: string;
   relativePath: string;
   source?: string;
+  additionalFiles?: GuiTextPackageFileInput[];
   expectedSourceHash?: string;
   patches?: (SourceReplacement & {
     expectedText: string;
@@ -905,20 +1033,23 @@ export class ScriptedGuiStudio {
     };
   }
 
-  public planHelpers(input: PlanGuiHelperInput): ReturnType<typeof planGuiHelperCompilation> {
-    return planGuiHelperCompilation(this.transactions, input);
-  }
-
   public async planSource(input: PlanGuiSourceInput): Promise<TransactionManifest> {
     input.signal?.throwIfAborted();
-    if (!input.relativePath.replaceAll('\\', '/').toLowerCase().endsWith('.gui'))
-      throw new Error('GUI source plans must target a .gui file.');
+    const workspace = this.resolver.get(input.workspaceId, input.principal);
+    guiTextPackageFileKind(workspace, input.relativePath, true);
     if ((input.source === undefined) === (input.patches === undefined))
       throw new ServiceError(
         'GUI_SOURCE_MODE_INVALID',
         'Provide either a new source file or targeted source patches',
       );
-    let proposedBytes: Buffer;
+    if (input.patches !== undefined && (input.additionalFiles?.length ?? 0) > 0) {
+      throw new ServiceError(
+        'GUI_TEXT_PACKAGE_PATCH_MODE_INVALID',
+        'Additional GUI text-package files are accepted only with whole-source or helper rewrites',
+      );
+    }
+
+    let prepared: PreparedGuiTextPackageFile[];
     if (input.patches !== undefined) {
       if (
         input.expectedSourceHash === undefined ||
@@ -963,42 +1094,122 @@ export class ScriptedGuiStudio {
         }
       }
       assertGuiSourcePatchesSafe(document, input.patches);
-      proposedBytes = applyReplacements(document, input.patches);
+      const proposedBytes = applyReplacements(document, input.patches);
+      prepared = [
+        {
+          relativePath: input.relativePath,
+          kind: 'gui',
+          bytes: proposedBytes,
+          absolutePath: existing.path,
+          loadOrder: existing.root.loadOrder,
+        },
+      ];
     } else {
-      try {
-        await this.resolver.resolvePath(
+      if (input.source === undefined)
+        throw new ServiceError('GUI_SOURCE_REQUIRED', 'A new GUI source file requires source text');
+      const requests = [
+        { relativePath: input.relativePath, source: input.source, main: true },
+        ...(input.additionalFiles ?? []).map((file) => ({ ...file, main: false })),
+      ];
+      if (requests.length > GUI_TEXT_PACKAGE_MAX_FILES) {
+        throw new ServiceError(
+          'GUI_TEXT_PACKAGE_FILE_BUDGET_BLOCKED',
+          'GUI text package exceeds the fixed file-count ceiling',
+          { files: requests.length, maximumFiles: GUI_TEXT_PACKAGE_MAX_FILES },
+        );
+      }
+      const seen = new Map<string, string>();
+      const classified = requests.map((request) => {
+        const key = portableSourcePathKey(request.relativePath);
+        const duplicate = seen.get(key);
+        if (duplicate !== undefined) {
+          throw new ServiceError(
+            'GUI_TEXT_PACKAGE_DUPLICATE_PATH',
+            'GUI text-package paths must be unique under portable path comparison',
+            { first: duplicate, duplicate: request.relativePath },
+          );
+        }
+        seen.set(key, request.relativePath);
+        return {
+          ...request,
+          kind: guiTextPackageFileKind(workspace, request.relativePath, request.main),
+        };
+      });
+      classified.sort((left, right) => compareCodeUnits(left.relativePath, right.relativePath));
+      prepared = [];
+      let totalBytes = 0;
+      for (const request of classified) {
+        input.signal?.throwIfAborted();
+        const resolved = await this.resolver.resolvePath(
           input.workspaceId,
-          input.relativePath,
-          'read',
+          request.relativePath,
+          'write',
           ['mod'],
           input.principal,
         );
-        throw new ServiceError(
-          'GUI_UNSAFE_WHOLE_FILE_REWRITE',
-          'Existing GUI files may be changed only with source-linked targeted patches',
-        );
-      } catch (error) {
-        if (error instanceof ServiceError && error.code !== 'PATH_NOT_FOUND_IN_ROOTS') throw error;
+        let existingBytes: Buffer | undefined;
+        try {
+          existingBytes = await readFile(resolved.path);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        const encoding =
+          request.kind === 'localisation'
+            ? 'utf8-bom'
+            : existingBytes === undefined
+              ? 'utf8'
+              : decodeSource(existingBytes).encoding;
+        const source = request.source.startsWith('\ufeff')
+          ? request.source.slice(1)
+          : request.source;
+        const bytes = encodeSource(source, encoding);
+        if (bytes.length > SOURCE_MAX_BYTES) {
+          throw new ServiceError(
+            'GUI_TEXT_PACKAGE_FILE_BYTE_BUDGET_BLOCKED',
+            'A GUI text-package file exceeds the Clausewitz parser byte ceiling',
+            {
+              relativePath: request.relativePath,
+              bytes: bytes.length,
+              maximumBytes: SOURCE_MAX_BYTES,
+            },
+          );
+        }
+        totalBytes += bytes.length;
+        if (!Number.isSafeInteger(totalBytes) || totalBytes > GUI_TEXT_PACKAGE_MAX_BYTES) {
+          throw new ServiceError(
+            'GUI_TEXT_PACKAGE_BYTE_BUDGET_BLOCKED',
+            'GUI text package exceeds the fixed aggregate byte ceiling',
+            { bytes: totalBytes, maximumBytes: GUI_TEXT_PACKAGE_MAX_BYTES },
+          );
+        }
+        prepared.push({
+          relativePath: request.relativePath,
+          kind: request.kind,
+          bytes,
+          absolutePath: resolved.path,
+          loadOrder: resolved.root.loadOrder,
+        });
       }
-      if (input.source === undefined)
-        throw new ServiceError('GUI_SOURCE_REQUIRED', 'A new GUI source file requires source text');
-      proposedBytes = Buffer.from(input.source, 'utf8');
     }
-    const proposedDocument = parseClausewitz(proposedBytes, `mod:${input.relativePath}`);
-    if (
-      proposedDocument.diagnostics.some(
-        ({ severity }) => severity === 'error' || severity === 'blocker',
-      )
-    )
+
+    const proposedSourceDiagnostics = prepared.flatMap(
+      (file) => parseGuiTextPackageFile(file).diagnostics,
+    );
+    const blockingProposedSourceDiagnostics = proposedSourceDiagnostics.filter(
+      ({ severity }) => severity === 'error' || severity === 'blocker',
+    );
+    if (blockingProposedSourceDiagnostics.length > 0)
       throw new ServiceError(
         'GUI_PROPOSED_SOURCE_INVALID',
-        'Proposed GUI source contains blocking parser diagnostics',
-        { diagnostics: proposedDocument.diagnostics },
+        'Proposed GUI text package contains blocking parser diagnostics',
+        {
+          diagnostics: blockingProposedSourceDiagnostics.slice(0, 100),
+          diagnosticCount: blockingProposedSourceDiagnostics.length,
+        },
       );
     if ((input.windowName === undefined) !== (input.scenario === undefined))
       throw new Error('GUI visual preflight requires both windowName and scenario.');
-    const workspace = this.resolver.get(input.workspaceId, input.principal);
-    const scanned =
+    const initiallyScanned =
       input.windowName === undefined
         ? await this.scan(input.workspaceId, input.principal, input.signal)
         : await this.scanWindow(
@@ -1008,60 +1219,21 @@ export class ScriptedGuiStudio {
             input.signal,
             [parsePreviewScenario(input.scenario).language],
           );
-    const normalizedPath = input.relativePath.replaceAll('\\', '/');
-    if (
-      input.patches === undefined &&
-      scanned.files.some(
-        ({ relativePath, rootKind }) => relativePath === normalizedPath && rootKind !== 'mod',
-      )
-    ) {
-      throw new ServiceError(
-        'GUI_UNSAFE_SHADOW_REWRITE',
-        'Creating this GUI file would replace a dependency or game file; use a distinct file or an explicit source-preserving patch in the owning workspace',
-      );
-    }
+    const exactTargets = await this.scanner.scan(workspace, {
+      patterns: prepared.map(({ relativePath }) => relativePath),
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+    });
+    const baselineFiles = mergeScannedFiles(initiallyScanned.files, exactTargets);
+    const baseline = {
+      files: baselineFiles,
+      graph: buildGuiSourceGraph(baselineFiles, this.engine.indexFiles(baselineFiles)),
+    };
     const preflightDiagnostics: Diagnostic[] = [];
     const preflightChecks: { id: string; passed: boolean; message: string }[] = [];
     const preflightArtifacts: ArtifactLink[] = [];
-    let dependencyFiles = scanned.files;
+    let dependencyFiles = baseline.files;
     if (input.windowName !== undefined && input.scenario !== undefined) {
-      const resolved = await this.resolver.resolvePath(
-        input.workspaceId,
-        input.relativePath,
-        'write',
-        ['mod'],
-        input.principal,
-      );
-      const displayPath = `mod:${normalizedPath}`;
-      const replacesModFile = scanned.files.some(
-        ({ rootKind, relativePath }) => rootKind === 'mod' && relativePath === normalizedPath,
-      );
-      let proposedFiles = scanned.files.map((file) => {
-        if (file.rootKind === 'mod' && file.relativePath === normalizedPath) {
-          return {
-            ...file,
-            bytes: proposedBytes,
-            size: proposedBytes.length,
-            modifiedMs: 0,
-            sha256: sha256Bytes(proposedBytes),
-          };
-        }
-        if (file.relativePath === normalizedPath) return { ...file, shadowedBy: displayPath };
-        return file;
-      });
-      if (!replacesModFile) {
-        proposedFiles.push({
-          absolutePath: resolved.path,
-          displayPath,
-          relativePath: normalizedPath,
-          rootKind: 'mod',
-          loadOrder: workspace.dependencyRoots.length + 1,
-          size: proposedBytes.length,
-          modifiedMs: 0,
-          sha256: sha256Bytes(proposedBytes),
-          bytes: proposedBytes,
-        });
-      }
+      let proposedFiles = overlayGuiTextPackageFiles(baseline.files, prepared);
       const scenario = parsePreviewScenario(input.scenario);
       const renderBudget = new RenderBudget();
       let proposedGraph = buildGuiSourceGraph(proposedFiles, this.engine.indexFiles(proposedFiles));
@@ -1112,7 +1284,7 @@ export class ScriptedGuiStudio {
         fallbackProposedFontPages,
       );
       input.signal?.throwIfAborted();
-      dependencyFiles = mergeScannedFiles(scanned.files, proposedAssets, proposedFontPages);
+      dependencyFiles = mergeScannedFiles(baseline.files, proposedAssets, proposedFontPages);
       proposedFiles = mergeScannedFiles(proposedFiles, proposedAssets, proposedFontPages);
       proposedGraph = buildGuiSourceGraph(proposedFiles, this.engine.indexFiles(proposedFiles));
       const proposedCatalog = new GuiAssetCatalog(proposedGraph, proposedFiles, renderBudget);
@@ -1156,14 +1328,14 @@ export class ScriptedGuiStudio {
       });
 
       const baselineScene = await buildGuiScene(
-        scanned.graph,
-        scanned.files,
+        baseline.graph,
+        baseline.files,
         input.windowName,
         scenario,
-        new GuiAssetCatalog(scanned.graph, scanned.files, renderBudget),
+        new GuiAssetCatalog(baseline.graph, baseline.files, renderBudget),
       );
       let baselinePng: Buffer;
-      if (scanned.graph.elements.some(({ name }) => name === input.windowName)) {
+      if (baseline.graph.elements.some(({ name }) => name === input.windowName)) {
         baselinePng = fullImage(
           await renderGuiScene(baselineScene, ['full'], input.signal, renderBudget),
         ).png;
@@ -1207,14 +1379,17 @@ export class ScriptedGuiStudio {
         input.signal,
       );
       const slug = safeSlug(input.windowName);
-      const metadata = { relativePath: normalizedPath };
+      const metadata = {
+        relativePath: input.relativePath,
+        packageFiles: prepared.map(({ relativePath }) => relativePath),
+      };
       const writes: ArtifactWrite[] = [
         {
           name: `${slug}-before.png`,
           mimeType: 'image/png',
           content: baselinePng,
           provenance: guiArtifactProvenance(
-            scanned.graph,
+            baseline.graph,
             'gui-before-render',
             baselineScene,
             [baselineScene],
@@ -1285,7 +1460,10 @@ export class ScriptedGuiStudio {
     }
     const operationId = deterministicId('gui_source_change', {
       relativePath: input.relativePath,
-      sourceHash: sha256Bytes(proposedBytes),
+      files: prepared.map(({ relativePath, bytes }) => ({
+        relativePath,
+        sourceHash: sha256Bytes(bytes),
+      })),
       patchCount: input.patches?.length ?? 0,
     });
     return this.transactions.plan({
@@ -1295,54 +1473,69 @@ export class ScriptedGuiStudio {
       operations: [
         {
           id: operationId,
-          kind: 'replace-gui-source',
-          summary: `Plan GUI source ${input.relativePath}`,
-          data: { relativePath: input.relativePath },
+          kind: prepared.length === 1 ? 'replace-gui-source' : 'replace-gui-text-package',
+          summary:
+            prepared.length === 1
+              ? `Plan GUI source ${input.relativePath}`
+              : `Plan ${prepared.length}-file GUI text package rooted at ${input.relativePath}`,
+          data: {
+            relativePath: input.relativePath,
+            fileCount: prepared.length,
+            files: prepared.map(({ relativePath, kind }) => ({ relativePath, kind })),
+          },
         },
       ],
-      changes: [
-        {
-          relativePath: input.relativePath,
-          content: proposedBytes,
-          operationIds: [operationId],
-          mediaType: 'text/plain',
-        },
-      ],
+      changes: prepared.map((file) => ({
+        relativePath: file.relativePath,
+        content: file.bytes,
+        operationIds: [operationId],
+        mediaType: 'text/plain',
+      })),
       readDependencies: readDependenciesFromScannedFiles(dependencyFiles),
       artifacts: preflightArtifacts,
       diagnostics: preflightDiagnostics,
-      validate: (proposed) => {
-        const proposedSource = proposed.get(input.relativePath);
-        const bytes = proposedSource === undefined ? proposedBytes : proposedSource;
-        if (bytes === null)
-          return Promise.resolve({
-            diagnostics: [
-              {
-                code: 'GUI_PROPOSED_SOURCE_MISSING',
-                severity: 'blocker' as const,
-                category: 'transaction' as const,
-                message: `Proposed source is missing ${input.relativePath}`,
-                operationId,
-              },
-            ],
-            checks: [
-              ...preflightChecks,
-              {
-                id: 'gui-source-present',
-                passed: false,
-                message: 'Proposed GUI source is present.',
-              },
-            ],
-          });
-        const document = parseClausewitz(bytes, `mod:${input.relativePath}`);
-        const passed = !document.diagnostics.some(
-          ({ severity }) => severity === 'error' || severity === 'blocker',
-        );
+      validate: (proposed, signal) => {
+        const diagnostics: Diagnostic[] = [];
+        let present = true;
+        let syntaxPassed = true;
+        for (const file of prepared) {
+          signal?.throwIfAborted();
+          const proposedSource = proposed.has(file.relativePath)
+            ? proposed.get(file.relativePath)
+            : file.bytes;
+          if (proposedSource === null || proposedSource === undefined) {
+            present = false;
+            syntaxPassed = false;
+            diagnostics.push({
+              code: 'GUI_PROPOSED_SOURCE_MISSING',
+              severity: 'blocker',
+              category: 'validation',
+              message: `Proposed source is missing ${file.relativePath}`,
+              operationId,
+            });
+            continue;
+          }
+          const document = parseGuiTextPackageFile({ ...file, bytes: proposedSource });
+          const blocking = document.diagnostics.filter(
+            ({ severity }) => severity === 'error' || severity === 'blocker',
+          );
+          if (blocking.length > 0) syntaxPassed = false;
+          diagnostics.push(...blocking.map((diagnostic) => ({ ...diagnostic, operationId })));
+        }
         return Promise.resolve({
-          diagnostics: document.diagnostics.map((diagnostic) => ({ ...diagnostic, operationId })),
+          diagnostics,
           checks: [
             ...preflightChecks,
-            { id: 'gui-source-syntax', passed, message: 'Proposed GUI source parses safely.' },
+            {
+              id: 'gui-package-files-present',
+              passed: present,
+              message: 'Every requested GUI text-package file is present.',
+            },
+            {
+              id: 'gui-package-source-syntax',
+              passed: syntaxPassed,
+              message: 'Every requested GUI text-package file parses safely for its source type.',
+            },
           ],
         });
       },

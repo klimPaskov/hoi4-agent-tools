@@ -25,22 +25,31 @@ const temporaryRoots: string[] = [];
 interface Harness {
   absolutePath: string;
   artifacts: ArtifactStore;
+  dependencyPath?: string;
   original: Buffer;
   resolver: WorkspaceResolver;
   studio: ScriptedGuiStudio;
   transactions: TransactionManager;
 }
 
-async function createHarness(original: Buffer): Promise<Harness> {
+async function createHarness(
+  original: Buffer,
+  options: { dependencySource?: Buffer; omitModSource?: boolean } = {},
+): Promise<Harness> {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'hoi4-gui-source-safety-'));
   temporaryRoots.push(temporaryRoot);
   const modRoot = path.join(temporaryRoot, 'mod');
   const absolutePath = path.join(modRoot, ...relativePath.split('/'));
   await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, original);
+  if (options.omitModSource !== true) await writeFile(absolutePath, original);
+  const dependencyRoot = path.join(temporaryRoot, 'dependency');
+  const dependencyPath = path.join(dependencyRoot, ...relativePath.split('/'));
+  if (options.dependencySource !== undefined) {
+    await mkdir(path.dirname(dependencyPath), { recursive: true });
+    await writeFile(dependencyPath, options.dependencySource);
+  }
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'transactions',
     serverStateRoot: path.join(temporaryRoot, 'server-state'),
     storageRoots: [
       path.join(temporaryRoot, 'runtime', 'artifacts'),
@@ -52,9 +61,9 @@ async function createHarness(original: Buffer): Promise<Harness> {
         name: 'Project-owned synthetic GUI source safety fixture',
         root: modRoot,
         kind: 'mod',
+        ...(options.dependencySource === undefined ? {} : { dependencyRoots: [dependencyRoot] }),
         artifactRoot: path.join(temporaryRoot, 'runtime', 'artifacts'),
         cacheRoot: path.join(temporaryRoot, 'runtime', 'cache'),
-        writeEnabled: true,
       },
     ],
   });
@@ -62,7 +71,15 @@ async function createHarness(original: Buffer): Promise<Harness> {
   const artifacts = new ArtifactStore();
   const transactions = new TransactionManager(resolver, artifacts);
   const studio = new ScriptedGuiStudio(resolver, transactions, new WorkspaceScanner(), artifacts);
-  return { absolutePath, artifacts, original, resolver, studio, transactions };
+  return {
+    absolutePath,
+    artifacts,
+    ...(options.dependencySource === undefined ? {} : { dependencyPath }),
+    original,
+    resolver,
+    studio,
+    transactions,
+  };
 }
 
 function patchFor(source: string, expectedText: string, text: string) {
@@ -154,18 +171,152 @@ afterEach(async () => {
 });
 
 describe('ScriptedGuiStudio targeted source planning safety', () => {
-  it('refuses whole-file source replacement for an existing GUI file', async () => {
+  it('plans whole-file source replacement for an existing mod-owned GUI file', async () => {
+    const source =
+      '# caf\u00e9 remains Windows-1252\r\nguiTypes = { containerWindowType = { name = "safety_window" } }\r\n';
+    const harness = await createHarness(Buffer.from(source, 'latin1'));
+
+    const replacement = source.replace('safety_window', 'replacement_window');
+    const replacementBytes = Buffer.from(replacement, 'latin1');
+    const planned = await harness.studio.planSource({
+      workspaceId,
+      relativePath,
+      source: replacement,
+    });
+
+    expect(planned).toMatchObject({
+      state: 'planned',
+      validation: { passed: true },
+      files: [
+        {
+          relativePath,
+          beforeSha256: sha256Bytes(harness.original),
+          afterSha256: sha256Bytes(replacementBytes),
+        },
+      ],
+    });
+    expect(await readFile(harness.absolutePath)).toEqual(harness.original);
+  });
+
+  it('creates an explicit mod override without modifying the dependency source', async () => {
+    const dependencySource = Buffer.from(
+      'guiTypes = { containerWindowType = { name = "dependency_window" } }\n',
+      'utf8',
+    );
+    const replacement = 'guiTypes = { containerWindowType = { name = "mod_override_window" } }\n';
+    const harness = await createHarness(dependencySource, {
+      dependencySource,
+      omitModSource: true,
+    });
+    const planned = await harness.studio.planSource({
+      workspaceId,
+      relativePath,
+      source: replacement,
+    });
+
+    expect(planned).toMatchObject({
+      validation: { passed: true },
+      files: [{ relativePath, beforeSha256: null }],
+    });
+    expect(planned.readDependencies).toEqual(
+      expect.arrayContaining([expect.objectContaining({ rootKind: 'dependency', relativePath })]),
+    );
+    const applied = await harness.studio.applyPlannedSource(
+      workspaceId,
+      planned.transactionId,
+      planned.planHash,
+    );
+    expect(applied.state).toBe('applied');
+    expect(await readFile(harness.absolutePath, 'utf8')).toBe(replacement);
+    expect(await readFile(harness.dependencyPath!)).toEqual(dependencySource);
+  });
+
+  it('plans one deterministic typed text package and writes localisation with a BOM', async () => {
     const source = 'guiTypes = { containerWindowType = { name = "safety_window" } }\n';
     const harness = await createHarness(Buffer.from(source, 'utf8'));
+    const packageFiles = [
+      {
+        relativePath: 'localisation/english/safety_l_english.yml',
+        source: 'l_english:\n SAFETY_WINDOW_TITLE: "Safety"\n',
+      },
+      {
+        relativePath: 'common/scripted_guis/safety.txt',
+        source:
+          'scripted_gui = { safety_controller = { context_type = player_context window_name = safety_window } }\n',
+      },
+      {
+        relativePath: 'interface/safety.gfx',
+        source: 'spriteTypes = { spriteType = { name = "GFX_safety_marker" } }\n',
+      },
+      {
+        relativePath: 'interface/safety_companion.gui',
+        source:
+          'guiTypes = { containerWindowType = { name = "safety_companion" size = { width = 20 height = 20 } } }\n',
+      },
+    ];
+    const planned = await harness.studio.planSource({
+      workspaceId,
+      relativePath,
+      source:
+        'guiTypes = { containerWindowType = { name = "safety_window" size = { width = 320 height = 200 } } }\n',
+      additionalFiles: packageFiles,
+    });
 
+    expect(planned.validation.passed).toBe(true);
+    expect(planned.files.map(({ relativePath: file }) => file)).toEqual([
+      'common/scripted_guis/safety.txt',
+      'interface/safety.gfx',
+      'interface/safety.gui',
+      'interface/safety_companion.gui',
+      'localisation/english/safety_l_english.yml',
+    ]);
+    const applied = await harness.studio.applyPlannedSource(
+      workspaceId,
+      planned.transactionId,
+      planned.planHash,
+    );
+    expect(applied.state).toBe('applied');
+    const localisation = await readFile(
+      path.join(
+        path.dirname(path.dirname(harness.absolutePath)),
+        'localisation',
+        'english',
+        'safety_l_english.yml',
+      ),
+    );
+    expect(localisation.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+  });
+
+  it('rejects duplicate aliases and unsupported package paths before planning', async () => {
+    const source = 'guiTypes = { containerWindowType = { name = "safety_window" } }\n';
+    const harness = await createHarness(Buffer.from(source, 'utf8'));
     await expect(
       harness.studio.planSource({
         workspaceId,
         relativePath,
-        source: source.replace('safety_window', 'replacement_window'),
+        source,
+        additionalFiles: [{ relativePath: 'INTERFACE/SAFETY.GUI', source }],
       }),
-    ).rejects.toMatchObject({ code: 'GUI_UNSAFE_WHOLE_FILE_REWRITE' });
-    expect(await readFile(harness.absolutePath)).toEqual(harness.original);
+    ).rejects.toMatchObject({ code: 'GUI_TEXT_PACKAGE_DUPLICATE_PATH' });
+    await expect(
+      harness.studio.planSource({
+        workspaceId,
+        relativePath,
+        source,
+        additionalFiles: [{ relativePath: 'events/not_gui.txt', source: 'country_event = { }\n' }],
+      }),
+    ).rejects.toMatchObject({ code: 'GUI_TEXT_PACKAGE_PATH_UNSUPPORTED' });
+    await expect(
+      harness.studio.planSource({
+        workspaceId,
+        relativePath,
+        source,
+        additionalFiles: Array.from({ length: 32 }, (_unused, index) => ({
+          relativePath: `interface/extra_${index}.gfx`,
+          source: 'spriteTypes = { }\n',
+        })),
+      }),
+    ).rejects.toMatchObject({ code: 'GUI_TEXT_PACKAGE_FILE_BUDGET_BLOCKED' });
   });
 
   it('cannot disguise whole-file, block, or unknown-field rewrites as targeted patches', async () => {
@@ -286,7 +437,7 @@ describe('ScriptedGuiStudio targeted source planning safety', () => {
     expect(await readFile(harness.absolutePath)).toEqual(harness.original);
   });
 
-  it('preserves comments, unknown fields, CRLF, and Windows-1252 through plan, apply, and rollback', async () => {
+  it('preserves comments, unknown fields, CRLF, and Windows-1252 through plan and apply', async () => {
     const source = [
       '# caf\u00e9 synthetic fixture',
       'guiTypes = {',
@@ -335,14 +486,6 @@ describe('ScriptedGuiStudio targeted source planning safety', () => {
     ).toBe(true);
     expect(appliedBytes.toString('latin1')).toContain('\r\n');
     expect(appliedBytes.includes(Buffer.from([0xe9]))).toBe(true);
-
-    const rolledBack = await harness.transactions.rollback(
-      workspaceId,
-      planned.transactionId,
-      planned.planHash,
-    );
-    expect(rolledBack).toMatchObject({ state: 'rolled_back', rollbackStatus: 'applied' });
-    expect(await readFile(harness.absolutePath)).toEqual(original);
   });
 
   it('binds supported proposed, visual-diff, fidelity, and source-diff artifacts to the plan', async () => {

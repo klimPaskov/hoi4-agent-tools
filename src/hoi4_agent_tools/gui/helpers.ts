@@ -1509,7 +1509,7 @@ export async function planGuiHelperCompilation(
             {
               code: 'GUI_HELPER_OUTPUT_MISSING',
               severity: 'blocker' as const,
-              category: 'transaction' as const,
+              category: 'validation' as const,
               message: `Proposed source is missing ${input.relativePath}`,
               operationId,
             },

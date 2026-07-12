@@ -49,17 +49,7 @@ type AuthenticatedRequest = Request & {
   releaseAdmission?: () => void;
 };
 
-const WRITE_SCOPED_TOOLS = new Set([
-  'hoi4.project_register',
-  'hoi4.focus_plan_changes',
-  'hoi4.focus_rewrite',
-  'hoi4.gui_plan_changes',
-  'hoi4.gui_rewrite',
-  'hoi4.map_plan',
-  'hoi4.map_rewrite',
-  'hoi4.transaction_apply',
-  'hoi4.transaction_rollback',
-]);
+const WRITE_SCOPED_TOOLS = new Set(['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']);
 const MCP_ALLOWED_METHODS = 'GET, POST, DELETE';
 const SINGLETON_SECURITY_HEADERS = new Set([
   'authorization',

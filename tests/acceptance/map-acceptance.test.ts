@@ -313,9 +313,7 @@ async function createHarness(
 ): Promise<Harness> {
   const configuration = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'transactions',
     serverStateRoot: path.join(storageRoot, 'server-state'),
-    transactionTtlSeconds: 3600,
     storageRoots: [path.join(storageRoot, 'artifacts'), path.join(storageRoot, 'cache')],
     workspaces: [
       {
@@ -326,7 +324,6 @@ async function createHarness(
         dependencyRoots: [roots.dependency],
         artifactRoot: path.join(storageRoot, 'artifacts'),
         cacheRoot: path.join(storageRoot, 'cache'),
-        writeEnabled: true,
       },
     ],
   });
@@ -1540,7 +1537,7 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     expect(blockedEvidence.review.validation.passed).toBe(false);
   }, 120_000);
 
-  it('applies only hash-bound affected files and rolls back created and existing files byte-for-byte', async () => {
+  it('applies only the hash-bound affected files byte-for-byte', async () => {
     const transactionRoot = path.join(temporaryRoot, 'transaction');
     const roots = await copyFixtureRoots(transactionRoot);
     const harness = await createHarness(
@@ -1667,22 +1664,9 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     }
     expect(changedPixelCount).toBe(selectedMask.length);
     expect(unexpectedPixelChanges).toBe(0);
-
-    const rolledBack = await harness.transactions.rollback(
-      harness.workspaceId,
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(rolledBack.rollbackStatus).toBe('applied');
-    expect(await treeSnapshot(roots.mod)).toEqual(beforeTree);
-    const restoredScan = await harness.nudger.scan(harness.workspaceId);
-    expect(restoredScan.revision).toBe(beforeScan.revision);
-    expect(restoredScan.index.definitionsById.has(5)).toBe(false);
-    expect(restoredScan.index.entityLocators[0]?.position).toEqual([1, 2, 3]);
   }, 120_000);
 
-  it('applies and rolls back exact normal-adjacency geometry with declarative state localisation in one transaction', async () => {
+  it('applies exact normal-adjacency geometry with declarative state localisation in one transaction', async () => {
     const transactionRoot = path.join(temporaryRoot, 'normal-adjacency-localisation-transaction');
     const roots = await copyFixtureRoots(transactionRoot);
     const harness = await createHarness(
@@ -1775,17 +1759,9 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     expect(
       (await readFile(path.join(roots.mod, ...localisationPath.split('/')))).subarray(0, 3),
     ).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
-
-    const rolledBack = await harness.transactions.rollback(
-      harness.workspaceId,
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(await treeSnapshot(roots.mod)).toEqual(beforeTree);
   }, 120_000);
 
-  it('applies and rolls back a complete land-to-sea dependency migration', async () => {
+  it('applies a complete land-to-sea dependency migration', async () => {
     const transactionRoot = path.join(temporaryRoot, 'type-migration-transaction');
     const roots = await copyFixtureRoots(transactionRoot);
     const harness = await createHarness(
@@ -1793,7 +1769,6 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
       path.join(transactionRoot, 'runtime'),
       'map_type_migration',
     );
-    const beforeTree = await treeSnapshot(roots.mod);
     const result = await harness.nudger.plan({
       workspaceId: harness.workspaceId,
       operations: [
@@ -1838,12 +1813,5 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
       '# Project-owned game-root state; comments and unknown blocks must survive targeted edits.',
     );
     expect(migratedStateSource).toContain('unknown_fixture_block = { preserve = yes }');
-    const rolledBack = await harness.transactions.rollback(
-      harness.workspaceId,
-      result.transaction.transactionId,
-      result.transaction.planHash,
-    );
-    expect(rolledBack.state).toBe('rolled_back');
-    expect(await treeSnapshot(roots.mod)).toEqual(beforeTree);
   }, 120_000);
 });

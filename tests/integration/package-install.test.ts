@@ -6,7 +6,6 @@ import process from 'node:process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compareCodeUnits } from '../../src/hoi4_agent_tools/core/canonical.js';
 import {
-  GENERATED_SCHEMA_FILES,
   PACKAGE_BIN_TARGETS,
   buildPackAndInstall,
   packagedWorkspaceLeaks,
@@ -17,15 +16,17 @@ import { qualifyInstalledHttpBinary } from '../../scripts/distribution/installed
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 const expectedToolNames = [
-  'hoi4.project_register',
-  'hoi4.project_scan',
-  'hoi4.project_status',
-  'hoi4.focus_scan',
-  'hoi4.gui_scan',
-  'hoi4.transaction_apply',
-  'hoi4.artifact_list',
+  'hoi4.mods',
+  'hoi4.focus_inspect',
+  'hoi4.focus_render',
+  'hoi4.focus_rewrite',
+  'hoi4.gui_inspect',
+  'hoi4.gui_render',
+  'hoi4.gui_rewrite',
+  'hoi4.map_inspect',
+  'hoi4.map_render',
+  'hoi4.map_rewrite',
 ];
-const expectedPromptNames = ['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow'];
 const httpOrigin = 'https://package-install.example.test';
 const httpToken = 'package-install-http-token-that-is-longer-than-thirty-two-characters';
 
@@ -116,7 +117,7 @@ afterAll(async () => {
 });
 
 describe('clean npm-pack installation', () => {
-  it('installs only the public payload with generated schemas and synchronized metadata', async () => {
+  it('installs only the executable public payload with synchronized metadata', async () => {
     const sourcePackage = JSON.parse(
       await readFile(path.join(projectRoot, 'package.json'), 'utf8'),
     ) as { name: string; version: string };
@@ -136,43 +137,17 @@ describe('clean npm-pack installation', () => {
     );
     expect(await packagedWorkspaceLeaks(fixture.installedPackageRoot, projectRoot)).toEqual([]);
 
-    for (const fileName of GENERATED_SCHEMA_FILES) {
-      const schema = JSON.parse(
-        await readFile(path.join(fixture.installedPackageRoot, 'schemas', fileName), 'utf8'),
-      ) as { $id: string };
-      expect(schema.$id).toContain(`/v${sourcePackage.version}/schemas/${fileName}`);
-    }
+    expect(fixture.pack.files.some(({ path: filePath }) => filePath.startsWith('schemas/'))).toBe(
+      false,
+    );
   });
 
-  it('resolves the public module and schema exports from the isolated consumer', async () => {
-    const probePath = path.join(fixture.consumerRoot, 'export-probe.mjs');
-    await writeFile(
-      probePath,
-      `import { readFile } from 'node:fs/promises';
-import { PACKAGE_NAME, PACKAGE_VERSION } from 'hoi4-agent-tools';
-const schemaSpecifiers = ${JSON.stringify(
-        GENERATED_SCHEMA_FILES.map((name) => `hoi4-agent-tools/schemas/${name}`),
-      )};
-const schemaIds = [];
-for (const specifier of schemaSpecifiers) {
-  const schema = JSON.parse(await readFile(new URL(import.meta.resolve(specifier)), 'utf8'));
-  schemaIds.push(schema.$id);
-}
-process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }));
-`,
-    );
-    const probe = await runCommand(process.execPath, [probePath], {
-      cwd: fixture.consumerRoot,
-      env: isolatedEnvironment(),
-    });
-    const result = JSON.parse(probe.stdout) as {
-      PACKAGE_NAME: string;
-      PACKAGE_VERSION: string;
-      schemaIds: string[];
-    };
-    expect(result.PACKAGE_NAME).toBe(fixture.pack.name);
-    expect(result.PACKAGE_VERSION).toBe(fixture.pack.version);
-    expect(result.schemaIds).toHaveLength(GENERATED_SCHEMA_FILES.length);
+  it('does not expose an SDK or generated schema subpath outside the MCP bins', async () => {
+    const installedPackage = JSON.parse(
+      await readFile(path.join(fixture.installedPackageRoot, 'package.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(installedPackage).not.toHaveProperty('exports');
+    expect(fixture.pack.files.map(({ path: filePath }) => filePath)).not.toContain('dist/index.js');
   });
 
   it('ships runnable setup and HTTP bins plus all npm bin shims', async () => {
@@ -204,163 +179,107 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
         }),
       },
     );
-    const discoveryResult = JSON.parse(discovery.stdout) as { candidates: string[] };
-    expect(discoveryResult.candidates).toEqual(
-      [...discoveryResult.candidates].sort(compareCodeUnits),
+    const discoveryResult = JSON.parse(discovery.stdout) as {
+      gameRoots: string[];
+      modRoots: string[];
+    };
+    expect(discoveryResult.gameRoots).toEqual(
+      [...discoveryResult.gameRoots].sort(compareCodeUnits),
     );
-    expect(new Set(discoveryResult.candidates).size).toBe(discoveryResult.candidates.length);
-    expect(discoveryResult.candidates).toEqual(
-      expect.arrayContaining(
-        await Promise.all([realpath(discoveredGame), realpath(discoveredMod)]),
-      ),
-    );
-    expect(discoveryResult.candidates).not.toContain(await realpath(nonDirectory));
+    expect(discoveryResult.modRoots).toEqual([...discoveryResult.modRoots].sort(compareCodeUnits));
+    expect(discoveryResult.gameRoots).toContain(await realpath(discoveredGame));
+    expect(discoveryResult.modRoots).toContain(await realpath(discoveredMod));
+    expect(discoveryResult.modRoots).not.toContain(await realpath(nonDirectory));
     expect(await readFile(nonDirectory, 'utf8')).toBe('unchanged\n');
 
-    const setupWorkspace = path.join(temporaryRoot, 'setup-workspace');
+    const setupModRoot = path.join(temporaryRoot, 'setup-mods');
+    const setupWorkspace = path.join(setupModRoot, 'setup-workspace');
+    const secondWorkspace = path.join(setupModRoot, 'second-workspace');
+    const setupLocalAppData = path.join(temporaryRoot, 'setup-local-app-data');
+    const setupStorageRoot = path.join(setupLocalAppData, 'hoi4-agent-tools', 'workspaces');
     const setupConfig = path.join(temporaryRoot, 'setup-config.json');
-    await mkdir(setupWorkspace);
+    setupServerStateRoot = path.join(setupLocalAppData, 'hoi4-agent-tools', 'state');
+    const setupEnvironment = isolatedEnvironment({
+      LOCALAPPDATA: setupLocalAppData,
+    });
+    delete setupEnvironment.XDG_CONFIG_HOME;
+    delete setupEnvironment.XDG_DATA_HOME;
+    delete setupEnvironment.XDG_STATE_HOME;
+    await Promise.all([
+      mkdir(setupWorkspace, { recursive: true }),
+      mkdir(secondWorkspace, { recursive: true }),
+    ]);
     await runCommand(
       process.execPath,
       [
         fixture.binEntries['hoi4-agent-tools-setup'],
-        '--init-config',
+        '--init',
+        '--config',
         setupConfig,
-        '--workspace',
-        setupWorkspace,
-        '--workspace-id',
-        'setup_mod',
-        '--workspace-name',
-        'Setup Mod',
+        '--mod-root',
+        setupModRoot,
+        '--game-root',
+        discoveredGame,
       ],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
+      { cwd: fixture.consumerRoot, env: setupEnvironment },
     );
     const generatedConfig = JSON.parse(await readFile(setupConfig, 'utf8')) as {
-      writePolicy: string;
-      workspaces: { id: string; name: string; root: string; writeEnabled: boolean }[];
+      gameRoot: string;
+      modRoots: string[];
+      serverStateRoot: string;
+      workspaceStorageRoot: string;
     };
     expect(generatedConfig).toMatchObject({
-      writePolicy: 'read-only',
-      workspaces: [
-        {
-          id: 'setup_mod',
-          name: 'Setup Mod',
-          root: path.resolve(setupWorkspace),
-          writeEnabled: false,
-        },
-      ],
+      serverStateRoot: setupServerStateRoot,
+      modRoots: [await realpath(setupModRoot)],
+      gameRoot: await realpath(discoveredGame),
+      workspaceStorageRoot: await realpath(setupStorageRoot),
     });
+    expect(path.dirname(generatedConfig.serverStateRoot)).toBe(
+      path.dirname(generatedConfig.workspaceStorageRoot),
+    );
+    expect(generatedConfig).not.toHaveProperty('writePolicy');
+    expect(generatedConfig).not.toHaveProperty('workspaces');
     await expect(
       runCommand(
         process.execPath,
         [
           fixture.binEntries['hoi4-agent-tools-setup'],
-          '--init-config',
+          '--init',
+          '--config',
           setupConfig,
-          '--workspace',
-          setupWorkspace,
+          '--mod-root',
+          setupModRoot,
         ],
-        { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
+        { cwd: fixture.consumerRoot, env: setupEnvironment },
       ),
     ).rejects.toThrow();
     const diagnosis = await runCommand(
       process.execPath,
       [fixture.binEntries['hoi4-agent-tools-setup'], '--diagnose', '--config', setupConfig],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
+      { cwd: fixture.consumerRoot, env: setupEnvironment },
     );
     expect(JSON.parse(diagnosis.stdout)).toMatchObject({
       status: 'ok',
       version: fixture.pack.version,
-      workspaces: [
-        {
+      serverState: { root: await realpath(setupServerStateRoot) },
+      workspaces: expect.arrayContaining([
+        expect.objectContaining({
           permissions: expect.arrayContaining([
-            { rootKind: 'mod', readable: true, writable: false },
+            { rootKind: 'mod', readable: true, writable: true },
             { rootKind: 'artifact', readable: true, writable: true },
             { rootKind: 'cache', readable: true, writable: true },
           ]),
-        },
-      ],
+        }),
+      ]),
     });
-
-    const writeSetupConfig = path.join(temporaryRoot, 'setup-write-config.json');
-    setupServerStateRoot = path.join(
-      tmpdir(),
-      `hoi4-package-state-${path.basename(temporaryRoot)}`,
-    );
-    await runCommand(
-      process.execPath,
-      [
-        fixture.binEntries['hoi4-agent-tools-setup'],
-        '--init-config',
-        writeSetupConfig,
-        '--workspace',
-        setupWorkspace,
-        '--enable-writes',
-        '--server-state',
-        setupServerStateRoot,
-      ],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
-    );
-    expect(JSON.parse(await readFile(writeSetupConfig, 'utf8'))).toMatchObject({
-      writePolicy: 'transactions',
-      serverStateRoot: path.resolve(setupServerStateRoot),
-      workspaces: [{ writeEnabled: true }],
-    });
-    const reviewedSetupConfig = path.join(temporaryRoot, 'setup-reviewed-write-config.json');
-    const reviewedServerStateRoot = path.join(temporaryRoot, 'reviewed-server-state');
-    await runCommand(
-      process.execPath,
-      [
-        fixture.binEntries['hoi4-agent-tools-setup'],
-        '--init-config',
-        reviewedSetupConfig,
-        '--workspace',
-        setupWorkspace,
-        '--reviewed-writes',
-        '--server-state',
-        reviewedServerStateRoot,
-      ],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
-    );
-    expect(JSON.parse(await readFile(reviewedSetupConfig, 'utf8'))).toMatchObject({
-      writePolicy: 'transactions',
-      serverStateRoot: path.resolve(reviewedServerStateRoot),
-      workspaces: [{ writeEnabled: true }],
-    });
-    const autonomousSetupConfig = path.join(temporaryRoot, 'setup-autonomous-write-config.json');
-    const autonomousServerStateRoot = path.join(temporaryRoot, 'autonomous-server-state');
-    await runCommand(
-      process.execPath,
-      [
-        fixture.binEntries['hoi4-agent-tools-setup'],
-        '--init-config',
-        autonomousSetupConfig,
-        '--workspace',
-        setupWorkspace,
-        '--autonomous-writes',
-        '--server-state',
-        autonomousServerStateRoot,
-      ],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
-    );
-    expect(JSON.parse(await readFile(autonomousSetupConfig, 'utf8'))).toMatchObject({
-      writePolicy: 'autonomous',
-      serverStateRoot: path.resolve(autonomousServerStateRoot),
-      workspaces: [{ writeEnabled: true }],
-    });
-    const writeDiagnosis = await runCommand(
-      process.execPath,
-      [fixture.binEntries['hoi4-agent-tools-setup'], '--diagnose', '--config', writeSetupConfig],
-      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
-    );
-    expect(JSON.parse(writeDiagnosis.stdout)).toMatchObject({
-      status: 'ok',
-      serverState: {
-        root: await realpath(setupServerStateRoot),
-        readable: true,
-        writable: true,
-      },
-    });
+    await expect(
+      runCommand(
+        process.execPath,
+        [fixture.binEntries['hoi4-agent-tools-setup'], '--init-config', setupConfig],
+        { cwd: fixture.consumerRoot, env: setupEnvironment },
+      ),
+    ).rejects.toThrow();
     const clientConfig = await runCommand(
       process.execPath,
       [
@@ -377,16 +296,36 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
         mcpServers: { hoi4_agent_tools: { env: { HOI4_AGENT_CONFIG: setupConfig } } },
       },
     });
+    const defaultClientConfig = await runCommand(
+      process.execPath,
+      [fixture.binEntries['hoi4-agent-tools-setup'], '--print-client-config'],
+      {
+        cwd: fixture.consumerRoot,
+        env: isolatedEnvironment({ APPDATA: path.join(temporaryRoot, 'default-config-root') }),
+      },
+    );
+    const defaultClient = JSON.parse(defaultClientConfig.stdout) as {
+      codexToml: string;
+      generic: { mcpServers: { hoi4_agent_tools: Record<string, unknown> } };
+    };
+    expect(defaultClient.generic.mcpServers.hoi4_agent_tools).not.toHaveProperty('env');
+    expect(defaultClient.codexToml).not.toContain('HOI4_AGENT_CONFIG');
   });
 
   it('qualifies authenticated Streamable HTTP through the installed package binary', async () => {
     const workspace = path.join(temporaryRoot, 'http-workspace');
-    await mkdir(workspace);
+    const focusRelativePath = 'common/national_focus/http_fixture.txt';
+    await mkdir(path.join(workspace, 'common', 'national_focus'), { recursive: true });
+    await writeFile(
+      path.join(workspace, focusRelativePath),
+      'focus_tree = { id = http_fixture focus = { id = http_root x = 0 y = 0 cost = 10 } }\n',
+    );
     const configPath = path.join(temporaryRoot, 'http-config.json');
     await writeFile(
       configPath,
       `${JSON.stringify({
         version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'http-state'),
         workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
         http: {
           host: '127.0.0.1',
@@ -410,11 +349,9 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
         HOI4_AGENT_CONFIG: configPath,
         PACKAGE_ACCEPTANCE_TOKEN: httpToken,
       }),
-      expectedPromptNames,
-      expectedResourceUri: 'hoi4-agent://schema/focus-plan',
       expectedServerName: fixture.pack.name,
       expectedServerVersion: fixture.pack.version,
-      expectedToolNames,
+      focusRelativePath,
       origin: httpOrigin,
       token: httpToken,
       workspaceId: 'fixture',
@@ -422,10 +359,14 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
 
     expect(qualified.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/u);
     expect(qualified.sessionId).toMatch(/^[0-9a-f-]{36}$/u);
-    expect(qualified.toolNames).toEqual(expect.arrayContaining(expectedToolNames));
-    expect(qualified.resourceUris).toContain('hoi4-agent://schema/focus-plan');
-    expect(qualified.resourceMimeType).toBe('application/schema+json');
-    expect(qualified.promptNames).toEqual(expect.arrayContaining(expectedPromptNames));
+    expect(qualified.toolNames).toEqual(expectedToolNames);
+    expect(qualified.resourceUris).toEqual([]);
+    expect(qualified.resourceTemplateUris).toEqual([
+      'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}',
+    ]);
+    expect(qualified.resourceMimeType).toBe('application/json');
+    expect(qualified.boundedArtifactBytes).toBe(64);
+    expect(qualified.promptNames).toEqual([]);
     expect(qualified.progress).toEqual([0, 2, 3]);
     expect(qualified.cancellationObserved).toBe(true);
     expect(qualified.initializedStatus).toBe(202);
@@ -440,6 +381,7 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
       configPath,
       `${JSON.stringify({
         version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'stdio-state'),
         workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
       })}\n`,
     );
@@ -472,8 +414,8 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
       },
     });
     const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
-    expect(instructions).toContain('Select this server proactively');
-    expect(instructions).toContain('Configure writePolicy "autonomous"');
+    expect(instructions).toContain('Start with hoi4.mods');
+    expect(instructions).toContain('Each rewrite performs the complete edit in one call');
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
     );
@@ -482,18 +424,7 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     );
     const listed = await waitForJsonRpcResponse(child, 2, stdoutLines, () => stderr);
     const tools = (listed.result as { tools: { name: string }[] }).tools.map(({ name }) => name);
-    expect(tools).toEqual(expect.arrayContaining(expectedToolNames));
-    child.stdin.write(
-      `${JSON.stringify({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'resources/read',
-        params: { uri: 'hoi4-agent://docs/agent-integration' },
-      })}\n`,
-    );
-    const guide = await waitForJsonRpcResponse(child, 3, stdoutLines, () => stderr);
-    const contents = (guide.result as { contents: Array<{ text?: string }> }).contents;
-    expect(contents[0]?.text).toContain('Autonomous selection rules');
+    expect(tools).toEqual(expectedToolNames);
     expect(
       stdoutLines.every((line) => (JSON.parse(line) as { jsonrpc?: unknown }).jsonrpc === '2.0'),
     ).toBe(true);

@@ -3,6 +3,7 @@ import fg from 'fast-glob';
 import {
   ArtifactStore,
   boundedSourceHashEvidence,
+  publicArtifactLink,
   type ArtifactWrite,
   type StoredArtifact,
 } from '../core/artifacts.js';
@@ -11,6 +12,7 @@ import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics.js';
 import { CoreEngine } from '../core/engine.js';
 import { RenderBudget } from '../core/render-budget.js';
+import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { WorkspaceScanner } from '../core/scanner.js';
 import {
@@ -21,7 +23,17 @@ import {
 } from '../core/transactions.js';
 import type { WorkspaceResolver } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
-import { defaultMapSelectorValue, MapWorkspaceIndex } from './model.js';
+import {
+  MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT,
+  MAP_SELECTED_OFFSET_BYTES,
+  MAP_SELECTED_PIXEL_LIMIT,
+} from './limits.js';
+import {
+  defaultMapSelectorValue,
+  MapWorkspaceIndex,
+  type ProvinceGeometry,
+  type ProvinceRaster,
+} from './model.js';
 import { planMapOperationsAsync, type MapOperation, type MapOperationPlan } from './operations.js';
 import {
   renderMap,
@@ -71,11 +83,220 @@ export interface StoredMapDiff {
   filesScanned: string[];
 }
 
+export interface MapRewritePlanInput {
+  workspaceId: string;
+  operations: MapOperation[];
+  diffScale?: number;
+  principal?: string;
+  signal?: AbortSignal;
+}
+
+export interface MapRewritePlanResult extends MapPlanResult, StoredMapDiff {}
+
+interface PreparedMapOperations {
+  snapshot: MapScanSnapshot;
+  plan: MapOperationPlan;
+  validation: MapValidationResult;
+}
+
 export interface MapValidationAttributionInput {
   diagnostics: readonly Diagnostic[];
   operations: ReadonlyArray<MapOperationPlan['operations'][number]>;
   changes: readonly Pick<ProposedFileChange, 'relativePath' | 'operationIds'>[];
   baselineDiagnostics?: readonly Diagnostic[];
+}
+
+export type ProvinceGeometryRowRun = readonly [y: number, startX: number, endXExclusive: number];
+
+export interface ProvinceGeometryRowRuns {
+  provinceId: number;
+  pixelCount: number;
+  bounds: {
+    minX: number;
+    minY: number;
+    maxXExclusive: number;
+    maxYExclusive: number;
+  };
+  rowRunCount: number;
+  rowRuns: ProvinceGeometryRowRun[];
+}
+
+export interface ProvinceGeometryRowRunExport {
+  width: number;
+  height: number;
+  requestedProvinceIds: number[];
+  unknownProvinceIds: number[];
+  missingGeometryProvinceIds: number[];
+  pixelCount: number;
+  rowRunCount: number;
+  provinces: ProvinceGeometryRowRuns[];
+}
+
+export interface ProvinceGeometryExportSource {
+  definitionsById: ReadonlyMap<number, unknown>;
+  raster: Pick<ProvinceRaster, 'width' | 'height' | 'provinceIds' | 'geometry'> | undefined;
+}
+
+function compareNumbers(left: number, right: number): number {
+  return left - right;
+}
+
+function exactGeometryBounds(geometry: ProvinceGeometry): ProvinceGeometryRowRuns['bounds'] {
+  return {
+    minX: geometry.minX,
+    minY: geometry.minY,
+    maxXExclusive: geometry.maxX + 1,
+    maxYExclusive: geometry.maxY + 1,
+  };
+}
+
+function assertProvinceGeometryExportPixelBudget(pixelCount: number): void {
+  if (!Number.isSafeInteger(pixelCount) || pixelCount < 0) {
+    throw new ServiceError(
+      'MAP_SELECTED_PIXEL_BUDGET_BLOCKED',
+      'Province geometry export declares an invalid selected-pixel count',
+      {
+        source: 'Province geometry export',
+        selectedPixels: pixelCount,
+        maximumSelectedPixels: MAP_SELECTED_PIXEL_LIMIT,
+      },
+    );
+  }
+  if (pixelCount > MAP_SELECTED_PIXEL_LIMIT) {
+    throw new ServiceError(
+      'MAP_SELECTED_PIXEL_BUDGET_BLOCKED',
+      'Province geometry export exceeds the fixed selected-pixel memory budget',
+      {
+        source: 'Province geometry export',
+        selectedPixels: pixelCount,
+        maximumSelectedPixels: MAP_SELECTED_PIXEL_LIMIT,
+        maximumOffsetBytes: MAP_SELECTED_PIXEL_LIMIT * MAP_SELECTED_OFFSET_BYTES,
+      },
+    );
+  }
+}
+
+/**
+ * Export maximal, canonical row runs from the same raster used by map rewrites.
+ * Runs are collected in raster order, so every province's tuples are sorted by
+ * y and then startX without a second, memory-heavy sort.
+ */
+export async function exportProvinceGeometryRowRuns(
+  source: ProvinceGeometryExportSource,
+  provinceIds: readonly number[],
+  signal?: AbortSignal,
+): Promise<ProvinceGeometryRowRunExport> {
+  signal?.throwIfAborted();
+  if (provinceIds.length > MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT) {
+    throw new ServiceError(
+      'MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT',
+      `Province geometry inspection accepts at most ${MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT} IDs`,
+      {
+        requestedProvinceCount: provinceIds.length,
+        maximumProvinceCount: MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT,
+      },
+    );
+  }
+  if (provinceIds.some((provinceId) => !Number.isSafeInteger(provinceId) || provinceId < 0)) {
+    throw new ServiceError(
+      'MAP_PROVINCE_GEOMETRY_SELECTOR_INVALID',
+      'Province geometry inspection IDs must be non-negative safe integers',
+    );
+  }
+  const raster = source.raster;
+  if (raster === undefined) {
+    throw new ServiceError(
+      'MAP_PROVINCE_BITMAP_MISSING',
+      'Exact province geometry inspection requires provinces.bmp',
+    );
+  }
+
+  const requestedProvinceIds = [...new Set(provinceIds)].sort(compareNumbers);
+  const unknownProvinceIds = requestedProvinceIds.filter(
+    (provinceId) => !source.definitionsById.has(provinceId),
+  );
+  const missingGeometryProvinceIds = requestedProvinceIds.filter(
+    (provinceId) => source.definitionsById.has(provinceId) && !raster.geometry.has(provinceId),
+  );
+  const exportableProvinceIds = requestedProvinceIds.filter(
+    (provinceId) => source.definitionsById.has(provinceId) && raster.geometry.has(provinceId),
+  );
+  let pixelCount = 0;
+  for (const provinceId of exportableProvinceIds) {
+    const geometry = raster.geometry.get(provinceId);
+    if (geometry === undefined) continue;
+    pixelCount += geometry.pixelCount;
+    assertProvinceGeometryExportPixelBudget(pixelCount);
+  }
+
+  const rowRunsByProvince = new Map<number, ProvinceGeometryRowRun[]>(
+    exportableProvinceIds.map((provinceId) => [provinceId, []]),
+  );
+  const observedPixelCounts = new Map<number, number>(
+    exportableProvinceIds.map((provinceId) => [provinceId, 0]),
+  );
+  for (let y = 0; y < raster.height; y += 1) {
+    if (y % 32 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      signal?.throwIfAborted();
+    }
+    let x = 0;
+    while (x < raster.width) {
+      const provinceId = raster.provinceIds[y * raster.width + x] ?? -1;
+      const startX = x;
+      x += 1;
+      while (x < raster.width && (raster.provinceIds[y * raster.width + x] ?? -1) === provinceId) {
+        x += 1;
+      }
+      const runs = rowRunsByProvince.get(provinceId);
+      if (runs === undefined) continue;
+      runs.push([y, startX, x]);
+      observedPixelCounts.set(provinceId, (observedPixelCounts.get(provinceId) ?? 0) + x - startX);
+    }
+  }
+  signal?.throwIfAborted();
+
+  const provinces = exportableProvinceIds.map((provinceId) => {
+    const geometry = raster.geometry.get(provinceId);
+    if (geometry === undefined) {
+      throw new ServiceError(
+        'MAP_RASTER_GEOMETRY_MISMATCH',
+        'Province geometry disappeared during exact row-run export',
+        { provinceId },
+      );
+    }
+    const observedPixelCount = observedPixelCounts.get(provinceId) ?? 0;
+    if (observedPixelCount !== geometry.pixelCount) {
+      throw new ServiceError(
+        'MAP_RASTER_GEOMETRY_MISMATCH',
+        'Exact province row runs do not match the indexed province pixel count',
+        {
+          provinceId,
+          expectedPixelCount: geometry.pixelCount,
+          observedPixelCount,
+        },
+      );
+    }
+    const rowRuns = rowRunsByProvince.get(provinceId) ?? [];
+    return {
+      provinceId,
+      pixelCount: observedPixelCount,
+      bounds: exactGeometryBounds(geometry),
+      rowRunCount: rowRuns.length,
+      rowRuns,
+    };
+  });
+
+  return {
+    width: raster.width,
+    height: raster.height,
+    requestedProvinceIds,
+    unknownProvinceIds,
+    missingGeometryProvinceIds,
+    pixelCount,
+    rowRunCount: provinces.reduce((count, province) => count + province.rowRunCount, 0),
+    provinces,
+  };
 }
 
 const provinceOperationKinds = new Set([
@@ -262,7 +483,7 @@ export function attributeMapValidationDiagnostics(
       attributed.push({
         code: 'MAP_VALIDATION_OPERATION_UNOWNED',
         severity: 'blocker',
-        category: 'transaction',
+        category: 'validation',
         message: `${diagnostic.code} already existed before the manifest and has no originating operation`,
         ...(diagnostic.location === undefined ? {} : { location: diagnostic.location }),
         ...(diagnostic.related === undefined ? {} : { related: diagnostic.related }),
@@ -323,7 +544,7 @@ export function attributeMapValidationDiagnostics(
     attributed.push({
       code: 'MAP_VALIDATION_OPERATION_UNOWNED',
       severity: 'blocker',
-      category: 'transaction',
+      category: 'validation',
       message: `${diagnostic.code} cannot be attributed to any manifest operation`,
       ...(diagnostic.location === undefined ? {} : { location: diagnostic.location }),
       ...(diagnostic.related === undefined ? {} : { related: diagnostic.related }),
@@ -535,17 +756,22 @@ export class AgentNudger {
     };
   }
 
-  async plan(input: MapPlanInput): Promise<MapPlanResult> {
-    input.signal?.throwIfAborted();
-    const snapshot = await this.scan(input.workspaceId, input.principal, input.signal);
-    const plan = await planMapOperationsAsync(snapshot.index, input.operations, input.signal);
+  private async prepareOperations(
+    workspaceId: string,
+    operations: readonly MapOperation[],
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<PreparedMapOperations> {
+    signal?.throwIfAborted();
+    const snapshot = await this.scan(workspaceId, principal, signal);
+    const plan = await planMapOperationsAsync(snapshot.index, operations, signal);
     const baselineValidation = await validateMapAsync(
       snapshot.index,
-      input.signal === undefined ? {} : { signal: input.signal },
+      signal === undefined ? {} : { signal },
     );
     const rawValidation = await validateMapAsync(plan.finalIndex, {
       baseline: snapshot.index,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
+      ...(signal === undefined ? {} : { signal }),
       ...(plan.expectedChangedBounds === undefined
         ? {}
         : { expectedChangedBounds: plan.expectedChangedBounds }),
@@ -559,7 +785,35 @@ export class AgentNudger {
         baselineDiagnostics: baselineValidation.diagnostics,
       }),
     };
-    const validation = validationWithPlan(attributedValidation, plan);
+    return {
+      snapshot,
+      plan,
+      validation: validationWithPlan(attributedValidation, plan),
+    };
+  }
+
+  async plan(input: MapPlanInput): Promise<MapPlanResult> {
+    const prepared = await this.prepareOperations(
+      input.workspaceId,
+      input.operations,
+      input.principal,
+      input.signal,
+    );
+    return this.planPrepared(input, prepared);
+  }
+
+  private async planPrepared(
+    input: MapPlanInput,
+    prepared: PreparedMapOperations,
+  ): Promise<MapPlanResult> {
+    input.signal?.throwIfAborted();
+    const { snapshot, plan, validation } = prepared;
+    if (snapshot.workspaceId !== input.workspaceId) {
+      throw new ServiceError(
+        'MAP_PREPARED_WORKSPACE_MISMATCH',
+        'Prepared map operations belong to another workspace',
+      );
+    }
     const transaction = await this.transactions.plan({
       workspaceId: input.workspaceId,
       ...(input.principal === undefined ? {} : { principal: input.principal }),
@@ -597,7 +851,7 @@ export class AgentNudger {
               {
                 code: 'MAP_TRANSACTION_BYTES_MISMATCH',
                 severity: 'blocker' as const,
-                category: 'transaction' as const,
+                category: 'validation' as const,
                 message: 'Transaction dry-run bytes differ from the validated map operation plan',
               },
             ];
@@ -686,32 +940,51 @@ export class AgentNudger {
     operations: readonly MapOperation[],
     options: Pick<MapRenderOptions, 'scale'> & { principal?: string; signal?: AbortSignal } = {},
   ): Promise<StoredMapDiff> {
-    const budget = new RenderBudget();
-    const snapshot = await this.scan(workspaceId, options.principal, options.signal);
-    const plan = await planMapOperationsAsync(snapshot.index, operations, options.signal);
-    const baselineValidation = await validateMapAsync(
-      snapshot.index,
-      options.signal === undefined ? {} : { signal: options.signal },
+    const prepared = await this.prepareOperations(
+      workspaceId,
+      operations,
+      options.principal,
+      options.signal,
     );
-    const rawValidation = await validateMapAsync(plan.finalIndex, {
-      baseline: snapshot.index,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ...(plan.expectedChangedBounds === undefined
-        ? {}
-        : { expectedChangedBounds: plan.expectedChangedBounds }),
+    return this.renderPreparedDiffAndStore(prepared, operations, options);
+  }
+
+  /**
+   * Build review evidence and a hash-bound transaction from one immutable scan and operation plan.
+   * Any source edit after this preparation is rejected by the transaction read-dependency checks.
+   */
+  async planRewriteWithDiff(input: MapRewritePlanInput): Promise<MapRewritePlanResult> {
+    const prepared = await this.prepareOperations(
+      input.workspaceId,
+      input.operations,
+      input.principal,
+      input.signal,
+    );
+    const diff = await this.renderPreparedDiffAndStore(prepared, input.operations, {
+      ...(input.diffScale === undefined ? {} : { scale: input.diffScale }),
+      ...(input.principal === undefined ? {} : { principal: input.principal }),
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
-    const validation = validationWithPlan(
+    const planned = await this.planPrepared(
       {
-        ...rawValidation,
-        diagnostics: attributeMapValidationDiagnostics({
-          diagnostics: rawValidation.diagnostics,
-          operations: plan.operations,
-          changes: plan.changes,
-          baselineDiagnostics: baselineValidation.diagnostics,
-        }),
+        workspaceId: input.workspaceId,
+        operations: input.operations,
+        artifacts: diff.artifacts.map(publicArtifactLink),
+        ...(input.principal === undefined ? {} : { principal: input.principal }),
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
       },
-      plan,
+      prepared,
     );
+    return { ...diff, ...planned };
+  }
+
+  private async renderPreparedDiffAndStore(
+    prepared: PreparedMapOperations,
+    operations: readonly MapOperation[],
+    options: Pick<MapRenderOptions, 'scale'> & { principal?: string; signal?: AbortSignal },
+  ): Promise<StoredMapDiff> {
+    const budget = new RenderBudget();
+    const { snapshot, plan, validation } = prepared;
     const review: MapDiffReviewContext = {
       operationIds: plan.operations.map(({ id }) => id),
       affectedFiles: plan.changes.map(({ relativePath, operationIds, mediaType, content }) => ({
@@ -770,7 +1043,7 @@ export class AgentNudger {
     const bundle = mapBundleWithSourceHashes(rawBundle, completeSourceHashes);
     const beforeBundle = mapBundleWithSourceHashes(rawBeforeBundle, completeSourceHashes);
     const proposedBundle = mapBundleWithSourceHashes(rawProposedBundle, completeSourceHashes);
-    const workspace = this.resolver.get(workspaceId, options.principal);
+    const workspace = this.resolver.get(snapshot.workspaceId, options.principal);
     const provenance = {
       kind: 'map-diff-render',
       toolVersion: PACKAGE_VERSION,

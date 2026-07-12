@@ -4,6 +4,20 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { FetchLike, Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 const protocolVersion = '2025-11-25';
+const artifactResourceTemplate =
+  'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
+const publicToolNames = [
+  'hoi4.mods',
+  'hoi4.focus_inspect',
+  'hoi4.focus_render',
+  'hoi4.focus_rewrite',
+  'hoi4.gui_inspect',
+  'hoi4.gui_render',
+  'hoi4.gui_rewrite',
+  'hoi4.map_inspect',
+  'hoi4.map_render',
+  'hoi4.map_rewrite',
+] as const;
 
 interface ObservedRequest {
   headers: Headers;
@@ -16,11 +30,9 @@ export interface InstalledHttpQualificationOptions {
   cwd: string;
   entryPath: string;
   environment: NodeJS.ProcessEnv;
-  expectedPromptNames: readonly string[];
-  expectedResourceUri: string;
   expectedServerName: string;
   expectedServerVersion: string;
-  expectedToolNames: readonly string[];
+  focusRelativePath: string;
   origin: string;
   token: string;
   workspaceId: string;
@@ -32,7 +44,10 @@ export interface InstalledHttpQualificationResult {
   initializedStatus: number;
   progress: number[];
   promptNames: string[];
+  artifactResourceUri: string;
+  boundedArtifactBytes: number;
   resourceMimeType: string | undefined;
+  resourceTemplateUris: string[];
   resourceUris: string[];
   sessionId: string;
   toolNames: string[];
@@ -41,6 +56,19 @@ export interface InstalledHttpQualificationResult {
 
 function requireCondition(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+function requireExactNames(
+  actual: readonly string[],
+  expected: readonly string[],
+  label: string,
+): void {
+  const orderedActual = [...actual].sort();
+  const orderedExpected = [...expected].sort();
+  requireCondition(
+    JSON.stringify(orderedActual) === JSON.stringify(orderedExpected),
+    `${label} mismatch: expected ${orderedExpected.join(', ')}, received ${orderedActual.join(', ')}`,
+  );
 }
 
 function rpcMethod(body: BodyInit | null | undefined): string | undefined {
@@ -180,7 +208,10 @@ export async function qualifyInstalledHttpBinary(
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
-  child.stdout.on('data', () => undefined);
+  let serverStdout = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    serverStdout = `${serverStdout}${chunk.toString('utf8')}`.slice(-65_536);
+  });
   let client: Client | undefined;
   try {
     const url = await waitForHttpListening(child);
@@ -231,40 +262,72 @@ export async function qualifyInstalledHttpBinary(
 
     const tools = await client.listTools();
     const toolNames = tools.tools.map(({ name }) => name);
-    for (const expected of options.expectedToolNames) {
-      requireCondition(
-        toolNames.includes(expected),
-        `Installed HTTP server is missing tool ${expected}`,
-      );
-    }
+    requireExactNames(toolNames, publicToolNames, 'Installed HTTP tools');
 
     const resources = await client.listResources();
     const resourceUris = resources.resources.map(({ uri }) => uri);
-    requireCondition(
-      resourceUris.includes(options.expectedResourceUri),
-      `Installed HTTP server is missing resource ${options.expectedResourceUri}`,
+    requireCondition(resourceUris.length === 0, 'Installed HTTP server exposed fixed resources');
+    const resourceTemplates = await client.listResourceTemplates();
+    const resourceTemplateUris = resourceTemplates.resourceTemplates.map(
+      ({ uriTemplate }) => uriTemplate,
     );
-    const resource = await client.readResource({ uri: options.expectedResourceUri });
-    const resourceContent = resource.contents[0];
-    requireCondition(
-      resourceContent !== undefined && 'text' in resourceContent && resourceContent.text.length > 0,
-      `Installed HTTP resource ${options.expectedResourceUri} did not return text`,
+    requireExactNames(
+      resourceTemplateUris,
+      [artifactResourceTemplate],
+      'Installed HTTP resource templates',
     );
 
-    const prompts = await client.listPrompts();
-    const promptNames = prompts.prompts.map(({ name }) => name);
-    for (const expected of options.expectedPromptNames) {
-      requireCondition(
-        promptNames.includes(expected),
-        `Installed HTTP server is missing prompt ${expected}`,
-      );
-    }
+    const promptNames: string[] = [];
+    requireCondition(
+      client.getServerCapabilities()?.prompts === undefined,
+      'Installed HTTP server unexpectedly advertised prompts',
+    );
 
     const progress: number[] = [];
-    await client.callTool(
-      { name: 'hoi4.project_scan', arguments: { workspaceId: options.workspaceId } },
+    const inspection = await client.callTool(
+      {
+        name: 'hoi4.focus_inspect',
+        arguments: {
+          workspaceId: options.workspaceId,
+          relativePath: options.focusRelativePath,
+        },
+      },
       undefined,
       { onprogress: ({ progress: value }) => progress.push(value) },
+    );
+    requireCondition(
+      inspection.isError !== true,
+      'Installed HTTP focus inspection returned an error',
+    );
+    const artifactLink = (inspection.content as unknown[]).find(
+      (entry): entry is { type: 'resource_link'; uri: string; mimeType?: string } =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'type' in entry &&
+        entry.type === 'resource_link' &&
+        'uri' in entry &&
+        typeof entry.uri === 'string' &&
+        'mimeType' in entry &&
+        entry.mimeType === 'application/json',
+    );
+    requireCondition(
+      artifactLink !== undefined,
+      'Installed HTTP focus inspection returned no JSON artifact resource link',
+    );
+    const artifactResourceUri = artifactLink.uri;
+    const rangedArtifactUri = new URL(artifactResourceUri);
+    rangedArtifactUri.searchParams.set('offset', '0');
+    rangedArtifactUri.searchParams.set('length', '64');
+    const resource = await client.readResource({ uri: rangedArtifactUri.href });
+    const resourceContent = resource.contents[0];
+    requireCondition(resourceContent !== undefined, 'Installed HTTP artifact range was empty');
+    const boundedArtifactBytes =
+      'blob' in resourceContent
+        ? Buffer.from(resourceContent.blob, 'base64').length
+        : Buffer.byteLength(resourceContent.text, 'utf8');
+    requireCondition(
+      boundedArtifactBytes === 64,
+      `Installed HTTP artifact range returned ${boundedArtifactBytes} bytes instead of 64`,
     );
     requireCondition(progress.length > 0, 'Installed HTTP tool call emitted no progress');
     requireCondition(
@@ -276,7 +339,13 @@ export async function qualifyInstalledHttpBinary(
     let cancellationObserved = false;
     try {
       await client.callTool(
-        { name: 'hoi4.project_scan', arguments: { workspaceId: options.workspaceId } },
+        {
+          name: 'hoi4.focus_inspect',
+          arguments: {
+            workspaceId: options.workspaceId,
+            relativePath: options.focusRelativePath,
+          },
+        },
         undefined,
         {
           signal: cancellation.signal,
@@ -349,14 +418,21 @@ export async function qualifyInstalledHttpBinary(
       'Installed HTTP session DELETE omitted negotiated headers',
     );
     requireCondition(deleteRequest.status === 200, 'Installed HTTP session DELETE did not succeed');
+    requireCondition(
+      serverStdout.length === 0,
+      `Installed HTTP binary wrote non-protocol data to stdout: ${serverStdout.slice(0, 256)}`,
+    );
 
     return {
+      artifactResourceUri,
+      boundedArtifactBytes,
       cancellationObserved,
       deleteStatus: deleteRequest.status,
       initializedStatus: initializedRequest.status,
       progress,
       promptNames,
       resourceMimeType: resourceContent.mimeType,
+      resourceTemplateUris,
       resourceUris,
       sessionId,
       toolNames,

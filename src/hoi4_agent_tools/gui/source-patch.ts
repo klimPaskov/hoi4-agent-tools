@@ -80,7 +80,7 @@ function validInsertion(text: string): boolean {
  * Restrict existing-file GUI patches to scalar assignments/values or a
  * syntactically complete insertion immediately before a parsed block close.
  * This prevents a caller from presenting an entire file as a "targeted" patch
- * while retaining a useful source-preserving editing surface.
+ * while retaining a useful targeted editing surface.
  */
 export function assertGuiSourcePatchesSafe(
   document: SourceDocument,
