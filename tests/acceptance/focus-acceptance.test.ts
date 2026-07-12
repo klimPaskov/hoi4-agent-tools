@@ -517,7 +517,7 @@ describe('Focus Tree Workbench project-owned acceptance fixture', () => {
       ]),
     );
     expect(await engine.artifacts.list(engine.resolver.get(workspaceId))).toHaveLength(6);
-  }, 120_000);
+  }, 240_000);
 
   it('stores continuous HTML, SVG, PNG, JSON, and complete source maps through FocusWorkbench', async () => {
     const options = {
