@@ -46,7 +46,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 0
+		x = 9
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -60,7 +60,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_01_focus_03 }
-		x = 0
+		x = 9
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -86,7 +86,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_02 focus = synthetic_route_01_focus_03 }
-		x = 0
+		x = 9
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -98,7 +98,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_04 }
-		x = 0
+		x = 9
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -110,7 +110,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_05 }
-		x = 0
+		x = 9
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -122,7 +122,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_06 }
-		x = 0
+		x = 9
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -134,7 +134,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_07 }
-		x = 0
+		x = 9
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -146,7 +146,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_08 }
-		x = 0
+		x = 3
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -339,7 +339,7 @@ focus_tree = {
 		id = synthetic_route_01_focus_25
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_01_focus_24 }
-		x = 0
+		x = 1
 		y = 26
 		cost = 5
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -351,7 +351,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 2
+		x = 10
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -365,7 +365,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_02_focus_03 }
-		x = 2
+		x = 11
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -391,7 +391,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_02 focus = synthetic_route_02_focus_03 }
-		x = 2
+		x = 11
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -403,7 +403,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_04 }
-		x = 2
+		x = 11
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -415,7 +415,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_05 }
-		x = 2
+		x = 11
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -427,7 +427,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_06 }
-		x = 2
+		x = 11
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -439,7 +439,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_07 }
-		x = 2
+		x = 11
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -451,7 +451,7 @@ focus_tree = {
 		id = synthetic_route_02_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_02_focus_08 }
-		x = 2
+		x = 5
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -656,7 +656,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 4
+		x = 11
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -670,7 +670,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_03_focus_03 }
-		x = 4
+		x = 13
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -696,7 +696,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_02 focus = synthetic_route_03_focus_03 }
-		x = 4
+		x = 13
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -708,7 +708,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_04 }
-		x = 4
+		x = 13
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -720,7 +720,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_05 }
-		x = 4
+		x = 13
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -732,7 +732,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_06 }
-		x = 4
+		x = 13
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -744,7 +744,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_07 }
-		x = 4
+		x = 13
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -756,7 +756,7 @@ focus_tree = {
 		id = synthetic_route_03_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_03_focus_08 }
-		x = 4
+		x = 7
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_POLITICAL }
@@ -961,7 +961,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 6
+		x = 12
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -975,7 +975,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_04_focus_03 }
-		x = 6
+		x = 15
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1001,7 +1001,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_02 focus = synthetic_route_04_focus_03 }
-		x = 6
+		x = 15
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1013,7 +1013,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_04 }
-		x = 6
+		x = 15
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1025,7 +1025,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_05 }
-		x = 6
+		x = 15
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1037,7 +1037,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_06 }
-		x = 6
+		x = 15
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1049,7 +1049,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_07 }
-		x = 6
+		x = 15
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1061,7 +1061,7 @@ focus_tree = {
 		id = synthetic_route_04_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_04_focus_08 }
-		x = 6
+		x = 9
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1266,7 +1266,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 8
+		x = 13
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -1280,7 +1280,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_05_focus_03 }
-		x = 8
+		x = 17
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1306,7 +1306,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_02 focus = synthetic_route_05_focus_03 }
-		x = 8
+		x = 17
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1318,7 +1318,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_04 }
-		x = 8
+		x = 17
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1330,7 +1330,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_05 }
-		x = 8
+		x = 17
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1342,7 +1342,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_06 }
-		x = 8
+		x = 17
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1354,7 +1354,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_07 }
-		x = 8
+		x = 17
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1366,7 +1366,7 @@ focus_tree = {
 		id = synthetic_route_05_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_05_focus_08 }
-		x = 8
+		x = 11
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1571,7 +1571,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 10
+		x = 14
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -1585,7 +1585,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_06_focus_03 }
-		x = 10
+		x = 19
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1611,7 +1611,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_02 focus = synthetic_route_06_focus_03 }
-		x = 10
+		x = 19
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1623,7 +1623,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_04 }
-		x = 10
+		x = 19
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1635,7 +1635,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_05 }
-		x = 10
+		x = 19
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1647,7 +1647,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_06 }
-		x = 10
+		x = 19
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1659,7 +1659,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_07 }
-		x = 10
+		x = 19
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1671,7 +1671,7 @@ focus_tree = {
 		id = synthetic_route_06_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_06_focus_08 }
-		x = 10
+		x = 13
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_RESEARCH }
@@ -1876,7 +1876,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 12
+		x = 15
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -1891,7 +1891,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_07_focus_03 }
-		x = 12
+		x = 21
 		y = 4
 		cost = 7
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1919,7 +1919,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_02 focus = synthetic_route_07_focus_03 }
-		x = 12
+		x = 21
 		y = 5
 		cost = 9
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1932,7 +1932,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_04 }
-		x = 12
+		x = 21
 		y = 6
 		cost = 5
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1945,7 +1945,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_05 }
-		x = 12
+		x = 21
 		y = 7
 		cost = 6
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1958,7 +1958,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_06 }
-		x = 12
+		x = 21
 		y = 8
 		cost = 7
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1971,7 +1971,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_07 }
-		x = 12
+		x = 21
 		y = 9
 		cost = 8
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -1984,7 +1984,7 @@ focus_tree = {
 		id = synthetic_route_07_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_07_focus_08 }
-		x = 12
+		x = 15
 		y = 10
 		cost = 9
 		allow_branch = { has_country_flag = synthetic_route_07_revealed }
@@ -2206,7 +2206,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 14
+		x = 16
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -2221,7 +2221,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_08_focus_03 }
-		x = 14
+		x = 23
 		y = 4
 		cost = 7
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2249,7 +2249,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_02 focus = synthetic_route_08_focus_03 }
-		x = 14
+		x = 23
 		y = 5
 		cost = 9
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2262,7 +2262,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_04 }
-		x = 14
+		x = 23
 		y = 6
 		cost = 5
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2275,7 +2275,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_05 }
-		x = 14
+		x = 23
 		y = 7
 		cost = 6
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2288,7 +2288,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_06 }
-		x = 14
+		x = 23
 		y = 8
 		cost = 7
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2301,7 +2301,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_07 }
-		x = 14
+		x = 23
 		y = 9
 		cost = 8
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2314,7 +2314,7 @@ focus_tree = {
 		id = synthetic_route_08_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_08_focus_08 }
-		x = 14
+		x = 17
 		y = 10
 		cost = 9
 		allow_branch = { has_country_flag = synthetic_route_08_revealed }
@@ -2536,7 +2536,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_01
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_hub }
-		x = 16
+		x = 17
 		y = 3
 		cost = 6
 		available = { has_completed_focus = synthetic_route_hub }
@@ -2551,7 +2551,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_09_focus_03 }
-		x = 16
+		x = 25
 		y = 4
 		cost = 7
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2579,7 +2579,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_02 focus = synthetic_route_09_focus_03 }
-		x = 16
+		x = 25
 		y = 5
 		cost = 9
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2592,7 +2592,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_04 }
-		x = 16
+		x = 25
 		y = 6
 		cost = 5
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2605,7 +2605,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_05 }
-		x = 16
+		x = 25
 		y = 7
 		cost = 6
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2618,7 +2618,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_06 }
-		x = 16
+		x = 25
 		y = 8
 		cost = 7
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2631,7 +2631,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_07 }
-		x = 16
+		x = 25
 		y = 9
 		cost = 8
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2644,7 +2644,7 @@ focus_tree = {
 		id = synthetic_route_09_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_09_focus_08 }
-		x = 16
+		x = 19
 		y = 10
 		cost = 9
 		allow_branch = { has_completed_decision = synthetic_decision_crisis_reveal }
@@ -2880,7 +2880,7 @@ focus_tree = {
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_01 }
 		mutually_exclusive = { focus = synthetic_route_10_focus_03 }
-		x = 18
+		x = 27
 		y = 4
 		cost = 7
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2906,7 +2906,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_04
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_02 focus = synthetic_route_10_focus_03 }
-		x = 18
+		x = 27
 		y = 5
 		cost = 9
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2918,7 +2918,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_05
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_04 }
-		x = 18
+		x = 27
 		y = 6
 		cost = 5
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2930,7 +2930,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_06
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_05 }
-		x = 18
+		x = 27
 		y = 7
 		cost = 6
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2942,7 +2942,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_07
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_06 }
-		x = 18
+		x = 27
 		y = 8
 		cost = 7
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2954,7 +2954,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_08
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_07 }
-		x = 18
+		x = 27
 		y = 9
 		cost = 8
 		search_filters = { FOCUS_FILTER_MANPOWER }
@@ -2966,7 +2966,7 @@ focus_tree = {
 		id = synthetic_route_10_focus_09
 		icon = GFX_synthetic_focus
 		prerequisite = { focus = synthetic_route_10_focus_08 }
-		x = 18
+		x = 21
 		y = 10
 		cost = 9
 		search_filters = { FOCUS_FILTER_MANPOWER }

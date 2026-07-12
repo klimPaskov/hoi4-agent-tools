@@ -22,9 +22,11 @@ import {
   FOCUS_PLAN_SCHEMA_VERSION,
   FocusWorkbench,
   compileFocusTree,
+  compactFocusTreePlan,
   compileContinuousFocusPalette,
   compileContinuousFocusPaletteWithSourceMap,
   assertFocusPlanAuthority,
+  assertCompactLayoutQuality,
   createFocusPlanningSidecar,
   enrichFocusPlanFromSidecar,
   detectContinuousFocusDrift,
@@ -854,6 +856,28 @@ continuous_focus_palette = {
     );
   });
 
+  it('restores automatic layout intent from the source-bound planning sidecar', () => {
+    const automatic = focusNode('automatic_round_trip', {
+      mode: 'auto',
+      pinned: false,
+      preferredX: 6,
+      preferredY: 4,
+    });
+    const planned = focusPlan([automatic]);
+    const compiled = compileFocusTree(planned, layoutFocusTree(planned));
+    const sourcePlan = importFocusTrees(
+      parseClausewitz(Buffer.from(compiled), planned.provenance.sourcePath),
+    ).plans[0]!;
+    expect(sourcePlan.focuses[0]?.position.mode).toBe('fixed');
+    const sidecarPlan = structuredClone(planned);
+    sidecarPlan.provenance.sourcePath = sourcePlan.provenance.sourcePath;
+    const sidecar = createFocusPlanningSidecar(sidecarPlan, sourcePlan.provenance.sourceHash);
+    expect(sidecar.focuses[0]?.autoPosition).toEqual(automatic.position);
+    const enriched = enrichFocusPlanFromSidecar(sourcePlan, sidecar);
+    expect(enriched.applied).toBe(true);
+    expect(enriched.plan.focuses[0]?.position).toEqual(automatic.position);
+  });
+
   it('distinguishes plan changes, formatting drift, semantic drift, and conflicts', () => {
     const original = parseClausewitz(Buffer.from(sampleSource), 'mod:fixture.txt');
     const saved = importFocusTrees(original).plans[0];
@@ -1124,6 +1148,386 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
+  it('balances sibling branches by lane order with deterministic mirror spacing', () => {
+    const root = focusNode('symmetric_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const lanes = ['route_a', 'route_b', 'route_c', 'route_d'];
+    const children = lanes.map((laneId, index) =>
+      focusNode(
+        `symmetric_child_${String(4 - index)}`,
+        { mode: 'auto', pinned: false },
+        {
+          laneId,
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+          },
+        },
+      ),
+    );
+    const plan = focusPlan([root, ...children], {
+      laneGroups: lanes.map((id, order) => ({ id, label: id, order })),
+    });
+    const layout = layoutFocusTree(plan);
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]));
+    expect(children.map(({ id }) => byId.get(id)?.x)).toEqual([-3, -1, 1, 3]);
+    expect(layout.metrics?.symmetry).toEqual(
+      expect.objectContaining({
+        siblingCohortCount: 1,
+        asymmetricSiblingCohortCount: 0,
+        maximumSiblingDeviation: 0,
+      }),
+    );
+    expect(layout.metrics?.spacing).toEqual(
+      expect.objectContaining({ requiredSameRowSpacing: 2, tooCloseSameRowPairCount: 0 }),
+    );
+  });
+
+  it('measures two-child symmetry against the placed structural parent anchor', () => {
+    const parent = focusNode('anchor_parent', { mode: 'fixed', x: 10, y: 0, pinned: true });
+    const children = (coordinates: readonly number[]) =>
+      coordinates.map((x, index) =>
+        focusNode(
+          `anchor_child_${String(index)}`,
+          { mode: 'auto', pinned: false, preferredX: x, preferredY: 1 },
+          {
+            prerequisites: {
+              operator: 'and',
+              groups: [{ operator: 'or', focusIds: [parent.id], rawPassthrough: [] }],
+            },
+          },
+        ),
+      );
+
+    const shifted = layoutFocusTree(focusPlan([parent, ...children([12, 14])]));
+    expect(shifted.metrics?.symmetry).toEqual(
+      expect.objectContaining({
+        asymmetricSiblingCohortCount: 0,
+        maximumSiblingDeviation: 0,
+        offAnchorSiblingCohortCount: 1,
+        maximumSiblingAnchorDeviation: 6,
+      }),
+    );
+    expect(shifted.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'FOCUS_LAYOUT_SIBLING_ANCHOR_DEVIATION',
+          details: expect.objectContaining({
+            anchorX: 10,
+            anchorKind: 'parent_median',
+            deviation: 6,
+          }),
+        }),
+      ]),
+    );
+
+    const balanced = layoutFocusTree(focusPlan([parent, ...children([9, 11])]));
+    expect(balanced.metrics?.symmetry).toEqual(
+      expect.objectContaining({
+        asymmetricSiblingCohortCount: 0,
+        maximumSiblingDeviation: 0,
+        offAnchorSiblingCohortCount: 0,
+        maximumSiblingAnchorDeviation: 0,
+      }),
+    );
+  });
+
+  it('reports objective focus-spacing and connector-length metrics', () => {
+    const root = focusNode('metric_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const adjacent = focusNode('metric_adjacent', {
+      mode: 'fixed',
+      x: 1,
+      y: 0,
+      pinned: true,
+    });
+    const distant = focusNode(
+      'metric_distant',
+      { mode: 'fixed', x: 12, y: 1, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const layout = layoutFocusTree(focusPlan([root, adjacent, distant]));
+    expect(layout.metrics?.spacing).toEqual(
+      expect.objectContaining({
+        requiredSameRowSpacing: 2,
+        tooCloseSameRowPairCount: 1,
+        minimumSameRowSpacing: 1,
+      }),
+    );
+    expect(layout.metrics?.connectors).toEqual(
+      expect.objectContaining({
+        count: 1,
+        longConnectorCount: 1,
+        maximumHorizontalSpan: 12,
+      }),
+    );
+    expect(layout.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'FOCUS_LAYOUT_SAME_ROW_SPACING_UNSATISFIED' }),
+        expect.objectContaining({ code: 'FOCUS_LAYOUT_LONG_CONNECTOR' }),
+      ]),
+    );
+  });
+
+  it('compacts an authored layout without worsening crossings, connector span, or spacing', () => {
+    const root = focusNode('compact_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const near = focusNode(
+      'compact_near',
+      { mode: 'fixed', x: -2, y: 1, pinned: true },
+      {
+        laneId: 'left',
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const far = focusNode(
+      'compact_far',
+      { mode: 'fixed', x: 20, y: 1, pinned: true },
+      {
+        laneId: 'right',
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const authored = focusPlan([root, near, far], {
+      laneGroups: [
+        { id: 'left', label: 'Left', order: 0, minimumX: -20, maximumX: 0 },
+        { id: 'right', label: 'Right', order: 1, minimumX: 10, maximumX: 30 },
+      ],
+    });
+    const before = layoutFocusTree(authored);
+    const compactPlan = compactFocusTreePlan(authored);
+    const after = layoutFocusTree(compactPlan);
+    expect(compactPlan.focuses.every(({ position }) => position.mode === 'auto')).toBe(true);
+    expect(
+      compactPlan.laneGroups.every(
+        ({ minimumX, maximumX }) => minimumX === undefined && maximumX === undefined,
+      ),
+    ).toBe(true);
+    expect(() => assertCompactLayoutQuality(before, after)).not.toThrow();
+    expect(after.metrics?.bounds.columnCount).toBeLessThan(before.metrics?.bounds.columnCount ?? 0);
+    expect(after.metrics?.connectors.crossingCount).toBeLessThanOrEqual(
+      before.metrics?.connectors.crossingCount ?? 0,
+    );
+    expect(after.metrics?.spacing.tooCloseSameRowPairCount).toBe(0);
+    expect(compactFocusTreePlan(compactPlan).focuses.map(({ position }) => position)).toEqual(
+      compactPlan.focuses.map(({ position }) => position),
+    );
+    const regressed = structuredClone(after);
+    regressed.metrics!.connectors.crossingCount =
+      (before.metrics?.connectors.crossingCount ?? 0) + 1;
+    expect(() => assertCompactLayoutQuality(before, regressed)).toThrowError(
+      expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
+    );
+    for (const [field, value] of [
+      ['nodeIntersectionCount', (before.metrics?.connectors.nodeIntersectionCount ?? 0) + 1],
+      ['totalManhattanSpan', (before.metrics?.connectors.totalManhattanSpan ?? 0) + 1],
+    ] as const) {
+      const connectorRegression = structuredClone(after);
+      connectorRegression.metrics!.connectors[field] = value;
+      expect(() => assertCompactLayoutQuality(before, connectorRegression)).toThrowError(
+        expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
+      );
+    }
+    const relativeMaximumBaseline = structuredClone(before);
+    relativeMaximumBaseline.metrics!.connectors.maximumManhattanSpan = Math.max(
+      0,
+      after.metrics!.connectors.maximumManhattanSpan - 1,
+    );
+    expect(() => assertCompactLayoutQuality(relativeMaximumBaseline, after)).toThrowError(
+      expect.objectContaining({
+        code: 'FOCUS_COMPACT_QUALITY_BLOCKED',
+        details: expect.objectContaining({
+          regressions: expect.arrayContaining(['maximumManhattanConnectorSpan']),
+        }),
+      }),
+    );
+  });
+
+  it('anchors compacted fixed sibling coordinates around their compacted parent', () => {
+    const parent = focusNode('compact_anchor_parent', {
+      mode: 'fixed',
+      x: 10,
+      y: 0,
+      pinned: true,
+    });
+    const children = [12, 14].map((x, index) =>
+      focusNode(
+        `compact_anchor_child_${String(index)}`,
+        { mode: 'fixed', x, y: 1, pinned: true },
+        {
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: [parent.id], rawPassthrough: [] }],
+          },
+        },
+      ),
+    );
+    const compacted = compactFocusTreePlan(focusPlan([parent, ...children]));
+    const layout = layoutFocusTree(compacted);
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]));
+    const compactedParent = byId.get(parent.id)!;
+    const compactedChildren = children.map(({ id }) => byId.get(id)!);
+
+    expect(compactedChildren[0]!.x + compactedChildren[1]!.x).toBe(2 * compactedParent.x);
+    expect(layout.metrics?.symmetry).toEqual(
+      expect.objectContaining({
+        asymmetricSiblingCohortCount: 0,
+        maximumSiblingDeviation: 0,
+        offAnchorSiblingCohortCount: 0,
+        maximumSiblingAnchorDeviation: 0,
+      }),
+    );
+  });
+
+  it('uses the same configured lane anchors while compacting and measuring root cohorts', () => {
+    const roots = [
+      focusNode('lane_left_a', { mode: 'fixed', x: -12, y: 0, pinned: true }, { laneId: 'left' }),
+      focusNode('lane_left_b', { mode: 'fixed', x: -10, y: 0, pinned: true }, { laneId: 'left' }),
+      focusNode('lane_right_a', { mode: 'fixed', x: 10, y: 0, pinned: true }, { laneId: 'right' }),
+      focusNode('lane_right_b', { mode: 'fixed', x: 12, y: 0, pinned: true }, { laneId: 'right' }),
+    ];
+    const authored = focusPlan(roots, {
+      laneGroups: [
+        { id: 'left', label: 'Left', order: 0 },
+        { id: 'right', label: 'Right', order: 1 },
+      ],
+    });
+    const compacted = compactFocusTreePlan(authored);
+    const layout = layoutFocusTree(compacted);
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]));
+
+    expect((byId.get('lane_left_a')?.x ?? 0) + (byId.get('lane_left_b')?.x ?? 0)).toBe(-8);
+    expect((byId.get('lane_right_a')?.x ?? 0) + (byId.get('lane_right_b')?.x ?? 0)).toBe(8);
+    expect(layout.metrics?.symmetry).toEqual(
+      expect.objectContaining({
+        offAnchorSiblingCohortCount: 0,
+        maximumSiblingAnchorDeviation: 0,
+      }),
+    );
+  });
+
+  it('throws instead of returning an unchecked compact fallback', () => {
+    const crowdedRoots = Array.from({ length: 100 }, (_, index) =>
+      focusNode(`crowded_root_${String(index)}`, {
+        mode: 'fixed',
+        x: index * 2,
+        y: 0,
+        pinned: true,
+      }),
+    );
+
+    expect(() => compactFocusTreePlan(focusPlan(crowdedRoots))).toThrowError(
+      expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
+    );
+  });
+
+  it('rebalances an automatic gateway without trading shorter edges for crossings or node hits', () => {
+    const upper = focusNode('quality_upper', { mode: 'fixed', x: -10, y: 0, pinned: true });
+    const gateway = focusNode(
+      'quality_gateway',
+      { mode: 'auto', pinned: false, preferredX: -8, preferredY: 1 },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [upper.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const children = [-4, 0, 4, 8].map((x, index) =>
+      focusNode(
+        `quality_child_${String(index)}`,
+        { mode: 'fixed', x, y: 2, pinned: true },
+        {
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: [gateway.id], rawPassthrough: [] }],
+          },
+        },
+      ),
+    );
+    const blocker = focusNode('quality_blocker', {
+      mode: 'fixed',
+      x: 0,
+      y: 1,
+      pinned: true,
+    });
+    const automaticPlan = focusPlan([upper, gateway, blocker, ...children]);
+    const authoredPlan = structuredClone(automaticPlan);
+    authoredPlan.focuses.find(({ id }) => id === gateway.id)!.position = {
+      mode: 'fixed',
+      x: -8,
+      y: 1,
+      pinned: true,
+    };
+    const authored = layoutFocusTree(authoredPlan);
+    const refined = layoutFocusTree(automaticPlan);
+
+    expect(refined.nodes.find(({ id }) => id === gateway.id)?.x).not.toBe(-8);
+    expect(refined.metrics!.connectors.maximumHorizontalSpan).toBeLessThan(
+      authored.metrics!.connectors.maximumHorizontalSpan,
+    );
+    expect(refined.metrics!.connectors.crossingCount).toBeLessThanOrEqual(
+      authored.metrics!.connectors.crossingCount,
+    );
+    expect(refined.metrics!.connectors.nodeIntersectionCount).toBeLessThanOrEqual(
+      authored.metrics!.connectors.nodeIntersectionCount,
+    );
+    expect(refined.metrics!.connectors.longConnectorCount).toBeLessThanOrEqual(
+      authored.metrics!.connectors.longConnectorCount,
+    );
+  });
+
+  it('reflows an arbitrary all-auto plan into compact mirrored rows idempotently', () => {
+    const root = focusNode('wide_auto_root', {
+      mode: 'auto',
+      pinned: false,
+      preferredX: 20,
+      preferredY: 0,
+    });
+    const children = Array.from({ length: 5 }, (_, index) =>
+      focusNode(
+        `wide_auto_child_${String(index)}`,
+        {
+          mode: 'auto',
+          pinned: false,
+          preferredX: index * 10,
+          preferredY: 10,
+        },
+        {
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+          },
+        },
+      ),
+    );
+    const authored = focusPlan([root, ...children], { laneGroups: [] });
+    const before = layoutFocusTree(authored);
+    const compacted = compactFocusTreePlan(authored);
+    const after = layoutFocusTree(compacted);
+    expect(() => assertCompactLayoutQuality(before, after)).not.toThrow();
+    expect(after.metrics).toMatchObject({
+      bounds: { rowCount: 2 },
+      connectors: { crossingCount: 0 },
+      symmetry: { asymmetricSiblingCohortCount: 0, maximumSiblingDeviation: 0 },
+      spacing: { tooCloseSameRowPairCount: 0, minimumSameRowSpacing: 2 },
+    });
+    expect(after.metrics!.bounds.columnCount).toBeLessThan(before.metrics!.bounds.columnCount);
+    expect(after.nodes.every(({ x, y }) => Number.isInteger(x) && Number.isInteger(y))).toBe(true);
+    const repeated = compactFocusTreePlan(compacted);
+    expect(repeated.focuses.map(({ position }) => position)).toEqual(
+      compacted.focuses.map(({ position }) => position),
+    );
+  });
+
   it('rejects rendered rectangle overlaps and centers automatic convergence nodes', () => {
     const left = focusNode(
       'left',
@@ -1177,15 +1581,15 @@ describe('Focus Tree Workbench layout', () => {
     );
     const right = focusNode(
       'exclusive_right',
-      { mode: 'auto', pinned: false, preferredX: 1, preferredY: 0 },
+      { mode: 'auto', pinned: false, preferredX: 1, preferredY: 1 },
       { mutuallyExclusive: ['exclusive_left'] },
     );
     const layout = layoutFocusTree(focusPlan([left, right]), { nodeSpacing: 2 });
     expect(layout.nodes.find(({ id }) => id === 'exclusive_left')).toEqual(
-      expect.objectContaining({ x: 0, y: 0 }),
+      expect.objectContaining({ x: -1, y: 0 }),
     );
     expect(layout.nodes.find(({ id }) => id === 'exclusive_right')).toEqual(
-      expect.objectContaining({ x: 3, y: 0 }),
+      expect.objectContaining({ x: 2, y: 1 }),
     );
     expect(layout.decisions.find(({ focusId }) => focusId === 'exclusive_right')).toEqual(
       expect.objectContaining({

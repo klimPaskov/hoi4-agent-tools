@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { emptyServiceResult, ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
 import {
   errorResult,
+  MAX_INLINE_ARTIFACT_LINKS,
+  MAX_INLINE_DIAGNOSTICS,
+  MAX_INLINE_VALIDATION_CHECKS,
   MAX_INLINE_FILES_SCANNED,
   MAX_TOOL_RESULT_BYTES,
   setInlineFilesScanned,
@@ -176,7 +179,62 @@ describe('MCP error privacy', () => {
     });
     const link = output.content.find((entry) => entry.type === 'resource_link');
     expect(link).toMatchObject({ type: 'resource_link', name: 'fixture.json' });
-    expect(link !== undefined && 'description' in link ? link.description.length : 0).toBe(1_024);
+    expect(link !== undefined && 'description' in link ? link.description.length : 0).toBe(256);
+    expect(Buffer.byteLength(JSON.stringify(output), 'utf8')).toBeLessThanOrEqual(
+      MAX_TOOL_RESULT_BYTES,
+    );
+  });
+
+  it('keeps a diagnostic-heavy render summary and its resource links within the inline budget', () => {
+    const result = emptyServiceResult('test', { mode: 'summary', variantCount: 24 });
+    result.diagnostics = Array.from({ length: 66 }, (_, index) => ({
+      code: `GUI_CONTEXT_${index}`,
+      severity: index % 11 === 0 ? ('error' as const) : ('warning' as const),
+      category: 'rendering' as const,
+      message: `Bounded synthetic GUI diagnostic ${index} ${'detail '.repeat(24)}`,
+    }));
+    result.artifacts = Array.from({ length: 24 }, (_, index) => ({
+      uri: `hoi4-agent://workspace/test/artifact/${'a'.repeat(64)}/${'b'.repeat(64)}/render-${index}.json`,
+      name: `render-${index}.json`,
+      mimeType: 'application/json',
+      description: `Review artifact ${index}`,
+    }));
+    result.validation = {
+      passed: false,
+      checks: Array.from({ length: 10 }, (_, index) => ({
+        id: `check-${index}`,
+        passed: index > 0,
+        message: `Validation check ${index}`,
+      })),
+    };
+
+    const output = toolResult(result);
+    const structured = output.structuredContent as {
+      data: Record<string, unknown>;
+      diagnostics: Array<Record<string, unknown>>;
+      artifacts: Array<Record<string, unknown>>;
+      validation: { checks: Array<Record<string, unknown>> };
+    };
+    expect(structured.data).toEqual({ mode: 'summary', variantCount: 24 });
+    expect(structured.diagnostics).toHaveLength(MAX_INLINE_DIAGNOSTICS);
+    expect(structured.diagnostics[0]).toMatchObject({
+      code: 'MCP_INLINE_COLLECTIONS_TRUNCATED',
+      details: {
+        collections: {
+          diagnostics: { total: 66, limit: MAX_INLINE_DIAGNOSTICS - 1 },
+          validationChecks: { total: 10, limit: MAX_INLINE_VALIDATION_CHECKS },
+        },
+      },
+    });
+    for (const index of [0, 11, 22, 33, 44, 55]) {
+      expect(structured.diagnostics).toContainEqual(
+        expect.objectContaining({ code: `GUI_CONTEXT_${index}`, severity: 'error' }),
+      );
+    }
+    expect(structured.artifacts).toHaveLength(24);
+    expect(structured.validation.checks).toHaveLength(MAX_INLINE_VALIDATION_CHECKS);
+    expect(output.content.filter(({ type }) => type === 'resource_link')).toHaveLength(24);
+    expect(structured.artifacts.length).toBeLessThanOrEqual(MAX_INLINE_ARTIFACT_LINKS);
     expect(Buffer.byteLength(JSON.stringify(output), 'utf8')).toBeLessThanOrEqual(
       MAX_TOOL_RESULT_BYTES,
     );

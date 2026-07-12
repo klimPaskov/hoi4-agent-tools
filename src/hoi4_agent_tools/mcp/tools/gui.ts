@@ -22,6 +22,7 @@ import {
 import { workspaceIdSchema, workspaceRelativePathSchema } from '../../schemas/common.js';
 import { PACKAGE_VERSION } from '../../version.js';
 import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
@@ -127,11 +128,20 @@ const previewStateSchema = z.enum([
   'missing-localisation',
 ]);
 
+const compactGuiScenarioSchema = compactValidatedInputSchema(
+  GuiPreviewScenarioSchema,
+  `Complete GUI preview scenario: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
+);
+const compactGuiHelperSchema = compactValidatedInputSchema(
+  GuiHelperDocumentSchema,
+  `Complete GUI helper document: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
+);
+
 const guiBaseInput = z
   .object({
     workspaceId: workspaceIdSchema,
     windowName: z.string().min(1).max(256),
-    scenario: GuiPreviewScenarioSchema,
+    scenario: compactGuiScenarioSchema,
   })
   .strict();
 
@@ -139,8 +149,8 @@ const guiInspectInput = z
   .object({
     workspaceId: workspaceIdSchema,
     windowName: z.string().min(1).max(256).optional(),
-    scenario: GuiPreviewScenarioSchema.optional(),
-    relatedScenarios: z.array(GuiPreviewScenarioSchema).max(32).optional(),
+    scenario: compactGuiScenarioSchema.optional(),
+    relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -199,7 +209,7 @@ export function registerGuiTools(
     {
       title: 'Inspect scripted GUI',
       description:
-        'Inspect GUI, GFX, scripted logic, localisation, sprites, fonts, interactions, and animation sources for creation and cleanup. Provide a window scenario to include visual, state, click, AI, and cost diagnostics.',
+        'Inspect GUI, GFX, script, localisation, and animation sources. Window/scenario selectors add offline visual and interaction diagnostics.',
       inputSchema: guiInspectInput,
       outputSchema: guiScanOutputSchema,
       annotations: artifactProducing,
@@ -404,7 +414,7 @@ export function registerGuiTools(
     .extend({
       states: z.array(previewStateSchema).max(14).optional(),
       resolutions: z.array(resolutionSchema).min(1).max(16).optional(),
-      comparisonScenario: GuiPreviewScenarioSchema.optional(),
+      comparisonScenario: compactGuiScenarioSchema.optional(),
     })
     .strict()
     .superRefine(({ scenario, states, resolutions }, context) => {
@@ -450,8 +460,7 @@ export function registerGuiTools(
     'hoi4.gui_render',
     {
       title: 'Render scripted GUI artifacts',
-      description:
-        'Render deterministic full, cropped, annotated, click, hierarchy, state, resolution, comparison, and fidelity artifacts for GUI creation and cleanup review.',
+      description: 'Render deterministic offline review artifacts for one GUI window and scenario.',
       inputSchema: renderInput,
       outputSchema: guiRenderOutputSchema,
       annotations: artifactProducing,
@@ -464,16 +473,16 @@ export function registerGuiTools(
     {
       title: 'Create or clean up scripted GUI',
       description:
-        'Create or replace a bounded scripted-GUI text package, or clean up one mod-owned .gui with exact patches. Source/helper mode accepts a main .gui plus additional .gui, .gfx, common/scripted_guis .txt, and localisation .yml source; binary art is referenced by those files, not uploaded. The complete package is validated, rendered, and applied in one call.',
+        'Apply one validated source, helper, or exact-patch GUI package. Text dependencies use additionalFiles; binary art stays workspace-referenced.',
       inputSchema: z
         .object({
           mode: z.enum(['source', 'helpers', 'patches']),
           workspaceId: workspaceIdSchema,
           relativePath: workspaceRelativePathSchema,
           windowName: z.string().min(1).max(256),
-          scenario: GuiPreviewScenarioSchema,
+          scenario: compactGuiScenarioSchema,
           source: z.string().max(SOURCE_MAX_BYTES).optional(),
-          helper: GuiHelperDocumentSchema.optional(),
+          helper: compactGuiHelperSchema.optional(),
           additionalFiles: z
             .array(
               z

@@ -13,7 +13,7 @@ HOI4 Agent Tools is an MCP server that helps coding agents inspect, create, and 
 Requires Node.js 22 or 24.
 
 ```bash
-npm install --global hoi4-agent-tools@1.0.0
+npm install --global hoi4-agent-tools@1.1.0
 hoi4-agent-tools-setup --init
 ```
 
@@ -44,11 +44,17 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 
 Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, follow the `continuationUri` returned in `_meta` until it is `null`; clients may also request byte ranges with `?offset=<bytes>&length=<bytes>`.
 
+## Coexistence with agent workflows
+
+HOI4 Agent Tools provides HOI4 domain operations; it does not register MCP prompts, replace repository instructions such as `AGENTS.md`, manage skills or plans, or start subagents. The coding agent decides when to call it as part of its existing workflow.
+
+Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Only `hoi4.*_rewrite` calls edit mod source.
+
 ## Create or clean content
 
 Ask your agent in normal task language. A typical workflow is inspect, render, rewrite, then inspect the result.
 
-- Focus trees: "Create a complete national focus tree for this route specification," or "Clean up this tree's overlaps and route crossings without changing its prerequisites or rewards." See [Focus trees](docs/focus.md).
+- Focus trees: "Create a complete national focus tree for this route specification," or "Compact this existing tree into a balanced, readable layout." Existing trees can use a plan-free compact reflow; new trees use a complete plan. See [Focus trees](docs/focus.md).
 - Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render this window at common resolutions and fix clipping, missing assets, and click-region conflicts." See [Scripted GUIs](docs/gui.md).
 - Maps: "Create a state from these exact provinces," or "Inspect this state and split these provinces while keeping supply and railway references valid." See [Maps](docs/map.md).
 

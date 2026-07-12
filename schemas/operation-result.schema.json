@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.0.0/schemas/operation-result.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.1.0/schemas/operation-result.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -20,35 +20,35 @@
       "maxLength": 64
     },
     "filesScanned": {
-      "maxItems": 1000,
+      "maxItems": 64,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema0"
       }
     },
     "proposedFiles": {
-      "maxItems": 1000,
+      "maxItems": 64,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema1"
       }
     },
     "changedFiles": {
-      "maxItems": 1000,
+      "maxItems": 64,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema2"
       }
     },
     "diagnostics": {
-      "maxItems": 100,
+      "maxItems": 20,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema3"
       }
     },
     "artifacts": {
-      "maxItems": 512,
+      "maxItems": 32,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema6"
@@ -75,7 +75,7 @@
       "additionalProperties": false
     },
     "blockers": {
-      "maxItems": 100,
+      "maxItems": 20,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema8"

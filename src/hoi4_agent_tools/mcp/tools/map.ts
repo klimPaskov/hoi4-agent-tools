@@ -23,6 +23,7 @@ import { workspaceIdSchema } from '../../schemas/common.js';
 import { mapAllocationRequestSchema, mapOperationSchema } from '../../schemas/map.js';
 import { PACKAGE_VERSION } from '../../version.js';
 import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
@@ -301,6 +302,10 @@ const mapOverlaySchema = z.enum([
   'unit-positions',
   'weather-positions',
 ]);
+const compactMapOperationSchema = compactValidatedInputSchema(
+  mapOperationSchema,
+  `Complete map operation: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/map.md`,
+);
 
 function validationSummary(validation: MapValidationResult): {
   passed: boolean;
@@ -444,7 +449,7 @@ export function registerMapTools(
     {
       title: 'Inspect HOI4 map',
       description:
-        'Inspect map geometry and records for creation and cleanup, validate the complete map, return selected province/state/region details, preview requested free IDs and province colors, and export exact canonical province row runs when provinceIds are supplied.',
+        'Validate the map and write linked inspection evidence. ID selectors return bounded records; provinceIds also export exact row-run geometry.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -628,8 +633,7 @@ export function registerMapTools(
     'hoi4.map_render',
     {
       title: 'Render map inspection artifacts',
-      description:
-        'Render deterministic PNG, JSON, and pan-and-zoom HTML artifacts for map creation and cleanup review, with one semantic layer and bounded overlays.',
+      description: 'Render deterministic offline map artifacts for one layer and bounded overlays.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -675,11 +679,11 @@ export function registerMapTools(
     {
       title: 'Create or clean up map content',
       description:
-        'Create or clean up states, provinces, regions, adjacencies, networks, positions, locators, and localisation with exact declarative operations, apply them in one call, and return pixel and semantic review artifacts.',
+        'Apply validated declarative map operations in one call and return linked pixel and semantic evidence.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
-          operations: z.array(mapOperationSchema).min(1).max(100),
+          operations: z.array(compactMapOperationSchema).min(1).max(100),
           diffScale: z.number().int().min(1).max(16).optional(),
         })
         .strict(),

@@ -4,10 +4,11 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { FocusWorkbench } from '../../src/hoi4_agent_tools/focus/index.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 
 interface OperationResult {
@@ -22,6 +23,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, '..', '..');
 const cleanup: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(cleanup.splice(0).map((callback) => callback()));
 });
 
@@ -110,6 +112,54 @@ describe('large public focus workflow', () => {
     );
     const source = await readFile(path.join(mod, ...relativePath.split('/')), 'utf8');
     expect(source.match(/^\s*focus\s*=\s*\{/gmu)).toHaveLength(255);
+
+    const layoutSpy = vi.spyOn(FocusWorkbench.prototype, 'layoutAsync');
+    const compacted = resultOf(
+      await client.callTool(
+        {
+          name: 'hoi4.focus_rewrite',
+          arguments: {
+            workspaceId: 'large-focus',
+            relativePath,
+            treeId: 'synthetic_acceptance_tree',
+            layoutMode: 'compact',
+          },
+        },
+        undefined,
+        { timeout: 180_000, resetTimeoutOnProgress: true, maxTotalTimeout: 180_000 },
+      ),
+    );
+    expect(compacted).toMatchObject({
+      status: 'ok',
+      code: expect.stringMatching(/^FOCUS_CHANGES_(?:APPLIED|UNCHANGED)$/u),
+      data: { treeId: 'synthetic_acceptance_tree' },
+    });
+    expect(layoutSpy).not.toHaveBeenCalled();
+    layoutSpy.mockRestore();
+    const compactSource = await readFile(path.join(mod, ...relativePath.split('/')));
+    const compactSidecarPath = path.join(
+      mod,
+      ...relativePath.replace(/\.txt$/u, '.focus-plan.json').split('/'),
+    );
+    const compactSidecar = await readFile(compactSidecarPath);
+    const repeatedCompact = resultOf(
+      await client.callTool(
+        {
+          name: 'hoi4.focus_rewrite',
+          arguments: {
+            workspaceId: 'large-focus',
+            relativePath,
+            treeId: 'synthetic_acceptance_tree',
+            layoutMode: 'compact',
+          },
+        },
+        undefined,
+        { timeout: 180_000, resetTimeoutOnProgress: true, maxTotalTimeout: 180_000 },
+      ),
+    );
+    expect(repeatedCompact).toMatchObject({ status: 'ok', code: 'FOCUS_CHANGES_UNCHANGED' });
+    expect(await readFile(path.join(mod, ...relativePath.split('/')))).toEqual(compactSource);
+    expect(await readFile(compactSidecarPath)).toEqual(compactSidecar);
 
     const inspected = resultOf(
       await client.callTool(

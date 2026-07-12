@@ -13,6 +13,8 @@ import {
   FocusWorkbench,
   FOCUS_RENDER_MAX_OUTPUT_SCALE,
   FOCUS_RENDER_MIN_OUTPUT_SCALE,
+  assertCompactLayoutQuality,
+  compactFocusTreePlanAsync,
   focusPlanHash,
   focusPresentationEvidence,
   focusPlanningSidecarPath,
@@ -25,6 +27,7 @@ import {
   resolveFocusPresentation,
   enrichFocusPlanFromSidecar,
   type ContinuousFocusPalettePlan,
+  type CompactFocusTreePlanAsyncResult,
   type FocusImportResult,
   type FocusLayoutResult,
   type FocusReferenceCatalog,
@@ -32,6 +35,7 @@ import {
 } from '../../focus/index.js';
 import {
   continuousFocusPaletteSchema,
+  focusLayoutMetricsSchema,
   focusLayoutSchema,
   focusTreePlanSchema,
 } from '../../schemas/focus.js';
@@ -50,6 +54,7 @@ import {
   toolResult,
 } from '../server/result.js';
 import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
   autonomousResultArtifacts,
@@ -76,6 +81,7 @@ const focusInspectOutputSchema = strictOperationResultSchema(
               resolvedTitleCount: nonNegativeIntegerSchema,
               layoutHash: sha256Schema,
               layoutDecisionCount: nonNegativeIntegerSchema,
+              layoutMetrics: focusLayoutMetricsSchema,
               diagnosticCount: nonNegativeIntegerSchema,
             })
             .strict(),
@@ -164,6 +170,10 @@ const focusPlanOutputSchema = strictOperationResultSchema(
       })
       .strict(),
   ]),
+);
+const compactFocusPlanSchema = compactValidatedInputSchema(
+  z.union([focusTreePlanSchema, continuousFocusPaletteSchema]),
+  `Complete focus plan: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/focus.md`,
 );
 
 const focusInspectInput = z
@@ -263,7 +273,9 @@ const focusPlanInput = z
     mode: z.enum(['national', 'continuous']).optional(),
     workspaceId: workspaceIdSchema,
     relativePath: workspaceRelativePathSchema,
-    plan: z.union([focusTreePlanSchema, continuousFocusPaletteSchema]),
+    treeId: z.string().min(1).max(256).optional(),
+    layoutMode: z.enum(['authored', 'compact']).default('authored'),
+    plan: compactFocusPlanSchema.optional(),
     createIfMissing: z.boolean().default(false),
     horizontalSpacing: z.number().int().min(80).max(1000).optional(),
     verticalSpacing: z.number().int().min(60).max(1000).optional(),
@@ -278,13 +290,31 @@ const focusPlanInput = z
   .superRefine((value, context) => {
     const mode = value.mode ?? 'national';
     const schema = mode === 'continuous' ? continuousFocusPaletteSchema : focusTreePlanSchema;
-    if (!schema.safeParse(value.plan).success)
+    if (value.plan !== undefined && !schema.safeParse(value.plan).success)
       context.addIssue({
         code: 'custom',
         path: ['plan'],
         message: `plan must be a ${mode} focus plan`,
       });
     if (mode === 'continuous') {
+      if (value.plan === undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['plan'],
+          message: 'plan is required in continuous mode',
+        });
+      if (value.treeId !== undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['treeId'],
+          message: 'treeId is only valid in national mode',
+        });
+      if (value.layoutMode !== 'authored')
+        context.addIssue({
+          code: 'custom',
+          path: ['layoutMode'],
+          message: 'compact layout mode is only valid in national mode',
+        });
       for (const [field, fieldValue] of [
         ['horizontalSpacing', value.horizontalSpacing],
         ['verticalSpacing', value.verticalSpacing],
@@ -298,6 +328,36 @@ const focusPlanInput = z
             message: `${field} is only valid for national focus review renders`,
           });
       }
+    } else {
+      if (value.plan === undefined && value.layoutMode !== 'compact')
+        context.addIssue({
+          code: 'custom',
+          path: ['plan'],
+          message: 'plan is required unless layoutMode is compact',
+        });
+      if (value.plan === undefined && value.treeId === undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['treeId'],
+          message: 'treeId is required for plan-free compact reflow',
+        });
+      if (value.plan === undefined && value.createIfMissing)
+        context.addIssue({
+          code: 'custom',
+          path: ['createIfMissing'],
+          message: 'plan-free compact reflow requires an existing focus source',
+        });
+      if (
+        value.plan !== undefined &&
+        value.treeId !== undefined &&
+        'id' in value.plan &&
+        value.plan.id !== value.treeId
+      )
+        context.addIssue({
+          code: 'custom',
+          path: ['treeId'],
+          message: 'treeId must match the supplied national focus plan',
+        });
     }
   });
 
@@ -781,6 +841,7 @@ export function registerFocusTools(
             ).length,
             layoutHash: layout.layoutHash,
             layoutDecisionCount: layout.decisions.length,
+            layoutMetrics: layout.metrics!,
             diagnosticCount,
           })),
           palettes: [],
@@ -957,7 +1018,7 @@ export function registerFocusTools(
     {
       title: 'Create or clean up focus content',
       description:
-        'Create or clean up a national tree or continuous palette from a complete plan, validate the result, apply it in one call, and return before-and-after review artifacts. Omit mode for national behavior. National plans accept bounded horizontalSpacing, verticalSpacing, padding, and reviewScale controls. Set createIfMissing for a new file.',
+        'Create or clean up a national tree or continuous palette, validate it, and apply it in one call. Supply a complete plan; set layoutMode compact for automatic arrangement. Existing national trees can omit the plan and use treeId plus layoutMode compact. Set createIfMissing for a new file.',
       inputSchema: focusPlanInput,
       outputSchema: focusPlanOutputSchema,
       annotations: {
@@ -1188,7 +1249,7 @@ export function registerFocusTools(
           );
           return toolResult(result);
         }
-        const plan = input.plan as FocusTreePlan;
+        const suppliedPlan = input.plan as FocusTreePlan | undefined;
         if (
           createIfMissing &&
           (!relativePath.toLowerCase().endsWith('.txt') ||
@@ -1227,6 +1288,32 @@ export function registerFocusTools(
           imported.result.plans = imported.result.plans.map((current) =>
             linkContinuousFocusPalettes(current, paletteImport.palettes),
           );
+        let compactPlanning: CompactFocusTreePlanAsyncResult | undefined;
+        let compactSourcePlan: FocusTreePlan | undefined;
+        let plan: FocusTreePlan;
+        if (suppliedPlan !== undefined) {
+          if (input.layoutMode === 'compact') {
+            compactSourcePlan = suppliedPlan;
+            compactPlanning = await compactFocusTreePlanAsync(suppliedPlan, {
+              signal: progress.signal,
+            });
+            plan = compactPlanning.plan;
+          } else {
+            plan = suppliedPlan;
+          }
+        } else {
+          if (imported === undefined)
+            throw new ServiceError(
+              'FOCUS_COMPACT_SOURCE_REQUIRED',
+              'Plan-free compact reflow requires an existing national focus source',
+              { relativePath },
+            );
+          compactSourcePlan = selectPlan(imported.result, input.treeId);
+          compactPlanning = await compactFocusTreePlanAsync(compactSourcePlan, {
+            signal: progress.signal,
+          });
+          plan = compactPlanning.plan;
+        }
         const currentPlan = imported?.result.plans.find(({ id }) => id === plan.id);
         if (currentPlan === undefined && !createIfMissing) {
           if (imported === undefined)
@@ -1268,7 +1355,9 @@ export function registerFocusTools(
         const currentLayout =
           currentPlan === undefined
             ? undefined
-            : await workbench.layoutAsync(currentPlan, { signal: progress.signal });
+            : currentPlan === compactSourcePlan && compactPlanning !== undefined
+              ? compactPlanning.currentLayout
+              : await workbench.layoutAsync(currentPlan, { signal: progress.signal });
         const currentDiagnostics =
           currentPlan === undefined || currentLayout === undefined
             ? []
@@ -1296,6 +1385,12 @@ export function registerFocusTools(
             importedPlanHash: proposedPlanHash,
           },
         };
+        const proposedLayout =
+          compactPlanning?.proposedLayout ??
+          (await workbench.layoutAsync(reviewPlan, { signal: progress.signal }));
+        if (input.layoutMode === 'compact') {
+          assertCompactLayoutQuality(currentLayout, proposedLayout);
+        }
         const proposed = await workbench.renderAndStore(workspaceId, reviewPlan, {
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           index: snapshot.index,
@@ -1310,6 +1405,7 @@ export function registerFocusTools(
           },
           budget: renderBudget,
           signal: progress.signal,
+          layout: proposedLayout,
         });
         const beforePng =
           currentRender?.png ??
@@ -1376,6 +1472,7 @@ export function registerFocusTools(
           plan,
           createIfMissing,
           authority: 'plan',
+          layout: proposed.layout,
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           index: snapshot.index,
           references: catalog,

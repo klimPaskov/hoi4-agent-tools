@@ -4,7 +4,12 @@ import { sortDiagnostics } from '../core/diagnostics.js';
 import { DiagnosticCollector } from '../core/diagnostic-collector.js';
 import type { SymbolIndex, SymbolKind } from '../core/index.js';
 import { ServiceError } from '../core/result.js';
-import { focusConnectorSegmentsProperlyCross, focusNodesVisiblyOverlap } from './geometry.js';
+import {
+  flattenFocusConnectorCurve,
+  focusConnectorCurve,
+  focusConnectorPolylinesIntersect,
+  focusNodesVisiblyOverlap,
+} from './geometry.js';
 import { layoutFocusTree } from './layout.js';
 import {
   FOCUS_CYCLE_SAMPLE_MAX,
@@ -700,7 +705,15 @@ export function lintFocusTree(plan: FocusTreePlan, options: FocusLintOptions = {
       const child = positions.get(focus.id);
       return parent === undefined || child === undefined
         ? []
-        : [{ parentId, childId: focus.id, parent, child }];
+        : [
+            {
+              parentId,
+              childId: focus.id,
+              parent,
+              child,
+              points: flattenFocusConnectorCurve(focusConnectorCurve(parent, child)),
+            },
+          ];
     }),
   );
   const connectorPairCount = (connectors.length * (connectors.length - 1)) / 2;
@@ -727,15 +740,7 @@ export function lintFocusTree(plan: FocusTreePlan, options: FocusLintOptions = {
         ) {
           continue;
         }
-        if (
-          !focusConnectorSegmentsProperlyCross(
-            first.parent,
-            first.child,
-            second.parent,
-            second.child,
-          )
-        )
-          continue;
+        if (!focusConnectorPolylinesIntersect(first.points, second.points)) continue;
         const focus = focuses.get(second.childId);
         if (focus === undefined) continue;
         diagnostics.push({

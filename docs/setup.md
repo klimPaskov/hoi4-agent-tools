@@ -5,7 +5,7 @@ HOI4 Agent Tools requires Node.js 22 or 24.
 ## Install and initialize
 
 ```bash
-npm install --global hoi4-agent-tools@1.0.0
+npm install --global hoi4-agent-tools@1.1.0
 hoi4-agent-tools-setup --init
 ```
 

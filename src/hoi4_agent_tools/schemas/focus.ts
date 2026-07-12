@@ -38,6 +38,15 @@ const prerequisitesSchema = z
   })
   .strict();
 
+const automaticPositionSchema = z
+  .object({
+    mode: z.literal('auto'),
+    pinned: z.literal(false),
+    preferredX: z.number().int().min(-100_000).max(100_000).optional(),
+    preferredY: z.number().int().min(-100_000).max(100_000).optional(),
+  })
+  .strict();
+
 const positionSchema = z.discriminatedUnion('mode', [
   z
     .object({
@@ -56,14 +65,7 @@ const positionSchema = z.discriminatedUnion('mode', [
       pinned: z.boolean(),
     })
     .strict(),
-  z
-    .object({
-      mode: z.literal('auto'),
-      pinned: z.literal(false),
-      preferredX: z.number().int().min(-100_000).max(100_000).optional(),
-      preferredY: z.number().int().min(-100_000).max(100_000).optional(),
-    })
-    .strict(),
+  automaticPositionSchema,
 ]);
 
 const routeLockSchema = z
@@ -330,6 +332,7 @@ export const focusPlanningSidecarSchema = z
           aiStrategyIds: z.array(z.string()),
           payoff: z.string().optional(),
           terminalKind: focusNodeSchema.shape.terminalKind,
+          autoPosition: automaticPositionSchema.optional(),
         })
         .strict(),
     ),
@@ -344,10 +347,64 @@ export const focusLayoutDecisionSchema = z
       'relative',
       'placed',
       'moved_for_collision',
+      'moved_for_spacing',
       'moved_for_mutual_exclusion',
+      'moved_for_parent_order',
+      'moved_for_lane_bounds',
       'moved_to_reduce_crossings',
     ]),
     message: z.string(),
+  })
+  .strict();
+
+export const focusLayoutMetricsSchema = z
+  .object({
+    bounds: z
+      .object({
+        minimumX: z.number().int(),
+        maximumX: z.number().int(),
+        minimumY: z.number().int(),
+        maximumY: z.number().int(),
+        columnSpan: z.number().int().nonnegative(),
+        rowSpan: z.number().int().nonnegative(),
+        columnCount: z.number().int().nonnegative(),
+        rowCount: z.number().int().nonnegative(),
+      })
+      .strict(),
+    connectors: z
+      .object({
+        count: z.number().int().nonnegative(),
+        crossingCount: z.number().int().nonnegative(),
+        nodeIntersectionCount: z.number().int().nonnegative(),
+        longConnectorCount: z.number().int().nonnegative(),
+        totalHorizontalSpan: z.number().int().nonnegative(),
+        maximumHorizontalSpan: z.number().int().nonnegative(),
+        totalVerticalSpan: z.number().int().nonnegative(),
+        maximumVerticalSpan: z.number().int().nonnegative(),
+        totalManhattanSpan: z.number().int().nonnegative(),
+        maximumManhattanSpan: z.number().int().nonnegative(),
+      })
+      .strict(),
+    symmetry: z
+      .object({
+        siblingCohortCount: z.number().int().nonnegative(),
+        asymmetricSiblingCohortCount: z.number().int().nonnegative(),
+        totalSiblingDeviation: z.number().int().nonnegative(),
+        maximumSiblingDeviation: z.number().int().nonnegative(),
+        offAnchorSiblingCohortCount: z.number().int().nonnegative(),
+        totalSiblingAnchorDeviation: z.number().int().nonnegative(),
+        maximumSiblingAnchorDeviation: z.number().int().nonnegative(),
+        boundingCenterOffsetTwice: z.number().int().nonnegative(),
+      })
+      .strict(),
+    spacing: z
+      .object({
+        requiredSameRowSpacing: z.number().int().positive(),
+        sameRowPairCount: z.number().int().nonnegative(),
+        tooCloseSameRowPairCount: z.number().int().nonnegative(),
+        minimumSameRowSpacing: z.number().int().nonnegative(),
+      })
+      .strict(),
   })
   .strict();
 
@@ -368,6 +425,7 @@ export const focusLayoutSchema = z
     ),
     decisions: z.array(focusLayoutDecisionSchema),
     diagnostics: z.array(z.unknown()),
+    metrics: focusLayoutMetricsSchema.optional(),
     layoutHash: z.string().regex(/^[a-f0-9]{64}$/u),
   })
   .strict();

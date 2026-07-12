@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 - 2026-07-12
+
+- Added plan-free `compact` rewrites for existing national focus trees while retaining authored mode for complete plans and new trees.
+- Added deterministic candidate reflow, vertical-gap compression, gateway refinement, spacing, rendered-curve crossing, connector-node, branch-balance, centering, and canvas metrics, with absolute and relative compact-layout gates.
+- Preserved automatic placement intent in focus planning sidecars so later imports can continue deterministic layout work.
+- Reduced MCP tool-discovery payload size by about 83% while keeping full runtime validation, and bounded inline results so large plans and artifacts stay in MCP resources.
+- Verified coexistence with repository `AGENTS.md` instructions, skills, plans, and subagent workflows; the server exposes domain tools without taking over task orchestration.
+- Refreshed the authentication and lint dependencies while retaining the current MCP SDK, Inspector, protocol, and Registry publisher versions.
+
 ## 1.0.0 - 2026-07-12
 
 - Reduced the MCP surface to ten tools for discovering mods and creating, inspecting, rendering, and rewriting focus trees, scripted GUIs, and maps.

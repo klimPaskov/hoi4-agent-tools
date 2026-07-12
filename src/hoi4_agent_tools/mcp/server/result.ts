@@ -6,15 +6,15 @@ import { ServiceError } from '../../core/result.js';
 import { diagnosticSchema } from '../../schemas/common.js';
 import { artifactLinkSchema, validationSummarySchema } from '../../schemas/transaction.js';
 
-export const MAX_INLINE_FILES_SCANNED = 1_000;
-export const MAX_INLINE_PROPOSED_FILES = 1_000;
-export const MAX_INLINE_CHANGED_FILES = 1_000;
-export const MAX_INLINE_DIAGNOSTICS = 100;
-export const MAX_INLINE_ARTIFACT_LINKS = 512;
-export const MAX_INLINE_BLOCKERS = 100;
+export const MAX_INLINE_FILES_SCANNED = 64;
+export const MAX_INLINE_PROPOSED_FILES = 64;
+export const MAX_INLINE_CHANGED_FILES = 64;
+export const MAX_INLINE_DIAGNOSTICS = 20;
+export const MAX_INLINE_ARTIFACT_LINKS = 32;
+export const MAX_INLINE_BLOCKERS = 20;
 export const MAX_INLINE_VALIDATION_CHECKS = 5;
 // Leave headroom for the enclosing JSON-RPC response and transport metadata.
-export const MAX_TOOL_RESULT_BYTES = 500_000;
+export const MAX_TOOL_RESULT_BYTES = 32_768;
 const deferredFilesDiagnostic = Symbol('deferredFilesDiagnostic');
 
 const operationResultBaseSchema = z
@@ -47,16 +47,43 @@ export const operationResultSchema = operationResultBaseSchema
   .strict();
 
 const emptyToolDataSchema = z.object({}).strict();
+const compactPublicOperationResultSchema = z
+  .object({
+    status: z.enum(['ok', 'blocked', 'error']),
+    code: z.string().max(256),
+    workspaceId: z.string().max(64),
+    filesScanned: z.array(z.string().max(4096)).max(MAX_INLINE_FILES_SCANNED),
+    proposedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_PROPOSED_FILES),
+    changedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_CHANGED_FILES),
+    diagnostics: z.array(z.unknown()).max(MAX_INLINE_DIAGNOSTICS),
+    artifacts: z.array(z.unknown()).max(MAX_INLINE_ARTIFACT_LINKS),
+    validation: z
+      .object({
+        passed: z.boolean(),
+        checks: z.array(z.unknown()).max(MAX_INLINE_VALIDATION_CHECKS),
+      })
+      .strict(),
+    blockers: z.array(z.unknown()).max(MAX_INLINE_BLOCKERS),
+    data: z.record(z.string().max(256), z.unknown()),
+  })
+  .strict()
+  .describe('Stable operation envelope; data is tool-specific and artifacts link bulk evidence.');
 
 /**
- * Advertise an exact success payload for one tool while retaining the shared empty error payload.
- * The generic operation-result schema remains available for stored envelopes, but is never used as
- * a public tool output contract.
+ * Advertise one compact operation envelope while retaining exact per-tool runtime validation.
+ * The generic operation-result schema remains available for stored envelopes.
  */
-export function strictOperationResultSchema<T extends z.ZodType>(successDataSchema: T) {
-  return operationResultBaseSchema
+export function strictOperationResultSchema(successDataSchema: z.ZodType) {
+  const exactSchema = operationResultBaseSchema
     .extend({ data: z.union([emptyToolDataSchema, successDataSchema]) })
     .strict();
+  return compactPublicOperationResultSchema.superRefine((value, context) => {
+    const parsed = exactSchema.safeParse(value);
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues) {
+      context.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+    }
+  });
 }
 
 /** Keep source inventories compact; complete inventories belong in linked resources. */
@@ -101,12 +128,14 @@ function boundedResult(
   result: ServiceResult<unknown>,
   actualBytes: number,
 ): ServiceResult<unknown> {
+  const hasLinkedEvidence = result.artifacts.length > 0;
   const truncationDiagnostic: Diagnostic = {
     code: 'MCP_RESPONSE_TRUNCATED',
     severity: 'warning',
     category: 'configuration',
-    message:
-      'Tool output exceeded the wire budget; complete details remain available through linked resources',
+    message: hasLinkedEvidence
+      ? 'Tool output exceeded the wire budget; inspect the linked evidence for complete details'
+      : 'Tool output exceeded the wire budget; nonessential inline details were omitted',
     details: { actualBytes, maxBytes: MAX_TOOL_RESULT_BYTES },
   };
   return {
@@ -127,8 +156,9 @@ function boundedResult(
         : [
             {
               code: 'MCP_RESPONSE_TRUNCATED',
-              message:
-                'Tool output exceeded the wire budget; inspect the linked resource for complete details',
+              message: hasLinkedEvidence
+                ? 'Tool output exceeded the wire budget; inspect the linked evidence for complete details'
+                : 'Tool output exceeded the wire budget; nonessential inline details were omitted',
               details: {
                 actualBytes,
                 maxBytes: MAX_TOOL_RESULT_BYTES,
@@ -220,7 +250,7 @@ function jsonBytesWithin(value: unknown, budget: number): boolean {
 }
 
 function compactDetails(details: Record<string, unknown>): Record<string, unknown> {
-  return jsonBytesWithin(details, 4_096) ? details : { truncated: true };
+  return jsonBytesWithin(details, 2_048) ? details : { truncated: true };
 }
 
 function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unknown> {
@@ -229,26 +259,66 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
       ? undefined
       : {
           ...location,
-          path: location.path.slice(0, 4_096),
-          ...(location.symbol === undefined ? {} : { symbol: location.symbol.slice(0, 1_024) }),
+          path: location.path.slice(0, 1_024),
+          ...(location.symbol === undefined ? {} : { symbol: location.symbol.slice(0, 256) }),
         };
-  const validationTruncation: Diagnostic | undefined =
-    result.validation.checks.length > MAX_INLINE_VALIDATION_CHECKS
-      ? {
-          code: 'MCP_INLINE_VALIDATION_TRUNCATED',
-          severity: 'info',
-          category: 'configuration',
-          message: `Inline validation is limited to ${MAX_INLINE_VALIDATION_CHECKS} checks; use the linked artifact for the complete validation record`,
-          details: {
-            total: result.validation.checks.length,
-            returned: MAX_INLINE_VALIDATION_CHECKS,
-          },
-        }
-      : undefined;
-  const compactDiagnostics = result.diagnostics.map((diagnostic) => ({
+  const collectionTotals = {
+    filesScanned: result.filesScanned.length,
+    proposedFiles: result.proposedFiles.length,
+    changedFiles: result.changedFiles.length,
+    diagnostics: result.diagnostics.length,
+    artifacts: result.artifacts.length,
+    validationChecks: result.validation.checks.length,
+    blockers: result.blockers.length,
+  };
+  const collectionLimits = {
+    filesScanned: MAX_INLINE_FILES_SCANNED,
+    proposedFiles: MAX_INLINE_PROPOSED_FILES,
+    changedFiles: MAX_INLINE_CHANGED_FILES,
+    diagnostics: MAX_INLINE_DIAGNOSTICS,
+    artifacts: MAX_INLINE_ARTIFACT_LINKS,
+    validationChecks: MAX_INLINE_VALIDATION_CHECKS,
+    blockers: MAX_INLINE_BLOCKERS,
+  };
+  const truncatedCollections: Record<string, { total: number; limit: number }> = Object.fromEntries(
+    Object.entries(collectionTotals).flatMap(([name, total]) => {
+      const limit = collectionLimits[name as keyof typeof collectionLimits];
+      return total > limit ? [[name, { total, limit }]] : [];
+    }),
+  );
+  if (
+    Object.keys(truncatedCollections).length > 0 &&
+    result.diagnostics.length > MAX_INLINE_DIAGNOSTICS - 1
+  ) {
+    truncatedCollections.diagnostics = {
+      total: result.diagnostics.length,
+      limit: MAX_INLINE_DIAGNOSTICS - 1,
+    };
+  }
+  const needsTruncationDiagnostic = Object.keys(truncatedCollections).length > 0;
+  const diagnosticSlots = Math.max(0, MAX_INLINE_DIAGNOSTICS - (needsTruncationDiagnostic ? 1 : 0));
+  const hardDiagnostics = result.diagnostics.filter(
+    ({ severity }) => severity === 'error' || severity === 'blocker',
+  );
+  const priorityDiagnostics = result.diagnostics.filter(
+    ({ code, severity }) =>
+      severity === 'error' || severity === 'blocker' || code === 'MCP_INLINE_FILES_TRUNCATED',
+  );
+  const otherDiagnostics = result.diagnostics.filter(
+    (diagnostic) => !priorityDiagnostics.includes(diagnostic),
+  );
+  const retainedPriorityDiagnostics = priorityDiagnostics.slice(0, diagnosticSlots);
+  const retainedDiagnostics = [
+    ...retainedPriorityDiagnostics,
+    ...otherDiagnostics.slice(0, diagnosticSlots - retainedPriorityDiagnostics.length),
+  ];
+  const omittedHardDiagnostics = hardDiagnostics.filter(
+    (diagnostic) => !retainedDiagnostics.includes(diagnostic),
+  ).length;
+  const compactDiagnostics = retainedDiagnostics.map((diagnostic) => ({
     ...diagnostic,
     code: diagnostic.code.slice(0, 256),
-    message: diagnostic.message.slice(0, 4_096),
+    message: diagnostic.message.slice(0, 1_024),
     ...(diagnostic.operationId === undefined
       ? {}
       : { operationId: diagnostic.operationId.slice(0, 256) }),
@@ -258,35 +328,54 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
     ...(diagnostic.related === undefined
       ? {}
       : {
-          related: diagnostic.related.slice(0, 5).map((location) => compactLocation(location)!),
+          related: diagnostic.related.slice(0, 3).map((location) => compactLocation(location)!),
         }),
     ...(diagnostic.details === undefined ? {} : { details: compactDetails(diagnostic.details) }),
   }));
+  const truncationDiagnostic: Diagnostic | undefined = needsTruncationDiagnostic
+    ? {
+        code: 'MCP_INLINE_COLLECTIONS_TRUNCATED',
+        severity: omittedHardDiagnostics > 0 ? 'blocker' : 'info',
+        category: 'configuration',
+        message:
+          result.artifacts.length > 0
+            ? 'Large collections were bounded inline; linked resources retain bulk evidence'
+            : 'Large collections were bounded inline',
+        details: {
+          collections: truncatedCollections,
+          diagnosticsReturned: retainedDiagnostics.length,
+          omittedHardDiagnostics,
+        },
+      }
+    : undefined;
   return {
     ...result,
+    filesScanned: result.filesScanned.slice(0, MAX_INLINE_FILES_SCANNED),
+    proposedFiles: result.proposedFiles.slice(0, MAX_INLINE_PROPOSED_FILES),
+    changedFiles: result.changedFiles.slice(0, MAX_INLINE_CHANGED_FILES),
     diagnostics:
-      validationTruncation === undefined
+      truncationDiagnostic === undefined
         ? compactDiagnostics
-        : [validationTruncation, ...compactDiagnostics].slice(0, MAX_INLINE_DIAGNOSTICS),
+        : [truncationDiagnostic, ...compactDiagnostics],
+    artifacts: result.artifacts.slice(0, MAX_INLINE_ARTIFACT_LINKS).map((artifact) => ({
+      ...artifact,
+      ...(artifact.description === undefined
+        ? {}
+        : { description: artifact.description.slice(0, 256) }),
+    })),
     validation: {
       ...result.validation,
       checks: result.validation.checks.slice(0, MAX_INLINE_VALIDATION_CHECKS).map((check) => ({
         ...check,
         id: check.id.slice(0, 256),
-        message: check.message.slice(0, 4_096),
+        message: check.message.slice(0, 1_024),
       })),
     },
-    blockers: result.blockers.map((blocker) => ({
+    blockers: result.blockers.slice(0, MAX_INLINE_BLOCKERS).map((blocker) => ({
       ...blocker,
       code: blocker.code.slice(0, 256),
-      message: blocker.message.slice(0, 4_096),
+      message: blocker.message.slice(0, 1_024),
       ...(blocker.details === undefined ? {} : { details: compactDetails(blocker.details) }),
-    })),
-    artifacts: result.artifacts.map((artifact) => ({
-      ...artifact,
-      ...(artifact.description === undefined
-        ? {}
-        : { description: artifact.description.slice(0, 1_024) }),
     })),
   };
 }
@@ -316,25 +405,16 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
 
 export function toolResult(result: ServiceResult<unknown>): ToolResultOutput {
   const completeResult = preserveDeferredFilesDiagnostic(result);
-  const exceedsArrayBudget =
-    completeResult.filesScanned.length > MAX_INLINE_FILES_SCANNED ||
-    completeResult.proposedFiles.length > MAX_INLINE_PROPOSED_FILES ||
-    completeResult.changedFiles.length > MAX_INLINE_CHANGED_FILES ||
-    completeResult.diagnostics.length > MAX_INLINE_DIAGNOSTICS ||
-    completeResult.artifacts.length > MAX_INLINE_ARTIFACT_LINKS ||
-    completeResult.blockers.length > MAX_INLINE_BLOCKERS;
   const compact = compactDescriptions(completeResult);
   const estimatedBytes = jsonBytesWithin(compact, MAX_TOOL_RESULT_BYTES)
     ? Buffer.byteLength(canonicalJson(compact), 'utf8')
     : MAX_TOOL_RESULT_BYTES + 1;
   const selected =
-    estimatedBytes > MAX_TOOL_RESULT_BYTES || exceedsArrayBudget
-      ? boundedResult(completeResult, estimatedBytes)
-      : compact;
+    estimatedBytes > MAX_TOOL_RESULT_BYTES ? boundedResult(compact, estimatedBytes) : compact;
   let output = buildToolResult(selected);
   const wireBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (wireBytes > MAX_TOOL_RESULT_BYTES) {
-    output = buildToolResult(boundedResult(completeResult, wireBytes));
+    output = buildToolResult(boundedResult(compact, wireBytes));
   }
   const finalBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (finalBytes > MAX_TOOL_RESULT_BYTES) {

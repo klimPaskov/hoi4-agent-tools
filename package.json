@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP tools for coding agents to create and clean HOI4 focus trees, scripted GUIs, and maps",
   "type": "module",
   "license": "Apache-2.0",
@@ -84,7 +84,7 @@
     "fast-glob": "3.3.3",
     "fontkit": "2.0.4",
     "iconv-lite": "0.7.3",
-    "jose": "6.1.3",
+    "jose": "6.2.3",
     "sharp": "0.35.3",
     "zod": "4.4.3"
   },
@@ -98,7 +98,7 @@
     "@vitest/coverage-v8": "4.1.10",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
-    "eslint": "10.6.0",
+    "eslint": "10.7.0",
     "fast-check": "4.9.0",
     "pixelmatch": "7.2.0",
     "prettier": "3.9.5",

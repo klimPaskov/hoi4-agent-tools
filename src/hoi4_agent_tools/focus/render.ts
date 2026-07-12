@@ -24,6 +24,8 @@ import {
   FOCUS_NODE_HEIGHT_PIXELS,
   FOCUS_NODE_WIDTH_PIXELS,
   FOCUS_VERTICAL_GRID_PIXELS,
+  focusConnectorCurve,
+  focusConnectorSvgPath,
   focusNodeOrigin,
 } from './geometry.js';
 import { createFocusPlanningSidecar, serializeFocusPlanningSidecar } from './planning.js';
@@ -297,6 +299,7 @@ function svgDocument(
       focusNodeOrigin(node, minimumX, minimumY, padding, horizontal, vertical),
     ]),
   );
+  const layoutNodes = new Map(nodes.map((node) => [node.id, node]));
   const focusMap = new Map(plan.focuses.map((focus) => [focus.id, focus]));
   const diagnosticMap = new Map<string, Diagnostic[]>();
   const toolText = new DeterministicSvgTextRenderer();
@@ -348,16 +351,19 @@ function svgDocument(
     '<g id="prerequisites">',
   ];
   for (const edge of prerequisiteEdges) {
-    const parent = pixel.get(edge.parentId);
-    const child = pixel.get(edge.childId);
+    const parent = layoutNodes.get(edge.parentId);
+    const child = layoutNodes.get(edge.childId);
     if (parent === undefined || child === undefined) continue;
-    const startX = parent.x + nodeWidth / 2;
-    const startY = parent.y + nodeHeight;
-    const endX = child.x + nodeWidth / 2;
-    const endY = child.y;
-    const middleY = (startY + endY) / 2;
+    const curve = focusConnectorCurve(parent, child, {
+      horizontalSpacing: horizontal,
+      verticalSpacing: vertical,
+      nodeWidth,
+      nodeHeight,
+      originX: padding - minimumX * horizontal,
+      originY: padding - minimumY * vertical,
+    });
     parts.push(
-      `<path d="M ${startX} ${startY} C ${startX} ${middleY}, ${endX} ${middleY}, ${endX} ${endY}" fill="none" stroke="#8da2bc" stroke-width="2" marker-end="url(#arrow)" data-parent="${escapeXml(edge.parentId)}" data-child="${escapeXml(edge.childId)}" data-prerequisite-group="${edge.groupIndex}"/>`,
+      `<path d="${focusConnectorSvgPath(curve)}" fill="none" stroke="#8da2bc" stroke-width="2" marker-end="url(#arrow)" data-parent="${escapeXml(edge.parentId)}" data-child="${escapeXml(edge.childId)}" data-prerequisite-group="${edge.groupIndex}"/>`,
     );
   }
   parts.push('</g>', '<g id="mutual-exclusions">');
@@ -462,6 +468,7 @@ function svgDocument(
       hash: layout.layoutHash,
       nodes,
       decisions: layout.decisions,
+      metrics: layout.metrics ?? null,
     },
     focuses: [...plan.focuses]
       .sort((left, right) => compareCodeUnits(left.id, right.id))

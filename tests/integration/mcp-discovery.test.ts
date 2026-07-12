@@ -12,17 +12,13 @@ import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
+const toolsListByteBudget = 32_768;
+const singleToolByteBudget = 8_192;
+const toolInputSchemaByteBudget = 6_144;
+const toolOutputSchemaByteBudget = 2_048;
+const toolDescriptionByteBudget = 512;
+const resourceTemplateListByteBudget = 2_048;
 afterEach(async () => Promise.all(close.splice(0).map((callback) => callback())));
-
-function strictObjectLeaves(schema: unknown): Array<Record<string, unknown>> {
-  if (schema === null || typeof schema !== 'object' || Array.isArray(schema)) return [];
-  const object = schema as Record<string, unknown>;
-  if (object.type === 'object') return [object];
-  return ['anyOf', 'oneOf', 'allOf'].flatMap((key) => {
-    const children = object[key];
-    return Array.isArray(children) ? children.flatMap(strictObjectLeaves) : [];
-  });
-}
 
 async function connected(context: ServerContext = {}, workspaceIds: readonly string[] = ['test']) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-mcp-'));
@@ -107,13 +103,18 @@ describe('MCP discovery', () => {
 
     for (const tool of tools.tools) {
       expect(tool.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });
-      const outputSchema = tool.outputSchema as
-        { properties?: { data?: { anyOf?: Array<Record<string, unknown>> } } } | undefined;
-      const dataVariants = outputSchema?.properties?.data?.anyOf;
-      expect(dataVariants, `${tool.name} must advertise exact success/error data`).toHaveLength(2);
-      const dataLeaves = dataVariants?.flatMap(strictObjectLeaves) ?? [];
-      expect(dataLeaves.every(({ additionalProperties }) => additionalProperties === false)).toBe(
-        true,
+      expect(tool.outputSchema).toMatchObject({
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          status: { enum: ['ok', 'blocked', 'error'] },
+          diagnostics: { type: 'array', maxItems: 20 },
+          artifacts: { type: 'array', maxItems: 32 },
+          data: { type: 'object' },
+        },
+      });
+      expect(Buffer.byteLength(JSON.stringify(tool.outputSchema), 'utf8')).toBeLessThanOrEqual(
+        2_048,
       );
       expect(JSON.stringify(tool.outputSchema)).not.toContain('transactionId');
       expect(JSON.stringify(tool.outputSchema)).not.toContain('planHash');
@@ -150,7 +151,7 @@ describe('MCP discovery', () => {
         },
       },
     });
-    expect(client.getInstructions()).toContain('continuationUri');
+    expect(client.getInstructions()).toBeUndefined();
     await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
   });
 
@@ -171,6 +172,72 @@ describe('MCP discovery', () => {
     });
     expect(JSON.stringify(result.structuredContent)).not.toContain('writePolicy');
     expect(JSON.stringify(result.structuredContent)).not.toContain('replacePaths');
+  });
+
+  it('keeps discovery metadata within fixed context budgets', async () => {
+    const client = await connected();
+    const tools = await client.listTools();
+    expect(Buffer.byteLength(JSON.stringify(tools), 'utf8')).toBeLessThanOrEqual(
+      toolsListByteBudget,
+    );
+    for (const tool of tools.tools) {
+      expect(Buffer.byteLength(JSON.stringify(tool), 'utf8'), tool.name).toBeLessThanOrEqual(
+        singleToolByteBudget,
+      );
+      expect(
+        Buffer.byteLength(JSON.stringify(tool.inputSchema), 'utf8'),
+        `${tool.name} input schema`,
+      ).toBeLessThanOrEqual(toolInputSchemaByteBudget);
+      expect(
+        Buffer.byteLength(JSON.stringify(tool.outputSchema), 'utf8'),
+        `${tool.name} output schema`,
+      ).toBeLessThanOrEqual(toolOutputSchemaByteBudget);
+      expect(
+        Buffer.byteLength(tool.description ?? '', 'utf8'),
+        `${tool.name} description`,
+      ).toBeLessThanOrEqual(toolDescriptionByteBudget);
+    }
+    expect(
+      Buffer.byteLength(JSON.stringify(await client.listResourceTemplates()), 'utf8'),
+    ).toBeLessThanOrEqual(resourceTemplateListByteBudget);
+    expect(client.getInstructions()).toBeUndefined();
+  });
+
+  it('retains exact nested validation behind compact discovery fields', async () => {
+    const client = await connected();
+    const tools = await client.listTools();
+    const focusRewrite = tools.tools.find(({ name }) => name === 'hoi4.focus_rewrite');
+    const guiInspect = tools.tools.find(({ name }) => name === 'hoi4.gui_inspect');
+    const mapRewrite = tools.tools.find(({ name }) => name === 'hoi4.map_rewrite');
+
+    expect(JSON.stringify(focusRewrite?.inputSchema)).not.toContain('completionReward');
+    expect(JSON.stringify(guiInspect?.inputSchema)).not.toContain('animationTimeSeconds');
+    expect(JSON.stringify(mapRewrite?.inputSchema)).not.toContain('move_state_provinces');
+    const invalidFocus = await client.callTool({
+      name: 'hoi4.focus_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        relativePath: 'common/national_focus/test.txt',
+        plan: {},
+      },
+    });
+    expect(invalidFocus).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidFocus.content)).toMatch(/Input validation error/iu);
+    const invalidGui = await client.callTool({
+      name: 'hoi4.gui_inspect',
+      arguments: { workspaceId: 'test', windowName: 'window', scenario: {} },
+    });
+    expect(invalidGui).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidGui.content)).toMatch(/Input validation error/iu);
+    const invalidMap = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [{ id: 'invalid', kind: 'not-a-map-operation' }],
+      },
+    });
+    expect(invalidMap).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidMap.content)).toMatch(/Input validation error/iu);
   });
 
   it('emits progress and honors cancellation for GUI inspection', async () => {

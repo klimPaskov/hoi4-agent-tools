@@ -414,8 +414,7 @@ describe('clean npm-pack installation', () => {
       },
     });
     const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
-    expect(instructions).toContain('Start with hoi4.mods');
-    expect(instructions).toContain('Each rewrite performs the complete edit in one call');
+    expect(instructions).toBe('');
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
     );

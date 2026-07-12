@@ -192,6 +192,8 @@ export interface FocusPlanningNodeMetadata {
   aiStrategyIds: string[];
   payoff?: string;
   terminalKind?: FocusTerminalKind;
+  /** Restores automatic placement intent after ordinary source coordinates are re-imported. */
+  autoPosition?: Extract<FocusPosition, { mode: 'auto' }>;
 }
 
 export interface FocusPlanningSidecar {
@@ -307,8 +309,12 @@ export interface FocusLayoutDecision {
     | 'relative'
     | 'placed'
     | 'moved_for_collision'
+    | 'moved_for_spacing'
     | 'moved_for_mutual_exclusion'
-    | 'moved_to_reduce_crossings';
+    | 'moved_for_parent_order'
+    | 'moved_for_lane_bounds'
+    | 'moved_to_reduce_crossings'
+    | 'moved_to_improve_connector_quality';
   message: string;
 }
 
@@ -317,13 +323,64 @@ export interface FocusLayoutResult {
   nodes: FocusLayoutNode[];
   decisions: FocusLayoutDecision[];
   diagnostics: Diagnostic[];
+  /** Present on layouts produced by this version; optional for prior-layout compatibility. */
+  metrics?: FocusLayoutMetrics;
   layoutHash: string;
+}
+
+export interface FocusLayoutMetrics {
+  bounds: {
+    minimumX: number;
+    maximumX: number;
+    minimumY: number;
+    maximumY: number;
+    columnSpan: number;
+    rowSpan: number;
+    columnCount: number;
+    rowCount: number;
+  };
+  connectors: {
+    count: number;
+    crossingCount: number;
+    nodeIntersectionCount: number;
+    longConnectorCount: number;
+    totalHorizontalSpan: number;
+    maximumHorizontalSpan: number;
+    totalVerticalSpan: number;
+    maximumVerticalSpan: number;
+    totalManhattanSpan: number;
+    maximumManhattanSpan: number;
+  };
+  symmetry: {
+    siblingCohortCount: number;
+    asymmetricSiblingCohortCount: number;
+    totalSiblingDeviation: number;
+    maximumSiblingDeviation: number;
+    offAnchorSiblingCohortCount: number;
+    totalSiblingAnchorDeviation: number;
+    maximumSiblingAnchorDeviation: number;
+    boundingCenterOffsetTwice: number;
+  };
+  spacing: {
+    requiredSameRowSpacing: number;
+    sameRowPairCount: number;
+    tooCloseSameRowPairCount: number;
+    minimumSameRowSpacing: number;
+  };
+}
+
+/** A reusable ceiling shared by one or more deterministic layout runs. */
+export interface FocusLayoutBudget {
+  readonly consumed: number;
+  spend(phase: string, amount?: number): void;
 }
 
 export interface FocusLayoutOptions {
   previous?: FocusLayoutResult;
   laneSpacing?: number;
   nodeSpacing?: number;
+  /** Reuse one budget when a higher-level operation evaluates multiple layouts. */
+  workBudget?: FocusLayoutBudget;
   /** Cooperative cancellation for callers laying out large focus graphs. */
   signal?: AbortSignal;
 }

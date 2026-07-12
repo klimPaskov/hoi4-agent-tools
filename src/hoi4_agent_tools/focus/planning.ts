@@ -42,6 +42,7 @@ function planningNode(focus: FocusTreePlan['focuses'][number]): FocusPlanningNod
     aiStrategyIds: [...focus.ai.strategyIds],
     ...(focus.payoff === undefined ? {} : { payoff: focus.payoff }),
     ...(focus.terminalKind === undefined ? {} : { terminalKind: focus.terminalKind }),
+    ...(focus.position.mode === 'auto' ? { autoPosition: structuredClone(focus.position) } : {}),
   };
 }
 
@@ -160,7 +161,11 @@ export function enrichFocusPlanFromSidecar(
     else focus.branchId = saved.branchId;
     if (saved.laneId === undefined) delete focus.laneId;
     else focus.laneId = saved.laneId;
-    if (focus.position.mode !== 'auto') focus.position.pinned = saved.pinned;
+    if (saved.autoPosition !== undefined) {
+      focus.position = structuredClone(saved.autoPosition);
+    } else if (focus.position.mode !== 'auto') {
+      focus.position.pinned = saved.pinned;
+    }
     focus.visibility = saved.visibility;
     if (saved.reveal === undefined) delete focus.reveal;
     else focus.reveal = structuredClone(saved.reveal);

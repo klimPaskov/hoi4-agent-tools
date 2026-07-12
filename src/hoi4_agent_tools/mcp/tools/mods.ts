@@ -35,8 +35,7 @@ export function registerModsTool(
     'hoi4.mods',
     {
       title: 'List available HOI4 mods',
-      description:
-        'List the configured HOI4 mods available for focus-tree, GUI, and map inspection, rendering, creation, and cleanup.',
+      description: 'List configured HOI4 mod workspaces, optionally selecting one by ID.',
       inputSchema: z.object({ workspaceId: z.string().min(1).max(64).optional() }).strict(),
       outputSchema: modsOutputSchema,
       annotations: {

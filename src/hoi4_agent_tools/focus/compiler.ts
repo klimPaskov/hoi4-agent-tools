@@ -117,15 +117,7 @@ function positionLines(focus: FocusNodePlan, layout: FocusLayoutResult | undefin
   if (focus.position.mode === 'fixed') {
     return [`x = ${focus.position.x}`, `y = ${focus.position.y}`];
   }
-  const placed = layoutNodeMap(
-    layout ?? {
-      treeId: '',
-      nodes: [],
-      decisions: [],
-      diagnostics: [],
-      layoutHash: '',
-    },
-  ).get(focus.id);
+  const placed = layout === undefined ? undefined : layoutNodeMap(layout).get(focus.id);
   if (placed === undefined) {
     throw new ServiceError(
       'FOCUS_LAYOUT_REQUIRED',

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.0.0/schemas/focus-planning-sidecar.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.1.0/schemas/focus-planning-sidecar.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -203,6 +203,34 @@
               "formable",
               "side_payoff"
             ]
+          },
+          "autoPosition": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "const": "auto"
+              },
+              "pinned": {
+                "type": "boolean",
+                "const": false
+              },
+              "preferredX": {
+                "type": "integer",
+                "minimum": -100000,
+                "maximum": 100000
+              },
+              "preferredY": {
+                "type": "integer",
+                "minimum": -100000,
+                "maximum": 100000
+              }
+            },
+            "required": [
+              "mode",
+              "pinned"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

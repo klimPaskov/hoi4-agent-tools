@@ -17,8 +17,6 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
     },
     {
       capabilities: { logging: {} },
-      instructions:
-        'Use this server when a configured HOI4 mod needs a large national or continuous focus, scripted GUI, or map created, inspected, rendered, or cleaned up. Start with hoi4.mods, then use the matching inspect, render, and rewrite tools. Each rewrite performs the complete edit in one call. Read linked hoi4-agent:// artifact resources for complete plans, diagnostics, layouts, previews, and diffs; when a resource content item has a non-null continuationUri in its namespaced _meta byte-range record, follow it until null. Generated GUI renders are offline representations, never game screenshots.',
     },
   );
   registerModsTool(server, engine, context);

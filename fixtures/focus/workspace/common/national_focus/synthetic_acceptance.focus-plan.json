@@ -424,6 +424,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_01",
@@ -437,6 +438,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_02",
@@ -463,6 +465,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": true,
       "id": "synthetic_route_01_focus_04",
@@ -476,6 +479,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_05",
@@ -489,6 +493,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_06",
@@ -502,6 +507,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_07",
@@ -515,6 +521,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_08",
@@ -528,6 +535,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_09",
@@ -554,6 +562,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_11",
@@ -567,6 +576,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_12",
@@ -580,6 +590,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_13",
@@ -593,6 +604,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_14",
@@ -619,6 +631,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_16",
@@ -632,6 +645,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_17",
@@ -645,6 +659,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_18",
@@ -658,6 +673,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_19",
@@ -671,6 +687,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_20",
@@ -684,6 +701,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_21",
@@ -697,6 +715,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_22",
@@ -710,6 +729,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_23",
@@ -723,6 +743,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_24",
@@ -736,6 +757,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_governance_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_01",
       "convergence": false,
       "id": "synthetic_route_01_focus_25",
@@ -751,6 +773,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_01",
@@ -764,6 +787,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_02",
@@ -790,6 +814,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": true,
       "id": "synthetic_route_02_focus_04",
@@ -803,6 +828,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_05",
@@ -816,6 +842,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_06",
@@ -829,6 +856,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_07",
@@ -842,6 +870,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_08",
@@ -855,6 +884,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_09",
@@ -881,6 +911,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_11",
@@ -894,6 +925,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_12",
@@ -907,6 +939,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_13",
@@ -920,6 +953,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_14",
@@ -946,6 +980,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_16",
@@ -959,6 +994,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_17",
@@ -972,6 +1008,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_18",
@@ -985,6 +1022,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_19",
@@ -998,6 +1036,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_20",
@@ -1011,6 +1050,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_21",
@@ -1024,6 +1064,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_22",
@@ -1037,6 +1078,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_23",
@@ -1050,6 +1092,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_24",
@@ -1063,6 +1106,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_diplomacy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_02",
       "convergence": false,
       "id": "synthetic_route_02_focus_25",
@@ -1078,6 +1122,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_01",
@@ -1091,6 +1136,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_02",
@@ -1117,6 +1163,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": true,
       "id": "synthetic_route_03_focus_04",
@@ -1130,6 +1177,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_05",
@@ -1143,6 +1191,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_06",
@@ -1156,6 +1205,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_07",
@@ -1169,6 +1219,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_08",
@@ -1182,6 +1233,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_09",
@@ -1208,6 +1260,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_11",
@@ -1221,6 +1274,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_12",
@@ -1234,6 +1288,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_13",
@@ -1247,6 +1302,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_14",
@@ -1273,6 +1329,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_16",
@@ -1286,6 +1343,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_17",
@@ -1299,6 +1357,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_18",
@@ -1312,6 +1371,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_19",
@@ -1325,6 +1385,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_20",
@@ -1338,6 +1399,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_21",
@@ -1351,6 +1413,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_22",
@@ -1364,6 +1427,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_23",
@@ -1377,6 +1441,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_24",
@@ -1390,6 +1455,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_industry_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_03",
       "convergence": false,
       "id": "synthetic_route_03_focus_25",
@@ -1405,6 +1471,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_01",
@@ -1418,6 +1485,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_02",
@@ -1444,6 +1512,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": true,
       "id": "synthetic_route_04_focus_04",
@@ -1457,6 +1526,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_05",
@@ -1470,6 +1540,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_06",
@@ -1483,6 +1554,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_07",
@@ -1496,6 +1568,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_08",
@@ -1509,6 +1582,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_09",
@@ -1535,6 +1609,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_11",
@@ -1548,6 +1623,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_12",
@@ -1561,6 +1637,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_13",
@@ -1574,6 +1651,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_14",
@@ -1600,6 +1678,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_16",
@@ -1613,6 +1692,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_17",
@@ -1626,6 +1706,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_18",
@@ -1639,6 +1720,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_19",
@@ -1652,6 +1734,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_20",
@@ -1665,6 +1748,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_21",
@@ -1678,6 +1762,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_22",
@@ -1691,6 +1776,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_23",
@@ -1704,6 +1790,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_24",
@@ -1717,6 +1804,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_army_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_04",
       "convergence": false,
       "id": "synthetic_route_04_focus_25",
@@ -1732,6 +1820,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_01",
@@ -1745,6 +1834,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_02",
@@ -1771,6 +1861,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": true,
       "id": "synthetic_route_05_focus_04",
@@ -1784,6 +1875,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_05",
@@ -1797,6 +1889,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_06",
@@ -1810,6 +1903,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_07",
@@ -1823,6 +1917,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_08",
@@ -1836,6 +1931,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_09",
@@ -1862,6 +1958,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_11",
@@ -1875,6 +1972,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_12",
@@ -1888,6 +1986,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_13",
@@ -1901,6 +2000,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_14",
@@ -1927,6 +2027,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_16",
@@ -1940,6 +2041,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_17",
@@ -1953,6 +2055,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_18",
@@ -1966,6 +2069,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_19",
@@ -1979,6 +2083,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_20",
@@ -1992,6 +2097,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_21",
@@ -2005,6 +2111,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_22",
@@ -2018,6 +2125,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_23",
@@ -2031,6 +2139,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_24",
@@ -2044,6 +2153,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_air_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_05",
       "convergence": false,
       "id": "synthetic_route_05_focus_25",
@@ -2059,6 +2169,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_01",
@@ -2072,6 +2183,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_02",
@@ -2098,6 +2210,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": true,
       "id": "synthetic_route_06_focus_04",
@@ -2111,6 +2224,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_05",
@@ -2124,6 +2238,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_06",
@@ -2137,6 +2252,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_07",
@@ -2150,6 +2266,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_08",
@@ -2163,6 +2280,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_09",
@@ -2189,6 +2307,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_11",
@@ -2202,6 +2321,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_12",
@@ -2215,6 +2335,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_13",
@@ -2228,6 +2349,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_14",
@@ -2254,6 +2376,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_16",
@@ -2267,6 +2390,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_17",
@@ -2280,6 +2404,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_18",
@@ -2293,6 +2418,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_19",
@@ -2306,6 +2432,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_20",
@@ -2319,6 +2446,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_21",
@@ -2332,6 +2460,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_22",
@@ -2345,6 +2474,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_23",
@@ -2358,6 +2488,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_24",
@@ -2371,6 +2502,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_navy_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_06",
       "convergence": false,
       "id": "synthetic_route_06_focus_25",
@@ -2386,6 +2518,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_01",
@@ -2407,6 +2540,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_02",
@@ -2449,6 +2583,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": true,
       "id": "synthetic_route_07_focus_04",
@@ -2470,6 +2605,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_05",
@@ -2491,6 +2627,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_06",
@@ -2512,6 +2649,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_07",
@@ -2533,6 +2671,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_08",
@@ -2554,6 +2693,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_09",
@@ -2596,6 +2736,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_11",
@@ -2617,6 +2758,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_12",
@@ -2638,6 +2780,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_13",
@@ -2659,6 +2802,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_14",
@@ -2701,6 +2845,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_16",
@@ -2722,6 +2867,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_17",
@@ -2743,6 +2889,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_18",
@@ -2764,6 +2911,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_19",
@@ -2785,6 +2933,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_20",
@@ -2806,6 +2955,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_21",
@@ -2827,6 +2977,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_22",
@@ -2848,6 +2999,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_23",
@@ -2869,6 +3021,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_24",
@@ -2890,6 +3043,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_intelligence_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_07",
       "convergence": false,
       "id": "synthetic_route_07_focus_25",
@@ -2913,6 +3067,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_01",
@@ -2934,6 +3089,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_02",
@@ -2976,6 +3132,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": true,
       "id": "synthetic_route_08_focus_04",
@@ -2997,6 +3154,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_05",
@@ -3018,6 +3176,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_06",
@@ -3039,6 +3198,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_07",
@@ -3060,6 +3220,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_08",
@@ -3081,6 +3242,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_09",
@@ -3123,6 +3285,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_11",
@@ -3144,6 +3307,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_12",
@@ -3165,6 +3329,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_13",
@@ -3186,6 +3351,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_14",
@@ -3228,6 +3394,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_16",
@@ -3249,6 +3416,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_17",
@@ -3270,6 +3438,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_18",
@@ -3291,6 +3460,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_19",
@@ -3312,6 +3482,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_20",
@@ -3333,6 +3504,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_21",
@@ -3354,6 +3526,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_22",
@@ -3375,6 +3548,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_23",
@@ -3396,6 +3570,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_24",
@@ -3417,6 +3592,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shadow_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_08",
       "convergence": false,
       "id": "synthetic_route_08_focus_25",
@@ -3440,6 +3616,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_01",
@@ -3461,6 +3638,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_02",
@@ -3503,6 +3681,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": true,
       "id": "synthetic_route_09_focus_04",
@@ -3524,6 +3703,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_05",
@@ -3545,6 +3725,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_06",
@@ -3566,6 +3747,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_07",
@@ -3587,6 +3769,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_08",
@@ -3608,6 +3791,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_09",
@@ -3650,6 +3834,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_11",
@@ -3671,6 +3856,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_12",
@@ -3692,6 +3878,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_13",
@@ -3713,6 +3900,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_14",
@@ -3755,6 +3943,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_16",
@@ -3776,6 +3965,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_17",
@@ -3797,6 +3987,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_18",
@@ -3818,6 +4009,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_19",
@@ -3839,6 +4031,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_20",
@@ -3860,6 +4053,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_21",
@@ -3881,6 +4075,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_22",
@@ -3902,6 +4097,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_23",
@@ -3923,6 +4119,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_24",
@@ -3944,6 +4141,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_crisis_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_09",
       "convergence": false,
       "id": "synthetic_route_09_focus_25",
@@ -3967,6 +4165,7 @@
     {
       "aiMajorRoute": true,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_01",
@@ -3980,6 +4179,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_02",
@@ -4006,6 +4206,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": true,
       "id": "synthetic_route_10_focus_04",
@@ -4019,6 +4220,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_05",
@@ -4032,6 +4234,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_06",
@@ -4045,6 +4248,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_07",
@@ -4058,6 +4262,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_08",
@@ -4071,6 +4276,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_09",
@@ -4097,6 +4303,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_11",
@@ -4110,6 +4317,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_12",
@@ -4123,6 +4331,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_13",
@@ -4136,6 +4345,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_14",
@@ -4162,6 +4372,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_16",
@@ -4175,6 +4386,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_17",
@@ -4188,6 +4400,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_18",
@@ -4201,6 +4414,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_19",
@@ -4214,6 +4428,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_20",
@@ -4227,6 +4442,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_21",
@@ -4240,6 +4456,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_22",
@@ -4253,6 +4470,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_23",
@@ -4266,6 +4484,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_24",
@@ -4279,6 +4498,7 @@
     {
       "aiMajorRoute": false,
       "aiStrategyIds": ["synthetic_shared_support_strategy"],
+      "autoPosition": { "mode": "auto", "pinned": false },
       "branchId": "route_10",
       "convergence": false,
       "id": "synthetic_route_10_focus_25",
@@ -4338,7 +4558,7 @@
     "replacesExistingCountryTree": true
   },
   "schemaVersion": 1,
-  "sourceHash": "687553895cdd67afbd98179f9f0c115af4978f6a7a63834e5fcb63c5ad949990",
+  "sourceHash": "cc133797ce0802f7b8156ecc8390aea1255022f48602f593eab17cd076e64366",
   "sourcePath": "mod:common/national_focus/synthetic_acceptance.txt",
   "treeId": "synthetic_acceptance_tree"
 }

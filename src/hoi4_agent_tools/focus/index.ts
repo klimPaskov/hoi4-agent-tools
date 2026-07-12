@@ -1,4 +1,5 @@
 export * from './compiler.js';
+export * from './compact.js';
 export * from './continuous-render.js';
 export * from './drift.js';
 export * from './geometry.js';
