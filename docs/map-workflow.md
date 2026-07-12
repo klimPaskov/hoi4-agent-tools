@@ -1,6 +1,6 @@
 # Agent Nudger map workflow
 
-Agent Nudger is a headless declarative map transaction service for coding agents. HTML/PNG/JSON maps are inspection evidence, not a manual editor.
+Agent Nudger is a headless declarative map rewrite service for coding agents. HTML/PNG/JSON maps are inspection evidence, not a manual editor.
 
 ## Indexed sources
 
@@ -8,14 +8,14 @@ The shared scan connects province bitmap and definitions, states, strategic regi
 
 ## Geometry input
 
-Province geometry apply requires one exact representation:
+Province geometry rewrite requires one exact representation:
 
 - selected existing province IDs;
 - polygon with integer raster-boundary coordinates and explicit `fillRule: "even-odd"`;
 - raster mask manifest with dimensions, origin, exact selected-pixel count, SHA-256, and canonical Base64 data;
 - explicit absolute pixel region (`kind: pixels`).
 
-Natural-language descriptions can guide a coding agent, but are not accepted as apply geometry.
+Natural-language descriptions can guide a coding agent, but are not accepted as rewrite geometry.
 
 Polygon vertices describe raster cell boundaries, not pixel indices. For a raster of `width` by `height`, every vertex must use an integer `x` from `0` through `width` and an integer `y` from `0` through `height`; the right and bottom boundary values `width` and `height` are valid. A greater coordinate is rejected with `MAP_GEOMETRY_OUT_OF_BOUNDS` before bounding-box or raster-work allocation, and polygon geometry is never silently clipped. Rasterization samples each candidate pixel at its center, `(x + 0.5, y + 0.5)`, using the required even-odd fill rule. Every selected center must still belong to the declared source province.
 
@@ -33,7 +33,7 @@ Split/merge/move operations do not guess manpower, resources, buildings, victory
 - exact manifest values;
 - block until resolved.
 
-Proportional rounding is deterministic and checked for conservation. The transaction remains blocked while any required policy is unresolved.
+Proportional rounding is deterministic and checked for conservation. The rewrite remains blocked while any required policy is unresolved.
 
 State move, split, and merge manifests also declare `ports`, `supplyNodes`, `railways`, and `positions` as `follow-province`. Those records are keyed by a selected province or its state association, so their source bytes remain unchanged except for the already modelled state-ID field on applicable position rows. The explicit literals make that behavior reviewable and prevent a partial distribution object from silently choosing it.
 
@@ -45,11 +45,11 @@ New states require an explicit name localisation key and a strict `localisation`
 
 `merge_provinces` and `remove_province` accept arbitrary compatible source IDs; removed IDs do not need to be the highest rows in `definition.csv`. Surviving definitions are compacted deterministically to contiguous IDs from zero in old-ID order. Removed source IDs map to the target's compacted ID, including when the target itself moves downward.
 
-The same total old-to-new map is applied atomically to state membership, victory points, province buildings, strategic regions, special-adjacency endpoints and through-provinces, supply nodes, railways, unit positions, and building-position sea references. Source pixels are repainted with the target color; other province colors and pixels remain unchanged. Reference collisions created by the merge are resolved by the declared sum/deduplicate policy. Definition row order, comments and extra fields, text-file comments, line endings, and source encoding are retained by targeted rewrites, and rollback restores every affected file byte-for-byte.
+The same total old-to-new map is applied as one recoverable operation to state membership, victory points, province buildings, strategic regions, special-adjacency endpoints and through-provinces, supply nodes, railways, unit positions, and building-position sea references. Source pixels are repainted with the target color; other province colors and pixels remain unchanged. Reference collisions created by the merge are resolved by the declared sum/deduplicate policy. Definition row order, comments and extra fields, text-file comments, line endings, and source encoding are retained by targeted rewrites. A failed application or post-validation restores every affected file byte-for-byte.
 
 Compaction requires an active definition table that is already contiguous from zero and unambiguous by ID and color. The merge also requires every source and target to share province type plus exact state and strategic-region membership; these are refusal cases rather than guessed redistribution.
 
-Province split/create manifests explicitly retain existing victory points, province buildings, ports, supply nodes, railways, special adjacencies, positions, and entity locators on the source province while the selected pixels and new ID join the declared state and strategic region. To move connected data to the new province, place the corresponding exact remove/add or update operations after the split in the same ordered transaction. Omitting any retention field blocks the split before geometry changes are proposed.
+Province split/create manifests explicitly retain existing victory points, province buildings, ports, supply nodes, railways, special adjacencies, positions, and entity locators on the source province while the selected pixels and new ID join the declared state and strategic region. To move connected data to the new province, place the corresponding exact remove/add or update operations after the split in the same ordered rewrite. Omitting any retention field blocks the split before geometry changes are proposed.
 
 ## Province type migration
 
@@ -66,7 +66,7 @@ The policy explicitly covers:
 - building and unit positions (`retain-if-valid` or `remove`) and entity locators (`retain-at-coordinate`, because type migration does not alter geometry);
 - special adjacency endpoint/through references (`retain-if-valid` or `remove-referencing`).
 
-Land-to-water requires removal from the exact indexed state and cannot leave that state without land. Water-to-land requires an explicit existing target state in the same strategic region. Sea targets require `ocean` terrain and continent `0`; lake targets require `lakes` and continent `0`; land targets require a non-water terrain and nonzero continent. Coastal fields and neighboring coastal changes remain exact manifest inputs and are verified by final map validation. Dependency removals and the definition edit share one hash-bound transaction, so apply and rollback cover every affected state, definition, network, position, and adjacency file together.
+Land-to-water requires removal from the exact indexed state and cannot leave that state without land. Water-to-land requires an explicit existing target state in the same strategic region. Sea targets require `ocean` terrain and continent `0`; lake targets require `lakes` and continent `0`; land targets require a non-water terrain and nonzero continent. Coastal fields and neighboring coastal changes remain exact manifest inputs and are verified by final map validation. Dependency removals and the definition edit share one hash-bound journal, so success or automatic failure restoration covers every affected state, definition, network, position, and adjacency file together.
 
 When a dependency should move rather than disappear, place the corresponding exact `update_state`, position, supply, railway, or adjacency operation after the type migration in the same ordered manifest. The migration policy removes or retains the old record explicitly; the later operation supplies the new target explicitly.
 
@@ -74,16 +74,22 @@ When a dependency should move rather than disappear, place the corresponding exa
 
 Special adjacency rows remain declarative `add_adjacency` and `remove_adjacency` operations against the active `default.map` adjacency CSV. Normal topological adjacency is derived only from four-neighbor province bitmap geometry (including horizontal map wrap) and uses separate `add_normal_adjacency` and `remove_normal_adjacency` operations.
 
-Every normal-adjacency operation carries unique exact pixel transfers with a coordinate, the province currently owning that pixel, and the destination province. Both requested endpoints and all transfer provinces must exist, every source must match the active raster, and every transfer must involve at least one requested endpoint. Agent Nudger repaints only those 24-bit pixels, rebuilds topology, and blocks/rolls back the operation unless the requested pair is present after an add or absent after a remove. Related coastal-definition changes remain explicit ordered operations in the same transaction.
+Every normal-adjacency operation carries unique exact pixel transfers with a coordinate, the province currently owning that pixel, and the destination province. Both requested endpoints and all transfer provinces must exist, every source must match the active raster, and every transfer must involve at least one requested endpoint. Agent Nudger repaints only those 24-bit pixels, rebuilds topology, and restores the operation unless the requested pair is present after an add or absent after a remove. Related coastal-definition changes remain explicit ordered operations in the same rewrite.
 
 ## Allocation
 
 ID/color allocation scans current game, dependencies, and mod sources first, including the definition table selected by each root's own `default.map` even when its filename differs from the active table. It records per-file/root maxima, used ranges, active definition contiguity, collisions, reserved values, selected value/color, and source revision. Explicit values are checked against the same evidence. A lower-root ID/color collision is returned as a named dependency conflict on the manifest operation that requested it. The allocator never assumes the numerically next value is safe.
 
+## Autonomous rewrite
+
+With `writePolicy: "autonomous"`, submit the complete ordered operation manifest once to `hoi4.map_rewrite`. The tool scans dependencies, resolves exact geometry and policies, renders baseline/proposed/diff evidence, validates, journals exact before-bytes, applies all affected text and binary files under the workspace lock, rescans, and post-validates. `execution: "applied"` means the final hashes and validation passed. A blocked proposal reports `execution: "blocked"` and changes nothing; a valid no-change request reports `execution: "unchanged"`; a failure after replacement begins restores every affected file automatically.
+
+No transaction tools are registered in autonomous mode. The optional `"transactions"` compatibility policy exposes `hoi4.map_plan` followed by the separate diff/apply/status/rollback tools, using the same internal journal and recovery engine.
+
 ## Artifacts and validation
 
 Map base layers cover province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays cover coastlines, ports, victory points, resources, state buildings, province buildings, supply nodes, railways, special adjacencies, building positions, unit positions, and weather positions. Resource/building data is present in canonical JSON as exact sorted state/province maps as well as deterministic PNG markers; HTML embeds the same JSON and PNG with pan/zoom controls. Render loops honor cancellation signals.
 
-Every map preflight stores three content-addressed PNG/JSON/HTML triplets: baseline (`map-before.*`), proposed (`map-proposed.*`), and changed-pixel/semantic diff (`map-diff.*`). Their links and content hashes are included in the transaction plan hash. Semantic diff JSON includes definitions, state/region membership, full state values (manpower, category, resources, owner/controller, cores/claims, VPs, state/province buildings, and derived capital), ports, building/unit/weather positions, entity locators, supply, railways, exact special-adjacency records, and exact bitmap-derived normal-adjacency pairs.
+Every map preflight stores three content-addressed PNG/JSON/HTML triplets: baseline (`map-before.*`), proposed (`map-proposed.*`), and changed-pixel/semantic diff (`map-diff.*`). Their links and content hashes are included in the internal plan hash. Semantic diff JSON includes definitions, state/region membership, full state values (manpower, category, resources, owner/controller, cores/claims, VPs, state/province buildings, and derived capital), ports, building/unit/weather positions, entity locators, supply, railways, exact special-adjacency records, and exact bitmap-derived normal-adjacency pairs.
 
 Validation detects duplicate IDs/colors, bitmap-definition mismatches, invalid references, unassigned/multi-state land, invalid derived capitals/VPs/ports/regions/adjacency/supply/rail/placements, removed references, coast inconsistencies, duplicate state IDs, missing localisation, ownership/control conflicts, lost payload, changes outside declared bounds, and dependency conflicts. Geometry review includes disconnected components, one-pixel corridors, and enclosed province holes. Hole detection uses one bounded digital-topology pass and reports `MAP_PROVINCE_HOLE_REVIEW` as a warning because intentional enclaves can be valid; provinces crossing the horizontally wrapping seam are excluded from planar hole classification. Baseline comparisons diagnose dimensions, file/DIB header, row orientation, pixel offset, bit depth, and palette changes separately. Sea and legitimate lake/island cases are not misclassified as missing state membership.

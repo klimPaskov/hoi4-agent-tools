@@ -75,7 +75,7 @@ The benchmark changes only the copied fixture's modification time and confirms t
 - metadata-only rescan/cache hit: 5.431 ms;
 - same-size, same-mtime content change/rescan: 20.300 ms.
 
-The deterministic unit test in `tests/unit/core-cache.test.ts` continuously checks this correctness property without asserting timing. Explicit transaction apply/rollback paths also invalidate the workspace cache; the content-derived revision remains the safety backstop for external edits.
+The deterministic unit test in `tests/unit/core-cache.test.ts` continuously checks this correctness property without asserting timing. Autonomous rewrites and reviewed transaction apply/rollback paths all invalidate the workspace cache; the content-derived revision remains the safety backstop for external edits.
 
 The Scripted GUI Studio and Agent Nudger benchmark paths currently rebuild their domain scans/indexes on each call. Their warm figures therefore reflect runtime/JIT and operating-system cache effects rather than a domain-level memoization claim. Stored artifacts are content-addressed, but artifact storage is not treated as a parsed-source cache.
 

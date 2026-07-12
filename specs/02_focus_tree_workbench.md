@@ -83,14 +83,14 @@ Separate script errors, reference errors, layout warnings, and design warnings. 
 
 ## MCP operations
 
-Expose agent tools for scan, import, lint, layout plan, render, transaction diff, transaction apply, and export. Exact public schemas belong in `06_public_mcp_server.md` and the shared schema package.
+Expose agent tools for scan, import, lint, layout plan, render, one-call source rewrite, and export. `focus_rewrite` accepts the complete source-preserving plan, performs proposal validation and review-artifact generation internally, and returns only after the rewrite and post-write validation succeed or exact source bytes have been restored automatically. Exact public schemas belong in `06_public_mcp_server.md` and the shared schema package.
 
-Every generated focus block needs a source map back to its plan node. Every applied change needs a transaction manifest and rollback record.
+Every generated focus block needs a source map back to its plan node. Every rewrite needs an internal authenticated journal and recovery record, but the coding agent must not be required to manage a transaction ID, expected plan hash, separate apply request, or rollback request.
 
 ## Acceptance fixture
 
 Create a standalone-project-owned synthetic tree with at least 250 focuses, ten route families, mutual-exclusion forks, convergence points, hidden branches, crisis branches, shared support branches, relative positions, pinned positions, continuous focuses, and cross-links to decisions and events.
 
-The module must produce stable repeated layouts, no duplicate coordinates, no cycles, no overlaps, and complete HTML, SVG, PNG, JSON, and validation artifacts. Intentionally invalid variants must be detected.
+The module must produce stable repeated layouts, no duplicate coordinates, no cycles, no overlaps, and complete HTML, SVG, PNG, JSON, and validation artifacts. Intentionally invalid variants must be detected. The autonomous acceptance workflow must also prove that one `focus_rewrite` call changes an authorized mod source, a blocked plan changes no source, and post-write validation failure restores the exact original bytes without a caller rollback operation.
 
 Also run local integration tests against a large vanilla tree and at least one external mod workspace without copying external source into this repository.

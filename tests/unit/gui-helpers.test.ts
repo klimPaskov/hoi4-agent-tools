@@ -177,6 +177,7 @@ describe('GUI helper templates and state variants', () => {
 
   it('exposes template-instance evidence in the MCP GUI plan output contract', () => {
     const output = emptyServiceResult('fixture', {
+      execution: 'planned' as const,
       mode: 'helpers' as const,
       expiresAt: '2026-07-11T00:00:00.000Z',
       nodeCount: 5,

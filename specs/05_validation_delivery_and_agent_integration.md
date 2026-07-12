@@ -9,7 +9,7 @@ Implement in this order:
 3. workspace resolver and configuration
 4. shared source parser and source map
 5. symbol and dependency index
-6. diagnostics, transaction, diff, artifact, and rollback engine
+6. diagnostics, internal journal, diff, artifact, and automatic-recovery engine
 7. Focus Tree Workbench
 8. Scripted GUI Studio scene graph and renderer
 9. Scripted GUI Studio state, fidelity, and visual validation
@@ -35,7 +35,7 @@ Add:
 - golden-output tests
 - negative fixtures
 - deterministic-output tests
-- transaction rollback tests
+- internal journal, fault-injection, crash-recovery, and exact-byte restoration tests
 - property-based tests where useful
 - renderer image comparison tests
 - GUI state-matrix tests
@@ -45,7 +45,7 @@ Add:
 - external mod workspace integration tests
 - MCP tool, resource, and prompt discovery tests
 - MCP stdio and Streamable HTTP transport tests
-- MCP security, workspace isolation, and stale-transaction tests
+- MCP security, workspace isolation, autonomous-policy, and stale-source rewrite tests
 - clean-environment package installation tests
 - Registry metadata tests
 
@@ -60,12 +60,12 @@ Create documentation for:
 - standalone architecture and dependency decisions
 - MCP installation and coding-agent connection
 - workspace registration and permissions
-- security and transaction approval
+- security and operator-controlled autonomous write policy
 - focus-tree agent workflow
 - GUI source graph and rendering workflow
 - GUI preview scenarios and fidelity reports
 - map agent workflow
-- transaction manifests and rollback
+- one-call rewrites, internal journals, and automatic recovery
 - artifact resources
 - troubleshooting
 - unsupported constructs and blockers
@@ -80,16 +80,18 @@ The server is designed for MCP-compatible coding agents. Provide:
 
 - strict tool schemas
 - concise tool descriptions
-- MCP prompts for safe focus, GUI, and map workflows
+- MCP prompts for focus, GUI, and map workflows
 - resource templates for generated artifacts
 - example client configuration for common coding-agent hosts
 - tool annotations for read-only, mutating, destructive, and idempotent behavior
 - clear progress and cancellation behavior
-- transaction approval patterns that work with client confirmation interfaces
+- one-call autonomous rewrite patterns that rely on explicit operator workspace policy rather than a caller-managed approval transaction
 
 Do not require Chaos Redux skills or subagents. The standalone repository may include generic agent guidance and MCP prompts, but it must not depend on another repository's `.agents` folder.
 
-Operators may install the package, register workspaces, and define client permission policy. Coding agents decide when to use the registered MCP capabilities. The product does not expose a directly operated focus editor, GUI editor, map editor, or full tool CLI.
+Operators may install the package, register workspaces, and define client permission policy. Workspaces remain read-only unless the operator explicitly enables effective `writePolicy: "autonomous"`. Coding agents decide when to use the registered MCP capabilities and may then complete a supported domain rewrite in one call. Remote calls still require authentication, transport write scope, and an explicit principal-to-workspace grant. The product does not expose a directly operated focus editor, GUI editor, map editor, or full tool CLI.
+
+A manually staged `writePolicy: "transactions"` mode may remain for compatibility, but it is not the primary documented workflow and acceptance does not depend on its transaction IDs, plan hashes, diff/apply sequence, or explicit rollback surface.
 
 ## Completion standard
 
@@ -101,7 +103,7 @@ The goal is complete only when:
 - the server is installable from a public package and has valid `server.json` Registry metadata
 - MCP tools, resources, prompts, annotations, progress, cancellation, security gates, and artifact links pass acceptance tests
 - all three modules use the shared parser, resolver, index, diagnostics, artifact, and transaction system
-- dry-run, source diff, visual diff, apply, and rollback work
+- each focus, GUI, and map source mutation completes through one authorized domain rewrite call, returns source/visual evidence, and restores exact original bytes automatically on failure
 - large focus-tree rendering and linting pass the acceptance fixture
 - GUI parsing, rendering, state galleries, fidelity reports, and visual validation pass the acceptance fixture
 - the GUI module never launches or automates Hearts of Iron IV
@@ -112,4 +114,4 @@ The goal is complete only when:
 - all known limitations are precise and reproducible
 - every simplification, omission, and blocker is reported
 
-If province geometry editing, atomic rollback, deterministic rendering, fidelity reporting, MCP publication, transport support, write safety, workspace isolation, or required validation remains unimplemented, report the goal as incomplete. Static diagrams, mock tools, and placeholder renders are not completion evidence.
+If province geometry editing, automatic atomic recovery, deterministic rendering, fidelity reporting, MCP publication, transport support, write safety, workspace isolation, or required validation remains unimplemented, report the goal as incomplete. The goal is also incomplete if the primary accepted mutation path requires a coding agent to carry a transaction ID or plan hash, make a separate apply call, or invoke rollback. Static diagrams, mock tools, and placeholder renders are not completion evidence.

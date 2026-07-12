@@ -1,44 +1,55 @@
-# Transactions, diffs, and rollback
+# Autonomous rewrites, transactions, and recovery
 
-## Plan
+The recommended `"autonomous"` write policy exposes three source-mutation tools:
 
-A domain `plan_changes`/`map_plan` call calculates every affected source and binary file before writing. Proposed bytes are validated in memory. The plan persists content-addressed before/after blobs and produces source, binary, pixel, and rendered comparison artifacts where applicable.
+- `hoi4.focus_rewrite`;
+- `hoi4.gui_rewrite`;
+- `hoi4.map_rewrite`.
 
-Every proposed source target is resolved with write access restricted to the workspace's canonical
-mod root. Transaction calls cannot write the game, a dependency, a fixture, artifact storage,
-cache storage, or the reserved `.hoi4-agent` subtree as mod source.
+One rewrite call calculates every affected source and binary file, validates the proposed bytes in memory, persists an authenticated journal with exact recovery data, applies under the workspace lock, rebuilds the shared index, and post-validates the result. The caller does not receive or invoke separate transaction apply or rollback tools. Those tools are not registered in autonomous mode.
 
-The transaction API requires both validation phases: planning must return at least one explicit in-memory check, and apply must return at least one explicit post-write check. Missing or empty callbacks fail with `TRANSACTION_DRY_RUN_VALIDATION_REQUIRED` or `TRANSACTION_POST_VALIDATION_REQUIRED`; callers cannot opt out through the typed core API. Diff artifacts are committed as one batch with the journal only after the planning validator returns structurally valid results. A rejected validator or journal admission leaves artifact inventory unchanged. A completed dry run whose explicit checks fail remains reviewable as a blocked plan and cannot be applied.
+`"transactions"` remains available as an optional compatibility policy. It exposes the older `hoi4.focus_plan_changes`, `hoi4.gui_plan_changes`, and `hoi4.map_plan` tools, followed by `hoi4.transaction_diff`, `hoi4.transaction_apply`, `hoi4.transaction_status`, and `hoi4.transaction_rollback`. Both modes use the same core transaction engine and safety properties; only the public MCP workflow differs.
+
+## Autonomous rewrite pipeline
+
+Every autonomous rewrite follows this sequence inside one MCP call:
+
+1. resolve targets with write access confined to the canonical mod root;
+2. calculate the complete affected-file set and exact proposed bytes;
+3. run domain-specific in-memory validation and create source, binary, pixel, or rendered evidence as applicable;
+4. persist the plan, before/after blobs, authentication tag, and protected revision head;
+5. recheck principal, workspace, canonical roots, expiry, and every before-hash under the workspace lock;
+6. stage and replace files in deterministic order;
+7. rebuild the shared index, run domain post-write validation, and verify every final hash;
+8. return `execution: "applied"`, changed-file samples, validation, and evidence links only after success.
+
+A proposal whose pre-write checks fail returns blocked with `execution: "blocked"` and changes no source bytes. A request whose desired bytes already match every target returns `execution: "unchanged"` as a successful no-op. Any error after replacement begins starts exact restoration before failure is returned. Startup recovery also completes restoration for an interrupted journal before another write is accepted. Autonomous mode therefore removes the client-driven review/apply handshake without weakening validation or recoverability.
+
+The rewrite tools truthfully advertise `readOnlyHint: false` and `destructiveHint: true`. MCP does not mandate a confirmation prompt for each tool call. A coding-agent host can still prompt for or block the call under its own policy, and the server cannot override that host decision.
+
+Git remains the recommended source-history, collaboration, and intentional-revert system. Internal recovery serves a different purpose: exact before-bytes and the durable journal prevent a failed multi-file rewrite from leaving partial corruption, including outside a Git checkout.
+
+Successful autonomous journals are internal recovery data, not user history. They are reclaimed automatically when journal retention reaches its configured count or byte limit; authenticated source-linked evidence remains in the artifact store. Reviewed compatibility mode retains applied journals so its explicit rollback operation remains available.
+
+## Planning and evidence
+
+Proposed bytes are validated in memory before any source replacement. Every target is restricted to the workspace's canonical mod root; rewrites cannot write the game, a dependency, a fixture, artifact storage, cache storage, or the reserved `.hoi4-agent` subtree as mod source.
+
+The transaction core requires both validation phases: planning must return at least one explicit in-memory check, and apply must return at least one explicit post-write check. Missing or empty callbacks fail with `TRANSACTION_DRY_RUN_VALIDATION_REQUIRED` or `TRANSACTION_POST_VALIDATION_REQUIRED`; domain adapters cannot opt out. Diff artifacts are committed as one batch with the journal only after the planning validator returns structurally valid results. A rejected validator or journal admission leaves artifact inventory unchanged. A completed plan whose explicit checks fail remains evidence for the blocked rewrite and cannot be applied.
 
 Text diffs use an exact deterministic algorithm with a fixed memory bound and cancellation checks. If an exact diff would exceed the bound, planning stops with `DIFF_COMPLEXITY_LIMIT`; the server does not substitute a truncated, approximate, or misleading diff.
 
-The returned transaction ID is not approval. Review:
+Autonomous rewrite results keep bounded path samples and return the generated evidence resources directly; internal transaction identifiers and plan hashes are not caller inputs or success-result fields. Every applied autonomous rewrite links a sanitized execution-validation JSON resource containing the complete pre-write and post-write checks, source-linked diagnostics, final target hashes, and any overflow diagnostic resources without exposing the internal transaction ID or plan hash. Inline validation remains capped at five checks for wire efficiency. Reviewed compatibility mode additionally exposes the authenticated transaction-manifest resource.
 
-- operations and unresolved choices;
-- affected file list;
-- source and visual diff resources;
-- diagnostic locations and validation gates;
-- expiry and plan hash.
+In reviewed compatibility mode, `hoi4.transaction_diff` returns at most 20 files, operation summaries, and artifact links per page. Follow every `nextCursor` until absent before applying. Cursors are bound to the immutable plan hash and fail if reused for a different transaction. A transaction ID is a journal identifier, not approval.
 
-Plan and mutation tool results keep only a bounded path sample plus the authenticated transaction
-manifest resource. Review artifacts remain listed in that manifest rather than being duplicated as
-hundreds of inline resource links. `hoi4.transaction_diff` returns at most 20 files, operation
-summaries, and artifact links per page; follow every `nextCursor` until it is absent. Cursors are
-bound to the immutable plan hash and fail if reused for a different transaction. Inline validation
-contains at most five checks with an explicit truncation diagnostic; the manifest is the complete
-validation record.
+Focus rewrites include both the edited Clausewitz source and its adjacent `.focus-plan.json` design sidecar in one recoverable operation. The manifest retains the proposed generated-source map and sidecar artifacts after success or restoration so each generated focus range remains traceable to its planning/source node.
 
-Focus plans include both the edited Clausewitz source and its adjacent `.focus-plan.json` design sidecar in one transaction. The manifest also retains the proposed generated-source map and sidecar artifacts through apply and rollback so each generated focus range remains traceable to its planning/source node.
+Complete focus proposal validation is a linked JSON resource. If proposed or post-write diagnostics exceed the fixed manifest allowance, validation still evaluates the complete set, stores it as a source-linked MCP resource, and retains a blocker-first bounded manifest summary. The plan phase reserves diagnostic capacity for the independent post-write phase, so a warning-heavy large tree does not weaken limits or prevent a valid rewrite.
 
-Complete focus proposal validation is a linked JSON resource. If proposed or post-write diagnostics
-exceed the fixed manifest allowance, validation still evaluates the complete set, stores it as a
-source-linked MCP resource, and retains a blocker-first bounded manifest summary. The plan phase
-reserves diagnostic capacity for the independent post-write phase, so a warning-heavy large tree
-does not weaken limits or make a valid reviewed transaction impossible to apply.
+## Apply pipeline and protected state
 
-## Apply
-
-Call `hoi4.transaction_apply` separately with `workspaceId`, `transactionId`, and the exact 64-character `expectedPlanHash`. The server rejects a different principal/workspace, changed roots, failed dry run, expiry, reused state, or any changed before-hash.
+Autonomous tools pass their internal transaction ID and exact 64-character plan hash directly to the core apply path. In compatibility mode, the caller supplies the same values to `hoi4.transaction_apply`. The server rejects a different principal/workspace, changed roots, failed pre-write validation, expiry, reused state, or any changed before-hash.
 
 The persisted immutable plan payload is recomputed against `planHash` whenever a manifest is
 loaded. A recomputable integrity hash remains useful for deterministic diagnostics, but is never an
@@ -55,8 +66,7 @@ reconcile only an HMAC-valid exact `+1` successor. Missing heads, gaps, conflict
 and forged successors fail closed. Successor creation is durable before older revision-head files
 are removed, so an old-head cleanup failure does not break loading.
 
-Ordinary status, diff, and resource reads are pure: they accept only an exact protected head and
-never promote state. An authenticated cache-first exact successor reports
+Ordinary manifest-resource reads, and status/diff reads when compatibility mode exposes them, are pure: they accept only an exact protected head and never promote state. An authenticated cache-first exact successor reports
 `TRANSACTION_HEAD_RECONCILIATION_REQUIRED` until startup recovery or an authorized write path
 performs the narrowly allowed reconciliation.
 
@@ -141,9 +151,11 @@ check rejects a plan, the artifact store removes only content and provenance fil
 attempt; artifact inventory is unchanged and any identical artifact retained by another operation
 remains addressable.
 
-## Explicit rollback
+## Explicit rollback in compatibility mode
 
-`hoi4.transaction_rollback` is available after successful apply. It first verifies that every current file still has the transaction's after-hash. An external edit makes rollback stale, protecting later work from being overwritten.
+`hoi4.transaction_rollback` is available only in reviewed `"transactions"` mode after successful apply. It first verifies that every current file still has the transaction's after-hash. An external edit makes rollback stale, protecting later work from being overwritten.
+
+Autonomous mode does not expose an explicit rollback tool. Failed application and post-validation restore automatically; an intentional later reversal belongs in Git or a new explicit domain rewrite.
 
 Rollback accepts cancellation through its path/hash verification preflight. Once byte restoration
 starts, restore plus authenticated journal advancement is deliberately non-cancellable so a client

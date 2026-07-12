@@ -1,5 +1,7 @@
 # Completion report: 0.1.7 public release
 
+> Historical release record. Version 0.2.0 supersedes the agent-facing write workflow described here; see [ADR 0012](adr/0012-autonomous-rewrites.md) and the current workflow documentation.
+
 - Released version: `0.1.7`
 - Report date: 2026-07-12
 - Status: complete; public delivery, installation, and a real external-workspace transaction are verified

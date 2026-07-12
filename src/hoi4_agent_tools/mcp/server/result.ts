@@ -399,7 +399,7 @@ export function errorResult(
     artifacts: context.artifacts ?? [],
     validation: context.validation ?? { passed: false, checks: [] },
     blockers: [{ code: serviceError.code, message: serviceError.message, details: publicDetails }],
-    rollbackStatus: context.rollbackStatus ?? 'not-required',
+    ...(context.rollbackStatus === undefined ? {} : { rollbackStatus: context.rollbackStatus }),
     data: context.data ?? {},
   });
 }

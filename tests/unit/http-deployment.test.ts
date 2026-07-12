@@ -232,8 +232,11 @@ describe('Streamable HTTP deployment policy', () => {
     const writeTools = [
       'hoi4.project_register',
       'hoi4.focus_plan_changes',
+      'hoi4.focus_rewrite',
       'hoi4.gui_plan_changes',
+      'hoi4.gui_rewrite',
       'hoi4.map_plan',
+      'hoi4.map_rewrite',
       'hoi4.transaction_apply',
       'hoi4.transaction_rollback',
     ];

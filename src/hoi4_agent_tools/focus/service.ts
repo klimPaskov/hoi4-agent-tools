@@ -389,7 +389,7 @@ export class FocusWorkbench {
         { relativePath: input.relativePath },
       );
     }
-    const { before, document, sourceCreated } = await loadModSource(
+    const { document, sourceCreated } = await loadModSource(
       this.resolver,
       input.workspaceId,
       input.relativePath,
@@ -435,21 +435,6 @@ export class FocusWorkbench {
     };
     const sidecar = createFocusPlanningSidecar(sidecarPlan, afterHash);
     const sidecarContent = Buffer.from(serializeFocusPlanningSidecar(sidecar), 'utf8');
-    const existingSidecar = await this.resolver
-      .resolvePath(input.workspaceId, sidecarPath, 'read', ['mod'], input.principal)
-      .then(({ path }) => readFile(path))
-      .catch((error: unknown) => {
-        if (error instanceof ServiceError && error.code === 'PATH_NOT_FOUND_IN_ROOTS')
-          return undefined;
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-        throw error;
-      });
-    if (before.equals(after) && existingSidecar?.equals(sidecarContent) === true) {
-      throw new ServiceError(
-        'FOCUS_NO_CHANGES',
-        `Focus tree ${input.plan.id} compiles to the current source`,
-      );
-    }
     const operationId = deterministicId('focus_change', {
       treeId: input.plan.id,
       relativePath: input.relativePath,
@@ -654,7 +639,9 @@ export class FocusWorkbench {
         signal?.throwIfAborted();
         const proposedSource = proposed.get(input.relativePath);
         const bytes = proposedSource === undefined ? after : proposedSource;
-        const proposedSidecarBytes = proposed.get(sidecarPath);
+        const proposedSidecar = proposed.get(sidecarPath);
+        const proposedSidecarBytes =
+          proposedSidecar === undefined ? sidecarContent : proposedSidecar;
         const validation = await validateProposedFocus(bytes, proposedSidecarBytes, signal);
         return {
           ...validation,
@@ -683,7 +670,7 @@ export class FocusWorkbench {
         { relativePath: input.relativePath },
       );
     }
-    const { before, document, sourceCreated } = await loadModSource(
+    const { document, sourceCreated } = await loadModSource(
       this.resolver,
       input.workspaceId,
       input.relativePath,
@@ -709,11 +696,6 @@ export class FocusWorkbench {
       targetCreated ? undefined : drift.currentSourcePlan,
       input.plan,
     );
-    if (before.equals(after))
-      throw new ServiceError(
-        'FOCUS_NO_CHANGES',
-        `Continuous focus palette ${input.plan.id} compiles to the current source`,
-      );
     const afterHash = sha256Bytes(after);
     const operationId = deterministicId('continuous_focus_change', {
       paletteId: input.plan.id,

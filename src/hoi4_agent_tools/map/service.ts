@@ -574,14 +574,22 @@ export class AgentNudger {
         const expected = new Map(
           plan.changes.map((change) => [change.relativePath, change.content]),
         );
+        const current = new Map(
+          snapshot.files
+            .filter(({ rootKind, shadowedBy }) => rootKind === 'mod' && shadowedBy === undefined)
+            .map(({ relativePath, bytes }) => [relativePath, bytes] as const),
+        );
         const exactProposedBytes =
-          proposed.size === expected.size &&
-          [...proposed].every(([relativePath, content]) => {
-            const planned = expected.get(relativePath);
-            if (planned === undefined) return false;
+          proposed.size <= expected.size &&
+          [...expected].every(([relativePath, planned]) => {
+            const content = proposed.has(relativePath)
+              ? proposed.get(relativePath)
+              : (current.get(relativePath) ?? null);
+            if (content === undefined) return false;
             if (content === null || planned === null) return content === planned;
             return Buffer.from(content).equals(Buffer.from(planned));
-          });
+          }) &&
+          [...proposed.keys()].every((relativePath) => expected.has(relativePath));
         const diagnostics = exactProposedBytes
           ? validation.diagnostics
           : [

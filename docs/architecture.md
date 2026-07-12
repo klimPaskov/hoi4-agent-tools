@@ -1,6 +1,6 @@
 # Architecture
 
-All external behavior enters through MCP and calls typed domain services. Transport code validates protocol and authorization; it does not parse source, lay out graphs, render images, or write files.
+All external behavior enters through MCP and calls typed domain services. Transport code validates protocol and authorization; it does not parse source, lay out graphs, render images, or write files. The configured write policy selects the public MCP surface without changing the shared core implementation.
 
 In this documentation, “read-only” scan, lint, layout, and render operations mean that registered HOI4 source bytes are never changed. MCP `readOnlyHint` follows the protocol's broader environmental-mutation meaning: an operation that creates content-addressed evidence under an allowlisted generated-artifact root advertises `readOnlyHint: false`, even though it cannot edit game or mod source.
 
@@ -42,19 +42,35 @@ Large binary rasters and translation catalogs are selected lazily rather than re
 
 Canonical JSON sorts keys with a locale-independent total UTF-16 code-unit order, traversal uses stable path ordering, layout tie-breaking is fixed, and artifact names are content hashes. Render profiles include source/asset/font hashes and all scenario geometry. Timestamps, host paths, locale collation, random IDs, and time zones are excluded from hashed artifacts.
 
-## Artifacts and transactions
+## Artifacts and write execution
 
 Generated evidence is content-addressed below `.hoi4-agent/artifacts`. Artifact manifests bind their
 immutable provenance address to a hash-only canonical workspace and configured/runtime owner
 identity. Runtime-generated stores also carry an atomic persistent owner claim, while statically
 configured workspaces retain one shared operator identity for their explicit grants.
 
-A transaction includes the complete affected-file set, before/after hashes and blobs, operation
+The server has three configured source policies. `read-only` authorizes no source mutation.
+`autonomous` registers `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite`, but not
+transaction status, diff, apply, or rollback tools. `transactions` is a compatibility surface that
+registers domain planning plus the separate transaction tools. MCP annotations remain truthful:
+the autonomous rewrite tools advertise `readOnlyHint: false` and `destructiveHint: true`. Those
+annotations do not mandate a client prompt, and the server cannot override its host's approval
+policy.
+
+Internally, both write policies call the same transaction core. A journal includes the complete affected-file set, before/after hashes and blobs, operation
 provenance, validation, source/binary/visual diffs, expiry, principal, workspace/root fingerprint,
 and plan hash. Its complete mutable journal is HMAC-authenticated by a random key beneath the
 isolated `serverStateRoot`; a protected latest-revision head prevents replay and bounds state to one
 head per admitted cache journal.
 
-Apply acquires one workspace write lock, rechecks preconditions, stages files on the same volume, journals deterministic replacements, rebuilds the affected index, and post-validates. Failure and startup recovery restore original blobs. This is recoverable logical atomicity; another process can briefly observe a replacement sequence.
+In autonomous mode, the domain tool plans and validates, admits the journal, applies, rebuilds the
+index, and post-validates inside one call. Apply acquires one workspace write lock, rechecks
+preconditions, stages files on the same volume, and journals deterministic replacements. Failure
+and startup recovery restore original blobs automatically. This is recoverable logical atomicity;
+another process can briefly observe a replacement sequence, but the server never reports success
+for a partial result.
+
+Git provides durable project history and collaboration. The internal journal is deliberately
+independent of Git so failed multi-file writes recover even in an unversioned workspace.
 
 Detailed decisions are recorded in [ADRs](adr/README.md).

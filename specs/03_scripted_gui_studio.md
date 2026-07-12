@@ -107,7 +107,7 @@ The renderer may produce selected-frame and animated review artifacts from the r
 
 ## MCP operations
 
-Expose agent tools for scan, lint, render, render-state matrix, compare, plan source changes, transaction diff, and transaction apply. Rendering and validation remain read-only.
+Expose agent tools for scan, lint, render, render-state matrix, compare, and one-call source rewrite. `gui_rewrite` performs source-preserving proposal compilation, reparsing, rendering, validation, journaling, mutation, and post-write validation inside one authorized request. Rendering and standalone validation remain source-read-only. The primary workflow has no caller-managed transaction diff, transaction ID, plan hash, separate apply, or rollback call.
 
 ## Acceptance fixture
 
@@ -115,4 +115,4 @@ Build a synthetic interface with at least five tabs, a scrollable dynamic list, 
 
 Produce reproducible state galleries, annotated renders, comparisons, resolution and UI-scale matrices, hierarchy reports, source maps, reference validation, click-region validation, fidelity reports, and defect fixtures for overlap and clipping.
 
-The fixture passes only when every intentional defect is detected, supported elements render consistently, repeated renders are deterministic, and unsupported fields are reported clearly. No part of the fixture may launch or automate the game.
+The fixture passes only when every intentional defect is detected, supported elements render consistently, repeated renders are deterministic, and unsupported fields are reported clearly. It must also prove that an autonomous `gui_rewrite` completes in one call, blockers leave source untouched, and a failed post-write check restores exact original bytes automatically. No part of the fixture may launch or automate the game.

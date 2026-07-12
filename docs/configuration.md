@@ -7,6 +7,14 @@ path is equally valid when the client registration sets `HOI4_AGENT_CONFIG`. Unk
 rejected.
 The read-only setup discovery command also checks `HOI4_GAME_ROOT` and the path-delimited `HOI4_MOD_ROOTS`; it reports candidates without registering or modifying them.
 
+Setup stays read-only unless a write flag is explicit. The recommended write configuration is generated with:
+
+```bash
+hoi4-agent-tools-setup --init-config /absolute/path/config.json --workspace /absolute/path/mod --autonomous-writes --server-state /separate/operator/state
+```
+
+That writes `"writePolicy": "autonomous"` and `"writeEnabled": true` for the supplied mod. Use `--reviewed-writes` only for the legacy separate review/apply tool sequence; `--enable-writes` remains a compatibility alias for reviewed mode. Autonomous and reviewed flags are mutually exclusive, and both require `--server-state`.
+
 The stdio executable accepts newline-delimited JSON-RPC frames up to a fixed 16,777,216-byte
 ceiling, excluding the line-feed delimiter. This transport safety limit is deliberately not a
 configuration field; malformed UTF-8 and oversized terminated or unterminated frames close the
@@ -16,7 +24,7 @@ separately configured `http.maxBodyBytes`.
 ```json
 {
   "version": 1,
-  "writePolicy": "read-only",
+  "writePolicy": "autonomous",
   "serverStateRoot": "/var/lib/hoi4-agent-tools-state",
   "transactionTtlSeconds": 3600,
   "transactionMaxJournalBytes": 536870912,
@@ -47,7 +55,7 @@ separately configured `http.maxBodyBytes`.
       "replacePaths": ["common/national_focus"],
       "artifactRoot": "/srv/hoi4/workspaces/example/.hoi4-agent/artifacts",
       "cacheRoot": "/srv/hoi4/workspaces/example/.hoi4-agent/cache",
-      "writeEnabled": false
+      "writeEnabled": true
     }
   ]
 }
@@ -60,8 +68,8 @@ All byte values are exact bytes. Defaults are applied when a field is omitted.
 | Field                        |                 Default | Validation and behavior                                                                                                                                                                           |
 | ---------------------------- | ----------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `version`                    |                required | Must equal the current configuration version, `1`.                                                                                                                                                |
-| `writePolicy`                |           `"read-only"` | `"read-only"` or `"transactions"`.                                                                                                                                                                |
-| `serverStateRoot`            |                 omitted | Required for `"transactions"`; absolute canonical operator state used for the private journal key and replay-protection heads.                                                                    |
+| `writePolicy`                |           `"read-only"` | `"read-only"`, recommended `"autonomous"`, or compatibility `"transactions"`.                                                                                                                     |
+| `serverStateRoot`            |                 omitted | Required for either write policy; absolute canonical operator state used for the private journal key and replay-protection heads.                                                                 |
 | `transactionTtlSeconds`      |                  `3600` | 60 through 86,400 seconds.                                                                                                                                                                        |
 | `transactionMaxJournalBytes` |             `536870912` | At least 1 MiB; aggregate transaction-journal retention ceiling and per-plan work ceiling.                                                                                                        |
 | `transactionMaxJournals`     |                   `128` | 1 through 10,000 journals per workspace cache.                                                                                                                                                    |
@@ -82,7 +90,7 @@ The configuration also rejects unsafe combined budgets: `scanMaxBytes` multiplie
 `maxConcurrentRequests` must be at most 16 MiB. HTTP concurrency has a fixed maximum of two so two
 simultaneous offline renders cannot exceed the supported process-safety model.
 
-`serverStateRoot` is mandatory whenever `writePolicy` is `"transactions"`. It must be absolute,
+`serverStateRoot` is mandatory whenever `writePolicy` is not `"read-only"`. It must be absolute,
 resolve to a canonical directory through components that contain no symbolic links or junctions,
 and it must not overlap any configured or runtime source, fixture, artifact, cache, registration,
 writable-registration, or storage root. The server stores the native canonical spelling, including
@@ -112,7 +120,7 @@ protocol when those primitives are unavailable.
 | `artifactRoot`    | mod default; otherwise required | A mod defaults to `<root>/.hoi4-agent/artifacts`. A game/dependency primary workspace must name an operator-owned path under `storageRoots`. |
 | `cacheRoot`       | mod default; otherwise required | A mod defaults to `<root>/.hoi4-agent/cache`. A game/dependency primary workspace must name an operator-owned path under `storageRoots`.     |
 | `fixtureRoot`     | omitted                         | Optional read-only fixture source.                                                                                                           |
-| `writeEnabled`    | `false`                         | Effective only for `kind: "mod"` when global `writePolicy` is `"transactions"`.                                                              |
+| `writeEnabled`    | `false`                         | Effective only for `kind: "mod"` when global `writePolicy` is `"autonomous"` or `"transactions"`.                                            |
 
 `registrationRoots`, `writableRegistrationRoots`, and `storageRoots` grant different capabilities:
 
@@ -170,11 +178,19 @@ path samples, so a workspace with many `replace_path` entries cannot inflate a t
 
 ## Read and write policy
 
-`writePolicy` defaults to `read-only`. Source apply/rollback requires `transactions` globally and `writeEnabled: true` on that mod workspace. A dependency or game registration remains read-only even if misconfigured.
+`writePolicy` defaults to `read-only`. In this mode the server exposes analysis and evidence tools but no source-mutation path.
+
+`autonomous` is the recommended write policy. With `writeEnabled: true` on a mod workspace, it exposes `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite`. Each tool plans, validates, journals, applies, rebuilds the index, and post-validates inside one call. If application or post-validation fails, exact original bytes are restored automatically. The transaction status/diff/apply/rollback tools are not registered in autonomous mode.
+
+`transactions` is an optional compatibility policy for clients that still need a distinct reviewed plan and apply boundary. It exposes the `*_plan_changes`/`map_plan` tools plus `hoi4.transaction_status`, `hoi4.transaction_diff`, `hoi4.transaction_apply`, and `hoi4.transaction_rollback`. It uses the same journal, hash checks, post-validation, and automatic failure recovery as autonomous mode.
+
+Both write policies require `serverStateRoot` and `writeEnabled: true` on the target mod. A dependency or game registration remains read-only even if misconfigured. Changing the global policy changes the MCP tool surface; restart the server and reinitialize the MCP session after changing it.
+
+The autonomous rewrite tools advertise `destructiveHint: true`. MCP does not require per-call prompts from that annotation, and server configuration cannot override a client's host approval or filesystem policy. A client may still prompt for or refuse a rewrite.
 
 `registrationRoots` controls runtime `hoi4.project_register`. A requested root must canonicalize beneath one of these roots, and a runtime mod additionally requires `writableRegistrationRoots`. HTTP principals also need `allowRegistration`. Granting `allowRegistration` permits that principal to register unclaimed sources beneath the configured capability roots, so use narrow roots or static reviewed workspaces for multi-user deployments. Runtime registration does not edit a client configuration or persist raw paths. It atomically records a hash-only owner/workspace claim in the canonical artifact root; later registrations of that physical store must match it. Reassigning a claimed store is therefore an explicit operator operation: stop the server, review/archive the claim and existing evidence, and choose whether to preserve or separately migrate data. The server never deletes or silently rebinds it.
 
-Transaction mode does not accept pre-upgrade unauthenticated journal manifests. Preserve their
+Write modes do not accept pre-upgrade unauthenticated journal manifests. Preserve their
 cache directories for operator review, then explicitly archive or remove them together with the
 corresponding protected state decision; the server never guesses a migration or treats a public
 integrity hash as authorization.

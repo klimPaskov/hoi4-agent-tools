@@ -92,8 +92,8 @@ release attempt. The retained history is:
   validation. Its exact public evidence is retained in
   [the 0.1.7 completion report](completion-report.md).
 
-`0.1.8` is the next strictly monotonic candidate. The normal stable-version gate treats public
-`0.1.7` as immutable history; only a strictly newer version may be published. Rerunning or fixing a
+`0.2.0` is the current strictly monotonic release candidate. The normal stable-version gate treats
+public `0.1.7` as immutable history; only a strictly newer version may be published. Rerunning or fixing a
 release never authorizes rewriting a tag, package version, image tag, release asset, or Registry
 version.
 

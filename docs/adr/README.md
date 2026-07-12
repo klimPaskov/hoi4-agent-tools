@@ -11,3 +11,4 @@
 9. [Packaging and Registry](0009-packaging-and-registry.md)
 10. [Unsupported/refusal policy](0010-unsupported-and-refusal-policy.md)
 11. [HTTP security](0011-http-security.md)
+12. [Autonomous one-call rewrites](0012-autonomous-rewrites.md)

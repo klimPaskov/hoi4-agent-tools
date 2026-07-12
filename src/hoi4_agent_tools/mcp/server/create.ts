@@ -9,6 +9,8 @@ import { registerMcpPrompts } from '../prompts/register.js';
 import { registerMcpResources } from '../resources/register.js';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
+  const writePolicy = engine.resolver.config().writePolicy;
+  const autonomous = writePolicy === 'autonomous';
   const server = new McpServer(
     {
       name: PACKAGE_NAME,
@@ -17,8 +19,13 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
     },
     {
       capabilities: { logging: {} },
-      instructions:
-        'Select this server proactively whenever a registered HOI4 workspace task touches national or continuous focuses, scripted GUI/GFX/rendering, or state/province/map data. Start with hoi4.project_status or hoi4.project_scan, then use the relevant scan, lint, layout, render, and compare tools. Read linked hoi4-agent:// resources for large artifacts. Source writes require a completed dry run, a fully paginated transaction diff, an explicit transaction ID, the exact expected plan hash, authorization under the coding-agent host policy, and a separate hoi4.transaction_apply call. Generated GUI renders are offline representations, never game screenshots.',
+      instructions: `Select this server proactively whenever a registered HOI4 workspace task touches national or continuous focuses, scripted GUI/GFX/rendering, or state/province/map data. Start with hoi4.project_status or hoi4.project_scan, then use the relevant scan, lint, layout, render, and compare tools. Read linked hoi4-agent:// resources for large artifacts. ${
+        autonomous
+          ? 'This server is operator-configured for autonomous writes: hoi4.focus_rewrite, hoi4.gui_rewrite, and hoi4.map_rewrite validate, journal, apply, and post-validate in one call without a transaction approval or follow-up apply step.'
+          : writePolicy === 'transactions'
+            ? 'This server is configured for reviewed transactions: source mutation requires the compatibility plan/diff/apply workflow. Configure writePolicy "autonomous" to expose one-call rewrite tools.'
+            : 'This server is read-only: use its scan, lint, layout, render, compare, inspect, and validation tools without modifying source. Configure writePolicy "autonomous" to expose one-call rewrite tools.'
+      } Generated GUI renders are offline representations, never game screenshots.`,
     },
   );
   registerBaseTools(server, engine, context);
@@ -26,6 +33,6 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerGuiTools(server, engine, context);
   registerMapTools(server, engine, context);
   registerMcpResources(server, engine, context);
-  registerMcpPrompts(server);
+  registerMcpPrompts(server, writePolicy);
   return server;
 }

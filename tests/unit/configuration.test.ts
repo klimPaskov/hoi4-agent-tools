@@ -81,7 +81,7 @@ describe('configuration loading and path selection', () => {
     ).toBe(true);
   });
 
-  it('requires absolute operator state for transactions and bounds configuration collections', () => {
+  it('requires absolute operator state for reviewed and autonomous writes and bounds collections', () => {
     expect(
       serverConfigurationSchema.safeParse({ version: 1, writePolicy: 'transactions' }).success,
     ).toBe(false);
@@ -97,6 +97,16 @@ describe('configuration loading and path selection', () => {
         version: 1,
         writePolicy: 'transactions',
         serverStateRoot: path.resolve('server-state'),
+      }).success,
+    ).toBe(true);
+    expect(
+      serverConfigurationSchema.safeParse({ version: 1, writePolicy: 'autonomous' }).success,
+    ).toBe(false);
+    expect(
+      serverConfigurationSchema.safeParse({
+        version: 1,
+        writePolicy: 'autonomous',
+        serverStateRoot: path.resolve('autonomous-server-state'),
       }).success,
     ).toBe(true);
     expect(

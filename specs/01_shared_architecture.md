@@ -82,34 +82,35 @@ Every MCP operation must return structured results containing:
 - files scanned
 - proposed or changed files
 - source-linked diagnostics
-- transaction ID when relevant
+- rewrite outcome when relevant
 - artifact resource links
 - validation results
 - blocker details
-- rollback status when relevant
+- automatic recovery status when a write fails
 
 Scanning, linting, rendering, and preview generation are read-only.
 
-## Transactions
+## Autonomous rewrites and internal transactions
 
 Every write operation must:
 
-1. calculate the complete affected-file set
-2. validate the proposed result in memory
-3. generate source and visual diffs where relevant
-4. save rollback data
-5. return a transaction ID and plan hash
-6. require a separate MCP apply call
-7. write atomically
-8. rebuild the affected index
-9. run post-write validation
-10. roll back when a required check fails
+1. verify that the canonical mod workspace is operator-authorized for effective `writePolicy: "autonomous"`
+2. enforce the authenticated principal, workspace grant, transport write scope, and path-containment boundaries
+3. calculate the complete affected-file set
+4. validate the proposed result in memory and refuse blockers before source mutation
+5. generate source and visual evidence where relevant
+6. acquire the workspace write lock and reject stale source or changed roots
+7. persist an authenticated internal journal with exact original bytes and the intended replacements
+8. replace the complete file set with recoverable logical atomicity
+9. rebuild the affected index and run post-write validation
+10. restore exact original bytes automatically when any required write or validation step fails
+11. return the completed rewrite outcome, diagnostics, changed-file list, and evidence resources in the same MCP call
 
-Use a declarative transaction manifest that agents can inspect, replay, compare, and cite in handoffs.
+The primary MCP contract must not require a coding agent to receive or resubmit a transaction ID or plan hash, page through a transaction diff, call a separate apply operation, or invoke rollback. Internal transaction manifests remain implementation and recovery records rather than caller authorization tokens. A manually staged `writePolicy: "transactions"` mode may remain available as an explicitly enabled compatibility surface, but the public documentation, prompts, and acceptance path use autonomous one-call rewrites.
 
 ## Generated workspace
 
-Use an ignored per-workspace folder such as `.hoi4-agent/` for caches, previews, artifacts, and rollback data. The standalone server repository keeps only synthetic fixtures and its own test artifacts.
+Use an ignored per-workspace folder such as `.hoi4-agent/` for caches, previews, artifacts, internal journals, and automatic-recovery data. The standalone server repository keeps only synthetic fixtures and its own test artifacts.
 
 Generated previews are evidence for the coding agent. The HOI4 source files remain authoritative.
 

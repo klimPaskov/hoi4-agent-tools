@@ -6,6 +6,8 @@ Tools return compact summaries and links. Content is stored by SHA-256 under the
 hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}
 ```
 
+An applied autonomous rewrite returns a source-linked `*.execution-validation.json` resource with the complete pre-write and post-write checks, final target hashes, diagnostics, and any overflow-validation resource links. This public evidence omits the engine's internal transaction ID and plan hash.
+
 Each version-2 manifest records name, MIME type, byte size, content hash, artifact kind,
 tool/schema version, SHA-256 source hashes, render profile, domain metadata, and hash-only bindings
 for the resolved workspace and its configured or runtime owner. Filesystem paths and raw principals
@@ -83,7 +85,8 @@ artifact root beneath `storageRoots`, separate from its explicit cache root. Art
 roots cannot overlap each other or a source root.
 
 Generated artifact writes never make the game, dependency, or fixture source writable. Source
-changes are a separate transaction surface and are confined to the mod root.
+changes use a separate autonomous-rewrite or reviewed-transaction surface and are confined to the
+mod root.
 
 ## Retention quotas
 
@@ -100,8 +103,8 @@ provenance manifest still counts as an entry and consumes its serialized bytes. 
 process, the store measures current usage under an in-process per-root write queue before adding
 immutable files. Multi-artifact operations preflight all logical writes and their projected
 normal/chunk/index entries as one batch before payload copying or hashing, then retain newly created
-content and manifests only if their owning operation commits. A failed transaction-journal
-admission removes the diff files created by that batch without deleting pre-existing shared
+content and manifests only if their owning operation commits. A failed rewrite-journal admission
+removes the diff files created by that batch without deleting pre-existing shared
 content or provenance. If the complete content and manifest would exceed a count, aggregate-byte,
 or per-object ceiling, the store refuses the write with `ARTIFACT_STORAGE_LIMIT`,
 `ARTIFACT_LOGICAL_BATCH_LIMIT`, `ARTIFACT_SINGLE_LIMIT`, `ARTIFACT_CHUNK_INDEX_LIMIT`, or
@@ -110,7 +113,7 @@ also refuses when an externally modified store is already over its configured re
 
 Artifact retention has no automatic garbage collector. Operator deletion is explicit and should
 be coordinated with active requests; deleting an artifact invalidates its URI. In contrast,
-transaction-journal cleanup follows the separate rules in [transactions](transactions.md). Do not
+internal journal cleanup follows the separate rules in [autonomous rewrites and transactions](transactions.md). Do not
 share one writable artifact root between uncoordinated server processes; an operating-system
 storage service or operator must provide that coordination.
 
@@ -120,7 +123,7 @@ Typical artifacts:
 - focus HTML/SVG/PNG/JSON, generated-source maps, and hash-bound planning sidecars;
 - GUI renders, galleries, hierarchy/click maps, comparisons, and fidelity reports;
 - map layers, changed-pixel reports, and before/after previews;
-- transaction manifests, source diffs, binary diffs, and validation reports.
+- rewrite journals, source diffs, binary diffs, and validation reports.
 
 Structured JSON evidence records source paths, hashes, frame numbers, dimensions, formats, and
 fidelity metadata, but strips embedded `data:` payloads and glyph bitmap bytes. Composite SVG and

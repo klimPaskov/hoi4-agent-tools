@@ -8,8 +8,9 @@ HOI4 Agent Tools is a public Model Context Protocol server for coding agents tha
 - Focus, GUI, map, and MCP adapters must call the same typed core services. Transport handlers contain no domain logic.
 - Preserve source bytes when no edit is requested. Preserve comments, ordering, unknown fields, raw blocks, newline style, and detected encoding during targeted edits.
 - Refuse a rewrite when a construct cannot be represented safely.
-- The server starts read-only. A write requires an allowlisted canonical workspace, enabled write policy, a completed dry run, transaction ID, expected plan hash, and a separate apply call.
-- Reject traversal, symlink escape, cross-workspace access, stale plans, arbitrary commands, and access outside configured roots.
+- The server starts read-only. Source writes require an operator-approved canonical mod workspace whose effective `writePolicy` is `autonomous`. The primary MCP workflow uses one domain rewrite call that performs in-memory validation, stale-source checks, durable journaling of exact before bytes, atomic replacement, post-write validation, and automatic recovery on failure. Do not require coding agents to carry a transaction ID or plan hash, call a separate diff/apply operation, or invoke rollback. A manual `transactions` policy may remain as an explicitly enabled compatibility mode, but it is not the documented or accepted primary workflow.
+- Remote rewrites retain authentication, Origin and Host validation, transport write scope, principal-to-workspace grants, and session isolation. Autonomous policy never broadens a root or principal grant.
+- Reject traversal, symlink escape, cross-workspace access, stale source or provenance, arbitrary commands, and access outside configured roots.
 - Never launch, automate, control, or capture output from the game. Offline renders are tool-generated evidence, never game screenshots.
 - Do not commit installed-game content or third-party mod content. CI fixtures must be synthetic and project-owned.
 

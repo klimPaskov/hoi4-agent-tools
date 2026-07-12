@@ -51,7 +51,9 @@ Public mode—either a non-loopback listener or a non-loopback `publicUrl` in fr
 }
 ```
 
-The server is an OAuth resource server, not an authorization server. Protected Resource Metadata is served at the standard well-known paths and its endpoint-specific URL is included in 401 and insufficient-scope 403 challenges. Baseline access uses the configured `requiredScopes`; transaction planning, registration, apply, and rollback additionally require `hoi4:write`. Each MCP session is bound to the exact bearer credential that initialized it, not only to mutable subject/client claims. A refreshed or step-up token must initialize a new MCP session; the previous session remains bound to its original credential and expires no later than that credential's `exp`. The server retains only a SHA-256 credential identifier, never the raw token. Static-token sessions keep the configured sliding inactivity lifetime. Terminate TLS at a trusted reverse proxy, preserve Authorization/Origin/Host headers, and do not make a session ID a bearer credential.
+The server is an OAuth resource server, not an authorization server. Protected Resource Metadata is served at the standard well-known paths and its endpoint-specific URL is included in 401 and insufficient-scope 403 challenges. Baseline access uses the configured `requiredScopes`; runtime registration and every source-mutation tool additionally require `hoi4:write`. In autonomous mode that means `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite`; in compatibility mode it includes planning, apply, and rollback. Each MCP session is bound to the exact bearer credential that initialized it, not only to mutable subject/client claims. A refreshed or step-up token must initialize a new MCP session; the previous session remains bound to its original credential and expires no later than that credential's `exp`. The server retains only a SHA-256 credential identifier, never the raw token. Static-token sessions keep the configured sliding inactivity lifetime. Terminate TLS at a trusted reverse proxy, preserve Authorization/Origin/Host headers, and do not make a session ID a bearer credential.
+
+`hoi4:write` authorizes the server-side capability; it does not dictate the MCP host's user-interaction policy. Autonomous rewrite tools advertise `destructiveHint: true`, but MCP does not require a prompt for every such call. The server cannot override a host that prompts for or blocks it.
 
 ### Reverse-proxy boundary
 
@@ -110,7 +112,7 @@ releases the ordinary request-concurrency slot. Each session retains at most 1,0
 `sessionTtlSeconds`. Old per-session history is evicted first. A new event that cannot fit the
 shared budget is not retained for replay and does not evict another session's history.
 
-Principal grants isolate tool, resource, session, and transaction access within one deployment. Run separate least-privilege server instances or containers for mutually distrustful teams or operating-system trust domains; do not treat application-level grants as an OS sandbox.
+Principal grants isolate tool, resource, session, and journal access within one deployment. Run separate least-privilege server instances or containers for mutually distrustful teams or operating-system trust domains; do not treat application-level grants as an OS sandbox.
 
 Runtime registration has two operator capabilities. `registrationRoots` permits read-only source
 selection. A caller-declared mod root additionally must be under the default-empty
@@ -121,14 +123,14 @@ these capability roots to that principal; prefer static registrations or separat
 mutually distrustful users.
 
 Runtime artifact storage must support same-volume hard links so the server can create persistent
-owner claims without replacement races. Transaction deployments additionally require an isolated,
+owner claims without replacement races. Every write-enabled deployment additionally requires an isolated,
 persistent `serverStateRoot` on a filesystem with hard-link and atomic-replacement support. Do not
 place it beneath any source, capability, artifact, cache, fixture, or `storageRoots` directory.
 
 ## Container
 
 ```bash
-docker build -t hoi4-agent-tools:0.1.7 .
+docker build -t hoi4-agent-tools:0.2.0 .
 docker run --read-only --rm -p 127.0.0.1:3210:3210 \
   -e HOI4_AGENT_CONFIG=/config/config.json \
   -v /srv/hoi4/config:/config:ro \
@@ -136,7 +138,7 @@ docker run --read-only --rm -p 127.0.0.1:3210:3210 \
   -v /srv/hoi4/workspaces:/srv/hoi4/workspaces \
   -v /var/lib/hoi4-agent-tools:/var/lib/hoi4-agent-tools \
   -v /var/lib/hoi4-agent-tools-state:/var/lib/hoi4-agent-tools-state \
-  hoi4-agent-tools:0.1.7
+  hoi4-agent-tools:0.2.0
 ```
 
 Port publishing reaches the container through a non-loopback interface. The mounted configuration
@@ -146,7 +148,7 @@ Terminate TLS at the configured reverse proxy. Mapping the host port only to `12
 exposure but does not turn the container-side listener into loopback, so it does not permit static
 bearer tokens.
 
-When writes are enabled, set `serverStateRoot` to `/var/lib/hoi4-agent-tools-state` in this example.
+When writes are enabled in either autonomous or reviewed mode, set `serverStateRoot` to `/var/lib/hoi4-agent-tools-state` in this example.
 Keep that mount persistent across restarts and protect it for the dedicated server account. It is a
 separate mount because a state root may not overlap `/var/lib/hoi4-agent-tools` when that path is a
 configured generated-storage capability.

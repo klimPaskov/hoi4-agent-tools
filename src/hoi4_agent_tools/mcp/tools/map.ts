@@ -22,6 +22,12 @@ import {
   type ServerContext,
 } from '../server/base-tools.js';
 import {
+  autonomousFailureContext,
+  autonomousResultArtifacts,
+  autonomousWrites,
+  executePlannedTransaction,
+} from '../server/transaction-execution.js';
+import {
   allocationEvidenceSchema,
   bitmapRenderHashesSchema,
   nonNegativeIntegerSchema,
@@ -148,6 +154,7 @@ const mapValidateOutputSchema = strictOperationResultSchema(
 const mapPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
+      execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
       allocations: z.array(allocationEvidenceSchema).max(100),
       operationBlockers: z.array(operationBlockerDataSchema).max(100),
       expectedChangedBounds: changedBoundsSchema.nullable(),
@@ -334,6 +341,7 @@ export function registerMapTools(
   engine: CoreEngine,
   context: ServerContext,
 ): void {
+  const autonomous = autonomousWrites(engine);
   const nudger = new AgentNudger(engine);
 
   server.registerTool(
@@ -764,11 +772,12 @@ export function registerMapTools(
   );
 
   server.registerTool(
-    'hoi4.map_plan',
+    autonomous ? 'hoi4.map_rewrite' : 'hoi4.map_plan',
     {
-      title: 'Dry-run declarative map operations',
-      description:
-        'Plan exact state/localisation, province, hash-bound mask, bitmap-normal/special adjacency, region, network, position, and locator changes with pixel/semantic diffs; never applies them.',
+      title: autonomous ? 'Apply declarative map operations' : 'Dry-run declarative map operations',
+      description: autonomous
+        ? 'Validate, journal, and immediately apply exact state/localisation, province, hash-bound mask, bitmap-normal/special adjacency, region, network, position, and locator changes with pixel/semantic evidence in one call.'
+        : 'Plan exact state/localisation, province, hash-bound mask, bitmap-normal/special adjacency, region, network, position, and locator changes with pixel/semantic diffs; it does not apply them.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -779,7 +788,7 @@ export function registerMapTools(
       outputSchema: mapPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: autonomous,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -803,9 +812,23 @@ export function registerMapTools(
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: progress.signal,
         });
-        const transaction = planned.transaction;
+        await progress.report(
+          4,
+          5,
+          autonomous
+            ? 'Applying and post-validating map rewrite'
+            : 'Finalizing reviewed transaction',
+        );
+        const execution = await executePlannedTransaction(
+          engine,
+          planned.transaction,
+          context.principal,
+          progress.signal,
+        );
+        const transaction = execution.transaction;
         const compactSemantic = compactMapSemanticDiff(diff.bundle.semantic);
         const result = emptyServiceResult(workspaceId, {
+          execution: execution.outcome,
           allocations: planned.plan.allocations.slice(0, 100).map(compactAllocationEvidence),
           operationBlockers: planned.plan.blockers
             .slice(0, 100)
@@ -821,17 +844,29 @@ export function registerMapTools(
           transactionArtifactCount: transaction.artifacts.length,
         });
         result.status = transaction.validation.passed ? 'ok' : 'blocked';
-        result.code = transaction.validation.passed ? 'MAP_CHANGES_PLANNED' : 'MAP_CHANGES_BLOCKED';
+        result.code =
+          execution.outcome === 'applied'
+            ? 'MAP_CHANGES_APPLIED'
+            : execution.outcome === 'unchanged'
+              ? 'MAP_CHANGES_UNCHANGED'
+              : transaction.validation.passed
+                ? 'MAP_CHANGES_PLANNED'
+                : 'MAP_CHANGES_BLOCKED';
         setInlineFilesScanned(result, diff.filesScanned);
         result.proposedFiles = transaction.files
           .slice(0, 100)
           .map(({ relativePath }) => relativePath);
+        result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        result.transactionId = transaction.transactionId;
-        result.planHash = transaction.planHash;
-        result.artifacts = [transactionResourceLink(transaction)];
+        if (autonomous) {
+          result.artifacts = autonomousResultArtifacts(execution);
+        } else {
+          result.transactionId = transaction.transactionId;
+          result.planHash = transaction.planHash;
+          result.artifacts = [transactionResourceLink(transaction)];
+          result.rollbackStatus = transaction.rollbackStatus;
+        }
         result.validation = transaction.validation;
-        result.rollbackStatus = transaction.rollbackStatus;
         result.blockers = [
           ...planned.plan.blockers.map(({ code, message }) => ({
             code,
@@ -845,10 +880,18 @@ export function registerMapTools(
               ...(details === undefined ? {} : { details }),
             })),
         ].slice(0, 100);
-        await progress.report(5, 5, 'Map dry run complete');
+        await progress.report(
+          5,
+          5,
+          execution.outcome === 'applied'
+            ? 'Map rewrite complete'
+            : execution.outcome === 'unchanged'
+              ? 'Map sources already satisfied the operations'
+              : 'Map transaction planned',
+        );
         return toolResult(result);
       } catch (error) {
-        return errorResult(error, workspaceId);
+        return errorResult(error, workspaceId, autonomousFailureContext(error));
       }
     },
   );

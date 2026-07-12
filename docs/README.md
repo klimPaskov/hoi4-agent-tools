@@ -5,7 +5,7 @@
 - [Configuration and workspace registration](configuration.md)
 - [Agent integration and autonomous tool selection](agent-integration.md)
 - [Security and threat model](security.md)
-- [Transactions and rollback](transactions.md)
+- [Autonomous rewrites, transactions, and recovery](transactions.md)
 - [Focus Tree Workbench](focus-workflow.md)
 - [Scripted GUI Studio](gui-workflow.md)
 - [Agent Nudger map workflow](map-workflow.md)

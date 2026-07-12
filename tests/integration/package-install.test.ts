@@ -25,11 +25,7 @@ const expectedToolNames = [
   'hoi4.transaction_apply',
   'hoi4.artifact_list',
 ];
-const expectedPromptNames = [
-  'hoi4.safe-focus-workflow',
-  'hoi4.safe-gui-workflow',
-  'hoi4.safe-map-workflow',
-];
+const expectedPromptNames = ['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow'];
 const httpOrigin = 'https://package-install.example.test';
 const httpToken = 'package-install-http-token-that-is-longer-than-thirty-two-characters';
 
@@ -310,6 +306,48 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
       serverStateRoot: path.resolve(setupServerStateRoot),
       workspaces: [{ writeEnabled: true }],
     });
+    const reviewedSetupConfig = path.join(temporaryRoot, 'setup-reviewed-write-config.json');
+    const reviewedServerStateRoot = path.join(temporaryRoot, 'reviewed-server-state');
+    await runCommand(
+      process.execPath,
+      [
+        fixture.binEntries['hoi4-agent-tools-setup'],
+        '--init-config',
+        reviewedSetupConfig,
+        '--workspace',
+        setupWorkspace,
+        '--reviewed-writes',
+        '--server-state',
+        reviewedServerStateRoot,
+      ],
+      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
+    );
+    expect(JSON.parse(await readFile(reviewedSetupConfig, 'utf8'))).toMatchObject({
+      writePolicy: 'transactions',
+      serverStateRoot: path.resolve(reviewedServerStateRoot),
+      workspaces: [{ writeEnabled: true }],
+    });
+    const autonomousSetupConfig = path.join(temporaryRoot, 'setup-autonomous-write-config.json');
+    const autonomousServerStateRoot = path.join(temporaryRoot, 'autonomous-server-state');
+    await runCommand(
+      process.execPath,
+      [
+        fixture.binEntries['hoi4-agent-tools-setup'],
+        '--init-config',
+        autonomousSetupConfig,
+        '--workspace',
+        setupWorkspace,
+        '--autonomous-writes',
+        '--server-state',
+        autonomousServerStateRoot,
+      ],
+      { cwd: fixture.consumerRoot, env: isolatedEnvironment() },
+    );
+    expect(JSON.parse(await readFile(autonomousSetupConfig, 'utf8'))).toMatchObject({
+      writePolicy: 'autonomous',
+      serverStateRoot: path.resolve(autonomousServerStateRoot),
+      workspaces: [{ writeEnabled: true }],
+    });
     const writeDiagnosis = await runCommand(
       process.execPath,
       [fixture.binEntries['hoi4-agent-tools-setup'], '--diagnose', '--config', writeSetupConfig],
@@ -435,7 +473,7 @@ process.stdout.write(JSON.stringify({ PACKAGE_NAME, PACKAGE_VERSION, schemaIds }
     });
     const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
     expect(instructions).toContain('Select this server proactively');
-    expect(instructions).toContain('coding-agent host policy');
+    expect(instructions).toContain('Configure writePolicy "autonomous"');
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
     );

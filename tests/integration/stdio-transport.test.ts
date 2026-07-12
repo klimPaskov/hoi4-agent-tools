@@ -147,7 +147,7 @@ describe('local stdio transport', () => {
       jsonrpc: '2.0',
       result: {
         protocolVersion: '2025-11-25',
-        serverInfo: { name: 'hoi4-agent-tools', version: '0.1.7' },
+        serverInfo: { name: 'hoi4-agent-tools', version: '0.2.0' },
       },
     });
     child.stdin.write(

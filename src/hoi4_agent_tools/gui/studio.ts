@@ -1312,8 +1312,9 @@ export class ScriptedGuiStudio {
       artifacts: preflightArtifacts,
       diagnostics: preflightDiagnostics,
       validate: (proposed) => {
-        const bytes = proposed.get(input.relativePath);
-        if (bytes === undefined || bytes === null)
+        const proposedSource = proposed.get(input.relativePath);
+        const bytes = proposedSource === undefined ? proposedBytes : proposedSource;
+        if (bytes === null)
           return Promise.resolve({
             diagnostics: [
               {

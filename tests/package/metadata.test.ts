@@ -143,7 +143,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'Agent-first, source-preserving HOI4 focus, scripted GUI, and map tools with safe transactions.',
+        'Agent-first HOI4 focus, scripted GUI, and map tools with workspace-authorized autonomous rewrites.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',

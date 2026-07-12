@@ -182,7 +182,7 @@ describe('MCP Streamable HTTP authorization challenges', () => {
       id: 2,
       method: 'tools/call',
       params: {
-        name: 'hoi4.transaction_apply',
+        name: 'hoi4.focus_rewrite',
         arguments: {
           workspaceId: 'not-registered',
           transactionId: 'not-present',

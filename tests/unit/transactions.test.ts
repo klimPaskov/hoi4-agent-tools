@@ -4,6 +4,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   symlink,
   utimes,
@@ -32,7 +33,7 @@ import {
 } from '../../src/hoi4_agent_tools/core/transactions.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
-async function setup() {
+async function setup(writePolicy: 'transactions' | 'autonomous' = 'transactions') {
   const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-transaction-'));
   const mod = path.join(base, 'mod');
   await mkdir(path.join(mod, 'common'), { recursive: true });
@@ -40,7 +41,7 @@ async function setup() {
   await writeFile(path.join(mod, 'map.bmp'), Buffer.from([0x42, 0x4d, 1, 2, 3, 4]));
   const config = serverConfigurationSchema.parse({
     version: 1,
-    writePolicy: 'transactions',
+    writePolicy,
     serverStateRoot: path.join(base, 'server-state'),
     transactionTtlSeconds: 3600,
     workspaces: [{ id: 'test', name: 'Test', root: mod, writeEnabled: true }],
@@ -1672,6 +1673,135 @@ describe('transaction manager', () => {
       }),
     ).rejects.toMatchObject({ code: 'TRANSACTION_JOURNAL_LIMIT' });
     expect(await byteArtifactStore.list(byteSetup.resolver.get('test'))).toHaveLength(0);
+  });
+
+  it('reclaims applied journals at autonomous admission but retains reviewed rollback data', async () => {
+    const reviewed = await setup();
+    const reviewedManager = testManager(
+      new TransactionManager(reviewed.resolver, undefined, 3600, 16_777_216, 1),
+    );
+    const reviewedPlan = await reviewedManager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('reviewed applied\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    await reviewedManager.apply('test', reviewedPlan.transactionId, reviewedPlan.planHash);
+    await expect(
+      reviewedManager.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('reviewed next\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_JOURNAL_LIMIT' });
+    await expect(reviewedManager.status('test', reviewedPlan.transactionId)).resolves.toMatchObject(
+      { state: 'applied', rollbackStatus: 'available' },
+    );
+
+    const autonomous = await setup('autonomous');
+    const autonomousManager = testManager(
+      new TransactionManager(autonomous.resolver, undefined, 3600, 16_777_216, 1),
+    );
+    const autonomousPlan = await autonomousManager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('autonomous applied\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    await autonomousManager.apply('test', autonomousPlan.transactionId, autonomousPlan.planHash);
+    await expect(
+      autonomousManager.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('autonomous next\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({ state: 'planned' });
+    await expect(
+      autonomousManager.status('test', autonomousPlan.transactionId),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_NOT_FOUND' });
+    await expect(readFile(path.join(autonomous.mod, 'common', 'one.txt'), 'utf8')).resolves.toBe(
+      'autonomous applied\n',
+    );
+  });
+
+  it('finishes a rename-first autonomous reclaim after a read-only restart', async () => {
+    const { base, mod, resolver } = await setup('autonomous');
+    const manager = testManager(new TransactionManager(resolver, undefined, 3600, 16_777_216, 1));
+    const applied = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('applied before reclaim crash\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    await manager.apply('test', applied.transactionId, applied.planHash);
+
+    const transactionsDirectory = path.join(mod, '.hoi4-agent', 'cache', 'transactions');
+    await rename(
+      path.join(transactionsDirectory, applied.transactionId),
+      path.join(transactionsDirectory, `.reclaiming-${applied.transactionId}`),
+    );
+
+    const readOnlyConfiguration = serverConfigurationSchema.parse({
+      version: 1,
+      writePolicy: 'read-only',
+      serverStateRoot: path.join(base, 'server-state'),
+      workspaces: [{ id: 'test', name: 'Test', root: mod }],
+    });
+    const restarted = new CoreEngine(await WorkspaceResolver.create(readOnlyConfiguration));
+    await expect(restarted.initialize()).resolves.toBeUndefined();
+    await expect(readdir(transactionsDirectory)).resolves.not.toContain(applied.transactionId);
+    await expect(readdir(transactionsDirectory)).resolves.not.toContain(
+      `.reclaiming-${applied.transactionId}`,
+    );
+    await expect(
+      manager.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('planned after reclaim recovery\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({ state: 'planned' });
+    await expect(readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).resolves.toBe(
+      'applied before reclaim crash\n',
+    );
   });
 
   it('prunes only expired safe terminal or planned journals before admission', async () => {

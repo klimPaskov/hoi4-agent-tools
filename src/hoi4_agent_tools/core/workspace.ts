@@ -1172,7 +1172,7 @@ export class WorkspaceResolver {
       ...(fixtureRoot === undefined ? {} : { fixtureRoot }),
       writeEnabled:
         registration.kind === 'mod' &&
-        this.configuration.writePolicy === 'transactions' &&
+        this.configuration.writePolicy !== 'read-only' &&
         registration.writeEnabled,
     };
     const workspaceIdentity = resolvedWorkspaceIdentity(workspaceBase);

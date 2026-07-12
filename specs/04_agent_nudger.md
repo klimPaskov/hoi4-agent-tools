@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Create an MCP map-modification system for coding agents. It must support safe state and province work through headless agent calls, declarative transactions, map renders, and machine-readable diagnostics.
+Create an MCP map-modification system for coding agents. It must support safe state and province work through headless agent calls, declarative one-call rewrites, map renders, and machine-readable diagnostics.
 
 There is no interactive map editor. Visual outputs are artifacts that help the coding agent inspect geography, IDs, layers, and proposed changes.
 
@@ -28,7 +28,7 @@ Do not assume an older map format is current. Use installed documentation and va
 
 ## Declarative operations
 
-Every edit begins as a transaction manifest. Support:
+Every edit is described by one complete declarative `map_rewrite` request. Before mutating source, the server compiles that request into an authenticated internal journal containing the complete affected-file set and exact original bytes. Support:
 
 - create a state from existing provinces
 - split and merge states
@@ -41,7 +41,7 @@ Every edit begins as a transaction manifest. Support:
 - add or remove normal and special adjacencies
 - update ports, victory points, supply nodes, railways, positions, and locators
 
-Natural language may help the coding agent draft a manifest. Geometry-changing work still requires exact selected provinces, polygons, masks, or pixel regions before apply.
+Natural language may help the coding agent draft the request. Geometry-changing work still requires exact selected provinces, polygons, masks, or pixel regions before the one-call rewrite can mutate source.
 
 ## ID and color allocation
 
@@ -69,7 +69,7 @@ Generate map resources with pan-and-zoom HTML where useful, plus PNG and JSON ou
 - unresolved distribution choices
 - validation results
 
-HTML may provide inspection controls, but source changes happen only through MCP transactions. It is not a supported manual editor.
+HTML may provide inspection controls, but source changes happen only through the authorized MCP rewrite tool. It is not a supported manual editor.
 
 ## Bitmap rules
 
@@ -89,7 +89,7 @@ Require explicit policies such as:
 - exact values in manifest
 - block until resolved
 
-Show the proposed result in artifacts and structured output before apply. Keep the transaction blocked while required choices remain unresolved.
+Build the proposed result and its artifacts before mutation within the rewrite call. Keep the rewrite blocked and leave source untouched while required choices remain unresolved.
 
 ## Validation
 
@@ -117,10 +117,10 @@ Run supported static and local engine-compatible validation without launching th
 
 ## MCP operations
 
-Expose agent tools for scan, inspect, plan, allocate, render, validate, transaction diff, transaction apply, and rollback.
+Expose agent tools for scan, inspect, allocate, render, validate, and one-call rewrite. Read-only planning evidence may be produced by the scan, inspect, render, and validate tools, but the mutating path is `map_rewrite`; it does not require a transaction ID, expected plan hash, separate diff/apply sequence, or caller rollback.
 
 ## Acceptance fixtures
 
-Create synthetic fixtures for state creation, province movement, province split by mask, province merge, safe ID and color allocation, strategic-region updates, supply or railway updates, adjacency changes, full rollback, orphan-pixel detection, and invalid-reference detection.
+Create synthetic fixtures for state creation, province movement, province split by mask, province merge, safe ID and color allocation, strategic-region updates, supply or railway updates, adjacency changes, exact automatic recovery after an injected failure, orphan-pixel detection, and invalid-reference detection. Prove that each authorized successful edit completes in one `map_rewrite` call and that blocked or failed calls leave no mixed source state.
 
 Also run local integration tests against the installed game and at least one external mod workspace. Prove that unrelated files and unrelated bitmap regions remain unchanged.

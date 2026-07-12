@@ -6,6 +6,7 @@ import { workspaceRegistrationSchema } from '../../core/configuration.js';
 import type { Diagnostic } from '../../core/diagnostics.js';
 import type { CoreEngine, WorkspaceStatus } from '../../core/engine.js';
 import { emptyServiceResult, ServiceError } from '../../core/result.js';
+import type { ArtifactLink } from '../../core/result.js';
 import { parseClausewitz } from '../../core/source/index.js';
 import { TRANSACTION_MAX_DIAGNOSTICS } from '../../core/transaction-limits.js';
 import type { TransactionManifest } from '../../core/transactions.js';
@@ -333,14 +334,16 @@ function focusReferences(
   };
 }
 
-async function postValidateTransaction(
+export async function postValidateTransaction(
   engine: CoreEngine,
   transaction: TransactionManifest,
   principal: string | undefined,
   signal: AbortSignal | undefined,
+  autonomous = false,
 ): Promise<{
   diagnostics: Diagnostic[];
   checks: { id: string; passed: boolean; message: string }[];
+  artifacts: ArtifactLink[];
 }> {
   engine.invalidate(transaction.workspaceId);
   const snapshot = await engine.scan(transaction.workspaceId, {}, principal, signal);
@@ -471,21 +474,29 @@ async function postValidateTransaction(
     );
     const artifact = await engine.artifacts.putChunked(
       workspace,
-      `${transaction.transactionId}.post-validation.json`,
+      autonomous
+        ? `${transaction.operationKind}.post-validation.json`
+        : `${transaction.transactionId}.post-validation.json`,
       'application/json',
       `${canonicalJson({
         schemaVersion: 1,
-        transactionId: transaction.transactionId,
-        planHash: transaction.planHash,
+        ...(autonomous
+          ? { execution: 'autonomous-rewrite' }
+          : {
+              transactionId: transaction.transactionId,
+              planHash: transaction.planHash,
+            }),
         operationKind: transaction.operationKind,
         diagnosticCount: diagnostics.length,
         checks,
         diagnostics,
       })}\n`,
       {
-        kind: 'transaction-post-validation',
+        kind: autonomous ? 'autonomous-rewrite-post-validation' : 'transaction-post-validation',
         toolVersion: PACKAGE_VERSION,
-        schemaVersion: 'transaction-post-validation.v1',
+        schemaVersion: autonomous
+          ? 'autonomous-rewrite-post-validation.v1'
+          : 'transaction-post-validation.v1',
         sourceHashes: sourceEvidence.sourceHashes,
         metadata: { sourceHashInventory: sourceEvidence.inventory },
       },
@@ -529,9 +540,10 @@ async function postValidateTransaction(
               },
             ],
       checks,
+      artifacts: [artifactLink],
     };
   }
-  return { diagnostics, checks };
+  return { diagnostics, checks, artifacts: [] };
 }
 
 export function registerBaseTools(
@@ -739,298 +751,308 @@ export function registerBaseTools(
     },
   );
 
-  server.registerTool(
-    'hoi4.transaction_status',
-    {
-      title: 'Inspect transaction',
-      description:
-        'Return compact dry-run/apply/rollback counts and current state with a complete manifest resource.',
-      inputSchema: workspaceInput.extend({ transactionId: transactionIdSchema }).strict(),
-      outputSchema: transactionStatusOutputSchema,
-      annotations: readOnly,
-    },
-    async ({ workspaceId, transactionId }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        progress.signal.throwIfAborted();
-        const manifest = await engine.transactions.status(
-          workspaceId,
-          transactionId,
-          context.principal,
-          progress.signal,
-        );
-        progress.signal.throwIfAborted();
-        const result = emptyServiceResult(workspaceId, { manifest: transactionSummary(manifest) });
-        result.code = 'TRANSACTION_STATUS';
-        result.transactionId = manifest.transactionId;
-        result.planHash = manifest.planHash;
-        result.proposedFiles = manifest.files.slice(0, 100).map(({ relativePath }) => relativePath);
-        result.changedFiles = manifest.appliedFiles.slice(0, 100);
-        result.artifacts = [transactionResourceLink(manifest)];
-        result.validation = manifest.validation;
-        result.rollbackStatus = manifest.rollbackStatus;
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
+  if (engine.resolver.config().writePolicy !== 'autonomous') {
+    server.registerTool(
+      'hoi4.transaction_status',
+      {
+        title: 'Inspect transaction',
+        description:
+          'Return compact dry-run/apply/rollback counts and current state with a complete manifest resource.',
+        inputSchema: workspaceInput.extend({ transactionId: transactionIdSchema }).strict(),
+        outputSchema: transactionStatusOutputSchema,
+        annotations: readOnly,
+      },
+      async ({ workspaceId, transactionId }, extra) => {
+        try {
+          const progress = progressReporter(extra);
+          progress.signal.throwIfAborted();
+          const manifest = await engine.transactions.status(
+            workspaceId,
+            transactionId,
+            context.principal,
+            progress.signal,
+          );
+          progress.signal.throwIfAborted();
+          const result = emptyServiceResult(workspaceId, {
+            manifest: transactionSummary(manifest),
+          });
+          result.code = 'TRANSACTION_STATUS';
+          result.transactionId = manifest.transactionId;
+          result.planHash = manifest.planHash;
+          result.proposedFiles = manifest.files
+            .slice(0, 100)
+            .map(({ relativePath }) => relativePath);
+          result.changedFiles = manifest.appliedFiles.slice(0, 100);
+          result.artifacts = [transactionResourceLink(manifest)];
+          result.validation = manifest.validation;
+          result.rollbackStatus = manifest.rollbackStatus;
+          return toolResult(result);
+        } catch (error) {
+          return errorResult(error, workspaceId);
+        }
+      },
+    );
 
-  server.registerTool(
-    'hoi4.transaction_diff',
-    {
-      title: 'Review transaction diff',
-      description:
-        'Page through the complete affected-file set, operation summaries, and source/binary artifact links before apply.',
-      inputSchema: workspaceInput
-        .extend({
-          transactionId: transactionIdSchema,
-          limit: z.number().int().min(1).max(20).default(20),
-          cursor: z.string().min(1).max(4096).optional(),
-        })
-        .strict(),
-      outputSchema: transactionDiffOutputSchema,
-      annotations: readOnly,
-    },
-    async ({ workspaceId, transactionId, limit, cursor }, extra) => {
-      try {
-        const progress = progressReporter(extra);
-        progress.signal.throwIfAborted();
-        const manifest = await engine.transactions.status(
-          workspaceId,
-          transactionId,
-          context.principal,
-          progress.signal,
-        );
-        progress.signal.throwIfAborted();
-        let fileOffset = 0;
-        let operationOffset = 0;
-        let artifactOffset = 0;
-        if (cursor !== undefined) {
-          const decoded = decodeTransactionDiffCursor(cursor);
-          if (
-            decoded.planHash !== manifest.planHash ||
-            decoded.fileOffset > manifest.files.length ||
-            decoded.operationOffset > manifest.operations.length ||
-            decoded.artifactOffset > manifest.artifacts.length
-          ) {
-            throw new ServiceError(
-              'TRANSACTION_CURSOR_STALE',
-              'Transaction plan changed or the diff cursor is stale',
-            );
+    server.registerTool(
+      'hoi4.transaction_diff',
+      {
+        title: 'Review transaction diff',
+        description:
+          'Page through the complete affected-file set, operation summaries, and source/binary artifact links before apply.',
+        inputSchema: workspaceInput
+          .extend({
+            transactionId: transactionIdSchema,
+            limit: z.number().int().min(1).max(20).default(20),
+            cursor: z.string().min(1).max(4096).optional(),
+          })
+          .strict(),
+        outputSchema: transactionDiffOutputSchema,
+        annotations: readOnly,
+      },
+      async ({ workspaceId, transactionId, limit, cursor }, extra) => {
+        try {
+          const progress = progressReporter(extra);
+          progress.signal.throwIfAborted();
+          const manifest = await engine.transactions.status(
+            workspaceId,
+            transactionId,
+            context.principal,
+            progress.signal,
+          );
+          progress.signal.throwIfAborted();
+          let fileOffset = 0;
+          let operationOffset = 0;
+          let artifactOffset = 0;
+          if (cursor !== undefined) {
+            const decoded = decodeTransactionDiffCursor(cursor);
+            if (
+              decoded.planHash !== manifest.planHash ||
+              decoded.fileOffset > manifest.files.length ||
+              decoded.operationOffset > manifest.operations.length ||
+              decoded.artifactOffset > manifest.artifacts.length
+            ) {
+              throw new ServiceError(
+                'TRANSACTION_CURSOR_STALE',
+                'Transaction plan changed or the diff cursor is stale',
+              );
+            }
+            fileOffset = decoded.fileOffset;
+            operationOffset = decoded.operationOffset;
+            artifactOffset = decoded.artifactOffset;
           }
-          fileOffset = decoded.fileOffset;
-          operationOffset = decoded.operationOffset;
-          artifactOffset = decoded.artifactOffset;
+          const manifestFiles = manifest.files.slice(fileOffset, fileOffset + limit);
+          const files = manifestFiles.map(
+            ({
+              relativePath,
+              operationIds,
+              beforeSha256,
+              afterSha256,
+              beforeSize,
+              afterSize,
+              mediaType,
+              diffArtifact,
+            }) => ({
+              relativePath,
+              operationIdCount: operationIds.length,
+              operationIds: operationIds.slice(0, 20),
+              beforeSha256,
+              afterSha256,
+              beforeSize,
+              afterSize,
+              mediaType,
+              ...(diffArtifact === undefined ? {} : { diffArtifact }),
+            }),
+          );
+          const operations = manifest.operations.slice(operationOffset, operationOffset + limit);
+          const artifacts = manifest.artifacts.slice(artifactOffset, artifactOffset + limit);
+          const nextFileOffset = fileOffset + manifestFiles.length;
+          const nextOperationOffset = operationOffset + operations.length;
+          const nextArtifactOffset = artifactOffset + artifacts.length;
+          const nextCursor =
+            nextFileOffset < manifest.files.length ||
+            nextOperationOffset < manifest.operations.length ||
+            nextArtifactOffset < manifest.artifacts.length
+              ? encodeTransactionDiffCursor(
+                  manifest.planHash,
+                  nextFileOffset,
+                  nextOperationOffset,
+                  nextArtifactOffset,
+                )
+              : undefined;
+          const result = emptyServiceResult(workspaceId, {
+            files,
+            operations: operations.map(({ id, kind, summary }) => ({ id, kind, summary })),
+            fileCount: manifest.files.length,
+            operationCount: manifest.operations.length,
+            artifactCount: manifest.artifacts.length,
+            returnedFiles: files.length,
+            returnedOperations: operations.length,
+            returnedArtifacts: artifacts.length,
+            ...(nextCursor === undefined ? {} : { nextCursor }),
+            expiresAt: manifest.expiresAt,
+          });
+          result.code = 'TRANSACTION_DIFF';
+          result.transactionId = manifest.transactionId;
+          result.planHash = manifest.planHash;
+          result.proposedFiles = files.map(({ relativePath }) => relativePath);
+          result.artifacts = [transactionResourceLink(manifest), ...artifacts];
+          result.validation = manifest.validation;
+          result.rollbackStatus = manifest.rollbackStatus;
+          return toolResult(result);
+        } catch (error) {
+          return errorResult(error, workspaceId);
         }
-        const manifestFiles = manifest.files.slice(fileOffset, fileOffset + limit);
-        const files = manifestFiles.map(
-          ({
-            relativePath,
-            operationIds,
-            beforeSha256,
-            afterSha256,
-            beforeSize,
-            afterSize,
-            mediaType,
-            diffArtifact,
-          }) => ({
-            relativePath,
-            operationIdCount: operationIds.length,
-            operationIds: operationIds.slice(0, 20),
-            beforeSha256,
-            afterSha256,
-            beforeSize,
-            afterSize,
-            mediaType,
-            ...(diffArtifact === undefined ? {} : { diffArtifact }),
-          }),
-        );
-        const operations = manifest.operations.slice(operationOffset, operationOffset + limit);
-        const artifacts = manifest.artifacts.slice(artifactOffset, artifactOffset + limit);
-        const nextFileOffset = fileOffset + manifestFiles.length;
-        const nextOperationOffset = operationOffset + operations.length;
-        const nextArtifactOffset = artifactOffset + artifacts.length;
-        const nextCursor =
-          nextFileOffset < manifest.files.length ||
-          nextOperationOffset < manifest.operations.length ||
-          nextArtifactOffset < manifest.artifacts.length
-            ? encodeTransactionDiffCursor(
-                manifest.planHash,
-                nextFileOffset,
-                nextOperationOffset,
-                nextArtifactOffset,
-              )
-            : undefined;
-        const result = emptyServiceResult(workspaceId, {
-          files,
-          operations: operations.map(({ id, kind, summary }) => ({ id, kind, summary })),
-          fileCount: manifest.files.length,
-          operationCount: manifest.operations.length,
-          artifactCount: manifest.artifacts.length,
-          returnedFiles: files.length,
-          returnedOperations: operations.length,
-          returnedArtifacts: artifacts.length,
-          ...(nextCursor === undefined ? {} : { nextCursor }),
-          expiresAt: manifest.expiresAt,
-        });
-        result.code = 'TRANSACTION_DIFF';
-        result.transactionId = manifest.transactionId;
-        result.planHash = manifest.planHash;
-        result.proposedFiles = files.map(({ relativePath }) => relativePath);
-        result.artifacts = [transactionResourceLink(manifest), ...artifacts];
-        result.validation = manifest.validation;
-        result.rollbackStatus = manifest.rollbackStatus;
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.transaction_apply',
-    {
-      title: 'Apply reviewed transaction',
-      description:
-        'Apply a completed dry run only when transaction ID, workspace, principal, source hashes, and expected plan hash still match.',
-      inputSchema: transactionInput,
-      outputSchema: transactionMutationOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
       },
-    },
-    async ({ workspaceId, transactionId, expectedPlanHash }, extra) => {
-      try {
-        requireServerScope(context, 'hoi4:write');
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Checking transaction preconditions');
-        const manifest = await engine.transactions.apply(
-          workspaceId,
-          transactionId,
-          expectedPlanHash,
-          {
-            ...(context.principal === undefined ? {} : { principal: context.principal }),
-            signal: progress.signal,
-            postValidate: (transaction, signal) =>
-              postValidateTransaction(engine, transaction, context.principal, signal),
-          },
-        );
-        engine.invalidate(workspaceId);
-        await engine.scan(workspaceId, {}, context.principal, progress.signal);
-        await progress.report(3, 3, 'Apply and index rebuild complete');
-        const result = emptyServiceResult(workspaceId, {
-          state: manifest.state,
-          fileCount: manifest.files.length,
-          appliedFileCount: manifest.appliedFiles.length,
-          artifactCount: manifest.artifacts.length,
-        });
-        result.code = 'TRANSACTION_APPLIED';
-        result.transactionId = manifest.transactionId;
-        result.planHash = manifest.planHash;
-        result.proposedFiles = manifest.files.slice(0, 100).map(({ relativePath }) => relativePath);
-        result.changedFiles = manifest.appliedFiles.slice(0, 100);
-        result.artifacts = [transactionResourceLink(manifest)];
-        result.validation = manifest.validation;
-        result.rollbackStatus = manifest.rollbackStatus;
-        return toolResult(result);
-      } catch (error) {
-        engine.invalidate(workspaceId);
+    );
+
+    server.registerTool(
+      'hoi4.transaction_apply',
+      {
+        title: 'Apply reviewed transaction',
+        description:
+          'Apply a completed dry run only when transaction ID, workspace, principal, source hashes, and expected plan hash still match.',
+        inputSchema: transactionInput,
+        outputSchema: transactionMutationOutputSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async ({ workspaceId, transactionId, expectedPlanHash }, extra) => {
         try {
-          const failed = await engine.transactions.status(
+          requireServerScope(context, 'hoi4:write');
+          const progress = progressReporter(extra);
+          await progress.report(0, 3, 'Checking transaction preconditions');
+          const manifest = await engine.transactions.apply(
             workspaceId,
             transactionId,
-            context.principal,
+            expectedPlanHash,
+            {
+              ...(context.principal === undefined ? {} : { principal: context.principal }),
+              signal: progress.signal,
+              postValidate: (transaction, signal) =>
+                postValidateTransaction(engine, transaction, context.principal, signal),
+            },
           );
-          return errorResult(error, workspaceId, {
-            transactionId: failed.transactionId,
-            planHash: failed.planHash,
-            proposedFiles: failed.files.slice(0, 100).map(({ relativePath }) => relativePath),
-            changedFiles: failed.state === 'applied' ? failed.appliedFiles.slice(0, 100) : [],
-            artifacts: [transactionResourceLink(failed)],
-            validation: failed.validation,
-            rollbackStatus: failed.rollbackStatus,
-            data: { state: failed.state, failure: failed.failure ?? null },
+          engine.invalidate(workspaceId);
+          await engine.scan(workspaceId, {}, context.principal, progress.signal);
+          await progress.report(3, 3, 'Apply and index rebuild complete');
+          const result = emptyServiceResult(workspaceId, {
+            state: manifest.state,
+            fileCount: manifest.files.length,
+            appliedFileCount: manifest.appliedFiles.length,
+            artifactCount: manifest.artifacts.length,
           });
-        } catch {
-          // A forged or cross-workspace transaction ID intentionally reveals no manifest details.
+          result.code = 'TRANSACTION_APPLIED';
+          result.transactionId = manifest.transactionId;
+          result.planHash = manifest.planHash;
+          result.proposedFiles = manifest.files
+            .slice(0, 100)
+            .map(({ relativePath }) => relativePath);
+          result.changedFiles = manifest.appliedFiles.slice(0, 100);
+          result.artifacts = [transactionResourceLink(manifest)];
+          result.validation = manifest.validation;
+          result.rollbackStatus = manifest.rollbackStatus;
+          return toolResult(result);
+        } catch (error) {
+          engine.invalidate(workspaceId);
+          try {
+            const failed = await engine.transactions.status(
+              workspaceId,
+              transactionId,
+              context.principal,
+            );
+            return errorResult(error, workspaceId, {
+              transactionId: failed.transactionId,
+              planHash: failed.planHash,
+              proposedFiles: failed.files.slice(0, 100).map(({ relativePath }) => relativePath),
+              changedFiles: failed.state === 'applied' ? failed.appliedFiles.slice(0, 100) : [],
+              artifacts: [transactionResourceLink(failed)],
+              validation: failed.validation,
+              rollbackStatus: failed.rollbackStatus,
+              data: { state: failed.state, failure: failed.failure ?? null },
+            });
+          } catch {
+            // A forged or cross-workspace transaction ID intentionally reveals no manifest details.
+          }
+          return errorResult(error, workspaceId);
         }
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
-
-  server.registerTool(
-    'hoi4.transaction_rollback',
-    {
-      title: 'Roll back applied transaction',
-      description:
-        'Restore exact original bytes when the applied result still matches rollback preconditions.',
-      inputSchema: transactionInput,
-      outputSchema: transactionMutationOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
       },
-    },
-    async ({ workspaceId, transactionId, expectedPlanHash }, extra) => {
-      try {
-        requireServerScope(context, 'hoi4:write');
-        const progress = progressReporter(extra);
-        await progress.report(0, 2, 'Checking rollback preconditions');
-        progress.signal.throwIfAborted();
-        const manifest = await engine.transactions.rollback(
-          workspaceId,
-          transactionId,
-          expectedPlanHash,
-          context.principal,
-          progress.signal,
-        );
-        engine.invalidate(workspaceId);
-        const result = emptyServiceResult(workspaceId, {
-          state: manifest.state,
-          fileCount: manifest.files.length,
-          appliedFileCount: manifest.appliedFiles.length,
-          artifactCount: manifest.artifacts.length,
-        });
-        result.code = 'TRANSACTION_ROLLED_BACK';
-        result.transactionId = manifest.transactionId;
-        result.planHash = manifest.planHash;
-        result.changedFiles = manifest.files.slice(0, 100).map(({ relativePath }) => relativePath);
-        result.artifacts = [transactionResourceLink(manifest)];
-        result.validation = manifest.validation;
-        result.rollbackStatus = manifest.rollbackStatus;
-        await progress.report(2, 2, 'Atomic rollback complete');
-        return toolResult(result);
-      } catch (error) {
+    );
+
+    server.registerTool(
+      'hoi4.transaction_rollback',
+      {
+        title: 'Roll back applied transaction',
+        description:
+          'Restore exact original bytes when the applied result still matches rollback preconditions.',
+        inputSchema: transactionInput,
+        outputSchema: transactionMutationOutputSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async ({ workspaceId, transactionId, expectedPlanHash }, extra) => {
         try {
-          const failed = await engine.transactions.status(
+          requireServerScope(context, 'hoi4:write');
+          const progress = progressReporter(extra);
+          await progress.report(0, 2, 'Checking rollback preconditions');
+          progress.signal.throwIfAborted();
+          const manifest = await engine.transactions.rollback(
             workspaceId,
             transactionId,
+            expectedPlanHash,
             context.principal,
+            progress.signal,
           );
-          return errorResult(error, workspaceId, {
-            transactionId: failed.transactionId,
-            planHash: failed.planHash,
-            proposedFiles: failed.files.slice(0, 100).map(({ relativePath }) => relativePath),
-            changedFiles: failed.state === 'applied' ? failed.appliedFiles.slice(0, 100) : [],
-            artifacts: [transactionResourceLink(failed)],
-            validation: failed.validation,
-            rollbackStatus: failed.rollbackStatus,
-            data: { state: failed.state, failure: failed.failure ?? null },
+          engine.invalidate(workspaceId);
+          const result = emptyServiceResult(workspaceId, {
+            state: manifest.state,
+            fileCount: manifest.files.length,
+            appliedFileCount: manifest.appliedFiles.length,
+            artifactCount: manifest.artifacts.length,
           });
-        } catch {
-          // Invalid or inaccessible transaction IDs intentionally reveal no manifest details.
+          result.code = 'TRANSACTION_ROLLED_BACK';
+          result.transactionId = manifest.transactionId;
+          result.planHash = manifest.planHash;
+          result.changedFiles = manifest.files
+            .slice(0, 100)
+            .map(({ relativePath }) => relativePath);
+          result.artifacts = [transactionResourceLink(manifest)];
+          result.validation = manifest.validation;
+          result.rollbackStatus = manifest.rollbackStatus;
+          await progress.report(2, 2, 'Atomic rollback complete');
+          return toolResult(result);
+        } catch (error) {
+          try {
+            const failed = await engine.transactions.status(
+              workspaceId,
+              transactionId,
+              context.principal,
+            );
+            return errorResult(error, workspaceId, {
+              transactionId: failed.transactionId,
+              planHash: failed.planHash,
+              proposedFiles: failed.files.slice(0, 100).map(({ relativePath }) => relativePath),
+              changedFiles: failed.state === 'applied' ? failed.appliedFiles.slice(0, 100) : [],
+              artifacts: [transactionResourceLink(failed)],
+              validation: failed.validation,
+              rollbackStatus: failed.rollbackStatus,
+              data: { state: failed.state, failure: failed.failure ?? null },
+            });
+          } catch {
+            // Invalid or inaccessible transaction IDs intentionally reveal no manifest details.
+          }
+          return errorResult(error, workspaceId);
         }
-        return errorResult(error, workspaceId);
-      }
-    },
-  );
+      },
+    );
+  }
 
   server.registerTool(
     'hoi4.artifact_list',

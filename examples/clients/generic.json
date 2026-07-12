@@ -2,7 +2,7 @@
   "mcpServers": {
     "hoi4_agent_tools": {
       "command": "npx",
-      "args": ["-y", "hoi4-agent-tools@0.1.7"],
+      "args": ["-y", "hoi4-agent-tools@0.2.0"],
       "env": {
         "HOI4_AGENT_CONFIG": "/absolute/path/to/config.json"
       }

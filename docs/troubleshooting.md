@@ -8,17 +8,25 @@ Set `HOI4_AGENT_CONFIG` to an absolute path or add `--config PATH` to the server
 
 Use a registered workspace-relative path. Confirm the canonical root is beneath `registrationRoots`; runtime mods also require the separate `writableRegistrationRoots` capability. Check for junctions/symlinks, parent segments, device names, trailing dots/spaces, or alternate data streams. Game and dependencies are intentionally read-only.
 
-## Apply reports stale
+## Rewrite reports stale
 
-The source changed after planning. Do not reuse the transaction. Scan and produce a new dry run so review evidence matches current files.
+The source changed after planning or before the workspace lock completed its recheck. Scan again and submit a new rewrite so evidence matches current files. In reviewed compatibility mode, do not reuse the stale transaction.
+
+## Rewrite or transaction tools are missing
+
+Check `writePolicy` in `hoi4.project_status`. `"read-only"` authorizes no source mutation, even if compatibility-named planning or transaction tools are listed by the client. `"autonomous"` exposes `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite` and intentionally hides all transaction tools. `"transactions"` enables the older plan/diff/apply/status/rollback surface instead. Restart the server and initialize a new MCP session after changing configuration.
 
 ## Transaction state rejected
 
-Transaction mode requires an absolute, persistent `serverStateRoot` that does not overlap any
-source or generated-storage capability. Run setup with `--enable-writes --server-state ROOT`, then
+Each write-enabled policy requires an absolute, persistent `serverStateRoot` that does not overlap any
+source or generated-storage capability. Run setup with `--autonomous-writes --server-state ROOT` for autonomous rewrites, or `--reviewed-writes --server-state ROOT` for compatibility mode, then
 run `--diagnose`. Preserve the same private state root across restarts. A missing key, malformed or
 replayed head, unauthenticated legacy manifest, or cache/head revision conflict fails closed; review
 and archive the affected journal/state evidence instead of regenerating a public hash or tag.
+
+## The MCP host still asks for approval
+
+The autonomous rewrite tools advertise `destructiveHint: true`. MCP does not require or forbid a prompt; the coding-agent host controls its own approval and filesystem policy, and the server cannot override it. Change the host policy only if that matches your local security requirements.
 
 ## Runtime registration conflicts after restart
 

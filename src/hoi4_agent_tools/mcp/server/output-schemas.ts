@@ -26,6 +26,7 @@ export const workspaceStatusSchema = z
     name: z.string().max(1024),
     kind: z.string().max(64),
     writeEnabled: z.boolean(),
+    writePolicy: z.enum(['read-only', 'transactions', 'autonomous']),
     rootKinds: z.array(z.string().max(64)).max(16),
     dependencyCount: nonNegativeIntegerSchema,
     replacePathCount: nonNegativeIntegerSchema,

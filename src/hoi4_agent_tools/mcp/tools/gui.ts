@@ -26,6 +26,12 @@ import {
   type ServerContext,
 } from '../server/base-tools.js';
 import {
+  autonomousFailureContext,
+  autonomousResultArtifacts,
+  autonomousWrites,
+  executePlannedTransaction,
+} from '../server/transaction-execution.js';
+import {
   indexSkippedSourceSchema,
   nonNegativeIntegerSchema,
   sha256Schema,
@@ -110,6 +116,7 @@ export const guiPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
       mode: z.enum(['source', 'helpers', 'patches']),
+      execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
       expiresAt: z.iso.datetime(),
       nodeCount: nonNegativeIntegerSchema.optional(),
       templateInstanceCount: nonNegativeIntegerSchema.optional(),
@@ -194,6 +201,7 @@ export function registerGuiTools(
   engine: CoreEngine,
   context: ServerContext,
 ): void {
+  const autonomous = autonomousWrites(engine);
   const studio = new ScriptedGuiStudio(engine);
 
   server.registerTool(
@@ -604,11 +612,12 @@ export function registerGuiTools(
   );
 
   server.registerTool(
-    'hoi4.gui_plan_changes',
+    autonomous ? 'hoi4.gui_rewrite' : 'hoi4.gui_plan_changes',
     {
-      title: 'Dry-run scripted GUI source changes',
-      description:
-        'Create a source-preserving hash-bound transaction from explicit GUI source or declarative build-time helpers; never applies it.',
+      title: autonomous ? 'Rewrite scripted GUI source' : 'Dry-run scripted GUI source changes',
+      description: autonomous
+        ? 'Validate, journal, and immediately apply source-preserving GUI source, patch, or declarative helper changes in one call; no follow-up apply call is required.'
+        : 'Create a source-preserving hash-bound reviewed transaction from explicit GUI source or declarative build-time helpers; it does not apply the transaction.',
       inputSchema: z
         .object({
           mode: z.enum(['source', 'helpers', 'patches']),
@@ -683,7 +692,7 @@ export function registerGuiTools(
       outputSchema: guiPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: autonomous,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -695,7 +704,7 @@ export function registerGuiTools(
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Validating GUI dry run');
         const compilation = input.mode === 'helpers' ? compileGuiHelpers(input.helper!) : undefined;
-        const transaction = await studio.planSource({
+        const plannedTransaction = await studio.planSource({
           workspaceId,
           relativePath,
           ...(input.mode === 'patches'
@@ -709,12 +718,27 @@ export function registerGuiTools(
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: progress.signal,
         });
+        await progress.report(
+          2,
+          3,
+          autonomous
+            ? 'Applying and post-validating GUI rewrite'
+            : 'Finalizing reviewed transaction',
+        );
+        const execution = await executePlannedTransaction(
+          engine,
+          plannedTransaction,
+          context.principal,
+          progress.signal,
+        );
+        const transaction = execution.transaction;
         const planned = {
           transaction,
           compilation,
         };
         const result = emptyServiceResult(workspaceId, {
           mode: input.mode,
+          execution: execution.outcome,
           expiresAt: transaction.expiresAt,
           transactionFileCount: transaction.files.length,
           transactionArtifactCount: transaction.artifacts.length,
@@ -727,17 +751,29 @@ export function registerGuiTools(
               }),
         });
         result.status = transaction.validation.passed ? 'ok' : 'blocked';
-        result.code = transaction.validation.passed ? 'GUI_CHANGES_PLANNED' : 'GUI_CHANGES_BLOCKED';
+        result.code =
+          execution.outcome === 'applied'
+            ? 'GUI_CHANGES_APPLIED'
+            : execution.outcome === 'unchanged'
+              ? 'GUI_CHANGES_UNCHANGED'
+              : transaction.validation.passed
+                ? 'GUI_CHANGES_PLANNED'
+                : 'GUI_CHANGES_BLOCKED';
         setInlineFilesScanned(result, [relativePath]);
         result.proposedFiles = transaction.files
           .slice(0, 100)
           .map(({ relativePath: file }) => file);
+        result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        result.transactionId = transaction.transactionId;
-        result.planHash = transaction.planHash;
-        result.artifacts = [transactionResourceLink(transaction)];
+        if (autonomous) {
+          result.artifacts = autonomousResultArtifacts(execution);
+        } else {
+          result.transactionId = transaction.transactionId;
+          result.planHash = transaction.planHash;
+          result.artifacts = [transactionResourceLink(transaction)];
+          result.rollbackStatus = transaction.rollbackStatus;
+        }
         result.validation = transaction.validation;
-        result.rollbackStatus = transaction.rollbackStatus;
         result.blockers = transaction.diagnostics
           .filter(({ severity }) => severity === 'error' || severity === 'blocker')
           .map(({ code, message, details }) => ({
@@ -745,10 +781,18 @@ export function registerGuiTools(
             message,
             ...(details === undefined ? {} : { details }),
           }));
-        await progress.report(3, 3, 'GUI dry run complete');
+        await progress.report(
+          3,
+          3,
+          execution.outcome === 'applied'
+            ? 'GUI rewrite complete'
+            : execution.outcome === 'unchanged'
+              ? 'GUI source already satisfied the rewrite'
+              : 'GUI transaction planned',
+        );
         return toolResult(result);
       } catch (error) {
-        return errorResult(error, workspaceId);
+        return errorResult(error, workspaceId, autonomousFailureContext(error));
       }
     },
   );

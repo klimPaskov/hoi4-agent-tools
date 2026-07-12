@@ -23,6 +23,7 @@ export interface WorkspaceStatus {
   name: string;
   kind: string;
   writeEnabled: boolean;
+  writePolicy: 'read-only' | 'transactions' | 'autonomous';
   rootKinds: string[];
   dependencyCount: number;
   replacePaths: string[];
@@ -174,6 +175,7 @@ export class CoreEngine {
       name: workspace.name,
       kind: workspace.registration.kind,
       writeEnabled: workspace.writeEnabled,
+      writePolicy: this.resolver.config().writePolicy,
       rootKinds: [...new Set(workspace.roots.map(({ kind }) => kind))].sort((a, b) =>
         compareCodeUnits(a, b),
       ),

@@ -21,11 +21,13 @@ function usage(): string {
   return `HOI4 Agent Tools setup utility
 
 Usage:
-  hoi4-agent-tools-setup --init-config PATH [--workspace ROOT] [--workspace-id ID] [--workspace-name NAME] [--game ROOT] [--enable-writes --server-state ROOT]
+  hoi4-agent-tools-setup --init-config PATH [--workspace ROOT] [--workspace-id ID] [--workspace-name NAME] [--game ROOT] [--autonomous-writes --server-state ROOT]
+  hoi4-agent-tools-setup --init-config PATH [--workspace ROOT] [--reviewed-writes --server-state ROOT]
   hoi4-agent-tools-setup --discover
   hoi4-agent-tools-setup --diagnose [--config PATH]
   hoi4-agent-tools-setup --print-client-config [--config PATH]
 
+The legacy --enable-writes flag is an alias for --reviewed-writes.
 This utility writes only the explicitly requested server config. It never edits an MCP client's settings.`;
 }
 
@@ -80,7 +82,15 @@ async function initializeConfig(target: string): Promise<void> {
   const gameRoot = argument('--game');
   const requestedWorkspaceId = argument('--workspace-id');
   const requestedWorkspaceName = argument('--workspace-name');
-  const writeEnabled = process.argv.includes('--enable-writes');
+  const autonomousWrites = process.argv.includes('--autonomous-writes');
+  const reviewedWrites =
+    process.argv.includes('--reviewed-writes') || process.argv.includes('--enable-writes');
+  if (autonomousWrites && reviewedWrites) {
+    throw new Error(
+      '--autonomous-writes and --reviewed-writes/--enable-writes are mutually exclusive',
+    );
+  }
+  const writeEnabled = autonomousWrites || reviewedWrites;
   const requestedServerStateRoot = argument('--server-state');
   if (
     process.argv.includes('--server-state') &&
@@ -89,7 +99,7 @@ async function initializeConfig(target: string): Promise<void> {
     throw new Error('--server-state requires a directory path');
   }
   if (writeEnabled && requestedServerStateRoot === undefined) {
-    throw new Error('--enable-writes requires an explicit --server-state ROOT');
+    throw new Error('Write-enabled setup requires an explicit --server-state ROOT');
   }
   for (const [flag, value] of [
     ['--workspace-id', requestedWorkspaceId],
@@ -130,7 +140,7 @@ async function initializeConfig(target: string): Promise<void> {
         ];
   const config = {
     version: 1,
-    writePolicy: writeEnabled ? 'transactions' : 'read-only',
+    writePolicy: autonomousWrites ? 'autonomous' : reviewedWrites ? 'transactions' : 'read-only',
     ...(requestedServerStateRoot === undefined
       ? {}
       : { serverStateRoot: path.resolve(requestedServerStateRoot) }),

@@ -62,12 +62,28 @@ try {
 
   const mod = path.join(temporary, 'mod');
   await mkdir(mod);
+  const storage = path.join(temporary, 'storage');
+  await mkdir(storage);
   const configuration = path.join(temporary, 'config.json');
   await writeFile(
     configuration,
     `${JSON.stringify({
       version: 1,
-      workspaces: [{ id: 'public', name: 'Public package smoke test', root: mod }],
+      writePolicy: 'autonomous',
+      serverStateRoot: path.join(temporary, 'state'),
+      registrationRoots: [mod],
+      writableRegistrationRoots: [mod],
+      storageRoots: [storage],
+      workspaces: [
+        {
+          id: 'public',
+          name: 'Public package smoke test',
+          root: mod,
+          artifactRoot: path.join(storage, 'public', 'artifacts'),
+          cacheRoot: path.join(storage, 'public', 'cache'),
+          writeEnabled: true,
+        },
+      ],
       http: {
         host: '127.0.0.1',
         port: 0,
@@ -122,7 +138,14 @@ try {
           );
         } else if (message.id === 2) {
           const names = message.result?.tools?.map(({ name }) => name) ?? [];
-          if (!names.includes('hoi4.focus_render') || !names.includes('hoi4.map_plan')) {
+          if (
+            !names.includes('hoi4.focus_render') ||
+            !names.includes('hoi4.focus_rewrite') ||
+            !names.includes('hoi4.gui_rewrite') ||
+            !names.includes('hoi4.map_rewrite') ||
+            names.includes('hoi4.map_plan') ||
+            names.includes('hoi4.transaction_apply')
+          ) {
             clearTimeout(timeout);
             reject(new Error('Published stdio server is missing required public tools'));
             return;
@@ -163,15 +186,16 @@ try {
     cwd: temporary,
     entryPath: path.join(installedRoot, 'dist', 'bin', 'http.js'),
     environment: httpEnvironment,
-    expectedPromptNames: [
-      'hoi4.safe-focus-workflow',
-      'hoi4.safe-gui-workflow',
-      'hoi4.safe-map-workflow',
-    ],
+    expectedPromptNames: ['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow'],
     expectedResourceUri: 'hoi4-agent://schema/focus-plan',
     expectedServerName: ownPackage.name,
     expectedServerVersion: ownPackage.version,
-    expectedToolNames: ['hoi4.focus_render', 'hoi4.map_plan'],
+    expectedToolNames: [
+      'hoi4.focus_render',
+      'hoi4.focus_rewrite',
+      'hoi4.gui_rewrite',
+      'hoi4.map_rewrite',
+    ],
     origin: httpOrigin,
     token: httpToken,
     workspaceId: 'public',

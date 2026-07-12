@@ -10,8 +10,10 @@ Do not open a public issue for a suspected vulnerability. Use GitHub private vul
 
 ## Security model
 
-The server is read-only by default. Writes require an allowlisted canonical workspace, an explicitly enabled write policy, a dry-run transaction, a transaction ID, the expected plan hash, and a separate apply request. Remote operation additionally requires authentication, origin validation, request and concurrency limits, and principal-to-workspace authorization.
+The server is read-only by default. In the recommended `"autonomous"` policy, the domain rewrite tools validate proposed bytes, persist an authenticated recovery journal, apply under a workspace lock, post-validate, and automatically restore the original bytes on failure in one call. The optional `"transactions"` compatibility policy retains a separate reviewed plan/diff/apply sequence. Both require an allowlisted canonical write-enabled mod workspace and an isolated operator state root. Remote operation additionally requires authentication, origin validation, request and concurrency limits, and principal-to-workspace authorization.
 
-The server never executes commands supplied by a caller. It rejects path traversal, symlink escapes, stale plans, cross-workspace transactions, and resource reads outside configured roots. Secrets and proprietary game assets are not exposed as resources.
+MCP tool annotations describe risk but do not mandate per-tool confirmation. Autonomous rewrite tools advertise `destructiveHint: true`; the server cannot suppress, require, or override prompts and filesystem restrictions imposed by the MCP host.
+
+The server never executes commands supplied by a caller. It rejects path traversal, symlink escapes, stale source revisions, cross-workspace writes, and resource reads outside configured roots. Secrets and proprietary game assets are not exposed as resources. Git should retain project history, while the internal journal and recovery blobs protect an in-progress multi-file rewrite from partial failure.
 
 See `docs/security.md` for deployment guidance and threat-model details.

@@ -213,14 +213,10 @@ describe('MCP discovery', () => {
     );
     const prompts = await client.listPrompts();
     expect(prompts.prompts.map(({ name }) => name)).toEqual(
-      expect.arrayContaining([
-        'hoi4.safe-focus-workflow',
-        'hoi4.safe-gui-workflow',
-        'hoi4.safe-map-workflow',
-      ]),
+      expect.arrayContaining(['hoi4.focus-workflow', 'hoi4.gui-workflow', 'hoi4.map-workflow']),
     );
     const focusPrompt = await client.getPrompt({
-      name: 'hoi4.safe-focus-workflow',
+      name: 'hoi4.focus-workflow',
       arguments: { workspaceId: 'test' },
     });
     const focusPromptText = focusPrompt.messages
@@ -228,15 +224,16 @@ describe('MCP discovery', () => {
       .join('\n');
     expect(focusPromptText).toContain('continuous focus palette');
     expect(focusPromptText).toContain('mode "continuous"');
-    expect(focusPromptText).toContain('bitmap comparison');
-    expect(focusPromptText).toContain('every transaction_diff nextCursor');
+    expect(focusPromptText).toContain('render evidence');
+    expect(focusPromptText).toContain('This server is read-only');
+    expect(focusPromptText).not.toContain('reviewed focus transaction');
     expect(focusPromptText).toContain(
       'preserve prerequisites, exclusions, rewards, and raw blocks',
     );
     expect(focusPromptText).toContain('position.mode "auto"');
     expect(focusPromptText).toContain('createIfMissing: true');
-    expect(focusPromptText).toContain("coding-agent host's configured write and approval policy");
-    expect(focusPromptText).not.toContain('ask for approval');
+    expect(focusPromptText).not.toContain('transaction_diff');
+    expect(focusPromptText).not.toContain('approval');
     const agentGuide = await client.readResource({ uri: 'hoi4-agent://docs/agent-integration' });
     expect(agentGuide.contents[0]).toMatchObject({ mimeType: 'text/markdown' });
     expect('text' in agentGuide.contents[0]!).toBe(true);

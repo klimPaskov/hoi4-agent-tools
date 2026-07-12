@@ -221,6 +221,7 @@ export interface ApplyTransactionOptions {
 }
 
 const transactionIdPattern = /^txn_[0-9a-f-]{36}$/u;
+const journalReclamationPattern = /^\.reclaiming-txn_[0-9a-f-]{36}$/u;
 const lockOwnerGraceMs = 30_000;
 const lockHost = hostname().toLowerCase();
 const lockInstanceId = secureId('instance');
@@ -902,6 +903,7 @@ export class TransactionManager {
       await this.removeOrphanJournalHeads(workspace, new Set(), signal);
       return [];
     }
+    await this.removeReclamationDirectories(directory, signal);
     const directoryEntries = await readdir(directory, { withFileTypes: true });
     signal?.throwIfAborted();
     const transactionIds = new Set(
@@ -1191,7 +1193,7 @@ export class TransactionManager {
       await mkdir(transactionsDirectory, { recursive: true });
       transactionsDirectory = await containedGeneratedPath(workspace.cacheRoot, 'transactions');
       await this.pruneExpiredJournals(workspace, transactionsDirectory);
-      const usage = await this.journalUsage(transactionsDirectory);
+      let usage = await this.journalUsage(transactionsDirectory);
 
       this.authenticateManifest(manifest);
       const serializedManifest = `${canonicalJson(manifest)}\n`;
@@ -1208,12 +1210,23 @@ export class TransactionManager {
         0,
       );
       const transactionWorkBytes = prospectiveBytes + replacementBytes;
+      const retentionLimitReached = () =>
+        usage.count >= this.maxJournals || usage.bytes > this.maxJournalBytes - prospectiveBytes;
+      if (
+        Number.isSafeInteger(prospectiveBytes) &&
+        Number.isSafeInteger(transactionWorkBytes) &&
+        transactionWorkBytes <= this.maxJournalBytes &&
+        retentionLimitReached() &&
+        this.resolver.config().writePolicy === 'autonomous'
+      ) {
+        await this.pruneExpiredJournals(workspace, transactionsDirectory, true);
+        usage = await this.journalUsage(transactionsDirectory);
+      }
       if (
         !Number.isSafeInteger(prospectiveBytes) ||
         !Number.isSafeInteger(transactionWorkBytes) ||
-        usage.count >= this.maxJournals ||
-        transactionWorkBytes > this.maxJournalBytes ||
-        usage.bytes > this.maxJournalBytes - prospectiveBytes
+        retentionLimitReached() ||
+        transactionWorkBytes > this.maxJournalBytes
       ) {
         throw new ServiceError(
           'TRANSACTION_JOURNAL_LIMIT',
@@ -1246,8 +1259,10 @@ export class TransactionManager {
   private async pruneExpiredJournals(
     workspace: ResolvedWorkspace,
     transactionsDirectory: string,
+    reclaimApplied = false,
   ): Promise<void> {
     const now = Date.now();
+    await this.removeReclamationDirectories(transactionsDirectory);
     const entries = await readdir(transactionsDirectory, { withFileTypes: true });
     const cacheTransactionIds = new Set(
       entries.filter((entry) => transactionIdPattern.test(entry.name)).map((entry) => entry.name),
@@ -1283,6 +1298,7 @@ export class TransactionManager {
           try {
             const orphan = await this.load(workspace, entry.name, { headMode: 'none' });
             if (orphan.state === 'planned' || orphan.state === 'rolled_back') {
+              this.removeManifestByteCache(this.manifestCacheKey(workspace, entry.name));
               await rm(directory, { recursive: true, force: true });
               continue;
             }
@@ -1293,6 +1309,12 @@ export class TransactionManager {
         continue;
       }
       if (
+        reclaimApplied &&
+        manifest.state === 'applied' &&
+        this.resolver.config().writePolicy === 'autonomous'
+      ) {
+        await this.reclaimAutonomousAppliedJournal(workspace, transactionsDirectory, entry.name);
+      } else if (
         Date.parse(manifest.expiresAt) <= now &&
         (manifest.state === 'planned' || manifest.state === 'rolled_back')
       ) {
@@ -1300,6 +1322,46 @@ export class TransactionManager {
         await this.requireServerState().removeJournalHead(workspace.workspaceIdentity, entry.name);
         await rm(directory, { recursive: true, force: true });
       }
+    }
+  }
+
+  private async reclaimAutonomousAppliedJournal(
+    workspace: ResolvedWorkspace,
+    transactionsDirectory: string,
+    transactionId: string,
+  ): Promise<void> {
+    const directory = await this.transactionDirectory(workspace, transactionId);
+    const reclamationDirectory = await containedGeneratedPath(
+      transactionsDirectory,
+      `.reclaiming-${transactionId}`,
+    );
+    // The atomic rename is the durable reclamation marker. It moves the journal
+    // outside quota and recovery scans before protected state is removed, so a
+    // restart can finish cleanup under any later write policy without mistaking
+    // an unrelated headless applied journal for authorized reclamation.
+    this.removeManifestByteCache(this.manifestCacheKey(workspace, transactionId));
+    await rename(directory, reclamationDirectory);
+    await this.requireServerState().removeJournalHead(workspace.workspaceIdentity, transactionId);
+    await rm(reclamationDirectory, { recursive: true, force: true });
+  }
+
+  private async removeReclamationDirectories(
+    transactionsDirectory: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    for (const entry of await readdir(transactionsDirectory, { withFileTypes: true })) {
+      signal?.throwIfAborted();
+      if (!journalReclamationPattern.test(entry.name)) continue;
+      if (entry.isSymbolicLink() || !entry.isDirectory()) {
+        throw new ServiceError(
+          'TRANSACTION_JOURNAL_UNSAFE',
+          'Transaction journal reclamation contains an unsafe entry',
+        );
+      }
+      await rm(await containedGeneratedPath(transactionsDirectory, entry.name), {
+        recursive: true,
+        force: true,
+      });
     }
   }
 

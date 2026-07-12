@@ -136,7 +136,7 @@ const principalSchema = z
 export const serverConfigurationSchema = z
   .object({
     version: z.literal(CONFIG_VERSION),
-    writePolicy: z.enum(['read-only', 'transactions']).default('read-only'),
+    writePolicy: z.enum(['read-only', 'transactions', 'autonomous']).default('read-only'),
     serverStateRoot: z
       .string()
       .min(1)
@@ -293,11 +293,11 @@ export const serverConfigurationSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.writePolicy === 'transactions' && value.serverStateRoot === undefined) {
+    if (value.writePolicy !== 'read-only' && value.serverStateRoot === undefined) {
       context.addIssue({
         code: 'custom',
         path: ['serverStateRoot'],
-        message: 'Transaction write policy requires an operator-controlled server state root',
+        message: 'Write policies require an operator-controlled server state root',
       });
     }
     if (value.scanMaxFileBytes > value.scanMaxBytes) {

@@ -28,11 +28,13 @@ afterEach(() => {
   }
 });
 
-function staticConfiguration(writePolicy: 'read-only' | 'transactions' = 'read-only') {
+function staticConfiguration(
+  writePolicy: 'read-only' | 'transactions' | 'autonomous' = 'read-only',
+) {
   return serverConfigurationSchema.parse({
     version: 1,
     writePolicy,
-    ...(writePolicy === 'transactions'
+    ...(writePolicy !== 'read-only'
       ? { serverStateRoot: path.resolve('fixture-server-state') }
       : {}),
     workspaces: [{ id: 'fixture', name: 'Fixture', root: 'C:/fixture' }],
@@ -95,7 +97,7 @@ describe('HTTP authentication edge policy', () => {
     expect(JSON.stringify(principal)).not.toContain(matchingToken);
   });
 
-  it('grants write scope only under transaction policy and enforces requested scopes', async () => {
+  it('grants write scope only under an enabled write policy and enforces requested scopes', async () => {
     const matchingToken = 'a'.repeat(32);
     process.env.HOI4_TOKEN_MATCH = matchingToken;
 
@@ -108,6 +110,12 @@ describe('HTTP authentication edge policy', () => {
     });
     await expect(
       authenticate(`Bearer ${matchingToken}`, staticConfiguration('transactions'), [
+        'hoi4:read',
+        'hoi4:write',
+      ]),
+    ).resolves.toMatchObject({ scopes: ['hoi4:read', 'hoi4:write'] });
+    await expect(
+      authenticate(`Bearer ${matchingToken}`, staticConfiguration('autonomous'), [
         'hoi4:read',
         'hoi4:write',
       ]),

@@ -58,6 +58,12 @@ import {
   transactionResourceLink,
   type ServerContext,
 } from '../server/base-tools.js';
+import {
+  autonomousFailureContext,
+  autonomousResultArtifacts,
+  autonomousWrites,
+  executePlannedTransaction,
+} from '../server/transaction-execution.js';
 
 const focusScanOutputSchema = strictOperationResultSchema(
   z
@@ -169,6 +175,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         treeId: z.string().max(256),
         drift: focusDriftOutputSchema,
         created: z.boolean(),
+        execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
         layoutHash: sha256Schema,
         expiresAt: z.iso.datetime(),
         transactionFileCount: nonNegativeIntegerSchema,
@@ -181,6 +188,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         paletteId: z.string().max(256),
         drift: continuousFocusDriftOutputSchema,
         created: z.boolean(),
+        execution: z.enum(['planned', 'applied', 'blocked', 'unchanged']),
         expiresAt: z.iso.datetime(),
         transactionFileCount: nonNegativeIntegerSchema,
         transactionArtifactCount: nonNegativeIntegerSchema,
@@ -533,6 +541,7 @@ export function registerFocusTools(
   engine: CoreEngine,
   context: ServerContext,
 ): void {
+  const autonomous = autonomousWrites(engine);
   const workbench = new FocusWorkbench(engine.resolver, engine.transactions, engine.artifacts);
 
   server.registerTool(
@@ -989,16 +998,19 @@ export function registerFocusTools(
   );
 
   server.registerTool(
-    'hoi4.focus_plan_changes',
+    autonomous ? 'hoi4.focus_rewrite' : 'hoi4.focus_plan_changes',
     {
-      title: 'Dry-run focus source changes',
-      description:
-        'Compile a validated national tree or continuous palette plan into source and create a hash-bound dry-run transaction; never applies it. Omit mode for national behavior. National plans accept the same bounded horizontalSpacing, verticalSpacing, and padding controls as focus_render plus a uniform reviewScale that preserves logical SVG geometry while reducing both before/proposed raster outputs. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.',
+      title: autonomous ? 'Rewrite focus source' : 'Dry-run focus source changes',
+      description: `${
+        autonomous
+          ? 'Compile, validate, journal, and immediately apply a national tree or continuous palette plan in one call. No transaction approval or follow-up apply call is required.'
+          : 'Compile a validated national tree or continuous palette plan into source and create a hash-bound reviewed transaction; it does not apply the transaction.'
+      } Omit mode for national behavior. National plans accept the same bounded horizontalSpacing, verticalSpacing, and padding controls as focus_render plus a uniform reviewScale that preserves logical SVG geometry while reducing both before/proposed raster outputs. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.`,
       inputSchema: focusPlanInput,
       outputSchema: focusPlanOutputSchema,
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: autonomous,
         idempotentHint: false,
         openWorldHint: false,
       },
@@ -1172,20 +1184,39 @@ export function registerFocusTools(
             readDependencies: readDependenciesFromScannedFiles(snapshot.files),
             signal: progress.signal,
           });
-          const transaction = planned.transaction;
+          await progress.report(
+            4,
+            5,
+            autonomous
+              ? 'Applying and post-validating continuous focus rewrite'
+              : 'Finalizing reviewed transaction',
+          );
+          const execution = await executePlannedTransaction(
+            engine,
+            planned.transaction,
+            context.principal,
+            progress.signal,
+          );
+          const transaction = execution.transaction;
           const result = emptyServiceResult(workspaceId, {
             mode: 'continuous' as const,
             paletteId: plan.id,
             drift: compactDrift(planned.drift),
             created: planned.drift.status === 'target_missing',
+            execution: execution.outcome,
             expiresAt: transaction.expiresAt,
             transactionFileCount: transaction.files.length,
             transactionArtifactCount: transaction.artifacts.length,
           });
           result.status = transaction.validation.passed ? 'ok' : 'blocked';
-          result.code = transaction.validation.passed
-            ? 'CONTINUOUS_FOCUS_CHANGES_PLANNED'
-            : 'CONTINUOUS_FOCUS_CHANGES_BLOCKED';
+          result.code =
+            execution.outcome === 'applied'
+              ? 'CONTINUOUS_FOCUS_CHANGES_APPLIED'
+              : execution.outcome === 'unchanged'
+                ? 'CONTINUOUS_FOCUS_CHANGES_UNCHANGED'
+                : transaction.validation.passed
+                  ? 'CONTINUOUS_FOCUS_CHANGES_PLANNED'
+                  : 'CONTINUOUS_FOCUS_CHANGES_BLOCKED';
           setInlineFilesScanned(
             result,
             [
@@ -1198,12 +1229,17 @@ export function registerFocusTools(
           result.proposedFiles = transaction.files
             .slice(0, 100)
             .map(({ relativePath: file }) => file);
+          result.changedFiles = transaction.appliedFiles.slice(0, 100);
           result.diagnostics = transaction.diagnostics.slice(0, 100);
-          result.transactionId = transaction.transactionId;
-          result.planHash = transaction.planHash;
-          result.artifacts = [transactionResourceLink(transaction)];
+          if (autonomous) {
+            result.artifacts = transaction.artifacts;
+          } else {
+            result.transactionId = transaction.transactionId;
+            result.planHash = transaction.planHash;
+            result.artifacts = [transactionResourceLink(transaction)];
+            result.rollbackStatus = transaction.rollbackStatus;
+          }
           result.validation = transaction.validation;
-          result.rollbackStatus = transaction.rollbackStatus;
           result.blockers = transaction.diagnostics
             .filter(({ severity }) => severity === 'error' || severity === 'blocker')
             .map(({ code, message, details }) => ({
@@ -1211,7 +1247,15 @@ export function registerFocusTools(
               message,
               ...(details === undefined ? {} : { details }),
             }));
-          await progress.report(5, 5, 'Continuous focus dry run complete');
+          await progress.report(
+            5,
+            5,
+            execution.outcome === 'applied'
+              ? 'Continuous focus rewrite complete'
+              : execution.outcome === 'unchanged'
+                ? 'Continuous focus source already satisfied the plan'
+                : 'Continuous focus transaction planned',
+          );
           return toolResult(result);
         }
         const plan = input.plan as FocusTreePlan;
@@ -1410,21 +1454,40 @@ export function registerFocusTools(
           readDependencies: readDependenciesFromScannedFiles(snapshot.files),
           signal: progress.signal,
         });
-        const transaction = planned.transaction;
+        await progress.report(
+          4,
+          5,
+          autonomous
+            ? 'Applying and post-validating focus rewrite'
+            : 'Finalizing reviewed transaction',
+        );
+        const execution = await executePlannedTransaction(
+          engine,
+          planned.transaction,
+          context.principal,
+          progress.signal,
+        );
+        const transaction = execution.transaction;
         const result = emptyServiceResult(workspaceId, {
           mode: 'national' as const,
           treeId: plan.id,
           drift: compactDrift(planned.drift),
           created: planned.drift.status === 'target_missing',
+          execution: execution.outcome,
           layoutHash: planned.layout.layoutHash,
           expiresAt: transaction.expiresAt,
           transactionFileCount: transaction.files.length,
           transactionArtifactCount: transaction.artifacts.length,
         });
         result.status = transaction.validation.passed ? 'ok' : 'blocked';
-        result.code = transaction.validation.passed
-          ? 'FOCUS_CHANGES_PLANNED'
-          : 'FOCUS_CHANGES_BLOCKED';
+        result.code =
+          execution.outcome === 'applied'
+            ? 'FOCUS_CHANGES_APPLIED'
+            : execution.outcome === 'unchanged'
+              ? 'FOCUS_CHANGES_UNCHANGED'
+              : transaction.validation.passed
+                ? 'FOCUS_CHANGES_PLANNED'
+                : 'FOCUS_CHANGES_BLOCKED';
         setInlineFilesScanned(
           result,
           [
@@ -1437,12 +1500,17 @@ export function registerFocusTools(
         result.proposedFiles = transaction.files
           .slice(0, 100)
           .map(({ relativePath: file }) => file);
+        result.changedFiles = transaction.appliedFiles.slice(0, 100);
         result.diagnostics = transaction.diagnostics.slice(0, 100);
-        result.transactionId = transaction.transactionId;
-        result.planHash = transaction.planHash;
-        result.artifacts = [transactionResourceLink(transaction)];
+        if (autonomous) {
+          result.artifacts = autonomousResultArtifacts(execution);
+        } else {
+          result.transactionId = transaction.transactionId;
+          result.planHash = transaction.planHash;
+          result.artifacts = [transactionResourceLink(transaction)];
+          result.rollbackStatus = transaction.rollbackStatus;
+        }
         result.validation = transaction.validation;
-        result.rollbackStatus = transaction.rollbackStatus;
         result.blockers = transaction.diagnostics
           .filter(({ severity }) => severity === 'error' || severity === 'blocker')
           .map(({ code, message, details }) => ({
@@ -1450,10 +1518,18 @@ export function registerFocusTools(
             message,
             ...(details === undefined ? {} : { details }),
           }));
-        await progress.report(5, 5, 'Focus dry run complete');
+        await progress.report(
+          5,
+          5,
+          execution.outcome === 'applied'
+            ? 'Focus rewrite complete'
+            : execution.outcome === 'unchanged'
+              ? 'Focus source already satisfied the plan'
+              : 'Focus transaction planned',
+        );
         return toolResult(result);
       } catch (error) {
-        return errorResult(error, workspaceId);
+        return errorResult(error, workspaceId, autonomousFailureContext(error));
       }
     },
   );

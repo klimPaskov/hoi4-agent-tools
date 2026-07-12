@@ -2,6 +2,30 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
+## [0.2.0] - 2026-07-12
+
+### Added
+
+- Added an explicit `autonomous` write policy with one-call `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite` tools for allowlisted mod workspaces.
+- Added deterministic autonomous workflow coverage for successful focus, GUI, and map rewrites, blocked proposals, no-change rewrites, stale sources, post-validation, and byte-exact automatic recovery.
+- Added autonomous configuration, client guidance, architecture rationale, self-hosting documentation, and current MCP protocol and security research.
+
+### Changed
+
+- Made autonomous one-call rewrites the primary agent workflow. Coding agents no longer receive or resubmit transaction IDs or plan hashes, page through diffs, call a separate apply operation, or invoke rollback.
+- Kept transaction journals, locks, stale-source checks, exact before-bytes, post-write validation, and failure recovery as internal engine guarantees rather than agent-facing approval steps.
+- Renamed the primary prompts to `hoi4.focus-workflow`, `hoi4.gui-workflow`, and `hoi4.map-workflow`, and exposed truthful destructive tool annotations required by the MCP contract.
+- Added `--autonomous-writes` for explicit setup. `--reviewed-writes` and the legacy `--enable-writes` alias retain the separate review/apply compatibility mode.
+
+### Fixed
+
+- Made valid no-change focus, GUI, and map rewrites return `execution: "unchanged"` without creating a source mutation.
+- Made validation blockers return `execution: "blocked"` without exposing internal transaction authorization data.
+- Preserved and reported automatic recovery state if application or post-validation fails after source replacement begins.
+- Reclaimed successful autonomous recovery journals at configured retention limits while preserving reviewed-mode rollback data, preventing long-running agent workflows from exhausting journal quotas.
+- Added sanitized complete execution-validation resources so autonomous results retain every pre-write and post-write check without exposing internal transaction IDs or plan hashes.
+- Distinguished read-only, reviewed, and autonomous server instructions and prompts, and made every prompt reference the exact registered MCP tool name.
+
 ## [0.1.7] - 2026-07-12
 
 ### Added

@@ -4,13 +4,13 @@
 
 - external mod source and binary map data;
 - installed game and dependency references;
-- transaction approval intent and rollback blobs;
+- configured write authority, authenticated journals, and exact recovery blobs;
 - generated artifacts that may reveal source details;
 - HTTP credentials and principal/workspace grants.
 
 ## Trust boundaries
 
-MCP input, file paths, manifest content, client annotations, session IDs, Origin/Host headers, and remote access tokens are untrusted. Tool annotations are descriptive hints. Prompts are guidance. Server-side policy is authoritative.
+MCP input, file paths, manifest content, client annotations, session IDs, Origin/Host headers, and remote access tokens are untrusted. Tool annotations are descriptive hints. Prompts are guidance. MCP does not require a confirmation prompt for every destructive tool call. Server-side configuration is authoritative for server access, while the MCP host independently controls its own approval and filesystem policy; neither can override the other.
 
 ## Filesystem controls
 
@@ -19,7 +19,7 @@ MCP input, file paths, manifest content, client annotations, session IDs, Origin
 - Traversal, absolute paths, UNC/device paths, NULs, alternate data streams, ambiguous trailing characters, and device names are rejected.
 - Existing symlinks and junctions are resolved; an escape outside the root is rejected.
 - Artifact shards, transaction journals, blobs, and lock descendants are re-canonicalized before access. A symlink or junction observed in artifact/journal enumeration is rejected.
-- Transaction mode requires an absolute `serverStateRoot` whose existing components are non-linked
+- Each write-enabled policy requires an absolute `serverStateRoot` whose existing components are non-linked
   and whose canonical target does not overlap any source, registration capability,
   generated-storage root, or runtime-nominated root. Harmless native path-spelling aliases are
   normalized only after the link check. Its random journal key and protected revision heads are
@@ -40,7 +40,13 @@ concurrent mutation.
 
 ## Write controls
 
-Read-only is the default. A write requires global and workspace enablement, a validated dry run, a persisted transaction, exact plan hash, separate apply call, unexpired principal/workspace binding, unchanged source hashes, and a workspace lock. There is no command execution field. Stale apply and rollback operations fail closed.
+Read-only is the default. The recommended `"autonomous"` policy exposes only `hoi4.focus_rewrite`, `hoi4.gui_rewrite`, and `hoi4.map_rewrite` for source mutation. Each call computes the complete affected-file set, validates proposed bytes, persists an authenticated journal and exact before-bytes, rechecks the unexpired principal/workspace binding and source hashes under a workspace lock, applies, rebuilds the index, and post-validates. Invalid proposals do not apply; an application, final-hash, or post-validation failure restores original bytes automatically.
+
+The optional `"transactions"` compatibility policy exposes the older plan/diff/apply/status/rollback tool sequence. It uses the same core journal and failure-recovery path. Autonomous mode intentionally does not register the transaction tools, so it has no client-callable bypass around the one-call rewrite contract.
+
+The autonomous rewrite tools advertise `destructiveHint: true` because a successful call changes mod source. That hint is truthful risk metadata, not a server request to suppress or force a dialog. A client host may prompt for or block the call; the server cannot override it. There is no command-execution field in either mode, and stale or cross-workspace writes fail closed.
+
+Git remains the project-history and intentional-revert layer. It is not required for operational recovery: the journal and exact before-bytes prevent a failed multi-file rewrite from remaining partially applied.
 
 Runtime registration definitions and raw paths are not persisted. The canonical artifact root does
 retain an atomically created ownership claim containing only domain-separated SHA-256 workspace and
@@ -63,7 +69,7 @@ valid manifest. A cache-first crash may reconcile only an authenticated exact ne
 missing head, revision gap, altered expiry/state/failure/rollback field, or recomputed public hash
 fails closed. No HMAC key is derived from public workspace data.
 
-Read-only transaction operations never repair protected state. Cache-first successor promotion is
+Read-only journal/resource operations never repair protected state. Cache-first successor promotion is
 confined to startup recovery and authorized write paths. Artifact manifests are capped at 1 MiB and
 transaction manifests at 16 MiB before parsing; transaction resource ranges use a bounded verified
 byte cache instead of repeatedly rebuilding the authenticated object.
@@ -129,7 +135,7 @@ root ACL for the dedicated server account; the server still rejects a linked/non
 inherits that operator ACL. A hostile operating-system principal that can read the key or replace
 state-root entries remains outside the documented filesystem trust boundary.
 
-Raw installed-game or dependency sprite, font, and bitmap files are never registered as downloadable resources. Structured JSON evidence strips embedded raster and glyph payloads, retaining only source-linked hashes, paths, frame and dimension metadata. Composite SVG/PNG reviews may contain processed frames or glyphs required to inspect the requested render, but remain generated, authorization-checked workspace evidence rather than raw asset-file resources. Transaction evidence may contain authorized mod-source before/proposed text and diffs; every artifact remains bound to the workspace principal.
+Raw installed-game or dependency sprite, font, and bitmap files are never registered as downloadable resources. Structured JSON evidence strips embedded raster and glyph payloads, retaining only source-linked hashes, paths, frame and dimension metadata. Composite SVG/PNG reviews may contain processed frames or glyphs required to inspect the requested render, but remain generated, authorization-checked workspace evidence rather than raw asset-file resources. Rewrite and reviewed-transaction evidence may contain authorized mod-source before/proposed text and diffs; every artifact remains bound to the workspace principal.
 
 The runtime sends no telemetry or analytics. Its only outbound network request is OAuth JWT-key retrieval from the administrator-configured JWKS endpoint; stdio and static-token loopback deployments require no runtime network access.
 

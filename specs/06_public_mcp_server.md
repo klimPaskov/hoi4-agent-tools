@@ -49,10 +49,9 @@ Expose a small, stable tool family. Tool names should be namespaced and versiona
 Required tool groups:
 
 - `project_register`, `project_scan`, `project_status`
-- `focus_scan`, `focus_lint`, `focus_layout`, `focus_render`, `focus_plan_changes`
-- `gui_scan`, `gui_lint`, `gui_render`, `gui_render_states`, `gui_compare`, `gui_plan_changes`
-- `map_scan`, `map_inspect`, `map_plan`, `map_render`, `map_validate`
-- `transaction_diff`, `transaction_apply`, `transaction_rollback`, `transaction_status`
+- `focus_scan`, `focus_lint`, `focus_layout`, `focus_render`, `focus_rewrite`
+- `gui_scan`, `gui_lint`, `gui_render`, `gui_render_states`, `gui_compare`, `gui_rewrite`
+- `map_scan`, `map_inspect`, `map_allocate`, `map_render`, `map_validate`, `map_rewrite`
 - `artifact_list`, `artifact_describe`
 
 The final schema may merge closely related read-only operations when that reduces context use without hiding behavior.
@@ -67,7 +66,7 @@ Provide stable resource URIs for:
 
 - workspace summaries and capability reports
 - diagnostics
-- transaction manifests and diffs
+- rewrite receipts, source/visual diffs, and validation evidence
 - focus HTML, SVG, PNG, and JSON renders
 - GUI renders, state galleries, hierarchy reports, and fidelity reports
 - map previews, pixel diffs, and validation reports
@@ -75,21 +74,22 @@ Provide stable resource URIs for:
 
 Tool calls return compact summaries plus resource links with MIME type and size when known.
 
-Provide MCP prompts for safe focus-tree, scripted-GUI, and map-editing workflows. Prompts guide coding agents but never replace tool validation or transaction approval.
+Provide MCP prompts for focus-tree, scripted-GUI, and map-editing workflows. Prompts guide coding agents but never replace tool validation or operator-owned workspace policy. In an autonomous workspace, prompts direct the agent to the appropriate one-call domain rewrite and must not require a caller-managed transaction review, plan hash, separate apply, or rollback step.
 
 ## Write safety
 
 The server starts read-only.
 
-Write access requires:
+The primary write path requires:
 
-1. explicit server configuration enabling writes
-2. a canonical allowlisted workspace root
-3. a completed dry-run transaction
-4. a transaction ID and expected plan hash
-5. a separate apply call
+1. explicit operator configuration whose effective policy for the mod workspace is `writePolicy: "autonomous"`
+2. a canonical allowlisted mod workspace root; game, dependency, fixture, cache, artifact, and unrelated roots remain non-writable
+3. an authenticated and authorized principal with access to that workspace and, for remote transports, the write scope
+4. one `focus_rewrite`, `gui_rewrite`, or `map_rewrite` request containing the complete declarative edit input
 
-Apply rejects stale, changed, expired, or cross-workspace transaction IDs. Preserve atomic write and rollback rules.
+Within that one request, the server calculates the complete affected-file set, validates the proposal in memory, creates relevant diff/render evidence, acquires the workspace lock, rechecks roots and every source hash, persists an authenticated journal with exact before bytes, performs recoverable atomic replacement, rebuilds the affected index, and runs post-write validation. A blocker returns before source mutation. A write or validation failure restores exact original bytes automatically before returning whenever safe recovery is possible. Stale, changed-root, cross-workspace, and cross-principal requests fail closed.
+
+The autonomous caller never needs to receive or resubmit a transaction ID or plan hash, page through a transaction diff, call a separate apply operation, or invoke rollback. A manually staged `writePolicy: "transactions"` mode and its legacy tools may remain available as an explicitly enabled compatibility surface, but it is not required by discovery, prompts, examples, or primary acceptance.
 
 Prevent path traversal, symlink escape, arbitrary command execution, unrestricted environment access, and access outside registered workspace, dependency, game, cache, and artifact roots. Never expose secrets, client configuration files, unrelated user files, or proprietary game assets as downloadable resources.
 
@@ -136,7 +136,10 @@ Required tests:
 - origin rejection and authentication behavior
 - concurrent users and isolated workspaces
 - read-only default policy
-- stale transaction rejection
+- explicit autonomous workspace-policy enforcement
+- one-call focus, GUI, and map rewrites with no caller transaction choreography
+- stale-source and changed-root rejection inside the rewrite call
+- exact automatic recovery after injected write and post-validation failures
 - path traversal and symlink escape attempts
 - cancellation and progress
 - large artifact resource links
@@ -145,4 +148,4 @@ Required tests:
 - registry metadata validation
 - agent workflow tests covering focus, GUI, and map operations end to end
 
-The MCP server is incomplete if it wraps mock tools, bypasses transaction safety, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.
+The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback for the primary workflow, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.
