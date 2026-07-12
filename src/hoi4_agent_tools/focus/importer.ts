@@ -11,11 +11,13 @@ import {
 } from '../core/source/index.js';
 import {
   FOCUS_PLAN_SCHEMA_VERSION,
+  FOCUS_COST_CONSTANT_PATTERN,
   focusPlanHash,
   type FocusAiMetadata,
   type ContinuousFocusDefinition,
   type ContinuousFocusPalettePlan,
   type FocusCountryAssignment,
+  type FocusCost,
   type FocusIcon,
   type FocusImportResult,
   type FocusNodePlan,
@@ -255,6 +257,15 @@ function passthroughEntry(
 function scalarNumber(block: BlockNode, key: string): number | undefined {
   const value = firstScalar(block, key)?.value;
   if (value === undefined || !/^-?(?:\d+|\d*\.\d+)$/u.test(value)) return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function focusCost(block: BlockNode): FocusCost | undefined {
+  const value = firstScalar(block, 'cost')?.value;
+  if (value === undefined) return undefined;
+  if (value.length <= 256 && FOCUS_COST_CONSTANT_PATTERN.test(value)) return value as FocusCost;
+  if (!/^-?(?:\d+|\d*\.\d+)$/u.test(value)) return undefined;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : undefined;
 }
@@ -583,7 +594,7 @@ function importFocus(
   const availability = availabilityEntry?.block;
   const bypass = assignmentBlocks(block, 'bypass')[0]?.block;
   const completionReward = assignmentBlocks(block, 'completion_reward')[0]?.block;
-  const cost = scalarNumber(block, 'cost');
+  const cost = focusCost(block);
   const hidden = scalarBoolean(block, 'hidden') === true;
   const crisis = scalarBoolean(block, 'crisis') === true;
   for (const markerName of ['hidden', 'crisis', 'continuous'] as const) {

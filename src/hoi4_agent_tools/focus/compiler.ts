@@ -2,15 +2,30 @@ import { sha256Bytes } from '../core/canonical.js';
 import { ServiceError } from '../core/result.js';
 import { assignments, firstScalar, nodeLocation, parseClausewitz } from '../core/source/index.js';
 import {
+  FOCUS_COST_CONSTANT_PATTERN,
   layoutNodeMap,
   type ContinuousFocusDefinition,
   type ContinuousFocusPalettePlan,
   type FocusCompiledSource,
+  type FocusCost,
   type FocusLayoutResult,
   type FocusNodePlan,
   type FocusRouteLock,
   type FocusTreePlan,
 } from './model.js';
+
+export function focusCostText(cost: FocusCost): string {
+  if (typeof cost === 'number') {
+    if (Number.isFinite(cost)) return String(cost);
+  } else if (cost.length <= 256 && FOCUS_COST_CONSTANT_PATTERN.test(cost)) {
+    return cost;
+  }
+  throw new ServiceError(
+    'FOCUS_COST_INVALID',
+    'Focus cost must be a finite number or a safe @constant token',
+    { cost: typeof cost === 'number' && !Number.isFinite(cost) ? String(cost) : cost },
+  );
+}
 
 function indent(level: number): string {
   return '\t'.repeat(level);
@@ -159,7 +174,7 @@ export function compileFocusBlock(
     );
   }
   lines.push(...positionLines(focus, layout).map((line) => `${indent(2)}${line}`));
-  if (focus.cost !== undefined) lines.push(`${indent(2)}cost = ${focus.cost}`);
+  if (focus.cost !== undefined) lines.push(`${indent(2)}cost = ${focusCostText(focus.cost)}`);
   const availability = focusTriggerBlockText(focus, 'available');
   if (availability !== undefined) lines.push(blockAssignment('available', availability, 2));
   if (focus.bypass !== undefined) lines.push(blockAssignment('bypass', focus.bypass.text, 2));

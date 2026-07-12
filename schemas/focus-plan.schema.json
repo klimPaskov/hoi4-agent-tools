@@ -640,7 +640,17 @@
           }
         },
         "cost": {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 256,
+              "pattern": "^@[A-Za-z_][A-Za-z0-9_]*$"
+            }
+          ]
         },
         "completionReward": {
           "$ref": "#/$defs/__schema0"

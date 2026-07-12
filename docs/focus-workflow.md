@@ -15,6 +15,11 @@ Decision categories are additive database fragments: the category definition und
 The shared index retains those fragments without reporting a duplicate-definition collision while
 still honoring same-relative-file shadowing and load-order source ownership.
 
+National focus `cost` values support finite numbers and safe file-scoped constants such as
+`@focus_cost_standard`. Targeted layout updates preserve the exact existing cost lexeme, including
+numeric formatting and comments. A cost token outside the typed model is retained unchanged when
+the plan does not explicitly replace it; the compiler refuses to generate an arbitrary scalar.
+
 National focuses and continuous focuses use their actual HOI4 source models. National trees come from the workspace registration's configured `roots.focus` paths. Continuous focuses come from `common/continuous_focus/*.txt` as `continuous_focus_palette = { ... focus = { ... } }`; matching country palettes take precedence over the default palette, and the compiler never emits a `continuous` field inside a national `focus = { ... }` block.
 
 ## Agent workflow
@@ -23,8 +28,8 @@ National focuses and continuous focuses use their actual HOI4 source models. Nat
 2. `hoi4.focus_scan` imports active national trees, matching continuous-focus palettes, active localisation, sprite definitions, and only the exact texture paths referenced by those sprites.
 3. `hoi4.focus_lint` separates syntax, reference, layout, and design diagnostics. Omit `mode` for national-tree compatibility, or pass `mode: "continuous"` with an optional `paletteId` to lint a palette directly.
 4. `hoi4.focus_layout` calculates stable integer coordinates. Pinned positions and existing coordinates anchor incremental changes.
-5. `hoi4.focus_render` returns deterministic HTML, SVG, PNG, JSON, and generated-source-map resources. National mode also returns the graph layout and hash-bound planning sidecar; continuous mode accepts palette columns and renders the actual continuous-focus source model.
-6. `hoi4.focus_plan_changes` accepts either a national plan (the backward-compatible default) or `mode: "continuous"` with a continuous-palette plan. Both make source-preserving range edits where possible and produce before/proposed/bitmap-diff review artifacts before creating the dry-run transaction. National plans also maintain the adjacent planning sidecar. To create a first tree or palette in a new mod source file, the coding agent must set `createIfMissing: true`; without that explicit flag, missing sources and IDs refuse. Creation never appends a different target to an existing source file, because doing so could repurpose unrelated source or its adjacent planning sidecar. It uses a transparent source-linked before render, never copies a read-only game/dependency file into a shadowing mod path, and rolls back newly created source and sidecar files atomically.
+5. `hoi4.focus_render` returns deterministic HTML, SVG, PNG, JSON, and generated-source-map resources. National mode also returns the graph layout and hash-bound planning sidecar; a uniform `reviewScale` from `0.25` through `1.0` keeps unusually wide or deep trees within bounded raster limits without changing logical geometry or source coordinates. Continuous mode accepts palette columns and renders the actual continuous-focus source model.
+6. `hoi4.focus_plan_changes` accepts either a national plan (the backward-compatible default) or `mode: "continuous"` with a continuous-palette plan. Both make source-preserving range edits where possible and produce before/proposed/bitmap-diff review artifacts before creating the dry-run transaction. National plans may set `horizontalSpacing`, `verticalSpacing`, `padding`, and a uniform `reviewScale` for both review renders; those pixel-space settings do not alter focus coordinates or compiled HOI4 source. National plans also maintain the adjacent planning sidecar. To create a first tree or palette in a new mod source file, the coding agent must set `createIfMissing: true`; without that explicit flag, missing sources and IDs refuse. Creation never appends a different target to an existing source file, because doing so could repurpose unrelated source or its adjacent planning sidecar. It uses a transparent source-linked before render, never copies a read-only game/dependency file into a shadowing mod path, and rolls back newly created source and sidecar files atomically.
 7. Review drift, diagnostics, source maps, diff artifacts, and plan hash before apply.
 
 ## Repairing an existing large tree
@@ -33,7 +38,9 @@ Imported authored coordinates are fixed by design. A plain `hoi4.focus_layout` c
 audits an existing layout without silently rearranging it. To opt a badly structured tree into a
 full cleanup, the coding agent must make the movement policy explicit:
 
-1. Scan, lint, and render the baseline, then read the complete imported plan resource.
+1. Scan, lint, and render the baseline, then read the complete imported plan resource. Use the same
+   national `reviewScale` for baseline, transaction, and final renders when the default canvas is too
+   large.
 2. Preserve every prerequisite group, exclusion, route lock, reward, raw passthrough entry, source
    location, and provenance value.
 3. Model the intended route architecture with `branchGroups`, `laneGroups`, `branchId`, and
@@ -43,6 +50,11 @@ full cleanup, the coding agent must make the movement policy explicit:
    route intent without making those coordinates mandatory.
 5. Submit the complete plan to `hoi4.focus_plan_changes`. The dry run performs layout, compilation,
    lint, source-preserving range edits, deterministic before/proposed rendering, and bitmap diffing.
+   For an unusually wide or deep tree, set a uniform national `reviewScale` between `0.25` and
+   `1.0`; `0.4` is appropriate for a very large comparison. It scales nodes, text, connectors, and
+   the viewport together, avoiding artificial overlap. The same scale governs both sides of the
+   comparison and affects only artifact pixels, never source-grid coordinates. Explicit spacing and
+   padding remain available when the artifact's logical presentation itself needs adjustment.
 6. Read every `hoi4.transaction_diff` page and all linked review resources. Apply the exact
    hash-bound transaction only under the coding-agent host's configured write policy.
 7. Rescan, lint, and render the applied tree. A rejected result can be restored exactly with
@@ -130,10 +142,10 @@ tree should add complete presentation and gameplay data before apply:
 Within each focus, one `prerequisites.groups` entry represents one Clausewitz `prerequisite` block
 whose listed focuses are OR alternatives. Multiple group entries are AND requirements. For a new
 target, use `sourcePath: "plan:<tree-id>"` and 64 zeroes for both initial hashes, then call
-`hoi4.focus_plan_changes` with `createIfMissing: true`. That convention is accepted only for a
-missing target; an existing source still requires its imported hash-bound provenance. The server
-refuses to append a different tree to an occupied source file and still requires the normal
-dry-run/apply boundary.
+`hoi4.focus_plan_changes` with `createIfMissing: true`. Use that convention only for a missing
+target. Existing sources normally use imported, hash-bound provenance; resolving intentional
+plan/source drift additionally requires explicit `authority: "plan"`. The server refuses to append
+a different tree to an occupied source file and still requires the normal dry-run/apply boundary.
 
 ## Prerequisite and route semantics
 
@@ -174,3 +186,10 @@ Every compiled or proposed focus block receives a source-map entry containing th
 Each rendered node includes its ID, resolved title/working label, resolved icon frame or diagnostic, coordinates, prerequisite type, exclusions, branch family, planner visibility/convergence/terminal state, AI metadata, and source-linked diagnostics. HTML search and filters inspect evidence only; they cannot write source.
 
 National-tree renders store `<tree>.focus.html`, `.svg`, `.png`, `.json`, `.source-map.json`, and `.plan.json`. Continuous-palette renders use the same core artifact store and produce `<palette>.continuous.html`, `.svg`, `.png`, `.json`, and `.source-map.json`. The JSON embeds the same complete generated-source map that is also stored separately, and all formats carry content hashes plus source/render provenance.
+
+A national focus transaction also stores `<tree>.focus.proposed-validation.json`. It contains every
+diagnostic and validation check from re-importing, laying out, and linting the compiled proposal.
+When that complete set is larger than the fixed transaction-manifest allowance, the manifest keeps
+a blocker-first bounded summary and an explicit resource diagnostic; it never drops findings from
+the validation decision. The generic apply boundary uses the same pattern for oversized post-write
+diagnostics.

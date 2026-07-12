@@ -16,6 +16,7 @@ import {
   compileContinuousFocusPalette,
   compileFocusBlock,
   compileFocusTree,
+  focusCostText,
   focusTriggerBlockText,
 } from './compiler.js';
 import {
@@ -191,13 +192,14 @@ function scalarValues(
     x: String(x),
     y: String(y),
     relative_position_id: relative,
-    cost: focus.cost === undefined ? undefined : String(focus.cost),
+    cost: focus.cost === undefined ? undefined : focusCostText(focus.cost),
   };
 }
 
 function scalarReplacements(
   document: SourceDocument,
   assignment: AssignmentNode,
+  currentFocus: FocusNodePlan,
   focus: FocusNodePlan,
   layout: FocusLayoutResult,
 ): SourceReplacement[] | undefined {
@@ -205,6 +207,10 @@ function scalarReplacements(
   const replacements: SourceReplacement[] = [];
   const insertions: string[] = [];
   for (const [key, desired] of Object.entries(scalarValues(focus, layout))) {
+    // Preserve the exact source lexeme for unchanged typed costs (for example
+    // `5.000`) and never delete an existing unmodelled cost merely because
+    // both imported and target plans omit it.
+    if (key === 'cost' && currentFocus.cost === focus.cost) continue;
     const existing = assignments(assignment.value, key);
     if (existing.length > 1 || existing[0]?.value.type === 'block') return undefined;
     const current = existing[0];
@@ -344,7 +350,7 @@ export function updateFocusTreeSource(
         ),
       );
     }
-    const scalar = scalarReplacements(document, sourceAssignment, target, layout);
+    const scalar = scalarReplacements(document, sourceAssignment, current, target, layout);
     if (scalar === undefined) {
       throw new ServiceError(
         'FOCUS_UNSAFE_SCALAR_REWRITE',

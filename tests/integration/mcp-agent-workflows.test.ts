@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
@@ -74,6 +75,13 @@ async function readJsonArtifact(client: Client, uri: string): Promise<Record<str
   if (content === undefined || !('text' in content))
     throw new Error('Expected a JSON text resource');
   return JSON.parse(content.text) as Record<string, unknown>;
+}
+
+async function readBinaryArtifact(client: Client, uri: string): Promise<Buffer> {
+  const resource = await client.readResource({ uri });
+  const content = resource.contents[0];
+  if (content === undefined || !('blob' in content)) throw new Error('Expected a binary resource');
+  return Buffer.from(content.blob, 'base64');
 }
 
 async function transactionManifest(
@@ -619,6 +627,200 @@ describe('MCP coding-agent workflows', () => {
     );
   }, 30_000);
 
+  it('renders and dry-runs a wide, deep focus-tree rewrite with one uniform safe review scale', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-focus-review-scale-'));
+    const mod = path.join(temporary, 'mod');
+    const relativePath = 'common/national_focus/large-review.txt';
+    const sourcePath = path.join(mod, ...relativePath.split('/'));
+    await mkdir(path.dirname(sourcePath), { recursive: true });
+    const focusCount = 89;
+    const focusBlocks = Array.from({ length: focusCount }, (_, index) => {
+      const x = -28 + (index % 58);
+      const y = index < 58 ? 0 : 41;
+      return [
+        '\tfocus = {',
+        `\t\tid = large_review_${String(index).padStart(3, '0')}`,
+        `\t\tx = ${x}`,
+        `\t\ty = ${y}`,
+        '\t\tcost = 5',
+        '\t}',
+      ].join('\n');
+    });
+    const original = Buffer.from(
+      [
+        'focus_tree = {',
+        '\tid = large_review_tree',
+        '\tdefault = yes',
+        ...focusBlocks,
+        '}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(sourcePath, original);
+    const { client } = await connect([
+      {
+        id: 'large_review',
+        name: 'Large focus transaction review scale',
+        root: mod,
+        writeEnabled: true,
+        artifactRoot: path.join(temporary, 'runtime', 'artifacts'),
+        cacheRoot: path.join(temporary, 'runtime', 'cache'),
+      },
+    ]);
+    cleanup.push(async () => rm(temporary, { recursive: true, force: true }));
+
+    const scanned = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_scan',
+        arguments: { workspaceId: 'large_review', relativePath },
+      }),
+    );
+    expect(scanned.code).toBe('FOCUS_SCANNED');
+    const scanArtifact = scanned.artifacts.find(({ mimeType }) => mimeType === 'application/json');
+    expect(scanArtifact).toBeDefined();
+    const scanJson = await readJsonArtifact(client, scanArtifact!.uri);
+    const plan = (scanJson.plans as Array<Record<string, unknown>>)[0]!;
+    const focuses = plan.focuses as Array<{
+      cost?: number;
+      position: { mode: string; x: number; y: number; pinned: boolean };
+    }>;
+    expect(focuses).toHaveLength(focusCount);
+    for (const [index, focus] of focuses.entries()) {
+      focus.position = {
+        mode: 'fixed',
+        x: index - 44,
+        y: index < 58 ? 0 : 41,
+        pinned: false,
+      };
+    }
+    focuses[0]!.cost = 6;
+
+    const unscaledRender = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_render',
+        arguments: { workspaceId: 'large_review', relativePath },
+      }),
+    );
+    expect(unscaledRender).toMatchObject({ status: 'blocked', code: 'RENDER_PIXELS_BLOCKED' });
+    const scaledRender = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_render',
+        arguments: { workspaceId: 'large_review', relativePath, reviewScale: 0.4 },
+      }),
+    );
+    expect(scaledRender).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_RENDERED',
+      data: { width: 4_134, height: 1_997 },
+    });
+
+    const unscaled = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_plan_changes',
+        arguments: { workspaceId: 'large_review', relativePath, plan },
+      }),
+    );
+    expect(unscaled).toMatchObject({ status: 'blocked', code: 'RENDER_PIXELS_BLOCKED' });
+
+    const planned = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_plan_changes',
+        arguments: {
+          workspaceId: 'large_review',
+          relativePath,
+          plan,
+          horizontalSpacing: 176,
+          verticalSpacing: 116,
+          padding: 80,
+          reviewScale: 0.4,
+        },
+      }),
+    );
+    expect(planned).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_CHANGES_PLANNED',
+      data: { mode: 'national', treeId: 'large_review_tree' },
+    });
+    expect(await readFile(sourcePath)).toEqual(original);
+
+    const artifacts = await reviewArtifacts(client, planned);
+    const before = artifacts.find(({ name }) => name === 'large_review_tree.focus-before.png');
+    const proposed = artifacts.find(({ name }) => name === 'large_review_tree.focus.png');
+    const diff = artifacts.find(({ name }) => name === 'large_review_tree.focus-visual-diff.json');
+    const completeValidation = artifacts.find(
+      ({ name }) => name === 'large_review_tree.focus.proposed-validation.json',
+    );
+    expect(before).toBeDefined();
+    expect(proposed).toBeDefined();
+    expect(diff).toBeDefined();
+    expect(completeValidation).toBeDefined();
+    const [beforeMetadata, proposedMetadata, diffJson, completeValidationJson] = await Promise.all([
+      sharp(await readBinaryArtifact(client, before!.uri)).metadata(),
+      sharp(await readBinaryArtifact(client, proposed!.uri)).metadata(),
+      readJsonArtifact(client, diff!.uri),
+      readJsonArtifact(client, completeValidation!.uri),
+    ]);
+    expect(beforeMetadata).toMatchObject({ width: 4_134, height: 1_997 });
+    expect(proposedMetadata).toMatchObject({ width: 6_317, height: 1_997 });
+    expect(diffJson).toMatchObject({ width: 6_317, height: 1_997 });
+    expect(completeValidationJson.diagnosticCount).toBeGreaterThan(100);
+    expect(completeValidationJson.diagnostics).toHaveLength(
+      completeValidationJson.diagnosticCount as number,
+    );
+
+    const applied = resultOf(
+      await client.callTool({
+        name: 'hoi4.transaction_apply',
+        arguments: {
+          workspaceId: 'large_review',
+          transactionId: planned.transactionId,
+          expectedPlanHash: planned.planHash,
+        },
+      }),
+    );
+    expect(applied).toMatchObject({ code: 'TRANSACTION_APPLIED', data: { state: 'applied' } });
+    expect(await readFile(sourcePath)).not.toEqual(original);
+    const status = resultOf(
+      await client.callTool({
+        name: 'hoi4.transaction_status',
+        arguments: { workspaceId: 'large_review', transactionId: planned.transactionId },
+      }),
+    );
+    const manifest = await readJsonArtifact(client, status.artifacts[0]!.uri);
+    const postValidationSummary = (
+      manifest.diagnostics as Array<{
+        code: string;
+        details?: { artifact?: { uri?: string } };
+      }>
+    ).find(({ code }) => code === 'POST_VALIDATION_DIAGNOSTICS_IN_RESOURCE');
+    expect(postValidationSummary?.details?.artifact?.uri).toBeTypeOf('string');
+    const postValidationEvidence = await readJsonArtifact(
+      client,
+      postValidationSummary!.details!.artifact!.uri!,
+    );
+    expect(postValidationEvidence.diagnosticCount).toBeGreaterThan(100);
+    expect(
+      (postValidationEvidence.diagnostics as Array<{ code: string }>).map(({ code }) => code),
+    ).not.toContain('FOCUS_TREE_NOT_FOUND');
+
+    const rolledBack = resultOf(
+      await client.callTool({
+        name: 'hoi4.transaction_rollback',
+        arguments: {
+          workspaceId: 'large_review',
+          transactionId: planned.transactionId,
+          expectedPlanHash: planned.planHash,
+        },
+      }),
+    );
+    expect(rolledBack).toMatchObject({
+      code: 'TRANSACTION_ROLLED_BACK',
+      data: { state: 'rolled_back' },
+    });
+    expect(await readFile(sourcePath)).toEqual(original);
+  }, 90_000);
+
   it('lints, renders, plans, applies, and rolls back a continuous focus palette edit', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-continuous-workflow-'));
     const mod = path.join(temporary, 'mod');
@@ -690,6 +892,31 @@ describe('MCP coding-agent workflows', () => {
       ({ id }) => id === 'workflow_continuous_palette',
     );
     expect(plan).toBeDefined();
+
+    const ambiguousRenderScale = await client.callTool({
+      name: 'hoi4.focus_render',
+      arguments: {
+        mode: 'continuous',
+        workspaceId: 'continuous',
+        relativePath,
+        reviewScale: 0.5,
+      },
+    });
+    expect(ambiguousRenderScale.isError).toBe(true);
+    expect(JSON.stringify(ambiguousRenderScale.content)).toContain('reviewScale');
+
+    const ambiguousReviewScale = await client.callTool({
+      name: 'hoi4.focus_plan_changes',
+      arguments: {
+        mode: 'continuous',
+        workspaceId: 'continuous',
+        relativePath,
+        plan,
+        reviewScale: 0.5,
+      },
+    });
+    expect(ambiguousReviewScale.isError).toBe(true);
+    expect(JSON.stringify(ambiguousReviewScale.content)).toContain('reviewScale');
 
     const linted = resultOf(
       await client.callTool({

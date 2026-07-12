@@ -82,7 +82,7 @@ Use the Focus Tree Workbench for large or badly structured trees: broken or ambi
 
 The safe repair sequence is:
 
-1. Call `hoi4.focus_scan`, `hoi4.focus_lint`, and `hoi4.focus_render` for the existing source.
+1. Call `hoi4.focus_scan`, `hoi4.focus_lint`, and `hoi4.focus_render` for the existing source. A very wide or deep national tree can pass `reviewScale` from `0.25` through `1.0`; retain that scale for transaction and final review artifacts.
 2. Read the complete imported plan resource and baseline HTML/SVG/PNG/JSON/source-map artifacts.
 3. Preserve prerequisites, exclusions, route locks, rewards, comments, raw passthrough, source locations, and provenance.
 4. Assign explicit `branchGroups`, `laneGroups`, `branchId`, and `laneId` metadata that reflect the intended route architecture.
@@ -98,7 +98,7 @@ The safe repair sequence is:
    }
    ```
 
-7. Submit the complete plan to `hoi4.focus_plan_changes`. This performs the deterministic proposed layout, source-preserving compilation, lint, before/proposed render, bitmap comparison, and dry-run transaction.
+7. Submit the complete plan to `hoi4.focus_plan_changes`. This performs the deterministic proposed layout, source-preserving compilation, lint, before/proposed render, bitmap comparison, and dry-run transaction. For a national tree whose default review canvas would exceed the bounded renderer, pass a uniform `reviewScale` from `0.25` through `1.0` (for example, `0.4` for a very large tree). It scales the complete visual rather than crowding node geometry, is applied identically to before and proposed artifacts, and does not change compiled focus coordinates. Optional `horizontalSpacing`, `verticalSpacing`, and `padding` controls remain available for intentional review-presentation changes.
 8. Follow every `hoi4.transaction_diff` cursor. Review the source map, changed fields, diagnostics, and visual artifacts.
 9. Apply only when the coding-agent host's write policy authorizes it, using the exact transaction ID and expected plan hash.
 10. Rescan, lint, and render the applied source. Use `hoi4.transaction_rollback` with the same hash if validation fails or the reviewed result is not acceptable.
@@ -120,7 +120,7 @@ A serious large-tree plan should define:
 - localisation keys, icon sprites, AI weights/strategies, filters, and links to decisions, events, ideas, leaders, helpers, and formables;
 - raw passthrough for unsupported or not-yet-modelled Clausewitz content.
 
-For a new source beneath `common/national_focus`, call `hoi4.focus_plan_changes` with `createIfMissing: true`. Use `plan:<tree-id>` as creation `provenance.sourcePath` and 64 zeroes for both initial provenance hashes; the server accepts that convention only when the target is actually missing. Creation refuses to append a different tree to an existing source file. The first write is still a dry-run transaction with transparent before evidence and complete proposed artifacts.
+For a new source beneath `common/national_focus`, call `hoi4.focus_plan_changes` with `createIfMissing: true`. Use `plan:<tree-id>` as creation `provenance.sourcePath` and 64 zeroes for both initial provenance hashes only when the target is missing. Existing targets normally use imported, hash-bound provenance; resolving intentional plan/source drift additionally requires explicit `authority: "plan"`. Creation refuses to append a different tree to an existing source file. The first write is still a dry-run transaction with transparent before evidence and complete proposed artifacts.
 
 ## Write autonomy and safety boundary
 

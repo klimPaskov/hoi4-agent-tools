@@ -2,7 +2,7 @@
 
 All notable changes are documented here. The project follows Semantic Versioning.
 
-## [0.1.7] - 2026-07-11
+## [0.1.7] - 2026-07-12
 
 ### Added
 
@@ -20,6 +20,9 @@ All notable changes are documented here. The project follows Semantic Versioning
 - Raised the bounded shared inventory to 500,000 symbols/references so a current game plus a feature-rich mod fits with safe headroom, and recorded the affected kind when a symbol ceiling drops a definition.
 - Reported unresolved focus sprites, localisation, and gameplay links as partial warnings only when an intentionally skipped source family could define that exact symbol kind; genuinely missing references remain missing diagnostics.
 - Made large-tree automatic layout reuse a coordinate occupancy index and incrementally cached connectors, bounded crossing optimization to a local 129-column window, and stopped evaluating a candidate as soon as it cannot beat the current crossing count. Complex 200+ focus plans now fit beneath the unchanged 500,000-operation safety ceiling instead of letting one unavoidable crossing exhaust the request.
+- Allowed national `focus_render` and `focus_plan_changes` calls to choose a bounded uniform viewport/raster scale; transaction plans also accept review-only spacing and padding. The server applies transaction settings to both before and proposed renders, so unusually wide or deep trees can retain meaningful baseline, diff, and final evidence without crowding node geometry, changing source-grid coordinates, or weakening artifact limits.
+- Modelled safe file-scoped focus-cost constants such as `cost = @focus_cost_standard` and preserved their exact source lexemes during layout-only updates. Unchanged numeric spellings and still-unmodelled cost tokens are also left byte-identical; deliberate supported cost edits remain targeted scalar replacements.
+- Kept large focus transactions below fixed manifest limits by storing complete proposed and post-write validation diagnostics as source-linked MCP resources. Transaction manifests retain blocker-first bounded summaries and explicit resource links while validation decisions still evaluate every diagnostic.
 
 ## [0.1.6] - 2026-07-11
 

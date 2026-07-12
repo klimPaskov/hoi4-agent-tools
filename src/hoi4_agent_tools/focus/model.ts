@@ -89,6 +89,11 @@ export interface FocusAiMetadata {
 export type FocusTerminalKind =
   'capstone' | 'convergence' | 'failure' | 'route_lock' | 'formable' | 'side_payoff';
 
+/** A source-safe Clausewitz file constant such as `@focus_cost_standard`. */
+export const FOCUS_COST_CONSTANT_PATTERN = /^@[A-Za-z_][A-Za-z0-9_]*$/u;
+export type FocusCostConstant = `@${string}`;
+export type FocusCost = number | FocusCostConstant;
+
 export interface FocusNodePlan {
   id: string;
   label: string;
@@ -112,7 +117,7 @@ export interface FocusNodePlan {
   ai: FocusAiMetadata;
   filters: string[];
   links: FocusReferenceLink[];
-  cost?: number;
+  cost?: FocusCost;
   completionReward?: RawClausewitzBlock;
   payoff?: string;
   terminalKind?: FocusTerminalKind;

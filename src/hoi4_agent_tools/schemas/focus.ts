@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { FOCUS_COST_CONSTANT_PATTERN } from '../focus/model.js';
 import { sourceLocationSchema } from './common.js';
 
 const rawBlockSchema = z
@@ -156,7 +157,9 @@ const focusNodeSchema = z
           .strict(),
       )
       .max(10_000),
-    cost: z.number().optional(),
+    cost: z
+      .union([z.number(), z.string().min(2).max(256).regex(FOCUS_COST_CONSTANT_PATTERN)])
+      .optional(),
     completionReward: rawBlockSchema.optional(),
     payoff: z.string().optional(),
     terminalKind: z

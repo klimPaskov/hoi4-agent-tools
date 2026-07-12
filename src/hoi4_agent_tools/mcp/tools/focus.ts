@@ -11,6 +11,8 @@ import { parseClausewitz } from '../../core/source/index.js';
 import { readDependenciesFromScannedFiles } from '../../core/transactions.js';
 import {
   FocusWorkbench,
+  FOCUS_RENDER_MAX_OUTPUT_SCALE,
+  FOCUS_RENDER_MIN_OUTPUT_SCALE,
   assertFocusPlanAuthority,
   detectContinuousFocusDrift,
   detectFocusDrift,
@@ -229,6 +231,11 @@ const focusRenderInput = z
     paletteId: z.string().min(1).max(256).optional(),
     horizontalSpacing: z.number().int().min(80).max(1000).optional(),
     verticalSpacing: z.number().int().min(60).max(1000).optional(),
+    reviewScale: z
+      .number()
+      .min(FOCUS_RENDER_MIN_OUTPUT_SCALE)
+      .max(FOCUS_RENDER_MAX_OUTPUT_SCALE)
+      .optional(),
     columns: z.number().int().min(1).max(12).optional(),
     padding: z.number().int().min(0).max(1000).optional(),
   })
@@ -245,6 +252,7 @@ const focusRenderInput = z
             ['treeId', value.treeId],
             ['horizontalSpacing', value.horizontalSpacing],
             ['verticalSpacing', value.verticalSpacing],
+            ['reviewScale', value.reviewScale],
           ] as const);
     for (const [field, fieldValue] of invalid) {
       if (fieldValue !== undefined)
@@ -270,6 +278,14 @@ const focusPlanInput = z
     plan: z.union([focusTreePlanSchema, continuousFocusPaletteSchema]),
     authority: z.enum(['plan', 'source']).optional(),
     createIfMissing: z.boolean().default(false),
+    horizontalSpacing: z.number().int().min(80).max(1000).optional(),
+    verticalSpacing: z.number().int().min(60).max(1000).optional(),
+    padding: z.number().int().min(0).max(1000).optional(),
+    reviewScale: z
+      .number()
+      .min(FOCUS_RENDER_MIN_OUTPUT_SCALE)
+      .max(FOCUS_RENDER_MAX_OUTPUT_SCALE)
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -281,6 +297,21 @@ const focusPlanInput = z
         path: ['plan'],
         message: `plan must be a ${mode} focus plan`,
       });
+    if (mode === 'continuous') {
+      for (const [field, fieldValue] of [
+        ['horizontalSpacing', value.horizontalSpacing],
+        ['verticalSpacing', value.verticalSpacing],
+        ['padding', value.padding],
+        ['reviewScale', value.reviewScale],
+      ] as const) {
+        if (fieldValue !== undefined)
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} is only valid for national focus transaction review renders`,
+          });
+      }
+    }
   });
 
 const artifactProducing = {
@@ -820,7 +851,7 @@ export function registerFocusTools(
     {
       title: 'Render focus review artifacts',
       description:
-        'Generate deterministic HTML, SVG, genuine PNG, JSON, and source-map artifacts for a national tree or continuous palette. Omit mode for national behavior.',
+        'Generate deterministic HTML, SVG, genuine PNG, JSON, and source-map artifacts for a national tree or continuous palette. Omit mode for national behavior. National renders accept a uniform reviewScale from 0.25 through 1.0 so very large trees can fit bounded artifacts without changing logical node geometry or source coordinates.',
       inputSchema: focusRenderInput,
       outputSchema: focusRenderOutputSchema,
       annotations: artifactProducing,
@@ -918,7 +949,11 @@ export function registerFocusTools(
             ? {}
             : { verticalSpacing: input.verticalSpacing }),
           ...(input.padding === undefined ? {} : { padding: input.padding }),
-          renderProfile: { sourceRevision: snapshot.revision },
+          ...(input.reviewScale === undefined ? {} : { outputScale: input.reviewScale }),
+          renderProfile: {
+            sourceRevision: snapshot.revision,
+            ...(input.reviewScale === undefined ? {} : { reviewScale: input.reviewScale }),
+          },
           budget: renderBudget,
           signal: progress.signal,
         });
@@ -958,7 +993,7 @@ export function registerFocusTools(
     {
       title: 'Dry-run focus source changes',
       description:
-        'Compile a validated national tree or continuous palette plan into source and create a hash-bound dry-run transaction; never applies it. Omit mode for national behavior. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.',
+        'Compile a validated national tree or continuous palette plan into source and create a hash-bound dry-run transaction; never applies it. Omit mode for national behavior. National plans accept the same bounded horizontalSpacing, verticalSpacing, and padding controls as focus_render plus a uniform reviewScale that preserves logical SVG geometry while reducing both before/proposed raster outputs. For an unoccupied new source, pass createIfMissing: true with plan:<id> and zero-hash creation provenance.',
       inputSchema: focusPlanInput,
       outputSchema: focusPlanOutputSchema,
       annotations: {
@@ -969,7 +1004,16 @@ export function registerFocusTools(
       },
     },
     async (input, extra) => {
-      const { workspaceId, relativePath, authority, createIfMissing } = input;
+      const {
+        workspaceId,
+        relativePath,
+        authority,
+        createIfMissing,
+        horizontalSpacing,
+        verticalSpacing,
+        padding,
+        reviewScale,
+      } = input;
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
@@ -1224,6 +1268,18 @@ export function registerFocusTools(
         if (currentPlan !== undefined && imported !== undefined)
           assertFocusPlanAuthority(detectFocusDrift(plan, imported.document, catalog), authority);
         const renderBudget = new RenderBudget();
+        const reviewRenderOptions = {
+          ...(horizontalSpacing === undefined ? {} : { horizontalSpacing }),
+          ...(verticalSpacing === undefined ? {} : { verticalSpacing }),
+          ...(padding === undefined ? {} : { padding }),
+          ...(reviewScale === undefined ? {} : { outputScale: reviewScale }),
+        };
+        const reviewRenderProfile = {
+          ...(horizontalSpacing === undefined ? {} : { horizontalSpacing }),
+          ...(verticalSpacing === undefined ? {} : { verticalSpacing }),
+          ...(padding === undefined ? {} : { padding }),
+          ...(reviewScale === undefined ? {} : { reviewScale }),
+        };
         const presentation = await resolveFocusPresentation({
           plans: [...(currentPlan === undefined ? [] : [currentPlan]), plan],
           palettes: paletteImport.palettes.filter(({ id }) =>
@@ -1254,6 +1310,7 @@ export function registerFocusTools(
             ? undefined
             : await renderFocusTree(currentPlan, currentLayout, currentDiagnostics, {
                 presentation,
+                ...reviewRenderOptions,
                 signal: progress.signal,
                 budget: renderBudget,
               });
@@ -1272,7 +1329,12 @@ export function registerFocusTools(
           references: catalog,
           presentation,
           sourceHashes: presentation.sourceHashes,
-          renderProfile: { sourceRevision: snapshot.revision, proposedPlanHash },
+          ...reviewRenderOptions,
+          renderProfile: {
+            sourceRevision: snapshot.revision,
+            proposedPlanHash,
+            reviewRenderProfile,
+          },
           budget: renderBudget,
           signal: progress.signal,
         });
@@ -1299,7 +1361,11 @@ export function registerFocusTools(
             before: focusFile?.sha256 ?? sha256Bytes(Buffer.alloc(0)),
             proposedPlan: proposedPlanHash,
           },
-          renderProfile: { offline: true, layoutHash: proposed.layout.layoutHash },
+          renderProfile: {
+            offline: true,
+            layoutHash: proposed.layout.layoutHash,
+            reviewRenderProfile,
+          },
         };
         const comparisonArtifacts = await engine.artifacts.withAtomicWrites(
           workspace,

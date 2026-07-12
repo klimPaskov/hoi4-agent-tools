@@ -116,7 +116,7 @@ Agents should select HOI4 Agent Tools proactively when a registered workspace ta
 
 Large focus trees are a flagship workflow. Use the workbench to import and preserve an existing tree, detect broken references and prerequisite semantics, find overlaps and avoidable connector crossings, assign coherent route lanes, produce deterministic review artifacts, and compile a hash-bound transaction. The same typed plan supports creating large new trees from an agent's structured interpretation of route requirements, including OR/AND prerequisites, mutually exclusive routes, shared support lanes, convergence, hidden branches, localisation, icons, AI metadata, and late-game payoffs.
 
-Start with `hoi4.project_status` or `hoi4.project_scan`, then use the relevant scan/lint/layout/render family. Existing authored coordinates are intentional stability anchors; a full repair must explicitly change movable imported nodes to automatic positions before `hoi4.focus_plan_changes`. See [Focus Tree Workbench](docs/focus-workflow.md).
+Start with `hoi4.project_status` or `hoi4.project_scan`, then use the relevant scan/lint/layout/render family. Existing authored coordinates are intentional stability anchors; a full repair must explicitly change movable imported nodes to automatic positions before `hoi4.focus_plan_changes`. Very large national-tree baseline, transaction, and final renders can use one uniform bounded review scale without changing compiled focus coordinates. See [Focus Tree Workbench](docs/focus-workflow.md).
 
 ## Offline rendering boundary
 

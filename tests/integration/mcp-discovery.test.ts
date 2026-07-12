@@ -131,6 +131,22 @@ describe('MCP discovery', () => {
     expect(focusLayout?.description).toContain('position.mode "auto"');
     const focusPlanChanges = tools.tools.find(({ name }) => name === 'hoi4.focus_plan_changes');
     expect(focusPlanChanges?.description).toContain('createIfMissing: true');
+    expect(focusPlanChanges?.description).toContain('horizontalSpacing');
+    const focusPlanProperties = (
+      focusPlanChanges?.inputSchema as
+        { properties?: Record<string, { minimum?: number; maximum?: number }> } | undefined
+    )?.properties;
+    expect(focusPlanProperties?.horizontalSpacing).toMatchObject({ minimum: 80, maximum: 1000 });
+    expect(focusPlanProperties?.verticalSpacing).toMatchObject({ minimum: 60, maximum: 1000 });
+    expect(focusPlanProperties?.padding).toMatchObject({ minimum: 0, maximum: 1000 });
+    expect(focusPlanProperties?.reviewScale).toMatchObject({ minimum: 0.25, maximum: 1 });
+    const focusRender = tools.tools.find(({ name }) => name === 'hoi4.focus_render');
+    expect(focusRender?.description).toContain('reviewScale');
+    const focusRenderProperties = (
+      focusRender?.inputSchema as
+        { properties?: Record<string, { minimum?: number; maximum?: number }> } | undefined
+    )?.properties;
+    expect(focusRenderProperties?.reviewScale).toMatchObject({ minimum: 0.25, maximum: 1 });
     for (const kind of ['moved_for_mutual_exclusion', 'moved_to_reduce_crossings']) {
       expect(JSON.stringify(focusLayout?.inputSchema)).toContain(kind);
       expect(JSON.stringify(focusLayout?.outputSchema)).toContain(kind);

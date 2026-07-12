@@ -36,10 +36,15 @@ import {
   type FocusTreePlan,
 } from './model.js';
 
+export const FOCUS_RENDER_MIN_OUTPUT_SCALE = 0.25;
+export const FOCUS_RENDER_MAX_OUTPUT_SCALE = 1;
+
 export interface FocusRenderOptions {
   horizontalSpacing?: number;
   verticalSpacing?: number;
   padding?: number;
+  /** Uniform raster-output scale; the logical SVG geometry and source coordinates are unchanged. */
+  outputScale?: number;
   iconDataUris?: Readonly<Record<string, string>>;
   presentation?: FocusPresentationResolution;
   sourceHashes?: Record<string, string>;
@@ -258,6 +263,22 @@ function svgDocument(
   const horizontal = options.horizontalSpacing ?? FOCUS_HORIZONTAL_GRID_PIXELS;
   const vertical = options.verticalSpacing ?? FOCUS_VERTICAL_GRID_PIXELS;
   const padding = options.padding ?? 80;
+  const outputScale = options.outputScale ?? 1;
+  if (
+    !Number.isFinite(outputScale) ||
+    outputScale < FOCUS_RENDER_MIN_OUTPUT_SCALE ||
+    outputScale > FOCUS_RENDER_MAX_OUTPUT_SCALE
+  ) {
+    throw new ServiceError(
+      'FOCUS_RENDER_SCALE_INVALID',
+      `Focus render output scale must be between ${FOCUS_RENDER_MIN_OUTPUT_SCALE} and ${FOCUS_RENDER_MAX_OUTPUT_SCALE}`,
+      {
+        outputScale: Number.isFinite(outputScale) ? outputScale : String(outputScale),
+        minimumOutputScale: FOCUS_RENDER_MIN_OUTPUT_SCALE,
+        maximumOutputScale: FOCUS_RENDER_MAX_OUTPUT_SCALE,
+      },
+    );
+  }
   const nodeWidth = FOCUS_NODE_WIDTH_PIXELS;
   const nodeHeight = FOCUS_NODE_HEIGHT_PIXELS;
   const nodes = [...layout.nodes].sort((left, right) => compareCodeUnits(left.id, right.id));
@@ -265,8 +286,10 @@ function svgDocument(
   const minimumY = Math.min(0, ...nodes.map(({ y }) => y));
   const maximumX = Math.max(0, ...nodes.map(({ x }) => x));
   const maximumY = Math.max(0, ...nodes.map(({ y }) => y));
-  const width = Math.max(320, (maximumX - minimumX) * horizontal + nodeWidth + padding * 2);
-  const height = Math.max(240, (maximumY - minimumY) * vertical + nodeHeight + padding * 2);
+  const logicalWidth = Math.max(320, (maximumX - minimumX) * horizontal + nodeWidth + padding * 2);
+  const logicalHeight = Math.max(240, (maximumY - minimumY) * vertical + nodeHeight + padding * 2);
+  const width = Math.max(1, Math.round(logicalWidth * outputScale));
+  const height = Math.max(1, Math.round(logicalHeight * outputScale));
   (options.budget ?? new RenderBudget()).reserve(width, height, 'focus tree PNG');
   const pixel = new Map(
     nodes.map((node) => [
@@ -306,7 +329,7 @@ function svgDocument(
     .sort((left, right) => compareCodeUnits(left.join('\0'), right.join('\0')));
 
   const parts: string[] = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title description">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${logicalWidth} ${logicalHeight}" role="img" aria-labelledby="title description">`,
     `<title id="title">${escapeXml(plan.id)} focus tree</title>`,
     `<desc id="description">Offline HOI4 Agent Tools representation. ${plan.focuses.length} focuses.</desc>`,
     '<defs>',

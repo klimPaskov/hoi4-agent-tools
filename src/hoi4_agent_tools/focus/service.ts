@@ -7,13 +7,16 @@ import {
 } from '../core/artifacts.js';
 import type { ArtifactLink } from '../core/result.js';
 import { canonicalJson, deterministicId, sha256Bytes } from '../core/canonical.js';
+import type { Diagnostic } from '../core/diagnostics.js';
 import type { SymbolIndex } from '../core/index.js';
 import { ServiceError } from '../core/result.js';
 import { parseClausewitz, type SourceDocument } from '../core/source/index.js';
+import { TRANSACTION_MAX_DIAGNOSTICS } from '../core/transaction-limits.js';
 import type {
   TransactionManager,
   TransactionManifest,
   TransactionReadDependency,
+  TransactionValidation,
 } from '../core/transactions.js';
 import type { WorkspaceResolver } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -118,6 +121,40 @@ export interface ContinuousFocusPlanChangesResult {
 
 function hardDiagnostic(diagnostic: { severity: string }): boolean {
   return diagnostic.severity === 'error' || diagnostic.severity === 'blocker';
+}
+
+const FOCUS_TRANSACTION_PLAN_DIAGNOSTIC_BUDGET = Math.floor(TRANSACTION_MAX_DIAGNOSTICS / 2);
+
+function boundedFocusTransactionDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  evidenceArtifactName: string,
+): Diagnostic[] {
+  if (diagnostics.length <= FOCUS_TRANSACTION_PLAN_DIAGNOSTIC_BUDGET) return [...diagnostics];
+  const retainedLimit = FOCUS_TRANSACTION_PLAN_DIAGNOSTIC_BUDGET - 1;
+  const hard = diagnostics.filter(hardDiagnostic);
+  const retainedHard = hard.slice(0, retainedLimit);
+  const retainedHardSet = new Set(retainedHard);
+  const retainedSoft = diagnostics
+    .filter((diagnostic) => !hardDiagnostic(diagnostic) && !retainedHardSet.has(diagnostic))
+    .slice(0, retainedLimit - retainedHard.length);
+  const omittedHard = hard.length - retainedHard.length;
+  return [
+    ...retainedHard,
+    ...retainedSoft,
+    {
+      code: 'FOCUS_VALIDATION_DIAGNOSTICS_IN_RESOURCE',
+      severity: omittedHard > 0 ? 'blocker' : 'warning',
+      category: 'transaction',
+      message: `Complete proposed-focus validation contains ${diagnostics.length} diagnostics and is stored in ${evidenceArtifactName}`,
+      details: {
+        total: diagnostics.length,
+        returned: FOCUS_TRANSACTION_PLAN_DIAGNOSTIC_BUDGET,
+        omitted: diagnostics.length - retainedLimit,
+        omittedHard,
+        evidenceArtifactName,
+      },
+    },
+  ];
 }
 
 function normalizedSourcePath(value: string): string {
@@ -428,7 +465,106 @@ export class FocusWorkbench {
         `Generated source map covers ${sourceMap.mappings.length} of ${input.plan.focuses.length} focuses`,
       );
     }
+    const lintOptions: FocusLintOptions = {
+      layout,
+      ...(input.index === undefined ? {} : { index: input.index }),
+      ...(input.references === undefined ? {} : { references: input.references }),
+    };
+    const validateProposedFocus = async (
+      bytes: Buffer | null,
+      proposedSidecarBytes: Buffer | null | undefined,
+      signal?: AbortSignal,
+    ): Promise<TransactionValidation> => {
+      signal?.throwIfAborted();
+      if (bytes === null) {
+        return {
+          diagnostics: [
+            {
+              code: 'FOCUS_PROPOSED_SOURCE_MISSING',
+              severity: 'blocker',
+              category: 'transaction',
+              message: `Proposed source is missing ${input.relativePath}`,
+              operationId,
+            },
+          ],
+          checks: [
+            { id: 'focus-source-present', passed: false, message: 'Proposed source is present' },
+          ],
+        };
+      }
+      const validationDocument = parseClausewitz(bytes, `mod:${input.relativePath}`);
+      const imported = importFocusTrees(
+        validationDocument,
+        input.references === undefined ? {} : { references: input.references },
+      );
+      let proposedPlan = imported.plans.find(({ id }) => id === input.plan.id);
+      const diagnostics = [...imported.diagnostics];
+      if (
+        proposedPlan !== undefined &&
+        proposedSidecarBytes !== undefined &&
+        proposedSidecarBytes !== null
+      ) {
+        const parsedSidecar = parseFocusPlanningSidecar(proposedSidecarBytes);
+        const enriched = enrichFocusPlanFromSidecar(proposedPlan, parsedSidecar);
+        diagnostics.push(...enriched.diagnostics);
+        proposedPlan = enriched.plan;
+      }
+      if (proposedPlan !== undefined) {
+        const proposedLayout = await layoutFocusTreeAsync(
+          proposedPlan,
+          signal === undefined ? {} : { signal },
+        );
+        diagnostics.push(
+          ...lintFocusTree(proposedPlan, {
+            ...lintOptions,
+            layout: proposedLayout,
+          }),
+        );
+      } else {
+        diagnostics.push({
+          code: 'FOCUS_PROPOSED_TREE_MISSING',
+          severity: 'blocker',
+          category: 'transaction',
+          message: `Compiled source does not contain focus tree ${input.plan.id}`,
+          operationId,
+        });
+      }
+      const syntaxPassed = !validationDocument.diagnostics.some(hardDiagnostic);
+      const lintPassed = !diagnostics.some(hardDiagnostic);
+      return {
+        diagnostics,
+        checks: [
+          {
+            id: 'focus-source-syntax',
+            passed: syntaxPassed,
+            message: 'Compiled focus source parses safely',
+          },
+          {
+            id: 'focus-tree-present',
+            passed: proposedPlan !== undefined,
+            message: 'Compiled source contains the requested focus tree',
+          },
+          {
+            id: 'focus-lint',
+            passed: lintPassed,
+            message: 'Compiled focus tree has no blocking lint findings',
+          },
+          {
+            id: 'focus-source-map-complete',
+            passed: sourceMap.mappings.length === input.plan.focuses.length,
+            message: 'Every proposed focus block maps to its planning node',
+          },
+          {
+            id: 'focus-planning-sidecar-present',
+            passed: proposedSidecarBytes !== undefined && proposedSidecarBytes !== null,
+            message: 'Non-Clausewitz planning metadata is persisted beside the source',
+          },
+        ],
+      };
+    };
+    const completeValidation = await validateProposedFocus(after, sidecarContent, input.signal);
     const stem = input.plan.id.replace(/[^A-Za-z0-9._-]/gu, '_').slice(0, 80) || 'focus-tree';
+    const validationArtifactName = `${stem}.focus.proposed-validation.json`;
     const artifactProvenance = {
       toolVersion: PACKAGE_VERSION,
       schemaVersion: 'focus-plan.v1',
@@ -450,6 +586,26 @@ export class FocusWorkbench {
         description:
           'Source-hash-bound non-Clausewitz planning metadata proposed with the source edit',
       },
+      {
+        name: validationArtifactName,
+        mimeType: 'application/json',
+        content: `${canonicalJson({
+          schemaVersion: 1,
+          treeId: input.plan.id,
+          relativePath: input.relativePath,
+          sourceHashes: { proposed: afterHash, sidecar: sha256Bytes(sidecarContent) },
+          layoutHash: layout.layoutHash,
+          passed:
+            !completeValidation.diagnostics.some(hardDiagnostic) &&
+            completeValidation.checks.every(({ passed }) => passed),
+          diagnosticCount: completeValidation.diagnostics.length,
+          checks: completeValidation.checks,
+          diagnostics: completeValidation.diagnostics,
+        })}\n`,
+        provenance: { ...artifactProvenance, kind: 'focus-proposed-validation' },
+        description:
+          'Complete source-linked validation diagnostics for the compiled focus transaction',
+      },
     ];
     const proposedArtifacts = await this.artifactStore.withAtomicWrites(
       workspace,
@@ -457,11 +613,6 @@ export class FocusWorkbench {
       (stored) => Promise.resolve([...stored]),
       input.signal,
     );
-    const lintOptions: FocusLintOptions = {
-      layout,
-      ...(input.index === undefined ? {} : { index: input.index }),
-      ...(input.references === undefined ? {} : { references: input.references }),
-    };
     const transaction = await this.transactions.plan({
       workspaceId: input.workspaceId,
       ...(input.principal === undefined ? {} : { principal: input.principal }),
@@ -503,91 +654,14 @@ export class FocusWorkbench {
         signal?.throwIfAborted();
         const proposedSource = proposed.get(input.relativePath);
         const bytes = proposedSource === undefined ? after : proposedSource;
-        if (bytes === null) {
-          return {
-            diagnostics: [
-              {
-                code: 'FOCUS_PROPOSED_SOURCE_MISSING',
-                severity: 'blocker',
-                category: 'transaction',
-                message: `Proposed source is missing ${input.relativePath}`,
-                operationId,
-              },
-            ],
-            checks: [
-              { id: 'focus-source-present', passed: false, message: 'Proposed source is present' },
-            ],
-          };
-        }
-        const proposedDocument = parseClausewitz(bytes, `mod:${input.relativePath}`);
-        const imported = importFocusTrees(
-          proposedDocument,
-          input.references === undefined ? {} : { references: input.references },
-        );
         const proposedSidecarBytes = proposed.get(sidecarPath);
-        let proposedPlan = imported.plans.find(({ id }) => id === input.plan.id);
-        const diagnostics = [...imported.diagnostics];
-        if (
-          proposedPlan !== undefined &&
-          proposedSidecarBytes !== undefined &&
-          proposedSidecarBytes !== null
-        ) {
-          const parsedSidecar = parseFocusPlanningSidecar(proposedSidecarBytes);
-          const enriched = enrichFocusPlanFromSidecar(proposedPlan, parsedSidecar);
-          diagnostics.push(...enriched.diagnostics);
-          proposedPlan = enriched.plan;
-        }
-        if (proposedPlan !== undefined) {
-          const proposedLayout = await layoutFocusTreeAsync(
-            proposedPlan,
-            signal === undefined ? {} : { signal },
-          );
-          diagnostics.push(
-            ...lintFocusTree(proposedPlan, {
-              ...lintOptions,
-              layout: proposedLayout,
-            }),
-          );
-        } else {
-          diagnostics.push({
-            code: 'FOCUS_PROPOSED_TREE_MISSING',
-            severity: 'blocker',
-            category: 'transaction',
-            message: `Compiled source does not contain focus tree ${input.plan.id}`,
-            operationId,
-          });
-        }
-        const syntaxPassed = !proposedDocument.diagnostics.some(hardDiagnostic);
-        const lintPassed = !diagnostics.some(hardDiagnostic);
+        const validation = await validateProposedFocus(bytes, proposedSidecarBytes, signal);
         return {
-          diagnostics,
-          checks: [
-            {
-              id: 'focus-source-syntax',
-              passed: syntaxPassed,
-              message: 'Compiled focus source parses safely',
-            },
-            {
-              id: 'focus-tree-present',
-              passed: proposedPlan !== undefined,
-              message: 'Compiled source contains the requested focus tree',
-            },
-            {
-              id: 'focus-lint',
-              passed: lintPassed,
-              message: 'Compiled focus tree has no blocking lint findings',
-            },
-            {
-              id: 'focus-source-map-complete',
-              passed: sourceMap.mappings.length === input.plan.focuses.length,
-              message: 'Every proposed focus block maps to its planning node',
-            },
-            {
-              id: 'focus-planning-sidecar-present',
-              passed: proposedSidecarBytes !== undefined && proposedSidecarBytes !== null,
-              message: 'Non-Clausewitz planning metadata is persisted beside the source',
-            },
-          ],
+          ...validation,
+          diagnostics: boundedFocusTransactionDiagnostics(
+            validation.diagnostics,
+            validationArtifactName,
+          ),
         };
       },
       ...(input.signal === undefined ? {} : { signal: input.signal }),

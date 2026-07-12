@@ -40,6 +40,7 @@ import {
   renderContinuousFocusPalette,
   storeFocusRenderArtifacts,
   updateContinuousFocusPaletteSource,
+  updateFocusTreeSource,
   type FocusNodePlan,
   type FocusLayoutResult,
   type FocusPosition,
@@ -362,6 +363,87 @@ describe('Focus Tree Workbench import and drift', () => {
     expect(compiled).toContain('custom_tree_field = { preserve = exactly }');
     expect(compiled).toContain('custom_focus_field = { preserve = this_too }');
     expect(compiled).not.toMatch(/^\s*(?:hidden|crisis)\s*=/mu);
+  });
+
+  it('preserves symbolic, numeric-lexeme, and unmodelled costs across targeted updates', () => {
+    const source = [
+      '@symbolic_focus_cost = 6',
+      'focus_tree = {',
+      '\tid = cost_round_trip',
+      '\tfocus = {',
+      '\t\tid = symbolic',
+      '\t\tx = 0',
+      '\t\ty = 0',
+      '\t\tcost = @symbolic_focus_cost # preserve symbolic lexeme',
+      '\t}',
+      '\tfocus = {',
+      '\t\tid = numeric',
+      '\t\tx = 2',
+      '\t\ty = 0',
+      '\t\tcost = 5.000 # preserve numeric lexeme',
+      '\t}',
+      '\tfocus = {',
+      '\t\tid = unmodelled',
+      '\t\tx = 4',
+      '\t\ty = 0',
+      '\t\tcost = constant:legacy_cost # preserve unmodelled source',
+      '\t}',
+      '}',
+      '',
+    ].join('\n');
+    const document = parseClausewitz(Buffer.from(source), 'mod:cost-round-trip.txt');
+    const current = importFocusTrees(document).plans[0]!;
+    expect(current.focuses.map(({ cost }) => cost)).toEqual(['@symbolic_focus_cost', 5, undefined]);
+    expect(focusTreePlanSchema.safeParse(current).success).toBe(true);
+
+    const moved = structuredClone(current);
+    for (const focus of moved.focuses) {
+      if (focus.position.mode !== 'fixed') throw new Error('Expected fixed fixture position');
+      focus.position.x += 1;
+      focus.position.y += 1;
+    }
+    const movedSource = updateFocusTreeSource(document, current, moved, layoutFocusTree(moved));
+    const expectedMoved = source
+      .replace('\t\tx = 0\n\t\ty = 0', '\t\tx = 1\n\t\ty = 1')
+      .replace('\t\tx = 2\n\t\ty = 0', '\t\tx = 3\n\t\ty = 1')
+      .replace('\t\tx = 4\n\t\ty = 0', '\t\tx = 5\n\t\ty = 1');
+    expect(movedSource.equals(Buffer.from(expectedMoved))).toBe(true);
+    expect(movedSource.toString('utf8')).toContain('cost = @symbolic_focus_cost #');
+    expect(movedSource.toString('utf8')).toContain('cost = 5.000 #');
+    expect(movedSource.toString('utf8')).toContain('cost = constant:legacy_cost #');
+
+    const changed = structuredClone(current);
+    changed.focuses.find(({ id }) => id === 'symbolic')!.cost = 7;
+    changed.focuses.find(({ id }) => id === 'numeric')!.cost = '@replacement_focus_cost';
+    const changedSource = updateFocusTreeSource(
+      document,
+      current,
+      changed,
+      layoutFocusTree(changed),
+    );
+    expect(changedSource.toString('utf8')).toContain('cost = 7 # preserve symbolic lexeme');
+    expect(changedSource.toString('utf8')).toContain(
+      'cost = @replacement_focus_cost # preserve numeric lexeme',
+    );
+    expect(changedSource.toString('utf8')).toContain(
+      'cost = constant:legacy_cost # preserve unmodelled source',
+    );
+    const changedPlan = importFocusTrees(parseClausewitz(changedSource, 'mod:cost-round-trip.txt'))
+      .plans[0]!;
+    expect(changedPlan.focuses.map(({ cost }) => cost)).toEqual([
+      7,
+      '@replacement_focus_cost',
+      undefined,
+    ]);
+
+    const unsafe = structuredClone(current) as FocusTreePlan & {
+      focuses: Array<FocusNodePlan & { cost?: number | string }>;
+    };
+    unsafe.focuses[0]!.cost = '@unsafe-name';
+    expect(focusTreePlanSchema.safeParse(unsafe).success).toBe(false);
+    expect(() => compileFocusTree(unsafe as FocusTreePlan, layoutFocusTree(unsafe))).toThrowError(
+      expect.objectContaining({ code: 'FOCUS_COST_INVALID' }),
+    );
   });
 
   it('finds nested scripted effects without treating controls or scopes as helpers', () => {
@@ -1856,6 +1938,19 @@ describe('Focus Tree Workbench rendering', () => {
     expect(observedPartialWrite).toBe(true);
     expect(existsSync(firstTarget)).toBe(false);
     await expect(store.list(workspace)).resolves.toEqual([]);
+  });
+
+  it('uniformly scales focus raster output without changing the logical SVG viewport', async () => {
+    const root = focusNode('root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const plan = focusPlan([root]);
+    const layout = layoutFocusTree(plan);
+    const scaled = await renderFocusTree(plan, layout, [], { outputScale: 0.25 });
+    expect(scaled).toMatchObject({ width: 80, height: 60 });
+    expect(scaled.svg).toContain('width="80" height="60" viewBox="0 0 320 240"');
+    await expect(renderFocusTree(plan, layout, [], { outputScale: 0.249 })).rejects.toMatchObject({
+      code: 'FOCUS_RENDER_SCALE_INVALID',
+      details: expect.objectContaining({ minimumOutputScale: 0.25, maximumOutputScale: 1 }),
+    });
   });
 
   it('blocks oversized focus canvases and hostile embedded icon rasters before Sharp', async () => {

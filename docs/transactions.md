@@ -30,6 +30,12 @@ validation record.
 
 Focus plans include both the edited Clausewitz source and its adjacent `.focus-plan.json` design sidecar in one transaction. The manifest also retains the proposed generated-source map and sidecar artifacts through apply and rollback so each generated focus range remains traceable to its planning/source node.
 
+Complete focus proposal validation is a linked JSON resource. If proposed or post-write diagnostics
+exceed the fixed manifest allowance, validation still evaluates the complete set, stores it as a
+source-linked MCP resource, and retains a blocker-first bounded manifest summary. The plan phase
+reserves diagnostic capacity for the independent post-write phase, so a warning-heavy large tree
+does not weaken limits or make a valid reviewed transaction impossible to apply.
+
 ## Apply
 
 Call `hoi4.transaction_apply` separately with `workspaceId`, `transactionId`, and the exact 64-character `expectedPlanHash`. The server rejects a different principal/workspace, changed roots, failed dry run, expiry, reused state, or any changed before-hash.

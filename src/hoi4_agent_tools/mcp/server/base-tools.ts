@@ -7,6 +7,7 @@ import type { Diagnostic } from '../../core/diagnostics.js';
 import type { CoreEngine, WorkspaceStatus } from '../../core/engine.js';
 import { emptyServiceResult, ServiceError } from '../../core/result.js';
 import { parseClausewitz } from '../../core/source/index.js';
+import { TRANSACTION_MAX_DIAGNOSTICS } from '../../core/transaction-limits.js';
 import type { TransactionManifest } from '../../core/transactions.js';
 import {
   importContinuousFocusPalettes,
@@ -357,7 +358,9 @@ async function postValidateTransaction(
     const catalog = focusReferences(snapshot);
     for (const file of snapshot.files.filter(
       ({ shadowedBy, relativePath }) =>
-        shadowedBy === undefined && changed.has(sourcePathComparisonKey(relativePath)),
+        shadowedBy === undefined &&
+        relativePath.toLowerCase().endsWith('.txt') &&
+        changed.has(sourcePathComparisonKey(relativePath)),
     )) {
       const document = parseClausewitz(file.bytes, file.displayPath);
       const imported = importFocusTrees(document, { references: catalog });
@@ -386,7 +389,9 @@ async function postValidateTransaction(
   } else if (transaction.operationKind === 'continuous-focus-plan-changes') {
     for (const file of snapshot.files.filter(
       ({ shadowedBy, relativePath }) =>
-        shadowedBy === undefined && changed.has(sourcePathComparisonKey(relativePath)),
+        shadowedBy === undefined &&
+        relativePath.toLowerCase().endsWith('.txt') &&
+        changed.has(sourcePathComparisonKey(relativePath)),
     )) {
       const document = parseClausewitz(file.bytes, file.displayPath);
       const imported = importContinuousFocusPalettes(document);
@@ -451,6 +456,81 @@ async function postValidateTransaction(
       ? 'Changed source reparsed and reindexed successfully'
       : 'Changed source has blocking post-write diagnostics',
   });
+  const availableDiagnostics = Math.max(
+    0,
+    TRANSACTION_MAX_DIAGNOSTICS - transaction.diagnostics.length,
+  );
+  if (diagnostics.length > availableDiagnostics) {
+    const workspace = engine.resolver.get(transaction.workspaceId, principal);
+    const sourceEvidence = boundedSourceHashEvidence(
+      Object.fromEntries(
+        transaction.files.flatMap(({ relativePath, afterSha256 }) =>
+          afterSha256 === null ? [] : [[relativePath, afterSha256]],
+        ),
+      ),
+    );
+    const artifact = await engine.artifacts.putChunked(
+      workspace,
+      `${transaction.transactionId}.post-validation.json`,
+      'application/json',
+      `${canonicalJson({
+        schemaVersion: 1,
+        transactionId: transaction.transactionId,
+        planHash: transaction.planHash,
+        operationKind: transaction.operationKind,
+        diagnosticCount: diagnostics.length,
+        checks,
+        diagnostics,
+      })}\n`,
+      {
+        kind: 'transaction-post-validation',
+        toolVersion: PACKAGE_VERSION,
+        schemaVersion: 'transaction-post-validation.v1',
+        sourceHashes: sourceEvidence.sourceHashes,
+        metadata: { sourceHashInventory: sourceEvidence.inventory },
+      },
+      'Complete source-linked diagnostics from post-write transaction validation',
+      signal,
+    );
+    const retainedLimit = Math.max(0, availableDiagnostics - 1);
+    const hard = diagnostics.filter(
+      ({ severity }) => severity === 'error' || severity === 'blocker',
+    );
+    const retainedHard = hard.slice(0, retainedLimit);
+    const retainedSoft = diagnostics
+      .filter(({ severity }) => severity !== 'error' && severity !== 'blocker')
+      .slice(0, retainedLimit - retainedHard.length);
+    const omittedHard = hard.length - retainedHard.length;
+    const artifactLink = publicArtifactLink(artifact);
+    checks.push({
+      id: 'post-write-diagnostics-resource',
+      passed: omittedHard === 0,
+      message: `Complete post-write diagnostics are stored at ${artifactLink.uri}`,
+    });
+    return {
+      diagnostics:
+        availableDiagnostics === 0
+          ? []
+          : [
+              ...retainedHard,
+              ...retainedSoft,
+              {
+                code: 'POST_VALIDATION_DIAGNOSTICS_IN_RESOURCE',
+                severity: omittedHard > 0 ? 'blocker' : 'warning',
+                category: 'transaction',
+                message: `Complete post-write validation contains ${diagnostics.length} diagnostics and is stored as an MCP resource`,
+                details: {
+                  total: diagnostics.length,
+                  returned: availableDiagnostics,
+                  omitted: diagnostics.length - retainedLimit,
+                  omittedHard,
+                  artifact: artifactLink,
+                },
+              },
+            ],
+      checks,
+    };
+  }
   return { diagnostics, checks };
 }
 
