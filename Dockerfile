@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS build
+FROM node:26-bookworm-slim@sha256:e999d087492c7227c85adc70574cf9d3cce774c3e6d7b8dfe473ee6b142c8f2c AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ COPY docs/README.md docs/setup.md docs/focus.md docs/gui.md docs/map.md docs/htt
 COPY server.json README.md LICENSE SECURITY.md CHANGELOG.md ./
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime
+FROM node:26-bookworm-slim@sha256:e999d087492c7227c85adc70574cf9d3cce774c3e6d7b8dfe473ee6b142c8f2c AS runtime
 LABEL org.opencontainers.image.source="https://github.com/klimPaskov/hoi4-agent-tools"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL io.modelcontextprotocol.server.name="io.github.klimPaskov/hoi4-agent-tools"
