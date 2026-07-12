@@ -17,6 +17,7 @@
 - [Known limitations](limitations.md)
 - [Third-party notices](third-party-notices.md)
 - [Troubleshooting](troubleshooting.md)
+- [0.2.0 autonomous release completion report](autonomous-release-report.md)
 - [0.1.7 completion report](completion-report.md)
 - [Release and MCP Registry publication](release.md)
 - [HOI4 research ledger](research/source-ledger.md)

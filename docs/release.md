@@ -91,11 +91,15 @@ release attempt. The retained history is:
   focus-tree review scaling, symbolic focus-cost preservation, and complete resource-backed focus
   validation. Its exact public evidence is retained in
   [the 0.1.7 completion report](completion-report.md).
+- `v0.2.0` completed the ordered workflow with one-call autonomous focus, GUI, and map rewrites,
+  automatic failure recovery, autonomous tool discovery, and persistent agent-client setup. Its
+  exact public evidence is retained in
+  [the 0.2.0 completion report](autonomous-release-report.md).
 
-`0.2.0` is the current strictly monotonic release candidate. The normal stable-version gate treats
-public `0.1.7` as immutable history; only a strictly newer version may be published. Rerunning or fixing a
-release never authorizes rewriting a tag, package version, image tag, release asset, or Registry
-version.
+`0.2.0` is the current stable release. The normal stable-version gate treats it and every earlier
+public version as immutable history; only a strictly newer version may be published. Rerunning or
+fixing a release never authorizes rewriting a tag, package version, image tag, release asset, or
+Registry version.
 
 ## Required pre-tag immutability check
 
