@@ -59,7 +59,7 @@ stable package is published, the normal strict stable-version monotonic and exac
 ## Immutable fix-forward history
 
 Stable tags and public package versions are never moved, deleted, or overwritten after a failed
-release attempt. The retained history before the `0.1.7` candidate is:
+release attempt. The retained history is:
 
 - `v0.1.0` stopped during prepublication validation, before any public writer ran;
 - `v0.1.1` stopped before npm accepted bytes because npm interpreted a slash-containing relative
@@ -86,14 +86,16 @@ release attempt. The retained history before the `0.1.7` candidate is:
   the pinned official schema defines false as that field's default and every public object passed
   its preceding publication gate. All public objects remain unchanged as audit evidence.
 - `v0.1.6` completed the ordered workflow and independent verification across npm, GHCR, the
-  immutable GitHub Release, and the official MCP Registry. Its exact public evidence is retained in
-  [the 0.1.6 completion report](completion-report.md).
+  immutable GitHub Release, and the official MCP Registry.
+- `v0.1.7` completed the same ordered workflow with agent-first persistent setup guidance, large
+  focus-tree review scaling, symbolic focus-cost preservation, and complete resource-backed focus
+  validation. Its exact public evidence is retained in
+  [the 0.1.7 completion report](completion-report.md).
 
-`0.1.7` is the next strictly monotonic candidate. It adds agent-first discovery/setup guidance and
-corrects shared event indexing and partial-inventory focus diagnostics. The normal stable-version
-gate treats the public `0.1.6` package as immutable history and permits only a strictly newer
-version. Rerunning or fixing a release never authorizes rewriting a tag, package version, image
-tag, release asset, or Registry version.
+`0.1.8` is the next strictly monotonic candidate. The normal stable-version gate treats public
+`0.1.7` as immutable history; only a strictly newer version may be published. Rerunning or fixing a
+release never authorizes rewriting a tag, package version, image tag, release asset, or Registry
+version.
 
 ## Required pre-tag immutability check
 
