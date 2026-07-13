@@ -1,0 +1,443 @@
+# Project-owned synthetic Event Chain Viewer acceptance fixture.
+# Generated deterministically; event triggering mode is explicit.
+add_namespace = synthetic_delta
+
+country_event = {
+	id = synthetic_delta.1
+	title = synthetic_delta.1.t
+	desc = synthetic_delta.1.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.1.a
+		country_event = { id = synthetic_delta.2 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.2
+	title = synthetic_delta.2.t
+	desc = synthetic_delta.2.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.2.a
+		country_event = { id = synthetic_delta.3 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.3
+	title = synthetic_delta.3.t
+	desc = synthetic_delta.3.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.3.a
+		country_event = { id = synthetic_delta.4 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.4
+	title = synthetic_delta.4.t
+	desc = synthetic_delta.4.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.4.a
+		country_event = { id = synthetic_delta.5 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.5
+	title = synthetic_delta.5.t
+	desc = synthetic_delta.5.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.5.a
+		country_event = { id = synthetic_delta.6 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.6
+	title = synthetic_delta.6.t
+	desc = synthetic_delta.6.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.6.a
+		country_event = { id = synthetic_delta.7 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.7
+	title = synthetic_delta.7.t
+	desc = synthetic_delta.7.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.7.a
+		country_event = { id = synthetic_delta.8 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.8
+	title = synthetic_delta.8.t
+	desc = synthetic_delta.8.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.8.a
+		country_event = { id = synthetic_delta.9 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.9
+	title = synthetic_delta.9.t
+	desc = synthetic_delta.9.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.9.a
+		country_event = { id = synthetic_delta.10 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.10
+	title = synthetic_delta.10.t
+	desc = synthetic_delta.10.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.10.a
+		country_event = { id = synthetic_delta.11 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.11
+	title = synthetic_delta.11.t
+	desc = synthetic_delta.11.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.11.a
+		country_event = { id = synthetic_delta.12 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.12
+	title = synthetic_delta.12.t
+	desc = synthetic_delta.12.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.12.a
+		country_event = { id = synthetic_delta.13 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.13
+	title = synthetic_delta.13.t
+	desc = synthetic_delta.13.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.13.a
+		country_event = { id = synthetic_delta.14 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.14
+	title = synthetic_delta.14.t
+	desc = synthetic_delta.14.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.14.a
+		country_event = { id = synthetic_delta.15 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.15
+	title = synthetic_delta.15.t
+	desc = synthetic_delta.15.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.15.a
+		country_event = { id = synthetic_delta.16 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.16
+	title = synthetic_delta.16.t
+	desc = synthetic_delta.16.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.16.a
+		country_event = { id = synthetic_delta.17 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.17
+	title = synthetic_delta.17.t
+	desc = synthetic_delta.17.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.17.a
+		country_event = { id = synthetic_delta.18 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.18
+	title = synthetic_delta.18.t
+	desc = synthetic_delta.18.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.18.a
+		country_event = { id = synthetic_delta.19 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.19
+	title = synthetic_delta.19.t
+	desc = synthetic_delta.19.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.19.a
+		country_event = { id = synthetic_delta.20 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.20
+	title = synthetic_delta.20.t
+	desc = synthetic_delta.20.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.20.a
+		country_event = { id = synthetic_delta.21 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.21
+	title = synthetic_delta.21.t
+	desc = synthetic_delta.21.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.21.a
+		country_event = { id = synthetic_delta.22 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.22
+	title = synthetic_delta.22.t
+	desc = synthetic_delta.22.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.22.a
+		country_event = { id = synthetic_delta.23 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.23
+	title = synthetic_delta.23.t
+	desc = synthetic_delta.23.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.23.a
+		country_event = { id = synthetic_delta.24 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.24
+	title = synthetic_delta.24.t
+	desc = synthetic_delta.24.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.24.a
+		country_event = { id = synthetic_delta.25 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.25
+	title = synthetic_delta.25.t
+	desc = synthetic_delta.25.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.25.a
+		country_event = { id = synthetic_delta.26 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.26
+	title = synthetic_delta.26.t
+	desc = synthetic_delta.26.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.26.a
+		country_event = { id = synthetic_delta.27 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.27
+	title = synthetic_delta.27.t
+	desc = synthetic_delta.27.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.27.a
+		country_event = { id = synthetic_delta.28 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.28
+	title = synthetic_delta.28.t
+	desc = synthetic_delta.28.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.28.a
+		country_event = { id = synthetic_delta.29 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.29
+	title = synthetic_delta.29.t
+	desc = synthetic_delta.29.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.29.a
+		country_event = { id = synthetic_delta.30 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.30
+	title = synthetic_delta.30.t
+	desc = synthetic_delta.30.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.30.a
+		country_event = { id = synthetic_delta.31 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.31
+	title = synthetic_delta.31.t
+	desc = synthetic_delta.31.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.31.a
+		country_event = { id = synthetic_delta.32 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.32
+	title = synthetic_delta.32.t
+	desc = synthetic_delta.32.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.32.a
+		country_event = { id = synthetic_delta.33 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.33
+	title = synthetic_delta.33.t
+	desc = synthetic_delta.33.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.33.a
+		country_event = { id = synthetic_delta.34 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.34
+	title = synthetic_delta.34.t
+	desc = synthetic_delta.34.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.34.a
+		country_event = { id = synthetic_delta.35 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.35
+	title = synthetic_delta.35.t
+	desc = synthetic_delta.35.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.35.a
+		country_event = { id = synthetic_delta.36 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.36
+	title = synthetic_delta.36.t
+	desc = synthetic_delta.36.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.36.a
+		country_event = { id = synthetic_delta.37 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.37
+	title = synthetic_delta.37.t
+	desc = synthetic_delta.37.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.37.a
+		country_event = { id = synthetic_delta.38 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.38
+	title = synthetic_delta.38.t
+	desc = synthetic_delta.38.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.38.a
+		country_event = { id = synthetic_delta.39 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.39
+	title = synthetic_delta.39.t
+	desc = synthetic_delta.39.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.39.a
+		country_event = { id = synthetic_delta.40 }
+	}
+}
+
+country_event = {
+	id = synthetic_delta.40
+	title = synthetic_delta.40.t
+	desc = synthetic_delta.40.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_delta.40.a
+		country_event = { id = synthetic_delta.41 }
+	}
+}

@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
-import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
+import {
+  createMcpServer,
+  SERVER_INSTRUCTIONS,
+} from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
@@ -56,6 +59,9 @@ describe('MCP discovery', () => {
       'hoi4.map_inspect',
       'hoi4.map_render',
       'hoi4.map_rewrite',
+      'hoi4.event_inspect',
+      'hoi4.event_render',
+      'hoi4.event_compare',
     ]);
 
     expect(tools.tools.find(({ name }) => name === 'hoi4.mods')?.annotations).toMatchObject({
@@ -74,6 +80,14 @@ describe('MCP discovery', () => {
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+    }
+    for (const name of ['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_compare']) {
+      expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
+        readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
         openWorldHint: false,
@@ -100,6 +114,10 @@ describe('MCP discovery', () => {
     const mapInspect = tools.tools.find(({ name }) => name === 'hoi4.map_inspect');
     expect(JSON.stringify(mapInspect?.inputSchema)).toContain('allocationRequests');
     expect(JSON.stringify(mapInspect?.inputSchema)).toContain('provinceIds');
+    const eventInspect = tools.tools.find(({ name }) => name === 'hoi4.event_inspect');
+    expect(JSON.stringify(eventInspect?.inputSchema)).toContain('explain_path');
+    expect(JSON.stringify(eventInspect?.inputSchema)).toContain('state_flow');
+    expect(JSON.stringify(eventInspect?.inputSchema)).toContain('impactSubject');
 
     for (const tool of tools.tools) {
       expect(tool.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });
@@ -151,7 +169,7 @@ describe('MCP discovery', () => {
         },
       },
     });
-    expect(client.getInstructions()).toBeUndefined();
+    expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
     await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
   });
 
@@ -200,7 +218,7 @@ describe('MCP discovery', () => {
     expect(
       Buffer.byteLength(JSON.stringify(await client.listResourceTemplates()), 'utf8'),
     ).toBeLessThanOrEqual(resourceTemplateListByteBudget);
-    expect(client.getInstructions()).toBeUndefined();
+    expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   });
 
   it('retains exact nested validation behind compact discovery fields', async () => {
@@ -209,10 +227,12 @@ describe('MCP discovery', () => {
     const focusRewrite = tools.tools.find(({ name }) => name === 'hoi4.focus_rewrite');
     const guiInspect = tools.tools.find(({ name }) => name === 'hoi4.gui_inspect');
     const mapRewrite = tools.tools.find(({ name }) => name === 'hoi4.map_rewrite');
+    const eventInspect = tools.tools.find(({ name }) => name === 'hoi4.event_inspect');
 
     expect(JSON.stringify(focusRewrite?.inputSchema)).not.toContain('completionReward');
     expect(JSON.stringify(guiInspect?.inputSchema)).not.toContain('animationTimeSeconds');
     expect(JSON.stringify(mapRewrite?.inputSchema)).not.toContain('move_state_provinces');
+    expect(JSON.stringify(eventInspect?.inputSchema)).not.toContain('eventId');
     const invalidFocus = await client.callTool({
       name: 'hoi4.focus_rewrite',
       arguments: {
@@ -238,6 +258,22 @@ describe('MCP discovery', () => {
     });
     expect(invalidMap).toMatchObject({ isError: true });
     expect(JSON.stringify(invalidMap.content)).toMatch(/Input validation error/iu);
+    const invalidEvent = await client.callTool({
+      name: 'hoi4.event_inspect',
+      arguments: { workspaceId: 'test', mode: 'trace' },
+    });
+    expect(invalidEvent).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidEvent.content)).toMatch(/Input validation error/iu);
+    const invalidEventSelector = await client.callTool({
+      name: 'hoi4.event_inspect',
+      arguments: {
+        workspaceId: 'test',
+        mode: 'trace',
+        selector: { kind: 'event', eventId: 4, unknown: true },
+      },
+    });
+    expect(invalidEventSelector).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Input validation error/iu);
   });
 
   it('emits progress and honors cancellation for GUI inspection', async () => {

@@ -1,0 +1,5925 @@
+{
+  "definitions": [
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.1",
+      "logicalId": "synthetic_alpha.1",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.2",
+      "logicalId": "synthetic_alpha.2",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.3",
+      "logicalId": "synthetic_alpha.3",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.4",
+      "logicalId": "synthetic_alpha.4",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.5",
+      "logicalId": "synthetic_alpha.5",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.6",
+      "logicalId": "synthetic_alpha.6",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.7",
+      "logicalId": "synthetic_alpha.7",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.8",
+      "logicalId": "synthetic_alpha.8",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.9",
+      "logicalId": "synthetic_alpha.9",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.10",
+      "logicalId": "synthetic_alpha.10",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.11",
+      "logicalId": "synthetic_alpha.11",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.12",
+      "logicalId": "synthetic_alpha.12",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.13",
+      "logicalId": "synthetic_alpha.13",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.14",
+      "logicalId": "synthetic_alpha.14",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.15",
+      "logicalId": "synthetic_alpha.15",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.16",
+      "logicalId": "synthetic_alpha.16",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.17",
+      "logicalId": "synthetic_alpha.17",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.18",
+      "logicalId": "synthetic_alpha.18",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.19",
+      "logicalId": "synthetic_alpha.19",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.20",
+      "logicalId": "synthetic_alpha.20",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.21",
+      "logicalId": "synthetic_alpha.21",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.22",
+      "logicalId": "synthetic_alpha.22",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.23",
+      "logicalId": "synthetic_alpha.23",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.24",
+      "logicalId": "synthetic_alpha.24",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.25",
+      "logicalId": "synthetic_alpha.25",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.26",
+      "logicalId": "synthetic_alpha.26",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.27",
+      "logicalId": "synthetic_alpha.27",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.28",
+      "logicalId": "synthetic_alpha.28",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.29",
+      "logicalId": "synthetic_alpha.29",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.30",
+      "logicalId": "synthetic_alpha.30",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.31",
+      "logicalId": "synthetic_alpha.31",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.32",
+      "logicalId": "synthetic_alpha.32",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.33",
+      "logicalId": "synthetic_alpha.33",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.34",
+      "logicalId": "synthetic_alpha.34",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.35",
+      "logicalId": "synthetic_alpha.35",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.36",
+      "logicalId": "synthetic_alpha.36",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.37",
+      "logicalId": "synthetic_alpha.37",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.38",
+      "logicalId": "synthetic_alpha.38",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.39",
+      "logicalId": "synthetic_alpha.39",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.40",
+      "logicalId": "synthetic_alpha.40",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.41",
+      "logicalId": "synthetic_alpha.41",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.42",
+      "logicalId": "synthetic_alpha.42",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.43",
+      "logicalId": "synthetic_alpha.43",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.44",
+      "logicalId": "synthetic_alpha.44",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.45",
+      "logicalId": "synthetic_alpha.45",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.46",
+      "logicalId": "synthetic_alpha.46",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.47",
+      "logicalId": "synthetic_alpha.47",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.48",
+      "logicalId": "synthetic_alpha.48",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.49",
+      "logicalId": "synthetic_alpha.49",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.50",
+      "logicalId": "synthetic_alpha.50",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.51",
+      "logicalId": "synthetic_alpha.51",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.52",
+      "logicalId": "synthetic_alpha.52",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.53",
+      "logicalId": "synthetic_alpha.53",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.54",
+      "logicalId": "synthetic_alpha.54",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.55",
+      "logicalId": "synthetic_alpha.55",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.56",
+      "logicalId": "synthetic_alpha.56",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.57",
+      "logicalId": "synthetic_alpha.57",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.58",
+      "logicalId": "synthetic_alpha.58",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.59",
+      "logicalId": "synthetic_alpha.59",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.60",
+      "logicalId": "synthetic_alpha.60",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.61",
+      "logicalId": "synthetic_alpha.61",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.62",
+      "logicalId": "synthetic_alpha.62",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.63",
+      "logicalId": "synthetic_alpha.63",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.64",
+      "logicalId": "synthetic_alpha.64",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.65",
+      "logicalId": "synthetic_alpha.65",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.66",
+      "logicalId": "synthetic_alpha.66",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.67",
+      "logicalId": "synthetic_alpha.67",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.68",
+      "logicalId": "synthetic_alpha.68",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.69",
+      "logicalId": "synthetic_alpha.69",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.70",
+      "logicalId": "synthetic_alpha.70",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.71",
+      "logicalId": "synthetic_alpha.71",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.72",
+      "logicalId": "synthetic_alpha.72",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.73",
+      "logicalId": "synthetic_alpha.73",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.74",
+      "logicalId": "synthetic_alpha.74",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.75",
+      "logicalId": "synthetic_alpha.75",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.76",
+      "logicalId": "synthetic_alpha.76",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.77",
+      "logicalId": "synthetic_alpha.77",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.78",
+      "logicalId": "synthetic_alpha.78",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.79",
+      "logicalId": "synthetic_alpha.79",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_alpha.80",
+      "logicalId": "synthetic_alpha.80",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.1",
+      "logicalId": "synthetic_beta.1",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.2",
+      "logicalId": "synthetic_beta.2",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.3",
+      "logicalId": "synthetic_beta.3",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.4",
+      "logicalId": "synthetic_beta.4",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.5",
+      "logicalId": "synthetic_beta.5",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.6",
+      "logicalId": "synthetic_beta.6",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.7",
+      "logicalId": "synthetic_beta.7",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.8",
+      "logicalId": "synthetic_beta.8",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.9",
+      "logicalId": "synthetic_beta.9",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.10",
+      "logicalId": "synthetic_beta.10",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.11",
+      "logicalId": "synthetic_beta.11",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.12",
+      "logicalId": "synthetic_beta.12",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.13",
+      "logicalId": "synthetic_beta.13",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.14",
+      "logicalId": "synthetic_beta.14",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.15",
+      "logicalId": "synthetic_beta.15",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.16",
+      "logicalId": "synthetic_beta.16",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.17",
+      "logicalId": "synthetic_beta.17",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.18",
+      "logicalId": "synthetic_beta.18",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.19",
+      "logicalId": "synthetic_beta.19",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.20",
+      "logicalId": "synthetic_beta.20",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.21",
+      "logicalId": "synthetic_beta.21",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.22",
+      "logicalId": "synthetic_beta.22",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.23",
+      "logicalId": "synthetic_beta.23",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.24",
+      "logicalId": "synthetic_beta.24",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.25",
+      "logicalId": "synthetic_beta.25",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.26",
+      "logicalId": "synthetic_beta.26",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.27",
+      "logicalId": "synthetic_beta.27",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.28",
+      "logicalId": "synthetic_beta.28",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.29",
+      "logicalId": "synthetic_beta.29",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.30",
+      "logicalId": "synthetic_beta.30",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.31",
+      "logicalId": "synthetic_beta.31",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.32",
+      "logicalId": "synthetic_beta.32",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.33",
+      "logicalId": "synthetic_beta.33",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.34",
+      "logicalId": "synthetic_beta.34",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.35",
+      "logicalId": "synthetic_beta.35",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.36",
+      "logicalId": "synthetic_beta.36",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.37",
+      "logicalId": "synthetic_beta.37",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.38",
+      "logicalId": "synthetic_beta.38",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.39",
+      "logicalId": "synthetic_beta.39",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.40",
+      "logicalId": "synthetic_beta.40",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.41",
+      "logicalId": "synthetic_beta.41",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.42",
+      "logicalId": "synthetic_beta.42",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.43",
+      "logicalId": "synthetic_beta.43",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.44",
+      "logicalId": "synthetic_beta.44",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.45",
+      "logicalId": "synthetic_beta.45",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.46",
+      "logicalId": "synthetic_beta.46",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.47",
+      "logicalId": "synthetic_beta.47",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.48",
+      "logicalId": "synthetic_beta.48",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.49",
+      "logicalId": "synthetic_beta.49",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.50",
+      "logicalId": "synthetic_beta.50",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.51",
+      "logicalId": "synthetic_beta.51",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.52",
+      "logicalId": "synthetic_beta.52",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.53",
+      "logicalId": "synthetic_beta.53",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.54",
+      "logicalId": "synthetic_beta.54",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.55",
+      "logicalId": "synthetic_beta.55",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.56",
+      "logicalId": "synthetic_beta.56",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.57",
+      "logicalId": "synthetic_beta.57",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.58",
+      "logicalId": "synthetic_beta.58",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.59",
+      "logicalId": "synthetic_beta.59",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.60",
+      "logicalId": "synthetic_beta.60",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.61",
+      "logicalId": "synthetic_beta.61",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.62",
+      "logicalId": "synthetic_beta.62",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.63",
+      "logicalId": "synthetic_beta.63",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.64",
+      "logicalId": "synthetic_beta.64",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.65",
+      "logicalId": "synthetic_beta.65",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.66",
+      "logicalId": "synthetic_beta.66",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.67",
+      "logicalId": "synthetic_beta.67",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.68",
+      "logicalId": "synthetic_beta.68",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.69",
+      "logicalId": "synthetic_beta.69",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.70",
+      "logicalId": "synthetic_beta.70",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.71",
+      "logicalId": "synthetic_beta.71",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.72",
+      "logicalId": "synthetic_beta.72",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.73",
+      "logicalId": "synthetic_beta.73",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.74",
+      "logicalId": "synthetic_beta.74",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.75",
+      "logicalId": "synthetic_beta.75",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.76",
+      "logicalId": "synthetic_beta.76",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.77",
+      "logicalId": "synthetic_beta.77",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.78",
+      "logicalId": "synthetic_beta.78",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.79",
+      "logicalId": "synthetic_beta.79",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_beta.80",
+      "logicalId": "synthetic_beta.80",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.1",
+      "logicalId": "synthetic_gamma.1",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.2",
+      "logicalId": "synthetic_gamma.2",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.3",
+      "logicalId": "synthetic_gamma.3",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.4",
+      "logicalId": "synthetic_gamma.4",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.5",
+      "logicalId": "synthetic_gamma.5",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.6",
+      "logicalId": "synthetic_gamma.6",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.7",
+      "logicalId": "synthetic_gamma.7",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.8",
+      "logicalId": "synthetic_gamma.8",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.9",
+      "logicalId": "synthetic_gamma.9",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.10",
+      "logicalId": "synthetic_gamma.10",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.11",
+      "logicalId": "synthetic_gamma.11",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.12",
+      "logicalId": "synthetic_gamma.12",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.13",
+      "logicalId": "synthetic_gamma.13",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.14",
+      "logicalId": "synthetic_gamma.14",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.15",
+      "logicalId": "synthetic_gamma.15",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.16",
+      "logicalId": "synthetic_gamma.16",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.17",
+      "logicalId": "synthetic_gamma.17",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.18",
+      "logicalId": "synthetic_gamma.18",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.19",
+      "logicalId": "synthetic_gamma.19",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.20",
+      "logicalId": "synthetic_gamma.20",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.21",
+      "logicalId": "synthetic_gamma.21",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.22",
+      "logicalId": "synthetic_gamma.22",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.23",
+      "logicalId": "synthetic_gamma.23",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.24",
+      "logicalId": "synthetic_gamma.24",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.25",
+      "logicalId": "synthetic_gamma.25",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.26",
+      "logicalId": "synthetic_gamma.26",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.27",
+      "logicalId": "synthetic_gamma.27",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.28",
+      "logicalId": "synthetic_gamma.28",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.29",
+      "logicalId": "synthetic_gamma.29",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.30",
+      "logicalId": "synthetic_gamma.30",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.31",
+      "logicalId": "synthetic_gamma.31",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.32",
+      "logicalId": "synthetic_gamma.32",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.33",
+      "logicalId": "synthetic_gamma.33",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.34",
+      "logicalId": "synthetic_gamma.34",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.35",
+      "logicalId": "synthetic_gamma.35",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.36",
+      "logicalId": "synthetic_gamma.36",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.37",
+      "logicalId": "synthetic_gamma.37",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.38",
+      "logicalId": "synthetic_gamma.38",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.39",
+      "logicalId": "synthetic_gamma.39",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.40",
+      "logicalId": "synthetic_gamma.40",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.41",
+      "logicalId": "synthetic_gamma.41",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.42",
+      "logicalId": "synthetic_gamma.42",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.43",
+      "logicalId": "synthetic_gamma.43",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.44",
+      "logicalId": "synthetic_gamma.44",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.45",
+      "logicalId": "synthetic_gamma.45",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.46",
+      "logicalId": "synthetic_gamma.46",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.47",
+      "logicalId": "synthetic_gamma.47",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.48",
+      "logicalId": "synthetic_gamma.48",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.49",
+      "logicalId": "synthetic_gamma.49",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.50",
+      "logicalId": "synthetic_gamma.50",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.51",
+      "logicalId": "synthetic_gamma.51",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.52",
+      "logicalId": "synthetic_gamma.52",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.53",
+      "logicalId": "synthetic_gamma.53",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.54",
+      "logicalId": "synthetic_gamma.54",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.55",
+      "logicalId": "synthetic_gamma.55",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.56",
+      "logicalId": "synthetic_gamma.56",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.57",
+      "logicalId": "synthetic_gamma.57",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.58",
+      "logicalId": "synthetic_gamma.58",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.59",
+      "logicalId": "synthetic_gamma.59",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.60",
+      "logicalId": "synthetic_gamma.60",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.61",
+      "logicalId": "synthetic_gamma.61",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.62",
+      "logicalId": "synthetic_gamma.62",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.63",
+      "logicalId": "synthetic_gamma.63",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.64",
+      "logicalId": "synthetic_gamma.64",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.65",
+      "logicalId": "synthetic_gamma.65",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.66",
+      "logicalId": "synthetic_gamma.66",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.67",
+      "logicalId": "synthetic_gamma.67",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.68",
+      "logicalId": "synthetic_gamma.68",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.69",
+      "logicalId": "synthetic_gamma.69",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.70",
+      "logicalId": "synthetic_gamma.70",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.71",
+      "logicalId": "synthetic_gamma.71",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.72",
+      "logicalId": "synthetic_gamma.72",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.73",
+      "logicalId": "synthetic_gamma.73",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.74",
+      "logicalId": "synthetic_gamma.74",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.75",
+      "logicalId": "synthetic_gamma.75",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.76",
+      "logicalId": "synthetic_gamma.76",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.77",
+      "logicalId": "synthetic_gamma.77",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.78",
+      "logicalId": "synthetic_gamma.78",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.79",
+      "logicalId": "synthetic_gamma.79",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_gamma.80",
+      "logicalId": "synthetic_gamma.80",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.1",
+      "logicalId": "synthetic_delta.1",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.2",
+      "logicalId": "synthetic_delta.2",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.3",
+      "logicalId": "synthetic_delta.3",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.4",
+      "logicalId": "synthetic_delta.4",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.5",
+      "logicalId": "synthetic_delta.5",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.6",
+      "logicalId": "synthetic_delta.6",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.7",
+      "logicalId": "synthetic_delta.7",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.8",
+      "logicalId": "synthetic_delta.8",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.9",
+      "logicalId": "synthetic_delta.9",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.10",
+      "logicalId": "synthetic_delta.10",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.11",
+      "logicalId": "synthetic_delta.11",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.12",
+      "logicalId": "synthetic_delta.12",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.13",
+      "logicalId": "synthetic_delta.13",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.14",
+      "logicalId": "synthetic_delta.14",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.15",
+      "logicalId": "synthetic_delta.15",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.16",
+      "logicalId": "synthetic_delta.16",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.17",
+      "logicalId": "synthetic_delta.17",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.18",
+      "logicalId": "synthetic_delta.18",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.19",
+      "logicalId": "synthetic_delta.19",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.20",
+      "logicalId": "synthetic_delta.20",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.21",
+      "logicalId": "synthetic_delta.21",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.22",
+      "logicalId": "synthetic_delta.22",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.23",
+      "logicalId": "synthetic_delta.23",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.24",
+      "logicalId": "synthetic_delta.24",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.25",
+      "logicalId": "synthetic_delta.25",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.26",
+      "logicalId": "synthetic_delta.26",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.27",
+      "logicalId": "synthetic_delta.27",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.28",
+      "logicalId": "synthetic_delta.28",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.29",
+      "logicalId": "synthetic_delta.29",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.30",
+      "logicalId": "synthetic_delta.30",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.31",
+      "logicalId": "synthetic_delta.31",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.32",
+      "logicalId": "synthetic_delta.32",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.33",
+      "logicalId": "synthetic_delta.33",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.34",
+      "logicalId": "synthetic_delta.34",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.35",
+      "logicalId": "synthetic_delta.35",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.36",
+      "logicalId": "synthetic_delta.36",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.37",
+      "logicalId": "synthetic_delta.37",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.38",
+      "logicalId": "synthetic_delta.38",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.39",
+      "logicalId": "synthetic_delta.39",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.40",
+      "logicalId": "synthetic_delta.40",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.41",
+      "logicalId": "synthetic_delta.41",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.42",
+      "logicalId": "synthetic_delta.42",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.43",
+      "logicalId": "synthetic_delta.43",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.44",
+      "logicalId": "synthetic_delta.44",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.45",
+      "logicalId": "synthetic_delta.45",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.46",
+      "logicalId": "synthetic_delta.46",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.47",
+      "logicalId": "synthetic_delta.47",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.48",
+      "logicalId": "synthetic_delta.48",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.49",
+      "logicalId": "synthetic_delta.49",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.50",
+      "logicalId": "synthetic_delta.50",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.51",
+      "logicalId": "synthetic_delta.51",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.52",
+      "logicalId": "synthetic_delta.52",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.53",
+      "logicalId": "synthetic_delta.53",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.54",
+      "logicalId": "synthetic_delta.54",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.55",
+      "logicalId": "synthetic_delta.55",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.56",
+      "logicalId": "synthetic_delta.56",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.57",
+      "logicalId": "synthetic_delta.57",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.58",
+      "logicalId": "synthetic_delta.58",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.59",
+      "logicalId": "synthetic_delta.59",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.60",
+      "logicalId": "synthetic_delta.60",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.61",
+      "logicalId": "synthetic_delta.61",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "news_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.62",
+      "logicalId": "synthetic_delta.62",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "news_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.63",
+      "logicalId": "synthetic_delta.63",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "news_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.64",
+      "logicalId": "synthetic_delta.64",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "news_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.65",
+      "logicalId": "synthetic_delta.65",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "state_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.66",
+      "logicalId": "synthetic_delta.66",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "state_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.67",
+      "logicalId": "synthetic_delta.67",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "state_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.68",
+      "logicalId": "synthetic_delta.68",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "state_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.69",
+      "logicalId": "synthetic_delta.69",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "unit_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.70",
+      "logicalId": "synthetic_delta.70",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "unit_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.71",
+      "logicalId": "synthetic_delta.71",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "unit_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.72",
+      "logicalId": "synthetic_delta.72",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "unit_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.73",
+      "logicalId": "synthetic_delta.73",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "operative_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.74",
+      "logicalId": "synthetic_delta.74",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "operative_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.75",
+      "logicalId": "synthetic_delta.75",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "operative_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.76",
+      "logicalId": "synthetic_delta.76",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "operative_leader_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.77",
+      "logicalId": "synthetic_delta.77",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.78",
+      "logicalId": "synthetic_delta.78",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 1,
+      "id": "synthetic_delta.79",
+      "logicalId": "synthetic_delta.79",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    },
+    {
+      "duplicateOrdinal": 2,
+      "id": "synthetic_delta.79",
+      "logicalId": "synthetic_delta.80",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "type": "country_event"
+    }
+  ],
+  "expectedAutomaticRootEventIds": ["synthetic_gamma.80"],
+  "expectedCallerlessTriggeredEventIds": ["synthetic_alpha.69"],
+  "expectedCycles": [
+    ["synthetic_alpha.20", "synthetic_alpha.21"],
+    ["synthetic_alpha.22"],
+    ["synthetic_alpha.30", "synthetic_alpha.31"],
+    ["synthetic_beta.20", "synthetic_beta.21", "synthetic_beta.22"]
+  ],
+  "expectedDerivedHelperProjections": [
+    {
+      "callerId": "synthetic_alpha.4",
+      "helperStack": ["synthetic_alpha_outer", "synthetic_alpha_middle", "synthetic_alpha_inner"],
+      "targetId": "synthetic_alpha.6"
+    },
+    {
+      "callerId": "synthetic_beta.30",
+      "helperStack": ["synthetic_beta_outer", "synthetic_beta_middle", "synthetic_beta_inner"],
+      "targetId": "synthetic_beta.31"
+    }
+  ],
+  "expectedEdges": [
+    {
+      "callerId": "synthetic_alpha.1",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.2",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.2"
+    },
+    {
+      "callerId": "synthetic_alpha.1",
+      "container": "option:b",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.3",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.3"
+    },
+    {
+      "callerId": "synthetic_alpha.2",
+      "container": "option:a",
+      "reason": "hidden_event_call",
+      "sourceNeedle": "synthetic_alpha.4",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.4"
+    },
+    {
+      "callerId": "synthetic_alpha.3",
+      "container": "option:a",
+      "reason": "weighted_event_call",
+      "sourceNeedle": "synthetic_alpha.4",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.4",
+      "weight": "70"
+    },
+    {
+      "callerId": "synthetic_alpha.3",
+      "container": "option:a",
+      "reason": "weighted_event_call",
+      "sourceNeedle": "synthetic_alpha.5",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.5",
+      "weight": "30"
+    },
+    {
+      "callerId": "synthetic_alpha.4",
+      "container": "option:a",
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_alpha_outer",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "helper:synthetic_alpha_outer"
+    },
+    {
+      "callerId": "synthetic_alpha.5",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.6",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.6"
+    },
+    {
+      "callerId": "synthetic_alpha.6",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.7",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.7"
+    },
+    {
+      "callerId": "synthetic_alpha.7",
+      "container": "option:a",
+      "delay": "days=4,random_days=2",
+      "reason": "delayed_event_call",
+      "sourceNeedle": "synthetic_alpha.8",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.8"
+    },
+    {
+      "callerId": "synthetic_alpha.8",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.9",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.9"
+    },
+    {
+      "callerId": "synthetic_alpha.9",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.10",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.10"
+    },
+    {
+      "callerId": "synthetic_alpha.10",
+      "container": "after",
+      "reason": "after_event_call",
+      "sourceNeedle": "synthetic_alpha.11",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.11"
+    },
+    {
+      "callerId": "synthetic_alpha.11",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.12",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.12"
+    },
+    {
+      "callerId": "synthetic_alpha.12",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.13",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.13"
+    },
+    {
+      "callerId": "synthetic_alpha.13",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.14",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.14"
+    },
+    {
+      "callerId": "synthetic_alpha.14",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.15",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.15"
+    },
+    {
+      "callerId": "synthetic_alpha.15",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.16",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.16"
+    },
+    {
+      "callerId": "synthetic_alpha.16",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.17",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.17"
+    },
+    {
+      "callerId": "synthetic_alpha.17",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.18",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.18"
+    },
+    {
+      "callerId": "synthetic_alpha.18",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.19",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.19"
+    },
+    {
+      "callerId": "synthetic_alpha.19",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.20",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.20"
+    },
+    {
+      "callerId": "synthetic_alpha.20",
+      "container": "immediate",
+      "reason": "immediate_event_call",
+      "sourceNeedle": "synthetic_alpha.21",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.21"
+    },
+    {
+      "callerId": "synthetic_alpha.21",
+      "container": "immediate",
+      "reason": "immediate_event_call",
+      "sourceNeedle": "synthetic_alpha.20",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.20"
+    },
+    {
+      "callerId": "synthetic_alpha.22",
+      "container": "immediate",
+      "reason": "immediate_event_call",
+      "sourceNeedle": "synthetic_alpha.22",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.22"
+    },
+    {
+      "callerId": "synthetic_alpha.23",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.24",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.24"
+    },
+    {
+      "callerId": "synthetic_alpha.24",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.25",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.25"
+    },
+    {
+      "callerId": "synthetic_alpha.25",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.26",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.26"
+    },
+    {
+      "callerId": "synthetic_alpha.26",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.27",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.27"
+    },
+    {
+      "callerId": "synthetic_alpha.27",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.28",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.28"
+    },
+    {
+      "callerId": "synthetic_alpha.28",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.29",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.29"
+    },
+    {
+      "callerId": "synthetic_alpha.29",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.30",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.30"
+    },
+    {
+      "callerId": "synthetic_alpha.30",
+      "container": "option:a",
+      "delay": "days=3",
+      "reason": "delayed_event_call",
+      "sourceNeedle": "synthetic_alpha.31",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.31"
+    },
+    {
+      "callerId": "synthetic_alpha.31",
+      "container": "option:a",
+      "delay": "days=3",
+      "reason": "delayed_event_call",
+      "sourceNeedle": "synthetic_alpha.30",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.30"
+    },
+    {
+      "callerId": "synthetic_alpha.32",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.33",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.33"
+    },
+    {
+      "callerId": "synthetic_alpha.33",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.34",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.34"
+    },
+    {
+      "callerId": "synthetic_alpha.34",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.35",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.35"
+    },
+    {
+      "callerId": "synthetic_alpha.35",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.36",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.36"
+    },
+    {
+      "callerId": "synthetic_alpha.36",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.37",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.37"
+    },
+    {
+      "callerId": "synthetic_alpha.37",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.38",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.38"
+    },
+    {
+      "callerId": "synthetic_alpha.38",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.39",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "synthetic_alpha.39"
+    },
+    {
+      "callerId": "synthetic_alpha.40",
+      "container": "option:a",
+      "reason": "unresolved_dynamic_reference",
+      "sourceNeedle": "synthetic_alpha.[?synthetic_dynamic_event]",
+      "sourcePath": "workspace/events/synthetic_alpha_01.txt",
+      "targetId": "unresolved:synthetic_alpha.[?synthetic_dynamic_event]",
+      "unresolved": true
+    },
+    {
+      "callerId": "synthetic_alpha.41",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.42",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.42"
+    },
+    {
+      "callerId": "synthetic_alpha.42",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.43",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.43"
+    },
+    {
+      "callerId": "synthetic_alpha.43",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.44",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.44"
+    },
+    {
+      "callerId": "synthetic_alpha.44",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.45",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.45"
+    },
+    {
+      "callerId": "synthetic_alpha.45",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.46",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.46"
+    },
+    {
+      "callerId": "synthetic_alpha.46",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.47",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.47"
+    },
+    {
+      "callerId": "synthetic_alpha.47",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.48",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.48"
+    },
+    {
+      "callerId": "synthetic_alpha.48",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.49",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.49"
+    },
+    {
+      "callerId": "synthetic_alpha.49",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.50",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.50"
+    },
+    {
+      "callerId": "synthetic_alpha.50",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.999",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.999"
+    },
+    {
+      "callerId": "synthetic_alpha.51",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.52",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.52"
+    },
+    {
+      "callerId": "synthetic_alpha.52",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.53",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.53"
+    },
+    {
+      "callerId": "synthetic_alpha.53",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.54",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.54"
+    },
+    {
+      "callerId": "synthetic_alpha.54",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.55",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.55"
+    },
+    {
+      "callerId": "synthetic_alpha.55",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.56",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.56"
+    },
+    {
+      "callerId": "synthetic_alpha.56",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.57",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.57"
+    },
+    {
+      "callerId": "synthetic_alpha.57",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.58",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.58"
+    },
+    {
+      "callerId": "synthetic_alpha.59",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.60",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.60"
+    },
+    {
+      "callerId": "synthetic_alpha.60",
+      "container": "immediate",
+      "reason": "immediate_event_call",
+      "sourceNeedle": "synthetic_delta.65",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_delta.65"
+    },
+    {
+      "callerId": "synthetic_alpha.61",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.62",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.62"
+    },
+    {
+      "callerId": "synthetic_alpha.62",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.63",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.63"
+    },
+    {
+      "callerId": "synthetic_alpha.63",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.64",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.64"
+    },
+    {
+      "callerId": "synthetic_alpha.64",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.65",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.65"
+    },
+    {
+      "callerId": "synthetic_alpha.65",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.66",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.66"
+    },
+    {
+      "callerId": "synthetic_alpha.66",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.67",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.67"
+    },
+    {
+      "callerId": "synthetic_alpha.67",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.68",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.68"
+    },
+    {
+      "callerId": "synthetic_alpha.70",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.71",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.71"
+    },
+    {
+      "callerId": "synthetic_alpha.71",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.72",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.72"
+    },
+    {
+      "callerId": "synthetic_alpha.72",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.73",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.73"
+    },
+    {
+      "callerId": "synthetic_alpha.73",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.74",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.74"
+    },
+    {
+      "callerId": "synthetic_alpha.74",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.75",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.75"
+    },
+    {
+      "callerId": "synthetic_alpha.75",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.76",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.76"
+    },
+    {
+      "callerId": "synthetic_alpha.76",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.77",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.77"
+    },
+    {
+      "callerId": "synthetic_alpha.77",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.78",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.78"
+    },
+    {
+      "callerId": "synthetic_alpha.78",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.79",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.79"
+    },
+    {
+      "callerId": "synthetic_alpha.79",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.80",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_alpha.80"
+    },
+    {
+      "callerId": "synthetic_beta.1",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.2",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.2"
+    },
+    {
+      "callerId": "synthetic_beta.1",
+      "container": "option:b",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.3",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.3"
+    },
+    {
+      "callerId": "synthetic_beta.2",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.4",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.4"
+    },
+    {
+      "callerId": "synthetic_beta.3",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.4",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.4"
+    },
+    {
+      "callerId": "synthetic_beta.4",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.5",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.5"
+    },
+    {
+      "callerId": "synthetic_beta.5",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.6",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.6"
+    },
+    {
+      "callerId": "synthetic_beta.6",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.7",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.7"
+    },
+    {
+      "callerId": "synthetic_beta.7",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.8",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.8"
+    },
+    {
+      "callerId": "synthetic_beta.8",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.9",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.9"
+    },
+    {
+      "callerId": "synthetic_beta.9",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.10",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.10"
+    },
+    {
+      "callerId": "synthetic_beta.10",
+      "container": "option:a",
+      "reason": "random_event_call",
+      "sourceNeedle": "synthetic_beta.11",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.11",
+      "weight": "60"
+    },
+    {
+      "callerId": "synthetic_beta.10",
+      "container": "option:a",
+      "reason": "random_event_call",
+      "sourceNeedle": "synthetic_beta.12",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.12",
+      "weight": "40"
+    },
+    {
+      "callerId": "synthetic_beta.10",
+      "container": "option:a",
+      "reason": "random_event_call",
+      "sourceNeedle": "synthetic_beta.13",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.13",
+      "weight": "-5"
+    },
+    {
+      "callerId": "synthetic_beta.11",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.12",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.12"
+    },
+    {
+      "callerId": "synthetic_beta.12",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.13",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.13"
+    },
+    {
+      "callerId": "synthetic_beta.13",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.14",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.14"
+    },
+    {
+      "callerId": "synthetic_beta.14",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.15",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.15"
+    },
+    {
+      "callerId": "synthetic_beta.15",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.16",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.16"
+    },
+    {
+      "callerId": "synthetic_beta.16",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.17",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.17"
+    },
+    {
+      "callerId": "synthetic_beta.17",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.18",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.18"
+    },
+    {
+      "callerId": "synthetic_beta.18",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.19",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.19"
+    },
+    {
+      "callerId": "synthetic_beta.19",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.20",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.20"
+    },
+    {
+      "callerId": "synthetic_beta.20",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.21",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.21"
+    },
+    {
+      "callerId": "synthetic_beta.21",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.22",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.22"
+    },
+    {
+      "callerId": "synthetic_beta.22",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.20",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.20"
+    },
+    {
+      "callerId": "synthetic_beta.23",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.24",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.24"
+    },
+    {
+      "callerId": "synthetic_beta.24",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.25",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.25"
+    },
+    {
+      "callerId": "synthetic_beta.25",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.26",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.26"
+    },
+    {
+      "callerId": "synthetic_beta.26",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.27",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.27"
+    },
+    {
+      "callerId": "synthetic_beta.27",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.28",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.28"
+    },
+    {
+      "callerId": "synthetic_beta.28",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.29",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.29"
+    },
+    {
+      "callerId": "synthetic_beta.29",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.30",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.30"
+    },
+    {
+      "callerId": "synthetic_beta.30",
+      "container": "option:a",
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_beta_outer",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "helper:synthetic_beta_outer"
+    },
+    {
+      "callerId": "synthetic_beta.31",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.32",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.32"
+    },
+    {
+      "callerId": "synthetic_beta.32",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.33",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.33"
+    },
+    {
+      "callerId": "synthetic_beta.33",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.34",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.34"
+    },
+    {
+      "callerId": "synthetic_beta.34",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.35",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.35"
+    },
+    {
+      "callerId": "synthetic_beta.35",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.36",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.36"
+    },
+    {
+      "callerId": "synthetic_beta.36",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.37",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.37"
+    },
+    {
+      "callerId": "synthetic_beta.37",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.38",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.38"
+    },
+    {
+      "callerId": "synthetic_beta.38",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.39",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.39"
+    },
+    {
+      "callerId": "synthetic_beta.39",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.40",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "synthetic_beta.40"
+    },
+    {
+      "callerId": "synthetic_beta.40",
+      "container": "option:a",
+      "reason": "unresolved_dynamic_reference",
+      "sourceNeedle": "synthetic_stage_[?synthetic_stage]",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt",
+      "targetId": "unresolved:synthetic_stage_[?synthetic_stage]",
+      "unresolved": true
+    },
+    {
+      "callerId": "synthetic_beta.41",
+      "container": "option:a",
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_missing_helper",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "unresolved:synthetic_missing_helper",
+      "unresolved": true
+    },
+    {
+      "callerId": "synthetic_beta.42",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.43",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.43"
+    },
+    {
+      "callerId": "synthetic_beta.43",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.44",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.44"
+    },
+    {
+      "callerId": "synthetic_beta.44",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.45",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.45"
+    },
+    {
+      "callerId": "synthetic_beta.45",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.46",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.46"
+    },
+    {
+      "callerId": "synthetic_beta.46",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.47",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.47"
+    },
+    {
+      "callerId": "synthetic_beta.47",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.48",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.48"
+    },
+    {
+      "callerId": "synthetic_beta.48",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.49",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.49"
+    },
+    {
+      "callerId": "synthetic_beta.49",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.50",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.50"
+    },
+    {
+      "callerId": "synthetic_beta.50",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.51",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.51"
+    },
+    {
+      "callerId": "synthetic_beta.51",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.52",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.52"
+    },
+    {
+      "callerId": "synthetic_beta.52",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.53",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.53"
+    },
+    {
+      "callerId": "synthetic_beta.53",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.54",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.54"
+    },
+    {
+      "callerId": "synthetic_beta.54",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.55",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.55"
+    },
+    {
+      "callerId": "synthetic_beta.55",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.56",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.56"
+    },
+    {
+      "callerId": "synthetic_beta.56",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.57",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.57"
+    },
+    {
+      "callerId": "synthetic_beta.57",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.58",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.58"
+    },
+    {
+      "callerId": "synthetic_beta.58",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.59",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.59"
+    },
+    {
+      "callerId": "synthetic_beta.59",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.60",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.60"
+    },
+    {
+      "callerId": "synthetic_beta.60",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.61",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.61"
+    },
+    {
+      "callerId": "synthetic_beta.61",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.62",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.62"
+    },
+    {
+      "callerId": "synthetic_beta.62",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.63",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.63"
+    },
+    {
+      "callerId": "synthetic_beta.63",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.64",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.64"
+    },
+    {
+      "callerId": "synthetic_beta.64",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.65",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.65"
+    },
+    {
+      "callerId": "synthetic_beta.65",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.66",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.66"
+    },
+    {
+      "callerId": "synthetic_beta.66",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.67",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.67"
+    },
+    {
+      "callerId": "synthetic_beta.67",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.68",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.68"
+    },
+    {
+      "callerId": "synthetic_beta.68",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.69",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.69"
+    },
+    {
+      "callerId": "synthetic_beta.69",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.70",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.70"
+    },
+    {
+      "callerId": "synthetic_beta.70",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.71",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.71"
+    },
+    {
+      "callerId": "synthetic_beta.71",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.72",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.72"
+    },
+    {
+      "callerId": "synthetic_beta.72",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.73",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.73"
+    },
+    {
+      "callerId": "synthetic_beta.73",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.74",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.74"
+    },
+    {
+      "callerId": "synthetic_beta.74",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.75",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.75"
+    },
+    {
+      "callerId": "synthetic_beta.75",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.76",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.76"
+    },
+    {
+      "callerId": "synthetic_beta.76",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.77",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.77"
+    },
+    {
+      "callerId": "synthetic_beta.77",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.78",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.78"
+    },
+    {
+      "callerId": "synthetic_beta.78",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.79",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.79"
+    },
+    {
+      "callerId": "synthetic_beta.79",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_beta.80",
+      "sourcePath": "workspace/events/synthetic_beta_02.txt",
+      "targetId": "synthetic_beta.80"
+    },
+    {
+      "callerId": "synthetic_gamma.1",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.2",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.2"
+    },
+    {
+      "callerId": "synthetic_gamma.2",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.3",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.3"
+    },
+    {
+      "callerId": "synthetic_gamma.3",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.4",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.4"
+    },
+    {
+      "callerId": "synthetic_gamma.4",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.5",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.5"
+    },
+    {
+      "callerId": "synthetic_gamma.5",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.6",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.6"
+    },
+    {
+      "callerId": "synthetic_gamma.6",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.7",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.7"
+    },
+    {
+      "callerId": "synthetic_gamma.7",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.8",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.8"
+    },
+    {
+      "callerId": "synthetic_gamma.8",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.9",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.9"
+    },
+    {
+      "callerId": "synthetic_gamma.9",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.10",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.10"
+    },
+    {
+      "callerId": "synthetic_gamma.10",
+      "container": "option:a",
+      "reason": "random_event_call",
+      "sourceNeedle": "synthetic_gamma.11",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.11",
+      "weight": "chance=35"
+    },
+    {
+      "callerId": "synthetic_gamma.10",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.12",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.12"
+    },
+    {
+      "callerId": "synthetic_gamma.11",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.12",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.12"
+    },
+    {
+      "callerId": "synthetic_gamma.12",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.13",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.13"
+    },
+    {
+      "callerId": "synthetic_gamma.13",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.14",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.14"
+    },
+    {
+      "callerId": "synthetic_gamma.14",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.15",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.15"
+    },
+    {
+      "callerId": "synthetic_gamma.15",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.16",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.16"
+    },
+    {
+      "callerId": "synthetic_gamma.16",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.17",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.17"
+    },
+    {
+      "callerId": "synthetic_gamma.17",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.18",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.18"
+    },
+    {
+      "callerId": "synthetic_gamma.18",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.19",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.19"
+    },
+    {
+      "callerId": "synthetic_gamma.19",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.20",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.20"
+    },
+    {
+      "callerId": "synthetic_gamma.20",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.21",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.21"
+    },
+    {
+      "callerId": "synthetic_gamma.21",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.22",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.22"
+    },
+    {
+      "callerId": "synthetic_gamma.22",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.23",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.23"
+    },
+    {
+      "callerId": "synthetic_gamma.23",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.24",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.24"
+    },
+    {
+      "callerId": "synthetic_gamma.24",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.25",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.25"
+    },
+    {
+      "callerId": "synthetic_gamma.25",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.26",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.26"
+    },
+    {
+      "callerId": "synthetic_gamma.26",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.27",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.27"
+    },
+    {
+      "callerId": "synthetic_gamma.27",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.28",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.28"
+    },
+    {
+      "callerId": "synthetic_gamma.28",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.29",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.29"
+    },
+    {
+      "callerId": "synthetic_gamma.29",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.30",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.30"
+    },
+    {
+      "callerId": "synthetic_gamma.30",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.31",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.31"
+    },
+    {
+      "callerId": "synthetic_gamma.31",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.32",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.32"
+    },
+    {
+      "callerId": "synthetic_gamma.32",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.33",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.33"
+    },
+    {
+      "callerId": "synthetic_gamma.33",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.34",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.34"
+    },
+    {
+      "callerId": "synthetic_gamma.34",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.35",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.35"
+    },
+    {
+      "callerId": "synthetic_gamma.35",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.36",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.36"
+    },
+    {
+      "callerId": "synthetic_gamma.36",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.37",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.37"
+    },
+    {
+      "callerId": "synthetic_gamma.37",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.38",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.38"
+    },
+    {
+      "callerId": "synthetic_gamma.38",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.39",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.39"
+    },
+    {
+      "callerId": "synthetic_gamma.39",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.40",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.40"
+    },
+    {
+      "callerId": "synthetic_gamma.40",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.41",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "targetId": "synthetic_gamma.41"
+    },
+    {
+      "callerId": "synthetic_gamma.41",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.42",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.42"
+    },
+    {
+      "callerId": "synthetic_gamma.42",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.43",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.43"
+    },
+    {
+      "callerId": "synthetic_gamma.43",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.44",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.44"
+    },
+    {
+      "callerId": "synthetic_gamma.44",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.45",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.45"
+    },
+    {
+      "callerId": "synthetic_gamma.45",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.46",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.46"
+    },
+    {
+      "callerId": "synthetic_gamma.46",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.47",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.47"
+    },
+    {
+      "callerId": "synthetic_gamma.47",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.48",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.48"
+    },
+    {
+      "callerId": "synthetic_gamma.48",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.49",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.49"
+    },
+    {
+      "callerId": "synthetic_gamma.49",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.50",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.50"
+    },
+    {
+      "callerId": "synthetic_gamma.50",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.51",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.51"
+    },
+    {
+      "callerId": "synthetic_gamma.51",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.52",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.52"
+    },
+    {
+      "callerId": "synthetic_gamma.52",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.53",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.53"
+    },
+    {
+      "callerId": "synthetic_gamma.53",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.54",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.54"
+    },
+    {
+      "callerId": "synthetic_gamma.54",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.55",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.55"
+    },
+    {
+      "callerId": "synthetic_gamma.55",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.56",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.56"
+    },
+    {
+      "callerId": "synthetic_gamma.56",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.57",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.57"
+    },
+    {
+      "callerId": "synthetic_gamma.57",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.58",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.58"
+    },
+    {
+      "callerId": "synthetic_gamma.58",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.59",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.59"
+    },
+    {
+      "callerId": "synthetic_gamma.59",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.60",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.60"
+    },
+    {
+      "callerId": "synthetic_gamma.60",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.61",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.61"
+    },
+    {
+      "callerId": "synthetic_gamma.61",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.62",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.62"
+    },
+    {
+      "callerId": "synthetic_gamma.62",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.63",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.63"
+    },
+    {
+      "callerId": "synthetic_gamma.63",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.64",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.64"
+    },
+    {
+      "callerId": "synthetic_gamma.64",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.65",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.65"
+    },
+    {
+      "callerId": "synthetic_gamma.65",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.66",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.66"
+    },
+    {
+      "callerId": "synthetic_gamma.66",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.67",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.67"
+    },
+    {
+      "callerId": "synthetic_gamma.67",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.68",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.68"
+    },
+    {
+      "callerId": "synthetic_gamma.68",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.69",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.69"
+    },
+    {
+      "callerId": "synthetic_gamma.69",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.70",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.70"
+    },
+    {
+      "callerId": "synthetic_gamma.70",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.71",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.71"
+    },
+    {
+      "callerId": "synthetic_gamma.71",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.72",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.72"
+    },
+    {
+      "callerId": "synthetic_gamma.72",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.73",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.73"
+    },
+    {
+      "callerId": "synthetic_gamma.73",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.74",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.74"
+    },
+    {
+      "callerId": "synthetic_gamma.74",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.75",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.75"
+    },
+    {
+      "callerId": "synthetic_gamma.75",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.76",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.76"
+    },
+    {
+      "callerId": "synthetic_gamma.76",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.77",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.77"
+    },
+    {
+      "callerId": "synthetic_gamma.77",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.78",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.78"
+    },
+    {
+      "callerId": "synthetic_gamma.78",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_gamma.79",
+      "sourcePath": "workspace/events/synthetic_gamma_02.txt",
+      "targetId": "synthetic_gamma.79"
+    },
+    {
+      "callerId": "synthetic_delta.1",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.2",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.2"
+    },
+    {
+      "callerId": "synthetic_delta.2",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.3",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.3"
+    },
+    {
+      "callerId": "synthetic_delta.3",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.4",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.4"
+    },
+    {
+      "callerId": "synthetic_delta.4",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.5",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.5"
+    },
+    {
+      "callerId": "synthetic_delta.5",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.6",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.6"
+    },
+    {
+      "callerId": "synthetic_delta.6",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.7",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.7"
+    },
+    {
+      "callerId": "synthetic_delta.7",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.8",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.8"
+    },
+    {
+      "callerId": "synthetic_delta.8",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.9",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.9"
+    },
+    {
+      "callerId": "synthetic_delta.9",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.10",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.10"
+    },
+    {
+      "callerId": "synthetic_delta.10",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.11",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.11"
+    },
+    {
+      "callerId": "synthetic_delta.11",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.12",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.12"
+    },
+    {
+      "callerId": "synthetic_delta.12",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.13",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.13"
+    },
+    {
+      "callerId": "synthetic_delta.13",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.14",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.14"
+    },
+    {
+      "callerId": "synthetic_delta.14",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.15",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.15"
+    },
+    {
+      "callerId": "synthetic_delta.15",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.16",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.16"
+    },
+    {
+      "callerId": "synthetic_delta.16",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.17",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.17"
+    },
+    {
+      "callerId": "synthetic_delta.17",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.18",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.18"
+    },
+    {
+      "callerId": "synthetic_delta.18",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.19",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.19"
+    },
+    {
+      "callerId": "synthetic_delta.19",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.20",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.20"
+    },
+    {
+      "callerId": "synthetic_delta.20",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.21",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.21"
+    },
+    {
+      "callerId": "synthetic_delta.21",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.22",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.22"
+    },
+    {
+      "callerId": "synthetic_delta.22",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.23",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.23"
+    },
+    {
+      "callerId": "synthetic_delta.23",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.24",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.24"
+    },
+    {
+      "callerId": "synthetic_delta.24",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.25",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.25"
+    },
+    {
+      "callerId": "synthetic_delta.25",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.26",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.26"
+    },
+    {
+      "callerId": "synthetic_delta.26",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.27",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.27"
+    },
+    {
+      "callerId": "synthetic_delta.27",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.28",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.28"
+    },
+    {
+      "callerId": "synthetic_delta.28",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.29",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.29"
+    },
+    {
+      "callerId": "synthetic_delta.29",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.30",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.30"
+    },
+    {
+      "callerId": "synthetic_delta.30",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.31",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.31"
+    },
+    {
+      "callerId": "synthetic_delta.31",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.32",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.32"
+    },
+    {
+      "callerId": "synthetic_delta.32",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.33",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.33"
+    },
+    {
+      "callerId": "synthetic_delta.33",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.34",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.34"
+    },
+    {
+      "callerId": "synthetic_delta.34",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.35",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.35"
+    },
+    {
+      "callerId": "synthetic_delta.35",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.36",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.36"
+    },
+    {
+      "callerId": "synthetic_delta.36",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.37",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.37"
+    },
+    {
+      "callerId": "synthetic_delta.37",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.38",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.38"
+    },
+    {
+      "callerId": "synthetic_delta.38",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.39",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.39"
+    },
+    {
+      "callerId": "synthetic_delta.39",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.40",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.40"
+    },
+    {
+      "callerId": "synthetic_delta.40",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.41",
+      "sourcePath": "workspace/events/synthetic_delta_01.txt",
+      "targetId": "synthetic_delta.41"
+    },
+    {
+      "callerId": "synthetic_delta.41",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.42",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.42"
+    },
+    {
+      "callerId": "synthetic_delta.42",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.43",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.43"
+    },
+    {
+      "callerId": "synthetic_delta.43",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.44",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.44"
+    },
+    {
+      "callerId": "synthetic_delta.44",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.45",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.45"
+    },
+    {
+      "callerId": "synthetic_delta.45",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.46",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.46"
+    },
+    {
+      "callerId": "synthetic_delta.46",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.47",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.47"
+    },
+    {
+      "callerId": "synthetic_delta.47",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.48",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.48"
+    },
+    {
+      "callerId": "synthetic_delta.48",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.49",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.49"
+    },
+    {
+      "callerId": "synthetic_delta.49",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.50",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.50"
+    },
+    {
+      "callerId": "synthetic_delta.50",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.51",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.51"
+    },
+    {
+      "callerId": "synthetic_delta.51",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.52",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.52"
+    },
+    {
+      "callerId": "synthetic_delta.52",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.53",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.53"
+    },
+    {
+      "callerId": "synthetic_delta.53",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.54",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.54"
+    },
+    {
+      "callerId": "synthetic_delta.54",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.55",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.55"
+    },
+    {
+      "callerId": "synthetic_delta.55",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.56",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.56"
+    },
+    {
+      "callerId": "synthetic_delta.56",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.57",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.57"
+    },
+    {
+      "callerId": "synthetic_delta.57",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.58",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.58"
+    },
+    {
+      "callerId": "synthetic_delta.58",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.59",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.59"
+    },
+    {
+      "callerId": "synthetic_delta.59",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.60",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.60"
+    },
+    {
+      "callerId": "synthetic_delta.60",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.61",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.61"
+    },
+    {
+      "callerId": "synthetic_delta.61",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.62",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.62"
+    },
+    {
+      "callerId": "synthetic_delta.62",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.63",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.63"
+    },
+    {
+      "callerId": "synthetic_delta.63",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.64",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.64"
+    },
+    {
+      "callerId": "synthetic_delta.65",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.66",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.66"
+    },
+    {
+      "callerId": "synthetic_delta.66",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.67",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.67"
+    },
+    {
+      "callerId": "synthetic_delta.67",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_alpha.60",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_alpha.60"
+    },
+    {
+      "callerId": "synthetic_delta.67",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.68",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.68"
+    },
+    {
+      "callerId": "synthetic_delta.69",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.70",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.70"
+    },
+    {
+      "callerId": "synthetic_delta.70",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.71",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.71"
+    },
+    {
+      "callerId": "synthetic_delta.71",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.72",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.72"
+    },
+    {
+      "callerId": "synthetic_delta.73",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.74",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.74"
+    },
+    {
+      "callerId": "synthetic_delta.74",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.75",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.75"
+    },
+    {
+      "callerId": "synthetic_delta.75",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.76",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.76"
+    },
+    {
+      "callerId": "synthetic_delta.77",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.78",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.78"
+    },
+    {
+      "callerId": "synthetic_delta.78",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.79",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.79"
+    },
+    {
+      "callerId": "synthetic_delta.79",
+      "container": "option:a",
+      "reason": "option_event_call",
+      "sourceNeedle": "synthetic_delta.80",
+      "sourcePath": "workspace/events/synthetic_delta_02.txt",
+      "targetId": "synthetic_delta.80"
+    },
+    {
+      "callerId": "helper:synthetic_alpha_outer",
+      "container": "helper",
+      "helperStack": ["synthetic_alpha_outer"],
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_alpha_middle",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "helper:synthetic_alpha_middle"
+    },
+    {
+      "callerId": "helper:synthetic_alpha_middle",
+      "container": "helper",
+      "helperStack": ["synthetic_alpha_outer", "synthetic_alpha_middle"],
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_alpha_inner",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "helper:synthetic_alpha_inner"
+    },
+    {
+      "callerId": "helper:synthetic_alpha_inner",
+      "container": "helper",
+      "delay": "hours=6",
+      "helperStack": ["synthetic_alpha_outer", "synthetic_alpha_middle", "synthetic_alpha_inner"],
+      "reason": "scripted_effect_expansion",
+      "sourceNeedle": "synthetic_alpha.6",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "synthetic_alpha.6"
+    },
+    {
+      "callerId": "helper:synthetic_beta_outer",
+      "container": "helper",
+      "helperStack": ["synthetic_beta_outer"],
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_beta_middle",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "helper:synthetic_beta_middle"
+    },
+    {
+      "callerId": "helper:synthetic_beta_middle",
+      "container": "helper",
+      "helperStack": ["synthetic_beta_outer", "synthetic_beta_middle"],
+      "reason": "scripted_effect_call",
+      "sourceNeedle": "synthetic_beta_inner",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "helper:synthetic_beta_inner"
+    },
+    {
+      "callerId": "helper:synthetic_beta_inner",
+      "container": "helper",
+      "helperStack": ["synthetic_beta_outer", "synthetic_beta_middle", "synthetic_beta_inner"],
+      "reason": "scripted_effect_expansion",
+      "sourceNeedle": "synthetic_beta.31",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "synthetic_beta.31"
+    },
+    {
+      "callerId": "helper:synthetic_dynamic_helper",
+      "container": "helper",
+      "helperStack": ["synthetic_dynamic_helper"],
+      "reason": "unresolved_dynamic_reference",
+      "sourceNeedle": "synthetic_stage_[?synthetic_stage]",
+      "sourcePath": "workspace/common/scripted_effects/synthetic_event_helpers.txt",
+      "targetId": "unresolved:synthetic_stage_[?synthetic_stage]",
+      "unresolved": true
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_01",
+      "container": "synthetic_on_action_01",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_alpha.1",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.1"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_02",
+      "container": "synthetic_on_action_02",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_alpha.11",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.11"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_03",
+      "container": "synthetic_on_action_03",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_alpha.20",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.20"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_04",
+      "container": "synthetic_on_action_04",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_alpha.30",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.30"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_05",
+      "container": "synthetic_on_action_05",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_beta.1",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.1"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_06",
+      "container": "synthetic_on_action_06",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_beta.10",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.10"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_07",
+      "container": "synthetic_on_action_07",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_gamma.1",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.1"
+    },
+    {
+      "callerId": "entry:on_action:synthetic_on_action_08",
+      "container": "synthetic_on_action_08",
+      "reason": "on_action_entry",
+      "sourceNeedle": "synthetic_delta.61",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.61"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_01",
+      "container": "synthetic_event_focus_01",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_alpha.40",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.40"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_02",
+      "container": "synthetic_event_focus_02",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_alpha.50",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.50"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_03",
+      "container": "synthetic_event_focus_03",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_alpha.60",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.60"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_04",
+      "container": "synthetic_event_focus_04",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_beta.11",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.11"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_05",
+      "container": "synthetic_event_focus_05",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_beta.20",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.20"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_06",
+      "container": "synthetic_event_focus_06",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_gamma.10",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.10"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_07",
+      "container": "synthetic_event_focus_07",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_gamma.20",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.20"
+    },
+    {
+      "callerId": "entry:focus:synthetic_event_focus_08",
+      "container": "synthetic_event_focus_08",
+      "reason": "focus_entry",
+      "sourceNeedle": "synthetic_delta.65",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.65"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_01",
+      "container": "synthetic_event_decision_01",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_alpha.51",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.51"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_02",
+      "container": "synthetic_event_decision_02",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_beta.30",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.30"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_03",
+      "container": "synthetic_event_decision_03",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_beta.40",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.40"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_04",
+      "container": "synthetic_event_decision_04",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_beta.50",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.50"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_05",
+      "container": "synthetic_event_decision_05",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_gamma.30",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.30"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_06",
+      "container": "synthetic_event_decision_06",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_gamma.40",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.40"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_07",
+      "container": "synthetic_event_decision_07",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_delta.69",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.69"
+    },
+    {
+      "callerId": "entry:decision:synthetic_event_decision_08",
+      "container": "synthetic_event_decision_08",
+      "reason": "decision_entry",
+      "sourceNeedle": "synthetic_delta.77",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.77"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_01",
+      "container": "synthetic_event_mission_01",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_alpha.70",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.70"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_02",
+      "container": "synthetic_event_mission_02",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_beta.60",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.60"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_03",
+      "container": "synthetic_event_mission_03",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_beta.70",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.70"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_04",
+      "container": "synthetic_event_mission_04",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_gamma.50",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.50"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_05",
+      "container": "synthetic_event_mission_05",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_gamma.60",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.60"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_06",
+      "container": "synthetic_event_mission_06",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_gamma.70",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.70"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_07",
+      "container": "synthetic_event_mission_07",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_delta.73",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.73"
+    },
+    {
+      "callerId": "entry:mission:synthetic_event_mission_08",
+      "container": "synthetic_event_mission_08",
+      "reason": "mission_entry",
+      "sourceNeedle": "synthetic_delta.78",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.78"
+    },
+    {
+      "callerId": "entry:country_setup:S01",
+      "container": "S01",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_alpha.2",
+      "sourcePath": "workspace/history/countries/S01 - Synthetic 1.txt",
+      "targetId": "synthetic_alpha.2"
+    },
+    {
+      "callerId": "entry:country_setup:S02",
+      "container": "S02",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_alpha.12",
+      "sourcePath": "workspace/history/countries/S02 - Synthetic 2.txt",
+      "targetId": "synthetic_alpha.12"
+    },
+    {
+      "callerId": "entry:country_setup:S03",
+      "container": "S03",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_beta.2",
+      "sourcePath": "workspace/history/countries/S03 - Synthetic 3.txt",
+      "targetId": "synthetic_beta.2"
+    },
+    {
+      "callerId": "entry:country_setup:S04",
+      "container": "S04",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_beta.12",
+      "sourcePath": "workspace/history/countries/S04 - Synthetic 4.txt",
+      "targetId": "synthetic_beta.12"
+    },
+    {
+      "callerId": "entry:country_setup:S05",
+      "container": "S05",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_gamma.2",
+      "sourcePath": "workspace/history/countries/S05 - Synthetic 5.txt",
+      "targetId": "synthetic_gamma.2"
+    },
+    {
+      "callerId": "entry:country_setup:S06",
+      "container": "S06",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_gamma.12",
+      "sourcePath": "workspace/history/countries/S06 - Synthetic 6.txt",
+      "targetId": "synthetic_gamma.12"
+    },
+    {
+      "callerId": "entry:country_setup:S07",
+      "container": "S07",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_delta.1",
+      "sourcePath": "workspace/history/countries/S07 - Synthetic 7.txt",
+      "targetId": "synthetic_delta.1"
+    },
+    {
+      "callerId": "entry:country_setup:S08",
+      "container": "S08",
+      "reason": "country_setup_entry",
+      "sourceNeedle": "synthetic_delta.11",
+      "sourcePath": "workspace/history/countries/S08 - Synthetic 8.txt",
+      "targetId": "synthetic_delta.11"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_01",
+      "container": "synthetic_state_setup_01",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_delta.65",
+      "sourcePath": "workspace/history/states/1-Synthetic.txt",
+      "targetId": "synthetic_delta.65"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_02",
+      "container": "synthetic_state_setup_02",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_delta.66",
+      "sourcePath": "workspace/history/states/2-Synthetic.txt",
+      "targetId": "synthetic_delta.66"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_03",
+      "container": "synthetic_state_setup_03",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_delta.67",
+      "sourcePath": "workspace/history/states/3-Synthetic.txt",
+      "targetId": "synthetic_delta.67"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_04",
+      "container": "synthetic_state_setup_04",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_delta.68",
+      "sourcePath": "workspace/history/states/4-Synthetic.txt",
+      "targetId": "synthetic_delta.68"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_05",
+      "container": "synthetic_state_setup_05",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_alpha.3",
+      "sourcePath": "workspace/history/states/5-Synthetic.txt",
+      "targetId": "synthetic_alpha.3"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_06",
+      "container": "synthetic_state_setup_06",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_beta.3",
+      "sourcePath": "workspace/history/states/6-Synthetic.txt",
+      "targetId": "synthetic_beta.3"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_07",
+      "container": "synthetic_state_setup_07",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_gamma.3",
+      "sourcePath": "workspace/history/states/7-Synthetic.txt",
+      "targetId": "synthetic_gamma.3"
+    },
+    {
+      "callerId": "entry:state_setup:synthetic_state_setup_08",
+      "container": "synthetic_state_setup_08",
+      "reason": "state_setup_entry",
+      "sourceNeedle": "synthetic_delta.21",
+      "sourcePath": "workspace/history/states/8-Synthetic.txt",
+      "targetId": "synthetic_delta.21"
+    }
+  ],
+  "expectedExternalEntries": [
+    {
+      "id": "synthetic_on_action_01",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.1"
+    },
+    {
+      "id": "synthetic_on_action_02",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.11"
+    },
+    {
+      "id": "synthetic_on_action_03",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.20"
+    },
+    {
+      "id": "synthetic_on_action_04",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.30"
+    },
+    {
+      "id": "synthetic_on_action_05",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.1"
+    },
+    {
+      "id": "synthetic_on_action_06",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.10"
+    },
+    {
+      "id": "synthetic_on_action_07",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.1"
+    },
+    {
+      "id": "synthetic_on_action_08",
+      "kind": "on_action",
+      "reason": "on_action_entry",
+      "sourcePath": "workspace/common/on_actions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.61"
+    },
+    {
+      "id": "synthetic_event_focus_01",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.40"
+    },
+    {
+      "id": "synthetic_event_focus_02",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.50"
+    },
+    {
+      "id": "synthetic_event_focus_03",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.60"
+    },
+    {
+      "id": "synthetic_event_focus_04",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.11"
+    },
+    {
+      "id": "synthetic_event_focus_05",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.20"
+    },
+    {
+      "id": "synthetic_event_focus_06",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.10"
+    },
+    {
+      "id": "synthetic_event_focus_07",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.20"
+    },
+    {
+      "id": "synthetic_event_focus_08",
+      "kind": "focus",
+      "reason": "focus_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.65"
+    },
+    {
+      "id": "synthetic_event_decision_01",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.51"
+    },
+    {
+      "id": "synthetic_event_decision_02",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.30"
+    },
+    {
+      "id": "synthetic_event_decision_03",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.40"
+    },
+    {
+      "id": "synthetic_event_decision_04",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.50"
+    },
+    {
+      "id": "synthetic_event_decision_05",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.30"
+    },
+    {
+      "id": "synthetic_event_decision_06",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.40"
+    },
+    {
+      "id": "synthetic_event_decision_07",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.69"
+    },
+    {
+      "id": "synthetic_event_decision_08",
+      "kind": "decision",
+      "reason": "decision_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.77"
+    },
+    {
+      "id": "synthetic_event_mission_01",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_alpha.70"
+    },
+    {
+      "id": "synthetic_event_mission_02",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.60"
+    },
+    {
+      "id": "synthetic_event_mission_03",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_beta.70"
+    },
+    {
+      "id": "synthetic_event_mission_04",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.50"
+    },
+    {
+      "id": "synthetic_event_mission_05",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.60"
+    },
+    {
+      "id": "synthetic_event_mission_06",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_gamma.70"
+    },
+    {
+      "id": "synthetic_event_mission_07",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.73"
+    },
+    {
+      "id": "synthetic_event_mission_08",
+      "kind": "mission",
+      "reason": "mission_entry",
+      "sourcePath": "workspace/common/decisions/synthetic_event_entries.txt",
+      "targetId": "synthetic_delta.78"
+    },
+    {
+      "id": "S01",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S01 - Synthetic 1.txt",
+      "targetId": "synthetic_alpha.2"
+    },
+    {
+      "id": "S02",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S02 - Synthetic 2.txt",
+      "targetId": "synthetic_alpha.12"
+    },
+    {
+      "id": "S03",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S03 - Synthetic 3.txt",
+      "targetId": "synthetic_beta.2"
+    },
+    {
+      "id": "S04",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S04 - Synthetic 4.txt",
+      "targetId": "synthetic_beta.12"
+    },
+    {
+      "id": "S05",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S05 - Synthetic 5.txt",
+      "targetId": "synthetic_gamma.2"
+    },
+    {
+      "id": "S06",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S06 - Synthetic 6.txt",
+      "targetId": "synthetic_gamma.12"
+    },
+    {
+      "id": "S07",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S07 - Synthetic 7.txt",
+      "targetId": "synthetic_delta.1"
+    },
+    {
+      "id": "S08",
+      "kind": "country_setup",
+      "reason": "country_setup_entry",
+      "sourcePath": "workspace/history/countries/S08 - Synthetic 8.txt",
+      "targetId": "synthetic_delta.11"
+    },
+    {
+      "id": "synthetic_state_setup_01",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/1-Synthetic.txt",
+      "targetId": "synthetic_delta.65"
+    },
+    {
+      "id": "synthetic_state_setup_02",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/2-Synthetic.txt",
+      "targetId": "synthetic_delta.66"
+    },
+    {
+      "id": "synthetic_state_setup_03",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/3-Synthetic.txt",
+      "targetId": "synthetic_delta.67"
+    },
+    {
+      "id": "synthetic_state_setup_04",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/4-Synthetic.txt",
+      "targetId": "synthetic_delta.68"
+    },
+    {
+      "id": "synthetic_state_setup_05",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/5-Synthetic.txt",
+      "targetId": "synthetic_alpha.3"
+    },
+    {
+      "id": "synthetic_state_setup_06",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/6-Synthetic.txt",
+      "targetId": "synthetic_beta.3"
+    },
+    {
+      "id": "synthetic_state_setup_07",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/7-Synthetic.txt",
+      "targetId": "synthetic_gamma.3"
+    },
+    {
+      "id": "synthetic_state_setup_08",
+      "kind": "state_setup",
+      "reason": "state_setup_entry",
+      "sourcePath": "workspace/history/states/8-Synthetic.txt",
+      "targetId": "synthetic_delta.21"
+    }
+  ],
+  "expectedUnresolved": [
+    {
+      "expression": "synthetic_alpha.[?synthetic_dynamic_event]",
+      "kind": "dynamic_event",
+      "ownerId": "synthetic_alpha.40"
+    },
+    {
+      "expression": "synthetic_stage_[?synthetic_stage]",
+      "kind": "dynamic_helper",
+      "ownerId": "synthetic_beta.40"
+    },
+    {
+      "expression": "synthetic_missing_helper",
+      "kind": "missing_helper",
+      "ownerId": "synthetic_beta.41"
+    },
+    {
+      "expression": "synthetic_stage_[?synthetic_stage]",
+      "kind": "dynamic_helper",
+      "ownerId": "helper:synthetic_dynamic_helper"
+    }
+  ],
+  "forbiddenInventedEdges": [
+    { "callerId": "synthetic_alpha.40", "targetId": "synthetic_alpha.40" },
+    { "callerId": "synthetic_beta.40", "targetId": "synthetic_beta.41" }
+  ],
+  "schemaVersion": 1,
+  "uniqueEventIds": [
+    "synthetic_alpha.1",
+    "synthetic_alpha.10",
+    "synthetic_alpha.11",
+    "synthetic_alpha.12",
+    "synthetic_alpha.13",
+    "synthetic_alpha.14",
+    "synthetic_alpha.15",
+    "synthetic_alpha.16",
+    "synthetic_alpha.17",
+    "synthetic_alpha.18",
+    "synthetic_alpha.19",
+    "synthetic_alpha.2",
+    "synthetic_alpha.20",
+    "synthetic_alpha.21",
+    "synthetic_alpha.22",
+    "synthetic_alpha.23",
+    "synthetic_alpha.24",
+    "synthetic_alpha.25",
+    "synthetic_alpha.26",
+    "synthetic_alpha.27",
+    "synthetic_alpha.28",
+    "synthetic_alpha.29",
+    "synthetic_alpha.3",
+    "synthetic_alpha.30",
+    "synthetic_alpha.31",
+    "synthetic_alpha.32",
+    "synthetic_alpha.33",
+    "synthetic_alpha.34",
+    "synthetic_alpha.35",
+    "synthetic_alpha.36",
+    "synthetic_alpha.37",
+    "synthetic_alpha.38",
+    "synthetic_alpha.39",
+    "synthetic_alpha.4",
+    "synthetic_alpha.40",
+    "synthetic_alpha.41",
+    "synthetic_alpha.42",
+    "synthetic_alpha.43",
+    "synthetic_alpha.44",
+    "synthetic_alpha.45",
+    "synthetic_alpha.46",
+    "synthetic_alpha.47",
+    "synthetic_alpha.48",
+    "synthetic_alpha.49",
+    "synthetic_alpha.5",
+    "synthetic_alpha.50",
+    "synthetic_alpha.51",
+    "synthetic_alpha.52",
+    "synthetic_alpha.53",
+    "synthetic_alpha.54",
+    "synthetic_alpha.55",
+    "synthetic_alpha.56",
+    "synthetic_alpha.57",
+    "synthetic_alpha.58",
+    "synthetic_alpha.59",
+    "synthetic_alpha.6",
+    "synthetic_alpha.60",
+    "synthetic_alpha.61",
+    "synthetic_alpha.62",
+    "synthetic_alpha.63",
+    "synthetic_alpha.64",
+    "synthetic_alpha.65",
+    "synthetic_alpha.66",
+    "synthetic_alpha.67",
+    "synthetic_alpha.68",
+    "synthetic_alpha.69",
+    "synthetic_alpha.7",
+    "synthetic_alpha.70",
+    "synthetic_alpha.71",
+    "synthetic_alpha.72",
+    "synthetic_alpha.73",
+    "synthetic_alpha.74",
+    "synthetic_alpha.75",
+    "synthetic_alpha.76",
+    "synthetic_alpha.77",
+    "synthetic_alpha.78",
+    "synthetic_alpha.79",
+    "synthetic_alpha.8",
+    "synthetic_alpha.80",
+    "synthetic_alpha.9",
+    "synthetic_beta.1",
+    "synthetic_beta.10",
+    "synthetic_beta.11",
+    "synthetic_beta.12",
+    "synthetic_beta.13",
+    "synthetic_beta.14",
+    "synthetic_beta.15",
+    "synthetic_beta.16",
+    "synthetic_beta.17",
+    "synthetic_beta.18",
+    "synthetic_beta.19",
+    "synthetic_beta.2",
+    "synthetic_beta.20",
+    "synthetic_beta.21",
+    "synthetic_beta.22",
+    "synthetic_beta.23",
+    "synthetic_beta.24",
+    "synthetic_beta.25",
+    "synthetic_beta.26",
+    "synthetic_beta.27",
+    "synthetic_beta.28",
+    "synthetic_beta.29",
+    "synthetic_beta.3",
+    "synthetic_beta.30",
+    "synthetic_beta.31",
+    "synthetic_beta.32",
+    "synthetic_beta.33",
+    "synthetic_beta.34",
+    "synthetic_beta.35",
+    "synthetic_beta.36",
+    "synthetic_beta.37",
+    "synthetic_beta.38",
+    "synthetic_beta.39",
+    "synthetic_beta.4",
+    "synthetic_beta.40",
+    "synthetic_beta.41",
+    "synthetic_beta.42",
+    "synthetic_beta.43",
+    "synthetic_beta.44",
+    "synthetic_beta.45",
+    "synthetic_beta.46",
+    "synthetic_beta.47",
+    "synthetic_beta.48",
+    "synthetic_beta.49",
+    "synthetic_beta.5",
+    "synthetic_beta.50",
+    "synthetic_beta.51",
+    "synthetic_beta.52",
+    "synthetic_beta.53",
+    "synthetic_beta.54",
+    "synthetic_beta.55",
+    "synthetic_beta.56",
+    "synthetic_beta.57",
+    "synthetic_beta.58",
+    "synthetic_beta.59",
+    "synthetic_beta.6",
+    "synthetic_beta.60",
+    "synthetic_beta.61",
+    "synthetic_beta.62",
+    "synthetic_beta.63",
+    "synthetic_beta.64",
+    "synthetic_beta.65",
+    "synthetic_beta.66",
+    "synthetic_beta.67",
+    "synthetic_beta.68",
+    "synthetic_beta.69",
+    "synthetic_beta.7",
+    "synthetic_beta.70",
+    "synthetic_beta.71",
+    "synthetic_beta.72",
+    "synthetic_beta.73",
+    "synthetic_beta.74",
+    "synthetic_beta.75",
+    "synthetic_beta.76",
+    "synthetic_beta.77",
+    "synthetic_beta.78",
+    "synthetic_beta.79",
+    "synthetic_beta.8",
+    "synthetic_beta.80",
+    "synthetic_beta.9",
+    "synthetic_delta.1",
+    "synthetic_delta.10",
+    "synthetic_delta.11",
+    "synthetic_delta.12",
+    "synthetic_delta.13",
+    "synthetic_delta.14",
+    "synthetic_delta.15",
+    "synthetic_delta.16",
+    "synthetic_delta.17",
+    "synthetic_delta.18",
+    "synthetic_delta.19",
+    "synthetic_delta.2",
+    "synthetic_delta.20",
+    "synthetic_delta.21",
+    "synthetic_delta.22",
+    "synthetic_delta.23",
+    "synthetic_delta.24",
+    "synthetic_delta.25",
+    "synthetic_delta.26",
+    "synthetic_delta.27",
+    "synthetic_delta.28",
+    "synthetic_delta.29",
+    "synthetic_delta.3",
+    "synthetic_delta.30",
+    "synthetic_delta.31",
+    "synthetic_delta.32",
+    "synthetic_delta.33",
+    "synthetic_delta.34",
+    "synthetic_delta.35",
+    "synthetic_delta.36",
+    "synthetic_delta.37",
+    "synthetic_delta.38",
+    "synthetic_delta.39",
+    "synthetic_delta.4",
+    "synthetic_delta.40",
+    "synthetic_delta.41",
+    "synthetic_delta.42",
+    "synthetic_delta.43",
+    "synthetic_delta.44",
+    "synthetic_delta.45",
+    "synthetic_delta.46",
+    "synthetic_delta.47",
+    "synthetic_delta.48",
+    "synthetic_delta.49",
+    "synthetic_delta.5",
+    "synthetic_delta.50",
+    "synthetic_delta.51",
+    "synthetic_delta.52",
+    "synthetic_delta.53",
+    "synthetic_delta.54",
+    "synthetic_delta.55",
+    "synthetic_delta.56",
+    "synthetic_delta.57",
+    "synthetic_delta.58",
+    "synthetic_delta.59",
+    "synthetic_delta.6",
+    "synthetic_delta.60",
+    "synthetic_delta.61",
+    "synthetic_delta.62",
+    "synthetic_delta.63",
+    "synthetic_delta.64",
+    "synthetic_delta.65",
+    "synthetic_delta.66",
+    "synthetic_delta.67",
+    "synthetic_delta.68",
+    "synthetic_delta.69",
+    "synthetic_delta.7",
+    "synthetic_delta.70",
+    "synthetic_delta.71",
+    "synthetic_delta.72",
+    "synthetic_delta.73",
+    "synthetic_delta.74",
+    "synthetic_delta.75",
+    "synthetic_delta.76",
+    "synthetic_delta.77",
+    "synthetic_delta.78",
+    "synthetic_delta.79",
+    "synthetic_delta.8",
+    "synthetic_delta.9",
+    "synthetic_gamma.1",
+    "synthetic_gamma.10",
+    "synthetic_gamma.11",
+    "synthetic_gamma.12",
+    "synthetic_gamma.13",
+    "synthetic_gamma.14",
+    "synthetic_gamma.15",
+    "synthetic_gamma.16",
+    "synthetic_gamma.17",
+    "synthetic_gamma.18",
+    "synthetic_gamma.19",
+    "synthetic_gamma.2",
+    "synthetic_gamma.20",
+    "synthetic_gamma.21",
+    "synthetic_gamma.22",
+    "synthetic_gamma.23",
+    "synthetic_gamma.24",
+    "synthetic_gamma.25",
+    "synthetic_gamma.26",
+    "synthetic_gamma.27",
+    "synthetic_gamma.28",
+    "synthetic_gamma.29",
+    "synthetic_gamma.3",
+    "synthetic_gamma.30",
+    "synthetic_gamma.31",
+    "synthetic_gamma.32",
+    "synthetic_gamma.33",
+    "synthetic_gamma.34",
+    "synthetic_gamma.35",
+    "synthetic_gamma.36",
+    "synthetic_gamma.37",
+    "synthetic_gamma.38",
+    "synthetic_gamma.39",
+    "synthetic_gamma.4",
+    "synthetic_gamma.40",
+    "synthetic_gamma.41",
+    "synthetic_gamma.42",
+    "synthetic_gamma.43",
+    "synthetic_gamma.44",
+    "synthetic_gamma.45",
+    "synthetic_gamma.46",
+    "synthetic_gamma.47",
+    "synthetic_gamma.48",
+    "synthetic_gamma.49",
+    "synthetic_gamma.5",
+    "synthetic_gamma.50",
+    "synthetic_gamma.51",
+    "synthetic_gamma.52",
+    "synthetic_gamma.53",
+    "synthetic_gamma.54",
+    "synthetic_gamma.55",
+    "synthetic_gamma.56",
+    "synthetic_gamma.57",
+    "synthetic_gamma.58",
+    "synthetic_gamma.59",
+    "synthetic_gamma.6",
+    "synthetic_gamma.60",
+    "synthetic_gamma.61",
+    "synthetic_gamma.62",
+    "synthetic_gamma.63",
+    "synthetic_gamma.64",
+    "synthetic_gamma.65",
+    "synthetic_gamma.66",
+    "synthetic_gamma.67",
+    "synthetic_gamma.68",
+    "synthetic_gamma.69",
+    "synthetic_gamma.7",
+    "synthetic_gamma.70",
+    "synthetic_gamma.71",
+    "synthetic_gamma.72",
+    "synthetic_gamma.73",
+    "synthetic_gamma.74",
+    "synthetic_gamma.75",
+    "synthetic_gamma.76",
+    "synthetic_gamma.77",
+    "synthetic_gamma.78",
+    "synthetic_gamma.79",
+    "synthetic_gamma.8",
+    "synthetic_gamma.80",
+    "synthetic_gamma.9"
+  ]
+}

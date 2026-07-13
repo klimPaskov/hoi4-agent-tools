@@ -1,0 +1,449 @@
+# Project-owned synthetic Event Chain Viewer acceptance fixture.
+# Generated deterministically; event triggering mode is explicit.
+add_namespace = synthetic_gamma
+
+country_event = {
+	id = synthetic_gamma.1
+	title = synthetic_gamma.1.t
+	desc = synthetic_gamma.1.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.1.a
+		country_event = { id = synthetic_gamma.2 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.2
+	title = synthetic_gamma.2.t
+	desc = synthetic_gamma.2.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.2.a
+		country_event = { id = synthetic_gamma.3 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.3
+	title = synthetic_gamma.3.t
+	desc = synthetic_gamma.3.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.3.a
+		country_event = { id = synthetic_gamma.4 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.4
+	title = synthetic_gamma.4.t
+	desc = synthetic_gamma.4.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.4.a
+		country_event = { id = synthetic_gamma.5 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.5
+	title = synthetic_gamma.5.t
+	desc = synthetic_gamma.5.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.5.a
+		country_event = { id = synthetic_gamma.6 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.6
+	title = synthetic_gamma.6.t
+	desc = synthetic_gamma.6.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.6.a
+		country_event = { id = synthetic_gamma.7 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.7
+	title = synthetic_gamma.7.t
+	desc = synthetic_gamma.7.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.7.a
+		country_event = { id = synthetic_gamma.8 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.8
+	title = synthetic_gamma.8.t
+	desc = synthetic_gamma.8.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.8.a
+		country_event = { id = synthetic_gamma.9 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.9
+	title = synthetic_gamma.9.t
+	desc = synthetic_gamma.9.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.9.a
+		country_event = { id = synthetic_gamma.10 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.10
+	title = synthetic_gamma.10.t
+	desc = synthetic_gamma.10.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.10.a
+		random = { chance = 35 country_event = synthetic_gamma.11 }
+		country_event = { id = synthetic_gamma.12 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.11
+	title = synthetic_gamma.11.t
+	desc = synthetic_gamma.11.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.11.a
+		country_event = { id = synthetic_gamma.12 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.12
+	title = synthetic_gamma.12.t
+	desc = synthetic_gamma.12.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.12.a
+		country_event = { id = synthetic_gamma.13 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.13
+	title = synthetic_gamma.13.t
+	desc = synthetic_gamma.13.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.13.a
+		country_event = { id = synthetic_gamma.14 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.14
+	title = synthetic_gamma.14.t
+	desc = synthetic_gamma.14.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.14.a
+		country_event = { id = synthetic_gamma.15 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.15
+	title = synthetic_gamma.15.t
+	desc = synthetic_gamma.15.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.15.a
+		country_event = { id = synthetic_gamma.16 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.16
+	title = synthetic_gamma.16.t
+	desc = synthetic_gamma.16.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.16.a
+		country_event = { id = synthetic_gamma.17 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.17
+	title = synthetic_gamma.17.t
+	desc = synthetic_gamma.17.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.17.a
+		country_event = { id = synthetic_gamma.18 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.18
+	title = synthetic_gamma.18.t
+	desc = synthetic_gamma.18.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.18.a
+		country_event = { id = synthetic_gamma.19 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.19
+	title = synthetic_gamma.19.t
+	desc = synthetic_gamma.19.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.19.a
+		country_event = { id = synthetic_gamma.20 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.20
+	title = synthetic_gamma.20.t
+	desc = synthetic_gamma.20.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.20.a
+		save_scope_as = synthetic_saved_country
+		country_event = { id = synthetic_gamma.21 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.21
+	title = synthetic_gamma.21.t
+	desc = synthetic_gamma.21.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.21.a
+		scope:synthetic_saved_country = { set_country_flag = synthetic_saved_scope_read }
+		clear_saved_scope = synthetic_saved_country
+		country_event = { id = synthetic_gamma.22 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.22
+	title = synthetic_gamma.22.t
+	desc = synthetic_gamma.22.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.22.a
+		country_event = { id = synthetic_gamma.23 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.23
+	title = synthetic_gamma.23.t
+	desc = synthetic_gamma.23.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.23.a
+		country_event = { id = synthetic_gamma.24 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.24
+	title = synthetic_gamma.24.t
+	desc = synthetic_gamma.24.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.24.a
+		country_event = { id = synthetic_gamma.25 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.25
+	title = synthetic_gamma.25.t
+	desc = synthetic_gamma.25.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.25.a
+		country_event = { id = synthetic_gamma.26 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.26
+	title = synthetic_gamma.26.t
+	desc = synthetic_gamma.26.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.26.a
+		country_event = { id = synthetic_gamma.27 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.27
+	title = synthetic_gamma.27.t
+	desc = synthetic_gamma.27.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.27.a
+		country_event = { id = synthetic_gamma.28 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.28
+	title = synthetic_gamma.28.t
+	desc = synthetic_gamma.28.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.28.a
+		country_event = { id = synthetic_gamma.29 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.29
+	title = synthetic_gamma.29.t
+	desc = synthetic_gamma.29.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.29.a
+		country_event = { id = synthetic_gamma.30 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.30
+	title = synthetic_gamma.30.t
+	desc = synthetic_gamma.30.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.30.a
+		set_variable = { global.synthetic_pressure = 2 }
+		country_event = { id = synthetic_gamma.31 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.31
+	title = synthetic_gamma.31.t
+	desc = synthetic_gamma.31.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.31.a
+		trigger = { check_variable = { global.synthetic_pressure > 0 } }
+		country_event = { id = synthetic_gamma.32 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.32
+	title = synthetic_gamma.32.t
+	desc = synthetic_gamma.32.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.32.a
+		country_event = { id = synthetic_gamma.33 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.33
+	title = synthetic_gamma.33.t
+	desc = synthetic_gamma.33.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.33.a
+		country_event = { id = synthetic_gamma.34 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.34
+	title = synthetic_gamma.34.t
+	desc = synthetic_gamma.34.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.34.a
+		country_event = { id = synthetic_gamma.35 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.35
+	title = synthetic_gamma.35.t
+	desc = synthetic_gamma.35.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.35.a
+		country_event = { id = synthetic_gamma.36 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.36
+	title = synthetic_gamma.36.t
+	desc = synthetic_gamma.36.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.36.a
+		country_event = { id = synthetic_gamma.37 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.37
+	title = synthetic_gamma.37.t
+	desc = synthetic_gamma.37.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.37.a
+		country_event = { id = synthetic_gamma.38 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.38
+	title = synthetic_gamma.38.t
+	desc = synthetic_gamma.38.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.38.a
+		country_event = { id = synthetic_gamma.39 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.39
+	title = synthetic_gamma.39.t
+	desc = synthetic_gamma.39.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.39.a
+		country_event = { id = synthetic_gamma.40 }
+	}
+}
+
+country_event = {
+	id = synthetic_gamma.40
+	title = synthetic_gamma.40.t
+	desc = synthetic_gamma.40.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_gamma.40.a
+		country_event = { id = synthetic_gamma.41 }
+	}
+}

@@ -14,6 +14,7 @@ import {
   focusTreePlanSchema,
 } from '../src/hoi4_agent_tools/schemas/focus.js';
 import { mapOperationSchema } from '../src/hoi4_agent_tools/schemas/map.js';
+import { eventFeatureManifestSchema } from '../src/hoi4_agent_tools/schemas/event.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'schemas');
@@ -31,6 +32,7 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['gui-animation-source.schema.json', GuiAnimationSourceManifestSchema],
   ['gui-scenario.schema.json', GuiPreviewScenarioSchema],
   ['map-operation.schema.json', mapOperationSchema],
+  ['event-feature-manifest.schema.json', eventFeatureManifestSchema],
   ['operation-result.schema.json', operationResultSchema],
 ];
 

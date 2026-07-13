@@ -1,0 +1,10 @@
+on_actions = {
+	synthetic_on_action_01 = { effect = { country_event = { id = synthetic_alpha.1 } } }
+	synthetic_on_action_02 = { effect = { country_event = { id = synthetic_alpha.11 } } }
+	synthetic_on_action_03 = { effect = { country_event = { id = synthetic_alpha.20 } } }
+	synthetic_on_action_04 = { effect = { country_event = { id = synthetic_alpha.30 } } }
+	synthetic_on_action_05 = { effect = { country_event = { id = synthetic_beta.1 } } }
+	synthetic_on_action_06 = { effect = { country_event = { id = synthetic_beta.10 } } }
+	synthetic_on_action_07 = { effect = { country_event = { id = synthetic_gamma.1 } } }
+	synthetic_on_action_08 = { effect = { news_event = { id = synthetic_delta.61 } } }
+}

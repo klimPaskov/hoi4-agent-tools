@@ -26,6 +26,9 @@ const expectedToolNames = [
   'hoi4.map_inspect',
   'hoi4.map_render',
   'hoi4.map_rewrite',
+  'hoi4.event_inspect',
+  'hoi4.event_render',
+  'hoi4.event_compare',
 ];
 const httpOrigin = 'https://package-install.example.test';
 const httpToken = 'package-install-http-token-that-is-longer-than-thirty-two-characters';
@@ -414,7 +417,8 @@ describe('clean npm-pack installation', () => {
       },
     });
     const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
-    expect(instructions).toBe('');
+    expect(instructions).toContain('hoi4.event_inspect');
+    expect(instructions).toContain('Event tools are read-only');
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
     );

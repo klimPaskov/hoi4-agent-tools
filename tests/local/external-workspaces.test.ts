@@ -16,6 +16,12 @@ import {
 import { nativeFocusEffectKeys } from '../../src/hoi4_agent_tools/focus/native-effects.js';
 import { ScriptedGuiStudio, defaultPreviewScenario } from '../../src/hoi4_agent_tools/gui/index.js';
 import { AgentNudger } from '../../src/hoi4_agent_tools/map/index.js';
+import {
+  EventChainViewer,
+  explainEventPath,
+  lintEventGraph,
+  traceSelectedEvents,
+} from '../../src/hoi4_agent_tools/event/index.js';
 
 const gameRoot = process.env.HOI4_GAME_ROOT;
 const modRoot = process.env.HOI4_EXTERNAL_MOD_ROOT;
@@ -72,6 +78,7 @@ async function engine(): Promise<CoreEngine> {
   if (runtimeRoot === '') runtimeRoot = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-local-'));
   const configuration = serverConfigurationSchema.parse({
     version: 1,
+    serverStateRoot: path.join(runtimeRoot, 'server-state'),
     storageRoots: [path.join(runtimeRoot, 'artifacts'), path.join(runtimeRoot, 'cache')],
     workspaces: [
       {
@@ -196,5 +203,91 @@ local('local installed-game and external-mod integration', () => {
     expect(renderedMap.filesScanned.length).toBeGreaterThan(0);
     expect(renderedMap.artifacts).toHaveLength(3);
     expect(renderedMap.bundle.png.subarray(1, 4).toString('ascii')).toBe('PNG');
+  }, 600_000);
+
+  it('analyzes a large vanilla and external-mod event family without copying or changing sources', async () => {
+    const core = await engine();
+    const viewer = new EventChainViewer(core);
+    const graph = await viewer.scan('external', { refresh: true });
+    const sourceHashesBefore = { ...graph.sourceHashes };
+    const families = (rootPrefix: 'game:' | 'mod:') => {
+      const grouped = new Map<string, string[]>();
+      for (const node of graph.nodes) {
+        if (
+          node.kind !== 'event' ||
+          node.eventId === undefined ||
+          node.namespace === undefined ||
+          node.sourcePath?.startsWith(rootPrefix) !== true
+        )
+          continue;
+        const values = grouped.get(node.namespace) ?? [];
+        values.push(node.eventId);
+        grouped.set(node.namespace, values);
+      }
+      return [...grouped.entries()].sort(
+        (left, right) => right[1].length - left[1].length || compareCodeUnits(left[0], right[0]),
+      );
+    };
+    const vanilla = families('game:')[0];
+    const external = families('mod:')[0];
+    expect(vanilla?.[1].length).toBeGreaterThanOrEqual(25);
+    expect(external?.[1].length).toBeGreaterThan(0);
+
+    for (const [namespace, eventIds] of [vanilla!, external!]) {
+      const trace = traceSelectedEvents(
+        graph,
+        { kind: 'namespace', namespace },
+        {
+          maxDepth: 6,
+          maxNodes: 1_000,
+          maxEdges: 4_000,
+          direction: 'both',
+          expandHelpers: false,
+        },
+      );
+      expect(trace.nodes.length).toBeGreaterThan(0);
+      const direct = trace.edges.find(
+        ({ from, to }) =>
+          graph.nodes.some(({ id, kind }) => id === from && kind === 'event') &&
+          graph.nodes.some(({ id, kind }) => id === to && kind === 'event'),
+      );
+      if (direct !== undefined) {
+        const from = graph.nodes.find(({ id }) => id === direct.from)?.eventId;
+        const to = graph.nodes.find(({ id }) => id === direct.to)?.eventId;
+        if (from !== undefined && to !== undefined) {
+          expect(
+            explainEventPath(
+              graph,
+              { kind: 'event', eventId: from },
+              { kind: 'event', eventId: to },
+              { maxDepth: 12, maxNodes: 2_000, expandHelpers: false },
+            ).found,
+          ).toBe(true);
+        }
+      }
+      expect(lintEventGraph(graph, { kind: 'namespace', namespace })).toBeDefined();
+      const first = await viewer.renderAndStore({
+        workspaceId: 'external',
+        view: 'overview',
+        selector: { kind: 'namespace', namespace },
+        maxDepth: 4,
+        maxNodes: 120,
+        includeHtml: false,
+      });
+      const second = await viewer.renderAndStore({
+        workspaceId: 'external',
+        view: 'overview',
+        selector: { kind: 'namespace', namespace },
+        maxDepth: 4,
+        maxNodes: 120,
+        includeHtml: false,
+      });
+      expect(first.render.hashes).toEqual(second.render.hashes);
+      expect(first.render.png.subarray(1, 4).toString('ascii')).toBe('PNG');
+      expect(eventIds.length).toBeGreaterThan(0);
+    }
+
+    const after = await viewer.scan('external', { refresh: true });
+    expect(after.sourceHashes).toEqual(sourceHashesBefore);
   }, 600_000);
 });

@@ -1,0 +1,11 @@
+{
+  "expected": {
+    "callersLeftDangling": ["helper:synthetic_beta_inner"],
+    "eventsWithChangedOutgoingEdges": ["synthetic_alpha.50", "synthetic_gamma.31"],
+    "newlyDisconnectedCandidates": ["synthetic_alpha.40"],
+    "removedEntryIds": ["synthetic_event_focus_01"],
+    "removedEventIds": ["synthetic_beta.31"],
+    "repairedMissingTargets": ["synthetic_alpha.999"]
+  },
+  "schemaVersion": 1
+}

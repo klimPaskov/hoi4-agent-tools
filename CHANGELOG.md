@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 - 2026-07-13
+
+- Added a read-only Event Chain Viewer for scanning, tracing, explaining, linting, rendering, and comparing large HOI4 event chains.
+- Kept the event surface to three tools with seven inspect modes and linked authoritative graph artifacts, bringing the public surface to thirteen tools within the fixed discovery budget.
+- Added event workflow documentation, package and Registry metadata, and project-owned acceptance coverage for more than 300 event definitions.
+- Reconfirmed MCP protocol `2025-11-25`, TypeScript SDK 1.29.0, Registry schema `2025-12-11`, and Registry publisher 1.7.9 for this release.
+
 ## 1.1.1 - 2026-07-13
 
 - Replaced the repository About text with a direct description of the focus-tree, GUI, and map tools.

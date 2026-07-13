@@ -1,0 +1,15 @@
+# Nested helpers intentionally cross several call frames.
+synthetic_alpha_outer = {
+	set_country_flag = synthetic_helper_entered
+	synthetic_alpha_middle = yes
+}
+synthetic_alpha_middle = { synthetic_alpha_inner = yes }
+synthetic_alpha_inner = { country_event = { id = synthetic_alpha.6 hours = 6 } }
+
+synthetic_beta_outer = { synthetic_beta_middle = yes }
+synthetic_beta_middle = { synthetic_beta_inner = yes }
+synthetic_beta_inner = { country_event = synthetic_beta.31 }
+
+synthetic_dynamic_helper = {
+	meta_effect = { text = { synthetic_stage_[?synthetic_stage] = yes } }
+}

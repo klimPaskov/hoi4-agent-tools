@@ -129,7 +129,8 @@ describe('offline package and Registry metadata', () => {
       $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
-      description: 'Create and clean HOI4 focus trees, scripted GUIs, and maps with coding agents.',
+      description:
+        'Analyze HOI4 event chains; create and clean focus trees, scripted GUIs, and maps with coding agents.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -159,6 +160,7 @@ describe('offline package and Registry metadata', () => {
       'dist/',
       'docs/README.md',
       'docs/setup.md',
+      'docs/events.md',
       'docs/focus.md',
       'docs/gui.md',
       'docs/map.md',

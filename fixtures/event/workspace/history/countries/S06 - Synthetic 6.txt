@@ -1,0 +1,2 @@
+capital = 1
+1936.1.1 = { country_event = { id = synthetic_gamma.12 } }

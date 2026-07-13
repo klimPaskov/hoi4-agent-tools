@@ -1,0 +1,5 @@
+state = {
+	id = 5
+	provinces = { 5 }
+	history = { owner = S01 1936.1.1 = { country_event = { id = synthetic_alpha.3 } } }
+}

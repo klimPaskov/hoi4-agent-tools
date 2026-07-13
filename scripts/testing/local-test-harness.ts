@@ -39,6 +39,7 @@ export const REQUIRED_LOCAL_TEST_NAMES = [
   'local installed-game and external-mod integration > indexes both roots and deterministically renders a large vanilla focus tree',
   'local installed-game and external-mod integration > builds and deterministically renders an offline GUI scene without launching HOI4',
   'local installed-game and external-mod integration > scans, renders, and stores the current map without launching HOI4',
+  'local installed-game and external-mod integration > analyzes a large vanilla and external-mod event family without copying or changing sources',
 ] as const;
 
 export function localVitestArguments(): string[] {

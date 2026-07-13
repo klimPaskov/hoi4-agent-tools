@@ -1,0 +1,12 @@
+focus_tree = {
+	id = synthetic_event_entries
+	country = { factor = 0 }
+	focus = { id = synthetic_event_focus_01 x = 0 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_alpha.40 } } }
+	focus = { id = synthetic_event_focus_02 x = 1 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_alpha.50 } } }
+	focus = { id = synthetic_event_focus_03 x = 2 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_alpha.60 } } }
+	focus = { id = synthetic_event_focus_04 x = 3 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_beta.11 } } }
+	focus = { id = synthetic_event_focus_05 x = 4 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_beta.20 } } }
+	focus = { id = synthetic_event_focus_06 x = 5 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_gamma.10 } } }
+	focus = { id = synthetic_event_focus_07 x = 6 y = 0 cost = 1 completion_reward = { country_event = { id = synthetic_gamma.20 } } }
+	focus = { id = synthetic_event_focus_08 x = 7 y = 0 cost = 1 completion_reward = { state_event = { id = synthetic_delta.65 } } }
+}

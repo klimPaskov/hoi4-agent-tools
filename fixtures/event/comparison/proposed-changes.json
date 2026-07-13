@@ -1,0 +1,28 @@
+{
+  "description": "Independent source mutations for event_compare tests; apply to a temporary copy.",
+  "mutations": [
+    {
+      "from": "synthetic_alpha.999",
+      "kind": "replace_scalar",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "to": "synthetic_alpha.49"
+    },
+    {
+      "eventId": "synthetic_beta.31",
+      "kind": "remove_event",
+      "sourcePath": "workspace/events/synthetic_beta_01.txt"
+    },
+    {
+      "entryId": "synthetic_event_focus_01",
+      "kind": "remove_entry",
+      "sourcePath": "workspace/common/national_focus/synthetic_event_entries.txt"
+    },
+    {
+      "from": "synthetic_gamma.32",
+      "kind": "replace_scalar",
+      "sourcePath": "workspace/events/synthetic_gamma_01.txt",
+      "to": "synthetic_gamma.33"
+    }
+  ],
+  "schemaVersion": 1
+}

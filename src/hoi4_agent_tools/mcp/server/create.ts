@@ -6,7 +6,11 @@ import { registerModsTool } from '../tools/mods.js';
 import { registerFocusTools } from '../tools/focus.js';
 import { registerGuiTools } from '../tools/gui.js';
 import { registerMapTools } from '../tools/map.js';
+import { registerEventTools } from '../tools/event.js';
 import { registerMcpResources } from '../resources/register.js';
+
+export const SERVER_INSTRUCTIONS =
+  'Use hoi4.mods to select a workspace. Use hoi4.event_inspect for scan, roots, trace, explain_path, state_flow, lint, and impact; hoi4.event_render and hoi4.event_compare return linked evidence. JSON resources are authoritative. Event tools are read-only. Only focus, GUI, and map rewrite tools edit configured mods.';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
   const server = new McpServer(
@@ -17,12 +21,14 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
     },
     {
       capabilities: { logging: {} },
+      instructions: SERVER_INSTRUCTIONS,
     },
   );
   registerModsTool(server, engine, context);
   registerFocusTools(server, engine, context);
   registerGuiTools(server, engine, context);
   registerMapTools(server, engine, context);
+  registerEventTools(server, engine, context);
   registerMcpResources(server, engine, context);
   return server;
 }

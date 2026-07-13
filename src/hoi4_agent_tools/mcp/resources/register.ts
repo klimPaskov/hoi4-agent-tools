@@ -11,7 +11,7 @@ const fatalUtf8Decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true
 const artifactResourceMetadata = {
   title: 'HOI4 review artifact',
   description:
-    'Complete plans, diagnostics, layouts, previews, and diffs. Reads accept zero-based byte offset and positive byte length query selectors; each response reports its exact byte range and continuation URI in _meta.',
+    'Complete plans, diagnostics, layouts, previews, event graphs, routes, state and scope reports, comparisons, and diffs. Reads accept zero-based byte offset and positive byte length query selectors; each response reports its exact byte range and continuation URI in _meta.',
   _meta: {
     [artifactChunkMetadataKey]: {
       version: 1,

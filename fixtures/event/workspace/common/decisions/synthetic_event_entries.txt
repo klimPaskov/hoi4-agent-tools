@@ -1,0 +1,18 @@
+synthetic_event_category = {
+	synthetic_event_decision_01 = { cost = 0 complete_effect = { country_event = { id = synthetic_alpha.51 } } }
+	synthetic_event_decision_02 = { cost = 0 complete_effect = { country_event = { id = synthetic_beta.30 } } }
+	synthetic_event_decision_03 = { cost = 0 complete_effect = { country_event = { id = synthetic_beta.40 } } }
+	synthetic_event_decision_04 = { cost = 0 complete_effect = { country_event = { id = synthetic_beta.50 } } }
+	synthetic_event_decision_05 = { cost = 0 complete_effect = { country_event = { id = synthetic_gamma.30 } } }
+	synthetic_event_decision_06 = { cost = 0 complete_effect = { country_event = { id = synthetic_gamma.40 } } }
+	synthetic_event_decision_07 = { cost = 0 complete_effect = { unit_leader_event = { id = synthetic_delta.69 } } }
+	synthetic_event_decision_08 = { cost = 0 complete_effect = { country_event = { id = synthetic_delta.77 } } }
+	synthetic_event_mission_01 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_alpha.70 } } timeout_effect = { set_country_flag = synthetic_event_mission_01_expired } }
+	synthetic_event_mission_02 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_beta.60 } } timeout_effect = { set_country_flag = synthetic_event_mission_02_expired } }
+	synthetic_event_mission_03 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_beta.70 } } timeout_effect = { set_country_flag = synthetic_event_mission_03_expired } }
+	synthetic_event_mission_04 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_gamma.50 } } timeout_effect = { set_country_flag = synthetic_event_mission_04_expired } }
+	synthetic_event_mission_05 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_gamma.60 } } timeout_effect = { set_country_flag = synthetic_event_mission_05_expired } }
+	synthetic_event_mission_06 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_gamma.70 } } timeout_effect = { set_country_flag = synthetic_event_mission_06_expired } }
+	synthetic_event_mission_07 = { days_mission_timeout = 30 complete_effect = { operative_leader_event = { id = synthetic_delta.73 } } timeout_effect = { set_country_flag = synthetic_event_mission_07_expired } }
+	synthetic_event_mission_08 = { days_mission_timeout = 30 complete_effect = { country_event = { id = synthetic_delta.78 } } timeout_effect = { set_country_flag = synthetic_event_mission_08_expired } }
+}

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.1.1/schemas/continuous-focus-palette.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v1.2.0/schemas/continuous-focus-palette.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {

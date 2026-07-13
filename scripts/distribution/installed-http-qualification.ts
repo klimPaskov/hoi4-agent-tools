@@ -17,6 +17,9 @@ const publicToolNames = [
   'hoi4.map_inspect',
   'hoi4.map_render',
   'hoi4.map_rewrite',
+  'hoi4.event_inspect',
+  'hoi4.event_render',
+  'hoi4.event_compare',
 ] as const;
 
 interface ObservedRequest {
@@ -333,6 +336,44 @@ export async function qualifyInstalledHttpBinary(
     requireCondition(
       progress.every((value, index) => index === 0 || value > progress[index - 1]!),
       'Installed HTTP progress was not strictly monotonic',
+    );
+
+    const eventProgress: number[] = [];
+    const eventInspection = await client.callTool(
+      {
+        name: 'hoi4.event_inspect',
+        arguments: { workspaceId: options.workspaceId, mode: 'scan' },
+      },
+      undefined,
+      { onprogress: ({ progress: value }) => eventProgress.push(value) },
+    );
+    requireCondition(
+      eventInspection.isError !== true,
+      'Installed HTTP event-chain inspection returned an error',
+    );
+    const eventStructured = eventInspection.structuredContent as
+      { status?: unknown; code?: unknown } | undefined;
+    requireCondition(
+      eventStructured?.status === 'ok' &&
+        (eventStructured.code === 'EVENT_INSPECTED' ||
+          eventStructured.code === 'EVENT_INSPECTED_PARTIAL'),
+      'Installed HTTP event-chain inspection returned an invalid structured result',
+    );
+    requireCondition(
+      (eventInspection.content as unknown[]).some(
+        (entry): entry is { type: 'resource_link'; mimeType: string } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          'type' in entry &&
+          entry.type === 'resource_link' &&
+          'mimeType' in entry &&
+          entry.mimeType === 'application/json',
+      ),
+      'Installed HTTP event-chain inspection returned no JSON artifact resource link',
+    );
+    requireCondition(
+      JSON.stringify(eventProgress) === JSON.stringify([0, 2, 3]),
+      `Installed HTTP event-chain progress was unexpected: ${eventProgress.join(', ')}`,
     );
 
     const cancellation = new AbortController();

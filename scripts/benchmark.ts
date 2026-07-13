@@ -25,6 +25,12 @@ import {
   type MapBaseLayer,
   type MapOverlay,
 } from '../src/hoi4_agent_tools/map/index.js';
+import {
+  EventChainViewer,
+  eventGraphHash,
+  explainEventPath,
+  traceSelectedEvents,
+} from '../src/hoi4_agent_tools/event/index.js';
 
 interface FocusManifest {
   focusCount: number;
@@ -49,6 +55,13 @@ interface MapManifest {
   strategicRegionIds: number[];
 }
 
+interface EventFixtureManifest {
+  eventDefinitionCount: number;
+  uniqueEventIdCount: number;
+  externalEntryPointCount: number;
+  automaticEventCount: number;
+}
+
 interface MemorySample {
   rssMiB: number;
   heapUsedMiB: number;
@@ -71,6 +84,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const focusFixtureRoot = path.join(repositoryRoot, 'fixtures', 'focus');
 const guiFixtureRoot = path.join(repositoryRoot, 'fixtures', 'gui');
 const mapFixtureRoot = path.join(repositoryRoot, 'fixtures', 'map');
+const eventFixtureRoot = path.join(repositoryRoot, 'fixtures', 'event');
 const oneMiB = 1024 * 1024;
 const iconDataUri =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -176,7 +190,7 @@ async function createEngine(
   const configuration = serverConfigurationSchema.parse({
     version: 1,
     serverStateRoot: path.join(runtimeRoot, 'server-state'),
-    storageRoots: [runtimeRoot],
+    storageRoots: [path.join(runtimeRoot, 'artifacts'), path.join(runtimeRoot, 'cache')],
     workspaces: [
       {
         id,
@@ -476,6 +490,100 @@ async function benchmarkMap(runtimeRoot: string): Promise<Record<string, unknown
   };
 }
 
+async function benchmarkEvent(runtimeRoot: string): Promise<Record<string, unknown>> {
+  const manifest = await readJson<EventFixtureManifest>(
+    path.join(eventFixtureRoot, 'fixture-manifest.json'),
+  );
+  assert.ok(
+    manifest.eventDefinitionCount >= 300,
+    'event benchmark fixture must contain at least 300 definitions',
+  );
+  assert.ok(
+    manifest.externalEntryPointCount >= 25,
+    'event benchmark fixture must contain at least 25 external entries',
+  );
+  const workspaceId = 'benchmark_event';
+  const { engine } = await createEngine(
+    workspaceId,
+    'Project-owned event-chain benchmark fixture',
+    path.join(eventFixtureRoot, 'workspace'),
+    runtimeRoot,
+  );
+  const viewer = new EventChainViewer(engine);
+  const memoryBefore = startMemory();
+  const cold = await timed(() => viewer.scan(workspaceId, { refresh: true }));
+  assert.equal(cold.value.statistics.eventCount, manifest.eventDefinitionCount);
+  assert.equal(
+    cold.value.statistics.entryCount,
+    manifest.externalEntryPointCount + manifest.automaticEventCount,
+  );
+
+  const trace = await timed(() =>
+    traceSelectedEvents(
+      cold.value,
+      { kind: 'namespace', namespace: 'synthetic_alpha' },
+      {
+        direction: 'both',
+        maxDepth: 12,
+        maxNodes: 2_000,
+        maxEdges: 8_000,
+        expandHelpers: false,
+      },
+    ),
+  );
+  assert.ok(trace.value.nodes.length > 100, 'event benchmark trace must remain non-trivial');
+  const explanation = await timed(() =>
+    explainEventPath(
+      cold.value,
+      { kind: 'event', eventId: 'synthetic_alpha.1' },
+      { kind: 'event', eventId: 'synthetic_alpha.9' },
+      { maxDepth: 24, maxNodes: 2_000, expandHelpers: true },
+    ),
+  );
+  assert.equal(explanation.value.found, true);
+  const firstRender = await timed(() =>
+    viewer.renderAndStore({
+      workspaceId,
+      view: 'overview',
+      selector: { kind: 'namespace', namespace: 'synthetic_alpha' },
+      maxDepth: 6,
+      maxNodes: 120,
+      includeHtml: false,
+    }),
+  );
+  const warmRender = await timed(() =>
+    viewer.renderAndStore({
+      workspaceId,
+      view: 'overview',
+      selector: { kind: 'namespace', namespace: 'synthetic_alpha' },
+      maxDepth: 6,
+      maxNodes: 120,
+      includeHtml: false,
+    }),
+  );
+  assert.deepEqual(firstRender.value.render.hashes, warmRender.value.render.hashes);
+  return {
+    fixture: 'fixtures/event/workspace',
+    counts: {
+      definitions: manifest.eventDefinitionCount,
+      indexedEvents: cold.value.statistics.eventCount,
+      entries: cold.value.statistics.entryCount,
+      nodes: cold.value.nodes.length,
+      edges: cold.value.edges.length,
+      stateAccesses: cold.value.stateAccesses.length,
+      issues: cold.value.issues.length,
+    },
+    graphHash: eventGraphHash(cold.value),
+    coldScanMs: cold.elapsedMs,
+    boundedTraceMs: trace.elapsedMs,
+    explainedPathMs: explanation.elapsedMs,
+    coldRenderMs: firstRender.elapsedMs,
+    warmRenderMs: warmRender.elapsedMs,
+    renderHashesStable: true,
+    memory: finishMemory(memoryBefore),
+  };
+}
+
 async function benchmarkCacheInvalidation(runtimeRoot: string): Promise<Record<string, unknown>> {
   const workspaceRoot = path.join(runtimeRoot, 'workspace');
   await cp(path.join(focusFixtureRoot, 'workspace'), workspaceRoot, { recursive: true });
@@ -542,6 +650,7 @@ async function main(): Promise<void> {
     const focus = await benchmarkFocus(path.join(temporaryRoot, 'focus'));
     const gui = await benchmarkGui(path.join(temporaryRoot, 'gui'));
     const map = await benchmarkMap(path.join(temporaryRoot, 'map'));
+    const event = await benchmarkEvent(path.join(temporaryRoot, 'event'));
     const cacheInvalidation = await benchmarkCacheInvalidation(
       path.join(temporaryRoot, 'cache-invalidation'),
     );
@@ -578,6 +687,7 @@ async function main(): Promise<void> {
       focus,
       gui,
       map,
+      event,
       cacheInvalidation,
     };
     console.log(JSON.stringify(report, null, 2));

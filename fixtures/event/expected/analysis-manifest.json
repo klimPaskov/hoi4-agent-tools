@@ -1,0 +1,163 @@
+{
+  "expectedStateFlows": [
+    {
+      "clearers": ["synthetic_alpha.10"],
+      "consumers": ["synthetic_alpha.6"],
+      "kind": "country_flag",
+      "name": "synthetic_chain_started",
+      "producers": ["synthetic_alpha.1"]
+    },
+    {
+      "clearers": ["synthetic_beta.50"],
+      "consumers": ["synthetic_beta.50"],
+      "kind": "global_flag",
+      "name": "synthetic_world_alarm",
+      "producers": ["synthetic_beta.1"]
+    },
+    {
+      "clearers": ["synthetic_delta.68"],
+      "consumers": ["synthetic_delta.66"],
+      "kind": "state_flag",
+      "name": "synthetic_state_ready",
+      "producers": ["synthetic_delta.65"]
+    },
+    {
+      "clearers": ["synthetic_alpha.10"],
+      "consumers": ["synthetic_alpha.6"],
+      "kind": "variable",
+      "name": "synthetic_counter",
+      "producers": ["synthetic_alpha.1", "synthetic_alpha.2"]
+    },
+    {
+      "clearers": [],
+      "consumers": ["synthetic_gamma.31"],
+      "kind": "global_variable",
+      "name": "synthetic_pressure",
+      "producers": ["synthetic_gamma.30"]
+    },
+    {
+      "clearers": ["synthetic_alpha.55"],
+      "consumers": ["synthetic_alpha.55"],
+      "kind": "array",
+      "name": "synthetic_participants",
+      "producers": ["synthetic_alpha.54"]
+    },
+    {
+      "clearers": [],
+      "consumers": ["synthetic_alpha.8"],
+      "kind": "event_target",
+      "name": "synthetic_transient_target",
+      "producers": ["synthetic_alpha.7"]
+    },
+    {
+      "clearers": [],
+      "consumers": [],
+      "kind": "global_event_target",
+      "name": "synthetic_leaked_global_target",
+      "producers": ["synthetic_alpha.53"]
+    },
+    {
+      "clearers": ["synthetic_beta.54"],
+      "consumers": ["synthetic_beta.53", "synthetic_beta.54"],
+      "expectedAccessOrder": ["save", "read", "replace", "read", "clear"],
+      "kind": "global_event_target",
+      "name": "synthetic_managed_global_target",
+      "producers": ["synthetic_beta.52", "synthetic_beta.53"]
+    },
+    {
+      "clearers": ["synthetic_gamma.21"],
+      "consumers": ["synthetic_gamma.21"],
+      "kind": "saved_scope",
+      "name": "synthetic_saved_country",
+      "producers": ["synthetic_gamma.20"]
+    }
+  ],
+  "intentionalDiagnostics": [
+    {
+      "classification": "confirmed_error",
+      "code": "EVENT_DUPLICATE_ID",
+      "owners": ["synthetic_delta.79"]
+    },
+    {
+      "classification": "confirmed_error",
+      "code": "EVENT_REFERENCE_MISSING",
+      "owners": ["synthetic_alpha.50", "synthetic_delta.79"]
+    },
+    {
+      "classification": "confirmed_error",
+      "code": "EVENT_IMMEDIATE_SELF_CALL",
+      "owners": ["synthetic_alpha.22"]
+    },
+    {
+      "classification": "probable_defect",
+      "code": "EVENT_IMMEDIATE_CYCLE",
+      "owners": ["synthetic_alpha.20", "synthetic_alpha.21"]
+    },
+    {
+      "classification": "unresolved_analysis",
+      "code": "EVENT_DYNAMIC_DISPATCH_UNRESOLVED",
+      "owners": ["synthetic_alpha.40"]
+    },
+    {
+      "classification": "unresolved_analysis",
+      "code": "EVENT_HELPER_UNRESOLVED",
+      "owners": ["synthetic_beta.40"]
+    },
+    {
+      "classification": "unresolved_analysis",
+      "code": "EVENT_HELPER_UNRESOLVED",
+      "owners": ["synthetic_beta.41"]
+    },
+    {
+      "classification": "unresolved_analysis",
+      "code": "EVENT_HELPER_UNRESOLVED",
+      "owners": ["helper:synthetic_dynamic_helper"]
+    },
+    {
+      "classification": "probable_defect",
+      "code": "EVENT_LOCALISATION_MISSING",
+      "owners": ["synthetic_delta.77"]
+    },
+    {
+      "classification": "confirmed_error",
+      "code": "EVENT_RANDOM_WEIGHT_INVALID",
+      "owners": ["synthetic_beta.10"]
+    },
+    {
+      "classification": "design_warning",
+      "code": "EVENT_OPTION_DANGLING",
+      "owners": ["synthetic_alpha.58"]
+    },
+    {
+      "classification": "probable_defect",
+      "code": "EVENT_SCOPE_MISMATCH",
+      "owners": ["synthetic_alpha.60"]
+    },
+    {
+      "classification": "probable_defect",
+      "code": "EVENT_TARGET_READ_BEFORE_SAVE",
+      "owners": ["synthetic_alpha.52"]
+    },
+    {
+      "classification": "design_warning",
+      "code": "EVENT_GLOBAL_TARGET_WITHOUT_CLEANUP",
+      "owners": ["synthetic_alpha.53"]
+    },
+    {
+      "classification": "design_warning",
+      "code": "EVENT_GATE_WITHOUT_WRITER",
+      "owners": ["synthetic_alpha.51"]
+    },
+    {
+      "classification": "probable_defect",
+      "code": "EVENT_DELAYED_TRANSIENT_CONTEXT",
+      "owners": ["synthetic_alpha.7", "synthetic_alpha.8"]
+    },
+    {
+      "classification": "design_warning",
+      "code": "EVENT_UNREACHABLE_IN_SELECTION",
+      "owners": ["synthetic_alpha.69"]
+    }
+  ],
+  "schemaVersion": 1
+}

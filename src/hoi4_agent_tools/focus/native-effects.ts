@@ -5,7 +5,7 @@
  * Source: the official HOI4 1.19.2 effects documentation reviewed 2026-07-10.
  * Keep this list synchronized during compatibility reviews.
  */
-export const nativeFocusEffectKeys: ReadonlySet<string> = new Set([
+export const nativeEffectKeys: ReadonlySet<string> = new Set([
   'activate_advisor',
   'activate_decision',
   'activate_mission',
@@ -560,3 +560,6 @@ export const nativeFocusEffectKeys: ReadonlySet<string> = new Set([
   'while_loop_effect',
   'white_peace',
 ]);
+
+/** Backward-compatible focus-domain name for the shared official effect catalog. */
+export const nativeFocusEffectKeys = nativeEffectKeys;

@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.klimPaskov/hoi4-agent-tools",
   "title": "HOI4 Agent Tools",
-  "description": "Create and clean HOI4 focus trees, scripted GUIs, and maps with coding agents.",
-  "version": "1.1.1",
+  "description": "Analyze HOI4 event chains; create and clean focus trees, scripted GUIs, and maps with coding agents.",
+  "version": "1.2.0",
   "repository": {
     "url": "https://github.com/klimPaskov/hoi4-agent-tools",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "hoi4-agent-tools",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "transport": {
         "type": "stdio"
       }

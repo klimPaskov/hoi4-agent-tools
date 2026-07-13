@@ -50,24 +50,18 @@ const emptyToolDataSchema = z.object({}).strict();
 const compactPublicOperationResultSchema = z
   .object({
     status: z.enum(['ok', 'blocked', 'error']),
-    code: z.string().max(256),
-    workspaceId: z.string().max(64),
-    filesScanned: z.array(z.string().max(4096)).max(MAX_INLINE_FILES_SCANNED),
-    proposedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_PROPOSED_FILES),
-    changedFiles: z.array(z.string().max(1024)).max(MAX_INLINE_CHANGED_FILES),
+    code: z.string(),
+    workspaceId: z.string(),
+    filesScanned: z.array(z.unknown()).max(MAX_INLINE_FILES_SCANNED),
+    proposedFiles: z.array(z.unknown()).max(MAX_INLINE_PROPOSED_FILES),
+    changedFiles: z.array(z.unknown()).max(MAX_INLINE_CHANGED_FILES),
     diagnostics: z.array(z.unknown()).max(MAX_INLINE_DIAGNOSTICS),
     artifacts: z.array(z.unknown()).max(MAX_INLINE_ARTIFACT_LINKS),
-    validation: z
-      .object({
-        passed: z.boolean(),
-        checks: z.array(z.unknown()).max(MAX_INLINE_VALIDATION_CHECKS),
-      })
-      .strict(),
+    validation: z.unknown(),
     blockers: z.array(z.unknown()).max(MAX_INLINE_BLOCKERS),
-    data: z.record(z.string().max(256), z.unknown()),
+    data: z.object({}).catchall(z.unknown()),
   })
-  .strict()
-  .describe('Stable operation envelope; data is tool-specific and artifacts link bulk evidence.');
+  .strict();
 
 /**
  * Advertise one compact operation envelope while retaining exact per-tool runtime validation.

@@ -1,0 +1,450 @@
+# Project-owned synthetic Event Chain Viewer acceptance fixture.
+# Generated deterministically; event triggering mode is explicit.
+add_namespace = synthetic_beta
+
+country_event = {
+	id = synthetic_beta.41
+	title = synthetic_beta.41.t
+	desc = synthetic_beta.41.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.41.a
+		synthetic_missing_helper = yes
+	}
+}
+
+country_event = {
+	id = synthetic_beta.42
+	title = synthetic_beta.42.t
+	desc = synthetic_beta.42.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.42.a
+		country_event = { id = synthetic_beta.43 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.43
+	title = synthetic_beta.43.t
+	desc = synthetic_beta.43.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.43.a
+		country_event = { id = synthetic_beta.44 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.44
+	title = synthetic_beta.44.t
+	desc = synthetic_beta.44.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.44.a
+		country_event = { id = synthetic_beta.45 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.45
+	title = synthetic_beta.45.t
+	desc = synthetic_beta.45.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.45.a
+		country_event = { id = synthetic_beta.46 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.46
+	title = synthetic_beta.46.t
+	desc = synthetic_beta.46.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.46.a
+		country_event = { id = synthetic_beta.47 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.47
+	title = synthetic_beta.47.t
+	desc = synthetic_beta.47.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.47.a
+		country_event = { id = synthetic_beta.48 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.48
+	title = synthetic_beta.48.t
+	desc = synthetic_beta.48.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.48.a
+		country_event = { id = synthetic_beta.49 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.49
+	title = synthetic_beta.49.t
+	desc = synthetic_beta.49.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.49.a
+		country_event = { id = synthetic_beta.50 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.50
+	title = synthetic_beta.50.t
+	desc = synthetic_beta.50.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.50.a
+		trigger = { has_global_flag = synthetic_world_alarm }
+		clr_global_flag = synthetic_world_alarm
+		country_event = { id = synthetic_beta.51 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.51
+	title = synthetic_beta.51.t
+	desc = synthetic_beta.51.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.51.a
+		country_event = { id = synthetic_beta.52 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.52
+	title = synthetic_beta.52.t
+	desc = synthetic_beta.52.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.52.a
+		save_global_event_target_as = synthetic_managed_global_target
+		country_event = { id = synthetic_beta.53 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.53
+	title = synthetic_beta.53.t
+	desc = synthetic_beta.53.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.53.a
+		global_event_target:synthetic_managed_global_target = { set_country_flag = synthetic_managed_target_read_once }
+		save_global_event_target_as = synthetic_managed_global_target
+		country_event = { id = synthetic_beta.54 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.54
+	title = synthetic_beta.54.t
+	desc = synthetic_beta.54.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.54.a
+		global_event_target:synthetic_managed_global_target = { set_country_flag = synthetic_managed_target_read_twice }
+		clear_global_event_target = synthetic_managed_global_target
+		country_event = { id = synthetic_beta.55 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.55
+	title = synthetic_beta.55.t
+	desc = synthetic_beta.55.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.55.a
+		country_event = { id = synthetic_beta.56 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.56
+	title = synthetic_beta.56.t
+	desc = synthetic_beta.56.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.56.a
+		country_event = { id = synthetic_beta.57 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.57
+	title = synthetic_beta.57.t
+	desc = synthetic_beta.57.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.57.a
+		country_event = { id = synthetic_beta.58 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.58
+	title = synthetic_beta.58.t
+	desc = synthetic_beta.58.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.58.a
+		country_event = { id = synthetic_beta.59 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.59
+	title = synthetic_beta.59.t
+	desc = synthetic_beta.59.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.59.a
+		country_event = { id = synthetic_beta.60 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.60
+	title = synthetic_beta.60.t
+	desc = synthetic_beta.60.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.60.a
+		country_event = { id = synthetic_beta.61 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.61
+	title = synthetic_beta.61.t
+	desc = synthetic_beta.61.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.61.a
+		country_event = { id = synthetic_beta.62 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.62
+	title = synthetic_beta.62.t
+	desc = synthetic_beta.62.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.62.a
+		country_event = { id = synthetic_beta.63 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.63
+	title = synthetic_beta.63.t
+	desc = synthetic_beta.63.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.63.a
+		country_event = { id = synthetic_beta.64 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.64
+	title = synthetic_beta.64.t
+	desc = synthetic_beta.64.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.64.a
+		country_event = { id = synthetic_beta.65 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.65
+	title = synthetic_beta.65.t
+	desc = synthetic_beta.65.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.65.a
+		country_event = { id = synthetic_beta.66 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.66
+	title = synthetic_beta.66.t
+	desc = synthetic_beta.66.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.66.a
+		country_event = { id = synthetic_beta.67 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.67
+	title = synthetic_beta.67.t
+	desc = synthetic_beta.67.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.67.a
+		country_event = { id = synthetic_beta.68 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.68
+	title = synthetic_beta.68.t
+	desc = synthetic_beta.68.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.68.a
+		country_event = { id = synthetic_beta.69 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.69
+	title = synthetic_beta.69.t
+	desc = synthetic_beta.69.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.69.a
+		country_event = { id = synthetic_beta.70 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.70
+	title = synthetic_beta.70.t
+	desc = synthetic_beta.70.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.70.a
+		country_event = { id = synthetic_beta.71 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.71
+	title = synthetic_beta.71.t
+	desc = synthetic_beta.71.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.71.a
+		country_event = { id = synthetic_beta.72 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.72
+	title = synthetic_beta.72.t
+	desc = synthetic_beta.72.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.72.a
+		country_event = { id = synthetic_beta.73 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.73
+	title = synthetic_beta.73.t
+	desc = synthetic_beta.73.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.73.a
+		country_event = { id = synthetic_beta.74 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.74
+	title = synthetic_beta.74.t
+	desc = synthetic_beta.74.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.74.a
+		country_event = { id = synthetic_beta.75 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.75
+	title = synthetic_beta.75.t
+	desc = synthetic_beta.75.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.75.a
+		country_event = { id = synthetic_beta.76 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.76
+	title = synthetic_beta.76.t
+	desc = synthetic_beta.76.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.76.a
+		country_event = { id = synthetic_beta.77 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.77
+	title = synthetic_beta.77.t
+	desc = synthetic_beta.77.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.77.a
+		country_event = { id = synthetic_beta.78 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.78
+	title = synthetic_beta.78.t
+	desc = synthetic_beta.78.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.78.a
+		country_event = { id = synthetic_beta.79 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.79
+	title = synthetic_beta.79.t
+	desc = synthetic_beta.79.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.79.a
+		country_event = { id = synthetic_beta.80 }
+	}
+}
+
+country_event = {
+	id = synthetic_beta.80
+	title = synthetic_beta.80.t
+	desc = synthetic_beta.80.d
+	is_triggered_only = yes
+	option = {
+		name = synthetic_beta.80.a
+		set_country_flag = synthetic_terminal_reached
+	}
+}

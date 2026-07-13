@@ -46,7 +46,7 @@ describe('local integration test harness', () => {
     ]);
   });
 
-  it('accepts only a run containing all three required local workflows', () => {
+  it('accepts only a run containing all four required local workflows', () => {
     expect(evaluateLocalTestRun(observation())).toEqual({ exitCode: 0, issues: [] });
   });
 

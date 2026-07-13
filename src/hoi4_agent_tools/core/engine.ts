@@ -85,7 +85,15 @@ function defaultPatterns(workspace: ReturnType<WorkspaceResolver['get']>): strin
       'common/characters/**/*.txt',
       'common/scripted_effects/**/*.txt',
       'common/scripted_triggers/**/*.txt',
+      'common/on_actions/**/*.txt',
+      'common/operations/**/*.txt',
+      'common/raids/**/*.txt',
+      'common/bop/**/*.txt',
+      'common/resistance_compliance_modifiers/**/*.txt',
+      'common/special_projects/**/*.txt',
       'events/**/*.txt',
+      'history/countries/**/*.txt',
+      'history/states/**/*.txt',
       ...under(roots.states, '**/*.txt'),
       // Binary rasters and positional data tables are domain-selected by Agent
       // Nudger. The shared symbol scan retains only map sources it can index.
@@ -268,6 +276,11 @@ export class CoreEngine {
       this.#scanFlights.delete(key);
       flight.controller.abort();
     }
+  }
+
+  /** Monotonic cache generation used by domain services to invalidate derived snapshots. */
+  generation(workspaceId: string): number {
+    return this.#scanGenerations.get(workspaceId) ?? 0;
   }
 
   private awaitScanFlight(
