@@ -2749,6 +2749,14 @@
       "targetId": "synthetic_delta.65"
     },
     {
+      "callerId": "synthetic_alpha.60",
+      "container": "immediate",
+      "reason": "immediate_event_call",
+      "sourceNeedle": "synthetic_delta.69",
+      "sourcePath": "workspace/events/synthetic_alpha_02.txt",
+      "targetId": "synthetic_delta.69"
+    },
+    {
       "callerId": "synthetic_alpha.61",
       "container": "option:a",
       "reason": "option_event_call",

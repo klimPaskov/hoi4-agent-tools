@@ -293,7 +293,13 @@ function specialBody(
       return option(`${id}.a`, ['trigger = { has_country_flag = synthetic_chain_started }']);
     case 'synthetic_alpha.60':
       recordEdge(id, 'synthetic_delta.65', 'immediate_event_call', sourcePath, 'immediate');
-      return ['\timmediate = {', '\t\tstate_event = { id = synthetic_delta.65 }', '\t}'];
+      recordEdge(id, 'synthetic_delta.69', 'immediate_event_call', sourcePath, 'immediate');
+      return [
+        '\timmediate = {',
+        '\t\tstate_event = { id = synthetic_delta.65 }',
+        '\t\tunit_leader_event = { id = synthetic_delta.69 }',
+        '\t}',
+      ];
     case 'synthetic_alpha.68':
       return option(`${id}.a`, ['set_country_flag = synthetic_detached_predecessor_terminal']);
     case 'synthetic_alpha.69':

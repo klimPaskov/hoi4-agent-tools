@@ -631,6 +631,16 @@ describe('Event Chain Viewer project-owned acceptance fixture', () => {
       const owners = new Set(matching.flatMap(semanticIssueOwners));
       expect([...owners]).toEqual(expect.arrayContaining(expected.owners));
     }
+
+    const scopeMismatch = graph.issues.find(
+      (issue) =>
+        issue.code === 'EVENT_SCOPE_MISMATCH' &&
+        semanticIssueOwners(issue).includes('synthetic_alpha.60'),
+    );
+    expect(scopeMismatch?.details).toMatchObject({
+      source: 'country',
+      destination: 'unit_leader',
+    });
   });
 
   it('resolves every selector kind and reports impact for events, helpers, and state subjects', async () => {

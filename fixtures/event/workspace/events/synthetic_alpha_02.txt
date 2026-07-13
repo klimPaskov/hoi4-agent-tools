@@ -223,6 +223,7 @@ country_event = {
 	is_triggered_only = yes
 	immediate = {
 		state_event = { id = synthetic_delta.65 }
+		unit_leader_event = { id = synthetic_delta.69 }
 	}
 }
 
