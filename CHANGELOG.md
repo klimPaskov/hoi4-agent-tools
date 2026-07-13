@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 - 2026-07-13
+
+- Replaced the repository About text with a direct description of the focus-tree, GUI, and map tools.
+- Simplified the README introduction and HTTP summary so operational safeguards remain in their dedicated documentation.
+
 ## 1.1.0 - 2026-07-12
 
 - Added plan-free `compact` rewrites for existing national focus trees while retaining authored mode for complete plans and new trees.

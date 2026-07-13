@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server that helps coding agents inspect, create, and clean up Hearts of Iron IV focus trees, scripted GUIs, and maps. It works directly with configured mod folders and produces offline renders for review. It does not launch or control the game.
+HOI4 Agent Tools is an MCP server for coding agents to inspect, create, and clean up Hearts of Iron IV focus trees, scripted GUIs, and maps. It works directly with configured mod folders and produces offline renders for review.
 
 ## What it does
 
@@ -13,7 +13,7 @@ HOI4 Agent Tools is an MCP server that helps coding agents inspect, create, and 
 Requires Node.js 22 or 24.
 
 ```bash
-npm install --global hoi4-agent-tools@1.1.0
+npm install --global hoi4-agent-tools@1.1.1
 hoi4-agent-tools-setup --init
 ```
 
@@ -60,7 +60,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 
 ## HTTP
 
-Rewrites validate and apply in one call. The installed game is never changed, and an interrupted multi-file rewrite is recovered automatically. Local MCP clients should use stdio; shared or remote deployments use the controls described in [HTTP](docs/http.md).
+Use stdio for local MCP clients. For shared or remote deployments, see [HTTP](docs/http.md).
 
 ## Development
 

@@ -5,11 +5,11 @@ HOI4 Agent Tools requires Node.js 22 or 24.
 ## Install and initialize
 
 ```bash
-npm install --global hoi4-agent-tools@1.1.0
+npm install --global hoi4-agent-tools@1.1.1
 hoi4-agent-tools-setup --init
 ```
 
-The setup command discovers standard HOI4 game and mod locations, creates a separate storage folder for generated workspace data, and writes the default per-user config. Each configured mod root is a parent folder whose immediate child directories are individual mods. Every discovered mod is writable through the three rewrite tools; no per-mod write switch or approval step is required. The installed game remains reference-only.
+The setup command discovers standard HOI4 game and mod locations, creates a separate storage folder for generated workspace data, and writes the default per-user config. Each configured mod root is a parent folder whose immediate child directories are individual mods. Every discovered mod is available through the inspect, render, and rewrite tools without per-mod setup. The game root supplies vanilla references.
 
 After connecting the MCP server, call `hoi4.mods` to confirm which mods are available.
 
@@ -22,7 +22,7 @@ hoi4-agent-tools-setup --init --mod-root /projects/hoi4-mods --mod-root /worksho
 ```
 
 - `--mod-root PATH` adds a parent folder containing mods. Repeat it for additional locations.
-- `--game-root PATH` selects the installed game folder used as a read-only reference.
+- `--game-root PATH` selects the installed game folder used for vanilla references.
 - `--workspace-storage-root PATH` selects where indexes, renders, and other generated workspace files are stored.
 - `--config PATH` writes or reads a config at a custom path instead of the default per-user location.
 
