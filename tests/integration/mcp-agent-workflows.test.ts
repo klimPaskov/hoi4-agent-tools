@@ -116,13 +116,6 @@ describe('MCP coding-agent workflows', () => {
       root: mod,
     });
 
-    const mods = resultOf(await client.callTool({ name: 'hoi4.mods', arguments: {} }));
-    expect(mods).toMatchObject({
-      status: 'ok',
-      code: 'MODS_LISTED',
-      data: { mods: [{ id: 'focus', writable: true }] },
-    });
-
     const inspected = resultOf(
       await client.callTool({
         name: 'hoi4.focus_inspect',

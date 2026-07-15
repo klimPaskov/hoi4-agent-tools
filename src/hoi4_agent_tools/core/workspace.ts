@@ -13,6 +13,9 @@ import { ServerState } from './server-state.js';
 export type RootAccess = 'read' | 'write';
 export type RootKind = 'mod' | 'game' | 'dependency' | 'artifact' | 'cache' | 'fixture';
 
+/** Omitted MCP workspace arguments resolve to the mod containing the server cwd. */
+export const CURRENT_WORKSPACE_ID = 'current';
+
 export interface ResolvedRoot {
   kind: RootKind;
   path: string;
@@ -270,6 +273,12 @@ export class WorkspaceResolver {
       }
     }
     for (const configured of configuration.workspaces) {
+      if (configured.id === CURRENT_WORKSPACE_ID) {
+        throw new ServiceError(
+          'WORKSPACE_ID_RESERVED',
+          `Workspace ID is reserved for the current working mod: ${CURRENT_WORKSPACE_ID}`,
+        );
+      }
       const registration = resolver.withGlobalWorkspaceDefaults(configured);
       const workspace = await resolver.resolveRegistration(registration);
       if (resolver.#byId.has(workspace.id)) {
@@ -288,6 +297,44 @@ export class WorkspaceResolver {
 
   config(): ServerConfiguration {
     return this.configuration;
+  }
+
+  /** Resolve the implicit workspace used by local coding-agent calls. */
+  resolveCurrentWorkspaceId(principal?: string): string {
+    const workspaces = this.list(principal).filter(
+      ({ registration }) => registration.kind === 'mod',
+    );
+    if (workspaces.length === 0) {
+      throw new ServiceError(
+        'WORKSPACE_CONTEXT_NOT_FOUND',
+        'No writable mod workspace is configured for the MCP server',
+      );
+    }
+
+    const currentDirectory = path.normalize(process.cwd());
+    const containing = workspaces.filter((workspace) =>
+      isWithin(workspace.modRoot, currentDirectory),
+    );
+    if (containing.length === 1) return containing[0]!.id;
+    if (containing.length > 1) {
+      throw new ServiceError(
+        'WORKSPACE_CONTEXT_AMBIGUOUS',
+        'The MCP working directory is inside more than one writable mod workspace',
+        { currentDirectory },
+      );
+    }
+    if (workspaces.length === 1) return workspaces[0]!.id;
+    throw new ServiceError(
+      'WORKSPACE_CONTEXT_REQUIRED',
+      'The MCP working directory does not identify one writable mod workspace',
+      { currentDirectory, workspaceIds: workspaces.map(({ id }) => id) },
+    );
+  }
+
+  resolveWorkspaceId(workspaceId: string, principal?: string): string {
+    return workspaceId === CURRENT_WORKSPACE_ID
+      ? this.resolveCurrentWorkspaceId(principal)
+      : workspaceId;
   }
 
   serverState(): ServerState | undefined {
@@ -371,13 +418,14 @@ export class WorkspaceResolver {
   }
 
   get(workspaceId: string, principal?: string): ResolvedWorkspace {
-    if (principal !== undefined && !this.allowedWorkspaceIds(principal).has(workspaceId)) {
+    const resolvedWorkspaceId = this.resolveWorkspaceId(workspaceId, principal);
+    if (principal !== undefined && !this.allowedWorkspaceIds(principal).has(resolvedWorkspaceId)) {
       throw new ServiceError(
         'WORKSPACE_INACCESSIBLE',
         'Workspace is unavailable to the authenticated principal',
       );
     }
-    const workspace = this.#byId.get(workspaceId);
+    const workspace = this.#byId.get(resolvedWorkspaceId);
     if (workspace === undefined) {
       if (principal !== undefined) {
         throw new ServiceError(
@@ -387,7 +435,7 @@ export class WorkspaceResolver {
       }
       throw new ServiceError(
         'WORKSPACE_NOT_REGISTERED',
-        `Workspace is not registered: ${workspaceId}`,
+        `Workspace is not registered: ${resolvedWorkspaceId}`,
       );
     }
     return workspace;

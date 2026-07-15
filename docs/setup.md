@@ -2,18 +2,21 @@
 
 HOI4 Agent Tools requires Node.js 22 or 24.
 
-## Install and initialize
+## Install
 
 ```bash
-npm install --global hoi4-agent-tools@1.2.0
-hoi4-agent-tools-setup --init
+npm install --global hoi4-agent-tools
 ```
 
-The setup command discovers standard HOI4 game and mod locations, creates a separate storage folder for generated workspace data, and writes the default per-user config. Each configured mod root is a parent folder whose immediate child directories are individual mods. Every discovered mod is available through the focus, GUI, map, and read-only event tools without per-mod setup. The game root supplies vanilla references.
+Set the MCP process working directory to the mod being edited. The server creates its local workspace in memory, keeps generated artifacts in the per-user data directory, and starts without a config file. The installed game is detected when available for vanilla references; it is not required for source inspection or offline rendering.
 
-After connecting the MCP server, call `hoi4.mods` to confirm which mods are available.
+When the MCP server starts with its working directory inside a mod, every focus, GUI, map, and event call uses that mod automatically. Omit `workspaceId`. Explicit `workspaceId` values remain available for configured multi-mod or remote deployments.
 
-## Override discovered paths
+## Optional persistent configuration
+
+Use `--init` only when you need several mod roots, a fixed game path, or a shared/remote process:
+
+### Configure explicit paths
 
 Use explicit paths when discovery is incomplete or when you want to expose more than one mod root:
 

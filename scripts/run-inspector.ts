@@ -11,7 +11,6 @@ const mod = path.join(modRoot, 'fixture');
 const storage = path.join(temporary, 'storage');
 const config = path.join(temporary, 'config.json');
 const publicToolNames = [
-  'hoi4.mods',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -175,7 +174,6 @@ try {
       '--tool-name',
       'hoi4.event_inspect',
       '--tool-arg',
-      'workspaceId=inspector',
       'mode=scan',
     ]),
     'Inspector hoi4.event_inspect',
@@ -220,7 +218,6 @@ try {
       '--tool-name',
       'hoi4.event_render',
       '--tool-arg',
-      'workspaceId=inspector',
       'view=overview',
       'includeHtml=false',
     ]),
@@ -237,7 +234,6 @@ try {
       '--tool-name',
       'hoi4.event_compare',
       '--tool-arg',
-      'workspaceId=inspector',
       `proposedSources=${JSON.stringify([{ relativePath: 'events/inspector.txt', source: proposedSource }])}`,
       'render=false',
     ]),
@@ -248,7 +244,7 @@ try {
   }
 
   process.stderr.write(
-    'Official MCP Inspector verified thirteen-tool discovery, the artifact resource, and event inspect/render/compare workflows.\n',
+    'Official MCP Inspector verified twelve-tool discovery, the artifact resource, and event inspect/render/compare workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

@@ -250,13 +250,5 @@ describe('Streamable HTTP deployment policy', () => {
         }),
       ).toEqual(['hoi4:read']);
     }
-    expect(
-      requiredScopesForMcpRequest(config, {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'hoi4.mods', arguments: {} },
-      }),
-    ).toEqual(['hoi4:read']);
   });
 });

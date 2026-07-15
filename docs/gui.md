@@ -1,6 +1,6 @@
 # Scripted GUIs
 
-Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points. Start with `hoi4.mods` when the mod ID is not known.
+Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points. Omit `workspaceId` when the MCP working directory is inside the target mod.
 
 ## Create a GUI
 

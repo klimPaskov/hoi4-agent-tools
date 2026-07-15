@@ -214,7 +214,14 @@ export function registerGuiTools(
       outputSchema: guiScanOutputSchema,
       annotations: artifactProducing,
     },
-    async ({ workspaceId, windowName, scenario, relatedScenarios }, extra) => {
+    async (
+      { workspaceId: requestedWorkspaceId, windowName, scenario, relatedScenarios },
+      extra,
+    ) => {
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building shared index and GUI inspection');
@@ -344,7 +351,8 @@ export function registerGuiTools(
     extra: Parameters<typeof progressReporter>[0],
     code: 'GUI_RENDERED' | 'GUI_STATES_RENDERED',
   ): Promise<ReturnType<typeof toolResult>> => {
-    const { workspaceId, windowName } = input;
+    const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+    const { windowName } = input;
     try {
       const progress = progressReporter(extra);
       await progress.report(0, 4, 'Building shared index and GUI source graph');
@@ -567,7 +575,8 @@ export function registerGuiTools(
       },
     },
     async (input, extra) => {
-      const { workspaceId, relativePath, windowName, scenario } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const { relativePath, windowName, scenario } = input;
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);

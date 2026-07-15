@@ -1,6 +1,6 @@
 # Focus trees
 
-Use `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes. Start with `hoi4.mods` when the mod ID is not known.
+Use `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes. Omit `workspaceId` when the MCP working directory is inside the target mod.
 
 ## Create a tree
 

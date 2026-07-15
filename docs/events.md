@@ -2,7 +2,7 @@
 
 The Event Chain Viewer analyzes event definitions and call sites across the active mod, configured dependencies, and vanilla sources. It is read-only: it does not rewrite event files or simulate the game.
 
-Start with `hoi4.mods` to obtain the workspace ID, then use the three event tools as needed.
+Use the three event tools directly; omit `workspaceId` when the MCP working directory is inside the target mod.
 
 ## Inspect
 

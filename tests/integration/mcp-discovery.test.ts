@@ -49,7 +49,6 @@ describe('MCP discovery', () => {
     const client = await connected();
     const tools = await client.listTools();
     expect(tools.tools.map(({ name }) => name)).toEqual([
-      'hoi4.mods',
       'hoi4.focus_inspect',
       'hoi4.focus_render',
       'hoi4.focus_rewrite',
@@ -64,12 +63,6 @@ describe('MCP discovery', () => {
       'hoi4.event_compare',
     ]);
 
-    expect(tools.tools.find(({ name }) => name === 'hoi4.mods')?.annotations).toMatchObject({
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    });
     for (const name of [
       'hoi4.focus_inspect',
       'hoi4.focus_render',
@@ -173,23 +166,13 @@ describe('MCP discovery', () => {
     await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
   });
 
-  it('returns a minimal structured mod inventory', async () => {
-    const client = await connected({}, ['alpha', 'beta']);
-    const result = await client.callTool({ name: 'hoi4.mods', arguments: {} });
+  it('resolves omitted workspace IDs to the sole configured mod', async () => {
+    const client = await connected();
+    const result = await client.callTool({ name: 'hoi4.gui_inspect', arguments: {} });
     expect(result.structuredContent).toMatchObject({
       status: 'ok',
-      code: 'MODS_LISTED',
-      workspaceId: '',
-      data: {
-        count: 2,
-        mods: [
-          { id: 'alpha', name: 'alpha', writable: true },
-          { id: 'beta', name: 'beta', writable: true },
-        ],
-      },
+      workspaceId: 'test',
     });
-    expect(JSON.stringify(result.structuredContent)).not.toContain('writePolicy');
-    expect(JSON.stringify(result.structuredContent)).not.toContain('replacePaths');
   });
 
   it('keeps discovery metadata within fixed context budgets', async () => {

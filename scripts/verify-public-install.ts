@@ -20,7 +20,6 @@ const httpToken = randomBytes(32).toString('hex');
 const httpTokenEnvironment = 'PUBLIC_INSTALL_HTTP_TOKEN';
 const focusRelativePath = 'common/national_focus/public_install_focus.txt';
 const publicToolNames = [
-  'hoi4.mods',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -192,9 +191,7 @@ try {
             message.result?.tools?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
           if (!sameNames(names, publicToolNames)) {
             clearTimeout(timeout);
-            reject(
-              new Error(`Published stdio tools do not match the thirteen-tool public surface`),
-            );
+            reject(new Error(`Published stdio tools do not match the twelve-tool public surface`));
             return;
           }
           validated = true;

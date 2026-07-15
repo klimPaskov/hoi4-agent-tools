@@ -125,7 +125,6 @@ describe('autonomous MCP rewrite workflows', () => {
     const tools = await client.listTools();
     const toolNames = tools.tools.map(({ name }) => name);
     expect(toolNames).toEqual([
-      'hoi4.mods',
       'hoi4.focus_inspect',
       'hoi4.focus_render',
       'hoi4.focus_rewrite',

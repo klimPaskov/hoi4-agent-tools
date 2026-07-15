@@ -1,6 +1,10 @@
 import { z } from 'zod/v4';
 
-export const workspaceIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/u);
+/** Optional for local agents: omitted means the mod containing the MCP cwd. */
+export const workspaceIdSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_-]{0,63}$/u)
+  .default('current');
 
 const diagnosticCodeSchema = z.string().min(1).max(256);
 const diagnosticMessageSchema = z.string().max(4096);

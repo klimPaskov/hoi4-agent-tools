@@ -202,14 +202,12 @@ describe('secured Streamable HTTP', () => {
     const alpha = await httpClient(handle.url, alphaSecret);
     const beta = await httpClient(handle.url, betaSecret);
     const alphaStatus = await alpha.client.callTool({
-      name: 'hoi4.mods',
-      arguments: {},
+      name: 'hoi4.gui_inspect',
+      arguments: { workspaceId: 'alpha' },
     });
-    expect((alphaStatus.structuredContent as Record<string, unknown>).data).toMatchObject({
-      mods: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]),
-    });
+    expect(alphaStatus).not.toMatchObject({ isError: true });
     const forbidden = await alpha.client.callTool({
-      name: 'hoi4.mods',
+      name: 'hoi4.gui_inspect',
       arguments: { workspaceId: 'beta' },
     });
     expect(forbidden).toMatchObject({
@@ -217,14 +215,14 @@ describe('secured Streamable HTTP', () => {
       structuredContent: { code: 'WORKSPACE_INACCESSIBLE' },
     });
     const discoveredForAlpha = await alpha.client.callTool({
-      name: 'hoi4.mods',
+      name: 'hoi4.gui_inspect',
       arguments: { workspaceId: discoveredWorkspaceId },
     });
     expect(discoveredForAlpha).toMatchObject({
-      structuredContent: { status: 'ok', code: 'MODS_LISTED' },
+      structuredContent: { status: 'ok' },
     });
     const discoveredForBeta = await beta.client.callTool({
-      name: 'hoi4.mods',
+      name: 'hoi4.gui_inspect',
       arguments: { workspaceId: discoveredWorkspaceId },
     });
     expect(discoveredForBeta).toMatchObject({

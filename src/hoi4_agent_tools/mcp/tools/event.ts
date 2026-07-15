@@ -393,11 +393,13 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const { workspaceId } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Analyzing event chain');
-        const inspected = await viewer.inspect(inspectRequest(input, context, progress.signal));
+        const inspected = await viewer.inspect(
+          inspectRequest({ ...input, workspaceId }, context, progress.signal),
+        );
         await progress.report(2, 3, 'Linking complete event analysis');
         const result = emptyServiceResult(workspaceId, {
           mode: inspected.mode,
@@ -436,12 +438,12 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const { workspaceId } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Rendering event-chain view');
         const rendered = await viewer.renderAndStore(
-          renderRequest(input, context, progress.signal),
+          renderRequest({ ...input, workspaceId }, context, progress.signal),
         );
         await progress.report(2, 3, 'Linking complete event renders');
         const result = emptyServiceResult(workspaceId, {
@@ -488,12 +490,12 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const { workspaceId } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Comparing event-chain graphs');
         const compared = await viewer.compareAndStore(
-          compareRequest(input, context, progress.signal),
+          compareRequest({ ...input, workspaceId }, context, progress.signal),
         );
         await progress.report(2, 3, 'Linking complete event comparison');
         const { comparison } = compared;

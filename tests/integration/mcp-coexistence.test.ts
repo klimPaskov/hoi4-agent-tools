@@ -164,7 +164,6 @@ describe('MCP coding-agent coexistence', () => {
 
     await client.listTools();
     await client.listResourceTemplates();
-    await client.callTool({ name: 'hoi4.mods', arguments: {} });
     expect(scan).not.toHaveBeenCalled();
     expect(await treeSnapshot(mod)).toEqual(sourceBefore);
     expect(await treeSnapshot(runtime)).toEqual(generatedBeforeDiscovery);

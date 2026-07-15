@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import {
   workspaceRegistrationSchema,
 } from '../../src/hoi4_agent_tools/core/configuration.js';
 import {
+  automaticConfiguration,
   configurationPath,
   createEngine,
   defaultConfigurationPath,
@@ -41,6 +42,26 @@ const workspace = {
 };
 
 describe('configuration loading and path selection', () => {
+  it('builds an immediate local configuration from the MCP working directory', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-automatic-configuration-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'my_mod');
+    await mkdir(path.join(modRoot, 'common'), { recursive: true });
+    await writeFile(path.join(modRoot, 'descriptor.mod'), 'name="My Mod"\n', 'utf8');
+
+    const configuration = await automaticConfiguration(path.join(modRoot, 'common'));
+
+    expect(configuration.workspaces).toHaveLength(1);
+    expect(configuration.workspaces[0]).toMatchObject({
+      id: 'auto_my_mod',
+      name: 'my_mod',
+      root: modRoot,
+      kind: 'mod',
+    });
+    expect(configuration.serverStateRoot).toBeTruthy();
+    expect(configuration.workspaceStorageRoot).toBeTruthy();
+  });
+
   it('accepts only exact non-opaque HTTP(S) origins', () => {
     for (const origin of [
       'file:///tmp/agent',

@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV event chains and inspect, create, or clean up focus trees, scripted GUIs, and maps. It works directly with configured mod folders and produces offline renders for review.
+HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV event chains and inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
 
 ## What it does
 
@@ -14,11 +14,10 @@ HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV
 Requires Node.js 22 or 24.
 
 ```bash
-npm install --global hoi4-agent-tools@1.2.0
-hoi4-agent-tools-setup --init
+npm install --global hoi4-agent-tools@2.0.0
 ```
 
-`--init` discovers the usual HOI4 game and mod locations and writes the default per-user configuration. No `HOI4_AGENT_CONFIG` environment variable is needed. For custom paths, multiple mod roots, or a custom config location, see [Setup](docs/setup.md).
+Start the MCP with its working directory set to the mod you are editing. No config or per-mod registration is required: the server finds that mod automatically. Run `hoi4-agent-tools-setup --init` only when you want persistent discovery for several mod roots, a custom game path, or a remote deployment; see [Setup](docs/setup.md).
 
 ## Connect your agent
 
@@ -32,7 +31,6 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 
 | Tool                 | Purpose                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------- |
-| `hoi4.mods`          | List the writable mods available to the coding agent.                                   |
 | `hoi4.focus_inspect` | Read focus trees and report structural or reference problems.                           |
 | `hoi4.focus_render`  | Render an existing focus tree or continuous palette.                                    |
 | `hoi4.focus_rewrite` | Create or update a focus tree.                                                          |

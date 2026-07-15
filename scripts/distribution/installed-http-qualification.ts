@@ -7,7 +7,6 @@ const protocolVersion = '2025-11-25';
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
 const publicToolNames = [
-  'hoi4.mods',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',

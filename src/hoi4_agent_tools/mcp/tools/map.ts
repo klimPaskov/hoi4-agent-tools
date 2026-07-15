@@ -468,7 +468,14 @@ export function registerMapTools(
       outputSchema: mapWorkspaceInspectOutputSchema,
       annotations: artifactProducing,
     },
-    async ({ workspaceId, provinceIds, stateIds, regionIds, allocationRequests }, extra) => {
+    async (
+      { workspaceId: requestedWorkspaceId, provinceIds, stateIds, regionIds, allocationRequests },
+      extra,
+    ) => {
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Inspecting and validating the map');
@@ -645,7 +652,11 @@ export function registerMapTools(
       outputSchema: mapRenderOutputSchema,
       annotations: artifactProducing,
     },
-    async ({ workspaceId, layer, overlays, scale }, extra) => {
+    async ({ workspaceId: requestedWorkspaceId, layer, overlays, scale }, extra) => {
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Rendering offline map layer');
@@ -695,7 +706,11 @@ export function registerMapTools(
         openWorldHint: false,
       },
     },
-    async ({ workspaceId, operations, diffScale }, extra) => {
+    async ({ workspaceId: requestedWorkspaceId, operations, diffScale }, extra) => {
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);

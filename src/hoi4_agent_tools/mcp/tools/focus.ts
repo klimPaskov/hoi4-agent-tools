@@ -601,7 +601,11 @@ export function registerFocusTools(
       annotations: artifactProducing,
     },
     async (input, extra) => {
-      const { workspaceId, relativePath } = input;
+      const { workspaceId: requestedWorkspaceId, relativePath } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building shared workspace index');
@@ -880,7 +884,11 @@ export function registerFocusTools(
       annotations: artifactProducing,
     },
     async (input, extra) => {
-      const { workspaceId, relativePath } = input;
+      const { workspaceId: requestedWorkspaceId, relativePath } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Importing and indexing focus source');
@@ -1030,7 +1038,7 @@ export function registerFocusTools(
     },
     async (input, extra) => {
       const {
-        workspaceId,
+        workspaceId: requestedWorkspaceId,
         relativePath,
         createIfMissing,
         horizontalSpacing,
@@ -1038,6 +1046,10 @@ export function registerFocusTools(
         padding,
         reviewScale,
       } = input;
+      const workspaceId = engine.resolver.resolveWorkspaceId(
+        requestedWorkspaceId,
+        context.principal,
+      );
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
