@@ -36,6 +36,8 @@ import type {
 import { emptyFidelityReport } from './types.js';
 
 const clickableTypes = /(?:button|checkbox|editbox|scrollbar|progressbar)/iu;
+const numericDynamicPlaceholder = '[X]';
+const textDynamicPlaceholder = '[dynamic_loc]';
 
 const partialSpriteSemantics: Readonly<Record<string, { field: string; detail: string }>> = {
   textSpriteType: {
@@ -315,7 +317,9 @@ function resolveTokenText(
       const replacement = rowValues?.[key] ?? scenario.variables[key] ?? scenario.scriptedGui[key];
       if (replacement === undefined) {
         unresolved.push(match[0]);
-        return '[X]';
+        return /(?:^|\.)Get[A-Za-z0-9_]+$/u.test(key)
+          ? textDynamicPlaceholder
+          : numericDynamicPlaceholder;
       }
       return String(replacement);
     },
@@ -326,7 +330,7 @@ function resolveTokenText(
     /\[([A-Za-z0-9_.:-]+)\]/gu,
     (match) => {
       const key = match[1] ?? '';
-      if (key === 'X') return match[0];
+      if (key === 'X' || key === 'dynamic_loc') return match[0];
       const countryKey = key.replace(/^(?:ROOT|This)\./u, '');
       const replacement =
         rowValues?.[countryKey] ??
@@ -335,7 +339,7 @@ function resolveTokenText(
         scenario.scriptedGui[key];
       if (replacement === undefined) {
         unresolved.push(match[0]);
-        return '[X]';
+        return textDynamicPlaceholder;
       }
       return String(replacement);
     },

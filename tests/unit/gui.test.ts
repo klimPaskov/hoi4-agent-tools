@@ -577,7 +577,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(first.layoutJson).toBe(second.layoutJson);
   });
 
-  it('uses compact placeholders and renders HOI4 localisation colour runs', async () => {
+  it('distinguishes numeric and text dynamic placeholders and renders HOI4 localisation colour runs', async () => {
     const files = [
       scanned(
         'interface/colour-probe.gui',
@@ -585,7 +585,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       ),
       scanned(
         'localisation/english/colour_probe_l_english.yml',
-        '\uFEFFl_english:\nDYNAMIC_COLOUR: "Cost: §Y[GetDynamicCost]§! Risk: §R[?missing_risk|.0]§!"\n',
+        '\uFEFFl_english:\nDYNAMIC_COLOUR: "Leader: §Y[GetDynamicLeader]§! Country: [FROM.GetName] Scoped: [?leader_scope.GetName] Risk: §R[?missing_risk|.0]§! Literal: [X]"\n',
       ),
     ];
     const scene = await buildGuiScene(
@@ -595,11 +595,20 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       parsePreviewScenario({ id: 'colour-probe', resolution: { width: 640, height: 360 } }),
     );
     const text = scene.elements.find(({ name }) => name === 'colour_text')?.text;
-    expect(text?.text).toBe('Cost: [X] Risk: [X]');
-    expect(text?.unresolvedTokens).toEqual(['[?missing_risk|.0]', '[GetDynamicCost]']);
+    expect(text?.text).toBe(
+      'Leader: [dynamic_loc] Country: [dynamic_loc] Scoped: [dynamic_loc] Risk: [X] Literal: [X]',
+    );
+    expect(text?.unresolvedTokens).toEqual([
+      '[?leader_scope.GetName]',
+      '[?missing_risk|.0]',
+      '[FROM.GetName]',
+      '[GetDynamicLeader]',
+    ]);
     const runs = text?.colourRuns?.flat() ?? [];
     expect(
-      runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#f1c75b'),
+      runs.some(
+        ({ text: value, colour }) => value.includes('[dynamic_loc]') && colour === '#f1c75b',
+      ),
     ).toBe(true);
     expect(
       runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#e05a5a'),
