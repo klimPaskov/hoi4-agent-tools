@@ -266,6 +266,14 @@ export interface GuiTextLayout {
   overflowX: boolean;
   overflowY: boolean;
   unresolvedTokens: string[];
+  colourRuns?: GuiTextColourRun[][];
+}
+
+export interface GuiTextColourRun {
+  text: string;
+  colour: string;
+  offsetX: number;
+  width: number;
 }
 
 export interface GuiOutlineTextGlyph {

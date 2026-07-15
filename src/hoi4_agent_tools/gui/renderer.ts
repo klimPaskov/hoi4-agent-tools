@@ -108,6 +108,27 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
       (glyphLine === undefined || glyphLine.source === 'deterministic-fallback'
         ? text.lineHeight * 0.8
         : glyphLine.baseline);
+    const colourRuns = text.colourRuns?.[index] ?? [];
+    if (colourRuns.length > 0) {
+      const runWidth = colourRuns.reduce(
+        (maximum, run) => Math.max(maximum, run.offsetX + run.width),
+        0,
+      );
+      const horizontalScale = runWidth > 0 && width > 0 ? width / runWidth : 1;
+      return `<g data-hoi4-colour-runs="true">${colourRuns
+        .map((run) =>
+          toolText.render(run.text, {
+            x: originX + run.offsetX * horizontalScale,
+            y: baseline,
+            fontSize: text.fontSize,
+            fill: run.colour,
+            stroke: '#12151a',
+            strokeWidth: 0.6,
+            ...(run.width > 0 ? { targetWidth: run.width * horizontalScale } : {}),
+          }),
+        )
+        .join('')}</g>`;
+    }
     if (glyphLine?.source === 'fontkit-path') {
       const horizontalScale = glyphLine.width > 0 && width > 0 ? width / glyphLine.width : 1;
       return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphLine.glyphs

@@ -5,6 +5,7 @@
 - Removed the workspace inventory tool and made the current mod implicit for local MCP calls.
 - Starting the server inside any mod now works without a config file or per-mod setup command.
 - Updated the published client examples, Registry metadata, and installation verification for the twelve-tool surface.
+- Rendered unresolved scripted localisation values as `[X]` and applied supported HOI4 `§` text colours in offline GUI previews.
 
 ## 1.2.0 - 2026-07-13
 

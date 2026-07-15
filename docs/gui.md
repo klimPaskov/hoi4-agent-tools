@@ -34,4 +34,6 @@ Inspection checks missing assets and localisation, invalid sizes, overlap, clipp
 
 The renderer does not run the game engine. Each render includes a fidelity report that separates fields it models from fields it approximates, ignores, cannot resolve, or does not support. Treat that report as part of the review.
 
+Unresolved runtime localisation expressions such as `[GetValue]` and `[?variable|format]` render as the compact placeholder `[X]`; provide scenario values when the exact text matters. Supported HOI4 `§` localisation colour controls are applied to preview text and `§!` restores the default colour.
+
 A rewrite stops if malformed or unsupported GUI script makes the requested change ambiguous. Runtime animation, masking, tiling, hardcoded controls, and dynamic values may require exact game precedents even when a useful offline preview is available.

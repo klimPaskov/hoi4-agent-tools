@@ -577,6 +577,39 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(first.layoutJson).toBe(second.layoutJson);
   });
 
+  it('uses compact placeholders and renders HOI4 localisation colour runs', async () => {
+    const files = [
+      scanned(
+        'interface/colour-probe.gui',
+        'guiTypes = { containerWindowType = { name = "colour_window" size = { width = 400 height = 100 } instantTextBoxType = { name = "colour_text" size = { width = 380 height = 30 } text = "DYNAMIC_COLOUR" } } }',
+      ),
+      scanned(
+        'localisation/english/colour_probe_l_english.yml',
+        '\uFEFFl_english:\nDYNAMIC_COLOUR: "Cost: §Y[GetDynamicCost]§! Risk: §R[?missing_risk|.0]§!"\n',
+      ),
+    ];
+    const scene = await buildGuiScene(
+      sourceGraph(files),
+      files,
+      'colour_window',
+      parsePreviewScenario({ id: 'colour-probe', resolution: { width: 640, height: 360 } }),
+    );
+    const text = scene.elements.find(({ name }) => name === 'colour_text')?.text;
+    expect(text?.text).toBe('Cost: [X] Risk: [X]');
+    expect(text?.unresolvedTokens).toEqual(['[?missing_risk|.0]', '[GetDynamicCost]']);
+    const runs = text?.colourRuns?.flat() ?? [];
+    expect(
+      runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#f1c75b'),
+    ).toBe(true);
+    expect(
+      runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#e05a5a'),
+    ).toBe(true);
+    const rendered = await renderGuiScene(scene, ['full']);
+    expect(rendered.images[0]?.svg).toContain('data-hoi4-colour-runs="true"');
+    expect(rendered.images[0]?.svg).toContain('fill="#f1c75b"');
+    expect(rendered.images[0]?.svg).toContain('fill="#e05a5a"');
+  });
+
   it('blocks aggregate scenario rows and nested list scene multiplication before expansion', async () => {
     expect(() =>
       parsePreviewScenario({

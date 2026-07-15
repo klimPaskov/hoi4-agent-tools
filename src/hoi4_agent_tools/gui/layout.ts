@@ -30,6 +30,7 @@ import type {
   GuiScene,
   GuiSceneElement,
   GuiSourceGraph,
+  GuiTextColourRun,
   GuiTextLayout,
 } from './types.js';
 import { emptyFidelityReport } from './types.js';
@@ -80,8 +81,61 @@ function scalarString(value: GuiPropertyValue | undefined): string | undefined {
   return undefined;
 }
 
-function visibleHoiText(value: string): string {
-  return value.replace(/\u00a7[A-Za-z0-9!]/gu, '').replace(/\u00a3[^\u00a3\s]+/gu, '\u25c6');
+const defaultTextColour = '#f5f2e8';
+const hoi4TextColours: Readonly<Record<string, string>> = {
+  B: '#4aa3df',
+  C: '#55d6d6',
+  G: '#56b870',
+  H: '#e7b454',
+  L: '#9aa7b3',
+  M: '#d16bd4',
+  O: '#e58b3c',
+  R: '#e05a5a',
+  T: '#4bc6b9',
+  W: defaultTextColour,
+  Y: '#f1c75b',
+  b: '#4aa3df',
+  g: '#87939e',
+};
+
+interface VisibleHoiText {
+  text: string;
+  colours: Array<string | undefined>;
+  hasColourMarkup: boolean;
+}
+
+function visibleHoiText(value: string): VisibleHoiText {
+  const characters: string[] = [];
+  const colours: Array<string | undefined> = [];
+  let colour: string | undefined;
+  let hasColourMarkup = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    const next = value[index + 1];
+    if (character === '\u00a7' && next !== undefined && /^[A-Za-z0-9!]$/u.test(next)) {
+      hasColourMarkup = true;
+      colour = next === '!' ? undefined : hoi4TextColours[next];
+      index += 1;
+      continue;
+    }
+    if (character === '\u00a3') {
+      let cursor = index + 1;
+      while (cursor < value.length && !/[\s\u00a3]/u.test(value[cursor] ?? '')) cursor += 1;
+      characters.push('\u25c6');
+      colours.push(colour);
+      index = cursor - 1;
+      continue;
+    }
+    if (character === '\\' && next === 'n') {
+      characters.push('\n');
+      colours.push(colour);
+      index += 1;
+      continue;
+    }
+    characters.push(character);
+    colours.push(colour);
+  }
+  return { text: characters.join(''), colours, hasColourMarkup };
 }
 
 function scalarNumber(value: GuiPropertyValue | undefined, reference: number): number | undefined {
@@ -260,8 +314,8 @@ function resolveTokenText(
       const key = match[1] ?? '';
       const replacement = rowValues?.[key] ?? scenario.variables[key] ?? scenario.scriptedGui[key];
       if (replacement === undefined) {
-        unresolved.push(`[?${key}]`);
-        return `[?${key}]`;
+        unresolved.push(match[0]);
+        return '[X]';
       }
       return String(replacement);
     },
@@ -272,6 +326,7 @@ function resolveTokenText(
     /\[([A-Za-z0-9_.:-]+)\]/gu,
     (match) => {
       const key = match[1] ?? '';
+      if (key === 'X') return match[0];
       const countryKey = key.replace(/^(?:ROOT|This)\./u, '');
       const replacement =
         rowValues?.[countryKey] ??
@@ -280,7 +335,7 @@ function resolveTokenText(
         scenario.scriptedGui[key];
       if (replacement === undefined) {
         unresolved.push(match[0]);
-        return match[0];
+        return '[X]';
       }
       return String(replacement);
     },
@@ -293,19 +348,26 @@ function wrapText(
   catalog: GuiAssetCatalog,
   fontName: string | undefined,
   text: string,
+  colours: readonly (string | undefined)[],
   fontSize: number,
   maximumWidth: number,
   work: GuiSceneWorkBudget,
 ): {
   lines: string[];
   widths: number[];
+  colourLines: Array<Array<string | undefined>>;
   lineHeight: number;
   metricSource: GuiTextLayout['metricSource'];
   missingGlyphs: number[];
 } {
-  const paragraphs = text.replaceAll('\\n', '\n').split('\n');
+  interface StyledWord {
+    text: string;
+    colours: Array<string | undefined>;
+  }
+
   const lines: string[] = [];
   const widths: number[] = [];
+  const colourLines: Array<Array<string | undefined>> = [];
   const missingGlyphs = new Set<number>();
   const retainMissingGlyphs = (values: readonly number[]): void => {
     for (const value of values) {
@@ -315,61 +377,108 @@ function wrapText(
   };
   let lineHeight = fontSize * 1.2;
   let metricSource: GuiTextLayout['metricSource'] = 'approximation';
-  for (const paragraph of paragraphs) {
+  const commitLine = (words: readonly StyledWord[]): void => {
+    const characters: string[] = [];
+    const lineColours: Array<string | undefined> = [];
+    for (const [index, word] of words.entries()) {
+      if (index > 0) {
+        characters.push(' ');
+        lineColours.push(lineColours.at(-1) ?? word.colours[0]);
+      }
+      characters.push(word.text);
+      lineColours.push(...word.colours);
+    }
+    const committedText = characters.join('');
+    work.spendTextLayout('committed text line measurement');
+    const committed = catalog.measureText(fontName, committedText, fontSize);
+    lines.push(committedText);
+    widths.push(committed.width);
+    colourLines.push(lineColours);
+    retainMissingGlyphs(committed.missingGlyphs);
+    lineHeight = committed.lineHeight;
+    metricSource = committed.source;
+  };
+
+  let paragraphStart = 0;
+  for (let paragraphEnd = 0; paragraphEnd <= text.length; paragraphEnd += 1) {
+    if (paragraphEnd < text.length && text[paragraphEnd] !== '\n') continue;
     work.spendTextLayout('text paragraph layout');
-    const words = paragraph.split(/\s+/u).filter((word) => word.length > 0);
+    const paragraph = text.slice(paragraphStart, paragraphEnd);
+    const paragraphColours = colours.slice(paragraphStart, paragraphEnd);
+    const words = [...paragraph.matchAll(/\S+/gu)].map((match): StyledWord => {
+      const start = match.index;
+      const word = match[0];
+      return { text: word, colours: paragraphColours.slice(start, start + word.length) };
+    });
+    paragraphStart = paragraphEnd + 1;
     if (words.length === 0) {
       lines.push('');
       widths.push(0);
+      colourLines.push([]);
       continue;
     }
-    let currentWords: string[] = [];
+    let currentWords: StyledWord[] = [];
     let currentWidth = 0;
     let previousWord: string | undefined;
     let previousWordWidth = 0;
     for (const word of words) {
       work.spendTextLayout('text word measurement');
-      const measuredWord = catalog.measureText(fontName, word, fontSize);
+      const measuredWord = catalog.measureText(fontName, word.text, fontSize);
       retainMissingGlyphs(measuredWord.missingGlyphs);
       let candidateWidth = measuredWord.width;
       if (previousWord !== undefined) {
         work.spendTextLayout('text word-boundary measurement');
-        const boundary = catalog.measureText(fontName, `${previousWord} ${word}`, fontSize);
+        const boundary = catalog.measureText(fontName, `${previousWord} ${word.text}`, fontSize);
         retainMissingGlyphs(boundary.missingGlyphs);
         candidateWidth = currentWidth + boundary.width - previousWordWidth;
       }
       if (maximumWidth > 0 && candidateWidth > maximumWidth && currentWords.length > 0) {
-        const committedText = currentWords.join(' ');
-        work.spendTextLayout('committed text line measurement');
-        const committed = catalog.measureText(fontName, committedText, fontSize);
-        lines.push(committedText);
-        widths.push(committed.width);
-        retainMissingGlyphs(committed.missingGlyphs);
+        commitLine(currentWords);
         currentWords = [word];
         currentWidth = measuredWord.width;
       } else {
         currentWords.push(word);
         currentWidth = candidateWidth;
       }
-      previousWord = word;
+      previousWord = word.text;
       previousWordWidth = measuredWord.width;
     }
-    const committedText = currentWords.join(' ');
-    work.spendTextLayout('committed text line measurement');
-    const committed = catalog.measureText(fontName, committedText, fontSize);
-    lines.push(committedText);
-    widths.push(committed.width);
-    retainMissingGlyphs(committed.missingGlyphs);
-    lineHeight = committed.lineHeight;
-    metricSource = committed.source;
+    commitLine(currentWords);
   }
   return {
     lines,
     widths,
+    colourLines,
     lineHeight,
     metricSource,
     missingGlyphs: [...missingGlyphs].sort((a, b) => a - b),
   };
+}
+
+function colourRunsForLine(
+  catalog: GuiAssetCatalog,
+  fontName: string | undefined,
+  line: string,
+  colours: readonly (string | undefined)[],
+  fontSize: number,
+  work: GuiSceneWorkBudget,
+): GuiTextColourRun[] {
+  if (!colours.some((colour) => colour !== undefined) || line.length === 0) return [];
+  const runs: GuiTextColourRun[] = [];
+  let start = 0;
+  let offsetX = 0;
+  while (start < line.length) {
+    const colour = colours[start] ?? defaultTextColour;
+    let end = start + 1;
+    while (end < line.length && (colours[end] ?? defaultTextColour) === colour) end += 1;
+    const text = line.slice(start, end);
+    work.spendTextLayout('localisation colour-run measurement');
+    const width = catalog.measureText(fontName, text, fontSize).width;
+    runs.push({ text, colour, offsetX, width });
+    offsetX += width;
+    start = end;
+  }
+  return runs;
 }
 
 function frameFor(
@@ -688,7 +797,8 @@ async function layoutElement(
     const state = scenario.elementStates[definition.name] ?? scenario.state;
     if (state === 'long-text') displayText = `${displayText} — ${displayText} — ${displayText}`;
     if (state === 'missing-localisation') displayText = `\u00a7R${rawText}_MISSING\u00a7!`;
-    displayText = visibleHoiText(displayText);
+    const visibleText = visibleHoiText(displayText);
+    displayText = visibleText.text;
     context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const fontName = scalarString(property(definition.attributes, 'font', 'buttonFont'));
     const resolvedFontMetrics = catalog.resolvedFontMetrics(fontName);
@@ -705,6 +815,7 @@ async function layoutElement(
       catalog,
       fontName,
       displayText,
+      visibleText.colours,
       fontSize * scale,
       maxWidth,
       context.work,
@@ -712,6 +823,18 @@ async function layoutElement(
     const glyphLines = [];
     for (const line of wrapped.lines)
       glyphLines.push(await catalog.shapeText(fontName, line, fontSize * scale));
+    const colourRuns = visibleText.hasColourMarkup
+      ? wrapped.lines.map((line, index) =>
+          colourRunsForLine(
+            catalog,
+            fontName,
+            line,
+            wrapped.colourLines[index] ?? [],
+            fontSize * scale,
+            context.work,
+          ),
+        )
+      : undefined;
     const maximumLineWidth = wrapped.widths.reduce((maximum, value) => Math.max(maximum, value), 0);
     if (width === 0) width = maximumLineWidth;
     if (height === 0) height = wrapped.lines.length * wrapped.lineHeight;
@@ -732,6 +855,7 @@ async function layoutElement(
       overflowX: width > 0 && measuredWidth > width + 0.01,
       overflowY: height > 0 && measuredHeight > height + 0.01,
       unresolvedTokens: resolved.unresolved,
+      ...(colourRuns === undefined ? {} : { colourRuns }),
     };
     if (wrapped.metricSource === 'approximation')
       addFidelity(
