@@ -752,7 +752,7 @@ describe('release artifact verification', () => {
       },
     ];
     const provenance = {
-      _type: 'https://in-toto.io/Statement/v0.1',
+      _type: 'https://in-toto.io/Statement/v1',
       predicateType: 'https://slsa.dev/provenance/v0.2',
       subject,
       predicate: {
@@ -778,7 +778,7 @@ describe('release artifact verification', () => {
       },
     };
     const sbom = {
-      _type: 'https://in-toto.io/Statement/v0.1',
+      _type: 'https://in-toto.io/Statement/v1',
       predicateType: 'https://spdx.dev/Document',
       subject,
       predicate: { SPDXID: 'SPDXRef-DOCUMENT', spdxVersion: 'SPDX-2.3' },
@@ -798,6 +798,13 @@ describe('release artifact verification', () => {
     expect(() =>
       verifyContainerAttestationStatement(sbom, 'https://spdx.dev/Document', expected),
     ).not.toThrow();
+    expect(() =>
+      verifyContainerAttestationStatement(
+        { ...sbom, _type: 'https://in-toto.io/Statement/v0.1' },
+        'https://spdx.dev/Document',
+        expected,
+      ),
+    ).toThrow(/statement type/iu);
     const invalidSourceMutations: Array<(candidate: typeof provenance) => void> = [
       (candidate) => {
         candidate.predicate.invocation.configSource.uri = `${expected.sourceRepository}.git#${'c'.repeat(40)}`;

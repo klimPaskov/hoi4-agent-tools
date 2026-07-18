@@ -559,7 +559,7 @@ export function verifyContainerAttestationStatement(
   expected: ExpectedContainerAttestation,
 ): void {
   const statement = record(value, 'container attestation statement');
-  if (statement._type !== 'https://in-toto.io/Statement/v0.1') {
+  if (statement._type !== 'https://in-toto.io/Statement/v1') {
     throw new Error('Container attestation statement type is incorrect');
   }
   if (statement.predicateType !== predicateType) {

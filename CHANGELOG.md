@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1 - 2026-07-18
+
+- Updated container attestation verification for current in-toto `Statement/v1` documents emitted by BuildKit.
+
 ## 2.1.0 - 2026-07-18
 
 - Added `hoi4.focus_raster` for decoded focus icons and deterministic PNG reviews while keeping inspection, vector rendering, and rewrites responsive on very large trees.
