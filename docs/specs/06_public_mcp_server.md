@@ -4,7 +4,7 @@
 
 Make the complete HOI4 agent workbench available through a public Model Context Protocol server. Coding agents connect to the server and call structured tools while working on configured HOI4 mod workspaces.
 
-The MCP server is the product interface. There is no separate supported interactive focus, GUI, or map application. Internal service calls, launch entry points, test harnesses, and maintenance scripts may exist, but they cannot become a second behavior model.
+The MCP server is the product interface. There is no separate supported interactive focus, GUI, map, or event application. Internal service calls, launch entry points, test harnesses, and maintenance scripts may exist, but they cannot become a second behavior model.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ src/hoi4_agent_tools/
     security/
 ```
 
-MCP handlers call typed core services directly. They must not scrape command output or duplicate focus, GUI, map, parser, transaction, rendering, or validation logic.
+MCP handlers call typed core services directly. They must not scrape command output or duplicate focus, GUI, map, event, parser, transaction, rendering, or validation logic.
 
 Use the current official MCP SDK for the chosen implementation language. Pin compatible versions, record supported protocol versions, and test capability negotiation.
 
@@ -42,14 +42,16 @@ A remote server accesses only workspaces mounted and configured on that server. 
 
 ## MCP tool surface
 
-Expose exactly these ten namespaced tools:
+Expose exactly these thirteen namespaced tools:
 
-- `hoi4.mods`
-- `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_rewrite`
+- `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, `hoi4.focus_rewrite`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, `hoi4.gui_rewrite`
 - `hoi4.map_inspect`, `hoi4.map_render`, `hoi4.map_rewrite`
+- `hoi4.event_inspect`, `hoi4.event_render`, `hoi4.event_compare`
 
-Workspace discovery happens from startup configuration; large evidence is read through artifact resources.
+`hoi4.event_inspect` is a compact operation family with `scan`, `roots`, `trace`, `explain_path`, `state_flow`, `lint`, and `impact` modes. All three event tools are read-only. They statically analyze and visualize event source; they do not edit events, simulate runtime execution, or launch the game.
+
+Local startup without a config file resolves the mod containing the MCP working directory and uses private generated-data roots outside gameplay files. Configured multi-mod deployments retain explicit workspace IDs; large evidence is read through artifact resources.
 
 Every tool has strict input and output schemas, bounded defaults, deterministic error codes, source-linked diagnostics, and accurate annotations. Long operations support progress and cancellation where the protocol and SDK permit it.
 
@@ -57,7 +59,7 @@ Every tool has strict input and output schemas, bounded defaults, deterministic 
 
 Use MCP resources for large or reusable outputs.
 
-Provide one stable content-addressed resource template for focus HTML/SVG/PNG/JSON, GUI renders/fidelity reports, map geometry/previews/diffs, diagnostics, and rewrite evidence.
+Provide one stable content-addressed resource template for focus HTML/SVG/PNG/JSON, GUI renders/fidelity reports, map geometry/previews/diffs, event graphs/routes/state/scope/comparisons, diagnostics, and rewrite evidence.
 
 Tool calls return compact summaries plus resource links with MIME type and size when known.
 
@@ -67,7 +69,7 @@ Do not register MCP prompts. Coding agents decide when to use the tools from the
 
 The primary write path requires:
 
-1. a canonical mod workspace loaded from explicit startup configuration or direct-child discovery beneath `modRoots`
+1. a canonical mod workspace loaded from the MCP working directory, explicit startup configuration, or direct-child discovery beneath `modRoots`
 2. a canonical allowlisted mod workspace root; game, dependency, fixture, cache, artifact, and unrelated roots remain non-writable
 3. an authenticated and authorized principal with access to that workspace and, for remote transports, the write scope
 4. one `focus_rewrite`, `gui_rewrite`, or `map_rewrite` request containing the complete declarative edit input
@@ -98,7 +100,7 @@ Create and maintain:
 
 Publish metadata to the official MCP Registry after the package or image is publicly available.
 
-Provide a minimal setup utility or installation flow that can discover and configure mod roots, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, or map tools for direct interactive use and must not silently edit another application's settings.
+Provide a minimal setup utility or installation flow that can discover and configure mod roots, test permissions and rendering dependencies, and print reviewable MCP client configuration. This utility exists for installation and diagnostics. It does not expose the focus, GUI, map, or event tools for direct interactive use and must not silently edit another application's settings.
 
 ## Versioning and compatibility
 
@@ -114,7 +116,7 @@ Test with the official MCP Inspector and automated protocol clients.
 
 Required tests:
 
-- exact ten-tool and one-resource-template discovery
+- exact thirteen-tool and one-resource-template discovery within the fixed 32 KiB tool-list budget
 - capability negotiation
 - stdio framing and stderr-only logging
 - Streamable HTTP request and streaming behavior
@@ -122,6 +124,7 @@ Required tests:
 - concurrent users and isolated workspaces
 - automatic writable mod discovery and non-mod root protection
 - one-call focus, GUI, and map rewrites with no caller transaction choreography
+- read-only event scan, root discovery, trace, path explanation, state flow, lint, impact, deterministic rendering, and comparison
 - stale-source and changed-root rejection inside the rewrite call
 - exact automatic recovery after injected write and post-validation failures
 - path traversal and symlink escape attempts
@@ -130,6 +133,6 @@ Required tests:
 - deterministic schemas and responses
 - clean installation from the published package
 - registry metadata validation
-- agent workflow tests covering focus, GUI, and map operations end to end
+- agent workflow tests covering focus, GUI, map, and event operations end to end
 
-The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, exposes prompts or legacy transaction tools, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback, requires hand-written client glue, exposes a separate interactive editor, or cannot be installed from its published package.
+The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, exposes prompts or legacy transaction tools, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback, requires hand-written client glue, exposes a separate interactive editor, omits the read-only Event Chain Viewer, or cannot be installed from its published package.

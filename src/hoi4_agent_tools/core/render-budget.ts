@@ -4,7 +4,7 @@ import { ServiceError } from './result.js';
  * Fixed process-safety ceilings for decoded rasters and offline render artifacts.
  *
  * The per-artifact ceiling permits the vanilla 5632x2048 map at scale 2 and the
- * committed 255-focus benchmark. Aggregate reservations account for every
+ * committed 1,024-focus benchmarks. Aggregate reservations account for every
  * variant in one service request and cap their combined RGBA-equivalent area.
  */
 export const RENDER_MAX_DIMENSION = 16_384;

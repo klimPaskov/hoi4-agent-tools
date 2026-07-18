@@ -4,6 +4,30 @@ import { unifiedTextDiff } from '../../src/hoi4_agent_tools/core/diff.js';
 import { comparePngImages } from '../../src/hoi4_agent_tools/core/image-diff.js';
 
 describe('shared source diffs', () => {
+  function expectTransforms(oldLines: string[], newLines: string[]): void {
+    const diff = unifiedTextDiff(
+      oldLines.length === 0 ? '' : `${oldLines.join('\n')}\n`,
+      newLines.length === 0 ? '' : `${newLines.join('\n')}\n`,
+      'a/file.txt',
+      'b/file.txt',
+      { maxMatrixCells: 1 },
+    );
+    const rows = diff.split('\n').slice(3);
+    const rebuilt: string[] = [];
+    let oldIndex = 0;
+    for (const row of rows) {
+      const marker = row[0];
+      const content = row.slice(1);
+      if (marker === ' ' || marker === '-') {
+        expect(content).toBe(oldLines[oldIndex]);
+        oldIndex += 1;
+      }
+      if (marker === ' ' || marker === '+') rebuilt.push(content);
+    }
+    expect(oldIndex).toBe(oldLines.length);
+    expect(rebuilt).toEqual(newLines);
+  }
+
   it('reports exact line counts without phantom trailing lines', () => {
     expect(unifiedTextDiff('', 'line\n', 'a/file.txt', 'b/file.txt')).toBe(
       ['--- a/file.txt', '+++ b/file.txt', '@@ -1,0 +1,1 @@', '+line'].join('\n'),
@@ -22,12 +46,19 @@ describe('shared source diffs', () => {
     expect(first).toContain('+three');
   });
 
-  it('refuses an exact diff above its memory bound and honors cancellation', () => {
-    expect(() =>
-      unifiedTextDiff('one\ntwo\n', 'three\nfour\n', 'a/file.txt', 'b/file.txt', {
-        maxMatrixCells: 4,
-      }),
-    ).toThrowError(expect.objectContaining({ code: 'DIFF_COMPLEXITY_LIMIT' }));
+  it('uses a deterministic exact patience diff above the matrix threshold and honors cancellation', () => {
+    const oldText = `${Array.from({ length: 20_000 }, (_unused, index) => `line-${index}`).join('\n')}\n`;
+    const newText = oldText.replace('line-5000\n', 'line-5000-updated\n');
+    const first = unifiedTextDiff(oldText, newText, 'a/file.txt', 'b/file.txt', {
+      maxMatrixCells: 4,
+    });
+    const second = unifiedTextDiff(oldText, newText, 'a/file.txt', 'b/file.txt', {
+      maxMatrixCells: 4,
+    });
+    expect(first).toBe(second);
+    expect(first).toContain('-line-5000');
+    expect(first).toContain('+line-5000-updated');
+    expect(first).toContain(' line-19999');
 
     const controller = new AbortController();
     controller.abort();
@@ -36,6 +67,22 @@ describe('shared source diffs', () => {
         signal: controller.signal,
       }),
     ).toThrowError(expect.objectContaining({ name: 'AbortError' }));
+  });
+
+  it('reconstructs exact target lines across duplicate-heavy large diff partitions', () => {
+    for (let seed = 0; seed < 100; seed += 1) {
+      const oldLines = Array.from(
+        { length: 80 + (seed % 17) },
+        (_unused, index) => `token-${(index * 7 + seed) % 23}`,
+      );
+      const newLines = oldLines
+        .filter((_line, index) => (index + seed) % 11 !== 0)
+        .flatMap((line, index) =>
+          (index * 5 + seed) % 13 === 0 ? [line, `insert-${seed}-${index}`] : [line],
+        );
+      if (seed % 3 === 0) newLines.reverse();
+      expectTransforms(oldLines, newLines);
+    }
   });
 });
 

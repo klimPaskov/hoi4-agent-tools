@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build one reusable engine with three focused modules. The modules share workspace discovery, parsing, indexing, diagnostics, transactions, configuration, artifacts, and machine-readable results. Do not create three unrelated services.
+Build one reusable engine with four focused modules and the thirteen-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create four unrelated services.
 
 The implementation belongs under the standalone root defined in `00_standalone_project_bootstrap.md`.
 
@@ -11,6 +11,7 @@ A suggested source layout is:
 ```text
 src/hoi4_agent_tools/
   core/
+  event/
   focus/
   gui/
   map/
@@ -23,7 +24,7 @@ src/hoi4_agent_tools/
 Before implementation:
 
 - Write the standalone project's own `AGENTS.md`.
-- Read the offline Paradox wiki pages for national focuses, interface modding, scripted GUI, graphical assets, maps, states, provinces, data structures, effects, triggers, scopes, and localisation.
+- Read the offline Paradox wiki pages for national focuses, event modding, on actions, interface modding, scripted GUI, graphical assets, maps, states, provinces, data structures, effects, triggers, scopes, and localisation.
 - Read relevant official documentation under the installed Hearts of Iron IV `documentation` folder.
 - Inspect vanilla implementations.
 - Inspect approved reference mods only when vanilla and official documentation do not answer a concrete question.
@@ -67,13 +68,13 @@ If a construct cannot be rewritten safely, retain the original token range and b
 
 ## Index and dependency graph
 
-Index focus IDs, tree IDs, sprites, textures, GUI elements, scripted GUI entries, localisation keys, state IDs, province IDs and colors, strategic regions, adjacencies, supply nodes, railways, and related references.
+Index focus IDs, tree IDs, sprites, textures, GUI elements, scripted GUI entries, localisation keys, state IDs, province IDs and colors, strategic regions, adjacencies, supply nodes, railways, event IDs and namespaces, event call sites, options, timing, scopes, flags, variables, targets, and related references.
 
 The index must understand vanilla, the active mod workspace, configured dependencies, and load order. It must identify collisions and overridden definitions.
 
 ## Agent service contract
 
-All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, or map application.
+All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, map, or event application.
 
 Every MCP operation must return structured results containing:
 
@@ -116,4 +117,4 @@ Generated previews are evidence for the coding agent. The HOI4 source files rema
 
 ## Non-goals
 
-Do not build a shallow content generator. Do not replace gameplay design. Do not require a runtime framework inside HOI4. Do not create an interactive dashboard or editor. Do not put core behavior into transport code. The MCP server calls the shared engine and remains the only supported external tool interface.
+Do not build a shallow content generator. Do not replace gameplay design. Do not require a runtime framework inside HOI4. Do not create an interactive dashboard or editor. Do not turn static event analysis into a runtime simulator or event writer. Do not put core behavior into transport code. The MCP server calls the shared engine and remains the only supported external tool interface.
