@@ -16,7 +16,11 @@ import {
   MapWorkspaceIndex,
   parseTextDocument,
 } from '../../src/hoi4_agent_tools/map/model.js';
-import { MAP_DIAGNOSTIC_LIMIT } from '../../src/hoi4_agent_tools/map/diagnostic-limit.js';
+import {
+  addActiveMapDiagnostic,
+  addMapDiagnostic,
+  MAP_DIAGNOSTIC_LIMIT,
+} from '../../src/hoi4_agent_tools/map/diagnostic-limit.js';
 import { MAP_SELECTED_PIXEL_LIMIT } from '../../src/hoi4_agent_tools/map/limits.js';
 import {
   indexWithProposedChanges,
@@ -384,6 +388,53 @@ describe('Agent Nudger map model and operations', () => {
       ),
     ).toThrowError(expect.objectContaining({ code: 'MAP_TEXT_RECORD_LIMIT' }));
   });
+
+  it('keeps a full-game localisation catalog separate from connected map topology limits', () => {
+    const localisationCount = 500_100;
+    const entriesPerFile = 83_350;
+    const files = Array.from({ length: localisationCount / entriesPerFile }, (_, fileIndex) => {
+      const start = fileIndex * entriesPerFile;
+      const localisation = `\ufeffl_english:\n${Array.from(
+        { length: entriesPerFile },
+        (_, entryIndex) => `K${start + entryIndex}: "x"`,
+      ).join('\n')}\n`;
+      return scannedText(
+        `localisation/english/scale_${fileIndex}_l_english.yml`,
+        localisation,
+        0,
+        'game',
+      );
+    });
+    const index = MapWorkspaceIndex.build(files);
+    expect(index.localisationEntries).toHaveLength(localisationCount);
+    expect(index.localisationKeys.size).toBe(localisationCount);
+  });
+
+  it('does not treat game model assets as writable map locator sources', () => {
+    const gameAsset = scannedText(
+      'gfx/entities/particle.asset',
+      'entity = { name = particles locator = { name = incomplete position = { 1 2 } } }\n',
+      0,
+      'game',
+    );
+    const index = MapWorkspaceIndex.build([gameAsset]);
+    expect(index.entityLocators).toEqual([]);
+    expect(index.diagnostics.map(({ code }) => code)).not.toContain('MAP_ENTITY_LOCATOR_MALFORMED');
+  });
+
+  it('does not report baseline-game localisation syntax as a mod map failure', () => {
+    const malformed = '\ufeffl_english:\nnot valid localisation\n';
+    const gameIndex = MapWorkspaceIndex.build([
+      scannedText('localisation/english/game_l_english.yml', malformed, 0, 'game'),
+    ]);
+    const modIndex = MapWorkspaceIndex.build([
+      scannedText('localisation/english/mod_l_english.yml', malformed, 1, 'mod'),
+    ]);
+    expect(gameIndex.diagnostics.map(({ code }) => code)).not.toContain(
+      'LOCALISATION_MALFORMED_LINE',
+    );
+    expect(modIndex.diagnostics.map(({ code }) => code)).toContain('LOCALISATION_MALFORMED_LINE');
+  });
   it('yields during real map validation and planning so timer aborts are delivered', async () => {
     const { mod, nudger } = await setup();
     await writeFile(path.join(mod, 'map/provinces.bmp'), provinceBitmap(512, 512));
@@ -654,6 +705,83 @@ describe('Agent Nudger map model and operations', () => {
       severity: 'blocker',
       details: { limit: MAP_DIAGNOSTIC_LIMIT, retained: MAP_DIAGNOSTIC_LIMIT - 1 },
     });
+  });
+
+  it('summarises excess map review diagnostics without turning them into blockers', () => {
+    const diagnostics: Parameters<typeof addMapDiagnostic>[0] = [];
+    for (let index = 0; index < MAP_DIAGNOSTIC_LIMIT + 100; index += 1) {
+      addMapDiagnostic(diagnostics, {
+        code: index % 2 === 0 ? 'MAP_REVIEW_A' : 'MAP_REVIEW_B',
+        severity: 'warning',
+        category: 'map',
+        message: `Review ${index}`,
+      });
+    }
+    expect(diagnostics).toHaveLength(MAP_DIAGNOSTIC_LIMIT);
+    expect(diagnostics.at(-1)).toMatchObject({
+      code: 'MAP_DIAGNOSTICS_TRUNCATED',
+      severity: 'info',
+      details: {
+        limit: MAP_DIAGNOSTIC_LIMIT,
+        retained: MAP_DIAGNOSTIC_LIMIT - 1,
+        omitted: 101,
+        omittedBySeverity: { warning: 101 },
+      },
+    });
+  });
+
+  it('suppresses inherited diagnostics unless active baseline validation is requested', () => {
+    const diagnostics: Parameters<typeof addMapDiagnostic>[0] = [];
+    addMapDiagnostic(diagnostics, {
+      code: 'MAP_BASELINE_PROBE',
+      severity: 'warning',
+      category: 'map',
+      message: 'Baseline review probe',
+      location: {
+        path: 'game:map/definition.csv',
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 2, offset: 1 },
+      },
+    });
+    addMapDiagnostic(diagnostics, {
+      code: 'MAP_BASELINE_HARD_PROBE',
+      severity: 'error',
+      category: 'map',
+      message: 'Baseline hard probe',
+      location: {
+        path: 'game:map/definition.csv',
+        start: { line: 2, column: 1, offset: 2 },
+        end: { line: 2, column: 2, offset: 3 },
+      },
+    });
+    addMapDiagnostic(diagnostics, {
+      code: 'MAP_MOD_PROBE',
+      severity: 'error',
+      category: 'map',
+      message: 'Mod probe',
+      location: {
+        path: 'mod:map/definition.csv',
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 2, offset: 1 },
+      },
+    });
+    expect(diagnostics.map(({ code }) => code)).toEqual(['MAP_MOD_PROBE']);
+
+    addActiveMapDiagnostic(diagnostics, {
+      code: 'MAP_BASELINE_ACTIVE_PROBE',
+      severity: 'error',
+      category: 'map',
+      message: 'Active baseline validation probe',
+      location: {
+        path: 'game:map/definition.csv',
+        start: { line: 3, column: 1, offset: 4 },
+        end: { line: 3, column: 2, offset: 5 },
+      },
+    });
+    expect(diagnostics.map(({ code }) => code)).toEqual([
+      'MAP_MOD_PROBE',
+      'MAP_BASELINE_ACTIVE_PROBE',
+    ]);
   });
 
   it('blocks aggregate map script models before parsing more than 5,000 files', () => {

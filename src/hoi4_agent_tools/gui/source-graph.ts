@@ -938,7 +938,7 @@ function linkGraph(
 
   for (const element of elements) {
     const spriteName = [element.attributes.spriteType, element.attributes.quadTextureSprite].find(
-      (value): value is string => typeof value === 'string',
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
     );
     if (spriteName !== undefined) {
       const sprite = spriteByName.get(spriteName);
@@ -953,7 +953,7 @@ function linkGraph(
       );
     }
     const fontName = [element.attributes.font, element.attributes.buttonFont].find(
-      (value): value is string => typeof value === 'string',
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
     );
     if (fontName !== undefined) {
       const font = fontByName.get(fontName);
@@ -967,9 +967,9 @@ function linkGraph(
         element.location,
       );
     }
-    for (const key of ['text', 'buttonText', 'pdx_tooltip', 'pdx_tooltip_delayed', 'hint_tag']) {
+    for (const key of localisationAttributeNames) {
       const value = element.attributes[key];
-      if (typeof value !== 'string') continue;
+      if (typeof value !== 'string' || value.trim().length === 0) continue;
       const entry = localisationByKey.get(value);
       addEdge(
         edges,
@@ -1087,6 +1087,28 @@ function linkGraph(
   }
 }
 
+const localisationAttributeNames = [
+  'text',
+  'buttonText',
+  'pdx_tooltip',
+  'pdx_tooltip_delayed',
+  'hint_tag',
+] as const;
+
+function referencedGuiLocalisationKeys(
+  elements: readonly GuiElementDefinition[],
+  scriptedLocalisation: readonly GuiScriptedLocalisationDefinition[],
+): Set<string> {
+  const keys = new Set(scriptedLocalisation.flatMap(({ localisationKeys }) => localisationKeys));
+  for (const element of elements) {
+    for (const attribute of localisationAttributeNames) {
+      const value = element.attributes[attribute];
+      if (typeof value === 'string' && value.trim().length > 0) keys.add(value);
+    }
+  }
+  return keys;
+}
+
 function skippedInventoryCouldResolve(edge: GuiSourceEdge, sharedIndex: SymbolIndex): boolean {
   switch (edge.kind) {
     case 'uses_sprite':
@@ -1126,6 +1148,12 @@ function* referenceDiagnostics(edges: readonly GuiSourceEdge[]): Iterable<Diagno
       edge.kind === 'animation_sheet' ||
       edge.kind === 'animation_source_frame' ||
       (edge.kind === 'uses_font' && edge.metadata.assetPath !== undefined)
+    )
+      continue;
+    if (
+      edge.location !== undefined &&
+      !edge.location.path.startsWith('mod:') &&
+      !edge.location.path.startsWith('fixture:')
     )
       continue;
     const partial = edge.partialInventory === true;
@@ -1203,6 +1231,7 @@ export function buildGuiSourceGraph(
   const fontAssetNodes = new Map<string, string>();
   const animationFrameNodes = new Map<string, string>();
   const pendingDecisionEdges: { from: string; target: string; location: SourceLocation }[] = [];
+  const localisationFiles: Array<{ file: ScannedFile; fileNodeId: string }> = [];
 
   for (const file of [...activeFiles].sort((a, b) =>
     compareCodeUnits(a.displayPath, b.displayPath),
@@ -1272,28 +1301,7 @@ export function buildGuiSourceGraph(
       }
     }
     if (kind === 'localisation_file' && fileNodeId !== undefined) {
-      const document = parseLocalisation(file.bytes, file.displayPath);
-      diagnostics.pushMany(document.diagnostics);
-      for (const entry of document.entries) {
-        const value: GuiLocalisationValue = {
-          key: entry.key,
-          language: entry.language,
-          value: entry.value,
-          sourcePath: file.displayPath,
-          location: locationFor(file.displayPath, document.lineIndex, entry.start, entry.end),
-        };
-        addDomainEntry(localisation, value, 'localisation');
-        const id = deterministicId('gui_loc', value);
-        addNode(nodes, {
-          id,
-          kind: 'localisation',
-          name: entry.key,
-          path: file.displayPath,
-          ...(value.location === undefined ? {} : { location: value.location }),
-          metadata: { language: entry.language, value: entry.value },
-        });
-        addEdge(edges, 'contains', fileNodeId, id, true, {}, value.location);
-      }
+      localisationFiles.push({ file, fileNodeId });
       continue;
     }
     if (kind === 'animation_source_manifest' && fileNodeId !== undefined) {
@@ -1303,13 +1311,15 @@ export function buildGuiSourceGraph(
     if (kind === undefined || fileNodeId === undefined) {
       if (/\.(?:txt|gui|gfx)$/u.test(normalized)) {
         const document = parseClausewitz(file.bytes, file.displayPath);
-        diagnostics.pushMany(document.diagnostics);
+        if (file.rootKind === 'mod' || file.rootKind === 'fixture')
+          diagnostics.pushMany(document.diagnostics);
         indexDecisionEntries(document, file, nodes, pendingDecisionEdges);
       }
       continue;
     }
     const document = parseClausewitz(file.bytes, file.displayPath);
-    diagnostics.pushMany(document.diagnostics);
+    if (file.rootKind === 'mod' || file.rootKind === 'fixture')
+      diagnostics.pushMany(document.diagnostics);
     if (kind === 'gui_file') indexGuiElements(document, file, fileNodeId, nodes, edges, elements);
     if (kind === 'gfx_file') {
       indexSpritesAndFonts(document, file, fileNodeId, nodes, edges, sprites, fonts);
@@ -1321,6 +1331,38 @@ export function buildGuiSourceGraph(
       indexScriptedLocalisation(document, file, fileNodeId, nodes, edges, scriptedLocalisation);
     }
     indexDecisionEntries(document, file, nodes, pendingDecisionEdges);
+  }
+
+  const referencedLocalisationKeys = referencedGuiLocalisationKeys(elements, scriptedLocalisation);
+  for (const { file, fileNodeId } of localisationFiles.sort(
+    (left, right) =>
+      right.file.loadOrder - left.file.loadOrder ||
+      compareCodeUnits(left.file.displayPath, right.file.displayPath),
+  )) {
+    const document = parseLocalisation(file.bytes, file.displayPath);
+    if (file.rootKind === 'mod' || file.rootKind === 'fixture')
+      diagnostics.pushMany(document.diagnostics);
+    for (const entry of document.entries) {
+      if (!referencedLocalisationKeys.has(entry.key)) continue;
+      const value: GuiLocalisationValue = {
+        key: entry.key,
+        language: entry.language,
+        value: entry.value,
+        sourcePath: file.displayPath,
+        location: locationFor(file.displayPath, document.lineIndex, entry.start, entry.end),
+      };
+      addDomainEntry(localisation, value, 'localisation');
+      const id = deterministicId('gui_loc', value);
+      addNode(nodes, {
+        id,
+        kind: 'localisation',
+        name: entry.key,
+        path: file.displayPath,
+        ...(value.location === undefined ? {} : { location: value.location }),
+        metadata: { language: entry.language, value: entry.value },
+      });
+      addEdge(edges, 'contains', fileNodeId, id, true, {}, value.location);
+    }
   }
 
   linkGraph(

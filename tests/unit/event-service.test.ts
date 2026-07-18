@@ -8,7 +8,11 @@ import { ArtifactStore } from '../../src/hoi4_agent_tools/core/artifacts.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { WorkspaceScanner } from '../../src/hoi4_agent_tools/core/scanner.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
-import { EventChainViewer, inspectEventStateFlow } from '../../src/hoi4_agent_tools/event/index.js';
+import {
+  EventChainViewer,
+  eventScanReport,
+  inspectEventStateFlow,
+} from '../../src/hoi4_agent_tools/event/index.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -104,14 +108,17 @@ describe('Event Chain Viewer service', () => {
       selector: { kind: 'event', eventId: 'service.1' },
       direction: 'downstream',
     });
-    expect(trace.graph).toBe(scanned.graph);
+    expect(trace.graph).not.toBe(scanned.graph);
+    expect(trace.graph).toStrictEqual(scanned.graph);
     expect(scan).toHaveBeenCalledTimes(1);
 
-    expect(await second.scan('event-service', { refresh: true })).toBe(scanned.graph);
+    expect(await second.scan('event-service', { refresh: true, projectHelpers: false })).toBe(
+      scanned.graph,
+    );
     expect(scan).toHaveBeenCalledTimes(2);
 
     engine.invalidate('event-service');
-    expect(await second.scan('event-service')).not.toBe(scanned.graph);
+    expect(await second.scan('event-service', { projectHelpers: false })).not.toBe(scanned.graph);
     expect(scan).toHaveBeenCalledTimes(3);
   });
 
@@ -178,6 +185,61 @@ describe('Event Chain Viewer service', () => {
     );
     expect(artifactRead.mock.calls[0]?.[2]).toEqual({ offset: 0, length: 1 });
     expect(await readFile(sourcePath, 'utf8')).toBe(source);
+  });
+
+  it('projects oversized scan artifacts to deterministic summaries', async () => {
+    const { engine } = await fixture();
+    const graph = await new EventChainViewer(engine).scan('event-service', {
+      refresh: true,
+      projectHelpers: false,
+    });
+    const report = eventScanReport(graph, 1) as {
+      graph?: unknown;
+      graphSummary: { revision: string; recordCounts: { nodes: number } };
+      artifactProjection: { mode: string; fullGraphRecordCount: number };
+    };
+    expect(report.graph).toBeUndefined();
+    expect(report.graphSummary).toMatchObject({
+      revision: graph.revision,
+      recordCounts: { nodes: graph.nodes.length },
+    });
+    expect(report.artifactProjection).toMatchObject({
+      mode: 'large-scan-summary',
+      fullGraphRecordCount: expect.any(Number),
+    });
+  });
+
+  it('bounds duplicated scan envelope evidence when the graph report is projected', async () => {
+    const { engine } = await fixture();
+    const viewer = new EventChainViewer(engine);
+    const inspected = await viewer.inspect({ workspaceId: 'event-service', mode: 'scan' });
+    const artifact = JSON.parse(inspected.reportJson) as {
+      sourceHashes: Record<string, string>;
+      unresolved: unknown[];
+      sourceHashInventory?: { count: number; retainedCount: number };
+      unresolvedInventory?: { count: number; retainedCount: number };
+    };
+
+    // The fixture is intentionally small, so force the projection contract
+    // independently and verify its count is based on every graph record.
+    const projected = eventScanReport(inspected.graph, 1) as {
+      artifactProjection: { fullGraphRecordCount: number };
+    };
+    expect(projected.artifactProjection.fullGraphRecordCount).toBe(
+      inspected.graph.nodes.length +
+        inspected.graph.edges.length +
+        inspected.graph.stateAccesses.length +
+        inspected.graph.stateLinks.length +
+        inspected.graph.issues.length +
+        inspected.graph.diagnostics.length +
+        inspected.graph.unresolved.length,
+    );
+    expect(artifact.sourceHashInventory).toBeUndefined();
+    expect(artifact.unresolvedInventory).toBeUndefined();
+    expect(Object.keys(artifact.sourceHashes)).toHaveLength(
+      Object.keys(inspected.graph.sourceHashes).length,
+    );
+    expect(artifact.unresolved).toEqual(inspected.graph.unresolved);
   });
 
   it('reconstructs bounded chunked graph references and rejects unbounded chunk indexes', async () => {

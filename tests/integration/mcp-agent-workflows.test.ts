@@ -146,9 +146,21 @@ describe('MCP coding-agent workflows', () => {
       data: { mode: 'national', treeId: 'workflow_tree' },
     });
     expect(rendered.artifacts.map(({ mimeType }) => mimeType)).toEqual(
-      expect.arrayContaining(['text/html', 'image/svg+xml', 'image/png', 'application/json']),
+      expect.arrayContaining(['text/html', 'image/svg+xml', 'application/json']),
     );
-    const focusPng = rendered.artifacts.find(({ mimeType }) => mimeType === 'image/png')!;
+    expect(rendered.artifacts.some(({ mimeType }) => mimeType === 'image/png')).toBe(false);
+    const rasterized = resultOf(
+      await client.callTool({
+        name: 'hoi4.focus_raster',
+        arguments: { workspaceId: 'focus', relativePath, treeId: 'workflow_tree' },
+      }),
+    );
+    expect(rasterized).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_RASTERIZED',
+      data: { mode: 'national', treeId: 'workflow_tree' },
+    });
+    const focusPng = rasterized.artifacts.find(({ mimeType }) => mimeType === 'image/png')!;
     expect((await readBinaryArtifact(client, focusPng.uri)).subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );

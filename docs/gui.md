@@ -1,6 +1,6 @@
 # Scripted GUIs
 
-Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points. Omit `workspaceId` when the MCP working directory is inside the target mod.
+Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points.
 
 ## Create a GUI
 
@@ -29,6 +29,8 @@ Rewrite once, then inspect and render the result.
 5. Rewrite once, then inspect and render the result.
 
 Inspection checks missing assets and localisation, invalid sizes, overlap, clipping, overflow, conflicting click regions, invisible blockers, broken parents or contexts, list-row cuts, state conflicts, trigger/effect gaps, and resolution drift.
+
+Broad inspection indexes localisation actually referenced by GUI source and returns a connected workspace projection when the complete source graph is very large. The resource records full and returned node and edge counts, so an agent can identify the relevant window without loading unrelated vanilla UI into its prompt. Rendering remains targeted to the selected root, state, and resolution.
 
 ## Offline preview limits
 

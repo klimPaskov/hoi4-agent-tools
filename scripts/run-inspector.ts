@@ -13,6 +13,7 @@ const config = path.join(temporary, 'config.json');
 const publicToolNames = [
   'hoi4.focus_inspect',
   'hoi4.focus_render',
+  'hoi4.focus_raster',
   'hoi4.focus_rewrite',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
@@ -244,7 +245,7 @@ try {
   }
 
   process.stderr.write(
-    'Official MCP Inspector verified twelve-tool discovery, the artifact resource, and event inspect/render/compare workflows.\n',
+    'Official MCP Inspector verified thirteen-tool discovery, the artifact resource, and event inspect/render/compare workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

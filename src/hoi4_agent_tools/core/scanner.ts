@@ -21,6 +21,7 @@ export interface ScannedFile {
 export interface ScanOptions {
   patterns: string[];
   ignore?: string[];
+  rootKinds?: readonly RootKind[];
   maxFiles?: number;
   maxBytes?: number;
   signal?: AbortSignal;
@@ -83,10 +84,11 @@ export class WorkspaceScanner {
     const roots = workspace.roots
       .filter(
         (root) =>
-          root.kind === 'game' ||
-          root.kind === 'dependency' ||
-          root.kind === 'mod' ||
-          root.kind === 'fixture',
+          (root.kind === 'game' ||
+            root.kind === 'dependency' ||
+            root.kind === 'mod' ||
+            root.kind === 'fixture') &&
+          (options.rootKinds === undefined || options.rootKinds.includes(root.kind)),
       )
       .sort((a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.path, b.path));
     const result: ScannedFile[] = [];

@@ -2,7 +2,7 @@ import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { assertRenderDimensions } from '../core/render-budget.js';
-import { addMapDiagnostic as addBoundedMapDiagnostic } from './diagnostic-limit.js';
+import { addActiveMapDiagnostic, addMapDiagnostic } from './diagnostic-limit.js';
 import type { ValidationSummary } from '../core/result.js';
 import { rgbKey } from './bmp.js';
 import { MAP_PROVINCE_ENGINE_MAX_PIXELS } from './model.js';
@@ -19,6 +19,7 @@ export interface MapValidationOptions {
   operationId?: string;
   expectedChangedBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   baseline?: MapWorkspaceIndex;
+  includeBaselineDiagnostics?: boolean;
   signal?: AbortSignal;
 }
 
@@ -96,7 +97,9 @@ function addDiagnostic(
   options: MapValidationOptions,
   diagnostic: Diagnostic,
 ): void {
-  addBoundedMapDiagnostic(diagnostics, {
+  const add =
+    options.includeBaselineDiagnostics === true ? addActiveMapDiagnostic : addMapDiagnostic;
+  add(diagnostics, {
     ...diagnostic,
     ...(diagnostic.operationId !== undefined || options.operationId === undefined
       ? {}

@@ -115,7 +115,7 @@ const decisionCategoryFields = new Set([
 // before the higher-precedence mod roots are reached. Keep the inventory
 // bounded, but leave enough headroom for the supported game build and a large
 // external workspace so valid mod symbols are never discarded behind vanilla.
-const INDEX_RECORD_LIMIT = 500_000;
+const INDEX_RECORD_LIMIT = 2_000_000;
 const INDEX_DIAGNOSTIC_LIMIT = 10_000;
 const INDEX_RELATED_LOCATION_LIMIT = 100;
 const INDEX_TABLE_RECORD_LIMIT = 100_000;
@@ -194,6 +194,10 @@ function normalizedRelative(value: string): string {
 
 function sourceIdentity(file: Pick<ScannedFile, 'rootKind' | 'loadOrder'>): string {
   return `${file.rootKind}:${file.loadOrder}`;
+}
+
+function isWorkspaceOwnedSource(file: Pick<ScannedFile, 'rootKind'> | undefined): boolean {
+  return file?.rootKind === 'mod' || file?.rootKind === 'fixture';
 }
 
 interface DefinitionSelection {
@@ -363,13 +367,16 @@ export class SymbolIndex {
 
   private recordSkippedSource(file: ScannedFile, diagnostics: readonly Diagnostic[]): void {
     if (file.shadowedBy !== undefined || this.#skippedSourcePaths.has(file.displayPath)) return;
+    const candidates = possibleSymbolKinds(file, this.#definitionFiles);
+    // Files outside indexed HOI4 domains may still match broad text globs. A parsing ceiling in one
+    // of those files does not make the symbol inventory partial.
+    if (candidates.length === 0) return;
     this.#skippedSourcePaths.add(file.displayPath);
     this.#complete = false;
     this.#skippedSourceCount += 1;
     const reasonCodes = [...new Set(diagnostics.map(({ code }) => code))].sort((left, right) =>
       compareCodeUnits(left, right),
     );
-    const candidates = possibleSymbolKinds(file, this.#definitionFiles);
     for (const kind of candidates) this.#skippedPossibleSymbolKinds.add(kind);
     if (this.skippedSources.length >= INDEX_SKIPPED_SOURCE_SAMPLE_LIMIT) return;
     const skipped: IndexSkippedSource = {
@@ -470,7 +477,7 @@ export class SymbolIndex {
         this.recordSkippedSource(file, limitDiagnostics);
         return;
       }
-      this.addDiagnostics(document.diagnostics);
+      if (isWorkspaceOwnedSource(file)) this.addDiagnostics(document.diagnostics);
       for (const entry of document.entries) {
         this.addSymbol({
           kind: 'localisation',
@@ -507,7 +514,7 @@ export class SymbolIndex {
       this.recordSkippedSource(file, limitDiagnostics);
       return;
     }
-    this.addDiagnostics(document.diagnostics);
+    if (isWorkspaceOwnedSource(file)) this.addDiagnostics(document.diagnostics);
     this.walkBlock(document, document.root, file, []);
     if (this.#currentFileShadowed) {
       this.diagnostics.splice(diagnosticStart);
@@ -1049,7 +1056,11 @@ export class SymbolIndex {
         candidate.overridden = additiveCategory ? candidate.sourceShadowed : candidate !== active;
       }
       const sameLevel = candidates.filter(({ loadOrder }) => loadOrder === active.loadOrder);
-      if (!additiveCategory && sameLevel.length > 1) {
+      if (
+        !additiveCategory &&
+        sameLevel.length > 1 &&
+        sameLevel.some((candidate) => isWorkspaceOwnedSource(this.files.get(candidate.path)))
+      ) {
         this.addDiagnostic({
           code: 'INDEX_SYMBOL_COLLISION',
           severity: 'error',
@@ -1062,7 +1073,9 @@ export class SymbolIndex {
         });
       }
     }
-    for (const reference of this.unresolvedReferences()) {
+    for (const reference of this.unresolvedReferences().filter((candidate) =>
+      isWorkspaceOwnedSource(this.files.get(candidate.path)),
+    )) {
       const mayResolveFromSkippedSource = this.#skippedPossibleSymbolKinds.has(reference.toKind);
       this.addDiagnostic({
         code: mayResolveFromSkippedSource

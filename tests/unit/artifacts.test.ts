@@ -298,7 +298,7 @@ describe('content-addressed artifacts', () => {
     ).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
   });
 
-  it('enforces per-artifact, aggregate-byte, and entry budgets atomically', async () => {
+  it('enforces per-artifact and aggregate-byte budgets while expiring old entries atomically', async () => {
     const { workspace } = await fixture();
     const provenance = {
       kind: 'quota-test',
@@ -329,13 +329,27 @@ describe('content-addressed artifacts', () => {
 
     const entryRoot = await fixture();
     const entryLimited = new ArtifactStore(100_000, 1, 10_000);
-    const outcomes = await Promise.allSettled([
-      entryLimited.put(entryRoot.workspace, 'first.json', 'application/json', '{}\n', provenance),
-      entryLimited.put(entryRoot.workspace, 'second.json', 'application/json', '[]\n', provenance),
-    ]);
-    expect(outcomes.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
-    expect(outcomes.filter(({ status }) => status === 'rejected')).toHaveLength(1);
+    const first = await entryLimited.put(
+      entryRoot.workspace,
+      'first.json',
+      'application/json',
+      '{}\n',
+      provenance,
+    );
+    const second = await entryLimited.put(
+      entryRoot.workspace,
+      'second.json',
+      'application/json',
+      '[]\n',
+      provenance,
+    );
     await expect(entryLimited.list(entryRoot.workspace)).resolves.toHaveLength(1);
+    await expect(entryLimited.read(entryRoot.workspace, first.uri)).rejects.toMatchObject({
+      code: 'ARTIFACT_NOT_FOUND',
+    });
+    await expect(entryLimited.read(entryRoot.workspace, second.uri)).resolves.toMatchObject({
+      name: 'second.json',
+    });
   });
 
   it('rejects a generated artifact shard that escapes through a symlink or junction', async () => {

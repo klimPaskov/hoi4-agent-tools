@@ -9,7 +9,7 @@ import { registerEventTools } from '../tools/event.js';
 import { registerMcpResources } from '../resources/register.js';
 
 export const SERVER_INSTRUCTIONS =
-  'The workspace defaults to the mod containing the MCP working directory; pass workspaceId only when selecting another configured mod. Use hoi4.event_inspect for scan, roots, trace, explain_path, state_flow, lint, and impact; hoi4.event_render and hoi4.event_compare return linked evidence. JSON resources are authoritative. Event tools are read-only. Only focus, GUI, and map rewrite tools edit configured mods.';
+  'Use hoi4.focus_inspect and hoi4.focus_render for fast structural work; hoi4.focus_raster adds decoded icons and PNG output. Use hoi4.event_inspect to analyze event chains. Event tools are read-only. Focus, GUI, and map rewrite tools edit the current mod. Large evidence is returned through linked resources.';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
   const server = new McpServer(

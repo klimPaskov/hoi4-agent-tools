@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
-import { canonicalJson, compareCodeUnits } from '../../core/canonical.js';
+import { canonicalJson, compareCodeUnits, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
 import {
   renderDimensionViolation,
@@ -19,6 +19,10 @@ import {
   type GuiPreviewState,
   type GuiValidationResult,
 } from '../../gui/index.js';
+import {
+  encodeGuiInspectionArtifact,
+  projectGuiGraphForArtifact,
+} from '../../gui/inspection-artifact.js';
 import { workspaceIdSchema, workspaceRelativePathSchema } from '../../schemas/common.js';
 import { PACKAGE_VERSION } from '../../version.js';
 import { requireServerScope, type ServerContext } from '../server/base-tools.js';
@@ -224,7 +228,7 @@ export function registerGuiTools(
       );
       try {
         const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Building shared index and GUI inspection');
+        await progress.report(0, 3, 'Building GUI source graph');
         const inspection =
           windowName === undefined || scenario === undefined
             ? studio
@@ -240,52 +244,63 @@ export function registerGuiTools(
                   signal: progress.signal,
                 })
                 .then((linted) => ({ graph: linted.graph, linted }));
-        const [shared, inspected] = await Promise.all([
-          engine.scan(workspaceId, {}, context.principal, progress.signal),
-          inspection,
-        ]);
+        const inspected = await inspection;
         const { graph, linted } = inspected;
+        const sharedRevision = hashCanonical(graph.sourceHashes);
         const workspace = engine.resolver.get(workspaceId, context.principal);
         const sourceEvidence = boundedSourceHashEvidence(graph.sourceHashes);
+        const artifactGraph = projectGuiGraphForArtifact(
+          graph,
+          linted?.scene.elements.map(({ sourceId }) => sourceId),
+        );
+        const inspectionName = `gui-inspect.${sharedRevision.slice(0, 16)}.json`;
+        const inspectionJson = `${canonicalJson({
+          schemaVersion: 1,
+          sharedRevision,
+          offline: true,
+          graph: artifactGraph.graph,
+          ...(artifactGraph.projection === undefined
+            ? {}
+            : { graphProjection: artifactGraph.projection }),
+          ...(linted === undefined
+            ? {}
+            : {
+                scenario: linted.scene.scenario,
+                fidelity: linted.scene.fidelity,
+                validation: linted.validation,
+              }),
+        })}\n`;
+        const encodedInspection = await encodeGuiInspectionArtifact(inspectionName, inspectionJson);
         const artifact = await engine.artifacts.putChunked(
           workspace,
-          `gui-inspect.${shared.revision.slice(0, 16)}.json`,
-          'application/json',
-          `${canonicalJson({
-            schemaVersion: 1,
-            sharedRevision: shared.revision,
-            offline: true,
-            graph,
-            ...(linted === undefined
-              ? {}
-              : {
-                  scenario: linted.scene.scenario,
-                  fidelity: linted.scene.fidelity,
-                  validation: linted.validation,
-                }),
-          })}\n`,
+          encodedInspection.name,
+          encodedInspection.mimeType,
+          encodedInspection.content,
           {
             kind: 'gui-inspect',
             toolVersion: PACKAGE_VERSION,
             schemaVersion: 'gui-inspect.v1',
             sourceHashes: sourceEvidence.sourceHashes,
             metadata: {
-              sharedRevision: shared.revision,
+              sharedRevision,
               offline: true,
               complete: graph.complete,
               skippedSourceCount: graph.skippedSourceCount,
               sourceHashInventory: sourceEvidence.inventory,
+              compressed: encodedInspection.compressed,
+              uncompressedBytes: encodedInspection.uncompressedBytes,
+              graphProjection: artifactGraph.projection?.mode ?? 'full',
             },
           },
-          'Scripted GUI graph, diagnostics, and optional scenario fidelity inspection',
+          encodedInspection.compressed
+            ? 'Gzip-compressed scripted GUI graph, diagnostics, and optional scenario fidelity inspection'
+            : 'Scripted GUI graph, diagnostics, and optional scenario fidelity inspection',
           progress.signal,
         );
-        const diagnostics = [
-          ...shared.diagnostics,
-          ...(linted === undefined ? graph.diagnostics : linted.validation.diagnostics),
-        ];
+        const diagnostics =
+          linted === undefined ? graph.diagnostics : linted.validation.diagnostics;
         const result = emptyServiceResult(workspaceId, {
-          sharedRevision: shared.revision,
+          sharedRevision,
           complete: graph.complete,
           skippedSourceCount: graph.skippedSourceCount,
           skippedSources: graph.skippedSources,
@@ -355,9 +370,7 @@ export function registerGuiTools(
     const { windowName } = input;
     try {
       const progress = progressReporter(extra);
-      await progress.report(0, 4, 'Building shared index and GUI source graph');
-      const shared = await engine.scan(workspaceId, {}, context.principal, progress.signal);
-      await progress.report(1, 4, 'Rendering offline GUI artifacts');
+      await progress.report(0, 4, 'Building GUI source graph');
       const rendered = await studio.renderAndStore({
         workspaceId,
         windowName,
@@ -378,7 +391,8 @@ export function registerGuiTools(
         ...(context.principal === undefined ? {} : { principal: context.principal }),
         signal: progress.signal,
       });
-      const diagnostics = [...shared.diagnostics, ...rendered.validation.diagnostics];
+      await progress.report(3, 4, 'Preparing GUI result');
+      const diagnostics = rendered.validation.diagnostics;
       const result = emptyServiceResult(workspaceId, {
         windowName,
         scenarioId: rendered.render.scene.scenario.id,
@@ -401,10 +415,7 @@ export function registerGuiTools(
         offlineRepresentation: true,
       });
       result.code = code;
-      setInlineFilesScanned(
-        result,
-        shared.files.map(({ displayPath }) => displayPath),
-      );
+      setInlineFilesScanned(result, rendered.filesScanned);
       result.diagnostics = diagnostics.slice(0, 100);
       result.artifacts = rendered.artifacts.map(publicArtifactLink);
       result.validation = validationSummary({

@@ -3,7 +3,10 @@ import type { Diagnostic } from '../diagnostics.js';
 export const SOURCE_DIAGNOSTIC_LIMIT = 100;
 export const SOURCE_MAX_NESTING = 256;
 export const SOURCE_MAX_BYTES = 8_388_608;
-export const SOURCE_TOKEN_LIMIT = 250_000;
+// Large authored HOI4 focus and scripted-effect files can exceed 250k tokens while remaining well
+// below the byte and nesting ceilings. Keep enough room for those files without allowing an
+// unbounded token inventory.
+export const SOURCE_TOKEN_LIMIT = 1_000_000;
 export const SOURCE_ENTRY_LIMIT = 100_000;
 export const SOURCE_LINE_LIMIT = 250_000;
 

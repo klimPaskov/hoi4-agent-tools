@@ -30,6 +30,7 @@ export interface ContinuousFocusRenderOptions {
   sourceHashes?: Record<string, string>;
   renderProfile?: Record<string, unknown>;
   budget?: RenderBudget;
+  rasterize?: boolean;
 }
 
 export interface ContinuousFocusRenderBundle {
@@ -37,7 +38,7 @@ export interface ContinuousFocusRenderBundle {
   svg: string;
   png: Buffer;
   json: string;
-  hashes: { html: string; svg: string; png: string; json: string };
+  hashes: { html: string; svg: string; png?: string; json: string };
   sourceMap: FocusGeneratedSourceMap;
   width: number;
   height: number;
@@ -76,7 +77,9 @@ export async function renderContinuousFocusPalette(
       iconSprite === undefined ? undefined : options.presentation?.icons[iconSprite]?.dataUri;
     return dataUri === undefined ? [] : [dataUri];
   });
-  await admitFocusIconDataUris(options, budget, renderedDataUris);
+  if (options.rasterize !== false) {
+    await admitFocusIconDataUris(options, budget, renderedDataUris);
+  }
   const columns = Math.max(1, Math.min(12, options.columns ?? 5));
   const padding = Math.max(24, options.padding ?? 64);
   const cardWidth = 190;
@@ -86,7 +89,9 @@ export async function renderContinuousFocusPalette(
   const usedColumns = Math.max(1, Math.min(columns, plan.focuses.length));
   const width = padding * 2 + usedColumns * cardWidth + Math.max(0, usedColumns - 1) * gap;
   const height = padding * 2 + 84 + rows * cardHeight + Math.max(0, rows - 1) * gap;
-  budget.reserve(width, height, 'continuous focus palette PNG');
+  if (options.rasterize !== false) {
+    budget.reserve(width, height, 'continuous focus palette PNG');
+  }
   const diagnosticsById = new Map<string, Diagnostic[]>();
   const toolText = new DeterministicSvgTextRenderer();
   for (const diagnostic of diagnostics) {
@@ -169,10 +174,13 @@ export async function renderContinuousFocusPalette(
   })}\n`;
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeXml(plan.id)} continuous focus palette</title><style>html{background:#101820;color:#f3f6f8;font:14px system-ui}body{margin:0;padding:24px}.notice{color:#d7b65b}svg{max-width:100%;height:auto;border:1px solid #385064}pre{white-space:pre-wrap}</style></head><body><h1>${escapeXml(plan.id)}</h1><p class="notice">Offline source-derived review artifact &mdash; not an in-game screenshot or editor.</p>${svg}<details><summary>Structured source model</summary><pre>${escapeXml(json)}</pre></details></body></html>`;
   options.signal?.throwIfAborted();
-  assertRenderDimensions(width, height, 'continuous focus palette Sharp raster');
-  const png = await sharp(Buffer.from(svg, 'utf8'), { limitInputPixels: RENDER_MAX_PIXELS })
-    .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-    .toBuffer();
+  let png = Buffer.alloc(0);
+  if (options.rasterize !== false) {
+    assertRenderDimensions(width, height, 'continuous focus palette Sharp raster');
+    png = await sharp(Buffer.from(svg, 'utf8'), { limitInputPixels: RENDER_MAX_PIXELS })
+      .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+      .toBuffer();
+  }
   options.signal?.throwIfAborted();
   return {
     html,
@@ -182,7 +190,7 @@ export async function renderContinuousFocusPalette(
     hashes: {
       html: sha256Bytes(html),
       svg: sha256Bytes(svg),
-      png: sha256Bytes(png),
+      ...(options.rasterize === false ? {} : { png: sha256Bytes(png) }),
       json: sha256Bytes(json),
     },
     sourceMap: compiled.sourceMap,
@@ -211,10 +219,12 @@ export async function storeContinuousFocusRenderArtifacts(
     renderProfile: { kind: 'continuous-focus-palette', ...(options.renderProfile ?? {}) },
     metadata: { sourceHashInventory: sourceEvidence.inventory },
   };
-  const entries = [
+  const entries: Array<readonly [string, string, Uint8Array | string, string]> = [
     [`${stem}.continuous.html`, 'text/html', bundle.html, 'interactive-review'],
     [`${stem}.continuous.svg`, 'image/svg+xml', bundle.svg, 'vector-render'],
-    [`${stem}.continuous.png`, 'image/png', bundle.png, 'raster-render'],
+    ...(options.rasterize === false
+      ? []
+      : [[`${stem}.continuous.png`, 'image/png', bundle.png, 'raster-render'] as const]),
     [`${stem}.continuous.json`, 'application/json', bundle.json, 'structured-render'],
     [
       `${stem}.continuous.source-map.json`,
@@ -222,7 +232,7 @@ export async function storeContinuousFocusRenderArtifacts(
       `${canonicalJson(bundle.sourceMap)}\n`,
       'source-map',
     ],
-  ] as const;
+  ];
   const writes: ArtifactWrite[] = entries.map(([name, mimeType, content, kind]) => ({
     name,
     mimeType,

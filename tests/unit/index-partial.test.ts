@@ -117,7 +117,8 @@ describe('partial shared-index inventories', () => {
     );
 
     const unrelatedText = SymbolIndex.build([focus, skippedUnrelatedText]);
-    expect(unrelatedText.skippedSources[0]?.possibleSymbolKinds).toEqual([]);
+    expect(unrelatedText.skippedSources).toEqual([]);
+    expect(unrelatedText.complete).toBe(true);
     expect(unrelatedText.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'INDEX_UNRESOLVED_REFERENCE', severity: 'error' }),
@@ -179,7 +180,7 @@ describe('partial shared-index inventories', () => {
   it('retains aggregate attribution for skipped sources beyond the bounded sample', () => {
     const sharedLimitedBytes = sizeLimitedSource();
     const unrelated = Array.from({ length: INDEX_SKIPPED_SOURCE_SAMPLE_LIMIT }, (_, index) =>
-      scannedFile(`common/misc/partial-${index}.txt`, sharedLimitedBytes),
+      scannedFile(`common/ideas/partial-${index}.txt`, sharedLimitedBytes),
     );
     const skippedGfx = scannedFile('interface/partial.gfx', sharedLimitedBytes);
     const focus = scannedFile(

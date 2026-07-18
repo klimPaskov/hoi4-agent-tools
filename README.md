@@ -14,7 +14,7 @@ HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV
 Requires Node.js 22 or 24.
 
 ```bash
-npm install --global hoi4-agent-tools@2.0.0
+npm install --global hoi4-agent-tools@latest
 ```
 
 Start the MCP with its working directory set to the mod you are editing. No config or per-mod registration is required: the server finds that mod automatically. Run `hoi4-agent-tools-setup --init` only when you want persistent discovery for several mod roots, a custom game path, or a remote deployment; see [Setup](docs/setup.md).
@@ -32,7 +32,8 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 | Tool                 | Purpose                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------- |
 | `hoi4.focus_inspect` | Read focus trees and report structural or reference problems.                           |
-| `hoi4.focus_render`  | Render an existing focus tree or continuous palette.                                    |
+| `hoi4.focus_render`  | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                       |
+| `hoi4.focus_raster`  | Produce a high-fidelity PNG review with decoded source icons.                           |
 | `hoi4.focus_rewrite` | Create or update a focus tree.                                                          |
 | `hoi4.gui_inspect`   | Read a scripted GUI and its linked assets and logic.                                    |
 | `hoi4.gui_render`    | Render GUI states and resolutions offline.                                              |
@@ -54,7 +55,7 @@ Connecting and listing tools does not scan mod source. Compact tool schemas and 
 
 ## Create or clean content
 
-Ask your agent in normal task language. A typical workflow is inspect, render, rewrite, then inspect the result.
+Ask your agent in normal task language. A typical workflow is inspect, render, rewrite, then inspect the result. The agent can call a raster tool when a pixel review is useful without paying that cost during every structural operation.
 
 - Focus trees: "Create a complete national focus tree for this route specification," or "Compact this existing tree into a balanced, readable layout." Existing trees can use a plan-free compact reflow; new trees use a complete plan. See [Focus trees](docs/focus.md).
 - Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render this window at common resolutions and fix clipping, missing assets, and click-region conflicts." See [Scripted GUIs](docs/gui.md).

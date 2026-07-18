@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0 - 2026-07-18
+
+- Added `hoi4.focus_raster` for decoded focus icons and deterministic PNG reviews while keeping inspection, vector rendering, and rewrites responsive on very large trees.
+- Raised distinct raster-operation capacity for large icon sets and deduplicated GUI sprite-frame raster work by texture and frame.
+- Separated full localisation inventories from connected map topology limits and raised the shared index capacity for installed-game scale.
+- Added automatic generated-artifact retention so long-running agent workflows reclaim older artifacts instead of stopping at the storage ceiling.
+- Made broad GUI inspection index only connected localisation, reuse decoded textures, and return bounded workspace projections for very large source graphs.
+- Made broad event scans structural by default, with helper expansion in focused queries and compact indexed resources for very large graphs.
+- Suppressed unrelated vanilla parser noise while retaining mod and dependency diagnostics that affect the requested content.
+- Added regressions for 500,100 localisation records, hundreds of distinct focus textures, large GUI and event graphs, raster discovery, package installation, and agent workflows.
+
 ## 2.0.0 - 2026-07-15
 
 - Removed the workspace inventory tool and made the current mod implicit for local MCP calls.

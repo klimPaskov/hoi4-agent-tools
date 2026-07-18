@@ -10,7 +10,7 @@ npm install --global hoi4-agent-tools
 
 Set the MCP process working directory to the mod being edited. The server creates its local workspace in memory, keeps generated artifacts in the per-user data directory, and starts without a config file. The installed game is detected when available for vanilla references; it is not required for source inspection or offline rendering.
 
-When the MCP server starts with its working directory inside a mod, every focus, GUI, map, and event call uses that mod automatically. Omit `workspaceId`. Explicit `workspaceId` values remain available for configured multi-mod or remote deployments.
+When the MCP server starts with its working directory inside a mod, every focus, GUI, map, and event call uses that mod automatically. Configured multi-mod or remote deployments can use explicit workspace selection.
 
 ## Optional persistent configuration
 

@@ -1,7 +1,7 @@
 import { ServiceError } from '../core/result.js';
 
 export const EVENT_GRAPH_MAX_NODES = 100_000;
-export const EVENT_GRAPH_MAX_EDGES = 250_000;
+export const EVENT_GRAPH_MAX_EDGES = 500_000;
 export const EVENT_GRAPH_MAX_STATE_ACCESSES = 250_000;
 export const EVENT_GRAPH_MAX_STATE_LINKS = 250_000;
 export const EVENT_GRAPH_MAX_STATE_LINK_CANDIDATES = 500_000;

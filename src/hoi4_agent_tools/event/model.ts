@@ -252,6 +252,8 @@ export interface EventGraphSnapshot {
 
 export interface EventGraphBuildOptions {
   signal?: AbortSignal;
+  /** Materialize collapsed scripted-helper edges and state accesses for expanded queries. */
+  projectHelpers?: boolean;
   /** Canonical root-topology identity supplied by the shared workspace resolver. */
   workspaceIdentity?: string;
   /** Tests or long-lived services may provide their own bounded fragment cache. */

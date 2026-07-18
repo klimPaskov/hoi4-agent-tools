@@ -19,7 +19,7 @@ export const renderHashesSchema = z
   .object({
     html: sha256Schema,
     svg: sha256Schema,
-    png: sha256Schema,
+    png: sha256Schema.optional(),
     json: sha256Schema,
   })
   .strict();

@@ -1,10 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
-import { compareCodeUnits, canonicalJson, sha256Bytes } from '../../core/canonical.js';
+import { compareCodeUnits, canonicalJson } from '../../core/canonical.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
 import type { ScannedFile } from '../../core/scanner.js';
-import { comparePngImages, createTransparentPng } from '../../core/image-diff.js';
 import { RenderBudget } from '../../core/render-budget.js';
 import { emptyServiceResult, ServiceError } from '../../core/result.js';
 import { parseClausewitz } from '../../core/source/index.js';
@@ -22,8 +21,6 @@ import {
   importFocusTrees,
   linkContinuousFocusPalettes,
   parseFocusPlanningSidecar,
-  renderContinuousFocusPalette,
-  renderFocusTree,
   resolveFocusPresentation,
   enrichFocusPlanFromSidecar,
   type ContinuousFocusPalettePlan,
@@ -375,6 +372,155 @@ function automaticFocusRenderScale(focusCount: number): number {
   return focusCount >= LARGE_FOCUS_RENDER_NODE_THRESHOLD ? LARGE_FOCUS_RENDER_SCALE : 1;
 }
 
+type FocusRenderInput = z.infer<typeof focusRenderInput>;
+type ProgressExtra = Parameters<typeof progressReporter>[0];
+
+async function executeFocusVisualTool(
+  engine: CoreEngine,
+  workbench: FocusWorkbench,
+  context: ServerContext,
+  input: FocusRenderInput,
+  extra: ProgressExtra,
+  rasterize: boolean,
+) {
+  const { workspaceId: requestedWorkspaceId, relativePath } = input;
+  const workspaceId = engine.resolver.resolveWorkspaceId(requestedWorkspaceId, context.principal);
+  const outputName = rasterize ? 'raster' : 'render';
+  try {
+    const progress = progressReporter(extra);
+    await progress.report(0, 4, 'Importing and indexing focus source');
+    const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
+    await progress.report(1, 4, 'Focus source index complete');
+    const workspace = engine.resolver.get(workspaceId, context.principal);
+    const renderBudget = new RenderBudget();
+    if (input.mode === 'continuous') {
+      selectedContinuousFocusFile(snapshot, relativePath);
+      const imported = await workbench.importContinuousPath(
+        workspaceId,
+        relativePath,
+        context.principal,
+      );
+      const plan = selectContinuousPlan(imported.result, input.paletteId);
+      const presentation = await resolveFocusPresentation({
+        plans: [],
+        palettes: [plan],
+        files: snapshot.files,
+        index: snapshot.index,
+        scanner: engine.scanner,
+        workspace,
+        decodeIcons: rasterize,
+        budget: renderBudget,
+        signal: progress.signal,
+      });
+      await progress.report(2, 4, `Producing continuous focus ${outputName} artifacts`);
+      const rendered = await workbench.renderContinuousAndStore(workspaceId, plan, {
+        ...(context.principal === undefined ? {} : { principal: context.principal }),
+        presentation,
+        sourceHashes: presentation.sourceHashes,
+        ...(input.columns === undefined ? {} : { columns: input.columns }),
+        ...(input.padding === undefined ? {} : { padding: input.padding }),
+        renderProfile: { sourceRevision: snapshot.revision, output: outputName },
+        rasterize,
+        budget: renderBudget,
+        signal: progress.signal,
+      });
+      const diagnostics = [...imported.result.diagnostics, ...rendered.diagnostics];
+      const result = emptyServiceResult(workspaceId, {
+        mode: 'continuous' as const,
+        paletteId: plan.id,
+        focusCount: plan.focuses.length,
+        hashes: rendered.bundle.hashes,
+        width: rendered.bundle.width,
+        height: rendered.bundle.height,
+      });
+      result.code = rasterize ? 'CONTINUOUS_FOCUS_RASTERIZED' : 'CONTINUOUS_FOCUS_RENDERED';
+      setInlineFilesScanned(
+        result,
+        [...new Set([plan.provenance.sourcePath, ...presentation.filesScanned])].sort(
+          (left, right) => compareCodeUnits(left, right),
+        ),
+      );
+      result.diagnostics = diagnostics.slice(0, 100);
+      result.artifacts = rendered.artifacts.map(publicArtifactLink);
+      result.validation = validationFromDiagnostics(diagnostics);
+      await progress.report(4, 4, `Continuous focus ${outputName} complete`);
+      return toolResult(result);
+    }
+    const paletteImport = continuousPalettes(snapshot);
+    const imported = importFocusFile(
+      snapshot,
+      selectedFocusFile(snapshot, workspace.registration.roots.focus, relativePath),
+      paletteImport.palettes,
+    );
+    const plan = selectPlan(imported, input.treeId);
+    const linkedPalettes = paletteImport.palettes.filter(({ id }) =>
+      plan.continuousFocusPaletteIds.includes(id),
+    );
+    const presentation = await resolveFocusPresentation({
+      plans: [plan],
+      palettes: linkedPalettes,
+      files: snapshot.files,
+      index: snapshot.index,
+      scanner: engine.scanner,
+      workspace,
+      decodeIcons: rasterize,
+      budget: renderBudget,
+      signal: progress.signal,
+    });
+    await progress.report(2, 4, `Producing focus ${outputName} artifacts`);
+    const effectiveReviewScale =
+      input.reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
+    const rendered = await workbench.renderAndStore(workspaceId, plan, {
+      ...(context.principal === undefined ? {} : { principal: context.principal }),
+      index: snapshot.index,
+      references: referenceCatalog(snapshot),
+      presentation,
+      sourceHashes: presentation.sourceHashes,
+      ...(input.horizontalSpacing === undefined
+        ? {}
+        : { horizontalSpacing: input.horizontalSpacing }),
+      ...(input.verticalSpacing === undefined ? {} : { verticalSpacing: input.verticalSpacing }),
+      ...(input.padding === undefined ? {} : { padding: input.padding }),
+      outputScale: effectiveReviewScale,
+      rasterize,
+      renderProfile: {
+        sourceRevision: snapshot.revision,
+        reviewScale: effectiveReviewScale,
+        output: outputName,
+      },
+      budget: renderBudget,
+      signal: progress.signal,
+    });
+    const diagnostics = [
+      ...paletteImport.diagnostics,
+      ...imported.diagnostics,
+      ...rendered.diagnostics,
+    ];
+    const result = emptyServiceResult(workspaceId, {
+      mode: 'national' as const,
+      treeId: plan.id,
+      layoutHash: rendered.layout.layoutHash,
+      hashes: rendered.bundle.hashes,
+      width: rendered.bundle.width,
+      height: rendered.bundle.height,
+    });
+    result.code = rasterize ? 'FOCUS_RASTERIZED' : 'FOCUS_RENDERED';
+    setInlineFilesScanned(
+      result,
+      [...new Set([plan.provenance.sourcePath, ...presentation.filesScanned])].sort((left, right) =>
+        compareCodeUnits(left, right),
+      ),
+    );
+    result.diagnostics = diagnostics.slice(0, 100);
+    result.artifacts = rendered.artifacts.map(publicArtifactLink);
+    result.validation = validationFromDiagnostics(diagnostics);
+    await progress.report(4, 4, `Focus ${outputName} complete`);
+    return toolResult(result);
+  } catch (error) {
+    return errorResult(error, workspaceId);
+  }
+}
+
 function compactDrift(drift: { status: string; sourceChanged: boolean; planChanged: boolean }) {
   return {
     status: drift.status,
@@ -655,6 +801,7 @@ export function registerFocusTools(
             index: snapshot.index,
             scanner: engine.scanner,
             workspace,
+            decodeIcons: false,
             signal: progress.signal,
           });
           diagnostics.push(...presentation.diagnostics);
@@ -783,6 +930,7 @@ export function registerFocusTools(
           index: snapshot.index,
           scanner: engine.scanner,
           workspace,
+          decodeIcons: false,
           signal: progress.signal,
         });
         diagnostics.push(...presentation.diagnostics);
@@ -878,147 +1026,25 @@ export function registerFocusTools(
     {
       title: 'Render focus review artifacts',
       description:
-        'Render a national tree or continuous palette for creation and cleanup review as deterministic HTML, SVG, PNG, JSON, and source-map artifacts. Omit mode for national behavior. National trees with at least 200 focuses use reviewScale 0.5 by default; set 0.25 through 1.0 explicitly when needed.',
+        'Render a national tree or continuous palette as fast deterministic HTML, SVG, JSON, and source-map artifacts. Use hoi4.focus_raster when decoded icons and PNG output are needed.',
       inputSchema: focusRenderInput,
       outputSchema: focusRenderOutputSchema,
       annotations: artifactProducing,
     },
-    async (input, extra) => {
-      const { workspaceId: requestedWorkspaceId, relativePath } = input;
-      const workspaceId = engine.resolver.resolveWorkspaceId(
-        requestedWorkspaceId,
-        context.principal,
-      );
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Importing and indexing focus source');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const renderBudget = new RenderBudget();
-        if (input.mode === 'continuous') {
-          selectedContinuousFocusFile(snapshot, relativePath);
-          const imported = await workbench.importContinuousPath(
-            workspaceId,
-            relativePath,
-            context.principal,
-          );
-          const plan = selectContinuousPlan(imported.result, input.paletteId);
-          const presentation = await resolveFocusPresentation({
-            plans: [],
-            palettes: [plan],
-            files: snapshot.files,
-            index: snapshot.index,
-            scanner: engine.scanner,
-            workspace,
-            budget: renderBudget,
-            signal: progress.signal,
-          });
-          await progress.report(1, 3, 'Rendering continuous focus artifacts');
-          const rendered = await workbench.renderContinuousAndStore(workspaceId, plan, {
-            ...(context.principal === undefined ? {} : { principal: context.principal }),
-            presentation,
-            sourceHashes: presentation.sourceHashes,
-            ...(input.columns === undefined ? {} : { columns: input.columns }),
-            ...(input.padding === undefined ? {} : { padding: input.padding }),
-            renderProfile: { sourceRevision: snapshot.revision },
-            budget: renderBudget,
-            signal: progress.signal,
-          });
-          const diagnostics = [...imported.result.diagnostics, ...rendered.diagnostics];
-          const result = emptyServiceResult(workspaceId, {
-            mode: 'continuous' as const,
-            paletteId: plan.id,
-            focusCount: plan.focuses.length,
-            hashes: rendered.bundle.hashes,
-            width: rendered.bundle.width,
-            height: rendered.bundle.height,
-          });
-          result.code = 'CONTINUOUS_FOCUS_RENDERED';
-          setInlineFilesScanned(
-            result,
-            [...new Set([plan.provenance.sourcePath, ...presentation.filesScanned])].sort(
-              (left, right) => compareCodeUnits(left, right),
-            ),
-          );
-          result.diagnostics = diagnostics.slice(0, 100);
-          result.artifacts = rendered.artifacts.map(publicArtifactLink);
-          result.validation = validationFromDiagnostics(diagnostics);
-          await progress.report(3, 3, 'Continuous focus render complete');
-          return toolResult(result);
-        }
-        const paletteImport = continuousPalettes(snapshot);
-        const imported = importFocusFile(
-          snapshot,
-          selectedFocusFile(snapshot, workspace.registration.roots.focus, relativePath),
-          paletteImport.palettes,
-        );
-        const plan = selectPlan(imported, input.treeId);
-        const linkedPalettes = paletteImport.palettes.filter(({ id }) =>
-          plan.continuousFocusPaletteIds.includes(id),
-        );
-        const presentation = await resolveFocusPresentation({
-          plans: [plan],
-          palettes: linkedPalettes,
-          files: snapshot.files,
-          index: snapshot.index,
-          scanner: engine.scanner,
-          workspace,
-          budget: renderBudget,
-          signal: progress.signal,
-        });
-        await progress.report(1, 3, 'Rendering focus artifacts');
-        const effectiveReviewScale =
-          input.reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
-        const rendered = await workbench.renderAndStore(workspaceId, plan, {
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          index: snapshot.index,
-          references: referenceCatalog(snapshot),
-          presentation,
-          sourceHashes: presentation.sourceHashes,
-          ...(input.horizontalSpacing === undefined
-            ? {}
-            : { horizontalSpacing: input.horizontalSpacing }),
-          ...(input.verticalSpacing === undefined
-            ? {}
-            : { verticalSpacing: input.verticalSpacing }),
-          ...(input.padding === undefined ? {} : { padding: input.padding }),
-          outputScale: effectiveReviewScale,
-          renderProfile: {
-            sourceRevision: snapshot.revision,
-            reviewScale: effectiveReviewScale,
-          },
-          budget: renderBudget,
-          signal: progress.signal,
-        });
-        const diagnostics = [
-          ...paletteImport.diagnostics,
-          ...imported.diagnostics,
-          ...rendered.diagnostics,
-        ];
-        const result = emptyServiceResult(workspaceId, {
-          mode: 'national' as const,
-          treeId: plan.id,
-          layoutHash: rendered.layout.layoutHash,
-          hashes: rendered.bundle.hashes,
-          width: rendered.bundle.width,
-          height: rendered.bundle.height,
-        });
-        result.code = 'FOCUS_RENDERED';
-        setInlineFilesScanned(
-          result,
-          [...new Set([plan.provenance.sourcePath, ...presentation.filesScanned])].sort(
-            (left, right) => compareCodeUnits(left, right),
-          ),
-        );
-        result.diagnostics = diagnostics.slice(0, 100);
-        result.artifacts = rendered.artifacts.map(publicArtifactLink);
-        result.validation = validationFromDiagnostics(diagnostics);
-        await progress.report(3, 3, 'Focus render complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      }
+    (input, extra) => executeFocusVisualTool(engine, workbench, context, input, extra, false),
+  );
+
+  server.registerTool(
+    'hoi4.focus_raster',
+    {
+      title: 'Rasterize focus review artifacts',
+      description:
+        'Produce the high-fidelity focus review with decoded source icons and deterministic PNG output. Use focus_render for the faster structural HTML, SVG, and JSON view.',
+      inputSchema: focusRenderInput,
+      outputSchema: focusRenderOutputSchema,
+      annotations: artifactProducing,
     },
+    (input, extra) => executeFocusVisualTool(engine, workbench, context, input, extra, true),
   );
 
   server.registerTool(
@@ -1104,22 +1130,11 @@ export function registerFocusTools(
             index: snapshot.index,
             scanner: engine.scanner,
             workspace,
+            decodeIcons: false,
             budget: renderBudget,
             signal: progress.signal,
           });
-          const currentDiagnostics =
-            currentPlan === undefined
-              ? []
-              : [...(imported?.result.diagnostics ?? []), ...workbench.lintContinuous(currentPlan)];
-          await progress.report(1, 5, 'Rendering before and proposed continuous focus plans');
-          const currentRender =
-            currentPlan === undefined
-              ? undefined
-              : await renderContinuousFocusPalette(currentPlan, currentDiagnostics, {
-                  presentation,
-                  signal: progress.signal,
-                  budget: renderBudget,
-                });
+          await progress.report(1, 5, 'Building proposed continuous focus review');
           const proposedPlanHash = focusPlanHash(plan);
           const reviewPlan: ContinuousFocusPalettePlan = {
             ...plan,
@@ -1133,64 +1148,16 @@ export function registerFocusTools(
             ...(context.principal === undefined ? {} : { principal: context.principal }),
             presentation,
             sourceHashes: presentation.sourceHashes,
-            renderProfile: { sourceRevision: snapshot.revision, proposedPlanHash },
+            renderProfile: {
+              sourceRevision: snapshot.revision,
+              proposedPlanHash,
+              output: 'vector',
+            },
+            rasterize: false,
             budget: renderBudget,
             signal: progress.signal,
           });
-          const beforePng =
-            currentRender?.png ??
-            (await createTransparentPng(
-              proposed.bundle.width,
-              proposed.bundle.height,
-              'new continuous focus baseline',
-              renderBudget,
-            ));
-          const comparison = await comparePngImages(
-            beforePng,
-            proposed.bundle.png,
-            8,
-            progress.signal,
-            renderBudget,
-          );
-          const stem = plan.id.replace(/[^A-Za-z0-9._-]/gu, '_').slice(0, 80) || 'continuous';
-          const provenance = {
-            toolVersion: PACKAGE_VERSION,
-            schemaVersion: 'continuous-focus-visual-diff.v1',
-            sourceHashes: {
-              before: sourceFile?.sha256 ?? sha256Bytes(Buffer.alloc(0)),
-              proposedPlan: proposedPlanHash,
-            },
-            renderProfile: { offline: true, kind: 'continuous-focus-palette' },
-          };
-          const comparisonArtifacts = await engine.artifacts.withAtomicWrites(
-            workspace,
-            [
-              {
-                name: `${stem}.continuous-focus-before.png`,
-                mimeType: 'image/png',
-                content: beforePng,
-                provenance: { ...provenance, kind: 'continuous-focus-before-render' },
-              },
-              {
-                name: `${stem}.continuous-focus-visual-diff.png`,
-                mimeType: 'image/png',
-                content: comparison.png,
-                provenance: { ...provenance, kind: 'continuous-focus-visual-diff' },
-              },
-              {
-                name: `${stem}.continuous-focus-visual-diff.json`,
-                mimeType: 'application/json',
-                content: comparison.json,
-                provenance: { ...provenance, kind: 'continuous-focus-visual-diff-json' },
-              },
-            ],
-            (stored) => Promise.resolve([...stored]),
-            progress.signal,
-          );
-          const reviewArtifacts = [
-            ...proposed.artifacts.map(publicArtifactLink),
-            ...comparisonArtifacts.map(publicArtifactLink),
-          ];
+          const reviewArtifacts = proposed.artifacts.map(publicArtifactLink);
           await progress.report(3, 5, 'Preparing the continuous focus rewrite');
           const planned = await workbench.planContinuousChanges({
             workspaceId,
@@ -1361,6 +1328,7 @@ export function registerFocusTools(
           index: snapshot.index,
           scanner: engine.scanner,
           workspace,
+          decodeIcons: false,
           budget: renderBudget,
           signal: progress.signal,
         });
@@ -1370,24 +1338,7 @@ export function registerFocusTools(
             : currentPlan === compactSourcePlan && compactPlanning !== undefined
               ? compactPlanning.currentLayout
               : await workbench.layoutAsync(currentPlan, { signal: progress.signal });
-        const currentDiagnostics =
-          currentPlan === undefined || currentLayout === undefined
-            ? []
-            : workbench.lint(currentPlan, {
-                index: snapshot.index,
-                references: catalog,
-                layout: currentLayout,
-              });
-        await progress.report(1, 5, 'Rendering before and proposed focus plans');
-        const currentRender =
-          currentPlan === undefined || currentLayout === undefined
-            ? undefined
-            : await renderFocusTree(currentPlan, currentLayout, currentDiagnostics, {
-                presentation,
-                ...reviewRenderOptions,
-                signal: progress.signal,
-                budget: renderBudget,
-              });
+        await progress.report(1, 5, 'Building proposed focus review');
         const proposedPlanHash = focusPlanHash(plan);
         const reviewPlan: FocusTreePlan = {
           ...plan,
@@ -1410,73 +1361,18 @@ export function registerFocusTools(
           presentation,
           sourceHashes: presentation.sourceHashes,
           ...reviewRenderOptions,
+          rasterize: false,
           renderProfile: {
             sourceRevision: snapshot.revision,
             proposedPlanHash,
             reviewRenderProfile,
+            output: 'vector',
           },
           budget: renderBudget,
           signal: progress.signal,
           layout: proposedLayout,
         });
-        const beforePng =
-          currentRender?.png ??
-          (await createTransparentPng(
-            proposed.bundle.width,
-            proposed.bundle.height,
-            'new national focus baseline',
-            renderBudget,
-          ));
-        const comparison = await comparePngImages(
-          beforePng,
-          proposed.bundle.png,
-          8,
-          progress.signal,
-          renderBudget,
-        );
-        const stem = plan.id.replace(/[^A-Za-z0-9._-]/gu, '_').slice(0, 80) || 'focus-tree';
-        const provenance = {
-          toolVersion: PACKAGE_VERSION,
-          schemaVersion: 'focus-visual-diff.v1',
-          sourceHashes: {
-            before: focusFile?.sha256 ?? sha256Bytes(Buffer.alloc(0)),
-            proposedPlan: proposedPlanHash,
-          },
-          renderProfile: {
-            offline: true,
-            layoutHash: proposed.layout.layoutHash,
-            reviewRenderProfile,
-          },
-        };
-        const comparisonArtifacts = await engine.artifacts.withAtomicWrites(
-          workspace,
-          [
-            {
-              name: `${stem}.focus-before.png`,
-              mimeType: 'image/png',
-              content: beforePng,
-              provenance: { ...provenance, kind: 'focus-before-render' },
-            },
-            {
-              name: `${stem}.focus-visual-diff.png`,
-              mimeType: 'image/png',
-              content: comparison.png,
-              provenance: { ...provenance, kind: 'focus-visual-diff' },
-            },
-            {
-              name: `${stem}.focus-visual-diff.json`,
-              mimeType: 'application/json',
-              content: comparison.json,
-              provenance: { ...provenance, kind: 'focus-visual-diff-json' },
-            },
-          ],
-          (stored) => Promise.resolve([...stored]),
-          progress.signal,
-        );
-        const reviewArtifacts = [
-          ...proposed.artifacts.map(publicArtifactLink),
-          ...comparisonArtifacts.map(publicArtifactLink),
-        ];
+        const reviewArtifacts = proposed.artifacts.map(publicArtifactLink);
         await progress.report(3, 5, 'Preparing the focus-tree rewrite');
         const planned = await workbench.planChanges({
           workspaceId,

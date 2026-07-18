@@ -2,7 +2,7 @@
 
 The Event Chain Viewer analyzes event definitions and call sites across the active mod, configured dependencies, and vanilla sources. It is read-only: it does not rewrite event files or simulate the game.
 
-Use the three event tools directly; omit `workspaceId` when the MCP working directory is inside the target mod.
+Use the three event tools directly from the target mod.
 
 ## Inspect
 
@@ -16,7 +16,9 @@ Use the three event tools directly; omit `workspaceId` when the MCP working dire
 - `lint`: find missing targets, unreachable events, suspicious cycles, conflicting definitions, invalid timing, and unresolved dynamic calls.
 - `impact`: identify callers, descendants, state dependencies, and files affected by a proposed event change.
 
-Use narrow identifiers, direction, and depth limits when the task concerns one chain. The compact response summarizes the result; complete graphs and diagnostics are returned as linked resources.
+Use narrow identifiers, direction, and depth limits when the task concerns one chain. Broad scans build the structural event graph without expanding every scripted helper into duplicate paths. Focused trace, path, state, impact, and render calls expand helper relationships when needed.
+
+The compact response summarizes the result. Small scan resources contain the complete graph; very large scan resources contain exact totals, grouped inventories, representative diagnostics, and the revision needed for focused follow-up queries. This keeps an agent's prompt and artifact storage bounded without reducing the results of those focused queries.
 
 Selectors use one of these forms:
 
@@ -37,7 +39,6 @@ Example `hoi4.event_inspect` arguments:
 
 ```json
 {
-  "workspaceId": "my-mod",
   "mode": "trace",
   "selector": { "kind": "event", "eventId": "namespace.1" },
   "direction": "downstream",
@@ -61,7 +62,6 @@ Example `hoi4.event_render` arguments:
 
 ```json
 {
-  "workspaceId": "my-mod",
   "view": "neighborhood",
   "selector": { "kind": "event", "eventId": "namespace.1" },
   "direction": "both",
@@ -83,7 +83,6 @@ Example `hoi4.event_compare` arguments:
 
 ```json
 {
-  "workspaceId": "my-mod",
   "proposedSources": [
     {
       "relativePath": "events/example.txt",

@@ -203,6 +203,7 @@ export class CoreEngine {
     const requestKey = `${workspaceId}:${generation}:${hashCanonical({
       patterns: [...patterns].sort(),
       ignore: [...(ignore ?? [])].sort(),
+      rootKinds: [...(options.rootKinds ?? [])].sort(),
       maxFiles: options.maxFiles ?? this.resolver.config().scanMaxFiles,
       maxBytes: options.maxBytes ?? this.resolver.config().scanMaxBytes,
     })}`;
@@ -214,6 +215,7 @@ export class CoreEngine {
           const files = await this.scanner.scan(workspace, {
             patterns,
             ...(ignore === undefined ? {} : { ignore }),
+            ...(options.rootKinds === undefined ? {} : { rootKinds: options.rootKinds }),
             ...(options.maxFiles === undefined ? {} : { maxFiles: options.maxFiles }),
             ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
             signal: controller.signal,

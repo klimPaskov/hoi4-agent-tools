@@ -1,6 +1,6 @@
 # Focus trees
 
-Use `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes. Omit `workspaceId` when the MCP working directory is inside the target mod.
+Use `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes.
 
 ## Create a tree
 
@@ -14,7 +14,7 @@ A complete plan should include:
 - focus positions, convergence points, and shared support branches;
 - titles, descriptions, icons, filters, and AI behavior.
 
-For a missing target, call `hoi4.focus_rewrite` with `createIfMissing: true`. Review the proposed and final artifacts returned by the rewrite, then inspect and render the result. Do not call a tree complete with placeholder rewards, missing localisation, missing icons, or absent AI choices.
+For a missing target, call `hoi4.focus_rewrite` with `createIfMissing: true`. Review the proposed and final artifacts returned by the rewrite, then inspect and render the result. Call `hoi4.focus_raster` when the review needs decoded source icons and a deterministic PNG. Do not call a tree complete with placeholder rewards, missing localisation, missing icons, or absent AI choices.
 
 ## Clean an existing tree
 
@@ -22,7 +22,6 @@ For a layout-only cleanup of an existing national tree, call `hoi4.focus_rewrite
 
 ```json
 {
-  "workspaceId": "my-mod",
   "relativePath": "common/national_focus/my_tree.txt",
   "treeId": "my_tree",
   "layoutMode": "compact"
@@ -47,4 +46,4 @@ If malformed or unsupported script makes a requested change ambiguous, the rewri
 
 Inspection and rendering can report missing references, invalid prerequisite structure, duplicate or overlapping positions, insufficient spacing, long or crossing connectors, branch asymmetry, route conflicts, missing localisation or sprites, weak terminal branches, repeated rewards, and missing AI metadata. Renders are offline review artifacts, not game screenshots.
 
-National trees with 200 or more focuses render review PNGs at half scale by default so large agent workflows stay responsive. Pass an explicit `reviewScale` from `0.25` through `1` when a different raster size is needed; HTML, SVG, JSON, layout, and diagnostics remain complete.
+`hoi4.focus_render` is the normal structural view and writes complete HTML, SVG, JSON, and source-map artifacts without decoding every icon or creating a PNG. `hoi4.focus_raster` adds decoded icons and the high-fidelity PNG. National trees with 200 or more focuses raster at half scale by default; pass `reviewScale` from `0.25` through `1` when a different PNG size is needed.

@@ -30,6 +30,7 @@ import {
   type MapPlanResult,
   type MapScanSnapshot,
 } from '../../src/hoi4_agent_tools/map/service.js';
+import { validateMapAsync } from '../../src/hoi4_agent_tools/map/validation.js';
 
 const postValidate = () =>
   Promise.resolve({
@@ -1251,8 +1252,11 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
         path.join(variantRoot, 'runtime'),
         `map_invalid_${index}`,
       );
-      const result = await harness.nudger.validate(harness.workspaceId);
-      const codes = new Set(result.validation.diagnostics.map(({ code }) => code));
+      const snapshot = await harness.nudger.scan(harness.workspaceId);
+      const validation = await validateMapAsync(snapshot.index, {
+        includeBaselineDiagnostics: true,
+      });
+      const codes = new Set(validation.diagnostics.map(({ code }) => code));
       for (const expectedCode of variant.expectedDiagnosticCodes) {
         expect(codes, `${variant.id} should report ${expectedCode}`).toContain(expectedCode);
       }

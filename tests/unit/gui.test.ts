@@ -726,6 +726,71 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(new Set(parent.childIds).size).toBe(parent.childIds.length);
   });
 
+  it('indexes only referenced localisation with mod precedence and suppresses baseline unresolved noise', () => {
+    const rooted = (
+      relativePath: string,
+      content: string,
+      rootKind: 'game' | 'mod',
+      loadOrder: number,
+    ): ScannedFile => ({
+      ...scanned(relativePath, content),
+      absolutePath: path.join(`C:/${rootKind}`, relativePath),
+      displayPath: `${rootKind}:${relativePath}`,
+      rootKind,
+      loadOrder,
+    });
+    const files = [
+      rooted(
+        'interface/game.gui',
+        'guiTypes = { iconType = { name = "game_icon" spriteType = "MISSING_GAME" } }',
+        'game',
+        0,
+      ),
+      rooted(
+        'interface/mod.gui',
+        'guiTypes = { instantTextBoxType = { name = "mod_text" text = "TITLE" } iconType = { name = "mod_icon" spriteType = "MISSING_MOD" } }',
+        'mod',
+        10,
+      ),
+      rooted(
+        'localisation/english/game_l_english.yml',
+        '\uFEFFl_english:\nTITLE: "Game title"\nUNUSED: "Not a GUI key"\n',
+        'game',
+        0,
+      ),
+      rooted(
+        'localisation/english/mod_l_english.yml',
+        '\uFEFFl_english:\nTITLE: "Mod title"\n',
+        'mod',
+        10,
+      ),
+    ];
+    const graph = buildGuiSourceGraph(files, SymbolIndex.build(files.slice(0, 2)));
+    expect(graph.localisation.map(({ key }) => key)).toEqual(['TITLE', 'TITLE']);
+    const modLocalisationNode = graph.nodes.find(
+      ({ kind, name, path: sourcePath }) =>
+        kind === 'localisation' && name === 'TITLE' && sourcePath.startsWith('mod:'),
+    );
+    expect(modLocalisationNode).toBeDefined();
+    expect(
+      graph.edges.find(
+        ({ kind, metadata }) => kind === 'uses_localisation' && metadata.key === 'TITLE',
+      )?.to,
+    ).toBe(modLocalisationNode?.id);
+    expect(
+      graph.diagnostics.some(
+        ({ code, location }) =>
+          code === 'GUI_REFERENCE_UNRESOLVED' && location?.path.startsWith('game:'),
+      ),
+    ).toBe(false);
+    expect(
+      graph.diagnostics.some(
+        ({ code, location }) =>
+          code === 'GUI_REFERENCE_UNRESOLVED' && location?.path.startsWith('mod:'),
+      ),
+    ).toBe(true);
+  });
+
   it('samples non-looping, visible-clock, global-clock, and paused-loop animation timing', async () => {
     const files = await fixtureFiles();
     const graph = sourceGraph(files);
@@ -1006,7 +1071,7 @@ kernings count=0
     expect(new Set(measured.missingGlyphs).size).toBe(GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES);
   });
 
-  it('shares a distinct raster-operation ceiling across asset decode and sprite extraction', async () => {
+  it('deduplicates shared texture frames and keeps a ceiling for distinct raster work', async () => {
     const png = await sharp({
       create: { width: 1, height: 1, channels: 4, background: '#ffffff' },
     })
@@ -1015,22 +1080,30 @@ kernings count=0
     const files = [
       scanned(
         'interface/decode-budget.gfx',
-        'spriteTypes = { spriteType = { name = "GFX_first" texturefile = "gfx/shared.png" } spriteType = { name = "GFX_second" texturefile = "gfx/shared.png" } }',
+        'spriteTypes = { spriteType = { name = "GFX_first" texturefile = "gfx/shared.png" } spriteType = { name = "GFX_second" texturefile = "gfx/shared.png" } spriteType = { name = "GFX_third" texturefile = "gfx/distinct.png" } }',
       ),
       scanned('gfx/shared.png', png),
+      scanned('gfx/distinct.png', png),
     ];
     const graph = sourceGraph(files);
     const first = graph.sprites.find(({ name }) => name === 'GFX_first');
     const second = graph.sprites.find(({ name }) => name === 'GFX_second');
+    const third = graph.sprites.find(({ name }) => name === 'GFX_third');
     expect(first).toBeDefined();
     expect(second).toBeDefined();
-    if (first === undefined || second === undefined) return;
+    expect(third).toBeDefined();
+    if (first === undefined || second === undefined || third === undefined) return;
     const budget = new RenderBudget({ maximumDistinctRasterOperations: 2 });
     const catalog = new GuiAssetCatalog(graph, files, budget);
     await expect(catalog.loadSpriteFrame(first, 0)).resolves.toMatchObject({ supported: true });
     await expect(catalog.loadSpriteFrame(first, 0)).resolves.toMatchObject({ supported: true });
     expect(budget.distinctRasterOperations).toBe(2);
-    await expect(catalog.loadSpriteFrame(second, 0)).rejects.toMatchObject({
+    await expect(catalog.loadSpriteFrame(second, 0)).resolves.toMatchObject({
+      spriteName: 'GFX_second',
+      supported: true,
+    });
+    expect(budget.distinctRasterOperations).toBe(2);
+    await expect(catalog.loadSpriteFrame(third, 0)).rejects.toMatchObject({
       code: 'RENDER_RASTER_OPERATION_BUDGET_BLOCKED',
     });
   });

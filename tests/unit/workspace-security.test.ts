@@ -492,6 +492,17 @@ describe('workspace path policy', () => {
     ).rejects.toMatchObject({ code: 'SCAN_BYTE_LIMIT' });
   });
 
+  it('can scope a scan to selected workspace root kinds', async () => {
+    const { resolver, game } = await fixture();
+    await writeFile(path.join(game, 'inside.txt'), 'game');
+    const files = await new WorkspaceScanner().scan(resolver.get('test'), {
+      patterns: ['inside.txt'],
+      rootKinds: ['mod'],
+    });
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({ rootKind: 'mod', relativePath: 'inside.txt' });
+  });
+
   it('admits a vanilla-sized 5632 by 2048 24-bit province bitmap below the file ceiling', async () => {
     const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-vanilla-bmp-scan-'));
     const mod = path.join(base, 'mod');

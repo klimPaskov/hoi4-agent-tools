@@ -319,6 +319,15 @@ interface PreparedArtifactWrite {
   manifestBytes: string;
 }
 
+interface RetainedArtifactManifest {
+  manifest: ArtifactManifest;
+  manifestPath: string;
+  manifestBytes: number;
+  modifiedAt: number;
+  targetPath: string;
+  targetBytes: number;
+}
+
 function isValidArtifactName(name: string): boolean {
   return (
     safeNamePattern.test(name) &&
@@ -678,6 +687,150 @@ export class ArtifactStore {
     private readonly maxEntries = 5_000,
     private readonly maxSingleBytes = 134_217_728,
   ) {}
+
+  private async pruneForAdmission(
+    workspace: ResolvedWorkspace,
+    usage: { bytes: number; entries: number },
+    additionalBytes: number,
+    additionalEntries: number,
+    protectedManifests: ReadonlySet<string>,
+    protectedTargets: ReadonlySet<string>,
+    signal?: AbortSignal,
+  ): Promise<{ bytes: number; entries: number }> {
+    if (
+      usage.entries + additionalEntries <= this.maxEntries &&
+      usage.bytes <= this.maxBytes - additionalBytes
+    ) {
+      return usage;
+    }
+
+    // Reclaim to a low-water mark so a busy agent workflow does not rescan and evict one artifact
+    // for every subsequent tool call. The incoming batch itself remains protected and atomic.
+    const targetBytes = Math.max(
+      0,
+      Math.min(this.maxBytes - additionalBytes, Math.floor(this.maxBytes * 0.75)),
+    );
+    const targetEntries = Math.max(
+      0,
+      Math.min(this.maxEntries - additionalEntries, Math.floor(this.maxEntries * 0.75)),
+    );
+    const retained: RetainedArtifactManifest[] = [];
+    const walk = async (directory: string): Promise<void> => {
+      signal?.throwIfAborted();
+      let children;
+      try {
+        children = await readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw error;
+      }
+      for (const child of children) {
+        signal?.throwIfAborted();
+        if (child.isSymbolicLink()) {
+          throw new ServiceError(
+            'ARTIFACT_STORAGE_UNSAFE',
+            'Artifact storage contains a symbolic link or junction',
+          );
+        }
+        const candidate = await containedGeneratedPath(
+          workspace.artifactRoot,
+          path.relative(workspace.artifactRoot, path.join(directory, child.name)),
+        );
+        if (child.isDirectory()) {
+          await walk(candidate);
+          continue;
+        }
+        if (!child.isFile() || !child.name.endsWith('.manifest.json')) continue;
+        const metadata = await lstat(candidate);
+        const manifest = await readArtifactManifest(candidate, signal);
+        if (child.name !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
+          throw new ServiceError(
+            'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+            'Artifact provenance manifest filename does not match its contents',
+          );
+        }
+        assertManifestIntegrity(
+          manifest,
+          {
+            sha256: path.basename(directory),
+            provenanceHash: manifest.provenanceHash,
+            name: manifest.name,
+          },
+          workspace,
+        );
+        const targetPath = await containedGeneratedPath(
+          workspace.artifactRoot,
+          path.relative(workspace.artifactRoot, path.join(directory, manifest.name)),
+        );
+        let targetBytes = 0;
+        try {
+          targetBytes = (await stat(targetPath)).size;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        retained.push({
+          manifest,
+          manifestPath: candidate,
+          manifestBytes: metadata.size,
+          modifiedAt: metadata.mtimeMs,
+          targetPath,
+          targetBytes,
+        });
+      }
+    };
+    await walk(await containedGeneratedPath(workspace.artifactRoot));
+    retained.sort(
+      (left, right) =>
+        left.modifiedAt - right.modifiedAt ||
+        compareCodeUnits(left.manifestPath, right.manifestPath),
+    );
+
+    const current = { ...usage };
+    for (const candidate of retained) {
+      signal?.throwIfAborted();
+      if (current.bytes <= targetBytes && current.entries <= targetEntries) break;
+      if (protectedManifests.has(candidate.manifestPath)) continue;
+      try {
+        await unlink(candidate.manifestPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
+      current.entries = Math.max(0, current.entries - 1);
+      current.bytes = Math.max(0, current.bytes - candidate.manifestBytes);
+
+      if (protectedTargets.has(candidate.targetPath)) continue;
+      const prefix = `${candidate.manifest.name}.`;
+      const hasManifest = (
+        await readdir(path.dirname(candidate.targetPath), { withFileTypes: true })
+      ).some(
+        (entry) =>
+          entry.isFile() && entry.name.startsWith(prefix) && entry.name.endsWith('.manifest.json'),
+      );
+      if (hasManifest) continue;
+      try {
+        await unlink(candidate.targetPath);
+        current.bytes = Math.max(0, current.bytes - candidate.targetBytes);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      const verificationPrefix = `${workspace.workspaceIdentity}\0${workspace.ownerIdentity}\0${candidate.targetPath}\0`;
+      for (const key of this.#verifiedContent.keys()) {
+        if (key.startsWith(verificationPrefix)) this.#verifiedContent.delete(key);
+      }
+    }
+
+    if (
+      current.entries + additionalEntries > this.maxEntries ||
+      current.bytes > this.maxBytes - additionalBytes
+    ) {
+      throw new ServiceError(
+        'ARTIFACT_STORAGE_LIMIT',
+        'Artifact batch cannot fit after reclaiming expired artifacts',
+      );
+    }
+    return current;
+  }
 
   async list(workspace: ResolvedWorkspace, signal?: AbortSignal): Promise<ArtifactLink[]> {
     signal?.throwIfAborted();
@@ -1320,15 +1473,15 @@ export class ArtifactStore {
         const additionalEntries = [...uniqueManifests.values()].filter(
           (artifact) => !artifact.exists,
         ).length;
-        if (
-          usage.entries + additionalEntries > this.maxEntries ||
-          usage.bytes > this.maxBytes - additionalBytes
-        ) {
-          throw new ServiceError(
-            'ARTIFACT_STORAGE_LIMIT',
-            'Artifact storage retention limit has been reached',
-          );
-        }
+        await this.pruneForAdmission(
+          workspace,
+          usage,
+          additionalBytes,
+          additionalEntries,
+          new Set(uniqueManifests.keys()),
+          new Set(uniqueTargets.keys()),
+          signal,
+        );
 
         const createdTargets: string[] = [];
         const createdManifests: string[] = [];

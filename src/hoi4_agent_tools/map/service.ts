@@ -11,6 +11,7 @@ import type { ArtifactLink } from '../core/result.js';
 import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../core/canonical.js';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics.js';
 import { CoreEngine } from '../core/engine.js';
+import { SymbolIndex } from '../core/index.js';
 import { RenderBudget } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -581,7 +582,6 @@ function sourceTextPatterns(roots: {
       const normalized = normalizeSourceRoot(root);
       return [`${normalized}/english/**/*.{yml,yaml}`, `${normalized}/*.{yml,yaml}`];
     }),
-    '**/*.asset',
   ];
 }
 
@@ -731,8 +731,17 @@ export class AgentNudger {
       principal,
       signal,
     );
+    const locatorSnapshot = await this.engine.scan(
+      workspaceId,
+      { patterns: ['**/*.asset'], rootKinds: ['mod', 'fixture'] },
+      principal,
+      signal,
+    );
     signal?.throwIfAborted();
-    const files = contentSnapshot.files;
+    const files = [...contentSnapshot.files, ...locatorSnapshot.files].sort(
+      (left, right) =>
+        left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+    );
     const revision = hashCanonical(
       files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
     );
@@ -740,7 +749,7 @@ export class AgentNudger {
       workspaceId,
       revision,
       files,
-      index: MapWorkspaceIndex.build(files, sourceRoots, contentSnapshot.index),
+      index: MapWorkspaceIndex.build(files, sourceRoots, SymbolIndex.build(files)),
     };
   }
 

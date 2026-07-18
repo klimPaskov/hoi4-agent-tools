@@ -88,11 +88,8 @@ describe('offline package and Registry metadata', () => {
     expect(versionSource).toContain(`export const PACKAGE_VERSION = '${version}';`);
     expect(changelog).toContain(`## ${version}`);
 
-    const documentedVersions = [...readme.matchAll(/hoi4-agent-tools@(\d+\.\d+\.\d+)/gu)].map(
-      ([, documented]) => documented,
-    );
-    expect(documentedVersions.length).toBeGreaterThan(0);
-    expect(new Set(documentedVersions)).toEqual(new Set([version]));
+    expect(readme).toContain('hoi4-agent-tools@latest');
+    expect(readme).not.toMatch(/hoi4-agent-tools@\d+\.\d+\.\d+/u);
 
     const schemaFiles = (await readdir(path.join(projectRoot, 'schemas')))
       .filter((fileName) => fileName.endsWith('.schema.json'))

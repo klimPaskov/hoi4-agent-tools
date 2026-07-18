@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Analyze HOI4 event chains; create and clean focus trees, scripted GUIs, and maps with coding agents.",
   "type": "module",
   "license": "Apache-2.0",

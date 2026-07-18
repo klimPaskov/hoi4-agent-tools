@@ -1,6 +1,6 @@
 # Maps
 
-Use `hoi4.map_inspect`, `hoi4.map_render`, and `hoi4.map_rewrite` for provinces, states, strategic regions, adjacency, supply nodes, railways, positions, ownership, cores, claims, resources, buildings, and localisation. Omit `workspaceId` when the MCP working directory is inside the target mod.
+Use `hoi4.map_inspect`, `hoi4.map_render`, and `hoi4.map_rewrite` for provinces, states, strategic regions, adjacency, supply nodes, railways, positions, ownership, cores, claims, resources, buildings, and localisation.
 
 ## Create or reshape map content
 

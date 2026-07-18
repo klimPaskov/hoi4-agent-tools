@@ -336,13 +336,23 @@ export class GuiAssetCatalog {
     if (texturePath === undefined) return Promise.resolve(undefined);
     const frameCount = Math.max(1, sprite.frameCount);
     const frame = Math.max(0, Math.min(frameCount - 1, Math.trunc(requestedFrame)));
-    const key = `${sprite.id}:${texturePath}:${frameCount}:${frame}`;
+    // Different sprite names frequently reuse the same frame strip. Cache by resolved texture and
+    // crop instead of sprite identity so large surfaces do not rasterize identical pixels hundreds
+    // of times.
+    const textureFile = this.resolveFile(texturePath, sprite.sourcePath);
+    const textureIdentity =
+      textureFile === undefined
+        ? `${sprite.sourcePath}:${texturePath}`
+        : `${textureFile.displayPath}:${textureFile.sha256}`;
+    const key = `${textureIdentity}:${frameCount}:${frame}`;
     let promise = this.frames.get(key);
     if (promise === undefined) {
       promise = this.decodeSpriteFrame(sprite, texturePath, frameCount, frame, key);
       this.frames.set(key, promise);
     }
-    return promise;
+    return promise.then((decoded) =>
+      decoded === undefined ? undefined : { ...decoded, spriteName: sprite.name },
+    );
   }
 
   private async decodeSpriteFrame(

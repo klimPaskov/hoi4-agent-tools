@@ -398,6 +398,7 @@ export interface GuiComparisonResult {
 
 export interface GuiArtifactSet {
   artifacts: StoredArtifact[];
+  filesScanned: string[];
   render: GuiRenderResult;
   stateScenes: GuiScene[];
   resolutionScenes: GuiScene[];

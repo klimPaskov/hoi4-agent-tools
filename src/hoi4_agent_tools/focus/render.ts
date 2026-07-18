@@ -47,6 +47,8 @@ export interface FocusRenderOptions {
   padding?: number;
   /** Uniform raster-output scale; the logical SVG geometry and source coordinates are unchanged. */
   outputScale?: number;
+  /** Generate and store PNG output. Structural callers can disable this and avoid native raster work. */
+  rasterize?: boolean;
   iconDataUris?: Readonly<Record<string, string>>;
   presentation?: FocusPresentationResolution;
   sourceHashes?: Record<string, string>;
@@ -60,7 +62,7 @@ export interface FocusRenderBundle {
   svg: string;
   png: Buffer;
   json: string;
-  hashes: { html: string; svg: string; png: string; json: string };
+  hashes: { html: string; svg: string; png?: string; json: string };
   sourceMap: FocusGeneratedSourceMap;
   width: number;
   height: number;
@@ -292,7 +294,9 @@ function svgDocument(
   const logicalHeight = Math.max(240, (maximumY - minimumY) * vertical + nodeHeight + padding * 2);
   const width = Math.max(1, Math.round(logicalWidth * outputScale));
   const height = Math.max(1, Math.round(logicalHeight * outputScale));
-  (options.budget ?? new RenderBudget()).reserve(width, height, 'focus tree PNG');
+  if (options.rasterize !== false) {
+    (options.budget ?? new RenderBudget()).reserve(width, height, 'focus tree PNG');
+  }
   const pixel = new Map(
     nodes.map((node) => [
       node.id,
@@ -602,21 +606,26 @@ export async function renderFocusTree(
     const dataUri = focusIconDataUri(focus, resolvedOptions);
     return dataUri === undefined ? [] : [dataUri];
   });
-  await admitFocusIconDataUris(resolvedOptions, budget, renderedDataUris);
+  if (options.rasterize !== false) {
+    await admitFocusIconDataUris(resolvedOptions, budget, renderedDataUris);
+  }
   const compiled = compileFocusTreeWithSourceMap(plan, layout);
   const rendered = svgDocument(plan, layout, diagnostics, resolvedOptions);
   const json = `${canonicalJson({ ...rendered.graph, generatedSourceMap: compiled.sourceMap })}\n`;
   const html = htmlDocument(plan, rendered.svg, json, diagnostics);
-  assertRenderDimensions(rendered.width, rendered.height, 'focus tree Sharp raster');
-  budget.reserveRasterOperation(
-    `focus-tree:${sha256Bytes(rendered.svg)}`,
-    'focus tree SVG rasterization',
-  );
-  const png = await sharp(Buffer.from(rendered.svg, 'utf8'), {
-    limitInputPixels: RENDER_MAX_PIXELS,
-  })
-    .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-    .toBuffer();
+  let png = Buffer.alloc(0);
+  if (options.rasterize !== false) {
+    assertRenderDimensions(rendered.width, rendered.height, 'focus tree Sharp raster');
+    budget.reserveRasterOperation(
+      `focus-tree:${sha256Bytes(rendered.svg)}`,
+      'focus tree SVG rasterization',
+    );
+    png = await sharp(Buffer.from(rendered.svg, 'utf8'), {
+      limitInputPixels: RENDER_MAX_PIXELS,
+    })
+      .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+      .toBuffer();
+  }
   options.signal?.throwIfAborted();
   return {
     html,
@@ -626,7 +635,7 @@ export async function renderFocusTree(
     hashes: {
       html: sha256Bytes(html),
       svg: sha256Bytes(rendered.svg),
-      png: sha256Bytes(png),
+      ...(options.rasterize === false ? {} : { png: sha256Bytes(png) }),
       json: sha256Bytes(json),
     },
     sourceMap: compiled.sourceMap,
@@ -675,12 +684,16 @@ export async function storeFocusRenderArtifacts(
       content: bundle.svg,
       provenance: { ...provenance, kind: 'focus-svg' },
     },
-    {
-      name: `${stem}.focus.png`,
-      mimeType: 'image/png',
-      content: bundle.png,
-      provenance: { ...provenance, kind: 'focus-png' },
-    },
+    ...(options.rasterize === false
+      ? []
+      : [
+          {
+            name: `${stem}.focus.png`,
+            mimeType: 'image/png',
+            content: bundle.png,
+            provenance: { ...provenance, kind: 'focus-png' },
+          },
+        ]),
     {
       name: `${stem}.focus.json`,
       mimeType: 'application/json',

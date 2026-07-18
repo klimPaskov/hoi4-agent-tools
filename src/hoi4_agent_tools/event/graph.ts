@@ -567,6 +567,28 @@ function helperProjections(graph: MutableGraph, budget: EventAnalysisBudget): Ev
         const projectionKey = `${start.id}\0${edge.to}`;
         if (projectedKeys.has(projectionKey)) continue;
         projectedKeys.add(projectionKey);
+        if (projected.length >= EVENT_GRAPH_MAX_HELPER_PROJECTIONS) {
+          addIssue(graph.issues, {
+            code: 'EVENT_HELPER_PROJECTION_LIMIT',
+            classification: 'unresolved_analysis',
+            severity: 'blocker',
+            message:
+              'Collapsed helper projection reached its materialization ceiling; structural helper calls remain available.',
+            confidence: 'unresolved',
+            location: start.location,
+            blockers: [
+              {
+                code: 'HELPER_PROJECTION_LIMIT',
+                message:
+                  'Use a bounded helper-expanded trace for paths omitted from the collapsed workspace graph.',
+                location: start.location,
+                details: { maximum: EVENT_GRAPH_MAX_HELPER_PROJECTIONS },
+              },
+            ],
+            subjectIds: [start.from, start.to],
+          });
+          return stableUnique(projected);
+        }
         projected.push({
           id: `edge:helper-projection:${hashCanonical({
             from: start.from,
@@ -597,13 +619,6 @@ function helperProjections(graph: MutableGraph, budget: EventAnalysisBudget): Ev
             terminalDispatchLocation: locationKey(final.location),
           },
         });
-        if (projected.length > EVENT_GRAPH_MAX_HELPER_PROJECTIONS) {
-          throw new ServiceError(
-            'EVENT_HELPER_PROJECTION_LIMIT',
-            'Event-chain helper expansion exceeds the fixed projection ceiling',
-            { maximum: EVENT_GRAPH_MAX_HELPER_PROJECTIONS },
-          );
-        }
       }
     }
   }
@@ -1775,7 +1790,7 @@ export function buildEventGraph(
   const fragments = analyzeFragments(snapshot, files, catalog, options, budget);
   const graph = mergeFragments(fragments);
   const partial = partialInventoryEvidence(snapshot);
-  graph.unresolved.push(...partial.unresolved);
+  for (const unresolved of partial.unresolved) graph.unresolved.push(unresolved);
 
   assertGraphLimit(graph.nodes.length, EVENT_GRAPH_MAX_NODES, 'EVENT_NODE_LIMIT', 'node count');
   assertGraphLimit(graph.edges.length, EVENT_GRAPH_MAX_EDGES, 'EVENT_EDGE_LIMIT', 'edge count');
@@ -1795,8 +1810,11 @@ export function buildEventGraph(
   normalizePublicEventNodeIds(graph);
   normalizeCrossFileEdges(graph);
   ensureReferencedNodes(graph);
-  graph.edges.push(...helperProjections(graph, budget));
-  graph.stateAccesses.push(...projectHelperStateAccesses(graph, budget));
+  if (options.projectHelpers !== false) {
+    for (const edge of helperProjections(graph, budget)) graph.edges.push(edge);
+    for (const access of projectHelperStateAccesses(graph, budget))
+      graph.stateAccesses.push(access);
+  }
   addTerminalNodes(graph);
 
   graph.nodes = sortNodes(graph.nodes);

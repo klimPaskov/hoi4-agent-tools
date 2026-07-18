@@ -215,7 +215,19 @@ function under(roots: readonly string[], suffixes: readonly string[]): string[] 
   });
 }
 
-function guiDefinitionPatterns(
+function guiDefinitionPatterns(workspace: ResolvedWorkspace): string[] {
+  const roots = workspace.registration.roots;
+  return [
+    ...new Set([
+      ...under(roots.interface, ['**/*.gui', '**/*.gfx']),
+      ...under(roots.gfx, ['**/*.gfx']),
+      ...under(roots.scriptedGui, ['**/*.txt']),
+      ...staticGuiDefinitionPatterns,
+    ]),
+  ].sort((left, right) => compareCodeUnits(left, right));
+}
+
+function guiLocalisationPatterns(
   workspace: ResolvedWorkspace,
   languages: readonly string[] = ['l_english'],
 ): string[] {
@@ -228,9 +240,6 @@ function guiDefinitionPatterns(
   });
   return [
     ...new Set([
-      ...under(roots.interface, ['**/*.gui', '**/*.gfx']),
-      ...under(roots.gfx, ['**/*.gfx']),
-      ...under(roots.scriptedGui, ['**/*.txt']),
       ...under(roots.localisation, [
         '*.{yml,yaml}',
         ...languageDirectories.flatMap((directory) => [
@@ -238,7 +247,6 @@ function guiDefinitionPatterns(
           `${directory}/**/*.yaml`,
         ]),
       ]),
-      ...staticGuiDefinitionPatterns,
     ]),
   ].sort((left, right) => compareCodeUnits(left, right));
 }
@@ -625,16 +633,23 @@ export class ScriptedGuiStudio {
   ): Promise<GuiStudioScanResult> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
-    const snapshot = await this.engine.scan(
-      workspaceId,
-      { patterns: guiDefinitionPatterns(workspace, languages) },
-      principal,
-      signal,
-    );
+    const [snapshot, localisationFiles] = await Promise.all([
+      this.engine.scan(
+        workspaceId,
+        { patterns: guiDefinitionPatterns(workspace) },
+        principal,
+        signal,
+      ),
+      this.scanner.scan(workspace, {
+        patterns: guiLocalisationPatterns(workspace, languages),
+        ...(signal === undefined ? {} : { signal }),
+      }),
+    ]);
     signal?.throwIfAborted();
+    const files = mergeScannedFiles(snapshot.files, localisationFiles);
     return {
-      files: snapshot.files,
-      graph: buildGuiSourceGraph(snapshot.files, snapshot.index),
+      files,
+      graph: buildGuiSourceGraph(files, snapshot.index),
     };
   }
 
@@ -1025,6 +1040,7 @@ export class ScriptedGuiStudio {
     );
     return {
       artifacts: stored,
+      filesScanned: scanned.graph.filesScanned,
       render,
       stateScenes,
       resolutionScenes,

@@ -66,6 +66,8 @@ export interface ResolveFocusPresentationInput {
   index: SymbolIndex;
   scanner: WorkspaceScanner;
   workspace: ResolvedWorkspace;
+  /** Decode source textures only when a raster-capable caller needs embedded icon pixels. */
+  decodeIcons?: boolean;
   budget?: RenderBudget;
   signal?: AbortSignal;
 }
@@ -137,6 +139,25 @@ function diagnosticLocation(target: PresentationTarget): { location?: SourceLoca
     : { location: target.iconLocation };
 }
 
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  callback: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (next < values.length) {
+        const index = next;
+        next += 1;
+        results[index] = await callback(values[index]!);
+      }
+    }),
+  );
+  return results;
+}
+
 export async function resolveFocusPresentation(
   input: ResolveFocusPresentationInput,
 ): Promise<FocusPresentationResolution> {
@@ -144,10 +165,21 @@ export async function resolveFocusPresentation(
   const language = input.language ?? 'l_english';
   const palettes = input.palettes ?? [];
   const targets = presentationTargets(input.plans, palettes);
-  const baseGraph = buildGuiSourceGraph(input.files, input.index);
   const spriteNames = [
     ...new Set(targets.flatMap(({ sprite }) => (sprite === undefined ? [] : [sprite]))),
   ];
+  // Focus presentation needs sprite declarations, not the entire GUI, decision, and
+  // localisation graph. Localised focus text is resolved directly through the shared index.
+  const spriteSourcePaths = new Set(
+    spriteNames.flatMap((spriteName) => {
+      const symbol = input.index.find('sprite', spriteName);
+      return symbol === undefined ? [] : [symbol.path];
+    }),
+  );
+  const presentationFiles = input.files.filter(({ displayPath }) =>
+    spriteSourcePaths.has(displayPath),
+  );
+  const baseGraph = buildGuiSourceGraph(presentationFiles, input.index);
   const texturePaths = new Set<string>();
   for (const spriteName of spriteNames) {
     const sprite = relevantSprite(spriteName, baseGraph.sprites, input.index);
@@ -165,17 +197,18 @@ export async function resolveFocusPresentation(
           ...(input.signal === undefined ? {} : { signal: input.signal }),
         });
   const combined = new Map<string, ScannedFile>();
-  for (const file of [...input.files, ...assets]) combined.set(file.displayPath, file);
+  for (const file of [...presentationFiles, ...assets]) combined.set(file.displayPath, file);
   const files = [...combined.values()].sort((left, right) =>
     compareCodeUnits(left.displayPath, right.displayPath),
   );
-  const graph = buildGuiSourceGraph(files, input.index.rebuild(files));
+  const graph = baseGraph;
   const catalog = new GuiAssetCatalog(graph, files, input.budget);
   const diagnostics: Diagnostic[] = [];
   const entries: FocusPresentationResolution['entries'] = {};
   const icons: FocusPresentationResolution['icons'] = {};
   const sourceHashes: Record<string, string> = {};
   const relevantPaths = new Set<string>();
+  const iconTargets = new Map<string, PresentationTarget>();
 
   for (const target of targets) {
     input.signal?.throwIfAborted();
@@ -197,6 +230,8 @@ export async function resolveFocusPresentation(
         : { descriptionSourceLocation: description.location }),
       ...(target.sprite === undefined ? {} : { iconSprite: target.sprite }),
     };
+    if (target.sprite !== undefined && !iconTargets.has(target.sprite))
+      iconTargets.set(target.sprite, target);
     for (const [key, symbol] of [
       [target.titleKey, title],
       [target.descriptionKey, description],
@@ -219,52 +254,84 @@ export async function resolveFocusPresentation(
         details: { language, key, focusId: target.id },
       });
     }
-    if (target.sprite === undefined || icons[target.sprite] !== undefined) continue;
-    const sprite = relevantSprite(target.sprite, graph.sprites, input.index);
+  }
+
+  const iconEntries = [...iconTargets.entries()];
+  const iconResults = await mapWithConcurrency(iconEntries, 8, async ([spriteName, target]) => {
+    const sprite = relevantSprite(spriteName, graph.sprites, input.index);
     if (sprite === undefined) {
       const partial = input.index.hasSkippedSourceForKind('sprite');
-      diagnostics.push({
-        code: partial ? 'FOCUS_ICON_REFERENCE_PARTIAL' : 'FOCUS_ICON_REFERENCE_MISSING',
-        severity: partial ? 'warning' : 'error',
-        category: 'reference',
-        message: partial
-          ? `The partial shared inventory cannot verify sprite ${target.sprite} for focus ${target.id}`
-          : `Focus ${target.id} references missing sprite ${target.sprite}`,
-        ...diagnosticLocation(target),
-        details: { focusId: target.id, sprite: target.sprite },
-      });
-      continue;
+      return {
+        paths: [] as string[],
+        diagnostic: {
+          code: partial ? 'FOCUS_ICON_REFERENCE_PARTIAL' : 'FOCUS_ICON_REFERENCE_MISSING',
+          severity: partial ? ('warning' as const) : ('error' as const),
+          category: 'reference' as const,
+          message: partial
+            ? `The partial shared inventory cannot verify sprite ${spriteName} for focus ${target.id}`
+            : `Focus ${target.id} references missing sprite ${spriteName}`,
+          ...diagnosticLocation(target),
+          details: { focusId: target.id, sprite: spriteName },
+        } satisfies Diagnostic,
+      };
     }
-    relevantPaths.add(sprite.sourcePath);
+    const paths = [sprite.sourcePath];
+    if (input.decodeIcons === false) {
+      const texturePath = sprite.texturePath;
+      const asset =
+        texturePath === undefined ? undefined : catalog.resolveFile(texturePath, sprite.sourcePath);
+      if (asset !== undefined) return { paths: [...paths, asset.displayPath] };
+      return {
+        paths,
+        diagnostic: {
+          code: 'FOCUS_ICON_TEXTURE_MISSING',
+          severity: 'error' as const,
+          category: 'reference' as const,
+          message: `Focus ${target.id} cannot resolve sprite texture ${texturePath ?? '<missing>'}`,
+          ...diagnosticLocation(target),
+          details: { focusId: target.id, sprite: spriteName, texturePath: texturePath ?? null },
+        } satisfies Diagnostic,
+      };
+    }
     const frame = await catalog.loadSpriteFrame(sprite, 0);
     if (frame?.supported !== true || frame.dataUri === undefined) {
-      diagnostics.push({
-        code: 'FOCUS_ICON_TEXTURE_MISSING',
-        severity: 'error',
-        category: 'reference',
-        message: `Focus ${target.id} cannot load sprite texture ${sprite.texturePath ?? '<missing>'}: ${frame?.reason ?? 'texturefile is missing'}`,
-        ...diagnosticLocation(target),
-        details: {
-          focusId: target.id,
-          sprite: target.sprite,
-          texturePath: sprite.texturePath ?? null,
-        },
-      });
-      continue;
+      return {
+        paths,
+        diagnostic: {
+          code: 'FOCUS_ICON_TEXTURE_MISSING',
+          severity: 'error' as const,
+          category: 'reference' as const,
+          message: `Focus ${target.id} cannot load sprite texture ${sprite.texturePath ?? '<missing>'}: ${frame?.reason ?? 'texturefile is missing'}`,
+          ...diagnosticLocation(target),
+          details: {
+            focusId: target.id,
+            sprite: spriteName,
+            texturePath: sprite.texturePath ?? null,
+          },
+        } satisfies Diagnostic,
+      };
     }
     const asset = catalog.resolveFile(frame.texturePath, sprite.sourcePath);
-    if (asset !== undefined) relevantPaths.add(asset.displayPath);
-    icons[target.sprite] = {
-      sprite: target.sprite,
-      sourcePath: sprite.sourcePath,
-      texturePath: frame.texturePath,
-      frame: frame.frame,
-      frameCount: frame.frameCount,
-      width: frame.width,
-      height: frame.height,
-      format: frame.format,
-      dataUri: frame.dataUri,
+    if (asset !== undefined) paths.push(asset.displayPath);
+    return {
+      paths,
+      icon: {
+        sprite: spriteName,
+        sourcePath: sprite.sourcePath,
+        texturePath: frame.texturePath,
+        frame: frame.frame,
+        frameCount: frame.frameCount,
+        width: frame.width,
+        height: frame.height,
+        format: frame.format,
+        dataUri: frame.dataUri,
+      },
     };
+  });
+  for (const [index, result] of iconResults.entries()) {
+    for (const sourcePath of result.paths) relevantPaths.add(sourcePath);
+    if (result.diagnostic !== undefined) diagnostics.push(result.diagnostic);
+    if (result.icon !== undefined) icons[iconEntries[index]![0]] = result.icon;
   }
 
   for (const file of files) {

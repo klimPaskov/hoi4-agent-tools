@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -32,6 +32,106 @@ function resultOf(value: Awaited<ReturnType<Client['callTool']>>): OperationResu
 }
 
 describe('large public focus workflow', () => {
+  it('inspects structurally and rasterizes a 300-icon tree without sharing the raster budget', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-many-icon-focus-'));
+    const mod = path.join(temporary, 'mod');
+    const focusDirectory = path.join(mod, 'common', 'national_focus');
+    const textureDirectory = path.join(mod, 'gfx', 'interface');
+    await Promise.all([
+      mkdir(focusDirectory, { recursive: true }),
+      mkdir(textureDirectory, { recursive: true }),
+      mkdir(path.join(mod, 'interface'), { recursive: true }),
+    ]);
+    const focusCount = 300;
+    const pad = (value: number): string => String(value).padStart(3, '0');
+    const focusSource = [
+      'focus_tree = {',
+      '\tid = many_icon_tree',
+      '\tcountry = { factor = 0 }',
+      ...Array.from({ length: focusCount }, (_, index) => [
+        '\tfocus = {',
+        `\t\tid = many_icon_${pad(index)}`,
+        `\t\ticon = GFX_many_icon_${pad(index)}`,
+        `\t\tx = ${index % 20}`,
+        `\t\ty = ${Math.floor(index / 20)}`,
+        '\t\tcost = 10',
+        '\t}',
+      ]).flat(),
+      '}',
+      '',
+    ].join('\n');
+    const gfxSource = [
+      'spriteTypes = {',
+      ...Array.from({ length: focusCount }, (_, index) => [
+        '\tspriteType = {',
+        `\t\tname = "GFX_many_icon_${pad(index)}"`,
+        `\t\ttexturefile = "gfx/interface/many_icon_${pad(index)}.png"`,
+        '\t}',
+      ]).flat(),
+      '}',
+      '',
+    ].join('\n');
+    const onePixelPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+    const relativePath = 'common/national_focus/many_icon_tree.txt';
+    await Promise.all([
+      writeFile(path.join(mod, ...relativePath.split('/')), focusSource),
+      writeFile(path.join(mod, 'interface', 'many_icon_tree.gfx'), gfxSource),
+      ...Array.from({ length: focusCount }, (_, index) =>
+        writeFile(path.join(textureDirectory, `many_icon_${pad(index)}.png`), onePixelPng),
+      ),
+    ]);
+
+    const configuration = serverConfigurationSchema.parse({
+      version: 1,
+      serverStateRoot: path.join(temporary, 'server-state'),
+      workspaces: [{ id: 'many-icons', name: 'Many icon focus fixture', root: mod }],
+    });
+    const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
+    await engine.initialize();
+    const server = createMcpServer(engine);
+    const client = new Client({ name: 'many-icon-focus-workflow', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport as unknown as Transport);
+    await client.connect(clientTransport as unknown as Transport);
+    cleanup.push(
+      async () => client.close(),
+      async () => server.close(),
+      async () => rm(temporary, { recursive: true, force: true }),
+    );
+
+    const inspected = resultOf(
+      await client.callTool(
+        {
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'many-icons', relativePath, treeId: 'many_icon_tree' },
+        },
+        undefined,
+        { timeout: 30_000, resetTimeoutOnProgress: true, maxTotalTimeout: 30_000 },
+      ),
+    );
+    expect(inspected).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_INSPECTED',
+      data: { treeCount: 1, trees: [expect.objectContaining({ focusCount })] },
+    });
+
+    const rasterized = resultOf(
+      await client.callTool(
+        {
+          name: 'hoi4.focus_raster',
+          arguments: { workspaceId: 'many-icons', relativePath, treeId: 'many_icon_tree' },
+        },
+        undefined,
+        { timeout: 180_000, resetTimeoutOnProgress: true, maxTotalTimeout: 180_000 },
+      ),
+    );
+    expect(rasterized).toMatchObject({ status: 'ok', code: 'FOCUS_RASTERIZED' });
+    expect(rasterized.artifacts.some(({ mimeType }) => mimeType === 'image/png')).toBe(true);
+  }, 180_000);
+
   it('creates, inspects, and renders a 255-focus mixed-route tree through MCP', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-large-focus-'));
     const mod = path.join(temporary, 'mod');
@@ -201,6 +301,29 @@ describe('large public focus workflow', () => {
       data: { treeId: 'synthetic_acceptance_tree' },
     });
     expect(rendered.artifacts.map(({ mimeType }) => mimeType)).toEqual(
+      expect.arrayContaining(['text/html', 'image/svg+xml', 'application/json']),
+    );
+    expect(rendered.artifacts.some(({ mimeType }) => mimeType === 'image/png')).toBe(false);
+    const rasterized = resultOf(
+      await client.callTool(
+        {
+          name: 'hoi4.focus_raster',
+          arguments: {
+            workspaceId: 'large-focus',
+            relativePath,
+            treeId: 'synthetic_acceptance_tree',
+          },
+        },
+        undefined,
+        { timeout: 180_000, resetTimeoutOnProgress: true, maxTotalTimeout: 180_000 },
+      ),
+    );
+    expect(rasterized).toMatchObject({
+      status: 'ok',
+      code: 'FOCUS_RASTERIZED',
+      data: { treeId: 'synthetic_acceptance_tree' },
+    });
+    expect(rasterized.artifacts.map(({ mimeType }) => mimeType)).toEqual(
       expect.arrayContaining(['text/html', 'image/svg+xml', 'image/png', 'application/json']),
     );
   }, 180_000);

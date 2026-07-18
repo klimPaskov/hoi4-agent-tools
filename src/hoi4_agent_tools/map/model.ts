@@ -253,12 +253,14 @@ const MAP_TEXT_FIELD_LIMIT = 10_000;
 const MAP_MODEL_MAX_SCRIPT_FILES = 5_000;
 const MAP_MODEL_MAX_SOURCE_TOKENS = 1_000_000;
 const MAP_MODEL_MAX_RECORDS = 500_000;
+const MAP_MODEL_MAX_LOCALISATION_RECORDS = 2_000_000;
 const MAP_MODEL_MAX_MEMBERSHIP_EDGES = 1_000_000;
 
 class MapModelBudget {
   readonly #documents = new Set<string>();
   #tokens = 0;
   #records = 0;
+  #localisationRecords = 0;
   #membershipEdges = 0;
 
   assertScriptFiles(count: number): void {
@@ -280,6 +282,20 @@ class MapModelBudget {
     this.#records += count;
     if (!Number.isSafeInteger(this.#records) || this.#records > MAP_MODEL_MAX_RECORDS) {
       this.block('domain records', this.#records, MAP_MODEL_MAX_RECORDS);
+    }
+  }
+
+  addLocalisationRecords(count: number): void {
+    this.#localisationRecords += count;
+    if (
+      !Number.isSafeInteger(this.#localisationRecords) ||
+      this.#localisationRecords > MAP_MODEL_MAX_LOCALISATION_RECORDS
+    ) {
+      this.block(
+        'localisation records',
+        this.#localisationRecords,
+        MAP_MODEL_MAX_LOCALISATION_RECORDS,
+      );
     }
   }
 
@@ -1260,7 +1276,9 @@ export class MapWorkspaceIndex {
           this.sourceRoots.map.some((root) =>
             normalizedPath(file.relativePath).startsWith(`${root}/strategicregions/`),
           ) ||
-          normalizedPath(file.relativePath).endsWith('.asset'),
+          ((file.rootKind === 'mod' || file.rootKind === 'fixture') &&
+            normalizedPath(file.relativePath).endsWith('.asset') &&
+            file.bytes.includes('locator')),
       ).length,
     );
     this.defaultMapFile = fileInRoots(this.activeFiles, this.sourceRoots.map, 'default.map');
@@ -1463,7 +1481,12 @@ export class MapWorkspaceIndex {
       weatherFile === undefined ? [] : parseWeatherPositions(weatherFile, this.diagnostics);
     modelBudget.addRecords(this.weatherPositions.length);
     this.entityLocators = this.activeFiles.all
-      .filter((file) => normalizedPath(file.relativePath).endsWith('.asset'))
+      .filter(
+        (file) =>
+          (file.rootKind === 'mod' || file.rootKind === 'fixture') &&
+          normalizedPath(file.relativePath).endsWith('.asset') &&
+          file.bytes.includes('locator'),
+      )
       .flatMap((file) => {
         const locators = parseEntityLocators(file, this.diagnostics);
         if (locators[0] !== undefined) modelBudget.addDocument(locators[0].document);
@@ -1476,8 +1499,13 @@ export class MapWorkspaceIndex {
         normalizedPath(entry.relativePath).endsWith('.yml'),
     )) {
       const document = parseLocalisation(file.bytes, file.displayPath);
-      addMapDiagnostics(this.diagnostics, document.diagnostics);
-      modelBudget.addRecords(document.entries.length);
+      if (file.rootKind === 'mod' || file.rootKind === 'fixture') {
+        addMapDiagnostics(this.diagnostics, document.diagnostics);
+      }
+      // Localisation is a supporting lookup table rather than connected map topology. Account for
+      // it separately so a normal full-game language database cannot exhaust the domain-record
+      // budget before provinces, states, regions, railways, and adjacencies are available.
+      modelBudget.addLocalisationRecords(document.entries.length);
       for (const entry of document.entries) {
         this.localisationKeys.add(`${entry.language}:${entry.key}`);
         const indexed = { file, document, entry };

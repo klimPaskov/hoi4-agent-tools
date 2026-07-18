@@ -183,11 +183,81 @@ interface SharedEventServiceState {
   fragments: BoundedEventFragmentCache;
 }
 
+function eventGraphCacheKey(workspaceId: string, projectHelpers: boolean): string {
+  return `${workspaceId}\0${projectHelpers ? 'expanded' : 'structural'}`;
+}
+
 const serviceState = new WeakMap<CoreEngine, SharedEventServiceState>();
 const EVENT_GRAPH_ARTIFACT_MAX_BYTES = 67_108_864;
 const EVENT_GRAPH_ARTIFACT_MAX_CHUNKS = 1_024;
+const EVENT_SCAN_FULL_GRAPH_RECORD_LIMIT = 100_000;
+const EVENT_SCAN_SUMMARY_SAMPLE_LIMIT = 100;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const graphHashCache = new WeakMap<EventGraphSnapshot, string>();
+
+function groupedCounts<T>(values: readonly T[], key: (value: T) => string): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const group = key(value);
+    counts.set(group, (counts.get(group) ?? 0) + 1);
+  }
+  return Object.fromEntries([...counts].sort(([left], [right]) => compareCodeUnits(left, right)));
+}
+
+export function eventScanReport(
+  graph: EventGraphSnapshot,
+  fullGraphRecordLimit = EVENT_SCAN_FULL_GRAPH_RECORD_LIMIT,
+): unknown {
+  const recordCount =
+    graph.nodes.length +
+    graph.edges.length +
+    graph.stateAccesses.length +
+    graph.stateLinks.length +
+    graph.issues.length +
+    graph.diagnostics.length +
+    graph.unresolved.length;
+  if (recordCount <= fullGraphRecordLimit) return { graph };
+  const sourceEvidence = boundedSourceHashEvidence(graph.sourceHashes);
+  return {
+    graphSummary: {
+      schemaVersion: graph.schemaVersion,
+      parserVersion: graph.parserVersion,
+      workspaceId: graph.workspaceId,
+      workspaceIdentity: graph.workspaceIdentity,
+      revision: graph.revision,
+      complete: graph.complete,
+      statistics: graph.statistics,
+      filesScanned: graph.filesScanned.length,
+      skippedSourceCount: graph.skippedSourceCount,
+      sourceHashInventory: sourceEvidence.inventory,
+      recordCounts: {
+        nodes: graph.nodes.length,
+        edges: graph.edges.length,
+        stateAccesses: graph.stateAccesses.length,
+        stateLinks: graph.stateLinks.length,
+        issues: graph.issues.length,
+        diagnostics: graph.diagnostics.length,
+        unresolved: graph.unresolved.length,
+      },
+      nodeKinds: groupedCounts(graph.nodes, ({ kind }) => kind),
+      edgeReasons: groupedCounts(graph.edges, ({ reason }) => reason),
+      issueCodes: groupedCounts(graph.issues, ({ code }) => code),
+      issueSeverities: groupedCounts(graph.issues, ({ severity }) => severity),
+      diagnosticCodes: groupedCounts(graph.diagnostics, ({ code }) => code),
+      diagnosticSeverities: groupedCounts(graph.diagnostics, ({ severity }) => severity),
+      unresolvedKinds: groupedCounts(graph.unresolved, ({ kind }) => kind),
+    },
+    issueSamples: graph.issues.slice(0, EVENT_SCAN_SUMMARY_SAMPLE_LIMIT),
+    diagnosticSamples: graph.diagnostics.slice(0, EVENT_SCAN_SUMMARY_SAMPLE_LIMIT),
+    unresolvedSamples: graph.unresolved.slice(0, EVENT_SCAN_SUMMARY_SAMPLE_LIMIT),
+    artifactProjection: {
+      mode: 'large-scan-summary',
+      fullGraphRecordCount: recordCount,
+      fullGraphRecordLimit,
+      detailQueries: ['roots', 'trace', 'explain_path', 'state_flow', 'impact'],
+    },
+  };
+}
 
 function cachedEventGraphHash(graph: EventGraphSnapshot, signal?: AbortSignal): string {
   signal?.throwIfAborted();
@@ -854,18 +924,29 @@ export class EventChainViewer {
 
   public async scan(
     workspaceId: string,
-    options: { refresh?: boolean; principal?: string; signal?: AbortSignal } = {},
+    options: {
+      refresh?: boolean;
+      projectHelpers?: boolean;
+      principal?: string;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<EventGraphSnapshot> {
     options.signal?.throwIfAborted();
     // Authorization is request-scoped. Never let a graph cached by one
     // principal bypass the resolver check for a later caller.
     const workspace = this.engine.resolver.get(workspaceId, options.principal);
     const generation = engineGeneration(this.engine, workspaceId);
-    const cached = this.#state.current.get(workspaceId);
+    const projectHelpers = options.projectHelpers ?? true;
+    const cacheKey = eventGraphCacheKey(workspaceId, projectHelpers);
+    const cached = this.#state.current.get(cacheKey);
     if (options.refresh !== true && cached?.generation === generation) {
       return cached.graph;
     }
-    const snapshot = await this.engine.scan(workspaceId, {}, options.principal, options.signal);
+    const sibling = this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers));
+    const snapshot =
+      options.refresh !== true && sibling?.generation === generation
+        ? sibling.snapshot
+        : await this.engine.scan(workspaceId, {}, options.principal, options.signal);
     options.signal?.throwIfAborted();
     if (cached?.snapshot.revision === snapshot.revision && cached.generation === generation) {
       return cached.graph;
@@ -874,8 +955,9 @@ export class EventChainViewer {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
+      projectHelpers,
     });
-    this.#state.current.set(workspaceId, { generation, snapshot, graph });
+    this.#state.current.set(cacheKey, { generation, snapshot, graph });
     rememberGraph(this.#state, workspaceId, graph);
     return graph;
   }
@@ -884,6 +966,7 @@ export class EventChainViewer {
     input.signal?.throwIfAborted();
     const graph = await this.scan(input.workspaceId, {
       refresh: input.refresh ?? input.mode === 'scan',
+      projectHelpers: input.mode !== 'scan' && input.mode !== 'roots',
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
@@ -906,7 +989,7 @@ export class EventChainViewer {
     let report: unknown;
     switch (input.mode) {
       case 'scan':
-        report = { graph };
+        report = eventScanReport(graph);
         break;
       case 'roots':
         report = {
@@ -990,6 +1073,17 @@ export class EventChainViewer {
     }
     const graphHash = cachedEventGraphHash(graph, input.signal);
     const name = `${safeSlug(`event-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`;
+    const projectedScan =
+      input.mode === 'scan' &&
+      typeof report === 'object' &&
+      report !== null &&
+      'artifactProjection' in report;
+    const artifactSourceEvidence = projectedScan
+      ? boundedSourceHashEvidence(graph.sourceHashes)
+      : undefined;
+    const artifactUnresolved = projectedScan
+      ? graph.unresolved.slice(0, EVENT_SCAN_SUMMARY_SAMPLE_LIMIT)
+      : graph.unresolved;
     const reportJson = `${canonicalJson({
       schemaVersion: 'event-analysis.v1',
       graphSchemaVersion: graph.schemaVersion,
@@ -999,10 +1093,22 @@ export class EventChainViewer {
       workspaceIdentity: graph.workspaceIdentity,
       graphRevision: graph.revision,
       graphHash,
-      sourceHashes: graph.sourceHashes,
+      sourceHashes: artifactSourceEvidence?.sourceHashes ?? graph.sourceHashes,
+      ...(artifactSourceEvidence === undefined
+        ? {}
+        : { sourceHashInventory: artifactSourceEvidence.inventory }),
       complete: graph.complete,
       filters: analysisFilters,
-      unresolved: graph.unresolved,
+      unresolved: artifactUnresolved,
+      ...(projectedScan
+        ? {
+            unresolvedInventory: {
+              count: graph.unresolved.length,
+              retainedCount: artifactUnresolved.length,
+              truncated: artifactUnresolved.length !== graph.unresolved.length,
+            },
+          }
+        : {}),
       resources: [{ name, mimeType: 'application/json' }],
       report,
     })}\n`;
@@ -1037,6 +1143,7 @@ export class EventChainViewer {
   public async renderAndStore(input: EventRenderServiceInput): Promise<EventRenderServiceResult> {
     const graph = await this.scan(input.workspaceId, {
       ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
+      projectHelpers: true,
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
@@ -1267,7 +1374,7 @@ export class EventChainViewer {
         'Proposed comparison source list is empty',
       );
     assertProposedSourceBounds(sources);
-    const cached = this.#state.current.get(workspaceId);
+    const cached = this.#state.current.get(eventGraphCacheKey(workspaceId, false));
     if (cached === undefined)
       throw new ServiceError(
         'EVENT_BASELINE_MISSING',
@@ -1378,6 +1485,7 @@ export class EventChainViewer {
       ...(signal === undefined ? {} : { signal }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
+      projectHelpers: false,
     });
   }
 
@@ -1435,6 +1543,7 @@ export class EventChainViewer {
         input.after === undefined);
     const current = await this.scan(input.workspaceId, {
       refresh,
+      projectHelpers: false,
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });

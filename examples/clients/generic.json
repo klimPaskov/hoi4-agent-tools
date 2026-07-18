@@ -2,7 +2,7 @@
   "mcpServers": {
     "hoi4_agent_tools": {
       "command": "npx",
-      "args": ["-y", "hoi4-agent-tools@2.0.0"]
+      "args": ["-y", "hoi4-agent-tools@latest"]
     }
   }
 }

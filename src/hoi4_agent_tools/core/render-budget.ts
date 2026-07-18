@@ -15,8 +15,10 @@ export const RENDER_MAX_DECODED_PIXELS = 16_777_216;
 export const RENDER_MAX_ENCODED_IMAGE_BYTES = 33_554_432;
 // 64 Mi pixels preserves one vanilla scale-1 before/proposed/diff map request.
 export const RENDER_MAX_AGGREGATE_PIXELS = 67_108_864;
-// A selected scene may reuse assets freely, but cannot trigger graph-scale decoder work.
-export const RENDER_MAX_DISTINCT_RASTER_OPERATIONS = 512;
+// Large focus and GUI surfaces can legitimately contain hundreds of distinct textures and frames.
+// The aggregate pixel budget remains the primary memory bound while this ceiling prevents runaway
+// decoder fan-out from malformed graphs.
+export const RENDER_MAX_DISTINCT_RASTER_OPERATIONS = 4_096;
 
 export interface RenderDimensions {
   width: number;

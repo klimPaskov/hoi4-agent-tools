@@ -51,6 +51,7 @@ describe('MCP discovery', () => {
     expect(tools.tools.map(({ name }) => name)).toEqual([
       'hoi4.focus_inspect',
       'hoi4.focus_render',
+      'hoi4.focus_raster',
       'hoi4.focus_rewrite',
       'hoi4.gui_inspect',
       'hoi4.gui_render',
@@ -66,6 +67,7 @@ describe('MCP discovery', () => {
     for (const name of [
       'hoi4.focus_inspect',
       'hoi4.focus_render',
+      'hoi4.focus_raster',
       'hoi4.gui_inspect',
       'hoi4.gui_render',
       'hoi4.map_inspect',
@@ -132,7 +134,12 @@ describe('MCP discovery', () => {
       expect(JSON.stringify(tool.outputSchema)).not.toContain('rollbackStatus');
     }
 
-    for (const name of ['hoi4.focus_inspect', 'hoi4.focus_render', 'hoi4.focus_rewrite']) {
+    for (const name of [
+      'hoi4.focus_inspect',
+      'hoi4.focus_render',
+      'hoi4.focus_raster',
+      'hoi4.focus_rewrite',
+    ]) {
       const tool = tools.tools.find((candidate) => candidate.name === name);
       expect(JSON.stringify(tool?.inputSchema)).toContain('continuous');
       expect(JSON.stringify(tool?.inputSchema)).toContain('national');
