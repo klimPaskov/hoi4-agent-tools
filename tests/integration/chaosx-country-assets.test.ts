@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -86,6 +86,9 @@ describe('ChaosX-only country assets MCP integration', () => {
     expect((await ordinaryClient.listTools()).tools.map(({ name }) => name)).not.toContain(
       'chaosx.focus_country_assets',
     );
+    expect((await ordinaryClient.listTools()).tools.map(({ name }) => name)).not.toContain(
+      'chaosx.visual_revision',
+    );
     await ordinaryClient.close();
     await ordinaryServer.close();
 
@@ -101,9 +104,9 @@ describe('ChaosX-only country assets MCP integration', () => {
       async () => rm(temporary, { recursive: true, force: true }),
     );
 
-    expect((await client.listTools()).tools.map(({ name }) => name)).toContain(
-      'chaosx.focus_country_assets',
-    );
+    const privateTools = (await client.listTools()).tools.map(({ name }) => name);
+    expect(privateTools).toContain('chaosx.focus_country_assets');
+    expect(privateTools).toContain('chaosx.visual_revision');
     const response = await client.callTool({
       name: 'chaosx.focus_country_assets',
       arguments: {
@@ -155,5 +158,95 @@ describe('ChaosX-only country assets MCP integration', () => {
         Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       );
     }
+  });
+
+  it('tracks exact scripted-GUI localisation, GFX, and texture dependencies', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-chaosx-gui-revision-'));
+    const mod = path.join(temporary, 'mod');
+    const artifactRoot = path.join(temporary, 'artifacts');
+    const cacheRoot = path.join(temporary, 'cache');
+    await cp(path.resolve('fixtures/gui/workspace'), mod, { recursive: true });
+
+    const configuration = serverConfigurationSchema.parse({
+      version: 1,
+      serverStateRoot: path.join(temporary, 'server-state'),
+      storageRoots: [artifactRoot, cacheRoot],
+      workspaces: [
+        {
+          id: 'chaosx-gui',
+          name: 'ChaosX GUI fixture',
+          root: mod,
+          artifactRoot,
+          cacheRoot,
+        },
+      ],
+    });
+    const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
+    await engine.initialize();
+    const server = createMcpServer(engine);
+    registerChaosxTools(server, engine, {});
+    const client = new Client({ name: 'chaosx-gui-revision-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport as unknown as Transport);
+    await client.connect(clientTransport as unknown as Transport);
+    cleanup.push(
+      async () => client.close(),
+      async () => server.close(),
+      async () => rm(temporary, { recursive: true, force: true }),
+    );
+
+    const revision = async (): Promise<{ revision: string; dependencyFileCount: number }> => {
+      const response = await client.callTool({
+        name: 'chaosx.visual_revision',
+        arguments: {
+          workspaceId: 'chaosx-gui',
+          guiWindows: [{ windowName: 'synthetic_gui_window', guiId: 'synthetic_gui_controller' }],
+        },
+      });
+      const result = response.structuredContent as {
+        status: string;
+        data: {
+          guiRevisions: Array<{ windowName: string; guiId: string; revision: string }>;
+          dependencyFileCount: number;
+        };
+      };
+      expect(result.status).toBe('ok');
+      expect(result.data.guiRevisions).toHaveLength(1);
+      expect(result.data.guiRevisions[0]).toMatchObject({
+        windowName: 'synthetic_gui_window',
+        guiId: 'synthetic_gui_controller',
+      });
+      const value = result.data.guiRevisions[0]?.revision;
+      if (value === undefined) throw new Error('Expected scripted-GUI revision');
+      return { revision: value, dependencyFileCount: result.data.dependencyFileCount };
+    };
+
+    const initial = await revision();
+    expect(initial.revision).toMatch(/^[0-9a-f]{64}$/);
+    expect(initial.dependencyFileCount).toBeGreaterThanOrEqual(6);
+    expect((await revision()).revision).toBe(initial.revision);
+
+    await appendFile(
+      path.join(mod, 'localisation/english/synthetic_acceptance_l_english.yml'),
+      '\nSYN_GUI_DYNAMIC_REVISION: "changed"\n',
+    );
+    const localisation = await revision();
+    expect(localisation.revision).not.toBe(initial.revision);
+
+    await appendFile(path.join(mod, 'interface/synthetic_acceptance.gfx'), '\n# revision change\n');
+    const gfx = await revision();
+    expect(gfx.revision).not.toBe(localisation.revision);
+
+    await writeFile(
+      path.join(mod, 'gfx/interface/synthetic_gui/panel.png'),
+      await sharp({
+        create: { width: 64, height: 64, channels: 4, background: '#24aa48' },
+      })
+        .png()
+        .toBuffer(),
+    );
+    const texture = await revision();
+    expect(texture.revision).not.toBe(gfx.revision);
+    expect((await revision()).revision).toBe(texture.revision);
   });
 });
