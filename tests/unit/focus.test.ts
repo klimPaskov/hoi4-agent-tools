@@ -2358,11 +2358,21 @@ describe('Focus Tree Workbench rendering', () => {
   it('blocks oversized focus canvases and hostile embedded icon rasters before Sharp', async () => {
     const root = focusNode('root', { mode: 'fixed', x: 0, y: 0, pinned: true });
     const plan = focusPlan([root]);
+    const far = focusNode('far', { mode: 'fixed', x: 100_000, y: 0, pinned: true });
+    const oversizedPlan = focusPlan([root, far]);
     const oversizedLayout = {
-      treeId: plan.id,
+      treeId: oversizedPlan.id,
       nodes: [
         {
           id: root.id,
+          x: 0,
+          y: 0,
+          laneId: 'default',
+          preserved: true,
+          sourceMode: 'fixed' as const,
+        },
+        {
+          id: far.id,
           x: 100_000,
           y: 0,
           laneId: 'default',
@@ -2374,7 +2384,7 @@ describe('Focus Tree Workbench rendering', () => {
       diagnostics: [],
       layoutHash: 'oversized',
     } satisfies FocusLayoutResult;
-    await expect(renderFocusTree(plan, oversizedLayout, [])).rejects.toMatchObject({
+    await expect(renderFocusTree(oversizedPlan, oversizedLayout, [])).rejects.toMatchObject({
       code: 'RENDER_DIMENSIONS_BLOCKED',
     });
 

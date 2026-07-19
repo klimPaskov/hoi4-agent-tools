@@ -258,6 +258,29 @@ function focusIconDataUri(
     : (options.presentation?.icons[icon.sprite]?.dataUri ?? options.iconDataUris?.[icon.sprite]);
 }
 
+interface FocusTitleLayout {
+  lines: string[];
+  fontSize: number;
+}
+
+function focusTitleLayout(
+  renderer: DeterministicSvgTextRenderer,
+  value: string,
+  maximumWidth: number,
+): FocusTitleLayout {
+  const title = value.trim().replace(/\s+/gu, ' ');
+  if (renderer.measure(title, 11) <= maximumWidth) return { lines: [title], fontSize: 11 };
+  const words = title.split(' ');
+  if (words.length < 2) return { lines: [title], fontSize: 10 };
+  let best = { lines: [title], width: renderer.measure(title, 10) };
+  for (let index = 1; index < words.length; index += 1) {
+    const lines = [words.slice(0, index).join(' '), words.slice(index).join(' ')];
+    const width = Math.max(...lines.map((line) => renderer.measure(line, 10)));
+    if (width < best.width) best = { lines, width };
+  }
+  return { lines: best.lines, fontSize: 10 };
+}
+
 function svgDocument(
   plan: FocusTreePlan,
   layout: FocusLayoutResult,
@@ -286,10 +309,10 @@ function svgDocument(
   const nodeWidth = FOCUS_NODE_WIDTH_PIXELS;
   const nodeHeight = FOCUS_NODE_HEIGHT_PIXELS;
   const nodes = [...layout.nodes].sort((left, right) => compareCodeUnits(left.id, right.id));
-  const minimumX = Math.min(0, ...nodes.map(({ x }) => x));
-  const minimumY = Math.min(0, ...nodes.map(({ y }) => y));
-  const maximumX = Math.max(0, ...nodes.map(({ x }) => x));
-  const maximumY = Math.max(0, ...nodes.map(({ y }) => y));
+  const minimumX = nodes.length === 0 ? 0 : Math.min(...nodes.map(({ x }) => x));
+  const minimumY = nodes.length === 0 ? 0 : Math.min(...nodes.map(({ y }) => y));
+  const maximumX = nodes.length === 0 ? 0 : Math.max(...nodes.map(({ x }) => x));
+  const maximumY = nodes.length === 0 ? 0 : Math.max(...nodes.map(({ y }) => y));
   const logicalWidth = Math.max(320, (maximumX - minimumX) * horizontal + nodeWidth + padding * 2);
   const logicalHeight = Math.max(240, (maximumY - minimumY) * vertical + nodeHeight + padding * 2);
   const width = Math.max(1, Math.round(logicalWidth * outputScale));
@@ -411,6 +434,8 @@ function svgDocument(
       .map(({ code }) => code)
       .sort()
       .join(' ');
+    const titleWidth = nodeWidth - 72;
+    const titleLayout = focusTitleLayout(toolText, title, titleWidth);
     parts.push(
       `<g class="focus-node ${escapeXml(focus.visibility)} ${severity}" id="focus-${escapeXml(node.id)}" data-focus-id="${escapeXml(node.id)}" data-branch="${escapeXml(focus.branchId ?? '')}" data-lane="${escapeXml(node.laneId)}" data-diagnostics="${escapeXml(diagnosticCodes)}" transform="translate(${point.x} ${point.y})" filter="url(#shadow)">`,
       `<title>${escapeXml(`${title} (${node.id}) at ${node.x},${node.y}`)}</title>`,
@@ -432,23 +457,30 @@ function svgDocument(
         }),
       );
     }
+    const titleY = titleLayout.lines.length === 1 ? 25 : 20;
+    for (const [index, line] of titleLayout.lines.entries()) {
+      const measuredWidth = toolText.measure(line, titleLayout.fontSize);
+      parts.push(
+        toolText.render(line, {
+          x: 64,
+          y: titleY + index * 13,
+          fontSize: titleLayout.fontSize,
+          weight: 700,
+          fill: '#f2f5fa',
+          ...(measuredWidth <= titleWidth ? {} : { targetWidth: titleWidth }),
+        }),
+      );
+    }
     parts.push(
-      toolText.render(title.slice(0, 18), {
-        x: 64,
-        y: 25,
-        fontSize: 12,
-        weight: 700,
-        fill: '#f2f5fa',
-      }),
       toolText.render(node.id.slice(0, 22), {
         x: 64,
-        y: 43,
+        y: 49,
         fontSize: 9,
         fill: '#aeb9c8',
       }),
       toolText.render(`(${node.x}, ${node.y}) · ${node.laneId}`, {
         x: 64,
-        y: 59,
+        y: 64,
         fontSize: 9,
         fill: '#8391a5',
       }),

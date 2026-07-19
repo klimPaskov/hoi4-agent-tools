@@ -96,6 +96,20 @@ function straightSegmentsProperlyCross(
 }
 
 describe('focus rendered connector geometry', () => {
+  it('wraps long focus titles instead of truncating their final words', async () => {
+    const focus = {
+      ...focusNode('country_island', 0, 0),
+      label: 'A Country on the Island',
+    };
+    const plan = focusPlan([focus]);
+    const rendered = await renderFocusTree(plan, layoutFocusTree(plan), []);
+    const labels = [...rendered.svg.matchAll(/<g aria-label="([^"]+)"/gu)].map((match) => match[1]);
+
+    expect(labels.some((label) => label?.includes('Country'))).toBe(true);
+    expect(labels.some((label) => label?.includes('Island'))).toBe(true);
+    expect(labels).not.toContain('A Country on the I');
+  });
+
   it('uses the rendered cubic when straight grid segments disagree', () => {
     const firstParent = { x: -3, y: 0 };
     const firstChild = { x: -2, y: 1 };
@@ -136,6 +150,17 @@ describe('focus rendered connector geometry', () => {
           details: expect.objectContaining({ focusId: 'first_child' }),
         }),
       ]),
+    );
+  });
+
+  it('crops unused positive authored coordinates from the review canvas', async () => {
+    const first = focusNode('first', 6, 4);
+    const second = focusNode('second', 8, 6, first.id);
+    const plan = focusPlan([first, second]);
+    const rendered = await renderFocusTree(plan, layoutFocusTree(plan), []);
+
+    expect(rendered.svg).toContain(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="656" height="468"',
     );
   });
 
