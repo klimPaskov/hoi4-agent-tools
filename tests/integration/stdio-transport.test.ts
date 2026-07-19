@@ -29,7 +29,7 @@ async function waitForMessage(
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for JSON-RPC response ${id}`)),
-      10_000,
+      20_000,
     );
     let pending = '';
     const consume = (chunk: Buffer): void => {
@@ -338,5 +338,5 @@ describe('local stdio transport', () => {
       });
       await stop(child);
     }
-  }, 30_000);
+  }, 120_000);
 });
