@@ -1,0 +1,1 @@
+name="Synthetic probability fixture"

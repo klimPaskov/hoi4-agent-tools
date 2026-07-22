@@ -15,6 +15,18 @@ import {
 } from '../src/hoi4_agent_tools/schemas/focus.js';
 import { mapOperationSchema } from '../src/hoi4_agent_tools/schemas/map.js';
 import { eventFeatureManifestSchema } from '../src/hoi4_agent_tools/schemas/event.js';
+import {
+  customWeightedPoolManifestSchema,
+  probabilityAnalysisResultSchema,
+  probabilityCompareInputSchema,
+  probabilityEvaluateInputSchema,
+  probabilityInspectInputSchema,
+  probabilityRenderInputSchema,
+  probabilityScenarioSetSchema,
+  probabilitySequenceInputSchema,
+  probabilitySimulateInputSchema,
+  probabilitySweepInputSchema,
+} from '../src/hoi4_agent_tools/schemas/probability.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'schemas');
@@ -33,6 +45,16 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['gui-scenario.schema.json', GuiPreviewScenarioSchema],
   ['map-operation.schema.json', mapOperationSchema],
   ['event-feature-manifest.schema.json', eventFeatureManifestSchema],
+  ['probability-scenario-set.schema.json', probabilityScenarioSetSchema],
+  ['custom-weighted-pool.schema.json', customWeightedPoolManifestSchema],
+  ['probability-inspect-input.schema.json', probabilityInspectInputSchema],
+  ['probability-evaluate-input.schema.json', probabilityEvaluateInputSchema],
+  ['probability-sweep-input.schema.json', probabilitySweepInputSchema],
+  ['probability-simulate-input.schema.json', probabilitySimulateInputSchema],
+  ['probability-sequence-input.schema.json', probabilitySequenceInputSchema],
+  ['probability-compare-input.schema.json', probabilityCompareInputSchema],
+  ['probability-render-input.schema.json', probabilityRenderInputSchema],
+  ['probability-analysis-result.schema.json', probabilityAnalysisResultSchema],
   ['operation-result.schema.json', operationResultSchema],
 ];
 

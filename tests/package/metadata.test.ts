@@ -127,7 +127,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'Analyze HOI4 events and technology trees; create and clean focus trees, GUIs, and maps.',
+        'Analyze HOI4 events, tech trees, AI weights, and MTTH; build focus trees, GUIs, and maps.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -159,11 +159,16 @@ describe('offline package and Registry metadata', () => {
       'docs/setup.md',
       'docs/events.md',
       'docs/technology.md',
+      'docs/probability.md',
+      'docs/research/probability-adapter-evidence.md',
       'docs/focus.md',
       'docs/gui.md',
       'docs/map.md',
       'docs/http.md',
       'docs/development.md',
+      'examples/clients/',
+      'examples/probability/',
+      'schemas/',
       'server.json',
       'README.md',
       'CHANGELOG.md',
@@ -180,8 +185,8 @@ describe('offline package and Registry metadata', () => {
       path.join(projectRoot, '.github', 'workflows', 'release.yml'),
       'utf8',
     );
-    expect(workflow).toContain('PUBLISHER_VERSION="1.7.9"');
-    expect(workflow).toContain('e84c4329507f205b111b35a9b30f330945ef5c329648a65260f15d69fcdbf94d');
+    expect(workflow).toContain('PUBLISHER_VERSION="1.8.0"');
+    expect(workflow).toContain('fb9d2c15f7977b96cd162d5cd16f1663aa8c3f3990853fdbf81c66a98ae915e7');
     expect(workflow).toContain('sha256sum --check --strict publisher-checksum.txt');
     expect(workflow).toContain('./mcp-publisher validate');
     expect(workflow).not.toContain('/latest/download/');

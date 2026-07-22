@@ -32,6 +32,13 @@ const expectedToolNames = [
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
+  'hoi4.probability_inspect',
+  'hoi4.probability_evaluate',
+  'hoi4.probability_sweep',
+  'hoi4.probability_simulate',
+  'hoi4.probability_sequence',
+  'hoi4.probability_compare',
+  'hoi4.probability_render',
 ];
 const httpOrigin = 'https://package-install.example.test';
 const httpToken = 'package-install-http-token-that-is-longer-than-thirty-two-characters';
@@ -144,7 +151,7 @@ describe('clean npm-pack installation', () => {
     expect(await packagedWorkspaceLeaks(fixture.installedPackageRoot, projectRoot)).toEqual([]);
 
     expect(fixture.pack.files.some(({ path: filePath }) => filePath.startsWith('schemas/'))).toBe(
-      false,
+      true,
     );
   });
 
@@ -372,7 +379,7 @@ describe('clean npm-pack installation', () => {
     ]);
     expect(qualified.resourceMimeType).toBe('application/json');
     expect(qualified.boundedArtifactBytes).toBe(64);
-    expect(qualified.promptNames).toEqual([]);
+    expect(qualified.promptNames).toEqual(['hoi4.probability_analysis']);
     expect(qualified.progress).toEqual([0, 2, 3]);
     expect(qualified.cancellationObserved).toBe(true);
     expect(qualified.initializedStatus).toBe(202);
@@ -397,46 +404,50 @@ describe('clean npm-pack installation', () => {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
-    const stdoutLines: string[] = [];
-    child.stdin.write(
-      `${JSON.stringify({
+    try {
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+      const stdoutLines: string[] = [];
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-11-25',
+            capabilities: {},
+            clientInfo: { name: 'package-install-test', version: '1.0.0' },
+          },
+        })}\n`,
+      );
+      const initialized = await waitForJsonRpcResponse(child, 1, stdoutLines, () => stderr);
+      expect(initialized).toMatchObject({
         jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-11-25',
-          capabilities: {},
-          clientInfo: { name: 'package-install-test', version: '1.0.0' },
+        result: {
+          serverInfo: { name: fixture.pack.name, version: fixture.pack.version },
         },
-      })}\n`,
-    );
-    const initialized = await waitForJsonRpcResponse(child, 1, stdoutLines, () => stderr);
-    expect(initialized).toMatchObject({
-      jsonrpc: '2.0',
-      result: {
-        serverInfo: { name: fixture.pack.name, version: fixture.pack.version },
-      },
-    });
-    const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
-    expect(instructions).toContain('hoi4.event_inspect');
-    expect(instructions).toContain('Event tools are read-only');
-    expect(instructions).toContain('hoi4.tech_inspect');
-    expect(instructions).toContain('Technology tools are read-only');
-    child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
-    );
-    child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
-    );
-    const listed = await waitForJsonRpcResponse(child, 2, stdoutLines, () => stderr);
-    const tools = (listed.result as { tools: { name: string }[] }).tools.map(({ name }) => name);
-    expect(tools).toEqual(expectedToolNames);
-    expect(
-      stdoutLines.every((line) => (JSON.parse(line) as { jsonrpc?: unknown }).jsonrpc === '2.0'),
-    ).toBe(true);
-    expect(stderr).not.toContain('"jsonrpc"');
-    await stop(child);
+      });
+      const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
+      expect(instructions).toContain('hoi4.event_inspect');
+      expect(instructions).toContain('Event tools are read-only');
+      expect(instructions).toContain('hoi4.tech_inspect');
+      expect(instructions).toContain('Technology tools are read-only');
+      expect(instructions).toContain('hoi4.probability_inspect');
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+      );
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
+      );
+      const listed = await waitForJsonRpcResponse(child, 2, stdoutLines, () => stderr);
+      const tools = (listed.result as { tools: { name: string }[] }).tools.map(({ name }) => name);
+      expect(tools).toEqual(expectedToolNames);
+      expect(
+        stdoutLines.every((line) => (JSON.parse(line) as { jsonrpc?: unknown }).jsonrpc === '2.0'),
+      ).toBe(true);
+      expect(stderr).not.toContain('"jsonrpc"');
+    } finally {
+      await stop(child);
+    }
   });
 });

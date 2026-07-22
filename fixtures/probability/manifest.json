@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "probability-fixture-manifest.v1",
+  "generatedBy": "scripts/generate-probability-fixture.ts",
+  "inventory": {
+    "focusCandidateSets": 40,
+    "decisionMissionSets": 30,
+    "technologySets": 20,
+    "doctrineSets": 10,
+    "eventOptionSets": 25,
+    "randomSets": 20,
+    "mtthFamilies": 15,
+    "weightedBlocksMinimum": 150,
+    "scenarios": 250
+  },
+  "files": {
+    "scenarios.json": {
+      "bytes": 119639,
+      "sha256": "9a4c8d3fc2136b9350ce91a319d948f32a070d9d832021a7916ff8bd14ddaff0"
+    },
+    "custom-pool.json": {
+      "bytes": 2463,
+      "sha256": "6c3e6ecfcd5263ee9af627e91af7e55aa3638ae4023161b1d98fffd59d84c49f"
+    },
+    "expected-results.json": {
+      "bytes": 2002,
+      "sha256": "d3c516b7e283365c059d0020adc39dda752808c8c96385d5ca92a668cee8c0b5"
+    }
+  }
+}

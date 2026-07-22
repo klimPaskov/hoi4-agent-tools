@@ -46,7 +46,7 @@ Use the shared parser and project index to inspect:
 - localisation for event titles and options
 - flags, variables, arrays, and event targets used by the chain
 
-Do not hardwire Chaos Redux event conventions into the generic engine. Allow workspace configuration or agent-supplied annotations to group events into a feature, stage, evolution, route, or incident family.
+Do not hardwire an external mod's event conventions into the generic engine. Allow workspace configuration or agent-supplied annotations to group events into a feature, stage, evolution, route, or incident family.
 
 ## Graph model
 

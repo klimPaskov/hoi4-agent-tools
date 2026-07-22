@@ -1,0 +1,36 @@
+{
+  "adapter": "national_focus_ai_will_do",
+  "source": { "identifier": "EXM_prepare_the_border" },
+  "scenarioSet": {
+    "schemaVersion": "1.0",
+    "id": "focus_route_sweep",
+    "surfaceHint": "national_focus_ai_will_do",
+    "scenarios": [
+      {
+        "id": "uncertain_foreign_support",
+        "actor": "EXM",
+        "date": "1939.3.1",
+        "state": {
+          "has_war": false,
+          "stability": 0.55,
+          "world_tension": 0.52,
+          "focus.external_factors_complete": true
+        },
+        "uncertainInputs": [
+          {
+            "path": "variable.foreign_influence",
+            "range": { "min": 20, "max": 80 }
+          }
+        ]
+      }
+    ]
+  },
+  "candidatePool": ["EXM_expand_industry", "EXM_prepare_the_border", "EXM_seek_foreign_support"],
+  "sweep": {
+    "paths": ["variable.foreign_influence"],
+    "steps": 25,
+    "pairwise": false,
+    "findRankReversals": true
+  },
+  "outputs": ["json", "ranking", "matrix", "waterfall", "sensitivity", "unresolved"]
+}

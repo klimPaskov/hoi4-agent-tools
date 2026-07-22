@@ -141,6 +141,13 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',
+      'hoi4.probability_inspect',
+      'hoi4.probability_evaluate',
+      'hoi4.probability_sweep',
+      'hoi4.probability_simulate',
+      'hoi4.probability_sequence',
+      'hoi4.probability_compare',
+      'hoi4.probability_render',
     ]);
     for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
@@ -150,7 +157,9 @@ describe('autonomous MCP rewrite workflows', () => {
         openWorldHint: false,
       });
     }
-    await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
+    expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
+      'hoi4.probability_analysis',
+    ]);
 
     const scannedFocus = resultOf(
       await client.callTool({

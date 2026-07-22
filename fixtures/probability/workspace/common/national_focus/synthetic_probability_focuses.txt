@@ -1,0 +1,1241 @@
+@focus_factor = 1.5
+
+focus_tree = {
+	id = synthetic_focus_00_tree
+	country = { factor = 0 modifier = { add = 10 tag = S00 } }
+	focus = {
+		id = synthetic_focus_00_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_00_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_00_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_00_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_00_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_01_tree
+	country = { factor = 0 modifier = { add = 10 tag = S01 } }
+	focus = {
+		id = synthetic_focus_01_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_01_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_01_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_01_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_01_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_02_tree
+	country = { factor = 0 modifier = { add = 10 tag = S02 } }
+	focus = {
+		id = synthetic_focus_02_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_02_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_02_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_02_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_02_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_03_tree
+	country = { factor = 0 modifier = { add = 10 tag = S03 } }
+	focus = {
+		id = synthetic_focus_03_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_03_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_03_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_03_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_03_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_04_tree
+	country = { factor = 0 modifier = { add = 10 tag = S04 } }
+	focus = {
+		id = synthetic_focus_04_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_04_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_04_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_04_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_04_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_05_tree
+	country = { factor = 0 modifier = { add = 10 tag = S05 } }
+	focus = {
+		id = synthetic_focus_05_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_05_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_05_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_05_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_05_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_06_tree
+	country = { factor = 0 modifier = { add = 10 tag = S06 } }
+	focus = {
+		id = synthetic_focus_06_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_06_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_06_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_06_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_06_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_07_tree
+	country = { factor = 0 modifier = { add = 10 tag = S07 } }
+	focus = {
+		id = synthetic_focus_07_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_07_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_07_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_07_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_07_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_08_tree
+	country = { factor = 0 modifier = { add = 10 tag = S08 } }
+	focus = {
+		id = synthetic_focus_08_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_08_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_08_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_08_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_08_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_09_tree
+	country = { factor = 0 modifier = { add = 10 tag = S09 } }
+	focus = {
+		id = synthetic_focus_09_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_09_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_09_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_09_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_09_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_10_tree
+	country = { factor = 0 modifier = { add = 10 tag = S10 } }
+	focus = {
+		id = synthetic_focus_10_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_10_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_10_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_10_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_10_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_11_tree
+	country = { factor = 0 modifier = { add = 10 tag = S11 } }
+	focus = {
+		id = synthetic_focus_11_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_11_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_11_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_11_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_11_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_12_tree
+	country = { factor = 0 modifier = { add = 10 tag = S12 } }
+	focus = {
+		id = synthetic_focus_12_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_12_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_12_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_12_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_12_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_13_tree
+	country = { factor = 0 modifier = { add = 10 tag = S13 } }
+	focus = {
+		id = synthetic_focus_13_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_13_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_13_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_13_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_13_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_14_tree
+	country = { factor = 0 modifier = { add = 10 tag = S14 } }
+	focus = {
+		id = synthetic_focus_14_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_14_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_14_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_14_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_14_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_15_tree
+	country = { factor = 0 modifier = { add = 10 tag = S15 } }
+	focus = {
+		id = synthetic_focus_15_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_15_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_15_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_15_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_15_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_16_tree
+	country = { factor = 0 modifier = { add = 10 tag = S16 } }
+	focus = {
+		id = synthetic_focus_16_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_16_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_16_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_16_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_16_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_17_tree
+	country = { factor = 0 modifier = { add = 10 tag = S17 } }
+	focus = {
+		id = synthetic_focus_17_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_17_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_17_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_17_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_17_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_18_tree
+	country = { factor = 0 modifier = { add = 10 tag = S18 } }
+	focus = {
+		id = synthetic_focus_18_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_18_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_18_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_18_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_18_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_19_tree
+	country = { factor = 0 modifier = { add = 10 tag = S19 } }
+	focus = {
+		id = synthetic_focus_19_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_19_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_19_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_19_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_19_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_20_tree
+	country = { factor = 0 modifier = { add = 10 tag = S20 } }
+	focus = {
+		id = synthetic_focus_20_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_20_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_20_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_20_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_20_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_21_tree
+	country = { factor = 0 modifier = { add = 10 tag = S21 } }
+	focus = {
+		id = synthetic_focus_21_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_21_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_21_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_21_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_21_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_22_tree
+	country = { factor = 0 modifier = { add = 10 tag = S22 } }
+	focus = {
+		id = synthetic_focus_22_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_22_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_22_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_22_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_22_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_23_tree
+	country = { factor = 0 modifier = { add = 10 tag = S23 } }
+	focus = {
+		id = synthetic_focus_23_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_23_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_23_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_23_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_23_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_24_tree
+	country = { factor = 0 modifier = { add = 10 tag = S24 } }
+	focus = {
+		id = synthetic_focus_24_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_24_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_24_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_24_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_24_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_25_tree
+	country = { factor = 0 modifier = { add = 10 tag = S25 } }
+	focus = {
+		id = synthetic_focus_25_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_25_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_25_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_25_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_25_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_26_tree
+	country = { factor = 0 modifier = { add = 10 tag = S26 } }
+	focus = {
+		id = synthetic_focus_26_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_26_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_26_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_26_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_26_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_27_tree
+	country = { factor = 0 modifier = { add = 10 tag = S27 } }
+	focus = {
+		id = synthetic_focus_27_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_27_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_27_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_27_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_27_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_28_tree
+	country = { factor = 0 modifier = { add = 10 tag = S28 } }
+	focus = {
+		id = synthetic_focus_28_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_28_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_28_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_28_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_28_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_29_tree
+	country = { factor = 0 modifier = { add = 10 tag = S29 } }
+	focus = {
+		id = synthetic_focus_29_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_29_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_29_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_29_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_29_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_30_tree
+	country = { factor = 0 modifier = { add = 10 tag = S30 } }
+	focus = {
+		id = synthetic_focus_30_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_30_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_30_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_30_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_30_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_31_tree
+	country = { factor = 0 modifier = { add = 10 tag = S31 } }
+	focus = {
+		id = synthetic_focus_31_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_31_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_31_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_31_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_31_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_32_tree
+	country = { factor = 0 modifier = { add = 10 tag = S32 } }
+	focus = {
+		id = synthetic_focus_32_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_32_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_32_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_32_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_32_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_33_tree
+	country = { factor = 0 modifier = { add = 10 tag = S33 } }
+	focus = {
+		id = synthetic_focus_33_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_33_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_33_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_33_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_33_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_34_tree
+	country = { factor = 0 modifier = { add = 10 tag = S34 } }
+	focus = {
+		id = synthetic_focus_34_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_34_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_34_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_34_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_34_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_35_tree
+	country = { factor = 0 modifier = { add = 10 tag = S35 } }
+	focus = {
+		id = synthetic_focus_35_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_35_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_35_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_35_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_35_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_36_tree
+	country = { factor = 0 modifier = { add = 10 tag = S36 } }
+	focus = {
+		id = synthetic_focus_36_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_36_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_36_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_36_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_36_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_37_tree
+	country = { factor = 0 modifier = { add = 10 tag = S37 } }
+	focus = {
+		id = synthetic_focus_37_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_37_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_37_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_37_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_37_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_38_tree
+	country = { factor = 0 modifier = { add = 10 tag = S38 } }
+	focus = {
+		id = synthetic_focus_38_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_38_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_38_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_38_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_38_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}
+
+focus_tree = {
+	id = synthetic_focus_39_tree
+	country = { factor = 0 modifier = { add = 10 tag = S39 } }
+	focus = {
+		id = synthetic_focus_39_a
+		x = 0
+		y = 0
+		cost = 10
+		ai_will_do = { factor = 1 modifier = { factor = 2 check_variable = { var = pressure value = 50 compare = greater_than_or_equals } } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_39_b
+		x = 1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_39_a }
+		ai_will_do = { factor = 2 modifier = { add = 1 has_war = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+	focus = {
+		id = synthetic_focus_39_c
+		x = -1
+		y = 1
+		cost = 10
+		prerequisite = { focus = synthetic_focus_39_a }
+		ai_will_do = { factor = 3 modifier = { factor = @focus_factor has_synthetic_helper = yes } }
+		completion_reward = { add_political_power = 1 }
+	}
+}

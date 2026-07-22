@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 32_768;
+const toolsListByteBudget = 49_152;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
@@ -65,6 +65,13 @@ describe('MCP discovery', () => {
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',
+      'hoi4.probability_inspect',
+      'hoi4.probability_evaluate',
+      'hoi4.probability_sweep',
+      'hoi4.probability_simulate',
+      'hoi4.probability_sequence',
+      'hoi4.probability_compare',
+      'hoi4.probability_render',
     ]);
 
     for (const name of [
@@ -90,6 +97,13 @@ describe('MCP discovery', () => {
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',
+      'hoi4.probability_inspect',
+      'hoi4.probability_evaluate',
+      'hoi4.probability_sweep',
+      'hoi4.probability_simulate',
+      'hoi4.probability_sequence',
+      'hoi4.probability_compare',
+      'hoi4.probability_render',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
@@ -180,7 +194,8 @@ describe('MCP discovery', () => {
       },
     });
     expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
-    await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map(({ name }) => name)).toEqual(['hoi4.probability_analysis']);
   });
 
   it('resolves omitted workspace IDs to the sole configured mod', async () => {
@@ -228,11 +243,15 @@ describe('MCP discovery', () => {
     const guiInspect = tools.tools.find(({ name }) => name === 'hoi4.gui_inspect');
     const mapRewrite = tools.tools.find(({ name }) => name === 'hoi4.map_rewrite');
     const eventInspect = tools.tools.find(({ name }) => name === 'hoi4.event_inspect');
+    const probabilityEvaluate = tools.tools.find(
+      ({ name }) => name === 'hoi4.probability_evaluate',
+    );
 
     expect(JSON.stringify(focusRewrite?.inputSchema)).not.toContain('completionReward');
     expect(JSON.stringify(guiInspect?.inputSchema)).not.toContain('animationTimeSeconds');
     expect(JSON.stringify(mapRewrite?.inputSchema)).not.toContain('move_state_provinces');
     expect(JSON.stringify(eventInspect?.inputSchema)).not.toContain('eventId');
+    expect(JSON.stringify(probabilityEvaluate?.inputSchema)).not.toContain('uncertainInputs');
     const invalidFocus = await client.callTool({
       name: 'hoi4.focus_rewrite',
       arguments: {
@@ -274,6 +293,17 @@ describe('MCP discovery', () => {
     });
     expect(invalidEventSelector).toMatchObject({ isError: true });
     expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Input validation error/iu);
+    const invalidProbability = await client.callTool({
+      name: 'hoi4.probability_evaluate',
+      arguments: {
+        workspaceId: 'test',
+        adapter: 'event_option_ai_chance',
+        source: {},
+        scenarioSet: { schemaVersion: '1.0', id: 'empty', scenarios: [] },
+      },
+    });
+    expect(invalidProbability).toMatchObject({ isError: true });
+    expect(JSON.stringify(invalidProbability.content)).toMatch(/Input validation error/iu);
   });
 
   it('emits progress and honors cancellation for GUI inspection', async () => {

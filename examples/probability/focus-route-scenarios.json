@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0",
+  "id": "focus_route_choice_examples",
+  "surfaceHint": "national_focus_ai_will_do",
+  "description": "Representative country states for evaluating the next focus choice.",
+  "scenarios": [
+    {
+      "id": "peace_low_industry",
+      "label": "Peace with weak industry",
+      "actor": "EXM",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "num_of_military_factories": 8,
+        "stability": 0.62,
+        "world_tension": 0.28,
+        "focus.external_factors_complete": true
+      },
+      "flags": ["route_independent"]
+    },
+    {
+      "id": "defensive_war",
+      "label": "Defensive war under pressure",
+      "actor": "EXM",
+      "date": "1939.9.1",
+      "state": {
+        "has_war": true,
+        "is_in_defensive_war": true,
+        "num_of_military_factories": 12,
+        "stability": 0.45,
+        "world_tension": 0.74,
+        "focus.external_factors_complete": true
+      },
+      "flags": ["route_independent", "border_crisis_active"]
+    },
+    {
+      "id": "uncertain_foreign_support",
+      "label": "Foreign support uncertain",
+      "actor": "EXM",
+      "date": "1939.3.1",
+      "state": {
+        "has_war": false,
+        "num_of_military_factories": 10,
+        "stability": 0.55,
+        "world_tension": 0.52,
+        "focus.external_factors_complete": true
+      },
+      "flags": ["route_independent"],
+      "uncertainInputs": [
+        {
+          "path": "has_flag.foreign_support_secured",
+          "alternatives": [true, false]
+        },
+        {
+          "path": "variable.foreign_influence",
+          "range": { "min": 20, "max": 80 }
+        }
+      ]
+    }
+  ]
+}

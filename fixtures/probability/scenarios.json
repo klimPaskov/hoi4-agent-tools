@@ -1,0 +1,4159 @@
+{
+  "schemaVersion": "1.0",
+  "id": "synthetic_probability_scenarios",
+  "surfaceHint": "national_focus_ai_will_do",
+  "description": "Two hundred and fifty deterministic, bounded, sampled, and unresolved world states.",
+  "scenarios": [
+    {
+      "id": "scenario_000",
+      "label": "Synthetic world state 0",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 0,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled", "disabled_option"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ],
+      "schedule": [
+        { "atDay": 60, "set": { "variable.pressure": 60 } },
+        { "atDay": 120, "set": { "has_war": true }, "addFlags": ["mission_enabled"] }
+      ]
+    },
+    {
+      "id": "scenario_001",
+      "label": "Synthetic world state 1",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 7,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_002",
+      "label": "Synthetic world state 2",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 14,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_003",
+      "label": "Synthetic world state 3",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 21,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_004",
+      "label": "Synthetic world state 4",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 28,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_005",
+      "label": "Synthetic world state 5",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 35,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_006",
+      "label": "Synthetic world state 6",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 42,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_007",
+      "label": "Synthetic world state 7",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 49,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_008",
+      "label": "Synthetic world state 8",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 56,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_009",
+      "label": "Synthetic world state 9",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 63,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_010",
+      "label": "Synthetic world state 10",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 70,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_011",
+      "label": "Synthetic world state 11",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 77,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_012",
+      "label": "Synthetic world state 12",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 84,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_013",
+      "label": "Synthetic world state 13",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 91,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_014",
+      "label": "Synthetic world state 14",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 98,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_015",
+      "label": "Synthetic world state 15",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 4,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_016",
+      "label": "Synthetic world state 16",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 11,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_017",
+      "label": "Synthetic world state 17",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 18,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_018",
+      "label": "Synthetic world state 18",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 25,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_019",
+      "label": "Synthetic world state 19",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 32,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_020",
+      "label": "Synthetic world state 20",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 39,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_021",
+      "label": "Synthetic world state 21",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 46,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_022",
+      "label": "Synthetic world state 22",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 53,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_023",
+      "label": "Synthetic world state 23",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 60,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_024",
+      "label": "Synthetic world state 24",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 67,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_025",
+      "label": "Synthetic world state 25",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 74,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ]
+    },
+    {
+      "id": "scenario_026",
+      "label": "Synthetic world state 26",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 81,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_027",
+      "label": "Synthetic world state 27",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 88,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_028",
+      "label": "Synthetic world state 28",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 95,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_029",
+      "label": "Synthetic world state 29",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 1,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_030",
+      "label": "Synthetic world state 30",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 8,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_031",
+      "label": "Synthetic world state 31",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 15,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_032",
+      "label": "Synthetic world state 32",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 22,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_033",
+      "label": "Synthetic world state 33",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 29,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_034",
+      "label": "Synthetic world state 34",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 36,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_035",
+      "label": "Synthetic world state 35",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 43,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_036",
+      "label": "Synthetic world state 36",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 50,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_037",
+      "label": "Synthetic world state 37",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 57,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_038",
+      "label": "Synthetic world state 38",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 64,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_039",
+      "label": "Synthetic world state 39",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 71,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_040",
+      "label": "Synthetic world state 40",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 78,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scenario_041",
+      "label": "Synthetic world state 41",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 85,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_042",
+      "label": "Synthetic world state 42",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 92,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_043",
+      "label": "Synthetic world state 43",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 99,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_044",
+      "label": "Synthetic world state 44",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 5,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_045",
+      "label": "Synthetic world state 45",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 12,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_046",
+      "label": "Synthetic world state 46",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 19,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_047",
+      "label": "Synthetic world state 47",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 26,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_048",
+      "label": "Synthetic world state 48",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 33,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_049",
+      "label": "Synthetic world state 49",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1936.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 40,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_050",
+      "label": "Synthetic world state 50",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 47,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ],
+      "schedule": [
+        { "atDay": 60, "set": { "variable.pressure": 60 } },
+        { "atDay": 120, "set": { "has_war": true }, "addFlags": ["mission_enabled"] }
+      ]
+    },
+    {
+      "id": "scenario_051",
+      "label": "Synthetic world state 51",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 54,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled", "disabled_option"]
+    },
+    {
+      "id": "scenario_052",
+      "label": "Synthetic world state 52",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 61,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_053",
+      "label": "Synthetic world state 53",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 68,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_054",
+      "label": "Synthetic world state 54",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 75,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_055",
+      "label": "Synthetic world state 55",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 82,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_056",
+      "label": "Synthetic world state 56",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 89,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_057",
+      "label": "Synthetic world state 57",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 96,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_058",
+      "label": "Synthetic world state 58",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 2,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_059",
+      "label": "Synthetic world state 59",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 9,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_060",
+      "label": "Synthetic world state 60",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 16,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_061",
+      "label": "Synthetic world state 61",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 23,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_062",
+      "label": "Synthetic world state 62",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 30,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_063",
+      "label": "Synthetic world state 63",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 37,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_064",
+      "label": "Synthetic world state 64",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 44,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_065",
+      "label": "Synthetic world state 65",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 51,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_066",
+      "label": "Synthetic world state 66",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 58,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_067",
+      "label": "Synthetic world state 67",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 65,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_068",
+      "label": "Synthetic world state 68",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 72,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_069",
+      "label": "Synthetic world state 69",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 79,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_070",
+      "label": "Synthetic world state 70",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 86,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_071",
+      "label": "Synthetic world state 71",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 93,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_072",
+      "label": "Synthetic world state 72",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 100,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_073",
+      "label": "Synthetic world state 73",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 6,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_074",
+      "label": "Synthetic world state 74",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 13,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_075",
+      "label": "Synthetic world state 75",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 20,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ]
+    },
+    {
+      "id": "scenario_076",
+      "label": "Synthetic world state 76",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 27,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_077",
+      "label": "Synthetic world state 77",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 34,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_078",
+      "label": "Synthetic world state 78",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 41,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_079",
+      "label": "Synthetic world state 79",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 48,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_080",
+      "label": "Synthetic world state 80",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 55,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scenario_081",
+      "label": "Synthetic world state 81",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 62,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_082",
+      "label": "Synthetic world state 82",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 69,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_083",
+      "label": "Synthetic world state 83",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 76,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_084",
+      "label": "Synthetic world state 84",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 83,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_085",
+      "label": "Synthetic world state 85",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 90,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_086",
+      "label": "Synthetic world state 86",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 97,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_087",
+      "label": "Synthetic world state 87",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 3,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_088",
+      "label": "Synthetic world state 88",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 10,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_089",
+      "label": "Synthetic world state 89",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 17,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_090",
+      "label": "Synthetic world state 90",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 24,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_091",
+      "label": "Synthetic world state 91",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 31,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_092",
+      "label": "Synthetic world state 92",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 38,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_093",
+      "label": "Synthetic world state 93",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 45,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_094",
+      "label": "Synthetic world state 94",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 52,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_095",
+      "label": "Synthetic world state 95",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 59,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_096",
+      "label": "Synthetic world state 96",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 66,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_097",
+      "label": "Synthetic world state 97",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 73,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_098",
+      "label": "Synthetic world state 98",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 80,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_099",
+      "label": "Synthetic world state 99",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1937.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 87,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_100",
+      "label": "Synthetic world state 100",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 94,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ],
+      "schedule": [
+        { "atDay": 60, "set": { "variable.pressure": 60 } },
+        { "atDay": 120, "set": { "has_war": true }, "addFlags": ["mission_enabled"] }
+      ]
+    },
+    {
+      "id": "scenario_101",
+      "label": "Synthetic world state 101",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 0,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_102",
+      "label": "Synthetic world state 102",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 7,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled", "disabled_option"]
+    },
+    {
+      "id": "scenario_103",
+      "label": "Synthetic world state 103",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 14,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_104",
+      "label": "Synthetic world state 104",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 21,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_105",
+      "label": "Synthetic world state 105",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 28,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_106",
+      "label": "Synthetic world state 106",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 35,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_107",
+      "label": "Synthetic world state 107",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 42,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_108",
+      "label": "Synthetic world state 108",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 49,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_109",
+      "label": "Synthetic world state 109",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 56,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_110",
+      "label": "Synthetic world state 110",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 63,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_111",
+      "label": "Synthetic world state 111",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 70,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_112",
+      "label": "Synthetic world state 112",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 77,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_113",
+      "label": "Synthetic world state 113",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 84,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_114",
+      "label": "Synthetic world state 114",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 91,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_115",
+      "label": "Synthetic world state 115",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 98,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_116",
+      "label": "Synthetic world state 116",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 4,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_117",
+      "label": "Synthetic world state 117",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 11,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_118",
+      "label": "Synthetic world state 118",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 18,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_119",
+      "label": "Synthetic world state 119",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 25,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_120",
+      "label": "Synthetic world state 120",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 32,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scenario_121",
+      "label": "Synthetic world state 121",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 39,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_122",
+      "label": "Synthetic world state 122",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 46,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_123",
+      "label": "Synthetic world state 123",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 53,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_124",
+      "label": "Synthetic world state 124",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 60,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_125",
+      "label": "Synthetic world state 125",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 67,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ]
+    },
+    {
+      "id": "scenario_126",
+      "label": "Synthetic world state 126",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 74,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_127",
+      "label": "Synthetic world state 127",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 81,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_128",
+      "label": "Synthetic world state 128",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 88,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_129",
+      "label": "Synthetic world state 129",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 95,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_130",
+      "label": "Synthetic world state 130",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 1,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_131",
+      "label": "Synthetic world state 131",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 8,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_132",
+      "label": "Synthetic world state 132",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 15,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_133",
+      "label": "Synthetic world state 133",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 22,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_134",
+      "label": "Synthetic world state 134",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 29,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_135",
+      "label": "Synthetic world state 135",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 36,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_136",
+      "label": "Synthetic world state 136",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 43,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_137",
+      "label": "Synthetic world state 137",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 50,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_138",
+      "label": "Synthetic world state 138",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 57,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_139",
+      "label": "Synthetic world state 139",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 64,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_140",
+      "label": "Synthetic world state 140",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 71,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_141",
+      "label": "Synthetic world state 141",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 78,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_142",
+      "label": "Synthetic world state 142",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 85,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_143",
+      "label": "Synthetic world state 143",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 92,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_144",
+      "label": "Synthetic world state 144",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 99,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_145",
+      "label": "Synthetic world state 145",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 5,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_146",
+      "label": "Synthetic world state 146",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 12,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_147",
+      "label": "Synthetic world state 147",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 19,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_148",
+      "label": "Synthetic world state 148",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 26,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_149",
+      "label": "Synthetic world state 149",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1938.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 33,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_150",
+      "label": "Synthetic world state 150",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 40,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ],
+      "schedule": [
+        { "atDay": 60, "set": { "variable.pressure": 60 } },
+        { "atDay": 120, "set": { "has_war": true }, "addFlags": ["mission_enabled"] }
+      ]
+    },
+    {
+      "id": "scenario_151",
+      "label": "Synthetic world state 151",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 47,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_152",
+      "label": "Synthetic world state 152",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 54,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_153",
+      "label": "Synthetic world state 153",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 61,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled", "disabled_option"]
+    },
+    {
+      "id": "scenario_154",
+      "label": "Synthetic world state 154",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 68,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_155",
+      "label": "Synthetic world state 155",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 75,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_156",
+      "label": "Synthetic world state 156",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 82,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_157",
+      "label": "Synthetic world state 157",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 89,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_158",
+      "label": "Synthetic world state 158",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 96,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_159",
+      "label": "Synthetic world state 159",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 2,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_160",
+      "label": "Synthetic world state 160",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 9,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scenario_161",
+      "label": "Synthetic world state 161",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 16,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_162",
+      "label": "Synthetic world state 162",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 23,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_163",
+      "label": "Synthetic world state 163",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 30,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_164",
+      "label": "Synthetic world state 164",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 37,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_165",
+      "label": "Synthetic world state 165",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 44,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_166",
+      "label": "Synthetic world state 166",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 51,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_167",
+      "label": "Synthetic world state 167",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 58,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_168",
+      "label": "Synthetic world state 168",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 65,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_169",
+      "label": "Synthetic world state 169",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 72,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_170",
+      "label": "Synthetic world state 170",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 79,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_171",
+      "label": "Synthetic world state 171",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 86,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_172",
+      "label": "Synthetic world state 172",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 93,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_173",
+      "label": "Synthetic world state 173",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 100,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_174",
+      "label": "Synthetic world state 174",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 6,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_175",
+      "label": "Synthetic world state 175",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 13,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ]
+    },
+    {
+      "id": "scenario_176",
+      "label": "Synthetic world state 176",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 20,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_177",
+      "label": "Synthetic world state 177",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 27,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_178",
+      "label": "Synthetic world state 178",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 34,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_179",
+      "label": "Synthetic world state 179",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 41,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_180",
+      "label": "Synthetic world state 180",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 48,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_181",
+      "label": "Synthetic world state 181",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 55,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_182",
+      "label": "Synthetic world state 182",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 62,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_183",
+      "label": "Synthetic world state 183",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 69,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_184",
+      "label": "Synthetic world state 184",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 76,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_185",
+      "label": "Synthetic world state 185",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 83,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_186",
+      "label": "Synthetic world state 186",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 90,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_187",
+      "label": "Synthetic world state 187",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 97,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_188",
+      "label": "Synthetic world state 188",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 3,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_189",
+      "label": "Synthetic world state 189",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 10,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_190",
+      "label": "Synthetic world state 190",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 17,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_191",
+      "label": "Synthetic world state 191",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 24,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_192",
+      "label": "Synthetic world state 192",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 31,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_193",
+      "label": "Synthetic world state 193",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 38,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_194",
+      "label": "Synthetic world state 194",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 45,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_195",
+      "label": "Synthetic world state 195",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 52,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_196",
+      "label": "Synthetic world state 196",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 59,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_197",
+      "label": "Synthetic world state 197",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 66,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_198",
+      "label": "Synthetic world state 198",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 73,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_199",
+      "label": "Synthetic world state 199",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1939.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 80,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_200",
+      "label": "Synthetic world state 200",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 87,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ],
+      "schedule": [
+        { "atDay": 60, "set": { "variable.pressure": 60 } },
+        { "atDay": 120, "set": { "has_war": true }, "addFlags": ["mission_enabled"] }
+      ]
+    },
+    {
+      "id": "scenario_201",
+      "label": "Synthetic world state 201",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 94,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_202",
+      "label": "Synthetic world state 202",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 0,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_203",
+      "label": "Synthetic world state 203",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 7,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_204",
+      "label": "Synthetic world state 204",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 14,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled", "disabled_option"]
+    },
+    {
+      "id": "scenario_205",
+      "label": "Synthetic world state 205",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 21,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_206",
+      "label": "Synthetic world state 206",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 28,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_207",
+      "label": "Synthetic world state 207",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 35,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_208",
+      "label": "Synthetic world state 208",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 42,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_209",
+      "label": "Synthetic world state 209",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 49,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_210",
+      "label": "Synthetic world state 210",
+      "prevalence": 0.004,
+      "actor": "S10",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 56,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_211",
+      "label": "Synthetic world state 211",
+      "prevalence": 0.004,
+      "actor": "S11",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 63,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_212",
+      "label": "Synthetic world state 212",
+      "prevalence": 0.004,
+      "actor": "S12",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 70,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_213",
+      "label": "Synthetic world state 213",
+      "prevalence": 0.004,
+      "actor": "S13",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 77,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_214",
+      "label": "Synthetic world state 214",
+      "prevalence": 0.004,
+      "actor": "S14",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 84,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_215",
+      "label": "Synthetic world state 215",
+      "prevalence": 0.004,
+      "actor": "S15",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 91,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_216",
+      "label": "Synthetic world state 216",
+      "prevalence": 0.004,
+      "actor": "S16",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 98,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_217",
+      "label": "Synthetic world state 217",
+      "prevalence": 0.004,
+      "actor": "S17",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 4,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_218",
+      "label": "Synthetic world state 218",
+      "prevalence": 0.004,
+      "actor": "S18",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 11,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_219",
+      "label": "Synthetic world state 219",
+      "prevalence": 0.004,
+      "actor": "S19",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 18,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_220",
+      "label": "Synthetic world state 220",
+      "prevalence": 0.004,
+      "actor": "S20",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 25,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_221",
+      "label": "Synthetic world state 221",
+      "prevalence": 0.004,
+      "actor": "S21",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 32,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_222",
+      "label": "Synthetic world state 222",
+      "prevalence": 0.004,
+      "actor": "S22",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 39,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_223",
+      "label": "Synthetic world state 223",
+      "prevalence": 0.004,
+      "actor": "S23",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 46,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_224",
+      "label": "Synthetic world state 224",
+      "prevalence": 0.004,
+      "actor": "S24",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 53,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_225",
+      "label": "Synthetic world state 225",
+      "prevalence": 0.004,
+      "actor": "S25",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 60,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [
+        { "path": "variable.pressure", "range": { "min": 25, "max": 85 } },
+        { "path": "has_war", "alternatives": [true, false] }
+      ]
+    },
+    {
+      "id": "scenario_226",
+      "label": "Synthetic world state 226",
+      "prevalence": 0.004,
+      "actor": "S26",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 67,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_227",
+      "label": "Synthetic world state 227",
+      "prevalence": 0.004,
+      "actor": "S27",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 74,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_228",
+      "label": "Synthetic world state 228",
+      "prevalence": 0.004,
+      "actor": "S28",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 81,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_229",
+      "label": "Synthetic world state 229",
+      "prevalence": 0.004,
+      "actor": "S29",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 88,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_230",
+      "label": "Synthetic world state 230",
+      "prevalence": 0.004,
+      "actor": "S30",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 95,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_231",
+      "label": "Synthetic world state 231",
+      "prevalence": 0.004,
+      "actor": "S31",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 1,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_232",
+      "label": "Synthetic world state 232",
+      "prevalence": 0.004,
+      "actor": "S32",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 8,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_233",
+      "label": "Synthetic world state 233",
+      "prevalence": 0.004,
+      "actor": "S33",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 15,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_234",
+      "label": "Synthetic world state 234",
+      "prevalence": 0.004,
+      "actor": "S34",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 22,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_235",
+      "label": "Synthetic world state 235",
+      "prevalence": 0.004,
+      "actor": "S35",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 29,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_236",
+      "label": "Synthetic world state 236",
+      "prevalence": 0.004,
+      "actor": "S36",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 36,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_237",
+      "label": "Synthetic world state 237",
+      "prevalence": 0.004,
+      "actor": "S37",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 43,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_238",
+      "label": "Synthetic world state 238",
+      "prevalence": 0.004,
+      "actor": "S38",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 50,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active", "disabled_option"]
+    },
+    {
+      "id": "scenario_239",
+      "label": "Synthetic world state 239",
+      "prevalence": 0.004,
+      "actor": "S39",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 57,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_240",
+      "label": "Synthetic world state 240",
+      "prevalence": 0.004,
+      "actor": "S00",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": true,
+        "variable.pressure": 64,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [
+        {
+          "path": "variable.pressure",
+          "distribution": { "kind": "triangular", "min": 10, "mode": 50, "max": 95 }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    },
+    {
+      "id": "scenario_241",
+      "label": "Synthetic world state 241",
+      "prevalence": 0.004,
+      "actor": "S01",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 71,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_242",
+      "label": "Synthetic world state 242",
+      "prevalence": 0.004,
+      "actor": "S02",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 78,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_243",
+      "label": "Synthetic world state 243",
+      "prevalence": 0.004,
+      "actor": "S03",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 85,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_244",
+      "label": "Synthetic world state 244",
+      "prevalence": 0.004,
+      "actor": "S04",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 92,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_245",
+      "label": "Synthetic world state 245",
+      "prevalence": 0.004,
+      "actor": "S05",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": true,
+        "variable.pressure": 99,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 25
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_246",
+      "label": "Synthetic world state 246",
+      "prevalence": 0.004,
+      "actor": "S06",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 5,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"]
+    },
+    {
+      "id": "scenario_247",
+      "label": "Synthetic world state 247",
+      "prevalence": 0.004,
+      "actor": "S07",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 12,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_248",
+      "label": "Synthetic world state 248",
+      "prevalence": 0.004,
+      "actor": "S08",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": true,
+        "is_major": false,
+        "variable.pressure": 19,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active"]
+    },
+    {
+      "id": "scenario_249",
+      "label": "Synthetic world state 249",
+      "prevalence": 0.004,
+      "actor": "S09",
+      "date": "1940.1.1",
+      "state": {
+        "has_war": false,
+        "is_major": false,
+        "variable.pressure": 26,
+        "focus.external_factors_complete": true,
+        "technology.external_factors_complete": true,
+        "research_weight_factor.all": 0
+      },
+      "flags": ["synthetic_active", "mission_enabled"],
+      "uncertainInputs": [{ "path": "unsupported.scope_value", "unresolved": true }]
+    }
+  ]
+}

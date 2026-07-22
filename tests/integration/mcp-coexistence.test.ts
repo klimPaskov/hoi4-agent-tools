@@ -48,7 +48,7 @@ async function typescriptSource(current: string): Promise<string> {
 }
 
 describe('MCP coding-agent coexistence', () => {
-  it('advertises bounded tool guidance without prompts, task ownership, or host-specific coupling', async () => {
+  it('advertises bounded guidance without task ownership or host-specific coupling', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-coexistence-surface-'));
     const mod = path.join(temporary, 'mod');
     const runtime = path.join(temporary, 'runtime');
@@ -92,7 +92,10 @@ describe('MCP coding-agent coexistence', () => {
     expect(instructions.length).toBeLessThanOrEqual(1_200);
     expect(instructions).not.toMatch(ownershipClaim);
     expect(instructions).not.toMatch(/AGENTS\.md|SKILL\.md|subagents?/iu);
-    await expect(client.listPrompts()).rejects.toThrow(/Method not found/iu);
+    const prompts = (await client.listPrompts()).prompts;
+    expect(prompts.map(({ name }) => name)).toEqual(['hoi4.probability_analysis']);
+    expect(prompts[0]?.description ?? '').not.toMatch(ownershipClaim);
+    expect(prompts[0]?.description ?? '').not.toMatch(/AGENTS\.md|SKILL\.md|subagents?/iu);
 
     const runtimeSource = await typescriptSource(path.join(repositoryRoot, 'src'));
     expect(runtimeSource).not.toMatch(/chaos[_ -]?redux/iu);

@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains and technology systems and to inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
+HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains, technology systems, AI weights, and MTTH timing and to inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
 
 ## What it does
 
@@ -9,6 +9,7 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 - Maps: inspect provinces, states, regions, adjacency, supply, and railways; render layers; create and repair exact map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
+- AI and MTTH: evaluate weighted choices and timing across explicit scenarios, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
 
 ## Setup
 
@@ -30,32 +31,39 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 
 ## Tools
 
-| Tool                 | Purpose                                                                                 |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `hoi4.focus_inspect` | Read focus trees and report structural or reference problems.                           |
-| `hoi4.focus_render`  | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                       |
-| `hoi4.focus_raster`  | Produce a high-fidelity PNG review with decoded source icons.                           |
-| `hoi4.focus_rewrite` | Create or update a focus tree.                                                          |
-| `hoi4.gui_inspect`   | Read a scripted GUI and its linked assets and logic.                                    |
-| `hoi4.gui_render`    | Render GUI states and resolutions offline.                                              |
-| `hoi4.gui_rewrite`   | Create or update a GUI source package.                                                  |
-| `hoi4.map_inspect`   | Read map, state, province, region, supply, and railway data.                            |
-| `hoi4.map_render`    | Render map layers and overlays.                                                         |
-| `hoi4.map_rewrite`   | Create or update map data from an ordered list of exact changes.                        |
-| `hoi4.event_inspect` | Scan, trace, explain, lint, or assess event chains and their state flow.                |
-| `hoi4.event_render`  | Render source-linked event routes, options, timing, state, scope, and unresolved edges. |
-| `hoi4.event_compare` | Compare event-chain topology and diagnostics between revisions.                         |
-| `hoi4.tech_inspect`  | Scan, trace, explain, lint, and assess technology and doctrine systems.                 |
-| `hoi4.tech_render`   | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage. |
-| `hoi4.tech_compare`  | Compare technology graphs, placements, references, diagnostics, and source overlays.    |
+| Tool                        | Purpose                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `hoi4.focus_inspect`        | Read focus trees and report structural or reference problems.                           |
+| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                       |
+| `hoi4.focus_raster`         | Produce a high-fidelity PNG review with decoded source icons.                           |
+| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                          |
+| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                    |
+| `hoi4.gui_render`           | Render GUI states and resolutions offline.                                              |
+| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                  |
+| `hoi4.map_inspect`          | Read map, state, province, region, supply, and railway data.                            |
+| `hoi4.map_render`           | Render map layers and overlays.                                                         |
+| `hoi4.map_rewrite`          | Create or update map data from an ordered list of exact changes.                        |
+| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                |
+| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges. |
+| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                         |
+| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                 |
+| `hoi4.tech_render`          | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage. |
+| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.    |
+| `hoi4.probability_inspect`  | Locate weighted logic, candidates, required inputs, and supported analysis.             |
+| `hoi4.probability_evaluate` | Evaluate exact values, probabilities, timing, bounds, and unresolved inputs.            |
+| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.       |
+| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                |
+| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.        |
+| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                   |
+| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.       |
 
 Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, follow the `continuationUri` returned in `_meta` until it is `null`; clients may also request byte ranges with `?offset=<bytes>&length=<bytes>`.
 
 ## Coexistence with agent workflows
 
-HOI4 Agent Tools provides HOI4 domain operations; it does not register MCP prompts, replace repository instructions such as `AGENTS.md`, manage skills or plans, or start subagents. The coding agent decides when to call it as part of its existing workflow.
+HOI4 Agent Tools provides HOI4 domain operations without replacing repository instructions such as `AGENTS.md`, skills, plans, or subagents. Its optional weighted-logic prompt helps an agent scope one probability analysis and then returns control to the normal workflow.
 
-Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Event and technology tools analyze source without editing it; only `hoi4.*_rewrite` calls edit mod source.
+Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Event, technology, and probability tools analyze source without editing it; only `hoi4.*_rewrite` calls edit mod source.
 
 ## Create or clean content
 
@@ -66,6 +74,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 - Maps: "Create a state from these exact provinces," or "Inspect this state and split these provinces while keeping supply and railway references valid." See [Maps](docs/map.md).
 - Event chains: "Trace every route from this event and explain where its flags and variables change," or "Compare the workspace event graph with its previous revision and render the affected routes." See [Event chains](docs/events.md).
 - Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).
+- AI and MTTH: "Compare these focus weights across peace, defensive-war, and low-stability scenarios," or "Show when this MTTH event becomes likely and which unknown inputs control the result." See [AI and MTTH analysis](docs/probability.md).
 
 ## HTTP
 

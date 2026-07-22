@@ -1,0 +1,4 @@
+synthetic_pressure_mtth = {
+	base = 1
+	modifier = { factor = 0.5 check_variable = { var = pressure value = 80 compare = greater_than_or_equals } }
+}

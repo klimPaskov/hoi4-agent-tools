@@ -1,0 +1,57 @@
+{
+  "scenarioSet": {
+    "schemaVersion": "1.0",
+    "id": "pool_baseline",
+    "scenarios": [{ "id": "baseline", "state": {} }]
+  },
+  "customPoolManifest": {
+    "schemaVersion": "1.0",
+    "id": "adaptive_event_pool_example",
+    "selection": {
+      "mode": "categorical_weighted",
+      "cadence": "timer",
+      "timerMinDays": 45,
+      "timerMaxDays": 60,
+      "rounding": "nearest"
+    },
+    "state": { "minor_events_since_major": 0, "major_gain": 150 },
+    "candidates": [
+      { "id": "minor_repeatable", "category": "minor", "weight": 1000, "cap": 1000 },
+      { "id": "major_crisis", "category": "major", "weight": 0, "cap": 1000, "oneTime": true }
+    ],
+    "recovery": [
+      {
+        "cadence": "monthly",
+        "target": "candidate.minor_repeatable.weight",
+        "amount": 20,
+        "cap": "candidate.minor_repeatable.cap"
+      }
+    ],
+    "transitions": [
+      {
+        "when": "selected.category != major",
+        "actions": [
+          {
+            "operation": "add",
+            "target": "candidate.major_crisis.weight",
+            "value": "state.major_gain"
+          },
+          { "operation": "compress_timer", "target": "selection.timer_max_days", "value": 1 }
+        ]
+      },
+      {
+        "when": "selected.category == major",
+        "actions": [
+          { "operation": "reset_category", "target": "category.major", "value": 0 },
+          { "operation": "reset_timer", "target": "selection", "value": null }
+        ]
+      }
+    ]
+  },
+  "horizonDays": 720,
+  "maxSteps": 1000,
+  "samples": 250000,
+  "seed": 3601,
+  "confidenceLevel": 0.95,
+  "outputs": ["json", "ranking", "timing", "sequence", "unresolved"]
+}

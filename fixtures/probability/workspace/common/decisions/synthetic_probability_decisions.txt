@@ -1,0 +1,419 @@
+synthetic_decision_00_category = {
+	synthetic_decision_00_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_00_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_01_category = {
+	synthetic_decision_01_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_01_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_02_category = {
+	synthetic_decision_02_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_02_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_03_category = {
+	synthetic_decision_03_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_03_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_04_category = {
+	synthetic_decision_04_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_04_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_05_category = {
+	synthetic_decision_05_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_05_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_06_category = {
+	synthetic_decision_06_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_06_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_07_category = {
+	synthetic_decision_07_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_07_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_08_category = {
+	synthetic_decision_08_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_08_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_09_category = {
+	synthetic_decision_09_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_09_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_10_category = {
+	synthetic_decision_10_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_10_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_11_category = {
+	synthetic_decision_11_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_11_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_12_category = {
+	synthetic_decision_12_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_12_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_13_category = {
+	synthetic_decision_13_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_13_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_14_category = {
+	synthetic_decision_14_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_14_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_15_category = {
+	synthetic_decision_15_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_15_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_16_category = {
+	synthetic_decision_16_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_16_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_17_category = {
+	synthetic_decision_17_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_17_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_18_category = {
+	synthetic_decision_18_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_18_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_19_category = {
+	synthetic_decision_19_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_19_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_20_category = {
+	synthetic_decision_20_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_20_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_21_category = {
+	synthetic_decision_21_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_21_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_22_category = {
+	synthetic_decision_22_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_22_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_23_category = {
+	synthetic_decision_23_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_23_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_24_category = {
+	synthetic_decision_24_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_24_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_25_category = {
+	synthetic_decision_25_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_25_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_26_category = {
+	synthetic_decision_26_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_26_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_27_category = {
+	synthetic_decision_27_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_27_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_28_category = {
+	synthetic_decision_28_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_28_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}
+
+synthetic_decision_29_category = {
+	synthetic_decision_29_choice = {
+		available = { has_war = no }
+		ai_will_do = { base = 1 modifier = { factor = 4 check_variable = { var = pressure value = 75 compare = greater_than } } }
+		complete_effect = { add_political_power = 1 }
+	}
+	synthetic_decision_29_mission = {
+		days_mission_timeout = 30
+		available = { has_country_flag = mission_enabled }
+		ai_will_do = { factor = 2 modifier = { add = 3 is_major = yes } }
+		timeout_effect = { add_political_power = -1 }
+	}
+}

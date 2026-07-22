@@ -1,0 +1,2211 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.3.0/schemas/probability-analysis-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "blocked",
+        "cancelled",
+        "stale"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "inspect",
+        "evaluate",
+        "sweep",
+        "simulate",
+        "sequence",
+        "compare",
+        "render"
+      ]
+    },
+    "analysisId": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "workspaceIdentity": {
+          "type": "string"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "sourceHash": {
+          "type": "string"
+        },
+        "scenarioHash": {
+          "type": "string"
+        },
+        "candidatePoolHash": {
+          "type": "string"
+        },
+        "gameVersion": {
+          "type": "string"
+        },
+        "gameVersionVerification": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "workspace_verified",
+                "adapter_target_only"
+              ]
+            },
+            "adapterTarget": {
+              "type": "string"
+            },
+            "sourcePath": {
+              "type": "string"
+            },
+            "observedVersion": {
+              "type": "string"
+            },
+            "observedRawVersion": {
+              "type": "string"
+            },
+            "observedChecksum": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "adapterTarget"
+          ],
+          "additionalProperties": false
+        },
+        "adapterId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "adapterVersion": {
+          "type": "string"
+        },
+        "requestedMetrics": {
+          "minItems": 1,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "numericalPrecision": {
+          "type": "string"
+        },
+        "cacheKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "workspaceIdentity",
+        "sourceRevision",
+        "sourceHash",
+        "scenarioHash",
+        "candidatePoolHash",
+        "gameVersion",
+        "gameVersionVerification",
+        "adapterId",
+        "adapterVersion",
+        "numericalPrecision",
+        "cacheKey"
+      ],
+      "additionalProperties": false
+    },
+    "adapter": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "version": {
+          "type": "string"
+        },
+        "gameVersion": {
+          "type": "string"
+        },
+        "supportedGameVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selectionRule": {
+          "type": "string",
+          "enum": [
+            "proportional_categorical",
+            "uniform_score_race",
+            "independent_chance",
+            "median_daily_hazard",
+            "score_only",
+            "custom_declared"
+          ]
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "eligibility": {
+              "type": "boolean"
+            },
+            "rawScore": {
+              "type": "boolean"
+            },
+            "normalizedProbability": {
+              "type": "boolean"
+            },
+            "timeDistribution": {
+              "type": "boolean"
+            },
+            "sequence": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "eligibility",
+            "rawScore",
+            "normalizedProbability",
+            "timeDistribution",
+            "sequence"
+          ],
+          "additionalProperties": false
+        },
+        "completePoolRequired": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "documented",
+            "documented_with_runtime_boundary",
+            "manifest_defined"
+          ]
+        },
+        "sourceBlockTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "candidateDiscoveryRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "eligibilityRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modifierOrder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "poolNormalizationRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evaluationCadence": {
+          "type": "string"
+        },
+        "timingConversion": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopeExpectations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "supportedExpressions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unsupportedConstructs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "testFixtures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "gameVersion",
+        "supportedGameVersions",
+        "selectionRule",
+        "capabilities",
+        "completePoolRequired",
+        "confidence",
+        "sourceBlockTypes",
+        "candidateDiscoveryRules",
+        "eligibilityRules",
+        "modifierOrder",
+        "poolNormalizationRules",
+        "evaluationCadence",
+        "timingConversion",
+        "scopeExpectations",
+        "supportedExpressions",
+        "unsupportedConstructs",
+        "evidence",
+        "testFixtures",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "prevalence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "poolComplete": {
+            "type": "boolean"
+          },
+          "supportLevel": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "bounded",
+              "sampled",
+              "score_only",
+              "external",
+              "unsupported"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "eligibility": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false",
+                    "unresolved"
+                  ]
+                },
+                "supportLevel": {
+                  "type": "string",
+                  "enum": [
+                    "exact",
+                    "bounded",
+                    "sampled",
+                    "score_only",
+                    "external",
+                    "unsupported"
+                  ]
+                },
+                "rawValue": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/__schema2"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rawInterval": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "min",
+                    "max"
+                  ],
+                  "additionalProperties": false
+                },
+                "conditionalProbability": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "exactConditionalProbability": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "pathProbability": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "exactPathProbability": {
+                  "$ref": "#/$defs/__schema2"
+                },
+                "pathProbabilityInterval": {
+                  "type": "object",
+                  "properties": {
+                    "low": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "high": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "additionalProperties": false
+                },
+                "conditionalProbabilityInterval": {
+                  "type": "object",
+                  "properties": {
+                    "low": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "high": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "additionalProperties": false
+                },
+                "confidenceInterval": {
+                  "type": "object",
+                  "properties": {
+                    "low": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "high": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "additionalProperties": false
+                },
+                "sampledFrequency": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "effectiveMtthDays": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "timingModel": {
+                  "type": "string"
+                },
+                "timingQuantilesDays": {
+                  "type": "object",
+                  "properties": {
+                    "p10": {
+                      "type": "number"
+                    },
+                    "p50": {
+                      "type": "number"
+                    },
+                    "p90": {
+                      "type": "number"
+                    },
+                    "p95": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "p10",
+                    "p50",
+                    "p90",
+                    "p95"
+                  ],
+                  "additionalProperties": false
+                },
+                "timingQuantileIntervals": {
+                  "type": "object",
+                  "properties": {
+                    "p10": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p50": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p90": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p95": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "p10",
+                    "p50",
+                    "p90",
+                    "p95"
+                  ],
+                  "additionalProperties": false
+                },
+                "timingSampleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingEvaluations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingReservoirCapacity": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingMethod": {
+                  "type": "string",
+                  "const": "sampled_discrete_daily_hazard"
+                },
+                "timingConfidenceMethod": {
+                  "type": "string",
+                  "const": "normal_order_statistic"
+                },
+                "cumulativeChance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "cumulativeChanceInterval": {
+                  "type": "object",
+                  "properties": {
+                    "low": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "high": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "additionalProperties": false
+                },
+                "rank": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "trace": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "base",
+                          "add",
+                          "factor",
+                          "eligibility",
+                          "external_factor",
+                          "normalization"
+                        ]
+                      },
+                      "expression": {
+                        "type": "string"
+                      },
+                      "applied": {
+                        "type": "string",
+                        "enum": [
+                          "true",
+                          "false",
+                          "unresolved"
+                        ]
+                      },
+                      "value": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "before": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "after": {
+                        "$ref": "#/$defs/__schema2"
+                      },
+                      "provenance": {
+                        "$ref": "#/$defs/__schema3"
+                      },
+                      "conditionExpression": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "operation",
+                      "expression",
+                      "applied"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "provenance": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema3"
+                  }
+                },
+                "unresolved": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/__schema6"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "eligibility",
+                "supportLevel",
+                "trace",
+                "provenance",
+                "unresolved"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "poolTotal": {
+            "$ref": "#/$defs/__schema2"
+          },
+          "horizonDays": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "survivalChance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "survivalChanceInterval": {
+            "type": "object",
+            "properties": {
+              "low": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "high": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "low",
+              "high"
+            ],
+            "additionalProperties": false
+          },
+          "timingIntervals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "startDay": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "endDay": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "eligibility": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false",
+                    "unresolved"
+                  ]
+                },
+                "effectiveMtthDays": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "minimumHazardContribution": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "maximumHazardContribution": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "startDay",
+                "endDay",
+                "eligibility",
+                "minimumHazardContribution",
+                "maximumHazardContribution"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "topOutcomes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "bottomEligibleOutcomes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "impossibleOutcomes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "unresolvedOutcomes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dominantFactors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "closestRankReversal": {
+                "type": "object",
+                "properties": {
+                  "candidates": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "gap": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "metric": {
+                    "type": "string",
+                    "enum": [
+                      "probability",
+                      "raw_value"
+                    ]
+                  }
+                },
+                "required": [
+                  "candidates",
+                  "gap",
+                  "metric"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "topOutcomes",
+              "bottomEligibleOutcomes",
+              "impossibleOutcomes",
+              "unresolvedOutcomes",
+              "dominantFactors"
+            ],
+            "additionalProperties": false
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema6"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "poolComplete",
+          "supportLevel",
+          "candidates",
+          "summary",
+          "unresolved"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "prevalenceAggregate": {
+      "type": "object",
+      "properties": {
+        "prevalenceTotal": {
+          "type": "number",
+          "minimum": 0
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "eligibilityPrevalence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "weightedConditionalProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "id",
+              "eligibilityPrevalence"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "prevalenceTotal",
+        "candidates"
+      ],
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "blocker"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "syntax",
+              "reference",
+              "layout",
+              "design",
+              "rendering",
+              "security",
+              "validation",
+              "map",
+              "configuration"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "location": {
+            "$ref": "#/$defs/__schema4"
+          },
+          "related": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/__schema4"
+            }
+          },
+          "operationId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "details": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "category",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      }
+    },
+    "sweep": {
+      "type": "object",
+      "properties": {
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema7"
+          }
+        },
+        "rankReversals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "between": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "beforeLeader": {
+                "type": "string"
+              },
+              "afterLeader": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "scenarioId",
+              "path",
+              "between",
+              "beforeLeader",
+              "afterLeader"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "breakpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema7"
+          }
+        },
+        "localElasticities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "conditional_probability",
+                  "raw_value"
+                ]
+              },
+              "between": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "slope": {
+                "type": "number"
+              },
+              "elasticity": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "scenarioId",
+              "path",
+              "candidateId",
+              "metric",
+              "between",
+              "slope"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "pairwiseInteractions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string"
+              },
+              "paths": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "conditional_probability",
+                  "raw_value"
+                ]
+              },
+              "cell": {
+                "type": "object",
+                "properties": {
+                  "left": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "right": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "left",
+                  "right"
+                ],
+                "additionalProperties": false
+              },
+              "mixedDifference": {
+                "type": "number"
+              },
+              "mixedDifferencePerUnit": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "scenarioId",
+              "paths",
+              "candidateId",
+              "metric",
+              "cell",
+              "mixedDifference",
+              "mixedDifferencePerUnit"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "points",
+        "rankReversals",
+        "breakpoints",
+        "localElasticities",
+        "pairwiseInteractions"
+      ],
+      "additionalProperties": false
+    },
+    "simulation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scenarioId": {
+            "type": "string"
+          },
+          "samples": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "samplingMethod": {
+            "type": "string",
+            "enum": [
+              "latin_hypercube",
+              "pseudo_random"
+            ]
+          },
+          "rng": {
+            "type": "string",
+            "const": "mulberry32"
+          },
+          "stoppingRule": {
+            "type": "string",
+            "const": "fixed_sample_budget"
+          },
+          "confidenceLevel": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 0.9999
+          },
+          "confidenceMethod": {
+            "type": "string",
+            "const": "wilson_score"
+          },
+          "effectiveSampleSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "globalImportance": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "candidateId": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "string",
+                  "const": "raw_value"
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "method": {
+                  "type": "string",
+                  "const": "absolute_pearson_correlation"
+                },
+                "observations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "path",
+                "candidateId",
+                "metric",
+                "score",
+                "method",
+                "observations"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "convergence": {
+            "type": "object",
+            "properties": {
+              "firstHalfSamples": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "secondHalfSamples": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maximumFrequencyDelta": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "firstHalfSamples",
+              "secondHalfSamples",
+              "maximumFrequencyDelta"
+            ],
+            "additionalProperties": false
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "frequency": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "confidenceInterval": {
+                  "type": "object",
+                  "properties": {
+                    "low": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "high": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "low",
+                    "high"
+                  ],
+                  "additionalProperties": false
+                },
+                "observedSelections": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "rawMean": {
+                  "type": "number"
+                },
+                "eligibilityFrequency": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "timingQuantilesDays": {
+                  "type": "object",
+                  "properties": {
+                    "p10": {
+                      "type": "number"
+                    },
+                    "p50": {
+                      "type": "number"
+                    },
+                    "p90": {
+                      "type": "number"
+                    },
+                    "p95": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "p10",
+                    "p50",
+                    "p90",
+                    "p95"
+                  ],
+                  "additionalProperties": false
+                },
+                "timingQuantileIntervals": {
+                  "type": "object",
+                  "properties": {
+                    "p10": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p50": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p90": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "p95": {
+                      "type": "object",
+                      "properties": {
+                        "low": {
+                          "type": "number"
+                        },
+                        "high": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "low",
+                        "high"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "p10",
+                    "p50",
+                    "p90",
+                    "p95"
+                  ],
+                  "additionalProperties": false
+                },
+                "timingSampleCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingEvaluations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingReservoirCapacity": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "timingMethod": {
+                  "type": "string",
+                  "const": "sampled_discrete_daily_hazard"
+                },
+                "timingConfidenceMethod": {
+                  "type": "string",
+                  "const": "normal_order_statistic"
+                }
+              },
+              "required": [
+                "id",
+                "eligibilityFrequency"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "scenarioId",
+          "samples",
+          "seed",
+          "samplingMethod",
+          "rng",
+          "stoppingRule",
+          "confidenceLevel",
+          "confidenceMethod",
+          "effectiveSampleSize",
+          "globalImportance",
+          "convergence",
+          "candidates"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "sequence": {
+      "type": "object",
+      "properties": {
+        "scenarioId": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "exact_state_distribution",
+            "bounded_beam",
+            "seeded_monte_carlo"
+          ]
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "samples": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "rng": {
+          "type": "string",
+          "const": "mulberry32"
+        },
+        "stoppingRule": {
+          "type": "string",
+          "const": "fixed_sample_budget"
+        },
+        "confidenceLevel": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 0.9999
+        },
+        "terminalProbability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "stateCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "omittedProbability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "nextSelectionProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expectedSelections": {
+                "type": "number",
+                "minimum": 0
+              },
+              "everSelectedProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "starvationProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expectedFirstSelectionDay": {
+                "type": "number",
+                "minimum": 0
+              },
+              "countDistribution": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "probability": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "count",
+                    "probability"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "nextSelectionProbability",
+              "expectedSelections",
+              "everSelectedProbability",
+              "starvationProbability",
+              "countDistribution"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "nextSelectionProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expectedSelections": {
+                "type": "number",
+                "minimum": 0
+              },
+              "everSelectedProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "starvationProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expectedFirstSelectionDay": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "nextSelectionProbability",
+              "expectedSelections",
+              "everSelectedProbability",
+              "starvationProbability"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "topPaths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "candidateIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "probability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "terminal": {
+                "type": "boolean"
+              },
+              "endDay": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "candidateIds",
+              "probability",
+              "terminal",
+              "endDay"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "day": {
+                "type": "number",
+                "minimum": 0
+              },
+              "leadingCandidate": {
+                "type": "string"
+              },
+              "terminalProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "step",
+              "day",
+              "terminalProbability"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "scenarioId",
+        "method",
+        "steps",
+        "terminalProbability",
+        "stateCount",
+        "candidates",
+        "categories",
+        "topPaths",
+        "timeline"
+      ],
+      "additionalProperties": false
+    },
+    "comparison": {
+      "type": "object",
+      "properties": {
+        "beforeAnalysisId": {
+          "type": "string"
+        },
+        "afterAnalysisId": {
+          "type": "string"
+        },
+        "scenarioChanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scenarioId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              },
+              "rawDelta": {
+                "type": "number"
+              },
+              "probabilityDelta": {
+                "type": "number"
+              },
+              "timingDeltaDays": {
+                "type": "number"
+              },
+              "cumulativeChanceDelta": {
+                "type": "number"
+              },
+              "rankDelta": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "eligibilityChange": {
+                "type": "object",
+                "properties": {
+                  "before": {
+                    "type": "string",
+                    "enum": [
+                      "true",
+                      "false",
+                      "unresolved"
+                    ]
+                  },
+                  "after": {
+                    "type": "string",
+                    "enum": [
+                      "true",
+                      "false",
+                      "unresolved"
+                    ]
+                  }
+                },
+                "required": [
+                  "before",
+                  "after"
+                ],
+                "additionalProperties": false
+              },
+              "unresolvedDelta": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "attribution": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "changedAstPaths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "change": {
+                      "type": "string",
+                      "enum": [
+                        "added",
+                        "removed"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "astPath": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "change",
+                    "path",
+                    "astPath"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "scenarioId",
+              "candidateId",
+              "unresolvedDelta",
+              "attribution",
+              "changedAstPaths"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "assumptionsChanged": {
+          "type": "boolean"
+        },
+        "adapterChanged": {
+          "type": "boolean"
+        },
+        "regressions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "scenarioId": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "beforeAnalysisId",
+        "afterAnalysisId",
+        "scenarioChanges",
+        "assumptionsChanged",
+        "adapterChanged",
+        "regressions"
+      ],
+      "additionalProperties": false
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "maxLength": 4096,
+            "format": "uri"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "uri",
+          "name",
+          "mimeType"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "status",
+    "operation",
+    "analysisId",
+    "metadata",
+    "adapter",
+    "scenarios",
+    "diagnostics",
+    "unresolved",
+    "resources"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "enum": [
+        "event_mean_time_to_happen",
+        "event_option_ai_chance",
+        "decision_ai_will_do",
+        "mission_ai_will_do",
+        "national_focus_ai_will_do",
+        "technology_ai_will_do",
+        "doctrine_ai_will_do",
+        "direct_random",
+        "random_list",
+        "ai_strategy_factor",
+        "custom_weighted_pool"
+      ]
+    },
+    "__schema1": {
+      "type": "string",
+      "enum": [
+        "conditional_probability",
+        "raw_value",
+        "cumulative_chance",
+        "effective_mtth_days"
+      ]
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "numerator": {
+          "type": "string",
+          "pattern": "^-?\\d+$"
+        },
+        "denominator": {
+          "type": "string",
+          "pattern": "^\\d+$"
+        },
+        "decimal": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator",
+        "decimal",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "rootKind": {
+          "type": "string"
+        },
+        "loadOrder": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "sourceHash": {
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "astPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "helperChain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "rootKind",
+        "loadOrder",
+        "sourceHash"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "start": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "end": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "path",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "additionalProperties": false
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "candidateId": {
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "details": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "__schema7": {
+      "type": "object",
+      "properties": {
+        "scenarioId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "rawValue": {
+                "type": "number"
+              },
+              "conditionalProbability": {
+                "type": "number"
+              },
+              "rank": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "scenarioId",
+        "path",
+        "value",
+        "candidates"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "1.0",
+  "id": "adaptive_event_pool_example",
+  "description": "Declared pool with recovery, repeat caps, category growth, reset, removal, and timer compression.",
+  "selection": {
+    "mode": "categorical_weighted",
+    "cadence": "timer",
+    "timerMinDays": 45,
+    "timerMaxDays": 60,
+    "rounding": "nearest"
+  },
+  "state": {
+    "minor_events_since_major": 0,
+    "major_gain": 150,
+    "timer_compression": 0
+  },
+  "candidates": [
+    {
+      "id": "minor_fire_once",
+      "category": "fire_once",
+      "weight": 1000,
+      "cap": 1000,
+      "eligibleWhen": "not selected.minor_fire_once",
+      "oneTime": true
+    },
+    {
+      "id": "minor_repeatable",
+      "category": "repeatable",
+      "weight": 1000,
+      "cap": 1000,
+      "eligibleWhen": "true",
+      "cooldownDays": 0
+    },
+    {
+      "id": "major_crisis",
+      "category": "major",
+      "weight": 0,
+      "cap": 1000,
+      "eligibleWhen": "not selected.major_crisis",
+      "oneTime": true
+    }
+  ],
+  "recovery": [
+    {
+      "cadence": "monthly",
+      "target": "candidate.minor_repeatable.weight",
+      "amount": 20,
+      "cap": "candidate.minor_repeatable.cap"
+    }
+  ],
+  "transitions": [
+    {
+      "when": "selected.category != major",
+      "actions": [
+        { "operation": "add", "target": "state.minor_events_since_major", "value": 1 },
+        {
+          "operation": "add",
+          "target": "candidate.major_crisis.weight",
+          "value": "state.major_gain"
+        },
+        {
+          "operation": "compress_timer",
+          "target": "selection.timer_max_days",
+          "value": "floor(state.minor_events_since_major / 3)"
+        }
+      ]
+    },
+    {
+      "when": "selected.id == minor_repeatable",
+      "actions": [
+        { "operation": "multiply", "target": "candidate.minor_repeatable.cap", "value": 0.5 },
+        {
+          "operation": "cap",
+          "target": "candidate.minor_repeatable.weight",
+          "value": "candidate.minor_repeatable.cap"
+        }
+      ]
+    },
+    {
+      "when": "selected.category == major",
+      "actions": [
+        { "operation": "set", "target": "state.minor_events_since_major", "value": 0 },
+        { "operation": "reset_category", "target": "category.major", "value": 0 },
+        { "operation": "reset_timer", "target": "selection", "value": null }
+      ]
+    },
+    {
+      "when": "selected.one_time == true",
+      "actions": [{ "operation": "remove", "target": "selected.candidate", "value": null }]
+    }
+  ]
+}

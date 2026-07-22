@@ -1,5 +1,7 @@
 # ADR 0014: Read-only Technology Tree Viewer
 
+> This ADR records the 2.2.0 surface. Its tool-count and discovery-budget limits are superseded by [ADR 0015](0015-ai-mtth-scenario-analyzer.md).
+
 - Status: accepted
 - Date: 2026-07-22
 

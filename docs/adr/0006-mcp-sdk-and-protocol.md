@@ -1,12 +1,14 @@
 # ADR 0006: Stable MCP 2025-11-25 and SDK 1.29.0
 
+> Tool-count, discovery-budget, and prompt decisions in this ADR are superseded by [ADR 0015](0015-ai-mtth-scenario-analyzer.md).
+
 - Status: accepted
 - Date: 2026-07-10
-- Last reviewed: 2026-07-13
+- Last reviewed: 2026-07-22
 
 ## Decision
 
-Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register the sixteen strict domain tools and the content-addressed artifact resource template through the official SDK. Local tool calls resolve the mod containing the MCP working directory. Do not register prompts.
+Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register strict domain tools, the optional weighted-logic prompt, and the content-addressed artifact resource template through the official SDK. Local tool calls resolve the mod containing the MCP working directory. Domain ADRs own the current tool and prompt inventory.
 
 ## Rationale
 

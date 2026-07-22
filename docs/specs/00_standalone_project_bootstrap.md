@@ -8,17 +8,17 @@ Create a new standalone Git project at:
 C:\Users\klimp\Documents\Projects\hoi4-agent-tools
 ```
 
-This is the source repository for the MCP server and all shared tool logic. It must not be created inside Chaos Redux, another HOI4 mod, a mod `tools` folder, or the Hearts of Iron IV installation.
+This is the source repository for the MCP server and all shared tool logic. It must not be created inside an HOI4 mod, a mod `tools` folder, or the Hearts of Iron IV installation.
 
 Run `git init` in this folder and treat it as an independent public project with its own history, releases, issues, documentation, tests, and package publishing workflow.
 
 ## Product boundary
 
-The product is an MCP server built for coding agents. The focus, GUI, map, read-only event-chain, and read-only technology-tree capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
+The product is an MCP server built for coding agents. Focus, GUI, map, event-chain, technology-tree, and AI and MTTH analysis capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
 
-The public surface has sixteen tools: four focus tools plus three tools in each of the GUI, map, event, and technology families. Local calls omit workspace selection and resolve the mod containing the MCP working directory.
+The public surface has 23 tools: four focus tools, three tools in each of the GUI, map, event, and technology families, and seven probability-analysis tools. One optional prompt scopes a weighted-logic analysis without replacing the agent's normal workflow. Local calls resolve the mod containing the MCP working directory.
 
-The product does not provide an interactive focus editor, GUI editor, map editor, event editor, technology editor, dashboard, or full command line application. An agent can start the MCP from inside a mod and use it immediately; optional configuration adds game references or explicit multi-mod deployments. Canonical mod workspaces are writable; game, dependency, fixture, artifact, cache, and unrelated roots are not source-write targets. Supported focus, GUI, and map rewrites complete through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call. Event-chain and technology-tree tools inspect, render, and compare source without editing it.
+The product does not provide an interactive focus editor, GUI editor, map editor, event editor, technology editor, probability wizard, dashboard, or full command line application. An agent can start the MCP from inside a mod and use it immediately; optional configuration adds game references or explicit multi-mod deployments. Canonical mod workspaces are writable; game, dependency, fixture, artifact, cache, and unrelated roots are not source-write targets. Supported focus, GUI, and map rewrites complete through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call. Event-chain, technology-tree, and probability tools analyze source without editing it.
 
 The repository may contain process entry points, maintenance scripts, test harnesses, and package diagnostics. These are infrastructure for launching and validating the MCP server. They are not separate interactive versions of the tools.
 
@@ -60,7 +60,7 @@ The server operates on external workspaces. A local startup inside a mod creates
 - dependency mod directories
 - a generated artifact directory
 
-The first development workspace may be Chaos Redux, but no Chaos Redux code, paths, naming rules, skills, or documentation structure may be hardwired into the generic product.
+External mods may be development workspaces, but no mod-specific code, paths, naming rules, workflow files, or documentation structure may be hardwired into the generic product.
 
 Every registered mod workspace keeps its own source files. The MCP server reads those files through allowlisted paths and edits only an operator-authorized mod workspace. An autonomous rewrite still uses the shared internal validation, durable journal, exact-before-byte, stale-check, locking, post-validation, and automatic-recovery services. It never copies a mod into the MCP project.
 
@@ -80,4 +80,4 @@ Create and maintain:
 - contribution guidance
 - MCP Registry metadata
 
-Do not copy Chaos Redux's `AGENTS.md` or skills as the new project's operating rules. Use the reviewed project files as design references, then write clean standalone instructions suited to a public agent tool server.
+Do not copy an external mod's workflow instructions as this project's operating rules. Use reviewed project files only as design references, then write standalone instructions suited to a public agent tool server.

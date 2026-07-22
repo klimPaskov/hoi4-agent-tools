@@ -1,0 +1,5 @@
+synthetic_probability = {
+	schema = { any_key = yes data = fixed_point }
+	mtth_war_factor = 0.5
+	strategy_bonus = 25
+}

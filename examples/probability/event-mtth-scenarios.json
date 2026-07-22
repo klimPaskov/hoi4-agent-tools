@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1.0",
+  "id": "event_mtth_timeline_examples",
+  "surfaceHint": "event_mean_time_to_happen",
+  "scenarios": [
+    {
+      "id": "contained_outbreak",
+      "label": "Contained outbreak with later containment failure",
+      "actor": "EXM",
+      "date": "1940.1.1",
+      "state": {
+        "variable.outbreak_pressure": 25,
+        "variable.chaos": 350,
+        "has_war": false
+      },
+      "flags": ["outbreak_active", "containment_program_active"],
+      "schedule": [
+        {
+          "atDay": 60,
+          "set": { "variable.outbreak_pressure": 45 }
+        },
+        {
+          "atDay": 120,
+          "set": { "variable.chaos": 650 },
+          "clearFlags": ["containment_program_active"]
+        }
+      ]
+    },
+    {
+      "id": "uncertain_pressure",
+      "label": "Pressure and war state sampled",
+      "actor": "EXM",
+      "date": "1940.1.1",
+      "state": { "variable.chaos": 500 },
+      "flags": ["outbreak_active"],
+      "uncertainInputs": [
+        {
+          "path": "variable.outbreak_pressure",
+          "distribution": {
+            "kind": "triangular",
+            "min": 20,
+            "mode": 50,
+            "max": 90
+          }
+        },
+        {
+          "path": "has_war",
+          "distribution": {
+            "kind": "categorical",
+            "values": [true, false],
+            "probabilities": [0.35, 0.65]
+          }
+        }
+      ]
+    }
+  ]
+}

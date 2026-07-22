@@ -36,6 +36,13 @@ const publicToolNames = [
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
+  'hoi4.probability_inspect',
+  'hoi4.probability_evaluate',
+  'hoi4.probability_sweep',
+  'hoi4.probability_simulate',
+  'hoi4.probability_sequence',
+  'hoi4.probability_compare',
+  'hoi4.probability_render',
 ] as const;
 const focusFixture = `focus_tree = {
 \tid = public_install_focus
@@ -167,6 +174,7 @@ try {
           result?: {
             capabilities?: { prompts?: unknown; resources?: unknown };
             serverInfo?: { version?: string };
+            prompts?: Array<{ name?: string }>;
             tools?: Array<{ name?: string }>;
           };
         };
@@ -177,8 +185,8 @@ try {
             return;
           }
           if (
-            message.result.capabilities?.prompts !== undefined ||
-            message.result.capabilities?.resources === undefined
+            message.result.capabilities?.prompts === undefined ||
+            message.result.capabilities.resources === undefined
           ) {
             clearTimeout(timeout);
             reject(new Error('Published stdio server reported the wrong discovery capabilities'));
@@ -195,7 +203,19 @@ try {
             message.result?.tools?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
           if (!sameNames(names, publicToolNames)) {
             clearTimeout(timeout);
-            reject(new Error(`Published stdio tools do not match the sixteen-tool public surface`));
+            reject(new Error(`Published stdio tools do not match the 23-tool public surface`));
+            return;
+          }
+          child.stdin.write(
+            `${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'prompts/list', params: {} })}\n`,
+          );
+        } else if (message.id === 3) {
+          const names =
+            message.result?.prompts?.flatMap(({ name }) => (name === undefined ? [] : [name])) ??
+            [];
+          if (!sameNames(names, ['hoi4.probability_analysis'])) {
+            clearTimeout(timeout);
+            reject(new Error('Published stdio prompts do not match the one-prompt public surface'));
             return;
           }
           validated = true;

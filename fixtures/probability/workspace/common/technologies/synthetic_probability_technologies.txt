@@ -1,0 +1,422 @@
+technologies = {
+synthetic_tech_00_0 = {
+	start_year = 1936
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 0 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_00_1 = {
+	start_year = 1936
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 0 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_00_2 = {
+	start_year = 1936
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 0 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_01_0 = {
+	start_year = 1937
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 1 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_01_1 = {
+	start_year = 1937
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 1 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_01_2 = {
+	start_year = 1937
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 1 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_02_0 = {
+	start_year = 1938
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 2 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_02_1 = {
+	start_year = 1938
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 2 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_02_2 = {
+	start_year = 1938
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 2 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_03_0 = {
+	start_year = 1939
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 3 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_03_1 = {
+	start_year = 1939
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 3 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_03_2 = {
+	start_year = 1939
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 3 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_04_0 = {
+	start_year = 1940
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 4 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_04_1 = {
+	start_year = 1940
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 4 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_04_2 = {
+	start_year = 1940
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 4 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_05_0 = {
+	start_year = 1941
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 5 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_05_1 = {
+	start_year = 1941
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 5 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_05_2 = {
+	start_year = 1941
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 5 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_06_0 = {
+	start_year = 1942
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 6 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_06_1 = {
+	start_year = 1942
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 6 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_06_2 = {
+	start_year = 1942
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 6 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_07_0 = {
+	start_year = 1943
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 7 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_07_1 = {
+	start_year = 1943
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 7 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_07_2 = {
+	start_year = 1943
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 7 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_08_0 = {
+	start_year = 1944
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 8 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_08_1 = {
+	start_year = 1944
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 8 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_08_2 = {
+	start_year = 1944
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 8 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_09_0 = {
+	start_year = 1945
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 9 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_09_1 = {
+	start_year = 1945
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 9 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_09_2 = {
+	start_year = 1945
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 9 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_10_0 = {
+	start_year = 1946
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 10 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_10_1 = {
+	start_year = 1946
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 10 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_10_2 = {
+	start_year = 1946
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 10 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_11_0 = {
+	start_year = 1947
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 11 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_11_1 = {
+	start_year = 1947
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 11 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_11_2 = {
+	start_year = 1947
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 11 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_12_0 = {
+	start_year = 1948
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 12 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_12_1 = {
+	start_year = 1948
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 12 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_12_2 = {
+	start_year = 1948
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 12 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_13_0 = {
+	start_year = 1949
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 13 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_13_1 = {
+	start_year = 1949
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 13 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_13_2 = {
+	start_year = 1949
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 13 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_14_0 = {
+	start_year = 1950
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 14 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_14_1 = {
+	start_year = 1950
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 14 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_14_2 = {
+	start_year = 1950
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 14 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_15_0 = {
+	start_year = 1951
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 15 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_15_1 = {
+	start_year = 1951
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 15 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_15_2 = {
+	start_year = 1951
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 15 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_16_0 = {
+	start_year = 1952
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 16 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_16_1 = {
+	start_year = 1952
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 16 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_16_2 = {
+	start_year = 1952
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 16 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_17_0 = {
+	start_year = 1953
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 17 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_17_1 = {
+	start_year = 1953
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 17 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_17_2 = {
+	start_year = 1953
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 17 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_18_0 = {
+	start_year = 1954
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 18 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_18_1 = {
+	start_year = 1954
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 18 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_18_2 = {
+	start_year = 1954
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 18 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_19_0 = {
+	start_year = 1955
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 0 y = 19 } }
+	ai_will_do = { factor = 1 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_19_1 = {
+	start_year = 1955
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 1 y = 19 } }
+	ai_will_do = { factor = 2 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+synthetic_tech_19_2 = {
+	start_year = 1955
+	research_cost = 1
+	folder = { name = synthetic_industry position = { x = 2 y = 19 } }
+	ai_will_do = { factor = 3 modifier = { factor = 2 has_war = yes } }
+	production_speed_buildings_factor = 0.01
+}
+}

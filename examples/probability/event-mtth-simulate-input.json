@@ -1,0 +1,37 @@
+{
+  "adapter": "event_mean_time_to_happen",
+  "source": { "identifier": "example_outbreak.42" },
+  "scenarioSet": {
+    "schemaVersion": "1.0",
+    "id": "outbreak_simulation",
+    "surfaceHint": "event_mean_time_to_happen",
+    "scenarios": [
+      {
+        "id": "uncertain_pressure",
+        "actor": "EXM",
+        "date": "1940.1.1",
+        "state": { "variable.chaos": 500 },
+        "flags": ["outbreak_active"],
+        "uncertainInputs": [
+          {
+            "path": "variable.outbreak_pressure",
+            "distribution": { "kind": "triangular", "min": 20, "mode": 50, "max": 90 }
+          },
+          {
+            "path": "has_war",
+            "distribution": {
+              "kind": "categorical",
+              "values": [true, false],
+              "probabilities": [0.35, 0.65]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "horizonDays": 365,
+  "samples": 100000,
+  "seed": 19400101,
+  "confidenceLevel": 0.95,
+  "outputs": ["json", "timing", "waterfall", "unresolved"]
+}

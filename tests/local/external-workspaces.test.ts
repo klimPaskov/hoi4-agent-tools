@@ -28,6 +28,8 @@ import {
   explainTechnology,
   lintTechnologyGraph,
 } from '../../src/hoi4_agent_tools/technology/index.js';
+import { ProbabilityAnalyzer } from '../../src/hoi4_agent_tools/probability/service.js';
+import type { ProbabilityAdapterId } from '../../src/hoi4_agent_tools/probability/model.js';
 
 const gameRoot = process.env.HOI4_GAME_ROOT;
 const modRoot = process.env.HOI4_EXTERNAL_MOD_ROOT;
@@ -215,7 +217,11 @@ local('local installed-game and external-mod integration', () => {
     const core = await engine();
     const viewer = new EventChainViewer(core);
     const graph = await viewer.scan('external', { refresh: true });
-    const sourceHashesBefore = { ...graph.sourceHashes };
+    // External mods may be edited by another agent while this opt-in suite runs; the
+    // installed game is the immutable source set for the end-to-end no-write assertion.
+    const gameSourceHashesBefore = Object.fromEntries(
+      Object.entries(graph.sourceHashes).filter(([sourcePath]) => sourcePath.startsWith('game:')),
+    );
     const families = (rootPrefix: 'game:' | 'mod:') => {
       const grouped = new Map<string, string[]>();
       for (const node of graph.nodes) {
@@ -294,7 +300,11 @@ local('local installed-game and external-mod integration', () => {
     }
 
     const after = await viewer.scan('external', { refresh: true });
-    expect(after.sourceHashes).toEqual(sourceHashesBefore);
+    expect(
+      Object.fromEntries(
+        Object.entries(after.sourceHashes).filter(([sourcePath]) => sourcePath.startsWith('game:')),
+      ),
+    ).toEqual(gameSourceHashesBefore);
   }, 600_000);
 
   it('analyzes installed vanilla and external-mod technology and doctrine systems read-only', async () => {
@@ -351,5 +361,60 @@ local('local installed-game and external-mod integration', () => {
         ),
       ),
     ).toEqual(relevantSourceHashes);
+  }, 600_000);
+
+  it('discovers a current installed-game example for every source-backed probability adapter', async () => {
+    const core = await engine();
+    const analyzer = new ProbabilityAnalyzer(core);
+    const examples: Array<{
+      adapter: ProbabilityAdapterId;
+      path: string;
+      line?: number;
+    }> = [
+      { adapter: 'event_mean_time_to_happen', path: 'events/Yugoslavia.txt', line: 49 },
+      { adapter: 'event_option_ai_chance', path: 'events/AAT_Generic_Events.txt', line: 44 },
+      { adapter: 'decision_ai_will_do', path: 'common/decisions/_generic_decisions.txt', line: 56 },
+      { adapter: 'mission_ai_will_do', path: 'common/decisions/AST.txt' },
+      {
+        adapter: 'national_focus_ai_will_do',
+        path: 'common/national_focus/austria.txt',
+        line: 122,
+      },
+      { adapter: 'technology_ai_will_do', path: 'common/technologies/industry.txt', line: 30 },
+      {
+        adapter: 'doctrine_ai_will_do',
+        path: 'common/doctrines/grand_doctrines/land_grand_doctrines.txt',
+        line: 14,
+      },
+      { adapter: 'direct_random', path: 'events/BBA_Switzerland.txt', line: 1197 },
+      { adapter: 'random_list', path: 'events/AAT_Sweden.txt', line: 1760 },
+      { adapter: 'ai_strategy_factor', path: 'common/ai_strategy/ENG.txt', line: 3206 },
+    ];
+
+    for (const example of examples) {
+      let inspected: Awaited<ReturnType<ProbabilityAnalyzer['inspect']>>;
+      try {
+        inspected = await analyzer.inspect({ workspaceId: 'external' }, example.adapter, {
+          path: example.path,
+          ...(example.line === undefined ? {} : { line: example.line }),
+        });
+      } catch (error) {
+        throw new Error(
+          `${example.adapter}: ${example.path}${example.line === undefined ? '' : `:${example.line}`} failed local discovery`,
+          { cause: error },
+        );
+      }
+      expect(
+        inspected.surface?.candidateCount,
+        `${example.adapter}: ${example.path}`,
+      ).toBeGreaterThan(0);
+      expect(inspected.surface?.sourceHash).toMatch(/^[a-f0-9]{64}$/u);
+      expect(inspected.surface?.adapter.gameVersion).toContain('1.19.2.0');
+      expect(inspected.surface?.gameVersionVerification).toMatchObject({
+        status: 'workspace_verified',
+        observedRawVersion: '1.19.2.0',
+        observedChecksum: 'd245',
+      });
+    }
   }, 600_000);
 });

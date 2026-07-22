@@ -1,0 +1,9 @@
+has_synthetic_helper = {
+	OR = {
+		has_war = yes
+		check_variable = { var = pressure value = 60 compare = greater_than_or_equals }
+	}
+}
+
+synthetic_recursive_a = { synthetic_recursive_b = yes }
+synthetic_recursive_b = { synthetic_recursive_a = yes }

@@ -1,0 +1,49 @@
+synthetic_doctrine_0 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 1 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_1 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 2 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_2 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 3 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_3 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 4 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_4 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 5 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_5 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 6 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_6 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 7 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_7 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 8 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_8 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 9 modifier = { factor = 0.5 has_war = no } }
+}
+
+synthetic_doctrine_9 = {
+	folder = synthetic_doctrine_folder
+	ai_will_do = { factor = 10 modifier = { factor = 0.5 has_war = no } }
+}

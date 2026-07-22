@@ -23,6 +23,13 @@ const publicToolNames = [
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
+  'hoi4.probability_inspect',
+  'hoi4.probability_evaluate',
+  'hoi4.probability_sweep',
+  'hoi4.probability_simulate',
+  'hoi4.probability_sequence',
+  'hoi4.probability_compare',
+  'hoi4.probability_render',
 ] as const;
 
 interface ObservedRequest {
@@ -283,11 +290,12 @@ export async function qualifyInstalledHttpBinary(
       'Installed HTTP resource templates',
     );
 
-    const promptNames: string[] = [];
+    const promptNames = (await client.listPrompts()).prompts.map(({ name }) => name);
     requireCondition(
-      client.getServerCapabilities()?.prompts === undefined,
-      'Installed HTTP server unexpectedly advertised prompts',
+      client.getServerCapabilities()?.prompts !== undefined,
+      'Installed HTTP server did not advertise the probability-analysis prompt',
     );
+    requireExactNames(promptNames, ['hoi4.probability_analysis'], 'Installed HTTP prompts');
 
     const progress: number[] = [];
     const inspection = await client.callTool(
@@ -377,6 +385,27 @@ export async function qualifyInstalledHttpBinary(
     requireCondition(
       JSON.stringify(eventProgress) === JSON.stringify([0, 2, 3]),
       `Installed HTTP event-chain progress was unexpected: ${eventProgress.join(', ')}`,
+    );
+
+    const probabilityInspection = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        workspaceId: options.workspaceId,
+        adapter: 'national_focus_ai_will_do',
+        source: { identifier: 'http_root' },
+        candidatePool: ['http_root'],
+      },
+    });
+    requireCondition(
+      probabilityInspection.isError !== true,
+      'Installed HTTP probability inspection returned an error',
+    );
+    const probabilityStructured = probabilityInspection.structuredContent as
+      { status?: unknown; code?: unknown } | undefined;
+    requireCondition(
+      probabilityStructured?.status === 'ok' &&
+        probabilityStructured.code === 'PROBABILITY_SOURCE_INSPECTED',
+      'Installed HTTP probability inspection returned an invalid structured result',
     );
 
     const cancellation = new AbortController();

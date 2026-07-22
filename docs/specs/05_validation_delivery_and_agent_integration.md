@@ -92,7 +92,7 @@ The server is designed for MCP-compatible coding agents. Provide:
 - clear progress and cancellation behavior
 - one-call rewrite patterns that rely on configured mod roots and principal grants rather than a caller-managed approval transaction
 
-Do not require Chaos Redux skills, subagents, prompts, rules, or documentation structures. The standalone repository must not depend on another repository's `.agents` folder.
+Do not require host-repository skills, agents, prompts, rules, or documentation structures. The standalone repository must not depend on another repository's workflow files.
 
 Operators may install the package, configure explicit workspaces or mod-discovery roots at startup, and define client permission policy. Canonical mod workspaces support one-call domain rewrites; non-mod source workspaces remain read-only. Remote calls still require authentication, transport write scope, and an explicit principal-to-workspace grant. `allowDiscoveredMods` grants only discovered mod IDs and never unrelated explicit workspaces. The product does not expose runtime workspace registration, a directly operated focus editor, GUI editor, map editor, event editor, or full tool CLI.
 
@@ -101,11 +101,11 @@ Operators may install the package, configure explicit workspaces or mod-discover
 The goal is complete only when:
 
 - the standalone repository exists at the required path and has its own Git history
-- all five modules are callable through the public MCP server
+- all six modules are callable through the public MCP server
 - local stdio and secured Streamable HTTP transports work
 - the server is installable from a public package and has valid `server.json` Registry metadata
-- the exact sixteen MCP tools, one artifact resource template, annotations, progress, cancellation, security gates, automatic current-mod resolution, and artifact links pass acceptance tests
-- all five modules use the shared parser, resolver, index, diagnostics, and artifact system; the three writable modules also use the shared transaction system
+- the exact 23 MCP tools, one optional probability-analysis prompt, one artifact resource template, annotations, progress, cancellation, security gates, automatic current-mod resolution, and artifact links pass acceptance tests
+- all six modules use the shared parser, resolver, index, diagnostics, and artifact system; the three writable modules also use the shared transaction system
 - each focus, GUI, and map source mutation completes through one authorized domain rewrite call, returns source/visual evidence, and restores exact original bytes automatically on failure
 - large focus-tree rendering and linting pass the acceptance fixture
 - GUI parsing, rendering, state galleries, fidelity reports, and visual validation pass the acceptance fixture

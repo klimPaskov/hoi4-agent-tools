@@ -27,6 +27,13 @@ const publicToolNames = [
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
+  'hoi4.probability_inspect',
+  'hoi4.probability_evaluate',
+  'hoi4.probability_sweep',
+  'hoi4.probability_simulate',
+  'hoi4.probability_sequence',
+  'hoi4.probability_compare',
+  'hoi4.probability_render',
 ] as const;
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
@@ -105,7 +112,7 @@ try {
   await Promise.all([
     writeFile(
       path.join(mod, 'common', 'national_focus', 'inspector.txt'),
-      'focus_tree = { id = inspector focus = { id = inspector_root x = 0 y = 0 cost = 10 } }\n',
+      'focus_tree = { id = inspector focus = { id = inspector_root x = 0 y = 0 cost = 10 ai_will_do = { factor = 2 modifier = { factor = 3 has_war = yes } } } }\n',
     ),
     writeFile(
       path.join(mod, 'common', 'on_actions', 'inspector.txt'),
@@ -178,14 +185,13 @@ try {
     throw new Error('Inspector returned fixed resources');
   }
 
-  const prompts = await runInspector('prompts/list');
-  if (prompts.code === 0) {
-    const listed = successfulJson(prompts, 'Inspector prompts/list') as { prompts?: unknown[] };
-    if ((listed.prompts?.length ?? 0) !== 0) throw new Error('Inspector returned prompts');
-  } else if (
-    !/does not support prompts|method not found|not supported|-32601/iu.test(prompts.stderr)
-  ) {
-    throw new Error(`Inspector prompt discovery failed unexpectedly\n${prompts.stderr}`);
+  const prompts = successfulJson(await runInspector('prompts/list'), 'Inspector prompts/list') as {
+    prompts?: Array<{ name?: string }>;
+  };
+  const promptNames =
+    prompts.prompts?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
+  if (!exactNames(promptNames, ['hoi4.probability_analysis'])) {
+    throw new Error(`Inspector returned the wrong prompts: ${promptNames.join(', ')}`);
   }
 
   const inspected = successfulToolResult(
@@ -311,8 +317,27 @@ try {
     throw new Error(`Inspector technology comparison returned ${String(technologyCompared.code)}`);
   }
 
+  const probabilityInspected = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.probability_inspect',
+      '--tool-arg',
+      'adapter=national_focus_ai_will_do',
+      '--tool-arg',
+      'source={"identifier":"inspector_root"}',
+      '--tool-arg',
+      'candidatePool=["inspector_root"]',
+    ]),
+    'Inspector hoi4.probability_inspect',
+  );
+  if (probabilityInspected.code !== 'PROBABILITY_SOURCE_INSPECTED') {
+    throw new Error(
+      `Inspector probability inspection returned ${String(probabilityInspected.code)}`,
+    );
+  }
+
   process.stderr.write(
-    'Official MCP Inspector verified sixteen-tool discovery, artifact resources, and event and technology workflows.\n',
+    'Official MCP Inspector verified 23 tools, one prompt, artifact resources, and event, technology, and probability workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

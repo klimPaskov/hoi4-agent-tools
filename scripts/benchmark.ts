@@ -31,6 +31,12 @@ import {
   explainEventPath,
   traceSelectedEvents,
 } from '../src/hoi4_agent_tools/event/index.js';
+import type {
+  CustomWeightedPoolManifest,
+  ProbabilityScenarioSet,
+} from '../src/hoi4_agent_tools/probability/model.js';
+import { ProbabilityAnalyzer } from '../src/hoi4_agent_tools/probability/service.js';
+import { DeterministicRandom } from '../src/hoi4_agent_tools/probability/simulation.js';
 
 interface FocusManifest {
   focusCount: number;
@@ -85,6 +91,7 @@ const focusFixtureRoot = path.join(repositoryRoot, 'fixtures', 'focus');
 const guiFixtureRoot = path.join(repositoryRoot, 'fixtures', 'gui');
 const mapFixtureRoot = path.join(repositoryRoot, 'fixtures', 'map');
 const eventFixtureRoot = path.join(repositoryRoot, 'fixtures', 'event');
+const probabilityFixtureRoot = path.join(repositoryRoot, 'fixtures', 'probability');
 const oneMiB = 1024 * 1024;
 const iconDataUri =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -644,6 +651,109 @@ async function benchmarkCacheInvalidation(runtimeRoot: string): Promise<Record<s
   };
 }
 
+async function benchmarkProbability(runtimeRoot: string): Promise<Record<string, unknown>> {
+  const scenarios = await readJson<ProbabilityScenarioSet>(
+    path.join(probabilityFixtureRoot, 'scenarios.json'),
+  );
+  const { engine } = await createEngine(
+    'benchmark_probability',
+    'Project-owned probability benchmark fixture',
+    path.join(probabilityFixtureRoot, 'workspace'),
+    runtimeRoot,
+  );
+  const analyzer = new ProbabilityAnalyzer(engine);
+  const coldScan = await timed(() => engine.scan('benchmark_probability'));
+  const singleScenario: ProbabilityScenarioSet = {
+    schemaVersion: '1.0',
+    id: 'single',
+    scenarios: [scenarios.scenarios[0]!],
+  };
+  const singleRequest = {
+    workspaceId: 'benchmark_probability',
+    adapter: 'event_option_ai_chance' as const,
+    source: { identifier: 'synthetic_options.1' },
+    scenarioSet: singleScenario,
+    outputs: ['json' as const],
+  };
+  const single = await timed(() => analyzer.evaluate(singleRequest));
+  const cachedSingle = await timed(() => analyzer.evaluate(singleRequest));
+  assert.equal(cachedSingle.value.analysisId, single.value.analysisId);
+
+  const matrix = await timed(() => analyzer.evaluate({ ...singleRequest, scenarioSet: scenarios }));
+  assert.equal(matrix.value.scenarios.length, 250);
+  const resultResource = matrix.value.resources.find(
+    ({ mimeType }) => mimeType === 'application/json',
+  );
+  assert.ok(resultResource, 'probability matrix must publish authoritative JSON');
+  const workspace = engine.resolver.get('benchmark_probability');
+  const retrieval = await timed(() => engine.artifacts.read(workspace, resultResource.uri));
+
+  const draws = await timed(() => {
+    const random = new DeterministicRandom(73);
+    let selected = 0;
+    for (let index = 0; index < 1_000_000; index += 1) if (random.next() < 0.25) selected += 1;
+    return selected;
+  });
+  assert.ok(Math.abs(draws.value / 1_000_000 - 0.25) < 0.01);
+
+  const stateSpaces: Array<Record<string, unknown>> = [];
+  for (const candidateCount of [3, 12, 25]) {
+    const manifest: CustomWeightedPoolManifest = {
+      schemaVersion: '1.0',
+      id: `benchmark_pool_${candidateCount}`,
+      selection: { mode: 'categorical_weighted', cadence: 'daily' },
+      candidates: Array.from({ length: candidateCount }, (_, index) => ({
+        id: `candidate_${index}`,
+        weight: index + 1,
+      })),
+      transitions: [],
+    };
+    const run = await timed(() =>
+      analyzer.sequence({
+        workspaceId: 'benchmark_probability',
+        scenarioSet: {
+          schemaVersion: '1.0',
+          id: `benchmark_sequence_${candidateCount}`,
+          scenarios: [{ id: 'baseline', state: {} }],
+        },
+        customPoolManifest: manifest,
+        horizonDays: 5,
+        maxSteps: 5,
+        samples: 10_000,
+        seed: 718,
+        confidenceLevel: 0.95,
+        outputs: ['json'],
+      }),
+    );
+    stateSpaces.push({
+      candidateCount,
+      elapsedMs: run.elapsedMs,
+      method: run.value.sequence?.method,
+      stateCount: run.value.sequence?.stateCount,
+    });
+  }
+
+  return {
+    fixture: 'fixtures/probability',
+    counts: {
+      sourceFiles: coldScan.value.files.length,
+      scenarioRows: matrix.value.scenarios.length,
+      matrixCandidates: matrix.value.scenarios[0]?.candidates.length ?? 0,
+      sampledDraws: 1_000_000,
+    },
+    coldWorkspaceIndexMs: coldScan.elapsedMs,
+    singleBlockEvaluationMs: single.elapsedMs,
+    cachedSingleBlockEvaluationMs: cachedSingle.elapsedMs,
+    scenarioMatrixMs: matrix.elapsedMs,
+    sampledDrawsMs: draws.elapsedMs,
+    stateSpaces,
+    largeTraceRetrieval: {
+      elapsedMs: retrieval.elapsedMs,
+      bytes: retrieval.value.bytes.length,
+    },
+  };
+}
+
 async function main(): Promise<void> {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-tools-benchmark-'));
   try {
@@ -651,6 +761,7 @@ async function main(): Promise<void> {
     const gui = await benchmarkGui(path.join(temporaryRoot, 'gui'));
     const map = await benchmarkMap(path.join(temporaryRoot, 'map'));
     const event = await benchmarkEvent(path.join(temporaryRoot, 'event'));
+    const probability = await benchmarkProbability(path.join(temporaryRoot, 'probability'));
     const cacheInvalidation = await benchmarkCacheInvalidation(
       path.join(temporaryRoot, 'cache-invalidation'),
     );
@@ -688,6 +799,7 @@ async function main(): Promise<void> {
       gui,
       map,
       event,
+      probability,
       cacheInvalidation,
     };
     console.log(JSON.stringify(report, null, 2));

@@ -1,0 +1,141 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.3.0/schemas/probability-render-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "analysisId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "expectedScenarioHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "outputs": {
+      "minItems": 1,
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
+    "includeHtml": {
+      "default": false,
+      "type": "boolean"
+    },
+    "filter": {
+      "type": "object",
+      "properties": {
+        "scenarioIds": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "candidateIds": {
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema2"
+          }
+        },
+        "diagnosticSeverities": {
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "sourcePaths": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "metrics": {
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema5"
+          }
+        },
+        "offset": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "limit": {
+          "default": 10000,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "analysisId",
+    "outputs"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "enum": [
+        "json",
+        "ranking",
+        "matrix",
+        "waterfall",
+        "timing",
+        "sensitivity",
+        "threshold",
+        "sequence",
+        "comparison",
+        "unresolved"
+      ]
+    },
+    "__schema1": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema3": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "blocker"
+      ]
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "__schema5": {
+      "type": "string",
+      "enum": [
+        "conditional_probability",
+        "raw_value",
+        "cumulative_chance",
+        "effective_mtth_days"
+      ]
+    }
+  }
+}

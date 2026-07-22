@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build one reusable engine with five focused modules and the sixteen-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create unrelated services.
+Build one reusable engine with six focused modules and the 23-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create unrelated services.
 
 The implementation belongs under the standalone root defined in `00_standalone_project_bootstrap.md`.
 
@@ -30,7 +30,7 @@ Before implementation:
 - Inspect vanilla implementations.
 - Inspect approved reference mods only when vanilla and official documentation do not answer a concrete question.
 - Search available public libraries for parsers, graph layout, image processing, MCP support, and test utilities before building replacements.
-- Treat Chaos Redux sources as reference material only.
+- Treat external mod sources as reference material only.
 
 Write architecture decision records for the implementation language, parser, image libraries, graph-layout library, rendering layer, MCP SDK, storage, test strategy, packaging, and unsupported cases.
 

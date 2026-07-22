@@ -247,6 +247,13 @@ describe('Streamable HTTP deployment policy', () => {
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',
+      'hoi4.probability_inspect',
+      'hoi4.probability_evaluate',
+      'hoi4.probability_sweep',
+      'hoi4.probability_simulate',
+      'hoi4.probability_sequence',
+      'hoi4.probability_compare',
+      'hoi4.probability_render',
     ]) {
       expect(
         requiredScopesForMcpRequest(config, {

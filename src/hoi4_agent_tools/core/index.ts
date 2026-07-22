@@ -31,6 +31,10 @@ export type SymbolKind =
   | 'formable'
   | 'scripted_effect'
   | 'scripted_trigger'
+  | 'script_constant'
+  | 'mtth_variable'
+  | 'ai_strategy'
+  | 'ai_strategy_plan'
   | 'sprite'
   | 'texture'
   | 'gui_element'
@@ -187,6 +191,10 @@ function possibleSymbolKinds(
     if (sourcePath.startsWith('events/')) kinds.add('event');
     if (sourcePath.startsWith('common/scripted_effects/')) kinds.add('scripted_effect');
     if (sourcePath.startsWith('common/scripted_triggers/')) kinds.add('scripted_trigger');
+    if (sourcePath.startsWith('common/script_constants/')) kinds.add('script_constant');
+    if (sourcePath.startsWith('common/mtth/')) kinds.add('mtth_variable');
+    if (sourcePath.startsWith('common/ai_strategy/')) kinds.add('ai_strategy');
+    if (sourcePath.startsWith('common/ai_strategy_plans/')) kinds.add('ai_strategy_plan');
     if (sourcePath.startsWith('common/decisions/')) {
       kinds.add('decision');
       kinds.add('decision_category');
@@ -585,7 +593,25 @@ export class SymbolIndex {
     const sourcePath = file.relativePath.replaceAll('\\', '/').toLowerCase();
     for (const assignment of assignments(block)) {
       const key = assignment.key.value;
-      if (assignment.value.type !== 'block') continue;
+      if (assignment.value.type !== 'block') {
+        if (
+          sourcePath.startsWith('common/script_constants/') &&
+          key !== 'schema' &&
+          !ancestors.includes('schema')
+        ) {
+          const id = [...ancestors, key].join('.');
+          this.addSymbol({
+            kind: 'script_constant',
+            id,
+            path: file.displayPath,
+            rootKind: file.rootKind,
+            loadOrder: file.loadOrder,
+            location: nodeLocation(document, assignment, id),
+            metadata: { value: assignment.value.value },
+          });
+        }
+        continue;
+      }
       const child = assignment.value;
       const id = firstScalar(child, 'id')?.value;
       if (key === 'focus_tree' && id !== undefined) {
@@ -984,6 +1010,36 @@ export class SymbolIndex {
       } else if (sourcePath.startsWith('common/scripted_triggers/') && ancestors.length === 0) {
         this.addSymbol({
           kind: 'scripted_trigger',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/mtth/') && ancestors.length === 0) {
+        this.addSymbol({
+          kind: 'mtth_variable',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/ai_strategy/') && ancestors.length === 0) {
+        this.addSymbol({
+          kind: 'ai_strategy',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/ai_strategy_plans/') && ancestors.length === 0) {
+        this.addSymbol({
+          kind: 'ai_strategy_plan',
           id: key,
           path: file.displayPath,
           rootKind: file.rootKind,

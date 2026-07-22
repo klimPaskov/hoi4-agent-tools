@@ -1,0 +1,298 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.3.0/schemas/custom-weighted-pool.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "id": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "description": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "selection": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "state": {
+      "$ref": "#/$defs/__schema4"
+    },
+    "candidates": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "recovery": {
+      "$ref": "#/$defs/__schema8"
+    },
+    "transitions": {
+      "$ref": "#/$defs/__schema10"
+    }
+  },
+  "required": [
+    "id",
+    "selection",
+    "candidates",
+    "transitions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "default": "1.0",
+      "type": "string",
+      "const": "1.0"
+    },
+    "__schema1": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema2": {
+      "type": "string",
+      "maxLength": 8192
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "categorical_weighted",
+            "independent_chances"
+          ]
+        },
+        "cadence": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly",
+            "timer"
+          ]
+        },
+        "timerMinDays": {
+          "type": "number",
+          "minimum": 0
+        },
+        "timerMaxDays": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rounding": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "floor",
+            "ceil",
+            "nearest"
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "cadence"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 1024
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema5"
+      }
+    },
+    "__schema5": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 4096
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema6": {
+      "minItems": 1,
+      "maxItems": 100000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema7"
+      }
+    },
+    "__schema7": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        },
+        "eligibleWhen": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "oneTime": {
+          "type": "boolean"
+        },
+        "cooldownDays": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "weight"
+      ],
+      "additionalProperties": false
+    },
+    "__schema8": {
+      "maxItems": 100000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema9"
+      }
+    },
+    "__schema9": {
+      "type": "object",
+      "properties": {
+        "cadence": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        }
+      },
+      "required": [
+        "cadence",
+        "target",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "__schema10": {
+      "maxItems": 100000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema11"
+      }
+    },
+    "__schema11": {
+      "type": "object",
+      "properties": {
+        "when": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "actions": {
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema12"
+          }
+        }
+      },
+      "required": [
+        "when",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "__schema12": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": [
+            "set",
+            "add",
+            "multiply",
+            "cap",
+            "remove",
+            "cooldown",
+            "reset_category",
+            "compress_timer",
+            "reset_timer",
+            "terminate"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "value": {
+          "$ref": "#/$defs/__schema5"
+        }
+      },
+      "required": [
+        "operation",
+        "target"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

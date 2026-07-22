@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.3.0 - 2026-07-22
+
+- Added a read-only AI and MTTH Scenario Analyzer with inspect, evaluate, sweep, simulate, sequence, compare, and render tools.
+- Added versioned adapters for event MTTH and options, decisions, missions, focuses, technologies, doctrines, direct random chance, `random_list`, supported AI strategy factors, and declared custom weighted pools without treating unlike HOI4 systems as one probability formula.
+- Added exact and bounded scenario evaluation, AST-path provenance, nested-random path probabilities, ranges, alternatives, distributions, numeric correlations, configurable diagnostics, named acceptance bands, and explicit external-factor support.
+- Added threshold-aware sweeps with trigger-adjacent breakpoints, local elasticities, pairwise interactions, rank reversals, cliffs, and missed target bands.
+- Added constant-memory Latin hypercube and seeded pseudo-random simulation, global input importance, Wilson intervals, and discrete daily-hazard MTTH samples with bounded quantile retention and uncertainty evidence.
+- Added declared-manifest sequence analysis for recovery, caps, cooldowns, removal, resets, timer changes, terminal states, and per-category outcomes without executing effects or inferring campaign state.
+- Added scenario-hash-bound deterministic ranking, matrix, waterfall, timing-survival, sensitivity, threshold, sequence, comparison, and unresolved renders with scenario, candidate, and metric filters.
+- Added fail-closed installed-game build verification for the versioned probability adapters.
+- Added generated public schemas, callable examples, source evidence, deterministic artifacts, and a project-owned fixture containing more than 150 weighted blocks, 250 scenarios, exact expectations, unresolved cases, and a stateful pool.
+- Verified analyzer discovery and workflows over stdio and authenticated Streamable HTTP, package installation, resource retrieval, cancellation, stale-result handling, workspace isolation, large candidate pools, and the official MCP Inspector.
+- Expanded event-graph capacity for installed-game and large-mod analysis beyond 100,000 nodes while retaining bounded artifact validation.
+- Reconfirmed MCP protocol `2025-11-25`, TypeScript SDK 1.29.0, Inspector 1.0.0, Registry schema `2025-12-11`, and Registry publisher 1.8.0 for this release.
+
 ## 2.2.0 - 2026-07-22
 
 - Added a read-only Technology Tree Viewer for classic technologies, legacy and current doctrines, source folder layouts, prerequisites, exclusive choices, categories, tags, unlocks, bonuses, grants, metadata, localisation, icons, and cross-file references.

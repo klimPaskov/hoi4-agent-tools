@@ -5,7 +5,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import process from 'node:process';
 import { describe, expect, it } from 'vitest';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '@modelcontextprotocol/sdk/types.js';
-import { MCP_PROTOCOL_VERSION } from '../../src/hoi4_agent_tools/version.js';
+import { MCP_PROTOCOL_VERSION, PACKAGE_VERSION } from '../../src/hoi4_agent_tools/version.js';
 import { STDIO_MAX_FRAME_BYTES } from '../../src/hoi4_agent_tools/mcp/transports/bounded-stdio.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
@@ -149,7 +149,7 @@ describe('local stdio transport', () => {
       jsonrpc: '2.0',
       result: {
         protocolVersion: '2025-11-25',
-        serverInfo: { name: 'hoi4-agent-tools', version: '2.2.0' },
+        serverInfo: { name: 'hoi4-agent-tools', version: PACKAGE_VERSION },
       },
     });
     child.stdin.write(

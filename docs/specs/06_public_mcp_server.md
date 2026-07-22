@@ -42,13 +42,14 @@ A remote server accesses only workspaces mounted and configured on that server. 
 
 ## MCP tool surface
 
-Expose exactly these sixteen namespaced tools:
+Expose exactly these 23 namespaced tools:
 
 - `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, `hoi4.focus_rewrite`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, `hoi4.gui_rewrite`
 - `hoi4.map_inspect`, `hoi4.map_render`, `hoi4.map_rewrite`
 - `hoi4.event_inspect`, `hoi4.event_render`, `hoi4.event_compare`
 - `hoi4.tech_inspect`, `hoi4.tech_render`, `hoi4.tech_compare`
+- `hoi4.probability_inspect`, `hoi4.probability_evaluate`, `hoi4.probability_sweep`, `hoi4.probability_simulate`, `hoi4.probability_sequence`, `hoi4.probability_compare`, `hoi4.probability_render`
 
 `hoi4.event_inspect` is a compact operation family with `scan`, `roots`, `trace`, `explain_path`, `state_flow`, `lint`, and `impact` modes. All three event tools are read-only. They statically analyze and visualize event source; they do not edit events, simulate runtime execution, or launch the game.
 
@@ -66,7 +67,7 @@ Provide one stable content-addressed resource template for focus HTML/SVG/PNG/JS
 
 Tool calls return compact summaries plus resource links with MIME type and size when known.
 
-Do not register MCP prompts. Coding agents decide when to use the tools from their own task context.
+Register only the optional `hoi4.probability_analysis` prompt. It scopes one weighted-logic analysis and returns control to the coding agent's normal task context.
 
 ## Write safety
 
@@ -119,7 +120,7 @@ Test with the official MCP Inspector and automated protocol clients.
 
 Required tests:
 
-- exact sixteen-tool and one-resource-template discovery within the fixed 32 KiB tool-list budget
+- exact 23-tool, one-prompt, and one-resource-template discovery within the fixed 48 KiB tool-list budget
 - capability negotiation
 - stdio framing and stderr-only logging
 - Streamable HTTP request and streaming behavior
@@ -137,6 +138,6 @@ Required tests:
 - deterministic schemas and responses
 - clean installation from the published package
 - registry metadata validation
-- agent workflow tests covering focus, GUI, map, event, and technology operations end to end
+- agent workflow tests covering focus, GUI, map, event, technology, and probability operations end to end
 
-The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery safety, exposes prompts or legacy transaction tools, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback, requires hand-written client glue, exposes a separate interactive editor, omits the read-only Event Chain Viewer or Technology Tree Viewer, or cannot be installed from its published package.
+The MCP server is incomplete if it wraps mock tools, bypasses internal journal and recovery behavior, exposes prompts other than `hoi4.probability_analysis` or legacy transaction tools, requires caller-managed transaction IDs, hashes, diff/apply calls, or rollback, requires hand-written client glue, exposes a separate interactive editor, omits the read-only Event Chain Viewer, Technology Tree Viewer, or AI and MTTH Scenario Analyzer, or cannot be installed from its published package.

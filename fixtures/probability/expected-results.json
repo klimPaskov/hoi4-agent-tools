@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "probability-fixture-expected.v1",
+  "inventory": {
+    "focusCandidateSets": 40,
+    "decisionMissionSets": 30,
+    "technologySets": 20,
+    "doctrineSets": 10,
+    "eventOptionSets": 25,
+    "randomSets": 20,
+    "mtthFamilies": 15,
+    "weightedBlocksMinimum": 150,
+    "scenarios": 250
+  },
+  "identities": {
+    "proportionalWeights": [10, 20, 30],
+    "proportionalProbabilities": ["1/6", "1/3", "1/2"],
+    "uniformRaceWeights": [1, 2, 3],
+    "uniformRaceProbabilities": ["1/18", "11/36", "23/36"],
+    "directRandom": { "chance": 25, "probability": "1/4" },
+    "mtth": { "medianDays": 30, "horizonDays": 30, "cumulativeChance": "1/2" },
+    "allZeroEventOptionWinner": 0,
+    "scaleInvarianceFactor": 17
+  },
+  "requiredUnresolvedCodes": [
+    "TRIGGER_UNRESOLVED",
+    "VALUE_UNRESOLVED",
+    "DISTRIBUTION_REQUIRES_SIMULATION",
+    "SCENARIO_INPUT_UNRESOLVED",
+    "MTTH_RECURSION",
+    "CATEGORICAL_CORRELATION_UNSUPPORTED"
+  ],
+  "requiredDiagnosticCodes": [
+    "PROBABILITY_ALL_ELIGIBLE_VALUES_ZERO",
+    "PROBABILITY_CANDIDATE_POOL_INCOMPLETE",
+    "PROBABILITY_MODIFIER_UNSATISFIED_IN_SCENARIOS",
+    "PROBABILITY_NEGATIVE_VALUE_CLAMPED",
+    "MTTH_HORIZON_CHANCE_NEGLIGIBLE"
+  ],
+  "sourceLocations": [
+    {
+      "adapter": "event_option_ai_chance",
+      "candidateId": "synthetic_options.1.a",
+      "path": "mod:events/synthetic_probability_events.txt",
+      "line": 8,
+      "column": 11,
+      "astPath": ["country_event[0]", "option[0]"]
+    },
+    {
+      "adapter": "national_focus_ai_will_do",
+      "candidateId": "synthetic_focus_00_a",
+      "path": "mod:common/national_focus/synthetic_probability_focuses.txt",
+      "line": 6,
+      "column": 2,
+      "astPath": ["focus_tree[0]", "focus[0]"]
+    },
+    {
+      "adapter": "event_mean_time_to_happen",
+      "candidateId": "synthetic_mtth.1",
+      "path": "mod:events/synthetic_probability_events.txt",
+      "line": 205,
+      "column": 1,
+      "astPath": ["country_event[25]"]
+    }
+  ]
+}
