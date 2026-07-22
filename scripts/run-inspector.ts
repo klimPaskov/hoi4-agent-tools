@@ -24,6 +24,9 @@ const publicToolNames = [
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
+  'hoi4.tech_inspect',
+  'hoi4.tech_render',
+  'hoi4.tech_compare',
 ] as const;
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
@@ -92,7 +95,10 @@ try {
   await Promise.all([
     mkdir(path.join(mod, 'common', 'national_focus'), { recursive: true }),
     mkdir(path.join(mod, 'common', 'on_actions'), { recursive: true }),
+    mkdir(path.join(mod, 'common', 'technologies'), { recursive: true }),
+    mkdir(path.join(mod, 'common', 'technology_tags'), { recursive: true }),
     mkdir(path.join(mod, 'events'), { recursive: true }),
+    mkdir(path.join(mod, 'interface'), { recursive: true }),
     mkdir(path.join(mod, 'localisation', 'english'), { recursive: true }),
     mkdir(storage),
   ]);
@@ -110,8 +116,20 @@ try {
       'add_namespace = inspector\ncountry_event = { id = inspector.1 title = inspector.1.t is_triggered_only = yes option = { name = inspector.1.a } }\n',
     ),
     writeFile(
+      path.join(mod, 'common', 'technologies', 'inspector.txt'),
+      'technologies = { inspector_tech_1 = { start_year = 1936 folder = { name = inspector_folder position = { x = 0 y = 0 } } path = { leads_to_tech = inspector_tech_2 } categories = { inspector_category } } inspector_tech_2 = { start_year = 1938 folder = { name = inspector_folder position = { x = 0 y = 1 } } categories = { inspector_category } } }\n',
+    ),
+    writeFile(
+      path.join(mod, 'common', 'technology_tags', 'inspector.txt'),
+      'technology_categories = { inspector_category }\ntechnology_folders = { inspector_folder = { ledger = army } }\n',
+    ),
+    writeFile(
+      path.join(mod, 'interface', 'inspector_technology.gui'),
+      'containerWindowType = { name = inspector_folder gridBoxType = { name = inspector_tech_1_tree position = { x = 0 y = 0 } slotsize = { width = 110 height = 96 } format = UP } }\n',
+    ),
+    writeFile(
       path.join(mod, 'localisation', 'english', 'inspector_l_english.yml'),
-      '\ufeffl_english:\ninspector.1.t: "Inspector Event"\ninspector.1.a: "Finish"\n',
+      '\ufeffl_english:\ninspector.1.t: "Inspector Event"\ninspector.1.a: "Finish"\ninspector_tech_1: "Inspector Technology I"\ninspector_tech_1_desc: "First inspector technology."\ninspector_tech_2: "Inspector Technology II"\ninspector_tech_2_desc: "Second inspector technology."\ninspector_folder: "Inspector Folder"\n',
     ),
   ]);
   await writeFile(
@@ -244,8 +262,57 @@ try {
     throw new Error(`Inspector event comparison returned ${String(compared.code)}`);
   }
 
+  const technologyInspected = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.tech_inspect',
+      '--tool-arg',
+      'mode=explain',
+      '--tool-arg',
+      'technologyId=inspector_tech_2',
+    ]),
+    'Inspector hoi4.tech_inspect',
+  );
+  if (technologyInspected.code !== 'TECH_INSPECTED') {
+    throw new Error(`Inspector technology inspection returned ${String(technologyInspected.code)}`);
+  }
+
+  const technologyRendered = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.tech_render',
+      '--tool-arg',
+      'view=folder',
+      '--tool-arg',
+      'folderId=inspector_folder',
+      '--tool-arg',
+      'includeHtml=false',
+    ]),
+    'Inspector hoi4.tech_render',
+  );
+  if (technologyRendered.code !== 'TECH_RENDERED') {
+    throw new Error(`Inspector technology render returned ${String(technologyRendered.code)}`);
+  }
+
+  const proposedTechnologySource =
+    'technologies = { inspector_tech_1 = { start_year = 1936 folder = { name = inspector_folder position = { x = 0 y = 0 } } path = { leads_to_tech = inspector_tech_3 } categories = { inspector_category } } inspector_tech_3 = { start_year = 1940 folder = { name = inspector_folder position = { x = 0 y = 1 } } categories = { inspector_category } } }\n';
+  const technologyCompared = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.tech_compare',
+      '--tool-arg',
+      `proposedSources=${JSON.stringify([{ relativePath: 'common/technologies/inspector.txt', source: proposedTechnologySource }])}`,
+      '--tool-arg',
+      'render=false',
+    ]),
+    'Inspector hoi4.tech_compare',
+  );
+  if (technologyCompared.code !== 'TECH_COMPARED') {
+    throw new Error(`Inspector technology comparison returned ${String(technologyCompared.code)}`);
+  }
+
   process.stderr.write(
-    'Official MCP Inspector verified thirteen-tool discovery, the artifact resource, and event inspect/render/compare workflows.\n',
+    'Official MCP Inspector verified sixteen-tool discovery, artifact resources, and event and technology workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

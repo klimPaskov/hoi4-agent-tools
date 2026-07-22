@@ -1,0 +1,1 @@
+synthetic_doctrine_folder = { name = synthetic_doctrine_folder_name }

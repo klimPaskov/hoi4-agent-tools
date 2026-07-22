@@ -1,0 +1,1 @@
+synthetic_decision_category = { synthetic_tech_decision = { complete_effect = { set_technology = { synthetic_tech_0003 = 1 } } } synthetic_tech_mission = { days_mission_timeout = 30 timeout_effect = { add_tech_bonus = { bonus = 0.25 uses = 1 category = synthetic_category_04 } } } }

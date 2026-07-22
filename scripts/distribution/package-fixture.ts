@@ -18,6 +18,7 @@ export const REQUIRED_PACKAGE_FILES = [
   'docs/README.md',
   'docs/setup.md',
   'docs/events.md',
+  'docs/technology.md',
   'docs/focus.md',
   'docs/gui.md',
   'docs/map.md',

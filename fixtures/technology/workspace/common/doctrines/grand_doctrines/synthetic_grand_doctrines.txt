@@ -1,0 +1,1 @@
+synthetic_grand_doctrine = { folder = synthetic_doctrine_folder tracks = { synthetic_track_alpha synthetic_track_beta } ai_will_do = { factor = 1 } }

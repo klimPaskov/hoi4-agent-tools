@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build one reusable engine with four focused modules and the thirteen-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create four unrelated services.
+Build one reusable engine with five focused modules and the sixteen-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create unrelated services.
 
 The implementation belongs under the standalone root defined in `00_standalone_project_bootstrap.md`.
 
@@ -15,6 +15,7 @@ src/hoi4_agent_tools/
   focus/
   gui/
   map/
+  technology/
   mcp/
   schemas/
 ```
@@ -74,7 +75,7 @@ The index must understand vanilla, the active mod workspace, configured dependen
 
 ## Agent service contract
 
-All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, map, or event application.
+All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, map, event, or technology application.
 
 Every MCP operation must return structured results containing:
 

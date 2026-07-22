@@ -1,0 +1,1 @@
+focus_tree = { id = synthetic_focus_tree country = { factor = 0 } focus = { id = synthetic_focus completion_reward = { set_technology = { synthetic_tech_0000 = 1 } synthetic_technology_bonus = yes } } }

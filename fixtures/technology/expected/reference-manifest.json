@@ -1,0 +1,96 @@
+{
+  "unlocks": [
+    {
+      "technologyId": "synthetic_tech_0000",
+      "kind": "equipment",
+      "targetId": "synthetic_equipment"
+    },
+    {
+      "technologyId": "synthetic_tech_0001",
+      "kind": "equipment_module",
+      "targetId": "synthetic_module"
+    },
+    {
+      "technologyId": "synthetic_tech_0002",
+      "kind": "sub_unit",
+      "targetId": "synthetic_sub_unit"
+    },
+    {
+      "technologyId": "synthetic_tech_0003",
+      "kind": "building",
+      "targetId": "synthetic_building"
+    },
+    {
+      "technologyId": "synthetic_tech_0004",
+      "kind": "ability",
+      "targetId": "synthetic_ability"
+    },
+    {
+      "technologyId": "synthetic_tech_0005",
+      "kind": "tactic",
+      "targetId": "synthetic_tactic"
+    },
+    {
+      "technologyId": "synthetic_tech_0016",
+      "kind": "equipment",
+      "targetId": "synthetic_missing_equipment"
+    }
+  ],
+  "externalSources": [
+    {
+      "sourceKind": "focus",
+      "sourceId": "synthetic_focus",
+      "technologyId": "synthetic_tech_0000",
+      "kind": "grant"
+    },
+    {
+      "sourceKind": "focus",
+      "sourceId": "synthetic_focus",
+      "technologyId": "synthetic_tech_0001",
+      "kind": "research_bonus",
+      "helperStack": ["synthetic_technology_bonus"]
+    },
+    {
+      "sourceKind": "event",
+      "sourceId": "synthetic_tech.1",
+      "technologyId": "synthetic_tech_0002",
+      "kind": "research_bonus"
+    },
+    {
+      "sourceKind": "decision",
+      "sourceId": "synthetic_tech_decision",
+      "technologyId": "synthetic_tech_0003",
+      "kind": "grant"
+    },
+    {
+      "sourceKind": "mission",
+      "sourceId": "synthetic_tech_mission",
+      "categoryId": "synthetic_category_04",
+      "kind": "research_bonus"
+    },
+    {
+      "sourceKind": "on_action",
+      "sourceId": "on_startup",
+      "technologyId": "synthetic_tech_0004",
+      "kind": "grant"
+    },
+    {
+      "sourceKind": "on_action",
+      "sourceId": "on_startup",
+      "technologyId": "synthetic_tech_1038",
+      "kind": "grant"
+    },
+    {
+      "sourceKind": "country_history",
+      "sourceId": "SYN",
+      "technologyId": "synthetic_tech_0005",
+      "kind": "starting_technology"
+    },
+    {
+      "sourceKind": "startup_effect",
+      "sourceId": "SYN",
+      "technologyId": "synthetic_tech_0006",
+      "kind": "starting_technology"
+    }
+  ]
+}

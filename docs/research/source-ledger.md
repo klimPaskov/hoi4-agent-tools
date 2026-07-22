@@ -1,6 +1,6 @@
 # HOI4 source research ledger
 
-Reviewed 2026-07-13. These sources informed format support and tests; no installed-game or third-party-mod content is included in this repository.
+Reviewed 2026-07-22. These sources informed format support and tests; no installed-game or third-party-mod content is included in this repository.
 
 ## Offline wiki snapshot
 
@@ -18,6 +18,7 @@ The supplied offline Hearts of Iron IV wiki snapshot was consulted for:
 - `Event modding - Hearts of Iron 4 Wiki.md`: all five event types, namespaces, triggered-only and automatic roots, options, immediate/hidden effects, delayed event-call fields, titles/descriptions, and common non-firing defects.
 - `On actions - Hearts of Iron 4 Wiki.md`: direct and random event entries, weighted lists, effect blocks, and externally supplied scopes.
 - `Data structures`, `Scopes`, `Triggers`, and `Effects`: saved regular/global event targets, target cleanup, variables, arrays, scoped event calls, random lists, and condition/effect boundaries used by event-chain state and scope analysis.
+- `Technology modding - Hearts of Iron 4 Wiki.md`: technology definitions, paths, folders, coordinates, categories, exclusivity, costs, dates, AI, unlocks, sprites, and localisation.
 
 The wiki remains useful background, but current official files and installed examples take precedence when they differ.
 
@@ -34,11 +35,13 @@ Under `<HOI4_ROOT>/documentation`:
 - `dynamic_variables_documentation.md`, `modifiers_documentation.md`, collection input/operator documentation: tokens and raw constructs the CST must retain.
 - `effects_documentation.md`: event dispatch effects, fixed and random delay fields, regular/global event-target saves and clears, state mutation effects, and declared effect scopes used by the Event Chain Viewer.
 - `triggers_documentation.md`: flag, variable, target, scope, and gate consumers used by event state-flow diagnostics.
+- `effects_documentation.md`: technology grants and research-bonus effects indexed by the Technology Tree Viewer.
 
 Official documentation found outside that folder was also consulted, especially:
 
 - `common/scripted_guis/_documentation.md`: authoritative current contexts, parent attachment, dynamic lists, properties, dirty variables, effects/triggers, and AI fields.
 - `common/focus_inlay_windows/documentation.md`: current inlay fields, including scripted buttons and progress bars absent from older summaries.
+- `common/doctrines/_documentation.md` and the documentation under `folders`, `grand_doctrines`, `tracks`, and `subdoctrines`: the current doctrine folder, track, subdoctrine, reward, XP, icon, and exclusivity model.
 
 ## Vanilla precedents
 
@@ -53,6 +56,8 @@ Representative read-only examples:
 - `history/states/*.txt` and `map/strategicregions/*.txt` for state/region membership and ordered history payloads.
 - Large `events/*.txt` families for country/news/state/unit-leader/operative event definitions; direct, delayed, hidden, random, and weighted dispatch; option and immediate calls; cycles; and target/state handoff.
 - `common/on_actions/*.txt`, `common/national_focus/*.txt`, `common/decisions/*.txt`, `common/scripted_effects/*.txt`, `history/countries/*.txt`, and `history/states/*.txt` for external event entries and nested helper expansion.
+- `common/technologies/*.txt`, `common/technology_tags/*.txt`, `common/technology_sharing/*.txt`, `common/doctrines/**`, and technology interface files for classic definitions, folder placements, dependency paths, modern doctrines, sharing categories, and GUI gridbox geometry.
+- Equipment, module, sub-unit, building, ability, and combat-tactic definitions for indexed technology unlock targets; focuses, events, decisions, missions, on-actions, scripted effects, and country history for external grants and bonuses.
 
 ## Current format conclusions
 
@@ -75,4 +80,6 @@ Representative read-only examples:
 - Event calls accept a literal scalar ID or a block with `id` plus fixed/random timing fields. Dynamic/meta-generated IDs cannot be resolved safely and remain explicit unresolved dispatch nodes.
 - News events share country-event dispatch behavior, while state, unit-leader, and operative-leader events establish different expected scopes. Scripted effects are scope-polymorphic unless the call site proves a transition.
 - Regular event targets are chain-transient; global targets persist until cleared. Static analysis therefore records lifecycle evidence and reports delayed uses without claiming runtime survival.
+- Classic technologies and the current doctrine system are distinct source models. The viewer links them in one result without treating doctrine tracks and rewards as classic technology prerequisite nodes.
+- A technology identity may have several folder placements. Source folder coordinates are converted through the matching GUI gridbox geometry, while dependency-only layouts are labelled as generated analysis.
 - File replacement, duplicate keys, and ordering are database-specific. Same relative indexed filename shadows lower load-order sources; directly indexed files in a `replace_path` directory are removed without treating every descendant asset as removed.

@@ -1,0 +1,123 @@
+containerWindowType = {
+	name = synthetic_folder_00
+	gridBoxType = {
+		name = synthetic_tech_0000_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_01
+	gridBoxType = {
+		name = synthetic_tech_0000_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+	gridBoxType = {
+		name = synthetic_tech_0080_tree
+		position = { x = 700 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_02
+	gridBoxType = {
+		name = synthetic_tech_0160_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_03
+	gridBoxType = {
+		name = synthetic_tech_0240_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_04
+	gridBoxType = {
+		name = synthetic_tech_0320_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_05
+	gridBoxType = {
+		name = synthetic_tech_0400_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_06
+	gridBoxType = {
+		name = synthetic_tech_0480_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_07
+	gridBoxType = {
+		name = synthetic_tech_0560_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_08
+	gridBoxType = {
+		name = synthetic_tech_0640_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_09
+	gridBoxType = {
+		name = synthetic_tech_0720_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_10
+	gridBoxType = {
+		name = synthetic_tech_0800_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_11
+	gridBoxType = {
+		name = synthetic_tech_0880_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}
+containerWindowType = {
+	name = synthetic_folder_12
+	gridBoxType = {
+		name = synthetic_tech_0960_tree
+		position = { x = 0 y = 0 }
+		slotsize = { width = 110 height = 96 }
+		format = UP
+	}
+}

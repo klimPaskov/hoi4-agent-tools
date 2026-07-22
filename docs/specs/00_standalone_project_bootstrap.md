@@ -14,11 +14,11 @@ Run `git init` in this folder and treat it as an independent public project with
 
 ## Product boundary
 
-The product is an MCP server built for coding agents. The focus, GUI, map, and read-only event-chain capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
+The product is an MCP server built for coding agents. The focus, GUI, map, read-only event-chain, and read-only technology-tree capabilities are MCP tools used by agents while they work on an external HOI4 mod project.
 
-The public surface has thirteen tools: four focus tools plus three tools in each of the GUI, map, and event families. Local calls omit workspace selection and resolve the mod containing the MCP working directory.
+The public surface has sixteen tools: four focus tools plus three tools in each of the GUI, map, event, and technology families. Local calls omit workspace selection and resolve the mod containing the MCP working directory.
 
-The product does not provide an interactive focus editor, GUI editor, map editor, event editor, dashboard, or full command line application. An agent can start the MCP from inside a mod and use it immediately; optional configuration adds game references or explicit multi-mod deployments. Canonical mod workspaces are writable; game, dependency, fixture, artifact, cache, and unrelated roots are not source-write targets. Supported focus, GUI, and map rewrites complete through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call. Event-chain tools inspect, render, and compare source without editing it.
+The product does not provide an interactive focus editor, GUI editor, map editor, event editor, technology editor, dashboard, or full command line application. An agent can start the MCP from inside a mod and use it immediately; optional configuration adds game references or explicit multi-mod deployments. Canonical mod workspaces are writable; game, dependency, fixture, artifact, cache, and unrelated roots are not source-write targets. Supported focus, GUI, and map rewrites complete through one domain tool call without a caller-managed transaction ID, plan hash, diff/apply sequence, or rollback call. Event-chain and technology-tree tools inspect, render, and compare source without editing it.
 
 The repository may contain process entry points, maintenance scripts, test harnesses, and package diagnostics. These are infrastructure for launching and validating the MCP server. They are not separate interactive versions of the tools.
 

@@ -6,10 +6,11 @@ import { registerFocusTools } from '../tools/focus.js';
 import { registerGuiTools } from '../tools/gui.js';
 import { registerMapTools } from '../tools/map.js';
 import { registerEventTools } from '../tools/event.js';
+import { registerTechnologyTools } from '../tools/technology.js';
 import { registerMcpResources } from '../resources/register.js';
 
 export const SERVER_INSTRUCTIONS =
-  'Use hoi4.focus_inspect and hoi4.focus_render for fast structural work; hoi4.focus_raster adds decoded icons and PNG output. Use hoi4.event_inspect to analyze event chains. Event tools are read-only. Focus, GUI, and map rewrite tools edit the current mod. Large evidence is returned through linked resources.';
+  'Use focus tools for focus trees, GUI tools for interfaces, and map tools for map data. Use hoi4.event_inspect, hoi4.event_render, and hoi4.event_compare for event chains. Use hoi4.tech_inspect, hoi4.tech_render, and hoi4.tech_compare for technology and doctrines. Event tools are read-only. Technology tools are read-only. Large evidence is linked as resources.';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
   const server = new McpServer(
@@ -27,6 +28,7 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerGuiTools(server, engine, context);
   registerMapTools(server, engine, context);
   registerEventTools(server, engine, context);
+  registerTechnologyTools(server, engine, context);
   registerMcpResources(server, engine, context);
   return server;
 }

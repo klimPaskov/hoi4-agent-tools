@@ -1,0 +1,1 @@
+equipments = { synthetic_equipment = { year = 1936 } }

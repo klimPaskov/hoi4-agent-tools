@@ -149,7 +149,7 @@ describe('local stdio transport', () => {
       jsonrpc: '2.0',
       result: {
         protocolVersion: '2025-11-25',
-        serverInfo: { name: 'hoi4-agent-tools', version: '2.1.1' },
+        serverInfo: { name: 'hoi4-agent-tools', version: '2.2.0' },
       },
     });
     child.stdin.write(
@@ -160,6 +160,19 @@ describe('local stdio transport', () => {
     );
     const listed = await waitForMessage(child, 2, stdoutLines);
     expect(listed).toMatchObject({ jsonrpc: '2.0', result: { tools: expect.any(Array) } });
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'hoi4.tech_inspect', arguments: { mode: 'scan' } },
+      })}\n`,
+    );
+    const technology = await waitForMessage(child, 3, stdoutLines);
+    expect(technology).toMatchObject({
+      jsonrpc: '2.0',
+      result: { structuredContent: { status: 'ok', code: 'TECH_INSPECTED' } },
+    });
     expect(stdoutLines.every((line) => JSON.parse(line).jsonrpc === '2.0')).toBe(true);
     expect(stdoutLines.join('\n')).not.toContain('startup_failed');
     expect(stderr).not.toContain('"jsonrpc"');

@@ -1,0 +1,1 @@
+buildings = { synthetic_building = { max_level = 5 } }

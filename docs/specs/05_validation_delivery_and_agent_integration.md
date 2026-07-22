@@ -16,12 +16,13 @@ Implement in this order:
 10. Agent Nudger map operations and rendering
 11. Agent Nudger static and engine-compatible validation
 12. Event Chain Viewer source analysis, graph construction, rendering, and comparison
-13. MCP server with stdio and Streamable HTTP transports
-14. package publication, Registry metadata, installer, diagnostics, and coding-agent configuration examples
-15. concise documentation and agent integration guides
-16. final fixtures, audits, and completion report
+13. Technology Tree Viewer source analysis, graph construction, rendering, and comparison
+14. MCP server with stdio and Streamable HTTP transports
+15. package publication, Registry metadata, installer, diagnostics, and coding-agent configuration examples
+16. concise documentation and agent integration guides
+17. final fixtures, audits, and completion report
 
-Do not build separate parsers or indexes for the four modules, or separate transaction models for the three writable modules.
+Do not build separate parsers or indexes for the five modules, or separate transaction models for the three writable modules.
 
 The Scripted GUI Studio remains fully offline. Do not add game launching, input automation, save loading, temporary gameplay hooks, or screenshot capture from Hearts of Iron IV.
 
@@ -100,11 +101,11 @@ Operators may install the package, configure explicit workspaces or mod-discover
 The goal is complete only when:
 
 - the standalone repository exists at the required path and has its own Git history
-- all four modules are callable through the public MCP server
+- all five modules are callable through the public MCP server
 - local stdio and secured Streamable HTTP transports work
 - the server is installable from a public package and has valid `server.json` Registry metadata
-- the exact twelve MCP tools, one artifact resource template, annotations, progress, cancellation, security gates, automatic current-mod resolution, and artifact links pass acceptance tests
-- all four modules use the shared parser, resolver, index, diagnostics, and artifact system; the three writable modules also use the shared transaction system
+- the exact sixteen MCP tools, one artifact resource template, annotations, progress, cancellation, security gates, automatic current-mod resolution, and artifact links pass acceptance tests
+- all five modules use the shared parser, resolver, index, diagnostics, and artifact system; the three writable modules also use the shared transaction system
 - each focus, GUI, and map source mutation completes through one authorized domain rewrite call, returns source/visual evidence, and restores exact original bytes automatically on failure
 - large focus-tree rendering and linting pass the acceptance fixture
 - GUI parsing, rendering, state galleries, fidelity reports, and visual validation pass the acceptance fixture

@@ -24,6 +24,7 @@ import {
   strictOperationResultSchema,
   toolResult,
 } from '../server/result.js';
+import { computeFocusVisualRevisions } from './focus.js';
 
 const countryTagSchema = z
   .string()
@@ -63,6 +64,12 @@ const chaosxCountryAssetsOutput = strictOperationResultSchema(
     .strict(),
 );
 
+const visualFocusSelectorSchema = z
+  .object({
+    relativePath: z.string().min(1).max(1024),
+    treeId: z.string().min(1).max(256),
+  })
+  .strict();
 const visualGuiSelectorSchema = z
   .object({
     windowName: z.string().min(1).max(256),
@@ -73,15 +80,20 @@ const chaosxVisualRevisionInput = compactValidatedInputSchema(
   z
     .object({
       workspaceId: workspaceIdSchema,
-      guiWindows: z.array(visualGuiSelectorSchema).min(1).max(3),
+      focusTrees: z.array(visualFocusSelectorSchema).max(3).default([]),
+      guiWindows: z.array(visualGuiSelectorSchema).max(3).default([]),
+      countryTags: z.array(countryTagSchema).max(12).default([]),
+      eventId: z.number().int().min(0).max(999).optional(),
     })
     .strict(),
-  'ChaosX-only scripted-GUI selectors for fast cache revision checks',
+  'ChaosX-only selectors for fast visual cache revision checks',
 );
 const visualRevisionEntrySchema = z
   .object({
-    windowName: z.string().min(1).max(256),
-    guiId: z.string().min(1).max(256),
+    relativePath: z.string().min(1).max(1024).optional(),
+    treeId: z.string().min(1).max(256).optional(),
+    windowName: z.string().min(1).max(256).optional(),
+    guiId: z.string().min(1).max(256).optional(),
     revision: sha256Schema,
   })
   .strict();
@@ -89,7 +101,9 @@ const chaosxVisualRevisionOutput = strictOperationResultSchema(
   z
     .object({
       workspaceRevision: sha256Schema,
+      focusRevisions: z.array(visualRevisionEntrySchema).max(3),
       guiRevisions: z.array(visualRevisionEntrySchema).max(3),
+      countryRevision: sha256Schema,
       dependencyFileCount: nonNegativeIntegerSchema,
     })
     .strict(),
@@ -458,6 +472,30 @@ async function resolveGuiRevision(
   };
 }
 
+function countryRevision(
+  snapshot: ScanSnapshot,
+  selections: readonly CountryAssetSelection[],
+  catalog: GuiAssetCatalog,
+): { revision: string; filesScanned: string[] } {
+  const sourceHashes: Record<string, string> = {};
+  for (const selection of selections) {
+    for (const sourcePath of [selection.discoverySourcePath, selection.spriteSourcePath]) {
+      if (sourcePath === undefined) continue;
+      const source = snapshot.files.find(({ displayPath }) => displayPath === sourcePath);
+      if (source !== undefined) sourceHashes[source.displayPath] = source.sha256;
+    }
+    for (const assetPath of [selection.flagPath, selection.leaderTexturePath]) {
+      if (assetPath === undefined) continue;
+      const source = catalog.resolveFile(assetPath);
+      if (source !== undefined) sourceHashes[source.displayPath] = source.sha256;
+    }
+  }
+  return {
+    revision: hashCanonical({ selections, sourceHashes }),
+    filesScanned: Object.keys(sourceHashes).sort(compareCodeUnits),
+  };
+}
+
 export function registerChaosxTools(
   server: McpServer,
   engine: CoreEngine,
@@ -470,7 +508,7 @@ export function registerChaosxTools(
     {
       title: 'Check ChaosX visual revisions',
       description:
-        'Private ChaosX cache-coherency endpoint. Computes exact scripted-GUI source revisions without rendering PNG artifacts.',
+        'Private ChaosX cache-coherency endpoint. Computes exact source revisions for event, focus, GUI, flag, and leader visuals without rendering PNG artifacts.',
       inputSchema: chaosxVisualRevisionInput,
       outputSchema: chaosxVisualRevisionOutput,
       annotations: readOnly,
@@ -479,7 +517,17 @@ export function registerChaosxTools(
       const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
       try {
         const progress = progressReporter(extra);
-        await progress.report(0, 2, 'Checking ChaosX scripted-GUI sources');
+        await progress.report(0, 4, 'Scanning ChaosX visual sources');
+        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
+        const focusRevisions = await computeFocusVisualRevisions(
+          engine,
+          context,
+          workspaceId,
+          snapshot,
+          input.focusTrees,
+          progress.signal,
+        );
+        await progress.report(1, 4, 'Checking ChaosX GUI sources');
         const resolvedGuiRevisions = [];
         for (const selector of input.guiWindows)
           resolvedGuiRevisions.push(
@@ -493,28 +541,42 @@ export function registerChaosxTools(
               progress.signal,
             ),
           );
-        const filesScanned = new Set<string>(
-          resolvedGuiRevisions.flatMap(({ filesScanned }) => filesScanned),
-        );
         const guiRevisions = resolvedGuiRevisions.map(({ windowName, guiId, revision }) => ({
           windowName,
           guiId,
           revision,
         }));
-        const workspaceRevision = hashCanonical(
-          resolvedGuiRevisions.map(({ windowName, workspaceRevision: revision }) => ({
-            windowName,
+        await progress.report(2, 4, 'Checking ChaosX country artwork');
+        const tags = [...new Set(input.countryTags)];
+        const { selections, catalog } = await selectCountryAssets(
+          engine,
+          snapshot,
+          workspaceId,
+          tags,
+          input.eventId,
+          context,
+          progress.signal,
+        );
+        const countries = countryRevision(snapshot, selections, catalog);
+        const filesScanned = new Set<string>([
+          ...focusRevisions.flatMap(({ filesScanned }) => filesScanned),
+          ...resolvedGuiRevisions.flatMap(({ filesScanned }) => filesScanned),
+          ...countries.filesScanned,
+        ]);
+        const result = emptyServiceResult(workspaceId, {
+          workspaceRevision: snapshot.revision,
+          focusRevisions: focusRevisions.map(({ relativePath, treeId, revision }) => ({
+            relativePath,
+            treeId,
             revision,
           })),
-        );
-        const result = emptyServiceResult(workspaceId, {
-          workspaceRevision,
           guiRevisions,
+          countryRevision: countries.revision,
           dependencyFileCount: filesScanned.size,
         });
         result.code = 'CHAOSX_VISUAL_REVISION_CHECKED';
         setInlineFilesScanned(result, [...filesScanned].sort(compareCodeUnits));
-        await progress.report(2, 2, 'ChaosX scripted-GUI revisions complete');
+        await progress.report(4, 4, 'ChaosX visual revisions complete');
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);

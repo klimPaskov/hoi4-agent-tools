@@ -1,0 +1,2 @@
+set_technology = { synthetic_tech_0005 = 1 }
+1936.1.1 = { set_technology = { synthetic_tech_0006 = 1 } }

@@ -1,0 +1,2 @@
+synthetic_track_alpha = { folder = synthetic_doctrine_folder name = synthetic_track_alpha_name }
+synthetic_track_beta = { folder = synthetic_doctrine_folder name = synthetic_track_beta_name }

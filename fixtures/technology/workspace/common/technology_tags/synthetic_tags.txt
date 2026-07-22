@@ -1,0 +1,17 @@
+technology_categories = { synthetic_category_00 synthetic_category_01 synthetic_category_02 synthetic_category_03 synthetic_category_04 synthetic_category_05 synthetic_category_06 synthetic_category_07 synthetic_category_08 synthetic_category_09 synthetic_category_10 synthetic_category_11 synthetic_category_12 synthetic_empty_category }
+technology_tags = { synthetic_tag_00 synthetic_tag_01 synthetic_tag_02 synthetic_tag_03 }
+technology_folders = {
+	synthetic_folder_00 = { ledger = army }
+	synthetic_folder_01 = { ledger = army }
+	synthetic_folder_02 = { ledger = army }
+	synthetic_folder_03 = { ledger = army }
+	synthetic_folder_04 = { ledger = army }
+	synthetic_folder_05 = { ledger = army }
+	synthetic_folder_06 = { ledger = army }
+	synthetic_folder_07 = { ledger = army }
+	synthetic_folder_08 = { ledger = army }
+	synthetic_folder_09 = { ledger = army }
+	synthetic_folder_10 = { ledger = army }
+	synthetic_folder_11 = { ledger = army }
+	synthetic_folder_12 = { doctrine = yes ledger = army }
+}

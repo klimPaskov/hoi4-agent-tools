@@ -162,6 +162,7 @@ describe('secured Streamable HTTP', () => {
     await client.connect(transport as unknown as Transport);
     const tools = await client.listTools();
     expect(tools.tools.some(({ name }) => name === 'hoi4.focus_inspect')).toBe(true);
+    expect(tools.tools.some(({ name }) => name === 'hoi4.tech_inspect')).toBe(true);
     const progress: number[] = [];
     await client.callTool(
       {
@@ -172,6 +173,11 @@ describe('secured Streamable HTTP', () => {
       { onprogress: ({ progress: value }) => progress.push(value) },
     );
     expect(progress).toEqual([0, 2, 3]);
+    const technology = await client.callTool({
+      name: 'hoi4.tech_inspect',
+      arguments: { workspaceId: 'test', mode: 'scan' },
+    });
+    expect(technology.structuredContent).toMatchObject({ status: 'ok', code: 'TECH_INSPECTED' });
     expect(transport.sessionId).toMatch(/^[0-9a-f-]{36}$/u);
     await transport.terminateSession();
     await client.close();

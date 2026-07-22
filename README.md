@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV event chains and inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
+HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains and technology systems and to inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
 
 ## What it does
 
@@ -8,6 +8,7 @@ HOI4 Agent Tools is an MCP server for coding agents to analyze Hearts of Iron IV
 - Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render states; create or repair interface source.
 - Maps: inspect provinces, states, regions, adjacency, supply, and railways; render layers; create and repair exact map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
+- Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
 
 ## Setup
 
@@ -44,6 +45,9 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 | `hoi4.event_inspect` | Scan, trace, explain, lint, or assess event chains and their state flow.                |
 | `hoi4.event_render`  | Render source-linked event routes, options, timing, state, scope, and unresolved edges. |
 | `hoi4.event_compare` | Compare event-chain topology and diagnostics between revisions.                         |
+| `hoi4.tech_inspect`  | Scan, trace, explain, lint, and assess technology and doctrine systems.                 |
+| `hoi4.tech_render`   | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage. |
+| `hoi4.tech_compare`  | Compare technology graphs, placements, references, diagnostics, and source overlays.    |
 
 Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, follow the `continuationUri` returned in `_meta` until it is `null`; clients may also request byte ranges with `?offset=<bytes>&length=<bytes>`.
 
@@ -51,7 +55,7 @@ Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, fo
 
 HOI4 Agent Tools provides HOI4 domain operations; it does not register MCP prompts, replace repository instructions such as `AGENTS.md`, manage skills or plans, or start subagents. The coding agent decides when to call it as part of its existing workflow.
 
-Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. The event tools are read-only; only `hoi4.*_rewrite` calls edit mod source.
+Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Event and technology tools analyze source without editing it; only `hoi4.*_rewrite` calls edit mod source.
 
 ## Create or clean content
 
@@ -61,6 +65,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 - Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render this window at common resolutions and fix clipping, missing assets, and click-region conflicts." See [Scripted GUIs](docs/gui.md).
 - Maps: "Create a state from these exact provinces," or "Inspect this state and split these provinces while keeping supply and railway references valid." See [Maps](docs/map.md).
 - Event chains: "Trace every route from this event and explain where its flags and variables change," or "Compare the workspace event graph with its previous revision and render the affected routes." See [Event chains](docs/events.md).
+- Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).
 
 ## HTTP
 

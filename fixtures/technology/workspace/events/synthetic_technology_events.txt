@@ -1,0 +1,2 @@
+add_namespace = synthetic_tech
+country_event = { id = synthetic_tech.1 hidden = yes immediate = { add_tech_bonus = { bonus = 0.5 uses = 1 technology = synthetic_tech_0002 } } }

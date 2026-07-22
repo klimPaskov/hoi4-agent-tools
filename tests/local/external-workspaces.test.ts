@@ -22,6 +22,12 @@ import {
   lintEventGraph,
   traceSelectedEvents,
 } from '../../src/hoi4_agent_tools/event/index.js';
+import {
+  TechnologyTreeViewer,
+  discoverTechnologyFolders,
+  explainTechnology,
+  lintTechnologyGraph,
+} from '../../src/hoi4_agent_tools/technology/index.js';
 
 const gameRoot = process.env.HOI4_GAME_ROOT;
 const modRoot = process.env.HOI4_EXTERNAL_MOD_ROOT;
@@ -289,5 +295,61 @@ local('local installed-game and external-mod integration', () => {
 
     const after = await viewer.scan('external', { refresh: true });
     expect(after.sourceHashes).toEqual(sourceHashesBefore);
+  }, 600_000);
+
+  it('analyzes installed vanilla and external-mod technology and doctrine systems read-only', async () => {
+    const core = await engine();
+    const viewer = new TechnologyTreeViewer(core);
+    const graph = await viewer.scan('external', { refresh: true });
+    const relevantSourceHashes = Object.fromEntries(
+      Object.entries(graph.sourceHashes).filter(([sourcePath]) =>
+        /:(?:common\/(?:technologies|technology_tags|doctrines)\/|interface\/.*(?:technolog|doctrine)|localisation\/.*(?:technolog|doctrine))/iu.test(
+          sourcePath,
+        ),
+      ),
+    );
+    expect(Object.keys(relevantSourceHashes).length).toBeGreaterThan(20);
+    const vanilla = graph.technologies.filter(({ source }) => source.rootKind === 'game');
+    const external = graph.technologies.filter(({ source }) => source.rootKind === 'mod');
+    expect(vanilla.length).toBeGreaterThan(500);
+    expect(external.length).toBeGreaterThan(0);
+    expect(graph.doctrineDefinitions.length).toBeGreaterThan(0);
+    expect(graph.folders.length).toBeGreaterThan(5);
+    expect(graph.placements.length).toBeGreaterThan(400);
+
+    for (const technology of [vanilla[0]!, external[0]!]) {
+      const explanation = explainTechnology(graph, technology.id) as {
+        technology: { source: { location: { path: string } } };
+        placements: Array<{ folderId: string }>;
+      };
+      expect(explanation.technology.source.location.path).toMatch(/^(?:game|mod):/u);
+      expect(lintTechnologyGraph(graph, { technologyId: technology.id })).toBeDefined();
+      const folderId = explanation.placements[0]?.folderId;
+      if (folderId !== undefined) {
+        expect(discoverTechnologyFolders(graph, folderId)).toBeDefined();
+        const first = await viewer.renderAndStore({
+          workspaceId: 'external',
+          view: 'folder',
+          folderId,
+          maxNodes: 1_000,
+        });
+        const second = await viewer.renderAndStore({
+          workspaceId: 'external',
+          view: 'folder',
+          folderId,
+          maxNodes: 1_000,
+        });
+        expect(first.render.hashes).toEqual(second.render.hashes);
+        expect(first.render.sourceAccurate).toBe(true);
+      }
+    }
+    const after = await viewer.scan('external', { refresh: true });
+    expect(
+      Object.fromEntries(
+        Object.entries(after.sourceHashes).filter(([sourcePath]) =>
+          Object.hasOwn(relevantSourceHashes, sourcePath),
+        ),
+      ),
+    ).toEqual(relevantSourceHashes);
   }, 600_000);
 });

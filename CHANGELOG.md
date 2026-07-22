@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 - 2026-07-22
+
+- Added a read-only Technology Tree Viewer for classic technologies, legacy and current doctrines, source folder layouts, prerequisites, exclusive choices, categories, tags, unlocks, bonuses, grants, metadata, localisation, icons, and cross-file references.
+- Added `hoi4.tech_inspect`, `hoi4.tech_render`, and `hoi4.tech_compare`, with complete graph resources, bounded large-tree overviews, focused folder renders, in-memory source comparison, and rename or removal impact analysis.
+- Added source-linked diagnostic classification for structural, placement, reference, unlock, bonus, doctrine, AI, localisation, icon, and unresolved static-analysis findings.
+- Added a deterministic 1,040-technology acceptance workspace with 13 folders, expected graph and reference manifests, stable SVG and PNG evidence, cancellation, incremental indexing, resource retrieval, and stdio, secured Streamable HTTP, package, and agent-workflow coverage.
+- Pinned patched transitive HTTP, URI, and shell parsing dependencies; the release dependency audit reports no known vulnerabilities.
+- Reconfirmed MCP protocol `2025-11-25`, TypeScript SDK 1.29.0, Registry schema `2025-12-11`, and Registry publisher 1.7.9 for this release.
+
 ## 2.1.1 - 2026-07-18
 
 - Updated container attestation verification for current in-toto `Statement/v1` documents emitted by BuildKit.

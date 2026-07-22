@@ -35,6 +35,21 @@ export type SymbolKind =
   | 'texture'
   | 'gui_element'
   | 'scripted_gui'
+  | 'technology'
+  | 'technology_folder'
+  | 'technology_category'
+  | 'technology_tag'
+  | 'equipment'
+  | 'equipment_module'
+  | 'sub_unit'
+  | 'unit_category'
+  | 'building'
+  | 'ability'
+  | 'combat_tactic'
+  | 'doctrine_folder'
+  | 'grand_doctrine'
+  | 'doctrine_track'
+  | 'subdoctrine'
   | 'localisation'
   | 'state'
   | 'province'
@@ -142,6 +157,27 @@ function possibleSymbolKinds(
   }
   if (sourcePath.endsWith('.gui')) kinds.add('gui_element');
   if (sourcePath.endsWith('.txt')) {
+    if (sourcePath.startsWith('common/technologies/')) kinds.add('technology');
+    if (sourcePath.startsWith('common/technology_tags/')) {
+      kinds.add('technology_folder');
+      kinds.add('technology_category');
+      kinds.add('technology_tag');
+    }
+    if (sourcePath.startsWith('common/units/equipment/modules/')) kinds.add('equipment_module');
+    else if (sourcePath.startsWith('common/units/equipment/')) kinds.add('equipment');
+    else if (sourcePath.startsWith('common/units/')) kinds.add('sub_unit');
+    if (sourcePath.startsWith('common/unit_tags/')) kinds.add('unit_category');
+    if (sourcePath.startsWith('common/buildings/')) kinds.add('building');
+    if (sourcePath.startsWith('common/abilities/')) kinds.add('ability');
+    if (
+      sourcePath === 'common/combat_tactics.txt' ||
+      sourcePath.startsWith('common/combat_tactics/')
+    )
+      kinds.add('combat_tactic');
+    if (sourcePath.startsWith('common/doctrines/folders/')) kinds.add('doctrine_folder');
+    if (sourcePath.startsWith('common/doctrines/grand_doctrines/')) kinds.add('grand_doctrine');
+    if (sourcePath.startsWith('common/doctrines/tracks/')) kinds.add('doctrine_track');
+    if (sourcePath.startsWith('common/doctrines/subdoctrines/')) kinds.add('subdoctrine');
     if (/(?:^|\/)focus(?:es)?(?:\/|$)|national_focus|continuous_focus/u.test(sourcePath)) {
       kinds.add('focus_tree');
       kinds.add('focus');
@@ -570,6 +606,271 @@ export class SymbolIndex {
           rootKind: file.rootKind,
           loadOrder: file.loadOrder,
           location: nodeLocation(document, assignment, id),
+          metadata: {},
+        });
+      } else if (
+        sourcePath.startsWith('common/technologies/') &&
+        ancestors.length === 1 &&
+        ancestors[0] === 'technologies' &&
+        !key.startsWith('@')
+      ) {
+        this.addSymbol({
+          kind: 'technology',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {
+            startYear: firstScalar(child, 'start_year')?.value,
+            researchCost: firstScalar(child, 'research_cost')?.value,
+            doctrine: firstScalar(child, 'doctrine')?.value === 'yes',
+            icon: `GFX_${key}_medium`,
+          },
+        });
+        for (const pathBlock of childBlocks(child, 'path')) {
+          const target = firstScalar(pathBlock, 'leads_to_tech');
+          if (target !== undefined)
+            this.addReference({
+              kind: 'technology_prerequisite',
+              from: key,
+              toKind: 'technology',
+              to: target.value,
+              path: file.displayPath,
+              location: nodeLocation(document, target, key),
+            });
+        }
+        for (const xor of childBlocks(child, 'xor'))
+          for (const target of scalars(xor))
+            this.addReference({
+              kind: 'technology_exclusive',
+              from: key,
+              toKind: 'technology',
+              to: target,
+              path: file.displayPath,
+              location: nodeLocation(document, xor, key),
+            });
+        for (const folder of childBlocks(child, 'folder')) {
+          const target = firstScalar(folder, 'name');
+          if (target !== undefined)
+            this.addReference({
+              kind: 'technology_folder',
+              from: key,
+              toKind: 'technology_folder',
+              to: target.value,
+              path: file.displayPath,
+              location: nodeLocation(document, target, key),
+            });
+        }
+        for (const categories of childBlocks(child, 'categories'))
+          for (const target of scalars(categories))
+            this.addReference({
+              kind: 'technology_category',
+              from: key,
+              toKind: 'technology_category',
+              to: target,
+              path: file.displayPath,
+              location: nodeLocation(document, categories, key),
+            });
+        for (const tags of childBlocks(child, 'tags'))
+          for (const target of scalars(tags))
+            this.addReference({
+              kind: 'technology_tag',
+              from: key,
+              toKind: 'technology_tag',
+              to: target,
+              path: file.displayPath,
+              location: nodeLocation(document, tags, key),
+            });
+        for (const [field, targetKind] of [
+          ['enable_equipments', 'equipment'],
+          ['enable_equipment_modules', 'equipment_module'],
+          ['enable_subunits', 'sub_unit'],
+        ] as const)
+          for (const unlockBlock of childBlocks(child, field))
+            for (const target of scalars(unlockBlock))
+              this.addReference({
+                kind: `technology_${field}`,
+                from: key,
+                toKind: targetKind,
+                to: target,
+                path: file.displayPath,
+                location: nodeLocation(document, unlockBlock, key),
+              });
+        for (const building of childBlocks(child, 'enable_building')) {
+          const target = firstScalar(building, 'building');
+          if (target !== undefined)
+            this.addReference({
+              kind: 'technology_enable_building',
+              from: key,
+              toKind: 'building',
+              to: target.value,
+              path: file.displayPath,
+              location: nodeLocation(document, target, key),
+            });
+        }
+      } else if (
+        sourcePath.startsWith('common/technology_tags/') &&
+        key === 'technology_categories'
+      ) {
+        for (const category of child.entries.filter((entry) => entry.type === 'scalar'))
+          this.addSymbol({
+            kind: 'technology_category',
+            id: category.value,
+            path: file.displayPath,
+            rootKind: file.rootKind,
+            loadOrder: file.loadOrder,
+            location: nodeLocation(document, category, category.value),
+            metadata: {},
+          });
+      } else if (sourcePath.startsWith('common/technology_tags/') && key === 'technology_tags') {
+        for (const tag of child.entries.filter((entry) => entry.type === 'scalar'))
+          this.addSymbol({
+            kind: 'technology_tag',
+            id: tag.value,
+            path: file.displayPath,
+            rootKind: file.rootKind,
+            loadOrder: file.loadOrder,
+            location: nodeLocation(document, tag, tag.value),
+            metadata: {},
+          });
+      } else if (
+        sourcePath.startsWith('common/technology_tags/') &&
+        ancestors.at(-1) === 'technology_folders'
+      ) {
+        this.addSymbol({
+          kind: 'technology_folder',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {
+            doctrine: firstScalar(child, 'doctrine')?.value === 'yes',
+            ledger: firstScalar(child, 'ledger')?.value,
+          },
+        });
+      } else if (
+        sourcePath.startsWith('common/units/equipment/modules/') &&
+        ancestors.at(-1) === 'equipment_modules' &&
+        key !== 'limit'
+      ) {
+        this.addSymbol({
+          kind: 'equipment_module',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (
+        sourcePath.startsWith('common/units/equipment/') &&
+        !sourcePath.startsWith('common/units/equipment/modules/') &&
+        ancestors.at(-1) === 'equipments' &&
+        key !== 'limit'
+      ) {
+        this.addSymbol({
+          kind: 'equipment',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (
+        sourcePath.startsWith('common/units/') &&
+        !sourcePath.startsWith('common/units/equipment/') &&
+        ancestors.at(-1) === 'sub_units'
+      ) {
+        this.addSymbol({
+          kind: 'sub_unit',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/buildings/') && ancestors.at(-1) === 'buildings') {
+        this.addSymbol({
+          kind: 'building',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/abilities/') && ancestors.at(-1) === 'ability') {
+        this.addSymbol({
+          kind: 'ability',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (
+        (sourcePath === 'common/combat_tactics.txt' ||
+          sourcePath.startsWith('common/combat_tactics/')) &&
+        ancestors.at(-1) === 'combat_tactics'
+      ) {
+        this.addSymbol({
+          kind: 'combat_tactic',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (sourcePath.startsWith('common/doctrines/folders/') && ancestors.length === 0) {
+        this.addSymbol({
+          kind: 'doctrine_folder',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (
+        sourcePath.startsWith('common/doctrines/grand_doctrines/') &&
+        ancestors.length === 0
+      ) {
+        this.addSymbol({
+          kind: 'grand_doctrine',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: { folder: firstScalar(child, 'folder')?.value },
+        });
+      } else if (sourcePath.startsWith('common/doctrines/tracks/') && ancestors.length === 0) {
+        this.addSymbol({
+          kind: 'doctrine_track',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
+          metadata: {},
+        });
+      } else if (
+        sourcePath.startsWith('common/doctrines/subdoctrines/') &&
+        ancestors.length === 0
+      ) {
+        this.addSymbol({
+          kind: 'subdoctrine',
+          id: key,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, key),
           metadata: {},
         });
       } else if (
@@ -1051,7 +1352,8 @@ export class SymbolIndex {
       if (candidates.length === 0) continue;
       const active = candidates[0]!;
       this.#active.set(key, active);
-      const additiveCategory = active.kind === 'decision_category';
+      const additiveCategory =
+        active.kind === 'decision_category' || active.kind === 'technology_category';
       for (const candidate of group) {
         candidate.overridden = additiveCategory ? candidate.sourceShadowed : candidate !== active;
       }

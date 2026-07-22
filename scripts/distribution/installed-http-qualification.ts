@@ -20,6 +20,9 @@ const publicToolNames = [
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
+  'hoi4.tech_inspect',
+  'hoi4.tech_render',
+  'hoi4.tech_compare',
 ] as const;
 
 interface ObservedRequest {

@@ -1,0 +1,1433 @@
+technologies = {
+	synthetic_tech_0130 = {
+		start_year = 1960
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0131 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0131 = {
+		start_year = 1960
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0132 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0132 = {
+		start_year = 1962
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0133 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0133 = {
+		start_year = 1962
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0134 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0134 = {
+		start_year = 1962
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0135 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0135 = {
+		start_year = 1962
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0136 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0136 = {
+		start_year = 1964
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0137 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0137 = {
+		start_year = 1964
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0138 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0138 = {
+		start_year = 1964
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0139 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0139 = {
+		start_year = 1964
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0140 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0140 = {
+		start_year = 1966
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0141 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0141 = {
+		start_year = 1966
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0142 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0142 = {
+		start_year = 1966
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0143 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0143 = {
+		start_year = 1966
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0144 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0144 = {
+		start_year = 1968
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0145 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0145 = {
+		start_year = 1968
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0146 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0146 = {
+		start_year = 1968
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0147 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0147 = {
+		start_year = 1968
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0148 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0148 = {
+		start_year = 1970
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0149 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0149 = {
+		start_year = 1970
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0150 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0150 = {
+		start_year = 1970
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0151 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0151 = {
+		start_year = 1970
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0152 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0152 = {
+		start_year = 1972
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0153 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0153 = {
+		start_year = 1972
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0154 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0154 = {
+		start_year = 1972
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0155 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0155 = {
+		start_year = 1972
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0156 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0156 = {
+		start_year = 1974
+		research_cost = 1.00
+		folder = { name = synthetic_folder_01 position = { x = 0 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0157 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0157 = {
+		start_year = 1974
+		research_cost = 1.25
+		folder = { name = synthetic_folder_01 position = { x = 1 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0158 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0158 = {
+		start_year = 1974
+		research_cost = 1.50
+		folder = { name = synthetic_folder_01 position = { x = 2 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0159 }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0159 = {
+		start_year = 1974
+		research_cost = 1.75
+		folder = { name = synthetic_folder_01 position = { x = 3 y = 19 } }
+		categories = { synthetic_category_01 }
+		tags = { synthetic_tag_01 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0160 = {
+		start_year = 1936
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0161 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0161 = {
+		start_year = 1936
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0162 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0162 = {
+		start_year = 1936
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0163 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0163 = {
+		start_year = 1936
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0164 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0164 = {
+		start_year = 1938
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0165 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0165 = {
+		start_year = 1938
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0166 }
+		xor = { synthetic_tech_0166 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0166 = {
+		start_year = 1938
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0167 }
+		xor = { synthetic_tech_0165 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0167 = {
+		start_year = 1938
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0168 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0168 = {
+		start_year = 1940
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0169 research_cost_coeff = 1.25 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0169 = {
+		start_year = 1940
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0170 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0170 = {
+		start_year = 1940
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0171 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0171 = {
+		start_year = 1940
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0172 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0172 = {
+		start_year = 1942
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0173 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0173 = {
+		start_year = 1942
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0174 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0174 = {
+		start_year = 1942
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0175 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0175 = {
+		start_year = 1942
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0176 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0176 = {
+		start_year = 1944
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0177 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0177 = {
+		start_year = 1944
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0178 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0178 = {
+		start_year = 1944
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0179 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0179 = {
+		start_year = 1944
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0180 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0180 = {
+		start_year = 1946
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 5 } }
+		path = { leads_to_tech = synthetic_tech_0181 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0181 = {
+		start_year = 1946
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 5 } }
+		path = { leads_to_tech = synthetic_tech_0182 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0182 = {
+		start_year = 1946
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 5 } }
+		path = { leads_to_tech = synthetic_tech_0183 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0183 = {
+		start_year = 1946
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 5 } }
+		path = { leads_to_tech = synthetic_tech_0184 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0184 = {
+		start_year = 1948
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 6 } }
+		path = { leads_to_tech = synthetic_tech_0185 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0185 = {
+		start_year = 1948
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 6 } }
+		path = { leads_to_tech = synthetic_tech_0186 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0186 = {
+		start_year = 1948
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 6 } }
+		path = { leads_to_tech = synthetic_tech_0187 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0187 = {
+		start_year = 1948
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 6 } }
+		path = { leads_to_tech = synthetic_tech_0188 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0188 = {
+		start_year = 1950
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 7 } }
+		path = { leads_to_tech = synthetic_tech_0189 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0189 = {
+		start_year = 1950
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 7 } }
+		path = { leads_to_tech = synthetic_tech_0190 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0190 = {
+		start_year = 1950
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 7 } }
+		path = { leads_to_tech = synthetic_tech_0191 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0191 = {
+		start_year = 1950
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 7 } }
+		path = { leads_to_tech = synthetic_tech_0192 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0192 = {
+		start_year = 1952
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 8 } }
+		path = { leads_to_tech = synthetic_tech_0193 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0193 = {
+		start_year = 1952
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 8 } }
+		path = { leads_to_tech = synthetic_tech_0194 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0194 = {
+		start_year = 1952
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 8 } }
+		path = { leads_to_tech = synthetic_tech_0195 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0195 = {
+		start_year = 1952
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 8 } }
+		path = { leads_to_tech = synthetic_tech_0196 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0196 = {
+		start_year = 1954
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 9 } }
+		path = { leads_to_tech = synthetic_tech_0197 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0197 = {
+		start_year = 1954
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 9 } }
+		path = { leads_to_tech = synthetic_tech_0198 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0198 = {
+		start_year = 1954
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 9 } }
+		path = { leads_to_tech = synthetic_tech_0199 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0199 = {
+		start_year = 1954
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 9 } }
+		path = { leads_to_tech = synthetic_tech_0200 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0200 = {
+		start_year = 1956
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 10 } }
+		path = { leads_to_tech = synthetic_tech_0201 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0201 = {
+		start_year = 1956
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 10 } }
+		path = { leads_to_tech = synthetic_tech_0202 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0202 = {
+		start_year = 1956
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 10 } }
+		path = { leads_to_tech = synthetic_tech_0203 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0203 = {
+		start_year = 1956
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 10 } }
+		path = { leads_to_tech = synthetic_tech_0204 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0204 = {
+		start_year = 1958
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 11 } }
+		path = { leads_to_tech = synthetic_tech_0205 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0205 = {
+		start_year = 1958
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 11 } }
+		path = { leads_to_tech = synthetic_tech_0206 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0206 = {
+		start_year = 1958
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 11 } }
+		path = { leads_to_tech = synthetic_tech_0207 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0207 = {
+		start_year = 1958
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 11 } }
+		path = { leads_to_tech = synthetic_tech_0208 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0208 = {
+		start_year = 1960
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0209 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0209 = {
+		start_year = 1960
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0210 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0210 = {
+		start_year = 1960
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0211 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0211 = {
+		start_year = 1960
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 12 } }
+		path = { leads_to_tech = synthetic_tech_0212 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0212 = {
+		start_year = 1962
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0213 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0213 = {
+		start_year = 1962
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0214 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0214 = {
+		start_year = 1962
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0215 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0215 = {
+		start_year = 1962
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 13 } }
+		path = { leads_to_tech = synthetic_tech_0216 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0216 = {
+		start_year = 1964
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0217 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0217 = {
+		start_year = 1964
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0218 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0218 = {
+		start_year = 1964
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0219 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0219 = {
+		start_year = 1964
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 14 } }
+		path = { leads_to_tech = synthetic_tech_0220 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0220 = {
+		start_year = 1966
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0221 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0221 = {
+		start_year = 1966
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0222 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0222 = {
+		start_year = 1966
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0223 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0223 = {
+		start_year = 1966
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 15 } }
+		path = { leads_to_tech = synthetic_tech_0224 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0224 = {
+		start_year = 1968
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0225 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0225 = {
+		start_year = 1968
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0226 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0226 = {
+		start_year = 1968
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0227 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0227 = {
+		start_year = 1968
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 16 } }
+		path = { leads_to_tech = synthetic_tech_0228 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0228 = {
+		start_year = 1970
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0229 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0229 = {
+		start_year = 1970
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0230 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0230 = {
+		start_year = 1970
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0231 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0231 = {
+		start_year = 1970
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 17 } }
+		path = { leads_to_tech = synthetic_tech_0232 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0232 = {
+		start_year = 1972
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0233 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0233 = {
+		start_year = 1972
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0234 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0234 = {
+		start_year = 1972
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0235 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0235 = {
+		start_year = 1972
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 18 } }
+		path = { leads_to_tech = synthetic_tech_0236 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0236 = {
+		start_year = 1974
+		research_cost = 1.00
+		folder = { name = synthetic_folder_02 position = { x = 0 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0237 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0237 = {
+		start_year = 1974
+		research_cost = 1.25
+		folder = { name = synthetic_folder_02 position = { x = 1 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0238 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0238 = {
+		start_year = 1974
+		research_cost = 1.50
+		folder = { name = synthetic_folder_02 position = { x = 2 y = 19 } }
+		path = { leads_to_tech = synthetic_tech_0239 }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0239 = {
+		start_year = 1974
+		research_cost = 1.75
+		folder = { name = synthetic_folder_02 position = { x = 3 y = 19 } }
+		categories = { synthetic_category_02 }
+		tags = { synthetic_tag_02 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0240 = {
+		start_year = 1936
+		research_cost = 1.00
+		folder = { name = synthetic_folder_03 position = { x = 0 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0241 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0241 = {
+		start_year = 1936
+		research_cost = 1.25
+		folder = { name = synthetic_folder_03 position = { x = 1 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0242 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0242 = {
+		start_year = 1936
+		research_cost = 1.50
+		folder = { name = synthetic_folder_03 position = { x = 2 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0243 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0243 = {
+		start_year = 1936
+		research_cost = 1.75
+		folder = { name = synthetic_folder_03 position = { x = 3 y = 0 } }
+		path = { leads_to_tech = synthetic_tech_0244 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0244 = {
+		start_year = 1938
+		research_cost = 1.00
+		folder = { name = synthetic_folder_03 position = { x = 0 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0245 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0245 = {
+		start_year = 1938
+		research_cost = 1.25
+		folder = { name = synthetic_folder_03 position = { x = 1 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0246 }
+		xor = { synthetic_tech_0246 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0246 = {
+		start_year = 1938
+		research_cost = 1.50
+		folder = { name = synthetic_folder_03 position = { x = 2 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0247 }
+		xor = { synthetic_tech_0245 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0247 = {
+		start_year = 1938
+		research_cost = 1.75
+		folder = { name = synthetic_folder_03 position = { x = 3 y = 1 } }
+		path = { leads_to_tech = synthetic_tech_0248 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0248 = {
+		start_year = 1940
+		research_cost = 1.00
+		folder = { name = synthetic_folder_03 position = { x = 0 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0249 research_cost_coeff = 1.25 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0249 = {
+		start_year = 1940
+		research_cost = 1.25
+		folder = { name = synthetic_folder_03 position = { x = 1 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0250 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0250 = {
+		start_year = 1940
+		research_cost = 1.50
+		folder = { name = synthetic_folder_03 position = { x = 2 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0251 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0251 = {
+		start_year = 1940
+		research_cost = 1.75
+		folder = { name = synthetic_folder_03 position = { x = 3 y = 2 } }
+		path = { leads_to_tech = synthetic_tech_0252 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0252 = {
+		start_year = 1942
+		research_cost = 1.00
+		folder = { name = synthetic_folder_03 position = { x = 0 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0253 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0253 = {
+		start_year = 1942
+		research_cost = 1.25
+		folder = { name = synthetic_folder_03 position = { x = 1 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0254 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0254 = {
+		start_year = 1942
+		research_cost = 1.50
+		folder = { name = synthetic_folder_03 position = { x = 2 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0255 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0255 = {
+		start_year = 1942
+		research_cost = 1.75
+		folder = { name = synthetic_folder_03 position = { x = 3 y = 3 } }
+		path = { leads_to_tech = synthetic_tech_0256 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		research_speed_factor = 0.01
+		ai_will_do = { factor = 0 }
+	}
+
+	synthetic_tech_0256 = {
+		start_year = 1944
+		research_cost = 1.00
+		folder = { name = synthetic_folder_03 position = { x = 0 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0257 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0257 = {
+		start_year = 1944
+		research_cost = 1.25
+		folder = { name = synthetic_folder_03 position = { x = 1 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0258 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0258 = {
+		start_year = 1944
+		research_cost = 1.50
+		folder = { name = synthetic_folder_03 position = { x = 2 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0259 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+
+	synthetic_tech_0259 = {
+		start_year = 1944
+		research_cost = 1.75
+		folder = { name = synthetic_folder_03 position = { x = 3 y = 4 } }
+		path = { leads_to_tech = synthetic_tech_0260 }
+		categories = { synthetic_category_03 }
+		tags = { synthetic_tag_03 }
+		production_speed_buildings_factor = 0.01
+		ai_will_do = { factor = 1 }
+	}
+}

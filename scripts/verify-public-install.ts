@@ -33,6 +33,9 @@ const publicToolNames = [
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
+  'hoi4.tech_inspect',
+  'hoi4.tech_render',
+  'hoi4.tech_compare',
 ] as const;
 const focusFixture = `focus_tree = {
 \tid = public_install_focus
@@ -192,9 +195,7 @@ try {
             message.result?.tools?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
           if (!sameNames(names, publicToolNames)) {
             clearTimeout(timeout);
-            reject(
-              new Error(`Published stdio tools do not match the thirteen-tool public surface`),
-            );
+            reject(new Error(`Published stdio tools do not match the sixteen-tool public surface`));
             return;
           }
           validated = true;

@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
-import { compareCodeUnits, canonicalJson } from '../../core/canonical.js';
+import { compareCodeUnits, canonicalJson, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
 import type { ScannedFile } from '../../core/scanner.js';
 import { RenderBudget } from '../../core/render-budget.js';
@@ -172,6 +172,10 @@ const compactFocusPlanSchema = compactValidatedInputSchema(
   z.union([focusTreePlanSchema, continuousFocusPaletteSchema]),
   `Complete focus plan: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/focus.md`,
 );
+const compactFocusLayoutSchema = compactValidatedInputSchema(
+  focusLayoutSchema,
+  'Prior deterministic focus layout used to stabilize unchanged positions.',
+);
 
 const focusInspectInput = z
   .object({
@@ -180,7 +184,7 @@ const focusInspectInput = z
     relativePath: workspaceRelativePathSchema.optional(),
     treeId: z.string().min(1).max(256).optional(),
     paletteId: z.string().min(1).max(256).optional(),
-    previous: focusLayoutSchema.optional(),
+    previous: compactFocusLayoutSchema.optional(),
     laneSpacing: z.number().int().min(1).max(100).optional(),
     nodeSpacing: z.number().int().min(1).max(100).optional(),
   })
@@ -374,6 +378,68 @@ function automaticFocusRenderScale(focusCount: number): number {
 
 type FocusRenderInput = z.infer<typeof focusRenderInput>;
 type ProgressExtra = Parameters<typeof progressReporter>[0];
+
+export interface FocusVisualRevisionSelector {
+  relativePath: string;
+  treeId: string;
+}
+
+export interface FocusVisualRevision {
+  relativePath: string;
+  treeId: string;
+  revision: string;
+  filesScanned: string[];
+}
+
+export async function computeFocusVisualRevisions(
+  engine: CoreEngine,
+  context: ServerContext,
+  workspaceId: string,
+  snapshot: ScanSnapshot,
+  selectors: readonly FocusVisualRevisionSelector[],
+  signal?: AbortSignal,
+): Promise<FocusVisualRevision[]> {
+  const workspace = engine.resolver.get(workspaceId, context.principal);
+  const paletteImport = continuousPalettes(snapshot);
+  const revisions: FocusVisualRevision[] = [];
+  for (const selector of selectors) {
+    signal?.throwIfAborted();
+    const imported = importFocusFile(
+      snapshot,
+      selectedFocusFile(snapshot, workspace.registration.roots.focus, selector.relativePath),
+      paletteImport.palettes,
+    );
+    const plan = selectPlan(imported, selector.treeId);
+    const linkedPalettes = paletteImport.palettes.filter(({ id }) =>
+      plan.continuousFocusPaletteIds.includes(id),
+    );
+    const presentation = await resolveFocusPresentation({
+      plans: [plan],
+      palettes: linkedPalettes,
+      files: snapshot.files,
+      index: snapshot.index,
+      scanner: engine.scanner,
+      workspace,
+      decodeIcons: false,
+      budget: new RenderBudget(),
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const filesScanned = [
+      ...new Set([plan.provenance.sourcePath, ...presentation.filesScanned]),
+    ].sort(compareCodeUnits);
+    revisions.push({
+      relativePath: selector.relativePath,
+      treeId: plan.id,
+      revision: hashCanonical({
+        planHash: focusPlanHash(plan),
+        linkedPalettes,
+        presentationSourceHashes: presentation.sourceHashes,
+      }),
+      filesScanned,
+    });
+  }
+  return revisions;
+}
 
 async function executeFocusVisualTool(
   engine: CoreEngine,

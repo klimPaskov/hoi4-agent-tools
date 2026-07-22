@@ -1,0 +1,1 @@
+synthetic_technology_bonus = { add_tech_bonus = { bonus = 0.5 uses = 1 technology = synthetic_tech_0001 } }

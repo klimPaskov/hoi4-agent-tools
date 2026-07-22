@@ -6,11 +6,11 @@
 
 ## Decision
 
-Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register the twelve strict domain tools and the content-addressed artifact resource template through the official SDK. Local tool calls resolve the mod containing the MCP working directory. Do not register prompts.
+Pin `@modelcontextprotocol/sdk` 1.29.0 and implement the final MCP revision `2025-11-25`. Use `McpServer`, SDK JSON-RPC stdio serialization/deserialization behind the product's bounded newline-frame transport, and stateful `StreamableHTTPServerTransport`. Register the sixteen strict domain tools and the content-addressed artifact resource template through the official SDK. Local tool calls resolve the mod containing the MCP working directory. Do not register prompts.
 
 ## Rationale
 
-On 2026-07-13, `2025-11-25` remains the current final protocol. The breaking `2026-07-28` revision and split SDK v2 packages remain release candidates, not the production line. The v1 SDK remains the upstream recommendation. ADR 0013 adds the compact three-tool Event Chain Viewer without changing this protocol or SDK baseline.
+Rechecked on 2026-07-22, `2025-11-25` remains the current final protocol. The breaking `2026-07-28` revision and split SDK v2 packages remain release candidates, not the production line. The v1 SDK remains the upstream recommendation. ADR 0014 adds the compact three-tool Technology Tree Viewer without changing this protocol or SDK baseline.
 
 ## Consequences
 

@@ -62,6 +62,9 @@ describe('MCP discovery', () => {
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
+      'hoi4.tech_inspect',
+      'hoi4.tech_render',
+      'hoi4.tech_compare',
     ]);
 
     for (const name of [
@@ -80,7 +83,14 @@ describe('MCP discovery', () => {
         openWorldHint: false,
       });
     }
-    for (const name of ['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_compare']) {
+    for (const name of [
+      'hoi4.event_inspect',
+      'hoi4.event_render',
+      'hoi4.event_compare',
+      'hoi4.tech_inspect',
+      'hoi4.tech_render',
+      'hoi4.tech_compare',
+    ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,

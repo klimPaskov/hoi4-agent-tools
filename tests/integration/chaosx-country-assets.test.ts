@@ -107,6 +107,48 @@ describe('ChaosX-only country assets MCP integration', () => {
     const privateTools = (await client.listTools()).tools.map(({ name }) => name);
     expect(privateTools).toContain('chaosx.focus_country_assets');
     expect(privateTools).toContain('chaosx.visual_revision');
+    const firstRevisionResponse = await client.callTool({
+      name: 'chaosx.visual_revision',
+      arguments: {
+        workspaceId: 'chaosx-assets',
+        countryTags: ['AAA'],
+        eventId: 3,
+      },
+    });
+    const firstRevision = firstRevisionResponse.structuredContent as {
+      status: string;
+      code: string;
+      data: { workspaceRevision: string; countryRevision: string; dependencyFileCount: number };
+    };
+    expect(firstRevision).toMatchObject({
+      status: 'ok',
+      code: 'CHAOSX_VISUAL_REVISION_CHECKED',
+      data: { dependencyFileCount: 4 },
+    });
+    expect(firstRevision.data.workspaceRevision).toMatch(/^[0-9a-f]{64}$/);
+    expect(firstRevision.data.countryRevision).toMatch(/^[0-9a-f]{64}$/);
+
+    await writeFile(
+      leaderPath,
+      await sharp({
+        create: { width: 156, height: 210, channels: 4, background: '#24aa48' },
+      })
+        .png()
+        .toBuffer(),
+    );
+    const changedRevisionResponse = await client.callTool({
+      name: 'chaosx.visual_revision',
+      arguments: {
+        workspaceId: 'chaosx-assets',
+        countryTags: ['AAA'],
+        eventId: 3,
+      },
+    });
+    const changedRevision = changedRevisionResponse.structuredContent as {
+      data: { workspaceRevision: string; countryRevision: string };
+    };
+    expect(changedRevision.data.workspaceRevision).toBe(firstRevision.data.workspaceRevision);
+    expect(changedRevision.data.countryRevision).not.toBe(firstRevision.data.countryRevision);
     const response = await client.callTool({
       name: 'chaosx.focus_country_assets',
       arguments: {

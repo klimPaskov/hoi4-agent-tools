@@ -1,0 +1,1 @@
+technology_sharing_group = { id = synthetic_sharing categories = { synthetic_category_02 synthetic_empty_category } }

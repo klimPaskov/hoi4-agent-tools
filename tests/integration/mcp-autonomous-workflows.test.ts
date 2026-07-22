@@ -138,6 +138,9 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
+      'hoi4.tech_inspect',
+      'hoi4.tech_render',
+      'hoi4.tech_compare',
     ]);
     for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations).toMatchObject({

@@ -1,0 +1,1 @@
+on_actions = { on_startup = { effect = { set_technology = { synthetic_tech_0004 = 1 synthetic_tech_1038 = 1 synthetic_stale_renamed_tech = 1 } add_tech_bonus = { bonus = 0.25 uses = 1 category = synthetic_missing_bonus_category } add_tech_bonus = { bonus = 0.25 uses = 1 category = synthetic_empty_category } } } }

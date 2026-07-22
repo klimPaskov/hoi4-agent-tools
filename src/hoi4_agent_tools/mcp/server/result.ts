@@ -52,13 +52,13 @@ const compactPublicOperationResultSchema = z
     status: z.enum(['ok', 'blocked', 'error']),
     code: z.string(),
     workspaceId: z.string(),
-    filesScanned: z.array(z.unknown()).max(MAX_INLINE_FILES_SCANNED),
-    proposedFiles: z.array(z.unknown()).max(MAX_INLINE_PROPOSED_FILES),
-    changedFiles: z.array(z.unknown()).max(MAX_INLINE_CHANGED_FILES),
+    filesScanned: z.array(z.unknown()),
+    proposedFiles: z.array(z.unknown()),
+    changedFiles: z.array(z.unknown()),
     diagnostics: z.array(z.unknown()).max(MAX_INLINE_DIAGNOSTICS),
     artifacts: z.array(z.unknown()).max(MAX_INLINE_ARTIFACT_LINKS),
     validation: z.unknown(),
-    blockers: z.array(z.unknown()).max(MAX_INLINE_BLOCKERS),
+    blockers: z.array(z.unknown()),
     data: z.object({}).catchall(z.unknown()),
   })
   .strict();

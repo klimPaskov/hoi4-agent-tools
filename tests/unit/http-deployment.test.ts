@@ -224,7 +224,7 @@ describe('Streamable HTTP deployment policy', () => {
     ).toBe(false);
   });
 
-  it('preflights mutations with write scope and event tools with read scope', () => {
+  it('preflights mutations with write scope and analysis tools with read scope', () => {
     const config = serverConfigurationSchema.parse({
       version: 1,
       http: { publicUrl: 'https://tools.example.test/mcp', oauth },
@@ -240,7 +240,14 @@ describe('Streamable HTTP deployment policy', () => {
         }),
       ).toEqual(['hoi4:read', 'hoi4:write']);
     }
-    for (const name of ['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_compare']) {
+    for (const name of [
+      'hoi4.event_inspect',
+      'hoi4.event_render',
+      'hoi4.event_compare',
+      'hoi4.tech_inspect',
+      'hoi4.tech_render',
+      'hoi4.tech_compare',
+    ]) {
       expect(
         requiredScopesForMcpRequest(config, {
           jsonrpc: '2.0',

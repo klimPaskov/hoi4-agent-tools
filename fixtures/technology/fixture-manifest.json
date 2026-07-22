@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "technologyCount": 1040,
+  "folderCount": 13,
+  "sourceDigest": "d36d906caae28951ad85fdef8ab32871a45c94900e41c458c3e839d92d472a3c",
+  "expectedGraph": "expected/graph-manifest.json",
+  "expectedReferences": "expected/reference-manifest.json"
+}

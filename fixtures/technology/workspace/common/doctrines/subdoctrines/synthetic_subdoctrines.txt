@@ -1,0 +1,2 @@
+synthetic_subdoctrine_alpha = { folder = synthetic_doctrine_folder track = synthetic_track_alpha xp_cost = 25 xp_type = army rewards = { synthetic_reward = { army_attack_factor = 0.05 } } xor = { synthetic_subdoctrine_beta } }
+synthetic_subdoctrine_beta = { folder = synthetic_doctrine_folder track = synthetic_track_beta xp_cost = 25 xp_type = army xor = { synthetic_subdoctrine_alpha } }

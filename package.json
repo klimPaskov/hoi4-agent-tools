@@ -1,8 +1,8 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "2.1.1",
-  "description": "Analyze HOI4 event chains; create and clean focus trees, scripted GUIs, and maps with coding agents.",
+  "version": "2.2.0",
+  "description": "Analyze HOI4 events and technology trees; create and clean focus trees, GUIs, and maps.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "HOI4 Agent Tools contributors",
@@ -22,6 +22,8 @@
     "clausewitz",
     "focus-trees",
     "event-chains",
+    "technology-trees",
+    "doctrines",
     "hoi4-events",
     "scripted-gui",
     "hoi4-map"
@@ -34,6 +36,7 @@
     "docs/README.md",
     "docs/setup.md",
     "docs/events.md",
+    "docs/technology.md",
     "docs/focus.md",
     "docs/gui.md",
     "docs/map.md",
@@ -63,11 +66,12 @@
     "test:local": "tsx scripts/run-local-tests.ts",
     "test:coverage": "vitest run --coverage",
     "benchmark": "node --expose-gc --import tsx scripts/benchmark.ts",
-    "fixtures:generate": "npm run fixtures:generate:focus && npm run fixtures:generate:gui && npm run fixtures:generate:map && npm run fixtures:generate:event",
+    "fixtures:generate": "npm run fixtures:generate:focus && npm run fixtures:generate:gui && npm run fixtures:generate:map && npm run fixtures:generate:event && npm run fixtures:generate:technology",
     "fixtures:generate:focus": "tsx scripts/generate-fixtures.ts",
     "fixtures:generate:gui": "tsx scripts/generate-gui-fixture.ts",
     "fixtures:generate:map": "tsx scripts/generate-map-fixture.ts",
     "fixtures:generate:event": "tsx scripts/generate-event-fixture.ts",
+    "fixtures:generate:technology": "tsx scripts/generate-technology-fixture.ts",
     "fixtures:check": "npm run fixtures:generate && tsx scripts/check-generated.ts fixtures",
     "schemas:generate": "tsx scripts/generate-schemas.ts",
     "schemas:check": "tsx scripts/generate-schemas.ts && tsx scripts/check-generated.ts schemas",
@@ -110,6 +114,11 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.63.0",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11",
+    "fast-uri": "3.1.4",
+    "shell-quote": "1.10.0"
   },
   "publishConfig": {
     "access": "public",

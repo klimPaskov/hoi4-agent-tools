@@ -1,12 +1,6 @@
 # Goal: Add the Technology Tree Viewer
 
-Work in:
-
-```text
-C:\\Users\\klimp\\Documents\\Projects\\hoi4-agent-tools
-```
-
-Add a fifth public MCP tool family for coding agents. Read `AGENTS.md`, architecture and MCP docs, and:
+Add a fifth public MCP tool family for coding agents. Read architecture and MCP docs, and:
 
 Inspect installed HOI4 documentation, offline technology references, vanilla technology and doctrine files, folder definitions, equipment and module files, localisation, sprites, and parser support.
 
