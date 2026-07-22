@@ -257,6 +257,7 @@ try {
     expectedServerName: ownPackage.name,
     expectedServerVersion: ownPackage.version,
     focusRelativePath,
+    probabilityFocusId: 'public_install_root',
     origin: httpOrigin,
     token: httpToken,
     workspaceId: 'public',

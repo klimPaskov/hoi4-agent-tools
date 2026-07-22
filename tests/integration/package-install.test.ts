@@ -365,6 +365,7 @@ describe('clean npm-pack installation', () => {
       expectedServerName: fixture.pack.name,
       expectedServerVersion: fixture.pack.version,
       focusRelativePath,
+      probabilityFocusId: 'http_root',
       origin: httpOrigin,
       token: httpToken,
       workspaceId: 'fixture',

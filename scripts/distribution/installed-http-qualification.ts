@@ -46,6 +46,7 @@ export interface InstalledHttpQualificationOptions {
   expectedServerName: string;
   expectedServerVersion: string;
   focusRelativePath: string;
+  probabilityFocusId: string;
   origin: string;
   token: string;
   workspaceId: string;
@@ -392,8 +393,8 @@ export async function qualifyInstalledHttpBinary(
       arguments: {
         workspaceId: options.workspaceId,
         adapter: 'national_focus_ai_will_do',
-        source: { identifier: 'http_root' },
-        candidatePool: ['http_root'],
+        source: { identifier: options.probabilityFocusId },
+        candidatePool: [options.probabilityFocusId],
       },
     });
     requireCondition(
