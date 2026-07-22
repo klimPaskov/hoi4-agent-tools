@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: ${{ env.RELEASE_NODE_VERSION }}
       - name: Require the one-time immutable bootstrap tag
@@ -131,7 +131,7 @@ jobs:
           FORBIDDEN_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           test -z "$FORBIDDEN_NPM_TOKEN"
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: ${{ env.RELEASE_NODE_VERSION }}
           registry-url: https://registry.npmjs.org
