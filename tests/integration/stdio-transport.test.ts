@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -19,6 +19,18 @@ function launch(
   return spawn(process.execPath, [tsxCli, stdioEntry], {
     cwd: projectRoot,
     env: { ...process.env, HOI4_AGENT_CONFIG: config, ...extraEnvironment },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+}
+
+function launchAutomatic(
+  cwd: string,
+  environment: NodeJS.ProcessEnv,
+): ChildProcessWithoutNullStreams {
+  return spawn(process.execPath, [tsxCli, stdioEntry], {
+    cwd,
+    env: environment,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -125,6 +137,66 @@ async function overflowConfig(prefix: string): Promise<string> {
 }
 
 describe('local stdio transport', () => {
+  it('starts from a sparse descriptor-less mod and resolves the current workspace', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-any-mod-'));
+    const workspace = path.join(temporary, 'sparse-mod');
+    const focusPath = path.join(workspace, 'common', 'national_focus', 'sparse.txt');
+    await mkdir(path.dirname(focusPath), { recursive: true });
+    await writeFile(
+      focusPath,
+      'focus_tree = { id = sparse focus = { id = sparse_root x = 0 y = 0 cost = 1 } }\n',
+      'utf8',
+    );
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      APPDATA: path.join(temporary, 'appdata'),
+      LOCALAPPDATA: path.join(temporary, 'localappdata'),
+      'ProgramFiles(x86)': path.join(temporary, 'missing-game'),
+    };
+    delete environment.HOI4_AGENT_CONFIG;
+    delete environment.HOI4_GAME_ROOT;
+    const child = launchAutomatic(workspace, environment);
+    const stdoutLines: string[] = [];
+    try {
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-11-25',
+            capabilities: {},
+            clientInfo: { name: 'any-mod-stdio-test', version: '1.0.0' },
+          },
+        })}\n`,
+      );
+      await waitForMessage(child, 1, stdoutLines);
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+      );
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'hoi4.focus_inspect',
+            arguments: { relativePath: 'common/national_focus/sparse.txt' },
+          },
+        })}\n`,
+      );
+      const inspected = await waitForMessage(child, 2, stdoutLines);
+      expect(inspected).toMatchObject({
+        jsonrpc: '2.0',
+        result: { structuredContent: { status: 'ok', code: 'FOCUS_INSPECTED' } },
+      });
+      expect(stdoutLines.every((line) => JSON.parse(line).jsonrpc === '2.0')).toBe(true);
+    } finally {
+      await stop(child);
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it('uses newline-delimited JSON-RPC on stdout with no log contamination', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-'));
     const workspace = path.join(temporary, 'mod');

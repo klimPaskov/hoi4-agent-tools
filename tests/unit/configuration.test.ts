@@ -9,12 +9,14 @@ import {
   serverConfigurationSchema,
   workspaceRegistrationSchema,
 } from '../../src/hoi4_agent_tools/core/configuration.js';
+import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import {
   automaticConfiguration,
   configurationPath,
   createEngine,
   defaultConfigurationPath,
 } from '../../src/hoi4_agent_tools/runtime.js';
+import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
 const temporaryRoots: string[] = [];
 const originalConfigPath = process.env.HOI4_AGENT_CONFIG;
@@ -60,6 +62,79 @@ describe('configuration loading and path selection', () => {
     });
     expect(configuration.serverStateRoot).toBeTruthy();
     expect(configuration.workspaceStorageRoot).toBeTruthy();
+  });
+
+  it.each(['common/national_focus', 'events', 'localisation', 'interface', 'map'])(
+    'finds a descriptor-less mod containing only %s',
+    async (contentPath) => {
+      const root = await mkdtemp(path.join(tmpdir(), 'hoi4-sparse-mod-'));
+      temporaryRoots.push(root);
+      const modRoot = path.join(root, 'sparse_mod');
+      const nestedContentRoot = path.join(modRoot, contentPath);
+      await mkdir(nestedContentRoot, { recursive: true });
+      if (contentPath !== 'common/national_focus') {
+        const extension = contentPath.startsWith('localisation')
+          ? '.yml'
+          : contentPath === 'interface'
+            ? '.gui'
+            : contentPath === 'map'
+              ? '.csv'
+              : '.txt';
+        await writeFile(
+          path.join(nestedContentRoot, `sparse_fixture${extension}`),
+          'fixture\n',
+          'utf8',
+        );
+      }
+
+      const configuration = await automaticConfiguration(nestedContentRoot);
+
+      expect(configuration.workspaces).toHaveLength(1);
+      expect(configuration.workspaces[0]).toMatchObject({
+        id: 'auto_sparse_mod',
+        root: modRoot,
+        kind: 'mod',
+      });
+    },
+  );
+
+  it('does not treat an installed game root as an automatic writable mod', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-game-root-'));
+    temporaryRoots.push(root);
+    const gameRoot = path.join(root, 'Hearts of Iron IV');
+    await mkdir(path.join(gameRoot, 'common'), { recursive: true });
+    await writeFile(path.join(gameRoot, 'hoi4.exe'), 'game marker\n', 'utf8');
+
+    await expect(automaticConfiguration(path.join(gameRoot, 'common'))).rejects.toMatchObject({
+      code: 'AUTO_MOD_ROOT_NOT_FOUND',
+    });
+  });
+
+  it('scans a sparse mod through the shared engine without a descriptor or game root', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-sparse-engine-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'focus_only');
+    const focusPath = path.join(modRoot, 'common', 'national_focus', 'focus_only.txt');
+    await mkdir(path.dirname(focusPath), { recursive: true });
+    await writeFile(
+      focusPath,
+      'focus_tree = { id = focus_only focus = { id = focus_only_root x = 0 y = 0 cost = 1 } }\n',
+      'utf8',
+    );
+    const automatic = await automaticConfiguration(path.dirname(focusPath));
+    const configuration = serverConfigurationSchema.parse({
+      ...automatic,
+      serverStateRoot: path.join(root, 'state'),
+      workspaceStorageRoot: path.join(root, 'storage'),
+    });
+    const resolver = await WorkspaceResolver.create(configuration);
+    const engine = new CoreEngine(resolver);
+    const snapshot = await engine.scan('auto_focus_only');
+
+    expect(snapshot.files.map(({ relativePath }) => relativePath)).toContain(
+      'common/national_focus/focus_only.txt',
+    );
+    expect(snapshot.index.findAll('focus_tree').map(({ id }) => id)).toContain('focus_only');
   });
 
   it('accepts only exact non-opaque HTTP(S) origins', () => {

@@ -12,6 +12,8 @@ Set the MCP process working directory to the mod being edited. The server create
 
 When the MCP server starts with its working directory inside a mod, every focus, GUI, map, event, and technology call uses that mod automatically. Configured multi-mod or remote deployments can use explicit workspace selection.
 
+Local startup accepts normal descriptor-based mods and sparse descriptor-less mods that contain standard HOI4 content folders. Empty roots need a `descriptor.mod` or an explicit configuration so the server does not guess an unrelated directory.
+
 ## Optional persistent configuration
 
 Use `--init` only when you need several mod roots, a fixed game path, or a shared/remote process:

@@ -16,3 +16,4 @@
 14. [Read-only Technology Tree Viewer](0014-technology-tree-viewer.md)
 15. [AI and MTTH Scenario Analyzer](0015-ai-mtth-scenario-analyzer.md)
 16. [Bounded large-graph analysis](0016-bounded-large-graph-analysis.md)
+17. [Arbitrary local mod roots](0017-arbitrary-local-mod-roots.md)

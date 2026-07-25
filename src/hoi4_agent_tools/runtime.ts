@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { lstat, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import {
@@ -47,17 +47,125 @@ async function isFile(candidate: string): Promise<boolean> {
   }
 }
 
+/**
+ * Standard content directories that can be the only content in a valid local
+ * mod. Keep this list limited to HOI4 roots so an arbitrary project directory
+ * is not mistaken for a mod just because it contains a generic `common`
+ * folder.
+ */
+const MOD_CONTENT_DIRECTORIES = [
+  'events',
+  'gfx',
+  'history',
+  'interface',
+  'localisation',
+  'localisation_synced',
+  'map',
+  'music',
+  'portraits',
+  'sound',
+] as const;
+
+const MOD_CONTENT_EXTENSIONS: Readonly<
+  Record<(typeof MOD_CONTENT_DIRECTORIES)[number], readonly string[]>
+> = {
+  events: ['.txt'],
+  gfx: ['.dds', '.gfx', '.png', '.tga'],
+  history: ['.txt'],
+  interface: ['.gfx', '.gui', '.txt'],
+  localisation: ['.yml', '.yaml'],
+  localisation_synced: ['.yml', '.yaml'],
+  map: ['.bmp', '.csv', '.map', '.txt'],
+  music: ['.asset', '.ogg', '.txt', '.wav'],
+  portraits: ['.dds', '.jpg', '.jpeg', '.png', '.tga'],
+  sound: ['.asset', '.ogg', '.txt', '.wav'],
+};
+
+const MOD_COMMON_DIRECTORIES = [
+  'abilities',
+  'ai_focuses',
+  'ai_strategy',
+  'ai_strategy_plans',
+  'bop',
+  'buildings',
+  'characters',
+  'continuous_focus',
+  'decisions',
+  'doctrines',
+  'ideas',
+  'mtth',
+  'national_focus',
+  'on_actions',
+  'operations',
+  'raids',
+  'resistance_compliance_modifiers',
+  'script_constants',
+  'scripted_effects',
+  'scripted_guis',
+  'scripted_triggers',
+  'special_projects',
+  'technology_sharing',
+  'technologies',
+  'technology_tags',
+  'units',
+  'unit_tags',
+] as const;
+
+async function hasEntries(candidate: string, extensions?: readonly string[]): Promise<boolean> {
+  try {
+    const entries = await readdir(candidate, { withFileTypes: true });
+    return entries.some(
+      (entry) =>
+        entry.isFile() &&
+        (extensions === undefined ||
+          extensions.some((extension) => entry.name.toLowerCase().endsWith(extension))),
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function isRealDirectory(candidate: string): Promise<boolean> {
+  try {
+    const metadata = await lstat(candidate);
+    return metadata.isDirectory() && !metadata.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+async function isLikelyGameRoot(candidate: string): Promise<boolean> {
+  // Vanilla installations have an executable or launcher marker that a mod
+  // root should never contain. The marker check also protects a nested cwd
+  // such as `<game>/common` when the server is started from there.
+  return (
+    (await isFile(path.join(candidate, 'hoi4.exe'))) ||
+    (await isFile(path.join(candidate, 'run_hoi4'))) ||
+    (await isFile(path.join(candidate, 'steam_appid.txt')))
+  );
+}
+
+async function isLikelyModRoot(candidate: string): Promise<boolean> {
+  if (await isFile(path.join(candidate, 'descriptor.mod'))) return true;
+  if (await isLikelyGameRoot(candidate)) return false;
+  for (const directory of MOD_COMMON_DIRECTORIES) {
+    if (await isRealDirectory(path.join(candidate, 'common', directory))) return true;
+  }
+  if (await isFile(path.join(candidate, 'common', 'combat_tactics.txt'))) return true;
+  for (const directory of MOD_CONTENT_DIRECTORIES) {
+    if (
+      (await isRealDirectory(path.join(candidate, directory))) &&
+      (await hasEntries(path.join(candidate, directory), MOD_CONTENT_EXTENSIONS[directory]))
+    )
+      return true;
+  }
+  return false;
+}
+
 async function findCurrentModRoot(start = process.cwd()): Promise<string> {
   for (let cursor = path.resolve(start); ;) {
-    if (
-      (await isFile(path.join(cursor, 'descriptor.mod'))) ||
-      ((await isDirectory(path.join(cursor, 'common'))) &&
-        ((await isDirectory(path.join(cursor, 'history'))) ||
-          (await isDirectory(path.join(cursor, 'interface'))) ||
-          (await isDirectory(path.join(cursor, 'map')))))
-    ) {
-      return cursor;
-    }
+    if (await isLikelyGameRoot(cursor)) break;
+    if (await isLikelyModRoot(cursor)) return cursor;
     const parent = path.dirname(cursor);
     if (parent === cursor) break;
     cursor = parent;
