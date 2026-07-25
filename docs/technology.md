@@ -8,7 +8,7 @@ Use the three technology tools directly from the target mod.
 
 `hoi4.tech_inspect` provides eight focused modes:
 
-- `scan`: build the complete technology graph and report its inventory, diagnostics, analysis limits, and revision.
+- `scan`: build the technology graph and report its inventory, diagnostics, analysis limits, and revision. Small graphs include the complete graph in the report; large graphs return exact counts, grouped findings, samples, and the revision for focused follow-up queries.
 - `folders`: list folder roots and source placements, or inspect one `folderId`.
 - `trace`: follow prerequisites, descendants, or both from a `technologyId` with bounded depth and node limits.
 - `explain`: collect one technology's definition, placements, paths, exclusivity, metadata, effects, unlocks, grants, bonuses, and unresolved references.
@@ -43,7 +43,7 @@ Impact mode takes a subject with `kind` set to `technology`, `category`, `folder
 }
 ```
 
-Findings are separated into confirmed errors, probable defects, design warnings, and unresolved analysis. Roots, grant-only technologies, early dates, zero AI weights, repeated effects, and routing nodes are evaluated in context instead of being treated as automatic defects.
+Findings are separated into confirmed errors, probable defects, design warnings, and unresolved analysis. Roots, grant-only technologies, early dates, zero AI weights, repeated effects, and routing nodes are evaluated in context instead of being treated as automatic defects. A large scan keeps the complete graph in the viewer cache while the linked scan artifact remains a bounded summary; use its revision with the focused inspect modes or a render resource to inspect the relevant records.
 
 ## Render
 

@@ -5,7 +5,10 @@ export const EVENT_GRAPH_MAX_EDGES = 500_000;
 export const EVENT_GRAPH_MAX_STATE_ACCESSES = 250_000;
 export const EVENT_GRAPH_MAX_STATE_LINKS = 250_000;
 export const EVENT_GRAPH_MAX_STATE_LINK_CANDIDATES = 500_000;
-export const EVENT_GRAPH_MAX_ISSUES = 20_000;
+// Installed-game scans can legitimately produce more than twenty thousand source-linked
+// findings before an agent narrows the query. Keep the graph bounded, but do not reject a
+// complete large workspace merely because its diagnostics are numerous.
+export const EVENT_GRAPH_MAX_ISSUES = 100_000;
 export const EVENT_GRAPH_MAX_UNRESOLVED = 50_000;
 export const EVENT_GRAPH_MAX_HELPER_DEPTH = 64;
 export const EVENT_GRAPH_MAX_HELPER_PROJECTIONS = 200_000;

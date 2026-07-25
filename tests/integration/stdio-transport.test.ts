@@ -360,6 +360,51 @@ describe('local stdio transport', () => {
     await stop(child);
   }, 20_000);
 
+  it('keeps the session usable after a domain request returns an error', async () => {
+    const child = launch(await overflowConfig('hoi4-agent-stdio-request-error-'));
+    const stdoutLines: string[] = [];
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'post-request-error-test', version: '1.0.0' },
+        },
+      })}\n`,
+    );
+    await waitForMessage(child, 1, stdoutLines);
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+    );
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'hoi4.tech_inspect', arguments: { mode: 'trace' } },
+      })}\n`,
+    );
+    const failure = await waitForMessage(child, 2, stdoutLines);
+    expect(failure).toMatchObject({
+      jsonrpc: '2.0',
+      id: 2,
+      result: { isError: true, content: expect.any(Array) },
+    });
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} })}\n`,
+    );
+    const followup = await waitForMessage(child, 3, stdoutLines);
+    expect(followup).toMatchObject({
+      jsonrpc: '2.0',
+      id: 3,
+      result: { tools: expect.any(Array) },
+    });
+    await stop(child);
+  }, 20_000);
+
   it('advertises only the production final revision for every non-current request', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-protocol-negotiation-'));
     const workspace = path.join(temporary, 'mod');

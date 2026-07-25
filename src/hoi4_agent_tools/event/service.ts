@@ -183,8 +183,12 @@ interface SharedEventServiceState {
   fragments: BoundedEventFragmentCache;
 }
 
-function eventGraphCacheKey(workspaceId: string, projectHelpers: boolean): string {
-  return `${workspaceId}\0${projectHelpers ? 'expanded' : 'structural'}`;
+function eventGraphCacheKey(
+  workspaceId: string,
+  projectHelpers: boolean,
+  analysisMode: 'full' | 'focused' = 'full',
+): string {
+  return `${workspaceId}\0${projectHelpers ? 'expanded' : 'structural'}\0${analysisMode}`;
 }
 
 const serviceState = new WeakMap<CoreEngine, SharedEventServiceState>();
@@ -192,6 +196,8 @@ const EVENT_GRAPH_ARTIFACT_MAX_BYTES = 67_108_864;
 const EVENT_GRAPH_ARTIFACT_MAX_CHUNKS = 1_024;
 const EVENT_SCAN_FULL_GRAPH_RECORD_LIMIT = 100_000;
 const EVENT_SCAN_SUMMARY_SAMPLE_LIMIT = 100;
+const EVENT_FOCUSED_EVIDENCE_LIMIT = 2_000;
+const EVENT_FOCUSED_GRAPH_FILE_THRESHOLD = 1_000;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const graphHashCache = new WeakMap<EventGraphSnapshot, string>();
 
@@ -263,7 +269,17 @@ function cachedEventGraphHash(graph: EventGraphSnapshot, signal?: AbortSignal): 
   signal?.throwIfAborted();
   const cached = graphHashCache.get(graph);
   if (cached !== undefined) return cached;
-  const computed = eventGraphHash(graph, signal);
+  const computed =
+    graph.analysisMode === 'focused'
+      ? hashCanonical({
+          schemaVersion: graph.schemaVersion,
+          parserVersion: graph.parserVersion,
+          workspaceIdentity: graph.workspaceIdentity,
+          revision: graph.revision,
+          statistics: graph.statistics,
+          sourceHashes: graph.sourceHashes,
+        })
+      : eventGraphHash(graph, signal);
   graphHashCache.set(graph, computed);
   return computed;
 }
@@ -283,6 +299,67 @@ function sharedState(engine: CoreEngine): SharedEventServiceState {
 
 function engineGeneration(engine: CoreEngine, workspaceId: string): number {
   return engine.generation(workspaceId);
+}
+
+function eventScanPatterns(workspace: ReturnType<CoreEngine['resolver']['get']>): string[] {
+  const roots = workspace.registration.roots;
+  const under = (values: readonly string[], glob: string): string[] =>
+    values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
+  return [
+    'events/**/*.txt',
+    'history/countries/**/*.txt',
+    ...under(roots.states, '**/*.txt'),
+    'common/continuous_focus/**/*.txt',
+    'common/decisions/**/*.txt',
+    'common/ideas/**/*.txt',
+    'common/characters/**/*.txt',
+    'common/operations/**/*.txt',
+    'common/raids/**/*.txt',
+    'common/bop/**/*.txt',
+    'common/resistance_compliance_modifiers/**/*.txt',
+    'common/abilities/**/*.txt',
+    'common/on_actions/**/*.txt',
+    'common/special_projects/**/*.txt',
+    'common/scripted_effects/**/*.txt',
+    ...under(roots.focus, '**/*.txt'),
+    ...under(roots.scriptedGui, '**/*.txt'),
+    ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
+    ...under(roots.localisation, '*.{yml,yaml}'),
+  ].sort(compareCodeUnits);
+}
+
+async function scanEventSources(
+  engine: CoreEngine,
+  workspaceId: string,
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+  principal?: string,
+  signal?: AbortSignal,
+): Promise<ScanSnapshot> {
+  const patterns = eventScanPatterns(workspace);
+  const sourceKinds = ['mod', 'dependency', 'fixture'] as const;
+  const scans = await Promise.all([
+    engine.scan(workspaceId, { patterns, rootKinds: sourceKinds }, principal, signal),
+    ...(workspace.roots.some(({ kind }) => kind === 'game')
+      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game'] }, principal, signal)]
+      : []),
+  ]);
+  const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));
+  recomputeShadowing(files);
+  files.sort(
+    (left, right) =>
+      left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+  );
+  const index = engine.indexFiles(files);
+  return {
+    workspaceId,
+    revision: snapshotRevision(files),
+    files,
+    index,
+    complete: scans.every(({ complete }) => complete) && index.complete,
+    skippedSourceCount: index.skippedSourceCount,
+    skippedSources: index.skippedSources,
+    diagnostics: [...scans.flatMap(({ diagnostics }) => diagnostics), ...index.diagnostics],
+  };
 }
 
 function rememberGraph(
@@ -316,6 +393,34 @@ function eventIssueDiagnostic(issue: EventIssue): Diagnostic {
       ...issue.details,
     },
   };
+}
+
+function boundedEvidence<T>(
+  values: readonly T[],
+  limit = EVENT_FOCUSED_EVIDENCE_LIMIT,
+): { values: T[]; inventory?: { count: number; retainedCount: number; truncated: true } } {
+  if (values.length <= limit) return { values: [...values] };
+  return {
+    values: values.slice(0, limit),
+    inventory: { count: values.length, retainedCount: limit, truncated: true },
+  };
+}
+
+function boundedUnresolved(
+  graph: EventGraphSnapshot,
+  selectedNodeIds?: ReadonlySet<string>,
+): {
+  values: EventGraphSnapshot['unresolved'];
+  inventory?: { count: number; retainedCount: number; truncated: true };
+} {
+  const relevant =
+    selectedNodeIds === undefined
+      ? graph.unresolved
+      : graph.unresolved.filter(
+          ({ id, ownerId }) =>
+            selectedNodeIds.has(id) || (ownerId !== undefined && selectedNodeIds.has(ownerId)),
+        );
+  return boundedEvidence(relevant);
 }
 
 export function eventDiagnostics(graph: EventGraphSnapshot): Diagnostic[] {
@@ -927,6 +1032,7 @@ export class EventChainViewer {
     options: {
       refresh?: boolean;
       projectHelpers?: boolean;
+      analysisMode?: 'full' | 'focused';
       principal?: string;
       signal?: AbortSignal;
     } = {},
@@ -937,39 +1043,67 @@ export class EventChainViewer {
     const workspace = this.engine.resolver.get(workspaceId, options.principal);
     const generation = engineGeneration(this.engine, workspaceId);
     const projectHelpers = options.projectHelpers ?? true;
-    const cacheKey = eventGraphCacheKey(workspaceId, projectHelpers);
+    const analysisMode = options.analysisMode ?? 'full';
+    const cacheKey = eventGraphCacheKey(workspaceId, projectHelpers, analysisMode);
     const cached = this.#state.current.get(cacheKey);
     if (options.refresh !== true && cached?.generation === generation) {
       return cached.graph;
     }
-    const sibling = this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers));
+    const sibling =
+      this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers, analysisMode)) ??
+      this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers)) ??
+      this.#state.current.get(eventGraphCacheKey(workspaceId, projectHelpers));
     const snapshot =
       options.refresh !== true && sibling?.generation === generation
         ? sibling.snapshot
-        : await this.engine.scan(workspaceId, {}, options.principal, options.signal);
+        : await scanEventSources(
+            this.engine,
+            workspaceId,
+            workspace,
+            options.principal,
+            options.signal,
+          );
     options.signal?.throwIfAborted();
     if (cached?.snapshot.revision === snapshot.revision && cached.generation === generation) {
       return cached.graph;
     }
+    const buildAnalysisMode =
+      analysisMode === 'focused' && snapshot.files.length > EVENT_FOCUSED_GRAPH_FILE_THRESHOLD
+        ? 'focused'
+        : 'full';
     const graph = buildEventGraph(snapshot, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
       projectHelpers,
+      analysisMode: buildAnalysisMode,
     });
     this.#state.current.set(cacheKey, { generation, snapshot, graph });
-    rememberGraph(this.#state, workspaceId, graph);
+    if (analysisMode === 'full') rememberGraph(this.#state, workspaceId, graph);
     return graph;
   }
 
   public async inspect(input: EventInspectInput): Promise<EventInspectResult> {
     input.signal?.throwIfAborted();
-    const graph = await this.scan(input.workspaceId, {
+    const scannedGraph = await this.scan(input.workspaceId, {
       refresh: input.refresh ?? input.mode === 'scan',
-      projectHelpers: input.mode !== 'scan' && input.mode !== 'roots',
+      // Focused routes traverse helper nodes directly and collapse only the
+      // selected path. Avoid materialising the full workspace projection first.
+      projectHelpers:
+        input.mode !== 'scan' &&
+        input.mode !== 'roots' &&
+        input.mode !== 'trace' &&
+        input.mode !== 'explain_path',
+      ...(input.mode === 'trace' || input.mode === 'explain_path'
+        ? { analysisMode: 'focused' as const }
+        : {}),
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
+    // Keep the service result's graph identity distinct from a prior scan while
+    // reusing its structural cache and avoiding a second large graph build.
+    const graph =
+      input.mode === 'trace' || input.mode === 'explain_path' ? { ...scannedGraph } : scannedGraph;
     const maxDepth = input.maxDepth ?? 8;
     const maxNodes = input.maxNodes ?? 500;
     const maxEdges = input.maxEdges ?? 2_000;
@@ -992,20 +1126,24 @@ export class EventChainViewer {
         report = eventScanReport(graph);
         break;
       case 'roots':
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          roots: discoverEventRoots(graph, input.signal),
-          unresolved: graph.unresolved,
-        };
+        {
+          const unresolved = boundedUnresolved(graph);
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            roots: discoverEventRoots(graph, input.signal),
+            unresolved: unresolved.values,
+            ...(unresolved.inventory === undefined
+              ? {}
+              : { unresolvedInventory: unresolved.inventory }),
+          };
+        }
         break;
       case 'trace':
         if (input.selector === undefined)
           throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          trace: traceSelectedEvents(
+        {
+          const trace = traceSelectedEvents(
             graph,
             input.selector,
             {
@@ -1016,9 +1154,18 @@ export class EventChainViewer {
               expandHelpers: input.expandHelpers ?? false,
             },
             input.signal,
-          ),
-          unresolved: graph.unresolved,
-        };
+          );
+          const unresolved = boundedUnresolved(graph, new Set(trace.nodes.map(({ id }) => id)));
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            trace,
+            unresolved: unresolved.values,
+            ...(unresolved.inventory === undefined
+              ? {}
+              : { unresolvedInventory: unresolved.inventory }),
+          };
+        }
         break;
       case 'explain_path':
         if (input.from === undefined || input.to === undefined)
@@ -1039,23 +1186,42 @@ export class EventChainViewer {
         };
         break;
       case 'state_flow':
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          flow: inspectEventStateFlow(graph, input.selector, input.stateSubject, input.signal),
-          issues: lintEventGraph(graph, input.selector, input.signal).filter(({ code }) =>
-            /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE)/u.test(code),
-          ),
-        };
+        {
+          const unresolved = boundedUnresolved(graph);
+          const issues = boundedEvidence(
+            lintEventGraph(graph, input.selector, input.signal).filter(({ code }) =>
+              /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE)/u.test(code),
+            ),
+          );
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            flow: inspectEventStateFlow(graph, input.selector, input.stateSubject, input.signal),
+            issues: issues.values,
+            unresolved: unresolved.values,
+            ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
+            ...(unresolved.inventory === undefined
+              ? {}
+              : { unresolvedInventory: unresolved.inventory }),
+          };
+        }
         break;
       case 'lint':
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          issues: lintEventGraph(graph, input.selector, input.signal),
-          complete: graph.complete,
-          unresolved: graph.unresolved,
-        };
+        {
+          const issues = boundedEvidence(lintEventGraph(graph, input.selector, input.signal));
+          const unresolved = boundedUnresolved(graph);
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            issues: issues.values,
+            complete: graph.complete,
+            unresolved: unresolved.values,
+            ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),
+            ...(unresolved.inventory === undefined
+              ? {}
+              : { unresolvedInventory: unresolved.inventory }),
+          };
+        }
         break;
       case 'impact':
         if (input.impactSubject === undefined)
@@ -1063,12 +1229,18 @@ export class EventChainViewer {
             'EVENT_IMPACT_SUBJECT_REQUIRED',
             'Impact analysis requires a subject',
           );
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          impact: analyzeEventImpact(graph, input.impactSubject, input.signal),
-          unresolved: graph.unresolved,
-        };
+        {
+          const unresolved = boundedUnresolved(graph);
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            impact: analyzeEventImpact(graph, input.impactSubject, input.signal),
+            unresolved: unresolved.values,
+            ...(unresolved.inventory === undefined
+              ? {}
+              : { unresolvedInventory: unresolved.inventory }),
+          };
+        }
         break;
     }
     const graphHash = cachedEventGraphHash(graph, input.signal);
@@ -1083,7 +1255,7 @@ export class EventChainViewer {
       : undefined;
     const artifactUnresolved = projectedScan
       ? graph.unresolved.slice(0, EVENT_SCAN_SUMMARY_SAMPLE_LIMIT)
-      : graph.unresolved;
+      : boundedUnresolved(graph).values;
     const reportJson = `${canonicalJson({
       schemaVersion: 'event-analysis.v1',
       graphSchemaVersion: graph.schemaVersion,
@@ -1100,12 +1272,12 @@ export class EventChainViewer {
       complete: graph.complete,
       filters: analysisFilters,
       unresolved: artifactUnresolved,
-      ...(projectedScan
+      ...(artifactUnresolved.length !== graph.unresolved.length
         ? {
             unresolvedInventory: {
               count: graph.unresolved.length,
               retainedCount: artifactUnresolved.length,
-              truncated: artifactUnresolved.length !== graph.unresolved.length,
+              truncated: true,
             },
           }
         : {}),
@@ -1321,7 +1493,15 @@ export class EventChainViewer {
         includeHtml: input.includeHtml ?? false,
         refresh: input.refresh ?? false,
       },
-      unresolved: graph.unresolved,
+      ...(() => {
+        const unresolved = boundedUnresolved(graph, new Set(render.selectedNodeIds));
+        return {
+          unresolved: unresolved.values,
+          ...(unresolved.inventory === undefined
+            ? {}
+            : { unresolvedInventory: unresolved.inventory }),
+        };
+      })(),
       resources: { ...resourceNames, artifacts: resourceLinks },
       overview: {
         selectedNodeIds: render.selectedNodeIds,

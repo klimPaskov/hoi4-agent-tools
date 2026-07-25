@@ -190,6 +190,33 @@ function sharedState(engine: CoreEngine): SharedTechnologyState {
   return state;
 }
 
+function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['get']>): string[] {
+  const roots = workspace.registration.roots;
+  const under = (values: readonly string[], glob: string): string[] =>
+    values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
+  return [
+    'common/technologies/**/*.txt',
+    'common/technology_tags/**/*.txt',
+    'common/technology_sharing/**/*.txt',
+    'common/doctrines/**/*.txt',
+    'common/units/**/*.txt',
+    'common/buildings/**/*.txt',
+    'common/abilities/**/*.txt',
+    'common/decisions/**/*.txt',
+    'common/scripted_effects/**/*.txt',
+    'common/on_actions/**/*.txt',
+    'common/ideas/**/*.txt',
+    'common/characters/**/*.txt',
+    'common/combat_tactics.txt',
+    'events/**/*.txt',
+    'history/countries/**/*.txt',
+    ...under(roots.focus, '**/*.txt'),
+    ...under(roots.interface, '**/*.gui'),
+    ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
+    ...under(roots.localisation, '*.{yml,yaml}'),
+  ].sort(compareCodeUnits);
+}
+
 function rememberGraph(state: SharedTechnologyState, graph: TechnologyGraphSnapshot): void {
   const history =
     state.history.get(graph.workspaceId) ?? new Map<string, TechnologyGraphSnapshot>();
@@ -563,7 +590,12 @@ export class TechnologyTreeViewer {
     const generation = this.engine.generation(workspaceId);
     const cached = this.#state.current.get(workspaceId);
     if (options.refresh !== true && cached?.generation === generation) return cached.graph;
-    const snapshot = await this.engine.scan(workspaceId, {}, options.principal, options.signal);
+    const snapshot = await this.engine.scan(
+      workspaceId,
+      { patterns: technologyScanPatterns(workspace) },
+      options.principal,
+      options.signal,
+    );
     const preliminary = buildTechnologyGraph(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
@@ -597,7 +629,7 @@ export class TechnologyTreeViewer {
     let report: unknown;
     switch (input.mode) {
       case 'scan':
-        report = { ...(technologyScanReport(graph) as Record<string, unknown>), graph };
+        report = technologyScanReport(graph);
         break;
       case 'folders':
         report = discoverTechnologyFolders(graph, input.folderId);

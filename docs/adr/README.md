@@ -15,3 +15,4 @@
 13. [Read-only Event Chain Viewer](0013-event-chain-viewer.md)
 14. [Read-only Technology Tree Viewer](0014-technology-tree-viewer.md)
 15. [AI and MTTH Scenario Analyzer](0015-ai-mtth-scenario-analyzer.md)
+16. [Bounded large-graph analysis](0016-bounded-large-graph-analysis.md)

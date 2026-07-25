@@ -232,6 +232,7 @@ export interface EventGraphStatistics {
 export interface EventGraphSnapshot {
   schemaVersion: typeof EVENT_GRAPH_SCHEMA_VERSION;
   parserVersion: typeof EVENT_GRAPH_PARSER_VERSION;
+  analysisMode?: 'full' | 'focused';
   workspaceId: string;
   workspaceIdentity: string;
   revision: string;
@@ -252,6 +253,8 @@ export interface EventGraphSnapshot {
 
 export interface EventGraphBuildOptions {
   signal?: AbortSignal;
+  /** Skip workspace-wide issue and state-link passes for a bounded focused route. */
+  analysisMode?: 'full' | 'focused';
   /** Materialize collapsed scripted-helper edges and state accesses for expanded queries. */
   projectHelpers?: boolean;
   /** Canonical root-topology identity supplied by the shared workspace resolver. */

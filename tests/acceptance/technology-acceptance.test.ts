@@ -15,6 +15,7 @@ import {
   lintTechnologyGraph,
   renderTechnologyGraph,
   technologyBonusCoverage,
+  technologyScanReport,
   traceTechnology,
   type TechnologyGraphSnapshot,
 } from '../../src/hoi4_agent_tools/technology/index.js';
@@ -323,6 +324,25 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(compared.comparison.technologies.added).toEqual([]);
     expect(compared.comparison.technologies.removed).toEqual([]);
   }, 120_000);
+
+  it('projects an oversized scan report without serializing the full graph', () => {
+    const projected = technologyScanReport(graph, 1) as {
+      graph?: unknown;
+      authoritativeGraphIncluded: boolean;
+      graphSummary: { revision: string; recordCounts: { externalReferences: number } };
+      artifactProjection: { mode: string; fullGraphRecordCount: number };
+    };
+    expect(projected.graph).toBeUndefined();
+    expect(projected.authoritativeGraphIncluded).toBe(false);
+    expect(projected.graphSummary).toMatchObject({
+      revision: graph.revision,
+      recordCounts: { externalReferences: graph.externalReferences.length },
+    });
+    expect(projected.artifactProjection).toMatchObject({
+      mode: 'large-scan-summary',
+      fullGraphRecordCount: expect.any(Number),
+    });
+  });
 
   it('renders every required agent view with authoritative JSON and source links', async () => {
     const requests = [

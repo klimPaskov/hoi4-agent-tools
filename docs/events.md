@@ -16,9 +16,9 @@ Use the three event tools directly from the target mod.
 - `lint`: find missing targets, unreachable events, suspicious cycles, conflicting definitions, invalid timing, and unresolved dynamic calls.
 - `impact`: identify callers, descendants, state dependencies, and files affected by a proposed event change.
 
-Use narrow identifiers, direction, and depth limits when the task concerns one chain. Broad scans build the structural event graph without expanding every scripted helper into duplicate paths. Focused trace, path, state, impact, and render calls expand helper relationships when needed.
+Use narrow identifiers, direction, and depth limits when the task concerns one chain. Broad scans build the structural event graph without expanding every scripted helper into duplicate paths. Focused trace and path calls traverse helper nodes and collapse only the selected bounded route, while state, impact, and render calls expand helper relationships when their workspace-wide evidence requires it.
 
-The compact response summarizes the result. Small scan resources contain the complete graph; very large scan resources contain exact totals, grouped inventories, representative diagnostics, and the revision needed for focused follow-up queries. This keeps an agent's prompt and artifact storage bounded without reducing the results of those focused queries.
+The compact response summarizes the result. Small scan resources contain the complete graph; very large scan resources contain exact totals, grouped inventories, representative diagnostics, and the revision needed for focused follow-up queries. The viewer retains the complete in-memory graph for those follow-up queries, and the event issue ceiling is high enough for installed-game-scale diagnostic inventories. This keeps an agent's prompt and artifact storage bounded without reducing the results of those focused queries.
 
 Selectors use one of these forms:
 

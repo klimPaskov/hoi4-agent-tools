@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '../core/canonical.js';
+import { compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { EventAnalysisBudget } from './limits.js';
 import type { EventGraphEdge, EventGraphNode, EventGraphSnapshot } from './model.js';
 import { iterativeStronglyConnectedComponents } from './scc.js';
@@ -87,6 +87,215 @@ function edgeMaps(edges: readonly EventGraphEdge[]): {
   return { outgoing, incoming };
 }
 
+function helperName(node: EventGraphNode): string {
+  const name = node.metadata.name;
+  if (typeof name === 'string') return name;
+  return node.label || node.id.replace(/^helper:/u, '');
+}
+
+function collapsedHelperEdge(
+  path: readonly EventGraphEdge[],
+  helperStack: readonly string[],
+  from: string,
+  to: string,
+): EventGraphEdge {
+  const first = path[0]!;
+  const last = path.at(-1)!;
+  if (helperStack.length === 0) return first;
+  return {
+    id: `edge:lazy-helper-projection:${hashCanonical({
+      from,
+      to,
+      edges: path.map(({ id }) => id),
+    }).slice(0, 32)}`,
+    from,
+    to,
+    reason: 'scripted_effect_expansion',
+    conditions: path.flatMap(({ conditions }) => conditions),
+    helperStack: [...helperStack],
+    location: first.location,
+    provenance: path.flatMap(({ provenance }) => provenance),
+    confidence: last.confidence,
+    derived: true,
+    ...(last.timing === undefined ? {} : { timing: last.timing }),
+    ...(last.weight === undefined ? {} : { weight: last.weight }),
+    ...(last.scope === undefined ? {} : { scope: last.scope }),
+    metadata: { structuralEdgeIds: path.map(({ id }) => id) },
+  };
+}
+
+/**
+ * Build only the helper projections reached by one bounded trace. Full-workspace
+ * helper materialisation is useful for broad reports, but it is unnecessarily
+ * expensive when an agent asks for one route in a large installed game.
+ */
+function lazyCollapsedEdges(
+  graph: EventGraphSnapshot,
+  nodeId: string,
+  direction: EventTraceDirection,
+  maps: ReturnType<typeof edgeMaps>,
+  maximumPaths: number,
+  signal?: AbortSignal,
+): EventGraphEdge[] {
+  const nodes = nodeMap(graph);
+  const retained = new Map<string, EventGraphEdge>();
+  let pathVisits = 0;
+  const add = (edge: EventGraphEdge): void => {
+    retained.set(edge.id, edge);
+  };
+  const downstream = (
+    edge: EventGraphEdge,
+    path: EventGraphEdge[],
+    stack: string[],
+    visited: Set<string>,
+  ): void => {
+    signal?.throwIfAborted();
+    if (++pathVisits > maximumPaths) return;
+    if (path.length > 64) return;
+    const target = nodes.get(edge.to);
+    if (target?.kind !== 'helper') {
+      add(collapsedHelperEdge(path, stack, nodeId, edge.to));
+      return;
+    }
+    if (visited.has(target.id)) return;
+    for (const next of maps.outgoing.get(target.id) ?? []) {
+      downstream(
+        next,
+        [...path, next],
+        [...stack, helperName(target)],
+        new Set([...visited, target.id]),
+      );
+    }
+  };
+  const upstream = (
+    edge: EventGraphEdge,
+    path: EventGraphEdge[],
+    stack: string[],
+    visited: Set<string>,
+  ): void => {
+    signal?.throwIfAborted();
+    if (++pathVisits > maximumPaths) return;
+    if (path.length > 64) return;
+    const source = nodes.get(edge.from);
+    if (source?.kind !== 'helper') {
+      const forwardPath = [...path].reverse();
+      add(collapsedHelperEdge(forwardPath, [...stack].reverse(), edge.from, nodeId));
+      return;
+    }
+    if (visited.has(source.id)) return;
+    for (const previous of maps.incoming.get(source.id) ?? []) {
+      upstream(
+        previous,
+        [...path, previous],
+        [...stack, helperName(source)],
+        new Set([...visited, source.id]),
+      );
+    }
+  };
+  if (direction !== 'upstream') {
+    for (const edge of maps.outgoing.get(nodeId) ?? []) downstream(edge, [edge], [], new Set());
+  }
+  if (direction !== 'downstream') {
+    for (const edge of maps.incoming.get(nodeId) ?? []) upstream(edge, [edge], [], new Set());
+  }
+  return [...retained.values()].sort((left, right) => compareCodeUnits(left.id, right.id));
+}
+
+function traceCollapsedHelpers(
+  graph: EventGraphSnapshot,
+  starts: readonly string[],
+  boundary: EventTraceBoundary,
+  signal?: AbortSignal,
+): EventTraceResult {
+  const byId = nodeMap(graph);
+  const maps = edgeMaps(graph.edges.filter(({ derived }) => !derived));
+  const edgeCache = new Map<string, EventGraphEdge[]>();
+  const edgesFor = (nodeId: string): EventGraphEdge[] => {
+    const key = `${nodeId}\0${boundary.direction}`;
+    const cached = edgeCache.get(key);
+    if (cached !== undefined) return cached;
+    const edges = lazyCollapsedEdges(
+      graph,
+      nodeId,
+      boundary.direction,
+      maps,
+      Math.max(256, boundary.maxEdges * 2),
+      signal,
+    );
+    edgeCache.set(key, edges);
+    return edges;
+  };
+  const depthByNode = new Map<string, number>(starts.map((id) => [id, 0]));
+  const queue = [...starts];
+  const retainedEdges = new Map<string, EventGraphEdge>();
+  const boundaryNodes = new Set<string>();
+  let truncated = false;
+  let cursor = 0;
+  while (cursor < queue.length) {
+    if ((cursor & 255) === 0) signal?.throwIfAborted();
+    const current = queue[cursor++]!;
+    const depth = depthByNode.get(current) ?? 0;
+    const nextEdges = edgesFor(current);
+    if (depth >= boundary.maxDepth) {
+      if (nextEdges.length > 0) {
+        boundaryNodes.add(current);
+        truncated = true;
+      }
+      continue;
+    }
+    for (const edge of nextEdges) {
+      if (retainedEdges.size >= boundary.maxEdges) {
+        boundaryNodes.add(current);
+        truncated = true;
+        break;
+      }
+      const next =
+        boundary.direction === 'upstream'
+          ? edge.from
+          : boundary.direction === 'downstream'
+            ? edge.to
+            : edge.from === current
+              ? edge.to
+              : edge.from;
+      const known = depthByNode.has(next);
+      if (!known && depthByNode.size >= boundary.maxNodes) {
+        boundaryNodes.add(current);
+        truncated = true;
+        continue;
+      }
+      retainedEdges.set(edge.id, edge);
+      if (!known) {
+        depthByNode.set(next, depth + 1);
+        queue.push(next);
+      }
+    }
+  }
+  const retainedNodes = [...depthByNode.keys()]
+    .flatMap((id) => {
+      const node = byId.get(id);
+      return node === undefined ? [] : [node];
+    })
+    .sort((left, right) => compareCodeUnits(left.id, right.id));
+  const layers = [...new Set(depthByNode.values())]
+    .sort((left, right) => left - right)
+    .map((depth) => ({
+      depth,
+      nodeIds: [...depthByNode.entries()]
+        .filter(([, value]) => value === depth)
+        .map(([id]) => id)
+        .sort(compareCodeUnits),
+    }));
+  return {
+    startNodeIds: [...starts],
+    nodes: retainedNodes,
+    edges: [...retainedEdges.values()].sort((left, right) => compareCodeUnits(left.id, right.id)),
+    layers,
+    boundary,
+    boundaryNodeIds: [...boundaryNodes].sort(compareCodeUnits),
+    truncated,
+  };
+}
+
 function edgesForDirection(
   nodeId: string,
   direction: EventTraceDirection,
@@ -115,6 +324,13 @@ export function traceEventGraph(
   const byId = nodeMap(graph);
   const resolvedStarts = sortedUnique(startNodeIds).filter((id) => byId.has(id));
   const starts = resolvedStarts.slice(0, Math.max(0, boundary.maxNodes));
+  if (
+    !boundary.expandHelpers &&
+    !graph.edges.some(({ derived }) => derived) &&
+    starts.every((id) => byId.get(id)?.kind !== 'helper')
+  ) {
+    return traceCollapsedHelpers(graph, starts, boundary, signal);
+  }
   const edges = eventFlowEdges(graph, boundary.expandHelpers);
   const maps = edgeMaps(edges);
   const depthByNode = new Map<string, number>(starts.map((id) => [id, 0]));

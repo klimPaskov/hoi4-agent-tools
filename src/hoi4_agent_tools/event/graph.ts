@@ -89,6 +89,17 @@ function activeFiles(snapshot: ScanSnapshot): ScannedFile[] {
     .sort((left, right) => compareCodeUnits(left.displayPath, right.displayPath));
 }
 
+const EVENT_SETUP_CALL_PATTERN =
+  /\b(?:country_event|news_event|state_event|unit_leader_event|operative_leader_event|fire_event|event)\s*=/iu;
+
+function shouldAnalyzeEventFile(file: ScannedFile): boolean {
+  const sourcePath = file.relativePath.replaceAll('\\', '/').toLowerCase();
+  if (!sourcePath.startsWith('history/countries/') && !sourcePath.startsWith('history/states/')) {
+    return true;
+  }
+  return EVENT_SETUP_CALL_PATTERN.test(file.bytes.toString('utf8'));
+}
+
 function catalogFor(snapshot: ScanSnapshot): EventCatalog {
   const unshadowedEventSymbols = snapshot.index
     .findAll('event')
@@ -1674,6 +1685,7 @@ function analyzeFragments(
   const fragments: EventSourceFragment[] = [];
   for (const file of files) {
     budget.spend('source_fragment');
+    if (!shouldAnalyzeEventFile(file)) continue;
     if (snapshot.index.isSourceSkipped(file.displayPath)) continue;
     const cacheKey = eventSemanticFragmentCacheKey(file, catalog.fingerprint);
     let fragment = options.cache?.get(cacheKey);
@@ -1821,15 +1833,18 @@ export function buildEventGraph(
   graph.edges = stableUnique(graph.edges);
   graph.stateAccesses = stableUnique(graph.stateAccesses);
   graph.unresolved = stableUnique(graph.unresolved);
-  const stateLinks = stateLinksFor(graph, budget);
+  const focused = options.analysisMode === 'focused';
+  const stateLinks = focused ? [] : stateLinksFor(graph, budget);
 
-  duplicateAndReferenceIssues(graph);
-  unresolvedIssues(graph);
-  structuralCallIssues(graph, budget);
-  localisationIssues(graph);
-  stateLifecycleIssues(graph, stateLinks, budget);
-  unreachableIssues(graph, budget);
-  normalizeIssueSubjects(graph);
+  if (!focused) {
+    duplicateAndReferenceIssues(graph);
+    unresolvedIssues(graph);
+    structuralCallIssues(graph, budget);
+    localisationIssues(graph);
+    stateLifecycleIssues(graph, stateLinks, budget);
+    unreachableIssues(graph, budget);
+    normalizeIssueSubjects(graph);
+  }
   graph.issues = stableIssues(graph.issues);
 
   assertGraphLimit(graph.nodes.length, EVENT_GRAPH_MAX_NODES, 'EVENT_NODE_LIMIT', 'node count');
@@ -1857,6 +1872,7 @@ export function buildEventGraph(
 
   const diagnostics = sortDiagnostics([...snapshot.diagnostics, ...partial.diagnostics]);
   const complete =
+    !focused &&
     snapshot.complete &&
     graph.unresolved.length === 0 &&
     !graph.issues.some(
@@ -1871,6 +1887,7 @@ export function buildEventGraph(
   return {
     schemaVersion: EVENT_GRAPH_SCHEMA_VERSION,
     parserVersion: EVENT_GRAPH_PARSER_VERSION,
+    analysisMode: options.analysisMode ?? 'full',
     workspaceId: snapshot.workspaceId,
     workspaceIdentity:
       options.workspaceIdentity ?? hashCanonical({ workspaceId: snapshot.workspaceId }),

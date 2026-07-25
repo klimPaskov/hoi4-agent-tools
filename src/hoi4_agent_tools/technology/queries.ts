@@ -37,7 +37,38 @@ function requireTechnology(graph: TechnologyGraphSnapshot, technologyId: string)
     });
 }
 
-export function technologyScanReport(graph: TechnologyGraphSnapshot): unknown {
+const TECHNOLOGY_SCAN_FULL_GRAPH_RECORD_LIMIT = 100_000;
+
+function technologyRecordCount(graph: TechnologyGraphSnapshot): number {
+  return (
+    graph.technologies.length +
+    graph.folders.length +
+    graph.categories.length +
+    graph.placements.length +
+    graph.gridboxes.length +
+    graph.edges.length +
+    graph.unlocks.length +
+    graph.unlockTargets.length +
+    graph.externalReferences.length +
+    graph.helperCalls.length +
+    graph.issues.length +
+    graph.diagnostics.length +
+    graph.unresolved.length +
+    graph.doctrineDefinitions.length
+  );
+}
+
+function groupedCounts<T>(values: readonly T[], key: (value: T) => string): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(key(value), (counts.get(key(value)) ?? 0) + 1);
+  return Object.fromEntries([...counts].sort(([left], [right]) => compareCodeUnits(left, right)));
+}
+
+export function technologyScanReport(
+  graph: TechnologyGraphSnapshot,
+  fullGraphRecordLimit = TECHNOLOGY_SCAN_FULL_GRAPH_RECORD_LIMIT,
+): unknown {
+  const recordCount = technologyRecordCount(graph);
   const classifications = Object.fromEntries(
     ['confirmed_error', 'probable_defect', 'design_warning', 'unresolved_analysis'].map(
       (classification) => [
@@ -46,7 +77,7 @@ export function technologyScanReport(graph: TechnologyGraphSnapshot): unknown {
       ],
     ),
   );
-  return {
+  const summary = {
     schemaVersion: graph.schemaVersion,
     parserVersion: graph.parserVersion,
     workspaceId: graph.workspaceId,
@@ -64,7 +95,49 @@ export function technologyScanReport(graph: TechnologyGraphSnapshot): unknown {
     analysisBoundary: graph.analysisBoundary,
     issueSamples: graph.issues.slice(0, 100),
     unresolvedSamples: graph.unresolved.slice(0, 100),
-    authoritativeGraphIncluded: true,
+    recordCounts: {
+      technologies: graph.technologies.length,
+      folders: graph.folders.length,
+      categories: graph.categories.length,
+      placements: graph.placements.length,
+      gridboxes: graph.gridboxes.length,
+      edges: graph.edges.length,
+      unlocks: graph.unlocks.length,
+      unlockTargets: graph.unlockTargets.length,
+      externalReferences: graph.externalReferences.length,
+      issues: graph.issues.length,
+      diagnostics: graph.diagnostics.length,
+      unresolved: graph.unresolved.length,
+      doctrineDefinitions: graph.doctrineDefinitions.length,
+    },
+  };
+  if (recordCount <= fullGraphRecordLimit) {
+    return {
+      ...summary,
+      authoritativeGraphIncluded: true,
+      graph,
+    };
+  }
+  return {
+    ...summary,
+    authoritativeGraphIncluded: false,
+    graphSummary: {
+      revision: graph.revision,
+      recordCounts: summary.recordCounts,
+      technologyKinds: groupedCounts(graph.technologies, ({ kind }) => kind),
+      edgeKinds: groupedCounts(graph.edges, ({ kind }) => kind),
+      issueCodes: groupedCounts(graph.issues, ({ code }) => code),
+      issueSeverities: groupedCounts(graph.issues, ({ severity }) => severity),
+      diagnosticCodes: groupedCounts(graph.diagnostics, ({ code }) => code),
+      diagnosticSeverities: groupedCounts(graph.diagnostics, ({ severity }) => severity),
+    },
+    diagnosticSamples: graph.diagnostics.slice(0, 100),
+    artifactProjection: {
+      mode: 'large-scan-summary',
+      fullGraphRecordCount: recordCount,
+      fullGraphRecordLimit,
+      detailQueries: ['folders', 'trace', 'explain', 'unlocks', 'bonus_coverage', 'lint', 'impact'],
+    },
   };
 }
 
