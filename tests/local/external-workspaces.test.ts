@@ -311,6 +311,13 @@ local('local installed-game and external-mod integration', () => {
     const core = await engine();
     const viewer = new TechnologyTreeViewer(core);
     const graph = await viewer.scan('external', { refresh: true });
+    expect(graph.analysisMode).toBe('focused');
+    expect(graph.complete).toBe(false);
+    expect(graph.unresolved).toContainEqual(
+      expect.objectContaining({
+        blockers: [expect.objectContaining({ code: 'TECH_HELPER_EXPANSION_DEFERRED' })],
+      }),
+    );
     const relevantSourceHashes = Object.fromEntries(
       Object.entries(graph.sourceHashes).filter(([sourcePath]) =>
         /:(?:common\/(?:technologies|technology_tags|doctrines)\/|interface\/.*(?:technolog|doctrine)|localisation\/.*(?:technolog|doctrine))/iu.test(

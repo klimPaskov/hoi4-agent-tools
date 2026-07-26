@@ -13,7 +13,7 @@ Add technology and doctrine analysis as a fifth domain backed by the shared work
 - `hoi4.tech_render`
 - `hoi4.tech_compare`
 
-Technology identity remains separate from its folder-placement instances. Folder views use source coordinates and GUI gridbox geometry; dependency and semantic views are labelled as generated analysis. JSON is authoritative, and complete graphs, focused folder views, SVG, PNG, optional HTML, comparisons, diagnostics, and provenance use the existing MCP artifact resource.
+Technology identity remains separate from its folder-placement instances. Folder views use source coordinates and GUI gridbox geometry; dependency and semantic views are labelled as generated analysis. JSON is authoritative, and complete or focused graphs, folder views, SVG, PNG, optional HTML, comparisons, diagnostics, and provenance use the existing MCP artifact resource.
 
 All three tools are read-only. They do not generate technologies, rewrite source, score balance, simulate research, register MCP prompts, or launch the game. Dynamic and meta-generated references that cannot be proven remain explicit with confidence and blocker data.
 

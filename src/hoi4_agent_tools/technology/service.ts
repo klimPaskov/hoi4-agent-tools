@@ -49,6 +49,7 @@ const GRAPH_ARTIFACT_BYTES = 134_217_728;
 const GRAPH_ARTIFACT_CHUNKS = 2_048;
 const HISTORY_ENTRIES = 12;
 const FOCUSED_RENDER_LIMIT = 32;
+const FOCUSED_GRAPH_FILE_THRESHOLD = 1_000;
 
 export type TechnologyAnalysisMode =
   'scan' | 'folders' | 'trace' | 'explain' | 'unlocks' | 'bonus_coverage' | 'lint' | 'impact';
@@ -217,6 +218,15 @@ function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['ge
   ].sort(compareCodeUnits);
 }
 
+function technologyAnalysisMode(
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+  snapshot: ScanSnapshot,
+): 'full' | 'focused' {
+  return workspace.gameRoot !== undefined || snapshot.files.length > FOCUSED_GRAPH_FILE_THRESHOLD
+    ? 'focused'
+    : 'full';
+}
+
 function rememberGraph(state: SharedTechnologyState, graph: TechnologyGraphSnapshot): void {
   const history =
     state.history.get(graph.workspaceId) ?? new Map<string, TechnologyGraphSnapshot>();
@@ -242,6 +252,7 @@ function safeSlug(value: string): string {
 function graphHash(graph: TechnologyGraphSnapshot): string {
   return hashCanonical({
     schemaVersion: graph.schemaVersion,
+    analysisMode: graph.analysisMode ?? 'full',
     workspaceIdentity: graph.workspaceIdentity,
     revision: graph.revision,
     statistics: graph.statistics,
@@ -596,9 +607,11 @@ export class TechnologyTreeViewer {
       options.principal,
       options.signal,
     );
+    const analysisMode = technologyAnalysisMode(workspace, snapshot);
     const preliminary = buildTechnologyGraph(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
+      analysisMode,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     const patterns = technologyAssetPatterns(preliminary);
@@ -613,6 +626,7 @@ export class TechnologyTreeViewer {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
       assetFiles,
+      analysisMode,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     this.#state.current.set(workspaceId, { generation, snapshot, assetFiles, graph });
@@ -935,6 +949,7 @@ export class TechnologyTreeViewer {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
       assetFiles: cached.assetFiles,
+      analysisMode: cached.graph.analysisMode ?? 'full',
       ...(signal === undefined ? {} : { signal }),
     });
   }

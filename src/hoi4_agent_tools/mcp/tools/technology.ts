@@ -206,6 +206,7 @@ const readOnly = {
 function graphHash(graph: TechnologyGraphSnapshot): string {
   return hashCanonical({
     schemaVersion: graph.schemaVersion,
+    analysisMode: graph.analysisMode ?? 'full',
     workspaceIdentity: graph.workspaceIdentity,
     revision: graph.revision,
     statistics: graph.statistics,
@@ -240,7 +241,9 @@ function validation(graph: TechnologyGraphSnapshot) {
         passed: graph.complete && blocking === 0,
         message: graph.complete
           ? `${blocking} blocking technology diagnostics; full evidence is linked`
-          : `${graph.skippedSourceCount} source(s) were skipped; full evidence is linked`,
+          : graph.analysisMode === 'focused'
+            ? 'Helper projections were deferred for this large workspace; direct evidence is linked'
+            : `${graph.skippedSourceCount} source(s) were skipped; full evidence is linked`,
       },
     ],
   };

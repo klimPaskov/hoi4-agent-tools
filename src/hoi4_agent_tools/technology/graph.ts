@@ -44,6 +44,8 @@ export interface TechnologyGraphBuildOptions {
   workspaceIdentity: string;
   assetFiles?: readonly ScannedFile[];
   cache?: TechnologySourceFragmentCacheLike;
+  /** Focused graphs retain direct references and helper calls without expanding the full call network. */
+  analysisMode?: 'full' | 'focused';
   signal?: AbortSignal;
 }
 
@@ -445,10 +447,32 @@ function expandHelperReferences(
   references: readonly TechnologyExternalReference[],
   calls: readonly TechnologyHelperCall[],
   unresolved: TechnologyUnresolvedAnalysis[],
+  analysisMode: 'full' | 'focused',
   signal?: AbortSignal,
 ): TechnologyExternalReference[] {
   const direct = references.filter(({ sourceKind }) => sourceKind === 'scripted_effect');
   const publicReferences = references.filter(({ sourceKind }) => sourceKind !== 'scripted_effect');
+  if (analysisMode === 'focused') {
+    if (calls.length > 0) {
+      unresolved.push({
+        id: 'tech-unresolved-helper-expansion-deferred',
+        kind: 'unsupported_construct',
+        expression: 'scripted_effect expansion',
+        confidence: 'unresolved',
+        blockers: [
+          {
+            code: 'TECH_HELPER_EXPANSION_DEFERRED',
+            message:
+              'Large-workspace technology analysis retains scripted-effect calls and direct references without materialising the full helper projection.',
+          },
+        ],
+      });
+    }
+    const deduplicated = new Map<string, TechnologyExternalReference>();
+    for (const reference of [...publicReferences, ...direct])
+      if (!deduplicated.has(reference.id)) deduplicated.set(reference.id, reference);
+    return [...deduplicated.values()].sort((left, right) => compareCodeUnits(left.id, right.id));
+  }
   const refsByHelper = new Map<string, TechnologyExternalReference[]>();
   for (const reference of direct) {
     const group = refsByHelper.get(reference.sourceId) ?? [];
@@ -1334,6 +1358,7 @@ export function buildTechnologyGraph(
     fragments.flatMap(({ externalReferences }) => externalReferences),
     helperCalls,
     unresolved,
+    options.analysisMode ?? 'full',
     options.signal,
   );
   const issues = diagnose(
@@ -1376,10 +1401,14 @@ export function buildTechnologyGraph(
   const graph: TechnologyGraphSnapshot = {
     schemaVersion: TECHNOLOGY_GRAPH_SCHEMA_VERSION,
     parserVersion: TECHNOLOGY_PARSER_VERSION,
+    analysisMode: options.analysisMode ?? 'full',
     workspaceId: snapshot.workspaceId,
     workspaceIdentity: options.workspaceIdentity,
     revision,
-    complete: snapshot.complete && unresolved.every(({ kind }) => kind !== 'partial_source'),
+    complete:
+      snapshot.complete &&
+      unresolved.every(({ kind }) => kind !== 'partial_source') &&
+      !(options.analysisMode === 'focused' && helperCalls.length > 0),
     analysisBoundary: {
       staticAnalysis: true,
       language: 'l_english',
@@ -1391,6 +1420,9 @@ export function buildTechnologyGraph(
         'meta-generated or variable technology identifiers',
         'exact AI research choice and runtime research time',
         'dynamic scripted localisation without supplied runtime values',
+        ...(options.analysisMode === 'focused' && helperCalls.length > 0
+          ? ['large-workspace scripted-effect helper projections are deferred']
+          : []),
       ],
       assumptions: [
         'classic technology paths point from the defining technology to leads_to_tech',

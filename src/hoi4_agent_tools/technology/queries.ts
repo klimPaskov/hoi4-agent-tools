@@ -83,6 +83,7 @@ export function technologyScanReport(
     workspaceId: graph.workspaceId,
     workspaceIdentity: graph.workspaceIdentity,
     revision: graph.revision,
+    analysisMode: graph.analysisMode ?? 'full',
     complete: graph.complete,
     statistics: graph.statistics,
     issueClassifications: classifications,

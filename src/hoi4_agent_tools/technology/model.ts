@@ -272,6 +272,8 @@ export interface TechnologyGraphStatistics {
 export interface TechnologyGraphSnapshot {
   schemaVersion: typeof TECHNOLOGY_GRAPH_SCHEMA_VERSION;
   parserVersion: typeof TECHNOLOGY_PARSER_VERSION;
+  /** Large workspaces keep helper calls structural instead of materialising every projection. */
+  analysisMode?: 'full' | 'focused';
   workspaceId: string;
   workspaceIdentity: string;
   revision: string;

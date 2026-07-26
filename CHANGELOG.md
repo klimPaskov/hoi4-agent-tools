@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.1 - 2026-07-26
+
+- Fixed large vanilla-plus-mod technology scans that could consume multiple gigabytes and leave the MCP transport open until a client timeout closed it.
+- Added automatic focused technology analysis for game-backed and large workspaces, retaining direct source evidence and helper-call indexing while deferring workspace-wide scripted-effect projections.
+
 ## 2.3.0 - 2026-07-22
 
 - Added a read-only AI and MTTH Scenario Analyzer with inspect, evaluate, sweep, simulate, sequence, compare, and render tools.

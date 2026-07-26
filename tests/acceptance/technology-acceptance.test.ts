@@ -17,6 +17,7 @@ import {
   technologyBonusCoverage,
   technologyScanReport,
   traceTechnology,
+  buildTechnologyGraph,
   type TechnologyGraphSnapshot,
 } from '../../src/hoi4_agent_tools/technology/index.js';
 
@@ -255,6 +256,30 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
           technologyId === 'synthetic_tech_0001',
       )?.location.path,
     ).toBe('mod:common/scripted_effects/synthetic_technology_effects.txt');
+  });
+
+  it('keeps a focused large-workspace graph bounded without losing direct evidence', async () => {
+    const snapshot = await engine.scan(workspaceId);
+    const workspace = engine.resolver.get(workspaceId);
+    const first = buildTechnologyGraph(snapshot, {
+      workspaceIdentity: workspace.workspaceIdentity,
+      analysisMode: 'focused',
+    });
+    const second = buildTechnologyGraph(snapshot, {
+      workspaceIdentity: workspace.workspaceIdentity,
+      analysisMode: 'focused',
+    });
+    expect(first.analysisMode).toBe('focused');
+    expect(first.complete).toBe(false);
+    expect(first.unresolved).toContainEqual(
+      expect.objectContaining({
+        id: 'tech-unresolved-helper-expansion-deferred',
+        blockers: [expect.objectContaining({ code: 'TECH_HELPER_EXPANSION_DEFERRED' })],
+      }),
+    );
+    expect(first.externalReferences.length).toBeLessThan(graph.externalReferences.length);
+    expect(first.externalReferences).toEqual(second.externalReferences);
+    expect(first.revision).toBe(second.revision);
   });
 
   it('classifies every intentional defect and keeps unsupported dynamic analysis explicit', () => {

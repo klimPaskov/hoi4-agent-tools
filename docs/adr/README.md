@@ -17,3 +17,4 @@
 15. [AI and MTTH Scenario Analyzer](0015-ai-mtth-scenario-analyzer.md)
 16. [Bounded large-graph analysis](0016-bounded-large-graph-analysis.md)
 17. [Arbitrary local mod roots](0017-arbitrary-local-mod-roots.md)
+18. [Bounded technology helper expansion](0018-bounded-technology-helper-expansion.md)
