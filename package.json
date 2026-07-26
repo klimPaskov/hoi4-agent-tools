@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Analyze HOI4 events, tech trees, AI weights, and MTTH; build focus trees, GUIs, and maps.",
   "type": "module",
   "license": "Apache-2.0",
@@ -126,7 +126,9 @@
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
+    "brace-expansion": "5.0.8",
     "fast-uri": "3.1.4",
+    "postcss": "8.5.23",
     "shell-quote": "1.10.0"
   },
   "publishConfig": {

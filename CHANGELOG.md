@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.2 - 2026-07-26
+
+- Pinned patched transitive `brace-expansion` and `postcss` releases so the CI and release audit remain clean without changing the MCP Inspector surface.
+
 ## 2.3.1 - 2026-07-26
 
 - Fixed large vanilla-plus-mod technology scans that could consume multiple gigabytes and leave the MCP transport open until a client timeout closed it.
