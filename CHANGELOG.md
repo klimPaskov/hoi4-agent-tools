@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.3 - 2026-07-26
+
+- Regenerated the npm lockfile with the pinned release npm so clean installs include the patched optional native runtime packages.
+
 ## 2.3.2 - 2026-07-26
 
 - Pinned patched transitive `brace-expansion` and `postcss` releases so the CI and release audit remain clean without changing the MCP Inspector surface.
