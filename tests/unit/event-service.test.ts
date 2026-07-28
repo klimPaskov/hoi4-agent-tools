@@ -122,6 +122,33 @@ describe('Event Chain Viewer service', () => {
     expect(scan).toHaveBeenCalledTimes(3);
   });
 
+  it('bounds large event workspaces before workspace-wide passes can exhaust the server', async () => {
+    const { engine, sourcePath } = await fixture();
+    const eventsRoot = path.dirname(sourcePath);
+    await Promise.all(
+      Array.from({ length: 1_001 }, (_, index) =>
+        writeFile(
+          path.join(eventsRoot, `large-${index}.txt`),
+          '# synthetic event fixture\n',
+          'utf8',
+        ),
+      ),
+    );
+
+    const inspected = await new EventChainViewer(engine).inspect({
+      workspaceId: 'event-service',
+      mode: 'roots',
+    });
+
+    expect(inspected.graph.analysisMode).toBe('focused');
+    expect(inspected.graph.complete).toBe(false);
+    expect(inspected.graph.unresolved).toContainEqual(
+      expect.objectContaining({
+        blockers: [expect.objectContaining({ code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED' })],
+      }),
+    );
+  }, 60_000);
+
   it('re-authorizes every request before returning a shared cached graph', async () => {
     const { engine } = await fixture();
     const viewer = new EventChainViewer(engine);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.4 - 2026-07-28
+
+- Bounded large game-backed event scans before workspace-wide lifecycle and helper analysis could exhaust the MCP process and close the stdio transport.
+- Added automatic focused event analysis for large workspaces, explicit deferred-analysis diagnostics, source-profile reporting, and deterministic regression coverage.
+
 ## 2.3.3 - 2026-07-26
 
 - Regenerated the npm lockfile with the pinned release npm so clean installs include the patched optional native runtime packages.

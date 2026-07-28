@@ -191,6 +191,10 @@ function eventGraphCacheKey(
   return `${workspaceId}\0${projectHelpers ? 'expanded' : 'structural'}\0${analysisMode}`;
 }
 
+function isGameBackedWorkspace(workspace: ReturnType<CoreEngine['resolver']['get']>): boolean {
+  return workspace.roots.some(({ kind }) => kind === 'game');
+}
+
 const serviceState = new WeakMap<CoreEngine, SharedEventServiceState>();
 const EVENT_GRAPH_ARTIFACT_MAX_BYTES = 67_108_864;
 const EVENT_GRAPH_ARTIFACT_MAX_CHUNKS = 1_024;
@@ -228,6 +232,7 @@ export function eventScanReport(
     graphSummary: {
       schemaVersion: graph.schemaVersion,
       parserVersion: graph.parserVersion,
+      analysisMode: graph.analysisMode ?? 'full',
       workspaceId: graph.workspaceId,
       workspaceIdentity: graph.workspaceIdentity,
       revision: graph.revision,
@@ -274,6 +279,7 @@ function cachedEventGraphHash(graph: EventGraphSnapshot, signal?: AbortSignal): 
       ? hashCanonical({
           schemaVersion: graph.schemaVersion,
           parserVersion: graph.parserVersion,
+          analysisMode: graph.analysisMode ?? 'full',
           workspaceIdentity: graph.workspaceIdentity,
           revision: graph.revision,
           statistics: graph.statistics,
@@ -301,10 +307,16 @@ function engineGeneration(engine: CoreEngine, workspaceId: string): number {
   return engine.generation(workspaceId);
 }
 
-function eventScanPatterns(workspace: ReturnType<CoreEngine['resolver']['get']>): string[] {
+function eventScanPatterns(
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+  focused = false,
+): string[] {
   const roots = workspace.registration.roots;
   const under = (values: readonly string[], glob: string): string[] =>
     values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
+  if (focused) {
+    return ['events/**/*.txt', 'common/on_actions/**/*.txt'].sort(compareCodeUnits);
+  }
   return [
     'events/**/*.txt',
     'history/countries/**/*.txt',
@@ -332,15 +344,24 @@ async function scanEventSources(
   engine: CoreEngine,
   workspaceId: string,
   workspace: ReturnType<CoreEngine['resolver']['get']>,
+  focused = false,
   principal?: string,
   signal?: AbortSignal,
 ): Promise<ScanSnapshot> {
-  const patterns = eventScanPatterns(workspace);
+  const patterns = eventScanPatterns(workspace, focused);
+  const gamePatterns = eventScanPatterns(workspace, focused);
   const sourceKinds = ['mod', 'dependency', 'fixture'] as const;
   const scans = await Promise.all([
     engine.scan(workspaceId, { patterns, rootKinds: sourceKinds }, principal, signal),
     ...(workspace.roots.some(({ kind }) => kind === 'game')
-      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game'] }, principal, signal)]
+      ? [
+          engine.scan(
+            workspaceId,
+            { patterns: gamePatterns, rootKinds: ['game'] },
+            principal,
+            signal,
+          ),
+        ]
       : []),
   ]);
   const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));
@@ -1042,17 +1063,26 @@ export class EventChainViewer {
     // principal bypass the resolver check for a later caller.
     const workspace = this.engine.resolver.get(workspaceId, options.principal);
     const generation = engineGeneration(this.engine, workspaceId);
-    const projectHelpers = options.projectHelpers ?? true;
-    const analysisMode = options.analysisMode ?? 'full';
-    const cacheKey = eventGraphCacheKey(workspaceId, projectHelpers, analysisMode);
+    const requestedProjectHelpers = options.projectHelpers ?? true;
+    const requestedAnalysisMode = options.analysisMode ?? 'full';
+    const autoFocused = isGameBackedWorkspace(workspace) && requestedAnalysisMode === 'full';
+    const cacheAnalysisMode = autoFocused ? 'focused' : requestedAnalysisMode;
+    const cacheProjectHelpers = cacheAnalysisMode === 'focused' ? false : requestedProjectHelpers;
+    const cacheKey = eventGraphCacheKey(workspaceId, cacheProjectHelpers, cacheAnalysisMode);
     const cached = this.#state.current.get(cacheKey);
     if (options.refresh !== true && cached?.generation === generation) {
       return cached.graph;
     }
     const sibling =
-      this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers, analysisMode)) ??
-      this.#state.current.get(eventGraphCacheKey(workspaceId, !projectHelpers)) ??
-      this.#state.current.get(eventGraphCacheKey(workspaceId, projectHelpers));
+      this.#state.current.get(
+        eventGraphCacheKey(workspaceId, !cacheProjectHelpers, cacheAnalysisMode),
+      ) ??
+      this.#state.current.get(
+        eventGraphCacheKey(workspaceId, requestedProjectHelpers, requestedAnalysisMode),
+      ) ??
+      this.#state.current.get(eventGraphCacheKey(workspaceId, !requestedProjectHelpers)) ??
+      this.#state.current.get(eventGraphCacheKey(workspaceId, requestedProjectHelpers));
+    const scanFocused = autoFocused || requestedAnalysisMode === 'focused';
     const snapshot =
       options.refresh !== true && sibling?.generation === generation
         ? sibling.snapshot
@@ -1060,6 +1090,7 @@ export class EventChainViewer {
             this.engine,
             workspaceId,
             workspace,
+            scanFocused,
             options.principal,
             options.signal,
           );
@@ -1068,9 +1099,10 @@ export class EventChainViewer {
       return cached.graph;
     }
     const buildAnalysisMode =
-      analysisMode === 'focused' && snapshot.files.length > EVENT_FOCUSED_GRAPH_FILE_THRESHOLD
+      autoFocused || snapshot.files.length > EVENT_FOCUSED_GRAPH_FILE_THRESHOLD
         ? 'focused'
         : 'full';
+    const projectHelpers = buildAnalysisMode === 'focused' ? false : requestedProjectHelpers;
     const graph = buildEventGraph(snapshot, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       cache: this.#state.fragments,
@@ -1079,7 +1111,7 @@ export class EventChainViewer {
       analysisMode: buildAnalysisMode,
     });
     this.#state.current.set(cacheKey, { generation, snapshot, graph });
-    if (analysisMode === 'full') rememberGraph(this.#state, workspaceId, graph);
+    if (buildAnalysisMode === 'full') rememberGraph(this.#state, workspaceId, graph);
     return graph;
   }
 

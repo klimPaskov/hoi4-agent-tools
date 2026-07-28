@@ -1834,6 +1834,21 @@ export function buildEventGraph(
   graph.stateAccesses = stableUnique(graph.stateAccesses);
   graph.unresolved = stableUnique(graph.unresolved);
   const focused = options.analysisMode === 'focused';
+  if (focused) {
+    graph.unresolved.push({
+      id: 'event-analysis-focused-boundary',
+      kind: 'partial_source',
+      expression: 'workspace-wide event helper projections and lifecycle diagnostics',
+      confidence: 'unresolved',
+      blockers: [
+        {
+          code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED',
+          message:
+            'Large event workspaces defer workspace-wide helper projections and lifecycle passes; direct source evidence remains available.',
+        },
+      ],
+    });
+  }
   const stateLinks = focused ? [] : stateLinksFor(graph, budget);
 
   if (!focused) {

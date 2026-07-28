@@ -170,6 +170,7 @@ const eventInspectOutputSchema = strictOperationResultSchema(
   z
     .object({
       mode: eventInspectModeSchema,
+      analysisMode: z.enum(['full', 'focused']),
       revision: sha256Schema,
       graphHash: sha256Schema,
       counts: eventGraphCountsSchema,
@@ -182,6 +183,7 @@ const eventRenderOutputSchema = strictOperationResultSchema(
   z
     .object({
       view: eventRenderViewSchema,
+      analysisMode: z.enum(['full', 'focused']),
       revision: sha256Schema,
       graphHash: sha256Schema,
       layoutHash: sha256Schema,
@@ -283,15 +285,18 @@ function graphCounts(graph: EventGraphSnapshot, artifacts: number) {
 
 function graphValidation(graph: EventGraphSnapshot) {
   const counts = graphCounts(graph, 0);
+  const focused = graph.analysisMode === 'focused';
   return {
     passed: graph.complete && counts.blockingDiagnostics === 0,
     checks: [
       {
         id: 'event-analysis',
         passed: graph.complete && counts.blockingDiagnostics === 0,
-        message: graph.complete
-          ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
-          : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
+        message: focused
+          ? 'Large workspace analysis deferred workspace-wide helper projections and lifecycle passes; direct evidence is linked'
+          : graph.complete
+            ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
+            : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
       },
     ],
   };
@@ -403,6 +408,7 @@ export function registerEventTools(
         await progress.report(2, 3, 'Linking complete event analysis');
         const result = emptyServiceResult(workspaceId, {
           mode: inspected.mode,
+          analysisMode: inspected.graph.analysisMode ?? 'full',
           revision: inspected.graph.revision,
           graphHash: inspected.graphHash,
           counts: graphCounts(inspected.graph, inspected.artifacts.length),
@@ -448,6 +454,7 @@ export function registerEventTools(
         await progress.report(2, 3, 'Linking complete event renders');
         const result = emptyServiceResult(workspaceId, {
           view: rendered.render.view,
+          analysisMode: rendered.graph.analysisMode ?? 'full',
           revision: rendered.graph.revision,
           graphHash: rendered.graphHash,
           layoutHash: rendered.render.layout.layoutHash,
