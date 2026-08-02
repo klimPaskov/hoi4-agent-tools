@@ -1,5 +1,9 @@
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
 import { canonicalJson } from '../../core/canonical.js';
+import {
+  exactChangedFilePatterns,
+  focusDomainScanPatterns,
+} from '../../core/domain-scan-patterns.js';
 import type { Diagnostic } from '../../core/diagnostics.js';
 import type { CoreEngine } from '../../core/engine.js';
 import { ServiceError, type ArtifactLink } from '../../core/result.js';
@@ -66,7 +70,20 @@ export async function postValidateTransaction(
   artifacts: ArtifactLink[];
 }> {
   engine.invalidate(transaction.workspaceId);
-  const snapshot = await engine.scan(transaction.workspaceId, {}, principal, signal);
+  const workspace = engine.resolver.get(transaction.workspaceId, principal);
+  const focusTransaction =
+    transaction.operationKind === 'focus-plan-changes' ||
+    transaction.operationKind === 'continuous-focus-plan-changes';
+  const snapshot = await engine.scan(
+    transaction.workspaceId,
+    {
+      patterns: focusTransaction
+        ? focusDomainScanPatterns(workspace)
+        : exactChangedFilePatterns(transaction.files.map(({ relativePath }) => relativePath)),
+    },
+    principal,
+    signal,
+  );
   const changed = new Set(
     transaction.files.map(({ relativePath }) => sourcePathComparisonKey(relativePath)),
   );

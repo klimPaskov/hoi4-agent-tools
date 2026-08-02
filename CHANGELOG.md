@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.5 - 2026-08-02
+
+- Replaced all-domain scans in focus, map, probability, rewrite validation, and country-asset discovery with domain-specific source inventories.
+- Prevented large unrelated mod files from producing `SCAN_BYTE_LIMIT` errors in otherwise bounded MCP work and added low-ceiling regression coverage.
+
 ## 2.3.4 - 2026-07-28
 
 - Bounded large game-backed event scans before workspace-wide lifecycle and helper analysis could exhaust the MCP process and close the stdio transport.

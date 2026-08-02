@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
 import { compareCodeUnits, canonicalJson, hashCanonical } from '../../core/canonical.js';
+import { focusDomainScanPatterns } from '../../core/domain-scan-patterns.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
 import type { ScannedFile } from '../../core/scanner.js';
 import { RenderBudget } from '../../core/render-budget.js';
@@ -455,9 +456,14 @@ async function executeFocusVisualTool(
   try {
     const progress = progressReporter(extra);
     await progress.report(0, 4, 'Importing and indexing focus source');
-    const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
-    await progress.report(1, 4, 'Focus source index complete');
     const workspace = engine.resolver.get(workspaceId, context.principal);
+    const snapshot = await engine.scan(
+      workspaceId,
+      { patterns: focusDomainScanPatterns(workspace) },
+      context.principal,
+      progress.signal,
+    );
+    await progress.report(1, 4, 'Focus source index complete');
     const renderBudget = new RenderBudget();
     if (input.mode === 'continuous') {
       selectedContinuousFocusFile(snapshot, relativePath);
@@ -821,8 +827,13 @@ export function registerFocusTools(
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building shared workspace index');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
         const workspace = engine.resolver.get(workspaceId, context.principal);
+        const snapshot = await engine.scan(
+          workspaceId,
+          { patterns: focusDomainScanPatterns(workspace) },
+          context.principal,
+          progress.signal,
+        );
         if (input.mode === 'continuous') {
           const selectedFiles = activeContinuousFocusFiles(snapshot).filter(
             (file) => relativePath === undefined || file.relativePath === relativePath,
@@ -1146,8 +1157,13 @@ export function registerFocusTools(
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
         await progress.report(0, 5, 'Validating shared index and current source');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
         const workspace = engine.resolver.get(workspaceId, context.principal);
+        const snapshot = await engine.scan(
+          workspaceId,
+          { patterns: focusDomainScanPatterns(workspace) },
+          context.principal,
+          progress.signal,
+        );
         if (input.mode === 'continuous') {
           const plan = input.plan as ContinuousFocusPalettePlan;
           if (

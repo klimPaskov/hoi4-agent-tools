@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { z } from 'zod/v4';
 import { type ArtifactWrite, publicArtifactLink } from '../../core/artifacts.js';
 import { compareCodeUnits, hashCanonical } from '../../core/canonical.js';
+import { countryAssetDiscoveryPatterns } from '../../core/domain-scan-patterns.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
 import type { ScannedFile } from '../../core/scanner.js';
 import { emptyServiceResult } from '../../core/result.js';
@@ -537,7 +538,13 @@ export function registerChaosxTools(
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Resolving ChaosX country assets');
-        const snapshot = await engine.scan(workspaceId, {}, context.principal, progress.signal);
+        const discoveryWorkspace = engine.resolver.get(workspaceId, context.principal);
+        const snapshot = await engine.scan(
+          workspaceId,
+          { patterns: countryAssetDiscoveryPatterns(discoveryWorkspace) },
+          context.principal,
+          progress.signal,
+        );
         const tags = [...new Set(input.countryTags)];
         const { selections, catalog } = await selectCountryAssets(
           engine,

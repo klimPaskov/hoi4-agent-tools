@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { canonicalJson, hashCanonical } from '../core/canonical.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
+import { probabilityDomainScanPatterns } from '../core/domain-scan-patterns.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import type { ArtifactLink } from '../core/result.js';
@@ -820,9 +821,23 @@ export class ProbabilityAnalyzer {
     this.state = analyzerState(engine);
   }
 
-  private async scan(context: ProbabilityServiceContext): Promise<ScanSnapshot> {
+  private async scan(
+    context: ProbabilityServiceContext,
+    sourcePaths: readonly (string | undefined)[] = [],
+  ): Promise<ScanSnapshot> {
     if (context.refresh === true) this.engine.invalidate(context.workspaceId);
-    return this.engine.scan(context.workspaceId, {}, context.principal, context.signal);
+    const workspace = this.engine.resolver.get(context.workspaceId, context.principal);
+    return this.engine.scan(
+      context.workspaceId,
+      {
+        patterns: probabilityDomainScanPatterns(
+          workspace,
+          sourcePaths.filter((sourcePath): sourcePath is string => sourcePath !== undefined),
+        ),
+      },
+      context.principal,
+      context.signal,
+    );
   }
 
   private async verifyGameVersion(
@@ -1095,7 +1110,7 @@ export class ProbabilityAnalyzer {
     if (adapter === undefined || source === undefined)
       return { adapters: probabilityAdapters(), artifacts: [], filesScanned: [] };
     const gameVersionVerification = await this.verifyGameVersion(context, adapter);
-    const snapshot = await this.scan(context);
+    const snapshot = await this.scan(context, [source.path]);
     const surface = discoverWeightedSurface(snapshot, adapter, source, candidatePool);
     const definitions = ClausewitzEvaluationDefinitions.build(snapshot);
     const inspectedCandidates = evaluateExactCandidates(
@@ -1199,7 +1214,7 @@ export class ProbabilityAnalyzer {
         'Scenario set belongs to a different workspace',
       );
     const gameVersionVerification = await this.verifyGameVersion(request, request.adapter);
-    const snapshot = await this.scan(request);
+    const snapshot = await this.scan(request, [request.source.path]);
     const surface = discoverWeightedSurface(
       snapshot,
       request.adapter,

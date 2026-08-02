@@ -479,10 +479,12 @@ export function registerMapTools(
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Inspecting and validating the map');
-        const [shared, { snapshot, validation }] = await Promise.all([
-          engine.scan(workspaceId, {}, context.principal, progress.signal),
-          nudger.validate(workspaceId, context.principal, progress.signal),
-        ]);
+        const { snapshot, validation } = await nudger.validate(
+          workspaceId,
+          context.principal,
+          progress.signal,
+        );
+        const sharedRevision = snapshot.revision;
         const selected = selectedMapEntities(snapshot, provinceIds, stateIds, regionIds);
         const provinceGeometry =
           provinceIds.length === 0
@@ -507,7 +509,7 @@ export function registerMapTools(
           schemaVersion: 'map-inspect.v1',
           sourceHashes: sourceEvidence.bounded.sourceHashes,
           metadata: {
-            sharedRevision: shared.revision,
+            sharedRevision,
             sourceHashInventory: sourceEvidence.bounded.inventory,
           },
         };
@@ -518,7 +520,7 @@ export function registerMapTools(
             content: `${canonicalJson({
               schemaVersion: 1,
               revision: snapshot.revision,
-              sharedRevision: shared.revision,
+              sharedRevision,
               dimensions:
                 snapshot.index.raster === undefined
                   ? null
@@ -603,7 +605,7 @@ export function registerMapTools(
         );
         const result = emptyServiceResult(workspaceId, {
           revision: snapshot.revision,
-          sharedRevision: shared.revision,
+          sharedRevision,
           width: snapshot.index.raster?.width ?? null,
           height: snapshot.index.raster?.height ?? null,
           definitions: snapshot.index.definitions.length,

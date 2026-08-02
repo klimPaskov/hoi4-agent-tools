@@ -19,3 +19,4 @@
 17. [Arbitrary local mod roots](0017-arbitrary-local-mod-roots.md)
 18. [Bounded technology helper expansion](0018-bounded-technology-helper-expansion.md)
 19. [Bounded event analysis](0019-bounded-event-analysis.md)
+20. [Domain-bounded scans](0020-domain-bounded-scans.md)
