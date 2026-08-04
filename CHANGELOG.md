@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.8 - 2026-08-04
+
+- Regenerated the clean-install lockfile with the release-pinned npm so optional native runtime metadata is complete in CI.
+
 ## 2.3.7 - 2026-08-04
 
 - Updated patched transitive URL, address, CORS, and glob dependencies after new npm advisories blocked the 2.3.6 publication gate.
