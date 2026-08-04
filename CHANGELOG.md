@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.7 - 2026-08-04
+
+- Updated patched transitive URL, address, CORS, and glob dependencies after new npm advisories blocked the 2.3.6 publication gate.
+
 ## 2.3.6 - 2026-08-04
 
 - Resolved discovered mod workspaces by their normalized directory or display name so coding agents do not need internal hashed registration IDs.
