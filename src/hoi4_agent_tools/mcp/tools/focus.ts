@@ -53,7 +53,7 @@ import {
 } from '../server/result.js';
 import {
   requireServerScope,
-  resolveServerWorkspaceId,
+  resolveServerWorkspaceForSource,
   type ServerContext,
 } from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
@@ -455,10 +455,11 @@ async function executeFocusVisualTool(
   rasterize: boolean,
 ) {
   const { workspaceId: requestedWorkspaceId, relativePath } = input;
-  const workspaceId = await resolveServerWorkspaceId(
+  const workspaceId = await resolveServerWorkspaceForSource(
     engine,
     context,
     requestedWorkspaceId,
+    relativePath,
     extra.signal,
   );
   const outputName = rasterize ? 'raster' : 'render';
@@ -829,10 +830,11 @@ export function registerFocusTools(
     },
     async (input, extra) => {
       const { workspaceId: requestedWorkspaceId, relativePath } = input;
-      const workspaceId = await resolveServerWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceForSource(
         engine,
         context,
         requestedWorkspaceId,
+        relativePath,
         extra.signal,
       );
       try {
@@ -1160,10 +1162,11 @@ export function registerFocusTools(
         padding,
         reviewScale,
       } = input;
-      const workspaceId = await resolveServerWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceForSource(
         engine,
         context,
         requestedWorkspaceId,
+        relativePath,
         extra.signal,
       );
       try {

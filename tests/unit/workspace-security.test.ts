@@ -293,6 +293,33 @@ describe('workspace path policy', () => {
     );
   });
 
+  it('rejects source recovery when more than one mod contains the requested file', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-source-ambiguity-'));
+    const modRoot = path.join(base, 'mods');
+    const relativePath = 'common/national_focus/shared_focus_tree.txt';
+    const firstSource = path.join(modRoot, 'first_mod', relativePath);
+    const secondSource = path.join(modRoot, 'second_mod', relativePath);
+    await Promise.all([
+      mkdir(path.dirname(firstSource), { recursive: true }),
+      mkdir(path.dirname(secondSource), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(firstSource, 'focus_tree = {}\n'),
+      writeFile(secondSource, 'focus_tree = {}\n'),
+    ]);
+    const resolver = await WorkspaceResolver.create(
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(base, 'server-state'),
+        modRoots: [modRoot],
+      }),
+    );
+
+    await expect(resolver.resolveUniqueModSourceWorkspaceId(relativePath)).rejects.toMatchObject({
+      code: 'WORKSPACE_SOURCE_AMBIGUOUS',
+    });
+  });
+
   it('lets an explicit advanced workspace override its discovered directory', async () => {
     const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-mod-override-'));
     const modRoot = path.join(base, 'mods');

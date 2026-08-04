@@ -386,6 +386,39 @@ export class WorkspaceResolver {
     );
   }
 
+  /** Find one mod containing an existing source path when a stale client root selected another mod. */
+  async resolveUniqueModSourceWorkspaceId(
+    relativePath: string,
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<string | undefined> {
+    const matches: string[] = [];
+    for (const workspace of this.list(principal)) {
+      signal?.throwIfAborted();
+      if (workspace.registration.kind !== 'mod') continue;
+      try {
+        const resolved = await this.resolvePath(
+          workspace.id,
+          relativePath,
+          'read',
+          ['mod'],
+          principal,
+        );
+        signal?.throwIfAborted();
+        if ((await lstat(resolved.path)).isFile()) matches.push(workspace.id);
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') throw error;
+      }
+    }
+    if (matches.length === 0) return undefined;
+    if (matches.length === 1) return matches[0];
+    throw new ServiceError(
+      'WORKSPACE_SOURCE_AMBIGUOUS',
+      `The requested source exists in more than one mod workspace: ${relativePath}`,
+      { relativePath, workspaceIds: matches },
+    );
+  }
+
   resolveWorkspaceId(workspaceId: string, principal?: string): string {
     if (workspaceId === CURRENT_WORKSPACE_ID) return this.resolveCurrentWorkspaceId(principal);
     if (this.#byId.has(workspaceId)) return workspaceId;

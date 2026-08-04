@@ -16,3 +16,5 @@ An MCP process can outlive or be reused independently of the coding task that or
 ## Consequences
 
 Clients that advertise roots receive correct per-session mod selection even when the server process started elsewhere. Empty, unmatched, or multiply matching root sets fail explicitly instead of falling back to an unrelated mod. Clients without roots must still launch the server from inside the intended mod or supply an explicit workspace reference.
+
+For focus operations with an existing source path, a stale client root may be recovered by searching registered mods for that exact relative path. Recovery occurs only when one mod contains the file; duplicate matches fail as ambiguous. New-file creation never uses source-path recovery.

@@ -1,4 +1,5 @@
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
+import { lstat } from 'node:fs/promises';
 import { canonicalJson } from '../../core/canonical.js';
 import {
   exactChangedFilePatterns,
@@ -38,6 +39,39 @@ export async function resolveServerWorkspaceId(
     return context.resolveCurrentWorkspaceId(signal);
   }
   return engine.resolver.resolveWorkspaceId(workspaceId, context.principal);
+}
+
+export async function resolveServerWorkspaceForSource(
+  engine: CoreEngine,
+  context: ServerContext,
+  workspaceId: string,
+  relativePath: string | undefined,
+  signal?: AbortSignal,
+): Promise<string> {
+  const resolvedWorkspaceId = await resolveServerWorkspaceId(engine, context, workspaceId, signal);
+  if (workspaceId !== 'current' || relativePath === undefined) return resolvedWorkspaceId;
+
+  try {
+    const resolved = await engine.resolver.resolvePath(
+      resolvedWorkspaceId,
+      relativePath,
+      'read',
+      ['mod'],
+      context.principal,
+    );
+    signal?.throwIfAborted();
+    if ((await lstat(resolved.path)).isFile()) return resolvedWorkspaceId;
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') throw error;
+  }
+
+  return (
+    (await engine.resolver.resolveUniqueModSourceWorkspaceId(
+      relativePath,
+      context.principal,
+      signal,
+    )) ?? resolvedWorkspaceId
+  );
 }
 
 export function requireServerScope(context: ServerContext, scope: string): void {

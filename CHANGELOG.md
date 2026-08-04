@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.10 - 2026-08-04
+
+- Routed focus operations to the unique discovered mod containing a requested source when a stale client root points at another mod.
+- Added regression coverage for a stale client context requesting Ireland's focus source without a workspace selector.
+
 ## 2.3.9 - 2026-08-04
 
 - Bound omitted-workspace tool calls to the connected MCP client's active filesystem root instead of the server process's original working directory.

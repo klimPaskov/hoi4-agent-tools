@@ -19,7 +19,10 @@ afterEach(async () => {
 });
 
 describe('MCP client workspace roots', () => {
-  it('uses the calling client root instead of the server process cwd', async () => {
+  it.each([
+    ['the active Ireland root', 'ireland'],
+    ['a stale Slop Redux root with Ireland source', 'slop'],
+  ])('routes Ireland focus inspection from %s', async (_label, advertisedRoot) => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-client-roots-'));
     const mods = path.join(temporary, 'mods');
     const slop = path.join(mods, 'slop_redux');
@@ -50,7 +53,12 @@ describe('MCP client workspace roots', () => {
       { capabilities: { roots: {} } },
     );
     client.setRequestHandler(ListRootsRequestSchema, () => ({
-      roots: [{ uri: pathToFileURL(ireland).href, name: 'Ireland Total Overhaul' }],
+      roots: [
+        {
+          uri: pathToFileURL(advertisedRoot === 'ireland' ? ireland : slop).href,
+          name: advertisedRoot === 'ireland' ? 'Ireland Total Overhaul' : 'Slop Redux',
+        },
+      ],
     }));
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport as unknown as Transport);
