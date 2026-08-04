@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.6 - 2026-08-04
+
+- Resolved discovered mod workspaces by their normalized directory or display name so coding agents do not need internal hashed registration IDs.
+- Accepted prior automatic and discovered workspace IDs when they uniquely identify the same mod after configuration or path changes.
+- Verified focus, GUI, map, event, technology, and weighted-logic inspection against an external `ireland_total_overhaul` mod workspace.
+
 ## 2.3.5 - 2026-08-02
 
 - Replaced all-domain scans in focus, map, probability, rewrite validation, and country-asset discovery with domain-specific source inventories.

@@ -106,6 +106,33 @@ function discoveredWorkspaceId(rootPath: string): string {
   return `mod_${slug.length === 0 ? 'workspace' : slug}_${sha256Bytes(identityPath).slice(0, 12)}`;
 }
 
+function workspaceAliasSlug(value: string): string {
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '')
+    .slice(0, 48);
+}
+
+function workspaceAliases(workspace: ResolvedWorkspace): Set<string> {
+  const slug = workspaceAliasSlug(path.basename(workspace.modRoot));
+  const nameSlug = workspaceAliasSlug(workspace.name);
+  return new Set([
+    slug,
+    nameSlug,
+    `auto_${slug}`,
+    `auto_${nameSlug}`,
+    `mod_${slug}`,
+    `mod_${nameSlug}`,
+  ]);
+}
+
+function requestedWorkspaceAlias(value: string): string {
+  const staleDiscovered = /^mod_(.+)_[a-f0-9]{12}$/u.exec(value);
+  return staleDiscovered?.[1] ?? value;
+}
+
 /**
  * Hash the resolved root topology without persisting canonical host paths. Canonicalization happens
  * before this function is called, so filesystem aliases converge on the same stable identity.
@@ -332,9 +359,23 @@ export class WorkspaceResolver {
   }
 
   resolveWorkspaceId(workspaceId: string, principal?: string): string {
-    return workspaceId === CURRENT_WORKSPACE_ID
-      ? this.resolveCurrentWorkspaceId(principal)
-      : workspaceId;
+    if (workspaceId === CURRENT_WORKSPACE_ID) return this.resolveCurrentWorkspaceId(principal);
+    if (this.#byId.has(workspaceId)) return workspaceId;
+
+    const alias = requestedWorkspaceAlias(workspaceId);
+    const matches = this.list(principal).filter(
+      (workspace) =>
+        workspace.registration.kind === 'mod' && workspaceAliases(workspace).has(alias),
+    );
+    if (matches.length === 1) return matches[0]!.id;
+    if (matches.length > 1) {
+      throw new ServiceError(
+        'WORKSPACE_CONTEXT_AMBIGUOUS',
+        `More than one mod workspace matches: ${workspaceId}`,
+        { workspaceId, workspaceIds: matches.map(({ id }) => id) },
+      );
+    }
+    return workspaceId;
   }
 
   serverState(): ServerState | undefined {

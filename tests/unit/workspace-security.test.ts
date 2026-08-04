@@ -208,6 +208,10 @@ describe('workspace path policy', () => {
     expect(all).toHaveLength(3);
     expect(discovered).toHaveLength(2);
     expect(discovered.map(({ name }) => name)).toEqual(['Alpha Mod', 'beta']);
+    expect(resolver.get('alpha_mod').name).toBe('Alpha Mod');
+    expect(resolver.get('mod_alpha_mod').name).toBe('Alpha Mod');
+    expect(resolver.get('auto_alpha_mod').name).toBe('Alpha Mod');
+    expect(resolver.get('mod_alpha_mod_000000000000').name).toBe('Alpha Mod');
     for (const workspace of discovered) {
       expect(workspace).toMatchObject({
         id: expect.stringMatching(/^mod_[a-z0-9_]+_[a-f0-9]{12}$/u),
@@ -263,6 +267,27 @@ describe('workspace path policy', () => {
         serverConfigurationSchema.parse({ ...baseConfiguration, modRoots: [linkedRoot] }),
       ),
     ).rejects.toMatchObject({ code: 'WORKSPACE_MOD_ROOT_UNSAFE' });
+  });
+
+  it('does not guess when separate mod roots contain the same mod directory name', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-mod-alias-'));
+    const firstRoot = path.join(base, 'first');
+    const secondRoot = path.join(base, 'second');
+    await Promise.all([
+      mkdir(path.join(firstRoot, 'shared_mod'), { recursive: true }),
+      mkdir(path.join(secondRoot, 'shared_mod'), { recursive: true }),
+    ]);
+    const resolver = await WorkspaceResolver.create(
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(base, 'server-state'),
+        modRoots: [firstRoot, secondRoot],
+      }),
+    );
+
+    expect(() => resolver.get('shared_mod')).toThrowError(
+      expect.objectContaining({ code: 'WORKSPACE_CONTEXT_AMBIGUOUS' }),
+    );
   });
 
   it('lets an explicit advanced workspace override its discovered directory', async () => {
