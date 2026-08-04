@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.9 - 2026-08-04
+
+- Bound omitted-workspace tool calls to the connected MCP client's active filesystem root instead of the server process's original working directory.
+- Added cross-workspace regression coverage proving an Ireland client root cannot be misdirected to a Slop Redux server working directory.
+
 ## 2.3.8 - 2026-08-04
 
 - Regenerated the clean-install lockfile with the release-pinned npm so optional native runtime metadata is complete in CI.

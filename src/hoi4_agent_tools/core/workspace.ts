@@ -358,6 +358,34 @@ export class WorkspaceResolver {
     );
   }
 
+  /** Resolve the active mod from filesystem roots advertised by the connected MCP client. */
+  async resolveClientWorkspaceId(
+    rootPaths: readonly string[],
+    principal?: string,
+  ): Promise<string> {
+    const canonicalRoots = await Promise.all(rootPaths.map((rootPath) => canonicalPath(rootPath)));
+    const matches = this.list(principal).filter(
+      (workspace) =>
+        workspace.registration.kind === 'mod' &&
+        canonicalRoots.some(
+          (rootPath) =>
+            isWithin(workspace.modRoot, rootPath) || isWithin(rootPath, workspace.modRoot),
+        ),
+    );
+    if (matches.length === 1) return matches[0]!.id;
+    if (matches.length === 0) {
+      throw new ServiceError(
+        'WORKSPACE_CONTEXT_NOT_FOUND',
+        'The active MCP client roots do not identify a registered HOI4 mod workspace',
+      );
+    }
+    throw new ServiceError(
+      'WORKSPACE_CONTEXT_AMBIGUOUS',
+      'The active MCP client roots identify more than one HOI4 mod workspace',
+      { workspaceIds: matches.map(({ id }) => id) },
+    );
+  }
+
   resolveWorkspaceId(workspaceId: string, principal?: string): string {
     if (workspaceId === CURRENT_WORKSPACE_ID) return this.resolveCurrentWorkspaceId(principal);
     if (this.#byId.has(workspaceId)) return workspaceId;

@@ -25,7 +25,11 @@ import {
 } from '../../gui/inspection-artifact.js';
 import { workspaceIdSchema, workspaceRelativePathSchema } from '../../schemas/common.js';
 import { PACKAGE_VERSION } from '../../version.js';
-import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import {
+  requireServerScope,
+  resolveServerWorkspaceId,
+  type ServerContext,
+} from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
@@ -222,9 +226,11 @@ export function registerGuiTools(
       { workspaceId: requestedWorkspaceId, windowName, scenario, relatedScenarios },
       extra,
     ) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         const progress = progressReporter(extra);
@@ -366,7 +372,12 @@ export function registerGuiTools(
     extra: Parameters<typeof progressReporter>[0],
     code: 'GUI_RENDERED' | 'GUI_STATES_RENDERED',
   ): Promise<ReturnType<typeof toolResult>> => {
-    const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+    const workspaceId = await resolveServerWorkspaceId(
+      engine,
+      context,
+      input.workspaceId,
+      extra.signal,
+    );
     const { windowName } = input;
     try {
       const progress = progressReporter(extra);
@@ -586,7 +597,12 @@ export function registerGuiTools(
       },
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       const { relativePath, windowName, scenario } = input;
       try {
         requireServerScope(context, 'hoi4:write');

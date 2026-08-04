@@ -212,6 +212,9 @@ describe('workspace path policy', () => {
     expect(resolver.get('mod_alpha_mod').name).toBe('Alpha Mod');
     expect(resolver.get('auto_alpha_mod').name).toBe('Alpha Mod');
     expect(resolver.get('mod_alpha_mod_000000000000').name).toBe('Alpha Mod');
+    await expect(resolver.resolveClientWorkspaceId([path.join(alpha, 'common')])).resolves.toBe(
+      discovered.find(({ name }) => name === 'Alpha Mod')!.id,
+    );
     for (const workspace of discovered) {
       expect(workspace).toMatchObject({
         id: expect.stringMatching(/^mod_[a-z0-9_]+_[a-f0-9]{12}$/u),

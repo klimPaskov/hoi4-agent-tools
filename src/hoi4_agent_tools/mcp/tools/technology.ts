@@ -32,7 +32,7 @@ import {
   strictOperationResultSchema,
   toolResult,
 } from '../server/result.js';
-import type { ServerContext } from '../server/base-tools.js';
+import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
 
 const technologyMode = z.enum([
   'scan',
@@ -315,7 +315,12 @@ export function registerTechnologyTools(
       annotations: readOnly,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 2, 'Analyzing technologies');
@@ -350,7 +355,12 @@ export function registerTechnologyTools(
       annotations: readOnly,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         const request: TechnologyRenderServiceInput = {
@@ -399,7 +409,12 @@ export function registerTechnologyTools(
       annotations: readOnly,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         const request: TechnologyCompareInput = {

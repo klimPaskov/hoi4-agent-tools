@@ -15,7 +15,7 @@ import { ScriptedGuiStudio } from '../../gui/index.js';
 import { buildGuiSourceGraph } from '../../gui/source-graph.js';
 import type { GuiSourceGraph } from '../../gui/types.js';
 import { PACKAGE_VERSION } from '../../version.js';
-import type { ServerContext } from '../server/base-tools.js';
+import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
 import { progressReporter } from '../server/progress.js';
@@ -477,7 +477,12 @@ export function registerChaosxTools(
       annotations: readOnly,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 2, 'Checking ChaosX scripted-GUI sources');
@@ -534,7 +539,12 @@ export function registerChaosxTools(
       annotations: artifactProducing,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Resolving ChaosX country assets');

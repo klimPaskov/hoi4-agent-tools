@@ -24,7 +24,7 @@ import {
   probabilitySourceSchema,
 } from '../../schemas/probability.js';
 import { workspaceIdSchema } from '../../schemas/common.js';
-import type { ServerContext } from '../server/base-tools.js';
+import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
 import { progressReporter } from '../server/progress.js';
@@ -201,7 +201,7 @@ const readOnly = {
   openWorldHint: false,
 } as const;
 
-function requestContext(
+async function requestContext(
   engine: CoreEngine,
   context: ServerContext,
   workspaceId: string,
@@ -209,7 +209,7 @@ function requestContext(
   signal: AbortSignal,
 ) {
   return {
-    workspaceId: engine.resolver.resolveWorkspaceId(workspaceId, context.principal),
+    workspaceId: await resolveServerWorkspaceId(engine, context, workspaceId, signal),
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     ...(refresh === undefined ? {} : { refresh }),
     signal,
@@ -288,7 +288,7 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(
+      const base = await requestContext(
         engine,
         context,
         input.workspaceId,
@@ -343,7 +343,7 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(
+      const base = await requestContext(
         engine,
         context,
         input.workspaceId,
@@ -378,7 +378,7 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(
+      const base = await requestContext(
         engine,
         context,
         input.workspaceId,
@@ -413,7 +413,7 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(
+      const base = await requestContext(
         engine,
         context,
         input.workspaceId,
@@ -448,7 +448,13 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(engine, context, input.workspaceId, undefined, progress.signal);
+      const base = await requestContext(
+        engine,
+        context,
+        input.workspaceId,
+        undefined,
+        progress.signal,
+      );
       try {
         await progress.report(0, input.maxSteps, 'Analyzing declared sequence');
         const request = {
@@ -477,7 +483,7 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(
+      const base = await requestContext(
         engine,
         context,
         input.workspaceId,
@@ -512,7 +518,13 @@ export function registerProbabilityTools(
     },
     async (input, extra) => {
       const progress = progressReporter(extra);
-      const base = requestContext(engine, context, input.workspaceId, undefined, progress.signal);
+      const base = await requestContext(
+        engine,
+        context,
+        input.workspaceId,
+        undefined,
+        progress.signal,
+      );
       try {
         await progress.report(0, input.outputs.length, 'Rendering analysis resources');
         const request = {

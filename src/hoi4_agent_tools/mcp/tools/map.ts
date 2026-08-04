@@ -22,7 +22,11 @@ import {
 import { workspaceIdSchema } from '../../schemas/common.js';
 import { mapAllocationRequestSchema, mapOperationSchema } from '../../schemas/map.js';
 import { PACKAGE_VERSION } from '../../version.js';
-import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import {
+  requireServerScope,
+  resolveServerWorkspaceId,
+  type ServerContext,
+} from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
@@ -472,9 +476,11 @@ export function registerMapTools(
       { workspaceId: requestedWorkspaceId, provinceIds, stateIds, regionIds, allocationRequests },
       extra,
     ) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         const progress = progressReporter(extra);
@@ -655,9 +661,11 @@ export function registerMapTools(
       annotations: artifactProducing,
     },
     async ({ workspaceId: requestedWorkspaceId, layer, overlays, scale }, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         const progress = progressReporter(extra);
@@ -709,9 +717,11 @@ export function registerMapTools(
       },
     },
     async ({ workspaceId: requestedWorkspaceId, operations, diffScale }, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         requireServerScope(context, 'hoi4:write');

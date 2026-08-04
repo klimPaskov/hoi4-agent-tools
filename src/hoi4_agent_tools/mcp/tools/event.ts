@@ -32,7 +32,7 @@ import {
   strictOperationResultSchema,
   toolResult,
 } from '../server/result.js';
-import type { ServerContext } from '../server/base-tools.js';
+import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
 
 const nestedSelectorSchema = compactValidatedInputSchema(
   eventSelectorSchema,
@@ -398,7 +398,12 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Analyzing event chain');
@@ -444,7 +449,12 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Rendering event-chain view');
@@ -497,7 +507,12 @@ export function registerEventTools(
       annotations: readOnlyEventTool,
     },
     async (input, extra) => {
-      const workspaceId = engine.resolver.resolveWorkspaceId(input.workspaceId, context.principal);
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
+        input.workspaceId,
+        extra.signal,
+      );
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Comparing event-chain graphs');

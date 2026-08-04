@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { fileURLToPath } from 'node:url';
 import type { CoreEngine } from '../../core/engine.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../version.js';
 import type { ServerContext } from './base-tools.js';
@@ -25,12 +26,34 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
       instructions: SERVER_INSTRUCTIONS,
     },
   );
-  registerFocusTools(server, engine, context);
-  registerGuiTools(server, engine, context);
-  registerMapTools(server, engine, context);
-  registerEventTools(server, engine, context);
-  registerTechnologyTools(server, engine, context);
-  registerProbabilityTools(server, engine, context);
-  registerMcpResources(server, engine, context);
+  const serverContext: ServerContext = {
+    ...context,
+    resolveCurrentWorkspaceId: async (signal) => {
+      const capabilities = server.server.getClientCapabilities();
+      if (capabilities?.roots === undefined) {
+        return engine.resolver.resolveCurrentWorkspaceId(context.principal);
+      }
+      const listed = await server.server.listRoots(
+        undefined,
+        signal === undefined ? undefined : { signal },
+      );
+      const rootPaths = listed.roots.flatMap(({ uri }) => {
+        try {
+          const parsed = new URL(uri);
+          return parsed.protocol === 'file:' ? [fileURLToPath(parsed)] : [];
+        } catch {
+          return [];
+        }
+      });
+      return engine.resolver.resolveClientWorkspaceId(rootPaths, context.principal);
+    },
+  };
+  registerFocusTools(server, engine, serverContext);
+  registerGuiTools(server, engine, serverContext);
+  registerMapTools(server, engine, serverContext);
+  registerEventTools(server, engine, serverContext);
+  registerTechnologyTools(server, engine, serverContext);
+  registerProbabilityTools(server, engine, serverContext);
+  registerMcpResources(server, engine, serverContext);
   return server;
 }

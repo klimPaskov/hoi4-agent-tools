@@ -25,6 +25,19 @@ import { PACKAGE_VERSION } from '../../version.js';
 export interface ServerContext {
   principal?: string;
   scopes?: readonly string[];
+  resolveCurrentWorkspaceId?: (signal?: AbortSignal) => Promise<string>;
+}
+
+export async function resolveServerWorkspaceId(
+  engine: CoreEngine,
+  context: ServerContext,
+  workspaceId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (workspaceId === 'current' && context.resolveCurrentWorkspaceId !== undefined) {
+    return context.resolveCurrentWorkspaceId(signal);
+  }
+  return engine.resolver.resolveWorkspaceId(workspaceId, context.principal);
 }
 
 export function requireServerScope(context: ServerContext, scope: string): void {

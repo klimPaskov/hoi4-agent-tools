@@ -51,7 +51,11 @@ import {
   strictOperationResultSchema,
   toolResult,
 } from '../server/result.js';
-import { requireServerScope, type ServerContext } from '../server/base-tools.js';
+import {
+  requireServerScope,
+  resolveServerWorkspaceId,
+  type ServerContext,
+} from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import {
   autonomousFailureContext,
@@ -451,7 +455,12 @@ async function executeFocusVisualTool(
   rasterize: boolean,
 ) {
   const { workspaceId: requestedWorkspaceId, relativePath } = input;
-  const workspaceId = engine.resolver.resolveWorkspaceId(requestedWorkspaceId, context.principal);
+  const workspaceId = await resolveServerWorkspaceId(
+    engine,
+    context,
+    requestedWorkspaceId,
+    extra.signal,
+  );
   const outputName = rasterize ? 'raster' : 'render';
   try {
     const progress = progressReporter(extra);
@@ -820,9 +829,11 @@ export function registerFocusTools(
     },
     async (input, extra) => {
       const { workspaceId: requestedWorkspaceId, relativePath } = input;
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         const progress = progressReporter(extra);
@@ -1149,9 +1160,11 @@ export function registerFocusTools(
         padding,
         reviewScale,
       } = input;
-      const workspaceId = engine.resolver.resolveWorkspaceId(
+      const workspaceId = await resolveServerWorkspaceId(
+        engine,
+        context,
         requestedWorkspaceId,
-        context.principal,
+        extra.signal,
       );
       try {
         requireServerScope(context, 'hoi4:write');
