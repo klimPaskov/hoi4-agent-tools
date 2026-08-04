@@ -96,7 +96,7 @@
   },
   "dependencies": {
     "@fontsource-variable/roboto": "5.2.10",
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "express": "5.2.1",
     "fast-glob": "3.3.3",
     "fontkit": "2.0.4",
