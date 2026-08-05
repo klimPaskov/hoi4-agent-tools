@@ -18,34 +18,22 @@ const COMPACT_HARD_DIAGNOSTICS = new Set([
   'FOCUS_LAYOUT_CONNECTOR_CROSSING_UNSATISFIED',
   'FOCUS_LAYOUT_CONNECTOR_THROUGH_NODE',
   'FOCUS_LAYOUT_COORDINATE_CONFLICT',
-  'FOCUS_LAYOUT_LINEAR_DETOUR',
   'FOCUS_LAYOUT_LANE_BOUNDS_UNSATISFIED',
   'FOCUS_LAYOUT_MUTUAL_EXCLUSION_SPACING_UNSATISFIED',
+  'FOCUS_LAYOUT_PARENT_NOT_ABOVE',
   'FOCUS_LAYOUT_PARENT_ORDER_UNSATISFIED',
   'FOCUS_LAYOUT_SAME_ROW_SPACING_UNSATISFIED',
-  'FOCUS_LAYOUT_STAIRCASE_CHAIN',
   'FOCUS_LAYOUT_VISIBLE_OVERLAP',
-  'FOCUS_LAYOUT_ZIGZAG_CHAIN',
 ]);
 
-interface CompactLimits {
-  maximumColumns: number;
-  maximumHorizontalSpan: number;
-  maximumVerticalSpan: number;
-  maximumManhattanSpan: number;
-}
-
-function compactLimits(focusCount: number): CompactLimits {
-  const graphScale = Math.sqrt(Math.max(1, focusCount));
-  const maximumHorizontalSpan = Math.max(14, Math.ceil(graphScale * 3));
-  const maximumVerticalSpan = Math.max(4, Math.ceil(Math.log2(Math.max(2, focusCount))));
-  return {
-    maximumColumns: Math.max(16, Math.ceil(graphScale * 5)),
-    maximumHorizontalSpan,
-    maximumVerticalSpan,
-    maximumManhattanSpan: maximumHorizontalSpan + maximumVerticalSpan,
-  };
-}
+const COMPACT_AESTHETIC_DIAGNOSTICS = new Set([
+  'FOCUS_LAYOUT_LINEAR_DETOUR',
+  'FOCUS_LAYOUT_LONG_CONNECTOR',
+  'FOCUS_LAYOUT_SIBLING_ANCHOR_DEVIATION',
+  'FOCUS_LAYOUT_SIBLING_ASYMMETRY',
+  'FOCUS_LAYOUT_STAIRCASE_CHAIN',
+  'FOCUS_LAYOUT_ZIGZAG_CHAIN',
+]);
 
 function requiredMetrics(layout: FocusLayoutResult): FocusLayoutMetrics {
   if (layout.metrics !== undefined) return layout.metrics;
@@ -58,7 +46,6 @@ function requiredMetrics(layout: FocusLayoutResult): FocusLayoutMetrics {
 
 function absoluteCompactRegressions(layout: FocusLayoutResult): string[] {
   const metrics = requiredMetrics(layout);
-  const limits = compactLimits(layout.nodes.length);
   return [
     ...(layout.diagnostics.some(({ code }) => COMPACT_HARD_DIAGNOSTICS.has(code))
       ? ['hardLayoutDiagnostics']
@@ -66,69 +53,8 @@ function absoluteCompactRegressions(layout: FocusLayoutResult): string[] {
     ...(metrics.connectors.crossingCount > 0 ? ['connectorCrossingCount'] : []),
     ...(metrics.connectors.nodeIntersectionCount > 0 ? ['connectorNodeIntersections'] : []),
     ...(metrics.spacing.tooCloseSameRowPairCount > 0 ? ['sameRowSpacing'] : []),
-    ...(metrics.symmetry.asymmetricSiblingCohortCount > 0 ? ['siblingMirrorDeviation'] : []),
-    ...(metrics.symmetry.totalSiblingDeviation > 0 ? ['totalSiblingMirrorDeviation'] : []),
-    ...(metrics.symmetry.offAnchorSiblingCohortCount > 0 ? ['siblingAnchorDeviation'] : []),
-    ...(metrics.symmetry.totalSiblingAnchorDeviation > 0 ? ['totalSiblingAnchorDeviation'] : []),
     ...(metrics.symmetry.boundingCenterOffsetTwice > 1 ? ['boundingCenter'] : []),
-    ...(metrics.bounds.columnCount > limits.maximumColumns ? ['columnBudget'] : []),
-    ...(metrics.connectors.maximumHorizontalSpan > limits.maximumHorizontalSpan
-      ? ['maximumHorizontalConnectorBudget']
-      : []),
-    ...(metrics.connectors.maximumVerticalSpan > limits.maximumVerticalSpan
-      ? ['maximumVerticalConnectorBudget']
-      : []),
-    ...(metrics.connectors.maximumManhattanSpan > limits.maximumManhattanSpan
-      ? ['maximumManhattanConnectorBudget']
-      : []),
-    ...(metrics.connectors.longConnectorCount > 0 ? ['longConnectors'] : []),
   ];
-}
-
-function relativeCompactRegressions(
-  current: FocusLayoutResult,
-  proposed: FocusLayoutResult,
-): string[] {
-  const before = requiredMetrics(current);
-  const after = requiredMetrics(proposed);
-  return [
-    ...(after.connectors.crossingCount > before.connectors.crossingCount
-      ? ['connectorCrossingCount']
-      : []),
-    ...(after.connectors.nodeIntersectionCount > before.connectors.nodeIntersectionCount
-      ? ['connectorNodeIntersectionCount']
-      : []),
-    ...(after.connectors.maximumHorizontalSpan > before.connectors.maximumHorizontalSpan
-      ? ['maximumHorizontalConnectorSpan']
-      : []),
-    ...(after.connectors.maximumVerticalSpan > before.connectors.maximumVerticalSpan
-      ? ['maximumVerticalConnectorSpan']
-      : []),
-    ...(after.connectors.maximumManhattanSpan > before.connectors.maximumManhattanSpan
-      ? ['maximumManhattanConnectorSpan']
-      : []),
-    ...(after.connectors.longConnectorCount > before.connectors.longConnectorCount
-      ? ['longConnectorCount']
-      : []),
-    ...(after.connectors.totalHorizontalSpan > before.connectors.totalHorizontalSpan
-      ? ['totalHorizontalConnectorSpan']
-      : []),
-    ...(after.connectors.totalManhattanSpan > before.connectors.totalManhattanSpan
-      ? ['totalManhattanConnectorSpan']
-      : []),
-    ...(after.bounds.columnCount > before.bounds.columnCount ? ['columnCount'] : []),
-    ...(after.bounds.rowCount > before.bounds.rowCount ? ['rowCount'] : []),
-  ];
-}
-
-function compactShape(plan: FocusTreePlan, layout: FocusLayoutResult): boolean {
-  return (
-    plan.focuses.every(({ position }) => position.mode === 'auto') &&
-    plan.laneGroups.every(
-      ({ minimumX, maximumX }) => minimumX === undefined && maximumX === undefined,
-    ) &&
-    absoluteCompactRegressions(layout).length === 0
-  );
 }
 
 function prerequisiteIds(plan: FocusTreePlan, focusId: string): string[] {
@@ -286,12 +212,19 @@ function straightenLinearChains(
   }
 }
 
+interface CompactCandidateStrategy {
+  scale: number;
+  compressRows: boolean;
+  mirrorSiblings: boolean;
+  straightenChains: boolean;
+}
+
 function compactCandidate(
   plan: FocusTreePlan,
   layout: FocusLayoutResult,
-  scale: number,
-  compressRows: boolean,
+  strategy: CompactCandidateStrategy,
 ): FocusTreePlan {
+  const { scale, compressRows, mirrorSiblings, straightenChains } = strategy;
   const minimumX = Math.min(...layout.nodes.map(({ x }) => x));
   const maximumX = Math.max(...layout.nodes.map(({ x }) => x));
   const minimumY = Math.min(...layout.nodes.map(({ y }) => y));
@@ -335,8 +268,8 @@ function compactCandidate(
     for (const [index, node] of row.entries())
       preferredX.set(node.id, (placed[index] ?? 0) + drift);
   }
-  mirrorSiblingCohorts(plan, preferredX, preferredY);
-  straightenLinearChains(plan, preferredX, preferredY);
+  if (mirrorSiblings) mirrorSiblingCohorts(plan, preferredX, preferredY);
+  if (straightenChains) straightenLinearChains(plan, preferredX, preferredY);
   const compacted = structuredClone(plan);
   compacted.laneGroups = compacted.laneGroups.map(({ id, label, order }) => ({
     id,
@@ -357,14 +290,28 @@ function compactCandidate(
 
 function compactScore(layout: FocusLayoutResult): readonly (number | string)[] {
   const metrics = requiredMetrics(layout);
+  const hardDiagnosticCount = layout.diagnostics.filter(({ code }) =>
+    COMPACT_HARD_DIAGNOSTICS.has(code),
+  ).length;
+  const aestheticDiagnosticCount = layout.diagnostics.filter(({ code }) =>
+    COMPACT_AESTHETIC_DIAGNOSTICS.has(code),
+  ).length;
   return [
-    metrics.connectors.longConnectorCount,
-    metrics.connectors.maximumHorizontalSpan,
-    metrics.bounds.columnCount,
+    hardDiagnosticCount,
+    metrics.connectors.crossingCount,
     metrics.connectors.nodeIntersectionCount,
+    metrics.spacing.tooCloseSameRowPairCount,
+    aestheticDiagnosticCount,
+    metrics.connectors.longConnectorCount,
+    metrics.symmetry.asymmetricSiblingCohortCount,
+    metrics.symmetry.offAnchorSiblingCohortCount,
+    metrics.symmetry.totalSiblingDeviation,
+    metrics.symmetry.totalSiblingAnchorDeviation,
+    metrics.bounds.rowCount,
+    metrics.bounds.columnCount,
+    metrics.connectors.maximumHorizontalSpan,
     metrics.connectors.totalHorizontalSpan,
     metrics.connectors.maximumManhattanSpan,
-    metrics.bounds.rowCount,
     metrics.connectors.totalVerticalSpan,
     layout.layoutHash,
   ];
@@ -394,49 +341,65 @@ function compactScales(focusCount: number): readonly number[] {
         : ([0.65] as const);
 }
 
+function compactStrategies(focusCount: number): readonly CompactCandidateStrategy[] {
+  const preservationStrategies = [
+    { scale: 1, compressRows: false, mirrorSiblings: false, straightenChains: false },
+    { scale: 1, compressRows: true, mirrorSiblings: false, straightenChains: false },
+    { scale: 1, compressRows: false, mirrorSiblings: false, straightenChains: true },
+    { scale: 1, compressRows: false, mirrorSiblings: true, straightenChains: false },
+  ] as const;
+  const compactStrategies = compactScales(focusCount).flatMap((scale) => [
+    { scale, compressRows: false, mirrorSiblings: true, straightenChains: true },
+    { scale, compressRows: true, mirrorSiblings: true, straightenChains: true },
+  ]);
+  return [...preservationStrategies, ...compactStrategies];
+}
+
+function needsPresentationNormalization(plan: FocusTreePlan): boolean {
+  return (
+    plan.focuses.some(({ position }) => position.mode !== 'auto') ||
+    plan.laneGroups.some(
+      ({ minimumX, maximumX }) => minimumX !== undefined || maximumX !== undefined,
+    )
+  );
+}
+
 /**
  * Produces a gameplay-neutral compact-reflow plan. Several deterministic
- * compression candidates are measured with the same layout engine; only a
- * centered, crossing-free, evenly spaced, branch-balanced candidate that
- * stays within absolute and source-relative connector budgets can win.
+ * repair and compression candidates are measured with the same layout engine.
+ * Invalid geometry cannot win; aesthetic tradeoffs are resolved by the score.
  */
 export function compactFocusTreePlan(plan: FocusTreePlan): FocusTreePlan {
-  const currentLayout = layoutFocusTree(plan);
-  if (compactShape(plan, currentLayout)) {
-    const stable = structuredClone(plan);
-    stable.provenance.importedPlanHash = focusPlanHash(stable);
-    return stable;
-  }
-  const scales = compactScales(plan.focuses.length);
+  const currentLayout = layoutFocusTree(plan, { aggressiveAestheticRepair: true });
+  const normalizedPlan = needsPresentationNormalization(plan)
+    ? compactCandidate(plan, currentLayout, {
+        scale: 1,
+        compressRows: false,
+        mirrorSiblings: false,
+        straightenChains: false,
+      })
+    : plan;
+  const normalizedLayout =
+    normalizedPlan === plan
+      ? currentLayout
+      : layoutFocusTree(normalizedPlan, { aggressiveAestheticRepair: true });
   let selected: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
-  for (const scale of scales) {
-    for (const compressRows of [false, true]) {
-      const candidate = compactCandidate(plan, currentLayout, scale, compressRows);
-      let layout: FocusLayoutResult;
-      try {
-        layout = layoutFocusTree(candidate);
-      } catch (error) {
-        if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED')
-          continue;
-        throw error;
-      }
-      if (
-        fallback === undefined ||
-        betterScore(compactScore(layout), compactScore(fallback.layout))
-      )
-        fallback = { plan: candidate, layout };
-      if (
-        absoluteCompactRegressions(layout).length > 0 ||
-        relativeCompactRegressions(currentLayout, layout).length > 0
-      )
+  for (const strategy of compactStrategies(plan.focuses.length)) {
+    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy);
+    let layout: FocusLayoutResult;
+    try {
+      layout = layoutFocusTree(candidate, { aggressiveAestheticRepair: true });
+    } catch (error) {
+      if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED')
         continue;
-      if (
-        selected === undefined ||
-        betterScore(compactScore(layout), compactScore(selected.layout))
-      )
-        selected = { plan: candidate, layout };
+      throw error;
     }
+    if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
+      fallback = { plan: candidate, layout };
+    if (absoluteCompactRegressions(layout).length > 0) continue;
+    if (selected === undefined || betterScore(compactScore(layout), compactScore(selected.layout)))
+      selected = { plan: candidate, layout };
   }
   if (selected !== undefined) return selected.plan;
   if (fallback !== undefined) {
@@ -473,48 +436,43 @@ export async function compactFocusTreePlanAsync(
   const workBudget = new FocusLayoutWorkBudget(options.maximumWork ?? COMPACT_LAYOUT_WORK_MAX);
   const layoutOptions = {
     workBudget,
+    aggressiveAestheticRepair: true,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
   const currentLayout = await layoutFocusTreeAsync(plan, layoutOptions);
-  if (compactShape(plan, currentLayout)) {
-    const stable = structuredClone(plan);
-    stable.provenance.importedPlanHash = focusPlanHash(stable);
-    return { plan: stable, currentLayout, proposedLayout: currentLayout };
-  }
-
+  const normalizedPlan = needsPresentationNormalization(plan)
+    ? compactCandidate(plan, currentLayout, {
+        scale: 1,
+        compressRows: false,
+        mirrorSiblings: false,
+        straightenChains: false,
+      })
+    : plan;
+  const normalizedLayout =
+    normalizedPlan === plan
+      ? currentLayout
+      : await layoutFocusTreeAsync(normalizedPlan, layoutOptions);
   let selected: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let exhausted: ServiceError | undefined;
-  candidateSearch: for (const scale of compactScales(plan.focuses.length)) {
-    for (const compressRows of [false, true]) {
-      options.signal?.throwIfAborted();
-      const candidate = compactCandidate(plan, currentLayout, scale, compressRows);
-      let layout: FocusLayoutResult;
-      try {
-        layout = await layoutFocusTreeAsync(candidate, layoutOptions);
-      } catch (error) {
-        if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED') {
-          exhausted = error;
-          break candidateSearch;
-        }
-        throw error;
+  candidateSearch: for (const strategy of compactStrategies(plan.focuses.length)) {
+    options.signal?.throwIfAborted();
+    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy);
+    let layout: FocusLayoutResult;
+    try {
+      layout = await layoutFocusTreeAsync(candidate, layoutOptions);
+    } catch (error) {
+      if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED') {
+        exhausted = error;
+        break candidateSearch;
       }
-      if (
-        fallback === undefined ||
-        betterScore(compactScore(layout), compactScore(fallback.layout))
-      )
-        fallback = { plan: candidate, layout };
-      if (
-        absoluteCompactRegressions(layout).length > 0 ||
-        relativeCompactRegressions(currentLayout, layout).length > 0
-      )
-        continue;
-      if (
-        selected === undefined ||
-        betterScore(compactScore(layout), compactScore(selected.layout))
-      )
-        selected = { plan: candidate, layout };
+      throw error;
     }
+    if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
+      fallback = { plan: candidate, layout };
+    if (absoluteCompactRegressions(layout).length > 0) continue;
+    if (selected === undefined || betterScore(compactScore(layout), compactScore(selected.layout)))
+      selected = { plan: candidate, layout };
   }
 
   if (selected !== undefined) {
@@ -532,24 +490,22 @@ export async function compactFocusTreePlanAsync(
   );
 }
 
-/** Refuses compact rewrites that are not clean or trade readability for a smaller canvas. */
+/** Refuses compact rewrites that still contain invalid or unreadable geometry. */
 export function assertCompactLayoutQuality(
-  current: FocusLayoutResult | undefined,
+  _current: FocusLayoutResult | undefined,
   proposed: FocusLayoutResult,
 ): void {
-  const regressions = [
-    ...absoluteCompactRegressions(proposed),
-    ...(current === undefined ? [] : relativeCompactRegressions(current, proposed)),
-  ].filter((value, index, all) => all.indexOf(value) === index);
+  const regressions = [...absoluteCompactRegressions(proposed)].filter(
+    (value, index, all) => all.indexOf(value) === index,
+  );
   if (regressions.length === 0) return;
   throw new ServiceError(
     'FOCUS_COMPACT_QUALITY_BLOCKED',
-    'Compact focus reflow failed the absolute or relative layout-quality gate',
+    'Compact focus reflow failed the layout-correctness gate',
     {
       treeId: proposed.treeId,
       regressions,
-      limits: compactLimits(proposed.nodes.length),
-      ...(current === undefined ? {} : { before: requiredMetrics(current) }),
+      ...(_current === undefined ? {} : { before: requiredMetrics(_current) }),
       proposed: requiredMetrics(proposed),
     },
   );

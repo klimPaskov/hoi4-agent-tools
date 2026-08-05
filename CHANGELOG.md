@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.12 - 2026-08-05
+
+- Made compact focus rewrites choose among preservation, row compression, linear-chain repair, sibling balancing, and combined strategies instead of forcing one aggressive transformation.
+- Limited rewrite rejection to invalid geometry while retaining long paths, fake complexity, branch balance, and compactness as prioritized cleanup objectives.
+- Added whole-cohort sibling refinement, collision-aware incremental placement, stable repeat rewrites, and regression coverage through the public Ireland and 1,024-focus MCP workflows.
+
 ## 2.3.11 - 2026-08-05
 
 - Made compact focus rewrites straighten offset linear chains and reject artificial staircase or zigzag geometry.

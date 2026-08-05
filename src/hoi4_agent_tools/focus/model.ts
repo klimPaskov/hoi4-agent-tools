@@ -379,6 +379,8 @@ export interface FocusLayoutOptions {
   previous?: FocusLayoutResult;
   laneSpacing?: number;
   nodeSpacing?: number;
+  /** Enables compact-rewrite-only refinement of aesthetic layout defects. */
+  aggressiveAestheticRepair?: boolean;
   /** Reuse one budget when a higher-level operation evaluates multiple layouts. */
   workBudget?: FocusLayoutBudget;
   /** Cooperative cancellation for callers laying out large focus graphs. */

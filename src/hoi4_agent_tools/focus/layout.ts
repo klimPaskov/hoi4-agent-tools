@@ -46,6 +46,7 @@ interface LayoutContext {
   siblingCohorts: string[][];
   nodeSpacing: number;
   minimumMutualExclusionSpacing: number;
+  aggressiveAestheticRepair: boolean;
   decisions: FocusLayoutDecision[];
   diagnostics: DiagnosticCollector;
   work: FocusLayoutBudget;
@@ -1582,6 +1583,7 @@ function longConnector(edge: LayoutConnector): boolean {
 interface ConnectorQualityScore {
   crossingCount: number;
   nodeIntersectionCount: number;
+  linearDetourCount: number;
   asymmetricSiblingCohortCount: number;
   maximumSiblingDeviation: number;
   totalSiblingDeviation: number;
@@ -1597,28 +1599,66 @@ interface ConnectorQualityScore {
   boundingCenterOffsetTwice: number;
 }
 
+function linearDetourCount(edges: readonly LayoutConnector[]): number {
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+  for (const edge of edges) {
+    incomingCount.set(edge.childId, (incomingCount.get(edge.childId) ?? 0) + 1);
+    outgoingCount.set(edge.parentId, (outgoingCount.get(edge.parentId) ?? 0) + 1);
+  }
+  return edges.filter((edge) => {
+    if (
+      (outgoingCount.get(edge.parentId) ?? 0) !== 1 ||
+      (incomingCount.get(edge.childId) ?? 0) !== 1
+    )
+      return false;
+    const spans = connectorSpans(edge);
+    return spans.horizontal !== 0 || spans.vertical !== 1;
+  }).length;
+}
+
 function betterConnectorQualityScore(
   candidate: ConnectorQualityScore,
   current: ConnectorQualityScore,
+  aggressiveAestheticRepair = false,
 ): boolean {
   if (candidate.longConnectorCount > current.longConnectorCount) return false;
-  const fields: readonly (keyof ConnectorQualityScore)[] = [
-    'crossingCount',
-    'nodeIntersectionCount',
-    'maximumManhattanSpan',
-    'maximumHorizontalSpan',
-    'longConnectorCount',
-    'totalManhattanSpan',
-    'totalHorizontalSpan',
-    'asymmetricSiblingCohortCount',
-    'maximumSiblingDeviation',
-    'totalSiblingDeviation',
-    'offAnchorSiblingCohortCount',
-    'maximumSiblingAnchorDeviation',
-    'totalSiblingAnchorDeviation',
-    'columnCount',
-    'boundingCenterOffsetTwice',
-  ];
+  const fields: readonly (keyof ConnectorQualityScore)[] = aggressiveAestheticRepair
+    ? [
+        'crossingCount',
+        'nodeIntersectionCount',
+        'longConnectorCount',
+        'linearDetourCount',
+        'asymmetricSiblingCohortCount',
+        'maximumSiblingDeviation',
+        'totalSiblingDeviation',
+        'offAnchorSiblingCohortCount',
+        'maximumSiblingAnchorDeviation',
+        'totalSiblingAnchorDeviation',
+        'maximumManhattanSpan',
+        'maximumHorizontalSpan',
+        'totalManhattanSpan',
+        'totalHorizontalSpan',
+        'columnCount',
+        'boundingCenterOffsetTwice',
+      ]
+    : [
+        'crossingCount',
+        'nodeIntersectionCount',
+        'maximumManhattanSpan',
+        'maximumHorizontalSpan',
+        'longConnectorCount',
+        'totalManhattanSpan',
+        'totalHorizontalSpan',
+        'asymmetricSiblingCohortCount',
+        'maximumSiblingDeviation',
+        'totalSiblingDeviation',
+        'offAnchorSiblingCohortCount',
+        'maximumSiblingAnchorDeviation',
+        'totalSiblingAnchorDeviation',
+        'columnCount',
+        'boundingCenterOffsetTwice',
+      ];
   for (const field of fields) {
     if (candidate[field] === current[field]) continue;
     return candidate[field] < current[field];
@@ -1674,10 +1714,11 @@ function* affectedNodeIntersectionCount(
 function* connectorNodeIntersectionSummary(
   context: LayoutContext,
   edges: readonly LayoutConnector[],
+  override?: ReadonlyMap<string, number>,
 ): LayoutSteps<{ count: number; involvedFocusIds: Set<string> }> {
-  const nodes = [...context.placed.values()].sort((left, right) =>
-    compareCodeUnits(left.id, right.id),
-  );
+  const nodes = [...context.placed.values()]
+    .map((node) => ({ ...node, x: override?.get(node.id) ?? node.x }))
+    .sort((left, right) => compareCodeUnits(left.id, right.id));
   const involvedFocusIds = new Set<string>();
   let count = 0;
   let comparisonIndex = 0;
@@ -1790,14 +1831,19 @@ function connectorQualityScore(
   crossingCount: number,
   nodeIntersectionCount: number,
   symmetry: ReturnType<typeof siblingQuality>,
+  override?: ReadonlyMap<string, number>,
 ): ConnectorQualityScore {
   const spans = edges.map(connectorSpans);
-  const nodes = [...context.placed.values()];
+  const nodes = [...context.placed.values()].map((node) => ({
+    ...node,
+    x: override?.get(node.id) ?? node.x,
+  }));
   const minimumX = Math.min(...nodes.map(({ x }) => x));
   const maximumX = Math.max(...nodes.map(({ x }) => x));
   return {
     crossingCount,
     nodeIntersectionCount,
+    linearDetourCount: linearDetourCount(edges),
     asymmetricSiblingCohortCount: symmetry.asymmetricSiblingCohortCount,
     maximumSiblingDeviation: symmetry.maximumSiblingDeviation,
     totalSiblingDeviation: symmetry.totalSiblingDeviation,
@@ -1815,6 +1861,131 @@ function connectorQualityScore(
     columnCount: maximumX - minimumX + 1,
     boundingCenterOffsetTwice: Math.abs(minimumX + maximumX),
   };
+}
+
+function edgesWithXOverride(
+  edges: readonly LayoutConnector[],
+  override: ReadonlyMap<string, number>,
+): LayoutConnector[] {
+  return edges.map((edge) => ({
+    ...edge,
+    parent: { ...edge.parent, x: override.get(edge.parentId) ?? edge.parent.x },
+    child: { ...edge.child, x: override.get(edge.childId) ?? edge.child.x },
+  }));
+}
+
+function siblingBatchConflicts(
+  context: LayoutContext,
+  cohort: ReadonlySet<string>,
+  override: ReadonlyMap<string, number>,
+): boolean {
+  const moved = [...override].flatMap(([focusId, x]) => {
+    const node = context.placed.get(focusId);
+    return node === undefined ? [] : [{ ...node, x }];
+  });
+  for (const node of moved) {
+    if (!coordinateWithinLane(context, node.id, node.x)) return true;
+    for (const other of context.placed.values()) {
+      if (cohort.has(other.id) || other.y !== node.y) continue;
+      if (Math.abs(other.x - node.x) < context.nodeSpacing) return true;
+    }
+    for (const excludedId of context.mutualExclusions.get(node.id) ?? []) {
+      const other = context.placed.get(excludedId);
+      if (other === undefined) continue;
+      const otherX = override.get(excludedId) ?? other.x;
+      if (Math.abs(otherX - node.x) < context.minimumMutualExclusionSpacing) return true;
+    }
+  }
+  const ordered = [...moved].sort(
+    (left, right) => left.y - right.y || left.x - right.x || compareCodeUnits(left.id, right.id),
+  );
+  for (let index = 1; index < ordered.length; index += 1) {
+    const left = ordered[index - 1];
+    const right = ordered[index];
+    if (
+      left?.y === right?.y &&
+      left !== undefined &&
+      right !== undefined &&
+      Math.abs(right.x - left.x) < context.nodeSpacing
+    )
+      return true;
+  }
+  return false;
+}
+
+function* refineSiblingCohorts(
+  context: LayoutContext,
+  edges: readonly LayoutConnector[],
+  initial: ConnectorQualityScore,
+): LayoutSteps<ConnectorQualityScore> {
+  let current = initial;
+  for (let pass = 0; pass < 2; pass += 1) {
+    let accepted = false;
+    for (const [cohortIndex, cohort] of context.siblingCohorts.entries()) {
+      yield* cancellationCheckpoint(context.signal, cohortIndex, 8);
+      if (cohort.some((focusId) => !canMoveForSoftConstraint(context, focusId))) continue;
+      const nodes = cohort
+        .flatMap((focusId) => {
+          const node = context.placed.get(focusId);
+          return node === undefined ? [] : [node];
+        })
+        .sort((left, right) => left.x - right.x || compareCodeUnits(left.id, right.id));
+      if (nodes.length < 2) continue;
+      const { anchorX } = siblingCohortAnchor(context, cohort);
+      const currentSpan = (nodes.at(-1)?.x ?? 0) - (nodes[0]?.x ?? 0);
+      const spacing = Math.max(
+        context.nodeSpacing,
+        Math.ceil(currentSpan / Math.max(1, nodes.length - 1)),
+      );
+      const cohortIds = new Set(cohort);
+      const internalCenter = ((nodes[0]?.x ?? 0) + (nodes.at(-1)?.x ?? 0)) / 2;
+      let best: { override: Map<string, number>; score: ConnectorQualityScore } | undefined;
+      for (const center of [...new Set([internalCenter, anchorX])]) {
+        const override = new Map<string, number>();
+        for (const [index, node] of nodes.entries()) {
+          override.set(node.id, Math.round(center + (index - (nodes.length - 1) / 2) * spacing));
+        }
+        if (nodes.every((node) => override.get(node.id) === node.x)) continue;
+        if (siblingBatchConflicts(context, cohortIds, override)) continue;
+        const candidateEdges = edgesWithXOverride(edges, override);
+        const crossingSummary = yield* connectorCrossings(candidateEdges, context);
+        if (crossingSummary.count > current.crossingCount) continue;
+        const intersectionSummary = yield* connectorNodeIntersectionSummary(
+          context,
+          candidateEdges,
+          override,
+        );
+        if (intersectionSummary.count > current.nodeIntersectionCount) continue;
+        const symmetry = siblingQuality(context, override);
+        const score = connectorQualityScore(
+          context,
+          candidateEdges,
+          crossingSummary.count,
+          intersectionSummary.count,
+          symmetry,
+          override,
+        );
+        if (!betterConnectorQualityScore(score, current, true)) continue;
+        if (best !== undefined && !betterConnectorQualityScore(score, best.score, true)) continue;
+        best = { override, score };
+      }
+      if (best === undefined) continue;
+      for (const node of nodes) {
+        const x = best.override.get(node.id);
+        if (x === undefined || x === node.x) continue;
+        context.decisions.push({
+          focusId: node.id,
+          kind: 'moved_to_improve_connector_quality',
+          message: `Sibling-balance refinement moved (${node.x}, ${node.y}) to (${x}, ${node.y})`,
+        });
+        movePlacedFocusX(context, node, x);
+      }
+      current = best.score;
+      accepted = true;
+    }
+    if (!accepted) break;
+  }
+  return current;
 }
 
 function candidateQualityScore(
@@ -1860,6 +2031,7 @@ function candidateQualityScore(
       current.nodeIntersectionCount -
       currentAffectedNodeIntersections +
       candidateAffectedNodeIntersections,
+    linearDetourCount: linearDetourCount([...nonIncidentEdges, ...candidateIncidentEdges]),
     asymmetricSiblingCohortCount: symmetry.asymmetricSiblingCohortCount,
     maximumSiblingDeviation: symmetry.maximumSiblingDeviation,
     totalSiblingDeviation: symmetry.totalSiblingDeviation,
@@ -1893,8 +2065,8 @@ function candidateQualityScore(
 const CONNECTOR_REFINEMENT_WORK_MAX = 7_000_000;
 
 function* refineConnectorQualityWithinBudget(context: LayoutContext): LayoutSteps<void> {
-  const maximumAcceptedMoves = 24;
-  const maximumCandidateNodes = 32;
+  const maximumAcceptedMoves = context.aggressiveAestheticRepair ? 32 : 24;
+  const maximumCandidateNodes = context.aggressiveAestheticRepair ? 48 : 32;
   const edges = yield* connectorEdges(context);
   const crossingSummary = yield* connectorCrossings(edges, context);
   const intersectionSummary = yield* connectorNodeIntersectionSummary(context, edges);
@@ -1906,24 +2078,66 @@ function* refineConnectorQualityWithinBudget(context: LayoutContext): LayoutStep
     intersectionSummary.count,
     symmetry,
   );
-  const siblingMembers = new Set(context.siblingCohorts.flat());
+  if (context.aggressiveAestheticRepair)
+    current = yield* refineSiblingCohorts(context, edges, current);
   const candidateIds = new Set<string>(intersectionSummary.involvedFocusIds);
+  const longFocusIds = new Set<string>();
   for (const edge of edges.filter(longConnector)) {
     candidateIds.add(edge.parentId);
     candidateIds.add(edge.childId);
+    longFocusIds.add(edge.parentId);
+    longFocusIds.add(edge.childId);
+  }
+  const siblingFocusIds = new Set(context.siblingCohorts.flat());
+  if (context.aggressiveAestheticRepair) {
+    for (const cohort of context.siblingCohorts) {
+      for (const focusId of cohort) {
+        candidateIds.add(focusId);
+      }
+    }
   }
   for (const parentId of symmetry.parentFocusIds) candidateIds.add(parentId);
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+  const linearFocusIds = new Set<string>();
+  for (const edge of context.aggressiveAestheticRepair ? edges : []) {
+    incomingCount.set(edge.childId, (incomingCount.get(edge.childId) ?? 0) + 1);
+    outgoingCount.set(edge.parentId, (outgoingCount.get(edge.parentId) ?? 0) + 1);
+  }
+  for (const edge of edges) {
+    if (
+      (outgoingCount.get(edge.parentId) ?? 0) !== 1 ||
+      (incomingCount.get(edge.childId) ?? 0) !== 1
+    )
+      continue;
+    const spans = connectorSpans(edge);
+    if (spans.horizontal === 0 && spans.vertical === 1) continue;
+    candidateIds.add(edge.parentId);
+    candidateIds.add(edge.childId);
+    linearFocusIds.add(edge.parentId);
+    linearFocusIds.add(edge.childId);
+  }
   const orderedCandidateIds = [...candidateIds]
     .filter((focusId) => {
       const degree = context.connectorDefinitionsByFocus.get(focusId)?.length ?? 0;
       return (
-        canMoveForSoftConstraint(context, focusId) && !siblingMembers.has(focusId) && degree !== 1
+        canMoveForSoftConstraint(context, focusId) &&
+        (context.aggressiveAestheticRepair || (!siblingFocusIds.has(focusId) && degree !== 1))
       );
     })
     .sort((left, right) => {
       const degree = (focusId: string): number =>
         context.connectorDefinitionsByFocus.get(focusId)?.length ?? 0;
-      return degree(right) - degree(left) || compareCodeUnits(left, right);
+      const priority = (focusId: string): number =>
+        (intersectionSummary.involvedFocusIds.has(focusId) ? 8 : 0) +
+        (longFocusIds.has(focusId) ? 4 : 0) +
+        (linearFocusIds.has(focusId) ? 2 : 0) +
+        (siblingFocusIds.has(focusId) ? 1 : 0);
+      return (
+        priority(right) - priority(left) ||
+        degree(right) - degree(left) ||
+        compareCodeUnits(left, right)
+      );
     })
     .slice(0, maximumCandidateNodes);
 
@@ -1991,8 +2205,13 @@ function* refineConnectorQualityWithinBudget(context: LayoutContext): LayoutStep
           currentAffectedNodeIntersections,
           candidateAffectedNodeIntersections,
         );
-        if (!betterConnectorQualityScore(score, current)) continue;
-        if (best !== undefined && !betterConnectorQualityScore(score, best.score)) continue;
+        if (!betterConnectorQualityScore(score, current, context.aggressiveAestheticRepair))
+          continue;
+        if (
+          best !== undefined &&
+          !betterConnectorQualityScore(score, best.score, context.aggressiveAestheticRepair)
+        )
+          continue;
         best = {
           focusId,
           x,
@@ -2461,6 +2680,7 @@ function* layoutFocusTreeSteps(
     siblingCohorts: siblingLayout.cohorts,
     nodeSpacing,
     minimumMutualExclusionSpacing: nodeSpacing,
+    aggressiveAestheticRepair: options.aggressiveAestheticRepair ?? false,
     decisions: [],
     diagnostics,
     work: options.workBudget ?? new FocusLayoutWorkBudget(),

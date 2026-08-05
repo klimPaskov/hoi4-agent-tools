@@ -1182,7 +1182,7 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
-  it('measures two-child symmetry against the placed structural parent anchor', () => {
+  it('repairs two-child symmetry around the placed structural parent anchor', () => {
     const parent = focusNode('anchor_parent', { mode: 'fixed', x: 10, y: 0, pinned: true });
     const children = (coordinates: readonly number[]) =>
       coordinates.map((x, index) =>
@@ -1198,27 +1198,23 @@ describe('Focus Tree Workbench layout', () => {
         ),
       );
 
-    const shifted = layoutFocusTree(focusPlan([parent, ...children([12, 14])]));
+    const shifted = layoutFocusTree(focusPlan([parent, ...children([12, 14])]), {
+      aggressiveAestheticRepair: true,
+    });
     expect(shifted.metrics?.symmetry).toEqual(
       expect.objectContaining({
         asymmetricSiblingCohortCount: 0,
         maximumSiblingDeviation: 0,
-        offAnchorSiblingCohortCount: 1,
-        maximumSiblingAnchorDeviation: 6,
+        offAnchorSiblingCohortCount: 0,
+        maximumSiblingAnchorDeviation: 0,
       }),
     );
-    expect(shifted.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'FOCUS_LAYOUT_SIBLING_ANCHOR_DEVIATION',
-          details: expect.objectContaining({
-            anchorX: 10,
-            anchorKind: 'parent_median',
-            deviation: 6,
-          }),
-        }),
-      ]),
-    );
+    expect(
+      shifted.nodes
+        .filter(({ id }) => id.startsWith('anchor_child_'))
+        .map(({ x }) => x)
+        .sort((left, right) => left - right),
+    ).toEqual([9, 11]);
 
     const balanced = layoutFocusTree(focusPlan([parent, ...children([9, 11])]));
     expect(balanced.metrics?.symmetry).toEqual(
@@ -1326,29 +1322,17 @@ describe('Focus Tree Workbench layout', () => {
     expect(() => assertCompactLayoutQuality(before, regressed)).toThrowError(
       expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
     );
-    for (const [field, value] of [
-      ['nodeIntersectionCount', (before.metrics?.connectors.nodeIntersectionCount ?? 0) + 1],
-      ['totalManhattanSpan', (before.metrics?.connectors.totalManhattanSpan ?? 0) + 1],
-    ] as const) {
-      const connectorRegression = structuredClone(after);
-      connectorRegression.metrics!.connectors[field] = value;
-      expect(() => assertCompactLayoutQuality(before, connectorRegression)).toThrowError(
-        expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
-      );
-    }
-    const relativeMaximumBaseline = structuredClone(before);
-    relativeMaximumBaseline.metrics!.connectors.maximumManhattanSpan = Math.max(
-      0,
-      after.metrics!.connectors.maximumManhattanSpan - 1,
+    const connectorIntersection = structuredClone(after);
+    connectorIntersection.metrics!.connectors.nodeIntersectionCount = 1;
+    expect(() => assertCompactLayoutQuality(before, connectorIntersection)).toThrowError(
+      expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
     );
-    expect(() => assertCompactLayoutQuality(relativeMaximumBaseline, after)).toThrowError(
-      expect.objectContaining({
-        code: 'FOCUS_COMPACT_QUALITY_BLOCKED',
-        details: expect.objectContaining({
-          regressions: expect.arrayContaining(['maximumManhattanConnectorSpan']),
-        }),
-      }),
-    );
+    const aestheticallyConstrained = structuredClone(after);
+    aestheticallyConstrained.metrics!.connectors.longConnectorCount = 3;
+    aestheticallyConstrained.metrics!.connectors.totalHorizontalSpan += 20;
+    aestheticallyConstrained.metrics!.symmetry.asymmetricSiblingCohortCount = 2;
+    aestheticallyConstrained.metrics!.symmetry.offAnchorSiblingCohortCount = 2;
+    expect(() => assertCompactLayoutQuality(before, aestheticallyConstrained)).not.toThrow();
   });
 
   it('straightens offset and zigzag geometry in mechanically linear chains', () => {
@@ -1475,20 +1459,13 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
-  it('rejects every remaining long connector in a compact result', () => {
+  it('does not reject an otherwise valid compact result for one structural long connector', () => {
     const clean = layoutFocusTree(
       focusPlan([focusNode('long_connector_gate_root', { mode: 'auto', pinned: false })]),
     );
     clean.metrics!.connectors.longConnectorCount = 1;
 
-    expect(() => assertCompactLayoutQuality(undefined, clean)).toThrowError(
-      expect.objectContaining({
-        code: 'FOCUS_COMPACT_QUALITY_BLOCKED',
-        details: expect.objectContaining({
-          regressions: expect.arrayContaining(['longConnectors']),
-        }),
-      }),
-    );
+    expect(() => assertCompactLayoutQuality(undefined, clean)).not.toThrow();
   });
 
   it('anchors compacted fixed sibling coordinates around their compacted parent', () => {
@@ -1554,7 +1531,7 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
-  it('throws instead of returning an unchecked compact fallback', () => {
+  it('lays out a wide tree without rejecting it for an arbitrary width budget', () => {
     const crowdedRoots = Array.from({ length: 100 }, (_, index) =>
       focusNode(`crowded_root_${String(index)}`, {
         mode: 'fixed',
@@ -1564,9 +1541,13 @@ describe('Focus Tree Workbench layout', () => {
       }),
     );
 
-    expect(() => compactFocusTreePlan(focusPlan(crowdedRoots))).toThrowError(
-      expect.objectContaining({ code: 'FOCUS_COMPACT_QUALITY_BLOCKED' }),
-    );
+    const compacted = compactFocusTreePlan(focusPlan(crowdedRoots));
+    const layout = layoutFocusTree(compacted);
+
+    expect(layout.nodes).toHaveLength(100);
+    expect(layout.metrics?.spacing.tooCloseSameRowPairCount).toBe(0);
+    expect(layout.metrics?.symmetry.boundingCenterOffsetTwice).toBeLessThanOrEqual(1);
+    expect(layout.diagnostics.some(({ severity }) => severity === 'error')).toBe(false);
   });
 
   it('rebalances an automatic gateway without trading shorter edges for crossings or node hits', () => {
