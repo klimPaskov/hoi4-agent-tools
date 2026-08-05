@@ -16,12 +16,16 @@ const LARGE_COMPACT_SCALES = [0.55, 0.6, 0.7, 0.8] as const;
 const COMPACT_LAYOUT_WORK_MAX = FOCUS_LAYOUT_WORK_MAX * 10;
 const COMPACT_HARD_DIAGNOSTICS = new Set([
   'FOCUS_LAYOUT_CONNECTOR_CROSSING_UNSATISFIED',
+  'FOCUS_LAYOUT_CONNECTOR_THROUGH_NODE',
   'FOCUS_LAYOUT_COORDINATE_CONFLICT',
+  'FOCUS_LAYOUT_LINEAR_DETOUR',
   'FOCUS_LAYOUT_LANE_BOUNDS_UNSATISFIED',
   'FOCUS_LAYOUT_MUTUAL_EXCLUSION_SPACING_UNSATISFIED',
   'FOCUS_LAYOUT_PARENT_ORDER_UNSATISFIED',
   'FOCUS_LAYOUT_SAME_ROW_SPACING_UNSATISFIED',
+  'FOCUS_LAYOUT_STAIRCASE_CHAIN',
   'FOCUS_LAYOUT_VISIBLE_OVERLAP',
+  'FOCUS_LAYOUT_ZIGZAG_CHAIN',
 ]);
 
 interface CompactLimits {
@@ -29,13 +33,9 @@ interface CompactLimits {
   maximumHorizontalSpan: number;
   maximumVerticalSpan: number;
   maximumManhattanSpan: number;
-  maximumLongConnectors: number;
-  maximumNodeIntersections: number;
-  maximumSiblingDeviation: number;
-  maximumTotalSiblingDeviation: number;
 }
 
-function compactLimits(focusCount: number, connectorCount: number): CompactLimits {
+function compactLimits(focusCount: number): CompactLimits {
   const graphScale = Math.sqrt(Math.max(1, focusCount));
   const maximumHorizontalSpan = Math.max(14, Math.ceil(graphScale * 3));
   const maximumVerticalSpan = Math.max(4, Math.ceil(Math.log2(Math.max(2, focusCount))));
@@ -44,10 +44,6 @@ function compactLimits(focusCount: number, connectorCount: number): CompactLimit
     maximumHorizontalSpan,
     maximumVerticalSpan,
     maximumManhattanSpan: maximumHorizontalSpan + maximumVerticalSpan,
-    maximumLongConnectors: Math.ceil(connectorCount * 0.05),
-    maximumNodeIntersections: Math.ceil(connectorCount * 0.12),
-    maximumSiblingDeviation: Math.max(2, Math.ceil(graphScale * 2)),
-    maximumTotalSiblingDeviation: Math.max(4, Math.ceil(focusCount * 0.5)),
   };
 }
 
@@ -62,26 +58,18 @@ function requiredMetrics(layout: FocusLayoutResult): FocusLayoutMetrics {
 
 function absoluteCompactRegressions(layout: FocusLayoutResult): string[] {
   const metrics = requiredMetrics(layout);
-  const limits = compactLimits(layout.nodes.length, metrics.connectors.count);
+  const limits = compactLimits(layout.nodes.length);
   return [
     ...(layout.diagnostics.some(({ code }) => COMPACT_HARD_DIAGNOSTICS.has(code))
       ? ['hardLayoutDiagnostics']
       : []),
     ...(metrics.connectors.crossingCount > 0 ? ['connectorCrossingCount'] : []),
-    ...(metrics.connectors.nodeIntersectionCount > limits.maximumNodeIntersections
-      ? ['connectorNodeIntersectionBudget']
-      : []),
+    ...(metrics.connectors.nodeIntersectionCount > 0 ? ['connectorNodeIntersections'] : []),
     ...(metrics.spacing.tooCloseSameRowPairCount > 0 ? ['sameRowSpacing'] : []),
-    ...(metrics.symmetry.maximumSiblingDeviation > 1 ? ['siblingMirrorDeviation'] : []),
-    ...(metrics.symmetry.totalSiblingDeviation > metrics.symmetry.siblingCohortCount
-      ? ['totalSiblingMirrorDeviation']
-      : []),
-    ...(metrics.symmetry.maximumSiblingAnchorDeviation > limits.maximumSiblingDeviation
-      ? ['maximumSiblingDeviationBudget']
-      : []),
-    ...(metrics.symmetry.totalSiblingAnchorDeviation > limits.maximumTotalSiblingDeviation
-      ? ['totalSiblingDeviationBudget']
-      : []),
+    ...(metrics.symmetry.asymmetricSiblingCohortCount > 0 ? ['siblingMirrorDeviation'] : []),
+    ...(metrics.symmetry.totalSiblingDeviation > 0 ? ['totalSiblingMirrorDeviation'] : []),
+    ...(metrics.symmetry.offAnchorSiblingCohortCount > 0 ? ['siblingAnchorDeviation'] : []),
+    ...(metrics.symmetry.totalSiblingAnchorDeviation > 0 ? ['totalSiblingAnchorDeviation'] : []),
     ...(metrics.symmetry.boundingCenterOffsetTwice > 1 ? ['boundingCenter'] : []),
     ...(metrics.bounds.columnCount > limits.maximumColumns ? ['columnBudget'] : []),
     ...(metrics.connectors.maximumHorizontalSpan > limits.maximumHorizontalSpan
@@ -93,9 +81,7 @@ function absoluteCompactRegressions(layout: FocusLayoutResult): string[] {
     ...(metrics.connectors.maximumManhattanSpan > limits.maximumManhattanSpan
       ? ['maximumManhattanConnectorBudget']
       : []),
-    ...(metrics.connectors.longConnectorCount > limits.maximumLongConnectors
-      ? ['longConnectorBudget']
-      : []),
+    ...(metrics.connectors.longConnectorCount > 0 ? ['longConnectors'] : []),
   ];
 }
 
@@ -216,10 +202,8 @@ function mirrorSiblingCohorts(
 ): void {
   const cohorts = new Map<string, string[]>();
   const laneBases = compactLaneBases(plan);
-  const childCounts = new Map<string, number>();
   for (const focus of plan.focuses) {
     const parents = prerequisiteIds(plan, focus.id);
-    for (const parentId of parents) childCounts.set(parentId, (childCounts.get(parentId) ?? 0) + 1);
     const key = JSON.stringify([
       parents.length === 0 ? focusLaneId(plan, focus) : null,
       parents,
@@ -239,11 +223,6 @@ function mirrorSiblingCohorts(
     const pairCount = Math.floor(coordinates.length / 2);
     const focus = plan.focuses.find(({ id }) => id === cohort[0]);
     if (focus === undefined) continue;
-    // A leaf fan can be mirrored directly around its structural parent. For
-    // rooted subtrees, moving only the entry focuses would push the long
-    // connectors into their descendants; keep the subtree envelope's center
-    // until the bounded gateway refinement can move the common parent.
-    const leafFan = cohort.every((focusId) => (childCounts.get(focusId) ?? 0) === 0);
     const mirroredAt = (centerTwice: number): number[] => {
       const mirrored = [...coordinates];
       for (let index = 0; index < pairCount; index += 1) {
@@ -265,30 +244,45 @@ function mirrorSiblingCohorts(
       }
       return mirrored;
     };
-    const selfCenterTwice = (coordinates[0] ?? 0) + (coordinates.at(-1) ?? 0);
     const anchorCenterTwice =
       2 *
       compactStructuralAnchorX(plan, focus, prerequisiteIds(plan, focus.id), preferredX, laneBases);
-    let mirrored = mirroredAt(leafFan ? anchorCenterTwice : selfCenterTwice);
-    if (leafFan) {
-      const cohortIds = new Set(cohort);
-      const y = preferredY.get(cohort[0] ?? '');
-      const otherCoordinates = plan.focuses.flatMap((candidate) =>
-        !cohortIds.has(candidate.id) && preferredY.get(candidate.id) === y
-          ? [preferredX.get(candidate.id) ?? 0]
-          : [],
-      );
-      if (
-        mirrored.some((coordinate) =>
-          otherCoordinates.some(
-            (otherCoordinate) => Math.abs(coordinate - otherCoordinate) < COMPACT_SAME_ROW_SPACING,
-          ),
-        )
-      ) {
-        mirrored = mirroredAt(selfCenterTwice);
-      }
-    }
+    const mirrored = mirroredAt(anchorCenterTwice);
     for (const [index, focusId] of cohort.entries()) preferredX.set(focusId, mirrored[index] ?? 0);
+  }
+}
+
+function straightenLinearChains(
+  plan: FocusTreePlan,
+  preferredX: Map<string, number>,
+  preferredY: Map<string, number>,
+): void {
+  const parentIds = new Map(
+    plan.focuses.map((focus) => [focus.id, prerequisiteIds(plan, focus.id)]),
+  );
+  const childIds = new Map<string, string[]>();
+  for (const [focusId, parents] of parentIds) {
+    for (const parentId of parents) {
+      const children = childIds.get(parentId) ?? [];
+      children.push(focusId);
+      childIds.set(parentId, children);
+    }
+  }
+  const ordered = [...plan.focuses].sort(
+    (left, right) =>
+      (preferredY.get(left.id) ?? 0) - (preferredY.get(right.id) ?? 0) ||
+      compareCodeUnits(left.id, right.id),
+  );
+  for (const focus of ordered) {
+    const parents = parentIds.get(focus.id) ?? [];
+    if (parents.length !== 1) continue;
+    const parentId = parents[0];
+    if (parentId === undefined || (childIds.get(parentId)?.length ?? 0) !== 1) continue;
+    const parentX = preferredX.get(parentId);
+    const parentY = preferredY.get(parentId);
+    if (parentX === undefined || parentY === undefined) continue;
+    preferredX.set(focus.id, parentX);
+    preferredY.set(focus.id, parentY + 1);
   }
 }
 
@@ -342,6 +336,7 @@ function compactCandidate(
       preferredX.set(node.id, (placed[index] ?? 0) + drift);
   }
   mirrorSiblingCohorts(plan, preferredX, preferredY);
+  straightenLinearChains(plan, preferredX, preferredY);
   const compacted = structuredClone(plan);
   compacted.laneGroups = compacted.laneGroups.map(({ id, label, order }) => ({
     id,
@@ -416,7 +411,7 @@ export function compactFocusTreePlan(plan: FocusTreePlan): FocusTreePlan {
   let selected: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   for (const scale of scales) {
-    for (const compressRows of plan.focuses.length <= 500 ? [false, true] : [false]) {
+    for (const compressRows of [false, true]) {
       const candidate = compactCandidate(plan, currentLayout, scale, compressRows);
       let layout: FocusLayoutResult;
       try {
@@ -491,7 +486,7 @@ export async function compactFocusTreePlanAsync(
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let exhausted: ServiceError | undefined;
   candidateSearch: for (const scale of compactScales(plan.focuses.length)) {
-    for (const compressRows of plan.focuses.length <= 500 ? [false, true] : [false]) {
+    for (const compressRows of [false, true]) {
       options.signal?.throwIfAborted();
       const candidate = compactCandidate(plan, currentLayout, scale, compressRows);
       let layout: FocusLayoutResult;
@@ -553,7 +548,7 @@ export function assertCompactLayoutQuality(
     {
       treeId: proposed.treeId,
       regressions,
-      limits: compactLimits(proposed.nodes.length, requiredMetrics(proposed).connectors.count),
+      limits: compactLimits(proposed.nodes.length),
       ...(current === undefined ? {} : { before: requiredMetrics(current) }),
       proposed: requiredMetrics(proposed),
     },

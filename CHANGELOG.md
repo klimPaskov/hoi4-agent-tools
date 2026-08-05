@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.11 - 2026-08-05
+
+- Made compact focus rewrites straighten offset linear chains and reject artificial staircase or zigzag geometry.
+- Tightened compact layout acceptance so long connectors, connector paths through focuses, crossings, asymmetric sibling groups, and off-anchor branches cannot survive a successful cleanup.
+- Kept the stricter rewrite deterministic and verified it through the public 1,024-focus MCP workflow.
+
 ## 2.3.10 - 2026-08-04
 
 - Routed focus operations to the unique discovered mod containing a requested source when a stale client root points at another mod.

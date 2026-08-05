@@ -1351,6 +1351,146 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
+  it('straightens offset and zigzag geometry in mechanically linear chains', () => {
+    const root = focusNode('linear_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const staircase = focusNode(
+      'linear_staircase',
+      { mode: 'fixed', x: 2, y: 2, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const zig = focusNode(
+      'linear_zig',
+      { mode: 'fixed', x: 0, y: 4, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [staircase.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const zag = focusNode(
+      'linear_zag',
+      { mode: 'fixed', x: 2, y: 6, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [zig.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const authored = focusPlan([root, staircase, zig, zag]);
+    const before = layoutFocusTree(authored);
+
+    expect(before.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'FOCUS_LAYOUT_LINEAR_DETOUR' }),
+        expect.objectContaining({ code: 'FOCUS_LAYOUT_ZIGZAG_CHAIN' }),
+      ]),
+    );
+
+    const compacted = compactFocusTreePlan(authored);
+    const after = layoutFocusTree(compacted);
+    expect(Object.fromEntries(after.nodes.map(({ id, x, y }) => [id, { x, y }]))).toEqual({
+      linear_root: { x: 0, y: 0 },
+      linear_staircase: { x: 0, y: 1 },
+      linear_zig: { x: 0, y: 2 },
+      linear_zag: { x: 0, y: 3 },
+    });
+    expect(
+      after.diagnostics.filter(({ code }) =>
+        [
+          'FOCUS_LAYOUT_LINEAR_DETOUR',
+          'FOCUS_LAYOUT_STAIRCASE_CHAIN',
+          'FOCUS_LAYOUT_ZIGZAG_CHAIN',
+        ].includes(code),
+      ),
+    ).toEqual([]);
+    expect(() => assertCompactLayoutQuality(before, after)).not.toThrow();
+  });
+
+  it('straightens staircase geometry in a mechanically linear chain', () => {
+    const root = focusNode('staircase_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const middle = focusNode(
+      'staircase_middle',
+      { mode: 'fixed', x: 2, y: 2, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const end = focusNode(
+      'staircase_end',
+      { mode: 'fixed', x: 4, y: 4, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [middle.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const authored = focusPlan([root, middle, end]);
+    expect(layoutFocusTree(authored).diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'FOCUS_LAYOUT_STAIRCASE_CHAIN' })]),
+    );
+
+    const compacted = layoutFocusTree(compactFocusTreePlan(authored));
+    expect(Object.fromEntries(compacted.nodes.map(({ id, x, y }) => [id, { x, y }]))).toEqual({
+      staircase_root: { x: 0, y: 0 },
+      staircase_middle: { x: 0, y: 1 },
+      staircase_end: { x: 0, y: 2 },
+    });
+    expect(compacted.diagnostics.some(({ code }) => code === 'FOCUS_LAYOUT_STAIRCASE_CHAIN')).toBe(
+      false,
+    );
+  });
+
+  it('rejects any connector through an unrelated focus in a compact result', () => {
+    const clean = layoutFocusTree(
+      focusPlan([
+        focusNode('intersection_gate_root', { mode: 'auto', pinned: false }),
+        focusNode('intersection_gate_other', {
+          mode: 'auto',
+          pinned: false,
+          preferredX: 2,
+          preferredY: 1,
+        }),
+      ]),
+    );
+    clean.metrics!.connectors.nodeIntersectionCount = 1;
+
+    expect(() => assertCompactLayoutQuality(undefined, clean)).toThrowError(
+      expect.objectContaining({
+        code: 'FOCUS_COMPACT_QUALITY_BLOCKED',
+        details: expect.objectContaining({
+          regressions: expect.arrayContaining(['connectorNodeIntersections']),
+        }),
+      }),
+    );
+  });
+
+  it('rejects every remaining long connector in a compact result', () => {
+    const clean = layoutFocusTree(
+      focusPlan([focusNode('long_connector_gate_root', { mode: 'auto', pinned: false })]),
+    );
+    clean.metrics!.connectors.longConnectorCount = 1;
+
+    expect(() => assertCompactLayoutQuality(undefined, clean)).toThrowError(
+      expect.objectContaining({
+        code: 'FOCUS_COMPACT_QUALITY_BLOCKED',
+        details: expect.objectContaining({
+          regressions: expect.arrayContaining(['longConnectors']),
+        }),
+      }),
+    );
+  });
+
   it('anchors compacted fixed sibling coordinates around their compacted parent', () => {
     const parent = focusNode('compact_anchor_parent', {
       mode: 'fixed',

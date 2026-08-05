@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-07-10
-- Updated: 2026-07-12
+- Updated: 2026-08-05
 
 ## Decision
 
@@ -16,6 +16,6 @@ ELK and Dagre were evaluated. They are strong general graph-layout libraries, bu
 
 ## Consequences
 
-The solver does not change prerequisites or stack nodes to force success. Automatic nodes reject visible overlaps and same-row or mutual-exclusion gaps smaller than `nodeSpacing`, then minimize connector crossings and span across deterministic integer candidates. A bounded post-pass evaluates rendered crossings, connector-node hits, maximum and total connector span, long-edge count, branch balance, bounds, and centering before moving an automatic gateway or blocker. Fixed, relative, and pinned nodes stay fixed in authored mode; prior automatic coordinates remain stability preferences rather than permanent anchors.
+The solver does not change prerequisites or stack nodes to force success. Automatic nodes reject visible overlaps and same-row or mutual-exclusion gaps smaller than `nodeSpacing`, then minimize connector crossings and span across deterministic integer candidates. A bounded post-pass evaluates rendered crossings, connector-node hits, maximum and total connector span, long-edge count, branch balance, bounds, and centering before moving an automatic gateway or blocker. Compact mode also straightens mechanically linear chains and rejects offset linear detours, staircase chains, and zigzags that manufacture visual complexity. Fixed, relative, and pinned nodes stay fixed in authored mode; prior automatic coordinates remain stability preferences rather than permanent anchors.
 
-Every layout reports bounds, spacing, rendered-curve connector, connector-node, branch-balance, and centering metrics. Compact rewrites have absolute and relative quality gates: they must eliminate too-close same-row pairs and rendered-curve crossings, keep local branches or broad subtree envelopes balanced, center the result within half a column, remain inside graph-size-based width and connector budgets, and avoid source-relative regressions. Connector paths through unrelated nodes remain explicit measured diagnostics with a bounded compact-layout budget.
+Every layout reports bounds, spacing, rendered-curve connector, connector-node, branch-balance, and centering metrics. Compact rewrites have absolute and relative quality gates: they must eliminate too-close same-row pairs, rendered-curve crossings, connector paths through unrelated focuses, asymmetric or off-anchor sibling cohorts, fake-complexity chain patterns, and long connectors; center the result within half a column; remain inside graph-size-based width and connector budgets; and avoid source-relative regressions. A linear connector must be the direct one-row path because it has no structural reason to detour.

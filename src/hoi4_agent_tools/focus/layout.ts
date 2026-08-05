@@ -2058,6 +2058,86 @@ function* connectorLengthDiagnostics(
   }
 }
 
+function* fakeComplexityDiagnostics(
+  context: LayoutContext,
+  edges: readonly LayoutConnector[],
+): LayoutSteps<void> {
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+  for (const edge of edges) {
+    incomingCount.set(edge.childId, (incomingCount.get(edge.childId) ?? 0) + 1);
+    outgoingCount.set(edge.parentId, (outgoingCount.get(edge.parentId) ?? 0) + 1);
+  }
+  const linearEdges = edges.filter(
+    ({ parentId, childId }) =>
+      (outgoingCount.get(parentId) ?? 0) === 1 && (incomingCount.get(childId) ?? 0) === 1,
+  );
+  const next = new Map(linearEdges.map((edge) => [edge.parentId, edge]));
+  const linearChildren = new Set(linearEdges.map(({ childId }) => childId));
+
+  for (const [edgeIndex, edge] of linearEdges.entries()) {
+    yield* cancellationCheckpoint(context.signal, edgeIndex, 32);
+    const spans = connectorSpans(edge);
+    if (spans.horizontal === 0 && spans.vertical === 1) continue;
+    const focus = context.focuses.get(edge.childId);
+    context.diagnostics.push({
+      code: 'FOCUS_LAYOUT_LINEAR_DETOUR',
+      severity: 'warning',
+      category: 'layout',
+      message: `Mechanically linear connector ${edge.parentId} -> ${edge.childId} uses an unnecessary visual detour`,
+      ...(focus?.sourceLocation === undefined ? {} : { location: focus.sourceLocation }),
+      details: {
+        parentId: edge.parentId,
+        childId: edge.childId,
+        horizontalSpan: spans.horizontal,
+        verticalSpan: spans.vertical,
+        expectedHorizontalSpan: 0,
+        expectedVerticalSpan: 1,
+      },
+    });
+  }
+
+  const starts = linearEdges
+    .filter(({ parentId }) => !linearChildren.has(parentId))
+    .sort((left, right) => compareCodeUnits(left.parentId, right.parentId));
+  for (const start of starts) {
+    const chain: LayoutConnector[] = [];
+    const visited = new Set<string>();
+    let current: LayoutConnector | undefined = start;
+    while (current !== undefined && !visited.has(current.parentId)) {
+      visited.add(current.parentId);
+      chain.push(current);
+      current = next.get(current.childId);
+    }
+    const horizontalDirections = chain
+      .map(({ parent, child }) => Math.sign(child.x - parent.x))
+      .filter((direction) => direction !== 0);
+    if (horizontalDirections.length < 2) continue;
+    const sameDirection = horizontalDirections.every(
+      (direction) => direction === horizontalDirections[0],
+    );
+    const alternating = horizontalDirections.every(
+      (direction, index) => index === 0 || direction === -horizontalDirections[index - 1]!,
+    );
+    const code = sameDirection
+      ? 'FOCUS_LAYOUT_STAIRCASE_CHAIN'
+      : alternating
+        ? 'FOCUS_LAYOUT_ZIGZAG_CHAIN'
+        : undefined;
+    if (code === undefined) continue;
+    const focusIds = [chain[0]!.parentId, ...chain.map(({ childId }) => childId)];
+    const focus = context.focuses.get(focusIds.at(-1) ?? '');
+    context.diagnostics.push({
+      code,
+      severity: 'warning',
+      category: 'layout',
+      message: `${sameDirection ? 'Staircase' : 'Zigzag'} geometry makes the linear chain ${focusIds.join(' -> ')} look artificially complex`,
+      ...(focus?.sourceLocation === undefined ? {} : { location: focus.sourceLocation }),
+      details: { focusIds, horizontalDirections },
+    });
+  }
+}
+
 function siblingCohortAnchor(
   context: LayoutContext,
   cohort: readonly string[],
@@ -2412,6 +2492,7 @@ function* layoutFocusTreeSteps(
   const nodeIntersectionCount = yield* connectorNodeIntersectionDiagnostics(context, edges);
   yield* connectorCrossingDiagnostics(context, crossingSummary.samples);
   yield* connectorLengthDiagnostics(context, edges);
+  yield* fakeComplexityDiagnostics(context, edges);
   const symmetry = yield* siblingSymmetryDiagnostics(context);
   const nodes = [...context.placed.values()].sort((left, right) =>
     compareCodeUnits(left.id, right.id),
