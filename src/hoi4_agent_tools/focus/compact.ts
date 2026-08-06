@@ -128,8 +128,14 @@ function mirrorSiblingCohorts(
 ): void {
   const cohorts = new Map<string, string[]>();
   const laneBases = compactLaneBases(plan);
+  const childIds = new Map<string, string[]>();
   for (const focus of plan.focuses) {
     const parents = prerequisiteIds(plan, focus.id);
+    for (const parentId of parents) {
+      const children = childIds.get(parentId) ?? [];
+      children.push(focus.id);
+      childIds.set(parentId, children);
+    }
     const key = JSON.stringify([
       parents.length === 0 ? focusLaneId(plan, focus) : null,
       parents,
@@ -145,36 +151,46 @@ function mirrorSiblingCohorts(
       (left, right) =>
         (preferredX.get(left) ?? 0) - (preferredX.get(right) ?? 0) || compareCodeUnits(left, right),
     );
-    const coordinates = cohort.map((id) => preferredX.get(id) ?? 0);
-    const pairCount = Math.floor(coordinates.length / 2);
     const focus = plan.focuses.find(({ id }) => id === cohort[0]);
     if (focus === undefined) continue;
-    const mirroredAt = (centerTwice: number): number[] => {
-      const mirrored = [...coordinates];
-      for (let index = 0; index < pairCount; index += 1) {
-        const opposite = coordinates.length - 1 - index;
-        const left = Math.round(
-          ((coordinates[index] ?? 0) + centerTwice - (coordinates[opposite] ?? 0)) / 2,
-        );
-        mirrored[index] = left;
-        mirrored[opposite] = centerTwice - left;
-      }
-      if (coordinates.length % 2 === 1) mirrored[pairCount] = Math.round(centerTwice / 2);
-      let maximumLeft = centerTwice / 2 - (coordinates.length % 2 === 1 ? 2 : 1);
-      for (let index = pairCount - 1; index >= 0; index -= 1) {
-        const opposite = coordinates.length - 1 - index;
-        const left = Math.min(mirrored[index] ?? maximumLeft, maximumLeft);
-        mirrored[index] = left;
-        mirrored[opposite] = centerTwice - left;
-        maximumLeft = left - COMPACT_SAME_ROW_SPACING;
-      }
-      return mirrored;
-    };
     const anchorCenterTwice =
       2 *
       compactStructuralAnchorX(plan, focus, prerequisiteIds(plan, focus.id), preferredX, laneBases);
-    const mirrored = mirroredAt(anchorCenterTwice);
-    for (const [index, focusId] of cohort.entries()) preferredX.set(focusId, mirrored[index] ?? 0);
+    const firstX = Math.round(
+      anchorCenterTwice / 2 - ((cohort.length - 1) * COMPACT_SAME_ROW_SPACING) / 2,
+    );
+    const targetX = new Map(
+      cohort.map((focusId, index) => [focusId, firstX + index * COMPACT_SAME_ROW_SPACING]),
+    );
+    const deltaX = new Map(
+      cohort.map((focusId) => [
+        focusId,
+        (targetX.get(focusId) ?? 0) - (preferredX.get(focusId) ?? 0),
+      ]),
+    );
+    const reachableBy = new Map<string, Set<string>>();
+    for (const rootId of cohort) {
+      const pending = [rootId];
+      const visited = new Set<string>();
+      while (pending.length > 0) {
+        const focusId = pending.pop();
+        if (focusId === undefined || visited.has(focusId)) continue;
+        visited.add(focusId);
+        const owners = reachableBy.get(focusId) ?? new Set<string>();
+        owners.add(rootId);
+        reachableBy.set(focusId, owners);
+        pending.push(...(childIds.get(focusId) ?? []));
+      }
+    }
+    for (const [focusId, owners] of reachableBy) {
+      if (owners.size !== 1) continue;
+      const ownerId = [...owners][0];
+      if (ownerId === undefined) continue;
+      const delta = deltaX.get(ownerId);
+      const current = preferredX.get(focusId);
+      if (delta === undefined || current === undefined) continue;
+      preferredX.set(focusId, current + delta);
+    }
   }
 }
 

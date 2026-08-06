@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-07-10
-- Updated: 2026-08-05
+- Updated: 2026-08-06
 
 ## Decision
 
@@ -16,6 +16,6 @@ ELK and Dagre were evaluated. They are strong general graph-layout libraries, bu
 
 ## Consequences
 
-The solver does not change prerequisites or stack nodes to force success. Automatic nodes reject visible overlaps and same-row or mutual-exclusion gaps smaller than `nodeSpacing`, then minimize connector crossings and span across deterministic integer candidates. A bounded post-pass evaluates rendered crossings, connector-node hits, maximum and total connector span, long-edge count, branch balance, bounds, and centering before moving automatic nodes or complete sibling cohorts. Compact mode straightens mechanically linear chains and minimizes offset linear detours, staircase chains, and zigzags that manufacture visual complexity. Fixed, relative, and pinned nodes stay fixed in authored mode; prior automatic coordinates remain stability preferences only while they remain collision-free and parent-valid.
+The solver does not change prerequisites or stack nodes to force success. Automatic nodes reject visible overlaps and same-row or mutual-exclusion gaps smaller than `nodeSpacing`, then minimize connector crossings and span across deterministic integer candidates. A bounded post-pass evaluates rendered crossings, connector-node hits, maximum and total connector span, long-edge count, branch balance, bounds, and centering before moving automatic nodes or complete sibling cohorts. Compact mode repacks sparse sibling cohorts at the minimum readable spacing around their structural parent. Exclusive descendant branches move with their sibling root so a shorter first connector does not merely transfer the detour to the next row, while shared convergence nodes remain anchored. Dense cohorts may retain additional width when their descendant geometry requires it to avoid overlap, crossings, or connector-node intersections. Compact mode also straightens mechanically linear chains and minimizes offset linear detours, staircase chains, and zigzags that manufacture visual complexity. Fixed, relative, and pinned nodes stay fixed in authored mode; prior automatic coordinates remain stability preferences only while they remain collision-free and parent-valid.
 
 Every layout reports bounds, spacing, rendered-curve connector, connector-node, branch-balance, and centering metrics. Compact rewrites have a correctness gate: they must eliminate visible overlap, too-close same-row pairs, invalid parent order, rendered-curve crossings, and connector paths through unrelated focuses, and they must center the result within half a column. Long connectors, linear detours, staircase or zigzag geometry, and sibling balance are prioritized optimization targets rather than independent rejection budgets because improving one complex route can legitimately increase another aggregate span.

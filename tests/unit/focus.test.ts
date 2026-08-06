@@ -1227,6 +1227,111 @@ describe('Focus Tree Workbench layout', () => {
     );
   });
 
+  it('repacks a sparse sibling fan-out instead of preserving long parent connectors', () => {
+    const root = focusNode('fanout_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const children = [-20, 0, 20].map((x, index) =>
+      focusNode(
+        `fanout_child_${String(index)}`,
+        { mode: 'fixed', x, y: 5, pinned: true },
+        {
+          laneId: `fanout_lane_${String(index)}`,
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+          },
+        },
+      ),
+    );
+    const authored = focusPlan([root, ...children], {
+      laneGroups: children.map(({ laneId }, order) => ({
+        id: laneId!,
+        label: laneId!,
+        order,
+      })),
+    });
+    const before = layoutFocusTree(authored);
+    const compacted = compactFocusTreePlan(authored);
+    const after = layoutFocusTree(compacted, { aggressiveAestheticRepair: true });
+    const childCoordinates = after.nodes
+      .filter(({ id }) => id.startsWith('fanout_child_'))
+      .map(({ x }) => x)
+      .sort((left, right) => left - right);
+
+    expect(before.metrics!.connectors.longConnectorCount).toBeGreaterThan(0);
+    expect(childCoordinates).toEqual([-2, 0, 2]);
+    expect(after.metrics!.connectors.longConnectorCount).toBe(0);
+    expect(after.metrics!.connectors.maximumHorizontalSpan).toBeLessThanOrEqual(2);
+    expect(after.metrics!.bounds.rowCount).toBe(2);
+  });
+
+  it('moves exclusive sibling branches while keeping shared convergence centered', () => {
+    const root = focusNode('branch_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const left = focusNode(
+      'branch_left',
+      { mode: 'fixed', x: -20, y: 2, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const right = focusNode(
+      'branch_right',
+      { mode: 'fixed', x: 20, y: 2, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const leftLeaf = focusNode(
+      'branch_left_leaf',
+      { mode: 'fixed', x: -20, y: 4, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [left.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const rightLeaf = focusNode(
+      'branch_right_leaf',
+      { mode: 'fixed', x: 20, y: 4, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [right.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const convergence = focusNode(
+      'branch_convergence',
+      { mode: 'fixed', x: 0, y: 6, pinned: true },
+      {
+        convergence: true,
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [left.id, right.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const compacted = layoutFocusTree(
+      compactFocusTreePlan(focusPlan([root, left, right, leftLeaf, rightLeaf, convergence])),
+      { aggressiveAestheticRepair: true },
+    );
+    const x = new Map(compacted.nodes.map((node) => [node.id, node.x]));
+
+    expect(x.get(left.id)).toBe(-1);
+    expect(x.get(right.id)).toBe(1);
+    expect(Math.abs((x.get(leftLeaf.id) ?? 0) - (x.get(left.id) ?? 0))).toBeLessThanOrEqual(1);
+    expect(Math.abs((x.get(rightLeaf.id) ?? 0) - (x.get(right.id) ?? 0))).toBeLessThanOrEqual(1);
+    expect(x.get(leftLeaf.id)).toBeLessThan(0);
+    expect(x.get(rightLeaf.id)).toBeGreaterThan(0);
+    expect(x.get(convergence.id)).toBe(0);
+  });
+
   it('reports objective focus-spacing and connector-length metrics', () => {
     const root = focusNode('metric_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
     const adjacent = focusNode('metric_adjacent', {

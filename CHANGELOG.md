@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.13 - 2026-08-06
+
+- Repacked sparse sibling fan-outs around their structural parent instead of preserving avoidable long prerequisite connectors.
+- Moved exclusive descendant branches with their compacted sibling root while keeping shared convergence focuses anchored.
+- Added direct branch-packing regressions and reverified the public 1,024-focus MCP rewrite workflow.
+
 ## 2.3.12 - 2026-08-05
 
 - Made compact focus rewrites choose among preservation, row compression, linear-chain repair, sibling balancing, and combined strategies instead of forcing one aggressive transformation.
