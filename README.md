@@ -31,31 +31,31 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 
 ## Tools
 
-| Tool                        | Purpose                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| `hoi4.focus_inspect`        | Read focus trees and report structural or reference problems.                           |
-| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                       |
-| `hoi4.focus_raster`         | Produce a high-fidelity PNG review with decoded source icons.                           |
-| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                          |
-| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                    |
-| `hoi4.gui_render`           | Render GUI scenario variants, states, resolutions, hierarchy, and layout diagnostics.   |
-| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                  |
-| `hoi4.map_inspect`          | Read map, state, province, region, supply, and railway data.                            |
-| `hoi4.map_render`           | Render map layers and overlays.                                                         |
-| `hoi4.map_rewrite`          | Create or update map data from an ordered list of exact changes.                        |
-| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                |
-| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges. |
-| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                         |
-| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                 |
-| `hoi4.tech_render`          | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage. |
-| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.    |
-| `hoi4.probability_inspect`  | Locate weighted logic, candidates, required inputs, and supported analysis.             |
-| `hoi4.probability_evaluate` | Evaluate exact values, probabilities, timing, bounds, and unresolved inputs.            |
-| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.       |
-| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                |
-| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.        |
-| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                   |
-| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.       |
+| Tool                        | Purpose                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| `hoi4.focus_inspect`        | Read focus trees, continuous-focus placement, and structural or reference problems.      |
+| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                        |
+| `hoi4.focus_raster`         | Produce a high-fidelity PNG review with decoded source icons.                            |
+| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                           |
+| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                     |
+| `hoi4.gui_render`           | Render GUI scenario variants, states, resolutions, hierarchy, and layout diagnostics.    |
+| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                   |
+| `hoi4.map_inspect`          | Read map, state, province, region, supply, and railway data.                             |
+| `hoi4.map_render`           | Render map layers and overlays.                                                          |
+| `hoi4.map_rewrite`          | Create or update map data from an ordered list of exact changes.                         |
+| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                 |
+| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.  |
+| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                          |
+| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                  |
+| `hoi4.tech_render`          | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage.  |
+| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.     |
+| `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs. |
+| `hoi4.probability_evaluate` | Evaluate exact values, probabilities, timing, bounds, and unresolved inputs.             |
+| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.        |
+| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                 |
+| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.         |
+| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                    |
+| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.        |
 
 Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, follow the `continuationUri` returned in `_meta` until it is `null`; clients may also request byte ranges with `?offset=<bytes>&length=<bytes>`.
 

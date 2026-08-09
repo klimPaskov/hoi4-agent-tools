@@ -91,25 +91,48 @@ describe('MCP coding-agent workflows', () => {
     const mod = path.join(temporary, 'mod');
     const relativePath = 'common/national_focus/workflow.txt';
     const sourcePath = path.join(mod, ...relativePath.split('/'));
-    await mkdir(path.dirname(sourcePath), { recursive: true });
-    await writeFile(
-      sourcePath,
-      [
-        'focus_tree = {',
-        '\tid = workflow_tree',
-        '\tdefault = yes',
-        '\tfocus = {',
-        '\t\tid = workflow_root',
-        '\t\tx = 0',
-        '\t\ty = 0',
-        '\t\tcost = 5',
-        '\t\tcompletion_reward = { add_political_power = 10 }',
-        '\t}',
-        '}',
-        '',
-      ].join('\n'),
-      'utf8',
-    );
+    const continuousPath = path.join(mod, 'common', 'continuous_focus', 'workflow.txt');
+    await Promise.all([
+      mkdir(path.dirname(sourcePath), { recursive: true }),
+      mkdir(path.dirname(continuousPath), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(
+        sourcePath,
+        [
+          'focus_tree = {',
+          '\tid = workflow_tree',
+          '\tdefault = yes',
+          '\tcontinuous_focus_position = { x = 18 y = 7 }',
+          '\tfocus = {',
+          '\t\tid = workflow_root',
+          '\t\tx = 0',
+          '\t\ty = 0',
+          '\t\tcost = 5',
+          '\t\tcompletion_reward = { add_political_power = 10 }',
+          '\t}',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      ),
+      writeFile(
+        continuousPath,
+        [
+          'continuous_focus_palette = {',
+          '\tid = workflow_continuous',
+          '\tdefault = yes',
+          '\tcontinuous_focus = {',
+          '\t\tid = workflow_industry',
+          '\t\ticon = GFX_goal_unknown',
+          '\t\tcost = 10',
+          '\t}',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      ),
+    ]);
     const client = await connect(temporary, {
       id: 'focus',
       name: 'Synthetic focus workflow',
@@ -125,7 +148,17 @@ describe('MCP coding-agent workflows', () => {
     expect(inspected).toMatchObject({
       status: 'ok',
       code: 'FOCUS_INSPECTED',
-      data: { mode: 'national', treeCount: 1 },
+      data: {
+        mode: 'national',
+        treeCount: 1,
+        trees: [
+          expect.objectContaining({
+            id: 'workflow_tree',
+            continuousFocusPosition: { x: 18, y: 7 },
+            continuousFocusPaletteIds: ['workflow_continuous'],
+          }),
+        ],
+      },
     });
     const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
     const plan = (inspection.plans as Array<Record<string, unknown>>)[0]!;

@@ -6,7 +6,7 @@ Use them for event timing and option weights, decision and mission scores, focus
 
 | Tool                        | Use                                                                                                                             |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `hoi4.probability_inspect`  | Discover weighted blocks, adapters, candidates, provenance, capabilities, and unsupported constructs.                           |
+| `hoi4.probability_inspect`  | Discover weighted blocks, compatible adapters, candidates, provenance, capabilities, and unsupported constructs.                |
 | `hoi4.probability_evaluate` | Evaluate eligibility, modifier traces, raw values, proven probabilities, and MTTH horizon chances across scenarios.             |
 | `hoi4.probability_sweep`    | Sweep declared ranges and locate sensitivity changes, breakpoints, and rank reversals.                                          |
 | `hoi4.probability_simulate` | Sample declared distributions with a deterministic seed and confidence intervals.                                               |
@@ -15,6 +15,8 @@ Use them for event timing and option weights, decision and mission scores, focus
 | `hoi4.probability_render`   | Render cached ranking, matrix, waterfall, timing, sensitivity, sequence, comparison, and unresolved views.                      |
 
 All seven tools are read-only. Proposed source is parsed in memory and never written. When an installed game root is configured, evaluation fails closed unless `launcher-settings.json` identifies the supported HOI4 build and checksum. Results otherwise state that they target the adapter version without claiming local-game verification.
+
+Pass a source without an adapter when the surface type is not yet known. Inspection returns every compatible adapter, candidate counts, and example candidate IDs. If a requested adapter, identifier, or candidate pool does not match the source, inspection returns the same discovery result with an explanation and suggested adapter instead of `PROBABILITY_SURFACE_EMPTY`; evaluation, sweeps, and simulation remain strict and still reject an empty requested surface.
 
 ## Scenarios
 

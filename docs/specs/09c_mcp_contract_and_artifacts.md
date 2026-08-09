@@ -30,6 +30,8 @@ All operations must be annotated read-only. There is no dry-run, apply, rollback
 - required scenario inputs
 - whether exact probabilities, timing, score-only analysis, or no analysis is currently possible
 
+The caller may provide a source without an adapter to inventory compatible surfaces. A mismatched adapter, identifier, or candidate pool returns discovery evidence and a suggested adapter instead of failing with an empty-surface error. Operations that calculate results remain strict.
+
 It performs no sampling unless explicitly requested by another operation.
 
 ## 3. Evaluate

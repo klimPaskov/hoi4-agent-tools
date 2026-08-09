@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0 - 2026-08-09
+
+- Added exact continuous-focus coordinates and linked palette IDs to compact national focus inspection results.
+- Added source-first probability inspection that discovers compatible adapters, candidate counts, and selector examples without requiring the caller to guess a surface type.
+- Changed empty or mismatched probability inspection into an actionable discovery result with a reason and suggested adapter while keeping evaluation, sweeps, and simulation strict.
+- Prevented focus-tree blocks from being misclassified as decision or mission weighted surfaces.
+
 ## 2.4.0 - 2026-08-09
 
 - Added named value-driven scripted-GUI scenario matrices with deterministic SVG, PNG, JSON, and per-element visibility, movement, size, text, and frame-change evidence.

@@ -80,6 +80,11 @@ const focusInspectOutputSchema = strictOperationResultSchema(
               branchCount: nonNegativeIntegerSchema,
               continuousPaletteCount: nonNegativeIntegerSchema,
               continuousFocusCount: nonNegativeIntegerSchema,
+              continuousFocusPosition: z
+                .object({ x: z.number().int(), y: z.number().int() })
+                .strict()
+                .nullable(),
+              continuousFocusPaletteIds: z.array(z.string().max(256)).max(100),
               resolvedTitleCount: nonNegativeIntegerSchema,
               layoutHash: sha256Schema,
               layoutDecisionCount: nonNegativeIntegerSchema,
@@ -823,7 +828,7 @@ export function registerFocusTools(
     {
       title: 'Inspect focus trees',
       description:
-        'Inspect national trees or continuous palettes for creation and cleanup, including complete plans, references, diagnostics, and stable layout decisions.',
+        'Inspect national trees or continuous palettes for creation and cleanup, including continuous-focus placement, complete plans, references, diagnostics, and stable layout decisions.',
       inputSchema: focusInspectInput,
       outputSchema: focusInspectOutputSchema,
       annotations: artifactProducing,
@@ -1078,6 +1083,8 @@ export function registerFocusTools(
             branchCount: plan.branchGroups.length,
             continuousPaletteCount: plan.continuousFocusPaletteIds.length,
             continuousFocusCount: plan.continuousFocusIds.length,
+            continuousFocusPosition: plan.continuousFocusPosition ?? null,
+            continuousFocusPaletteIds: plan.continuousFocusPaletteIds.slice(0, 100),
             resolvedTitleCount: plan.focuses.filter(
               ({ id }) => presentation.entries[id]?.titleSourceLocation !== undefined,
             ).length,

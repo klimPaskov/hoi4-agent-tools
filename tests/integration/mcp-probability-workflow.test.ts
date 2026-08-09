@@ -270,6 +270,128 @@ describe('probability MCP workflow', () => {
     expect(await treeSnapshot(mod)).toEqual(before);
   });
 
+  it('discovers compatible adapters instead of failing empty probability inspection', async () => {
+    const { client } = await connected();
+    const source =
+      'focus_tree = { id = weighted_tree focus = { id = weighted_focus x = 0 y = 0 ai_will_do = { factor = 2 } } }';
+    const discovered = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'decision_ai_will_do',
+        source: { inlineClausewitz: source },
+      },
+    });
+    expect(discovered.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_DISCOVERED',
+      data: {
+        requestedAdapter: 'decision_ai_will_do',
+        suggestedAdapter: 'national_focus_ai_will_do',
+        discoveryReason: 'requested_adapter_empty',
+        candidates: 0,
+        availableCandidates: 1,
+        availableAdapters: [
+          expect.objectContaining({ adapterId: 'national_focus_ai_will_do', candidates: 1 }),
+        ],
+        candidateExamples: ['weighted_focus'],
+      },
+    });
+    const structured = discovered.structuredContent as {
+      artifacts: Array<{ uri: string }>;
+    };
+    expect(structured.artifacts).toHaveLength(1);
+    const discovery = await client.readResource({ uri: structured.artifacts[0]!.uri });
+    const discoveryContent = discovery.contents[0];
+    expect(discoveryContent).toBeDefined();
+    if (discoveryContent !== undefined && 'text' in discoveryContent)
+      expect(JSON.parse(discoveryContent.text)).toMatchObject({
+        schemaVersion: 'probability-inspection.v2',
+        discovery: {
+          reason: 'requested_adapter_empty',
+          suggestedAdapter: 'national_focus_ai_will_do',
+        },
+      });
+
+    const automatic = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: { source: { inlineClausewitz: source } },
+    });
+    expect(automatic.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_DISCOVERED',
+      data: {
+        suggestedAdapter: 'national_focus_ai_will_do',
+        discoveryReason: 'source_inventory',
+      },
+    });
+
+    const missingIdentifier = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: { identifier: 'missing_focus', inlineClausewitz: source },
+      },
+    });
+    expect(missingIdentifier.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_DISCOVERED',
+      data: {
+        suggestedAdapter: 'national_focus_ai_will_do',
+        discoveryReason: 'identifier_not_found',
+        candidateExamples: ['weighted_focus'],
+      },
+    });
+
+    const missingPool = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: { inlineClausewitz: source },
+        candidatePool: ['missing_focus'],
+      },
+    });
+    expect(missingPool.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_DISCOVERED',
+      data: {
+        suggestedAdapter: 'national_focus_ai_will_do',
+        discoveryReason: 'candidate_pool_not_found',
+      },
+    });
+
+    const noSurface = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: { source: { inlineClausewitz: 'set_country_flag = no_weight_here' } },
+    });
+    expect(noSurface.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_DISCOVERED',
+      data: {
+        discoveryReason: 'no_weighted_surfaces',
+        availableCandidates: 0,
+        availableAdapters: [],
+        candidateExamples: [],
+      },
+    });
+
+    const evaluated = await client.callTool({
+      name: 'hoi4.probability_evaluate',
+      arguments: {
+        adapter: 'decision_ai_will_do',
+        source: { inlineClausewitz: source },
+        scenarioSet: {
+          schemaVersion: '1.0',
+          id: 'strict-empty-evaluation',
+          scenarios: [{ id: 'baseline', state: {} }],
+        },
+      },
+    });
+    expect(evaluated.structuredContent).toMatchObject({
+      status: 'error',
+      code: 'PROBABILITY_SURFACE_EMPTY',
+    });
+  });
+
   it('refuses to render a cached claim after workspace source changes', async () => {
     const { client, mod } = await connected();
     const evaluated = await client.callTool({

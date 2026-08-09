@@ -23,7 +23,7 @@ Support:
 - hidden, crisis, and conditional branches
 - convergence nodes
 - shared support branches
-- continuous focuses
+- continuous focuses, their linked palettes, and the national-tree placement coordinates used by the continuous-focus area
 - icons, localisation, AI weights, and filters
 - decision, event, idea, leader, formable, and scripted-helper links
 - raw passthrough fields
@@ -39,6 +39,8 @@ A small edit must not rearrange the whole tree. Record layout decisions and expl
 ## Agent visualization artifacts
 
 Generate interactive HTML, SVG, PNG, and JSON graph artifacts for the calling coding agent.
+
+Compact national-tree inspection must expose `continuous_focus_position` and linked palette IDs directly so the calling agent can move the continuous-focus area without loading the full plan artifact.
 
 The visualizer should show:
 

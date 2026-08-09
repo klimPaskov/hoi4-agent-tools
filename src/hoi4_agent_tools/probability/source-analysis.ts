@@ -34,6 +34,35 @@ interface WalkedAssignment {
   ancestors: Array<{ key: string; block: BlockNode; assignment: AssignmentNode }>;
 }
 
+export interface WeightedSurfaceInventoryEntry {
+  adapterId: ProbabilityAdapterId;
+  candidateCount: number;
+  identifierMatchCount: number;
+  candidatePoolMatchCount: number;
+  exampleCandidateIds: string[];
+  sourcePaths: string[];
+}
+
+export interface WeightedSurfaceInventory {
+  sourceRevision: string;
+  sourceHash: string;
+  filesScanned: string[];
+  adapters: WeightedSurfaceInventoryEntry[];
+}
+
+const sourceBackedAdapterIds: ProbabilityAdapterId[] = [
+  'event_mean_time_to_happen',
+  'event_option_ai_chance',
+  'decision_ai_will_do',
+  'mission_ai_will_do',
+  'national_focus_ai_will_do',
+  'technology_ai_will_do',
+  'doctrine_ai_will_do',
+  'direct_random',
+  'random_list',
+  'ai_strategy_factor',
+];
+
 const eventKeys = new Set([
   'country_event',
   'news_event',
@@ -195,6 +224,9 @@ function decisionCandidates(
   context: SourceContext,
   adapterId: 'decision_ai_will_do' | 'mission_ai_will_do',
 ): WeightedCandidate[] {
+  const sourcePath = normalized(context.file.relativePath);
+  if (context.file.absolutePath !== '<inline>' && !sourcePath.startsWith('common/decisions/'))
+    return [];
   const output: WeightedCandidate[] = [];
   const ignored = new Set([
     'allowed',
@@ -211,6 +243,10 @@ function decisionCandidates(
     if (
       assignment.value.type !== 'block' ||
       ancestors.length !== 1 ||
+      ancestors[0]!.key === 'focus_tree' ||
+      ancestors[0]!.key === 'continuous_focus_palette' ||
+      ancestors[0]!.key === 'technologies' ||
+      eventKeys.has(ancestors[0]!.key) ||
       ignored.has(assignment.key.value)
     )
       continue;
@@ -486,6 +522,91 @@ function samePool(candidate: WeightedCandidate, selected: WeightedCandidate): bo
   return candidate.id === selected.id;
 }
 
+function candidatesAtSourceLine(
+  candidates: WeightedCandidate[],
+  adapterId: ProbabilityAdapterId,
+  line: number | undefined,
+): WeightedCandidate[] {
+  if (line === undefined) return candidates;
+  let selected = candidates.filter(({ metadata, provenance: [first] }) => {
+    const location = first?.location;
+    const poolStartLine = metadata.poolStartLine;
+    const poolEndLine = metadata.poolEndLine;
+    return (
+      (location !== undefined && line >= location.start.line && line <= location.end.line) ||
+      (typeof poolStartLine === 'number' &&
+        typeof poolEndLine === 'number' &&
+        line >= poolStartLine &&
+        line <= poolEndLine)
+    );
+  });
+  if (adapterId !== 'event_option_ai_chance' && adapterId !== 'random_list') return selected;
+  const poolProperty = adapterId === 'event_option_ai_chance' ? 'eventId' : 'randomListId';
+  const pools = new Map<unknown, { span: number }>();
+  for (const candidate of selected) {
+    const start = candidate.metadata.poolStartLine;
+    const end = candidate.metadata.poolEndLine;
+    const span =
+      typeof start === 'number' && typeof end === 'number' ? end - start : Number.MAX_SAFE_INTEGER;
+    const key = candidate.metadata[poolProperty];
+    const existing = pools.get(key);
+    if (existing === undefined || span < existing.span) pools.set(key, { span });
+  }
+  const selectedPool = [...pools].sort(
+    ([leftKey, left], [rightKey, right]) =>
+      left.span - right.span || compareCodeUnits(String(leftKey), String(rightKey)),
+  )[0]?.[0];
+  if (selectedPool !== undefined)
+    selected = selected.filter((candidate) => candidate.metadata[poolProperty] === selectedPool);
+  return selected;
+}
+
+export function inventoryWeightedSurfaces(
+  snapshot: ScanSnapshot,
+  source: ProbabilitySourceInput,
+  candidatePool: readonly string[] = [],
+  adapterIds: readonly ProbabilityAdapterId[] = sourceBackedAdapterIds,
+): WeightedSurfaceInventory {
+  const contexts = sourceContexts(snapshot, source);
+  const wanted = new Set(candidatePool);
+  const adapters = adapterIds
+    .filter((adapterId) => adapterId !== 'custom_weighted_pool')
+    .map((adapterId): WeightedSurfaceInventoryEntry => {
+      const candidates = candidatesAtSourceLine(
+        contexts.flatMap((context) => candidatesFor(context, adapterId)),
+        adapterId,
+        source.line,
+      ).sort((left, right) => compareCodeUnits(left.id, right.id));
+      return {
+        adapterId,
+        candidateCount: candidates.length,
+        identifierMatchCount:
+          source.identifier === undefined
+            ? candidates.length
+            : candidates.filter((candidate) => identifierMatches(candidate, source.identifier!))
+                .length,
+        candidatePoolMatchCount:
+          candidatePool.length === 0
+            ? candidates.length
+            : candidates.filter(({ id }) => wanted.has(id)).length,
+        exampleCandidateIds: [...new Set(candidates.map(({ id }) => id))].slice(0, 10),
+        sourcePaths: [
+          ...new Set(candidates.flatMap(({ provenance }) => provenance.map(({ path }) => path))),
+        ].sort(compareCodeUnits),
+      };
+    })
+    .sort((left, right) => compareCodeUnits(left.adapterId, right.adapterId));
+  const hashes = Object.fromEntries(
+    contexts.map(({ file }) => [file.displayPath, file.sha256] as const),
+  );
+  return {
+    sourceRevision: snapshot.revision,
+    sourceHash: hashCanonical(hashes),
+    filesScanned: contexts.map(({ file }) => file.displayPath),
+    adapters,
+  };
+}
+
 export function discoverWeightedSurface(
   snapshot: ScanSnapshot,
   adapterId: ProbabilityAdapterId,
@@ -495,45 +616,7 @@ export function discoverWeightedSurface(
   const contexts = sourceContexts(snapshot, source);
   let candidates = contexts.flatMap((context) => candidatesFor(context, adapterId));
   candidates.sort((left, right) => compareCodeUnits(left.id, right.id));
-  if (source.line !== undefined) {
-    candidates = candidates.filter(({ metadata, provenance: [first] }) => {
-      const location = first?.location;
-      const poolStartLine = metadata.poolStartLine;
-      const poolEndLine = metadata.poolEndLine;
-      return (
-        (location !== undefined &&
-          source.line! >= location.start.line &&
-          source.line! <= location.end.line) ||
-        (typeof poolStartLine === 'number' &&
-          typeof poolEndLine === 'number' &&
-          source.line! >= poolStartLine &&
-          source.line! <= poolEndLine)
-      );
-    });
-    if (adapterId === 'event_option_ai_chance' || adapterId === 'random_list') {
-      const poolProperty = adapterId === 'event_option_ai_chance' ? 'eventId' : 'randomListId';
-      const pools = new Map<unknown, { span: number }>();
-      for (const candidate of candidates) {
-        const start = candidate.metadata.poolStartLine;
-        const end = candidate.metadata.poolEndLine;
-        const span =
-          typeof start === 'number' && typeof end === 'number'
-            ? end - start
-            : Number.MAX_SAFE_INTEGER;
-        const key = candidate.metadata[poolProperty];
-        const existing = pools.get(key);
-        if (existing === undefined || span < existing.span) pools.set(key, { span });
-      }
-      const selectedPool = [...pools].sort(
-        ([leftKey, left], [rightKey, right]) =>
-          left.span - right.span || compareCodeUnits(String(leftKey), String(rightKey)),
-      )[0]?.[0];
-      if (selectedPool !== undefined)
-        candidates = candidates.filter(
-          (candidate) => candidate.metadata[poolProperty] === selectedPool,
-        );
-    }
-  }
+  candidates = candidatesAtSourceLine(candidates, adapterId, source.line);
   const localCategoricalPool =
     adapterId === 'event_option_ai_chance' || adapterId === 'random_list';
   let completeLocalPoolIds: Set<string> | undefined;

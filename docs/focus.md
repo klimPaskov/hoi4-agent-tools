@@ -44,7 +44,7 @@ If malformed or unsupported script makes a requested change ambiguous, the rewri
 
 ## What inspection checks
 
-Inspection and rendering can report missing references, invalid prerequisite structure, duplicate or overlapping positions, insufficient spacing, long or crossing connectors, branch asymmetry, route conflicts, missing localisation or sprites, weak terminal branches, repeated rewards, and missing AI metadata. Renders are offline review artifacts, not game screenshots.
+Inspection and rendering can report missing references, invalid prerequisite structure, duplicate or overlapping positions, insufficient spacing, long or crossing connectors, branch asymmetry, route conflicts, missing localisation or sprites, weak terminal branches, repeated rewards, and missing AI metadata. National-tree inspection also returns the exact `continuous_focus_position` coordinates and linked palette IDs in its compact result, so an agent can identify and move the continuous-focus area without opening the full artifact. Renders are offline review artifacts, not game screenshots.
 
 `hoi4.focus_render` is the normal structural view and writes complete HTML, SVG, JSON, and source-map artifacts without decoding every icon or creating a PNG. `hoi4.focus_raster` adds decoded icons and the high-fidelity PNG. National trees with 200 or more focuses raster at half scale by default; pass `reviewScale` from `0.25` through `1` when a different PNG size is needed.
 

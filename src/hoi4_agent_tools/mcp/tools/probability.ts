@@ -84,10 +84,11 @@ const inspectInput = z
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.adapter === undefined) !== (value.source === undefined))
+    if (value.adapter !== undefined && value.source === undefined)
       context.addIssue({
         code: 'custom',
-        message: 'Provide adapter and source together, or omit both to list adapters',
+        message:
+          'An adapter requires a source; provide a source alone to discover compatible adapters',
       });
   });
 const evaluateInput = z.object(commonShape).strict();
@@ -182,9 +183,34 @@ const inspectDataSchema = z
   .object({
     adapters: nonNegativeIntegerSchema,
     adapterId: z.string().max(256).optional(),
+    requestedAdapter: z.string().max(256).optional(),
+    suggestedAdapter: z.string().max(256).optional(),
+    discoveryReason: z
+      .enum([
+        'source_inventory',
+        'requested_adapter_empty',
+        'identifier_not_found',
+        'candidate_pool_not_found',
+        'no_weighted_surfaces',
+      ])
+      .optional(),
     sourceRevision: sha256Schema.optional(),
     sourceHash: sha256Schema.optional(),
     candidates: nonNegativeIntegerSchema,
+    availableCandidates: nonNegativeIntegerSchema,
+    availableAdapters: z
+      .array(
+        z
+          .object({
+            adapterId: z.string().max(256),
+            candidates: nonNegativeIntegerSchema,
+            identifierMatches: nonNegativeIntegerSchema,
+            candidatePoolMatches: nonNegativeIntegerSchema,
+          })
+          .strict(),
+      )
+      .max(10),
+    candidateExamples: z.array(z.string().max(512)).max(10),
     poolComplete: z.boolean().optional(),
     requiredInputs: nonNegativeIntegerSchema,
     unresolved: nonNegativeIntegerSchema,
@@ -281,7 +307,7 @@ export function registerProbabilityTools(
     {
       title: 'Inspect AI and MTTH weighted logic',
       description:
-        'List versioned adapters or discover weighted blocks, candidate pools, capabilities, provenance, and unsupported constructs.',
+        'List versioned adapters, or provide a source alone to discover compatible weighted adapters, candidate pools, capabilities, provenance, and unsupported constructs before narrowing the request.',
       inputSchema: inspectInput,
       outputSchema: inspectOutput,
       annotations: readOnly,
@@ -313,14 +339,42 @@ export function registerProbabilityTools(
                 sourceHash: inspected.surface.sourceHash,
                 poolComplete: inspected.surface.poolComplete,
               }),
+          ...(inspected.discovery === undefined
+            ? {}
+            : {
+                ...(inspected.discovery.requestedAdapter === undefined
+                  ? {}
+                  : { requestedAdapter: inspected.discovery.requestedAdapter }),
+                ...(inspected.discovery.suggestedAdapter === undefined
+                  ? {}
+                  : { suggestedAdapter: inspected.discovery.suggestedAdapter }),
+                discoveryReason: inspected.discovery.reason,
+                sourceRevision: inspected.discovery.sourceRevision,
+                sourceHash: inspected.discovery.sourceHash,
+              }),
           candidates: inspected.surface?.candidateCount ?? 0,
+          availableCandidates:
+            inspected.discovery?.availableAdapters.reduce(
+              (sum, { candidateCount }) => sum + candidateCount,
+              0,
+            ) ?? 0,
+          availableAdapters:
+            inspected.discovery?.availableAdapters.map((available) => ({
+              adapterId: available.adapterId,
+              candidates: available.candidateCount,
+              identifierMatches: available.identifierMatchCount,
+              candidatePoolMatches: available.candidatePoolMatchCount,
+            })) ?? [],
+          candidateExamples: inspected.discovery?.exampleCandidateIds ?? [],
           requiredInputs: inspected.surface?.requiredInputs.length ?? 0,
           unresolved: inspected.surface?.unsupported.length ?? 0,
         });
         result.code =
-          inspected.surface === undefined
-            ? 'PROBABILITY_ADAPTERS_LISTED'
-            : 'PROBABILITY_SOURCE_INSPECTED';
+          inspected.surface !== undefined
+            ? 'PROBABILITY_SOURCE_INSPECTED'
+            : inspected.discovery !== undefined
+              ? 'PROBABILITY_SOURCE_DISCOVERED'
+              : 'PROBABILITY_ADAPTERS_LISTED';
         result.artifacts = inspected.artifacts;
         setInlineFilesScanned(result, inspected.filesScanned);
         await progress.report(2, 2, 'Weighted source inspection complete');

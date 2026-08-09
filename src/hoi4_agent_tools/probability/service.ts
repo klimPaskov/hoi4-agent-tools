@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalJson, hashCanonical } from '../core/canonical.js';
+import { canonicalJson, compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { probabilityDomainScanPatterns } from '../core/domain-scan-patterns.js';
 import type { Diagnostic } from '../core/diagnostics.js';
@@ -39,7 +39,12 @@ import type {
 import { renderProbabilityResult, type ProbabilityVisual } from './render.js';
 import { analyzeSequence } from './sequence.js';
 import { simulateSurface } from './simulation.js';
-import { discoverWeightedSurface } from './source-analysis.js';
+import {
+  discoverWeightedSurface,
+  inventoryWeightedSurfaces,
+  type WeightedSurfaceInventory,
+  type WeightedSurfaceInventoryEntry,
+} from './source-analysis.js';
 import { sweepSurface, type SweepRequest } from './sweep.js';
 
 export interface ProbabilityServiceContext {
@@ -135,6 +140,20 @@ export interface ProbabilityInspectResult {
     }>;
     requiredInputs: string[];
     unsupported: ProbabilityUnresolved[];
+  };
+  discovery?: {
+    requestedAdapter?: ProbabilityAdapterId;
+    reason:
+      | 'source_inventory'
+      | 'requested_adapter_empty'
+      | 'identifier_not_found'
+      | 'candidate_pool_not_found'
+      | 'no_weighted_surfaces';
+    sourceRevision: string;
+    sourceHash: string;
+    availableAdapters: WeightedSurfaceInventoryEntry[];
+    suggestedAdapter?: ProbabilityAdapterId;
+    exampleCandidateIds: string[];
   };
   artifacts: ArtifactLink[];
   filesScanned: string[];
@@ -1107,11 +1126,110 @@ export class ProbabilityAnalyzer {
     source?: ProbabilitySourceInput,
     candidatePool: readonly string[] = [],
   ): Promise<ProbabilityInspectResult> {
-    if (adapter === undefined || source === undefined)
+    if (source === undefined)
       return { adapters: probabilityAdapters(), artifacts: [], filesScanned: [] };
-    const gameVersionVerification = await this.verifyGameVersion(context, adapter);
     const snapshot = await this.scan(context, [source.path]);
-    const surface = discoverWeightedSurface(snapshot, adapter, source, candidatePool);
+    const storeDiscovery = async (
+      inventory: WeightedSurfaceInventory,
+      reason: NonNullable<ProbabilityInspectResult['discovery']>['reason'],
+    ): Promise<ProbabilityInspectResult> => {
+      const availableAdapters = inventory.adapters.filter(
+        ({ candidateCount }) => candidateCount > 0,
+      );
+      const matchingIdentifier = availableAdapters.filter(
+        ({ identifierMatchCount }) => source.identifier !== undefined && identifierMatchCount > 0,
+      );
+      const matchingPool = availableAdapters.filter(
+        ({ candidatePoolMatchCount }) => candidatePool.length > 0 && candidatePoolMatchCount > 0,
+      );
+      const requested = availableAdapters.find(({ adapterId }) => adapterId === adapter);
+      const ranked = [
+        ...(matchingIdentifier.length > 0
+          ? matchingIdentifier
+          : matchingPool.length > 0
+            ? matchingPool
+            : requested === undefined
+              ? availableAdapters
+              : [requested]),
+      ].sort(
+        (left, right) =>
+          right.identifierMatchCount - left.identifierMatchCount ||
+          right.candidatePoolMatchCount - left.candidatePoolMatchCount ||
+          right.candidateCount - left.candidateCount ||
+          compareCodeUnits(left.adapterId, right.adapterId),
+      );
+      const suggested = ranked[0];
+      const discovery: NonNullable<ProbabilityInspectResult['discovery']> = {
+        ...(adapter === undefined ? {} : { requestedAdapter: adapter }),
+        reason,
+        sourceRevision: inventory.sourceRevision,
+        sourceHash: inventory.sourceHash,
+        availableAdapters,
+        ...(suggested === undefined ? {} : { suggestedAdapter: suggested.adapterId }),
+        exampleCandidateIds: suggested?.exampleCandidateIds ?? [],
+      };
+      const report = {
+        schemaVersion: 'probability-inspection.v2',
+        workspaceId: context.workspaceId,
+        discovery,
+      };
+      const workspace = this.engine.resolver.get(context.workspaceId, context.principal);
+      const artifact = await this.engine.artifacts.putChunked(
+        workspace,
+        `probability-inspect-${inventory.sourceHash.slice(0, 12)}.json`,
+        'application/json',
+        `${canonicalJson(report)}\n`,
+        {
+          kind: 'probability-inspection',
+          toolVersion: PACKAGE_VERSION,
+          schemaVersion: 'probability-inspection.v2',
+          sourceHashes: { aggregate: inventory.sourceHash },
+        },
+        'Weighted-source adapter inventory and candidate examples',
+        context.signal,
+      );
+      return {
+        adapters: probabilityAdapters(),
+        discovery,
+        artifacts: [publicArtifactLink(artifact)],
+        filesScanned: inventory.filesScanned,
+      };
+    };
+    if (adapter === undefined) {
+      const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
+      return storeDiscovery(
+        inventory,
+        inventory.adapters.some(({ candidateCount }) => candidateCount > 0)
+          ? 'source_inventory'
+          : 'no_weighted_surfaces',
+      );
+    }
+    const gameVersionVerification = await this.verifyGameVersion(context, adapter);
+    let surface: WeightedSurface;
+    try {
+      surface = discoverWeightedSurface(snapshot, adapter, source, candidatePool);
+    } catch (error) {
+      if (
+        !(error instanceof ServiceError) ||
+        (error.code !== 'PROBABILITY_SURFACE_EMPTY' &&
+          error.code !== 'PROBABILITY_IDENTIFIER_NOT_FOUND')
+      )
+        throw error;
+      const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
+      const requested = inventory.adapters.find(({ adapterId }) => adapterId === adapter);
+      const reason =
+        error.code === 'PROBABILITY_IDENTIFIER_NOT_FOUND'
+          ? 'identifier_not_found'
+          : requested !== undefined &&
+              requested.candidateCount > 0 &&
+              candidatePool.length > 0 &&
+              requested.candidatePoolMatchCount === 0
+            ? 'candidate_pool_not_found'
+            : inventory.adapters.every(({ candidateCount }) => candidateCount === 0)
+              ? 'no_weighted_surfaces'
+              : 'requested_adapter_empty';
+      return storeDiscovery(inventory, reason);
+    }
     const definitions = ClausewitzEvaluationDefinitions.build(snapshot);
     const inspectedCandidates = evaluateExactCandidates(
       surface,
@@ -1126,7 +1244,7 @@ export class ProbabilityAnalyzer {
       ),
     ].sort();
     const report = {
-      schemaVersion: 'probability-inspection.v1',
+      schemaVersion: 'probability-inspection.v2',
       workspaceId: context.workspaceId,
       surface: {
         id: surface.id,
@@ -1180,7 +1298,7 @@ export class ProbabilityAnalyzer {
       {
         kind: 'probability-inspection',
         toolVersion: PACKAGE_VERSION,
-        schemaVersion: 'probability-inspection.v1',
+        schemaVersion: 'probability-inspection.v2',
         sourceHashes: { aggregate: surface.sourceHash },
       },
       'Discovered weighted surfaces and adapter capabilities',
