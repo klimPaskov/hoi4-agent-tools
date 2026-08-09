@@ -405,6 +405,10 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
       [],
     );
     expect(validationCodes.has('GUI_COST_MISMATCH')).toBe(false);
+    expect(validationCodes.has('GUI_BUTTON_LABEL_OFF_CENTER')).toBe(false);
+    expect(validationCodes.has('GUI_CONTENT_CROSSES_BACKGROUND_EDGE')).toBe(false);
+    expect(validationCodes.has('GUI_CONTENT_OUTSIDE_EXPECTED_BACKGROUND')).toBe(false);
+    expect(validationCodes.has('GUI_EXPECTED_CENTERING_MISMATCH')).toBe(false);
     const confirmEffect = graph.scriptedGuis
       .find(({ name }) => name === 'synthetic_gui_controller')
       ?.effectDefinitions.find(({ name }) => name === 'modal_confirm_click');
@@ -429,6 +433,14 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
     expect(scene.fidelity.missing.some(({ field }) => field === 'font_glyphs')).toBe(true);
     expect(scene.fidelity.unsupported.some(({ field }) => field === 'rotation')).toBe(true);
     expect(scene.fidelity.unresolved.some(({ field }) => field === 'dynamic_text')).toBe(true);
+    await expect(
+      harness.studio.lint({
+        workspaceId,
+        windowName: manifest.windowName,
+        scenario: baselineScenario,
+        relatedScenarios: [baselineScenario],
+      }),
+    ).rejects.toMatchObject({ code: 'GUI_SCENARIO_ID_DUPLICATE' });
   }, 60_000);
 
   it('stores deterministic render, hierarchy, source-map, state, resolution, and bitmap-comparison evidence', async () => {
@@ -442,6 +454,7 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
         { width: 960, height: 540, uiScale: 1 },
         { width: 1280, height: 720, uiScale: 0.9 },
       ],
+      relatedScenarios: [comparisonScenario],
       comparisonScenario,
     };
     const first = await harness.studio.renderAndStore(renderInput);
@@ -455,6 +468,10 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
       'source-map',
     ]);
     expect(first.stateScenes).toHaveLength(manifest.expected.states);
+    expect(first.scenarioScenes.map(({ scenario }) => scenario.id)).toEqual([
+      baselineScenario.id,
+      comparisonScenario.id,
+    ]);
     expect(new Set(first.stateScenes.map(({ scenario }) => scenario.state))).toEqual(
       new Set(allStates),
     );
@@ -507,6 +524,8 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
       'synthetic_gui_window-source-map.png',
       'synthetic_gui_window-hierarchy.svg',
       'synthetic_gui_window-layout.json',
+      'synthetic_gui_window-scenario-matrix.png',
+      'synthetic_gui_window-scenario-matrix.json',
       'synthetic_gui_window-state-matrix.png',
       'synthetic_gui_window-state-matrix.json',
       'synthetic_gui_window-resolution-scale.png',
@@ -516,7 +535,7 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
     ];
     const artifactNames = new Set(first.artifacts.map(({ name }) => name));
     for (const required of requiredNames) expect(artifactNames).toContain(required);
-    expect(first.artifacts).toHaveLength(24);
+    expect(first.artifacts).toHaveLength(27);
     expect(second.artifacts.map(({ name, sha256, uri }) => ({ name, sha256, uri }))).toEqual(
       first.artifacts.map(({ name, sha256, uri }) => ({ name, sha256, uri })),
     );
@@ -575,16 +594,18 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
       });
       const expectedScenes = artifact.name.includes('-state-matrix.')
         ? first.stateScenes
-        : artifact.name.includes('-resolution-scale.')
-          ? first.resolutionScenes
-          : artifact.name.includes('-comparison.')
-            ? [first.render.scene, comparisonScene]
-            : artifact.name.endsWith('-validation.json')
-              ? [first.render.scene, ...first.stateScenes, ...first.resolutionScenes]
-              : [first.render.scene];
+        : artifact.name.includes('-scenario-matrix.')
+          ? first.scenarioScenes
+          : artifact.name.includes('-resolution-scale.')
+            ? first.resolutionScenes
+            : artifact.name.includes('-comparison.')
+              ? [first.render.scene, comparisonScene]
+              : artifact.name.endsWith('-validation.json')
+                ? [...first.scenarioScenes, ...first.stateScenes, ...first.resolutionScenes]
+                : [first.render.scene];
       expectGuiArtifactProvenance(described, expectedScenes);
     }
-    expect(await harness.engine.artifacts.list(workspace)).toHaveLength(24);
+    expect(await harness.engine.artifacts.list(workspace)).toHaveLength(27);
   }, 180_000);
 
   it('detects every checked-in scenario and source defect through fresh real Studio workspaces', async () => {

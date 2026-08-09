@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.3.13/schemas/gui-scenario.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.4.0/schemas/gui-scenario.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -65,6 +65,9 @@
     },
     "scriptCosts": {
       "$ref": "#/$defs/__schema24"
+    },
+    "expectations": {
+      "$ref": "#/$defs/__schema25"
     }
   },
   "required": [
@@ -293,6 +296,59 @@
       "additionalProperties": {
         "type": "number"
       }
+    },
+    "__schema25": {
+      "default": {
+        "visible": [],
+        "hidden": [],
+        "containedBy": {},
+        "centeredOn": {}
+      },
+      "type": "object",
+      "properties": {
+        "visible": {
+          "default": [],
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema26"
+          }
+        },
+        "hidden": {
+          "default": [],
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema26"
+          }
+        },
+        "containedBy": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/__schema26"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema26"
+          }
+        },
+        "centeredOn": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/__schema26"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema26"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "__schema26": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
     }
   }
 }

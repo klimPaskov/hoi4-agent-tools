@@ -219,6 +219,13 @@ export type GuiPreviewState =
   | 'long-text'
   | 'missing-localisation';
 
+export interface GuiScenarioExpectations {
+  visible: string[];
+  hidden: string[];
+  containedBy: Record<string, string>;
+  centeredOn: Record<string, string>;
+}
+
 export interface GuiPreviewScenario {
   id: string;
   description?: string;
@@ -241,6 +248,7 @@ export interface GuiPreviewScenario {
   scrollOffsets: Record<string, number>;
   guiCosts: Record<string, number>;
   scriptCosts: Record<string, number>;
+  expectations: GuiScenarioExpectations;
 }
 
 export interface GuiRect {
@@ -400,6 +408,7 @@ export interface GuiArtifactSet {
   artifacts: StoredArtifact[];
   filesScanned: string[];
   render: GuiRenderResult;
+  scenarioScenes: GuiScene[];
   stateScenes: GuiScene[];
   resolutionScenes: GuiScene[];
   comparison: GuiComparisonResult;

@@ -866,6 +866,81 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     );
   });
 
+  it('centres native button text and validates value-driven visibility, panel, and label contracts', async () => {
+    const files = [
+      scanned(
+        'interface/contracts.gui',
+        `guiTypes = {
+	containerWindowType = {
+		name = "contract_window"
+		size = { width = 240 height = 140 }
+		background = { spriteType = "GFX_contract_panel" }
+		buttonType = { name = "native_button" position = { x = 20 y = 20 } size = { width = 100 height = 30 } spriteType = "GFX_contract_button" buttonText = "NATIVE_BUTTON" }
+		buttonType = {
+			name = "overlay_button"
+			position = { x = 20 y = 60 }
+			size = { width = 100 height = 30 }
+			spriteType = "GFX_contract_button"
+			instantTextBoxType = { name = "overlay_label" position = { x = 0 y = 0 } size = { width = 100 height = 30 } text = "OVERLAY_LABEL" format = left }
+		}
+		buttonType = { name = "outside_button" position = { x = 220 y = 105 } size = { width = 40 height = 24 } spriteType = "GFX_contract_button" }
+	}
+}`,
+      ),
+      scanned(
+        'interface/contracts.gfx',
+        `spriteTypes = {
+	spriteType = { name = "GFX_contract_panel" texturefile = "gfx/interface/panel.png" }
+	spriteType = { name = "GFX_contract_button" texturefile = "gfx/interface/button.png" }
+}`,
+      ),
+      scanned(
+        'localisation/english/contracts_l_english.yml',
+        '\uFEFFl_english:\nNATIVE_BUTTON: "Native"\nOVERLAY_LABEL: "Overlay"\n',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const base = await buildGuiScene(
+      graph,
+      files,
+      'contract_window',
+      parsePreviewScenario({ id: 'contract-base', resolution: { width: 640, height: 360 } }),
+    );
+    expect(base.elements.find(({ name }) => name === 'native_button')?.text).toMatchObject({
+      horizontalAlignment: 'center',
+      verticalAlignment: 'center',
+    });
+    const variant = await buildGuiScene(
+      graph,
+      files,
+      'contract_window',
+      parsePreviewScenario({
+        id: 'contract-variant',
+        resolution: { width: 640, height: 360 },
+        expectations: {
+          visible: ['native_button', 'missing_button'],
+          hidden: ['outside_button'],
+          containedBy: { outside_button: 'contract_window' },
+          centeredOn: { overlay_label: 'overlay_button' },
+        },
+      }),
+    );
+    const validation = await validateGuiScene(graph, base, files, [variant]);
+    const codes = new Set(validation.diagnostics.map(({ code }) => code));
+    for (const code of [
+      'GUI_BUTTON_LABEL_OFF_CENTER',
+      'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
+      'GUI_EXPECTED_ELEMENT_MISSING',
+      'GUI_EXPECTED_ELEMENT_VISIBLE',
+      'GUI_CONTENT_OUTSIDE_EXPECTED_BACKGROUND',
+      'GUI_EXPECTED_CENTERING_MISMATCH',
+    ])
+      expect(codes.has(code), code).toBe(true);
+    expect(
+      validation.diagnostics.find(({ code }) => code === 'GUI_EXPECTED_ELEMENT_VISIBLE')?.details,
+    ).toMatchObject({ scenarioId: 'contract-variant', element: 'outside_button' });
+  });
+
   it('uses BMFont xadvance and kerning from supplied font files', async () => {
     const files = await fixtureFiles();
     const graph = sourceGraph(files);

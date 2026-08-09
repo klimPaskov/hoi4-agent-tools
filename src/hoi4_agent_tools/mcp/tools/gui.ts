@@ -89,6 +89,7 @@ const guiRenderOutputSchema = strictOperationResultSchema(
         )
         .max(64),
       stateCount: nonNegativeIntegerSchema,
+      scenarioCount: nonNegativeIntegerSchema,
       resolutionCount: nonNegativeIntegerSchema,
       comparison: z
         .object({ changedPixels: nonNegativeIntegerSchema, changedRatio: z.number().min(0).max(1) })
@@ -367,6 +368,7 @@ export function registerGuiTools(
       states?: GuiPreviewState[] | undefined;
       resolutions?:
         Array<{ width: number; height: number; uiScale?: number | undefined }> | undefined;
+      relatedScenarios?: unknown[] | undefined;
       comparisonScenario?: unknown;
     },
     extra: Parameters<typeof progressReporter>[0],
@@ -396,6 +398,9 @@ export function registerGuiTools(
                 ...(uiScale === undefined ? {} : { uiScale }),
               })),
             }),
+        ...(input.relatedScenarios === undefined
+          ? {}
+          : { relatedScenarios: input.relatedScenarios }),
         ...(input.comparisonScenario === undefined
           ? {}
           : { comparisonScenario: input.comparisonScenario }),
@@ -415,6 +420,7 @@ export function registerGuiTools(
           height,
         })),
         stateCount: rendered.stateScenes.length,
+        scenarioCount: rendered.scenarioScenes.length,
         resolutionCount: rendered.resolutionScenes.length,
         comparison: {
           changedPixels: rendered.comparison.changedPixels,
@@ -444,10 +450,11 @@ export function registerGuiTools(
     .extend({
       states: z.array(previewStateSchema).max(14).optional(),
       resolutions: z.array(resolutionSchema).min(1).max(16).optional(),
+      relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
       comparisonScenario: compactGuiScenarioSchema.optional(),
     })
     .strict()
-    .superRefine(({ scenario, states, resolutions }, context) => {
+    .superRefine(({ scenario, states, resolutions, relatedScenarios }, context) => {
       const budget = new RenderBudget();
       try {
         const stateCount = states?.length ?? 14;
@@ -466,6 +473,7 @@ export function registerGuiTools(
         ]) {
           budget.reserve(resolution.width, resolution.height, 'GUI resolution variant');
         }
+        const scenarioCount = 1 + (relatedScenarios?.length ?? 0);
         const stateColumns = Math.min(3, Math.max(1, stateCount));
         const stateRows = Math.max(1, Math.ceil(stateCount / stateColumns));
         budget.reserve(stateColumns * 420, 46 + stateRows * 280, 'GUI state gallery');
@@ -476,6 +484,14 @@ export function registerGuiTools(
           resolutionColumns * 420,
           46 + resolutionRows * 280,
           'GUI resolution gallery',
+        );
+        const scenarioBudget = new RenderBudget();
+        const scenarioColumns = Math.min(3, Math.max(1, scenarioCount));
+        const scenarioRows = Math.max(1, Math.ceil(scenarioCount / scenarioColumns));
+        scenarioBudget.reserve(
+          scenarioColumns * 420,
+          46 + scenarioRows * 280,
+          'GUI scripted scenario gallery',
         );
       } catch (error) {
         if (error instanceof ServiceError) {
@@ -490,7 +506,8 @@ export function registerGuiTools(
     'hoi4.gui_render',
     {
       title: 'Render scripted GUI artifacts',
-      description: 'Render deterministic offline review artifacts for one GUI window and scenario.',
+      description:
+        'Render deterministic GUI review artifacts, named value-driven scenario variants, generic states, resolutions, click regions, hierarchy, comparisons, and layout diagnostics.',
       inputSchema: renderInput,
       outputSchema: guiRenderOutputSchema,
       annotations: artifactProducing,

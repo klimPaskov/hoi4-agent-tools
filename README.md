@@ -5,7 +5,7 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 ## What it does
 
 - Focus trees: inspect structure and references, render layouts, create trees, and reorganize existing branches.
-- Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render states; create or repair interface source.
+- Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render value-driven variants, states, resolutions, hierarchy, and click regions; diagnose alignment, visibility, clipping, panel containment, and button-label centering; create or repair interface source.
 - Maps: inspect provinces, states, regions, adjacency, supply, and railways; render layers; create and repair exact map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
@@ -13,7 +13,7 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 
 ## Setup
 
-Requires Node.js 22 or 24.
+Requires Node.js 22.19 or later in the Node 22 line, or Node.js 24.
 
 ```bash
 npm install --global hoi4-agent-tools@latest
@@ -38,7 +38,7 @@ Paste the printed Codex or generic global-install entry into your MCP client, th
 | `hoi4.focus_raster`         | Produce a high-fidelity PNG review with decoded source icons.                           |
 | `hoi4.focus_rewrite`        | Create or update a focus tree.                                                          |
 | `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                    |
-| `hoi4.gui_render`           | Render GUI states and resolutions offline.                                              |
+| `hoi4.gui_render`           | Render GUI scenario variants, states, resolutions, hierarchy, and layout diagnostics.   |
 | `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                  |
 | `hoi4.map_inspect`          | Read map, state, province, region, supply, and railway data.                            |
 | `hoi4.map_render`           | Render map layers and overlays.                                                         |
@@ -70,7 +70,7 @@ Connecting and listing tools does not scan mod source. Compact tool schemas and 
 Ask your agent in normal task language. A typical workflow is inspect, render, rewrite, then inspect the result. The agent can call a raster tool when a pixel review is useful without paying that cost during every structural operation.
 
 - Focus trees: "Create a complete national focus tree for this route specification," or "Compact this existing tree into a balanced, readable layout." Existing trees can use a plan-free compact reflow; new trees use a complete plan. See [Focus trees](docs/focus.md).
-- Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render this window at common resolutions and fix clipping, missing assets, and click-region conflicts." See [Scripted GUIs](docs/gui.md).
+- Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render every value-driven version of this window and fix hidden controls, off-center button text, background alignment, clipping, and click-region conflicts." See [Scripted GUIs](docs/gui.md).
 - Maps: "Create a state from these exact provinces," or "Inspect this state and split these provinces while keeping supply and railway references valid." See [Maps](docs/map.md).
 - Event chains: "Trace every route from this event and explain where its flags and variables change," or "Compare the workspace event graph with its previous revision and render the affected routes." See [Event chains](docs/events.md).
 - Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).

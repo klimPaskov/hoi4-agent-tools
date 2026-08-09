@@ -42,13 +42,16 @@ Generate MCP artifacts for:
 - hierarchy view
 - source-location map
 - state gallery
+- named scripted-scenario gallery with visibility and layout deltas
 - resolution and UI-scale gallery
 - before-and-after comparison
 - JSON layout report
 
 Support normal, hover, selected, locked, disabled, warning, active, completed, empty-list, full-list, minimum-value, maximum-value, long-text, and missing-localisation states.
 
-Allow the coding agent to define preview scenarios with mock country, state, variable, flag, list, localisation, and scripted-GUI values. Store the scenario beside the generated artifacts so another agent can reproduce the render.
+Allow the coding agent to define preview scenarios with mock country, state, variable, flag, list, localisation, and scripted-GUI values. A render can include multiple named scenarios so every meaningful runtime version of a window is visible and validated together. Store the scenarios and their shown, hidden, moved, resized, text-changed, and frame-changed elements beside the generated artifacts so another agent can reproduce the render.
+
+Preview scenarios may declare expected visible and hidden elements, expected background or panel containment, and exact label-to-control centering. These assertions turn runtime variants and background-aware composition into source-linked diagnostics instead of leaving them to manual image review.
 
 The images are the studio's own representation of the parsed GUI. Never describe them as screenshots from the game. Report unsupported or partially modelled fields instead of inventing their appearance.
 
@@ -78,6 +81,11 @@ Detect at least:
 - overlapping visible elements
 - accidental clipping
 - text overflow
+- button labels that are not visually centered
+- text or controls crossing a parent background boundary
+- scenario elements that are unexpectedly missing, visible, or hidden
+- elements outside an expected background or panel
+- labels or controls offset from an expected center target
 - inconsistent alignment and spacing
 - invalid sizes
 - children outside clipped parents

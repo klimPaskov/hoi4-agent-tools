@@ -129,6 +129,253 @@ function contains(outer: GuiRect, inner: GuiRect, tolerance = 0.01): boolean {
   );
 }
 
+function visualTextBounds(element: GuiSceneElement): GuiRect {
+  const text = element.text;
+  if (text === undefined) return element.unclippedRect;
+  const width = Math.min(element.unclippedRect.width, text.measuredWidth);
+  const height = Math.min(element.unclippedRect.height, text.measuredHeight);
+  const x =
+    text.horizontalAlignment === 'center'
+      ? element.unclippedRect.x + (element.unclippedRect.width - width) / 2
+      : text.horizontalAlignment === 'right'
+        ? element.unclippedRect.x + element.unclippedRect.width - width
+        : element.unclippedRect.x;
+  const y =
+    text.verticalAlignment === 'center'
+      ? element.unclippedRect.y + (element.unclippedRect.height - height) / 2
+      : text.verticalAlignment === 'bottom'
+        ? element.unclippedRect.y + element.unclippedRect.height - height
+        : element.unclippedRect.y;
+  return { x, y, width, height };
+}
+
+function centreDelta(inner: GuiRect, outer: GuiRect): { x: number; y: number } {
+  return {
+    x: inner.x + inner.width / 2 - (outer.x + outer.width / 2),
+    y: inner.y + inner.height / 2 - (outer.y + outer.height / 2),
+  };
+}
+
+function elementMatches(element: GuiSceneElement, selector: string): boolean {
+  return element.name === selector || element.id === selector || element.sourceId === selector;
+}
+
+function expectedElements(scene: GuiScene, selector: string): GuiSceneElement[] {
+  return scene.elements.filter((element) => elementMatches(element, selector));
+}
+
+function validateScenarioExpectations(scene: GuiScene, diagnostics: DiagnosticCollector): void {
+  const { expectations } = scene.scenario;
+  const missing = new Set<string>();
+  const requireElements = (selector: string): GuiSceneElement[] => {
+    const matches = expectedElements(scene, selector);
+    if (matches.length === 0 && !missing.has(selector)) {
+      missing.add(selector);
+      diagnostics.push({
+        code: 'GUI_EXPECTED_ELEMENT_MISSING',
+        severity: 'error',
+        category: 'design',
+        message: `Scenario ${scene.scenario.id} expects GUI element ${selector}, but the window does not contain it.`,
+        details: { scenarioId: scene.scenario.id, element: selector },
+      });
+    }
+    return matches;
+  };
+  for (const selector of expectations.visible) {
+    const matches = requireElements(selector);
+    if (matches.length > 0 && !matches.some(({ visible }) => visible))
+      diagnostics.push({
+        code: 'GUI_EXPECTED_ELEMENT_HIDDEN',
+        severity: 'error',
+        category: 'design',
+        message: `Scenario ${scene.scenario.id} expects ${selector} to be visible, but every matching element is hidden.`,
+        details: { scenarioId: scene.scenario.id, element: selector },
+      });
+  }
+  for (const selector of expectations.hidden) {
+    const matches = requireElements(selector);
+    if (matches.some(({ visible }) => visible))
+      diagnostics.push({
+        code: 'GUI_EXPECTED_ELEMENT_VISIBLE',
+        severity: 'error',
+        category: 'design',
+        message: `Scenario ${scene.scenario.id} expects ${selector} to be hidden, but a matching element is visible.`,
+        details: { scenarioId: scene.scenario.id, element: selector },
+      });
+  }
+  for (const [selector, ownerSelector] of Object.entries(expectations.containedBy)) {
+    const elements = requireElements(selector).filter(({ visible }) => visible);
+    const owners = requireElements(ownerSelector).filter(({ visible }) => visible);
+    for (const element of elements) {
+      if (owners.some((owner) => contains(owner.unclippedRect, element.unclippedRect, 0.5)))
+        continue;
+      diagnostics.push(
+        issue(
+          'GUI_CONTENT_OUTSIDE_EXPECTED_BACKGROUND',
+          'error',
+          'layout',
+          `Scenario ${scene.scenario.id} places ${selector} outside its expected background or panel ${ownerSelector}.`,
+          element,
+          {
+            scenarioId: scene.scenario.id,
+            element: selector,
+            expectedContainer: ownerSelector,
+          },
+        ),
+      );
+    }
+  }
+  for (const [selector, ownerSelector] of Object.entries(expectations.centeredOn)) {
+    const elements = requireElements(selector).filter(({ visible }) => visible);
+    const owners = requireElements(ownerSelector).filter(({ visible }) => visible);
+    for (const element of elements) {
+      const target = owners
+        .filter((owner) => intersection(owner.unclippedRect, element.unclippedRect) !== undefined)
+        .toSorted((left, right) => area(left.unclippedRect) - area(right.unclippedRect))[0];
+      if (target === undefined) {
+        diagnostics.push(
+          issue(
+            'GUI_EXPECTED_CENTER_TARGET_MISSING',
+            'error',
+            'layout',
+            `Scenario ${scene.scenario.id} cannot center ${selector} because it does not overlap visible target ${ownerSelector}.`,
+            element,
+            { scenarioId: scene.scenario.id, element: selector, target: ownerSelector },
+          ),
+        );
+        continue;
+      }
+      const delta = centreDelta(visualTextBounds(element), target.unclippedRect);
+      const toleranceX = Math.max(2, target.unclippedRect.width * 0.025);
+      const toleranceY = Math.max(2, target.unclippedRect.height * 0.08);
+      if (Math.abs(delta.x) <= toleranceX && Math.abs(delta.y) <= toleranceY) continue;
+      diagnostics.push(
+        issue(
+          'GUI_EXPECTED_CENTERING_MISMATCH',
+          'error',
+          'layout',
+          `Scenario ${scene.scenario.id} offsets ${selector} from the center of ${ownerSelector} by ${delta.x.toFixed(2)}px horizontally and ${delta.y.toFixed(2)}px vertically.`,
+          element,
+          {
+            scenarioId: scene.scenario.id,
+            element: selector,
+            target: ownerSelector,
+            deltaX: delta.x,
+            deltaY: delta.y,
+          },
+        ),
+      );
+    }
+  }
+}
+
+function validateButtonLabelsAndBackgrounds(
+  scene: GuiScene,
+  diagnostics: DiagnosticCollector,
+): void {
+  const visible = scene.elements.filter((element) => element.visible);
+  const byId = new Map(scene.elements.map((element) => [element.id, element]));
+  const buttons = visible.filter(
+    (element) => element.clickable && /button/iu.test(element.elementType),
+  );
+  const labels = visible.filter((element) => element.text !== undefined);
+  const inferredButtonByLabel = new Map<string, GuiSceneElement>();
+  const inferredLabelCountByButton = new Map<string, number>();
+  for (const label of labels) {
+    if (buttons.some(({ id }) => id === label.id)) continue;
+    const parentButton =
+      label.parentId === undefined ? undefined : buttons.find(({ id }) => id === label.parentId);
+    const overlayButton = buttons
+      .filter((button) => {
+        if (button.zIndex > label.zIndex || button.id === label.id) return false;
+        const overlap = intersection(button.unclippedRect, label.unclippedRect);
+        return (
+          overlap !== undefined && area(overlap) / Math.max(1, area(label.unclippedRect)) >= 0.6
+        );
+      })
+      .toSorted((left, right) => area(left.unclippedRect) - area(right.unclippedRect))[0];
+    const inferredButton = parentButton ?? overlayButton;
+    if (inferredButton === undefined) continue;
+    inferredButtonByLabel.set(label.id, inferredButton);
+    inferredLabelCountByButton.set(
+      inferredButton.id,
+      (inferredLabelCountByButton.get(inferredButton.id) ?? 0) + 1,
+    );
+  }
+  for (const label of labels) {
+    const ownButton = buttons.find(({ id }) => id === label.id);
+    const inferredButton = inferredButtonByLabel.get(label.id);
+    const button =
+      ownButton ??
+      (inferredButton !== undefined && inferredLabelCountByButton.get(inferredButton.id) === 1
+        ? inferredButton
+        : undefined);
+    if (button !== undefined) {
+      const delta = centreDelta(visualTextBounds(label), button.unclippedRect);
+      const toleranceX = Math.max(2, button.unclippedRect.width * 0.025);
+      const toleranceY = Math.max(2, button.unclippedRect.height * 0.08);
+      if (Math.abs(delta.x) > toleranceX || Math.abs(delta.y) > toleranceY)
+        diagnostics.push(
+          issue(
+            'GUI_BUTTON_LABEL_OFF_CENTER',
+            'warning',
+            'layout',
+            `${label.name} is offset from button ${button.name} by ${delta.x.toFixed(2)}px horizontally and ${delta.y.toFixed(2)}px vertically in scenario ${scene.scenario.id}.`,
+            label,
+            {
+              scenarioId: scene.scenario.id,
+              label: label.name,
+              button: button.name,
+              deltaX: delta.x,
+              deltaY: delta.y,
+            },
+          ),
+        );
+    }
+
+    let parent = label.parentId === undefined ? undefined : byId.get(label.parentId);
+    while (parent !== undefined && parent.sprite === undefined)
+      parent = parent.parentId === undefined ? undefined : byId.get(parent.parentId);
+    if (
+      parent !== undefined &&
+      !contains(parent.unclippedRect, label.unclippedRect, 0.5) &&
+      intersection(parent.unclippedRect, label.unclippedRect) !== undefined
+    )
+      diagnostics.push(
+        issue(
+          'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
+          'warning',
+          'layout',
+          `${label.name} crosses the visible background boundary of ${parent.name} in scenario ${scene.scenario.id}.`,
+          label,
+          { scenarioId: scene.scenario.id, element: label.name, background: parent.name },
+        ),
+      );
+  }
+  for (const control of visible.filter(
+    (element) => element.clickable && element.text === undefined,
+  )) {
+    let parent = control.parentId === undefined ? undefined : byId.get(control.parentId);
+    while (parent !== undefined && parent.sprite === undefined)
+      parent = parent.parentId === undefined ? undefined : byId.get(parent.parentId);
+    if (
+      parent !== undefined &&
+      !contains(parent.unclippedRect, control.unclippedRect, 0.5) &&
+      intersection(parent.unclippedRect, control.unclippedRect) !== undefined
+    )
+      diagnostics.push(
+        issue(
+          'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
+          'warning',
+          'layout',
+          `${control.name} crosses the visible background boundary of ${parent.name} in scenario ${scene.scenario.id}.`,
+          control,
+          { scenarioId: scene.scenario.id, element: control.name, background: parent.name },
+        ),
+      );
+  }
+}
+
 function sameRect(left: GuiRect, right: GuiRect): boolean {
   return (
     Math.abs(left.x - right.x) < 0.01 &&
@@ -1391,17 +1638,28 @@ export async function validateGuiScene(
     };
   }
   const diagnostics = validationCollector();
-  const work = new GuiValidationWorkBudget();
-  diagnostics.pushMany(scene.diagnostics);
-  validateOverlapAndGeometry(scene, diagnostics, work);
-  validateAlignmentAndSpacing(scene, diagnostics, work);
-  validateReferencesAndScript(graph, scene, diagnostics);
-  validateScrollAndTabs(scene, diagnostics);
+  for (const currentScene of [scene, ...relatedScenes]) {
+    const sceneDiagnostics = validationCollector();
+    const work = new GuiValidationWorkBudget();
+    sceneDiagnostics.pushMany(currentScene.diagnostics);
+    validateOverlapAndGeometry(currentScene, sceneDiagnostics, work);
+    validateAlignmentAndSpacing(currentScene, sceneDiagnostics, work);
+    validateButtonLabelsAndBackgrounds(currentScene, sceneDiagnostics);
+    validateScenarioExpectations(currentScene, sceneDiagnostics);
+    validateReferencesAndScript(graph, currentScene, sceneDiagnostics);
+    validateScrollAndTabs(currentScene, sceneDiagnostics);
+    diagnostics.pushMany(
+      sceneDiagnostics.values().map((diagnostic) => ({
+        ...diagnostic,
+        details: { ...diagnostic.details, scenarioId: currentScene.scenario.id },
+      })),
+    );
+  }
   const selectedSpriteNames = new Set<string>();
-  for (const element of scene.elements)
-    if (element.sprite !== undefined) selectedSpriteNames.add(element.sprite.spriteName);
+  for (const currentScene of [scene, ...relatedScenes])
+    for (const element of currentScene.elements)
+      if (element.sprite !== undefined) selectedSpriteNames.add(element.sprite.spriteName);
   await validateGuiAnimationsInto(graph, files, selectedSpriteNames, catalog, diagnostics);
-  if (relatedScenes.length > 0) validateResolutionDriftInto([scene, ...relatedScenes], diagnostics);
   return validationResult(diagnostics.values(), [
     'GUI_VALIDATION_DIAGNOSTICS_TRUNCATED',
     'GUI_VALIDATION_COMPARISON_BUDGET_BLOCKED',
@@ -1411,6 +1669,14 @@ export async function validateGuiScene(
     'GUI_TEXT_OVERFLOW',
     'GUI_INCONSISTENT_ALIGNMENT',
     'GUI_INCONSISTENT_SPACING',
+    'GUI_BUTTON_LABEL_OFF_CENTER',
+    'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
+    'GUI_EXPECTED_ELEMENT_MISSING',
+    'GUI_EXPECTED_ELEMENT_HIDDEN',
+    'GUI_EXPECTED_ELEMENT_VISIBLE',
+    'GUI_CONTENT_OUTSIDE_EXPECTED_BACKGROUND',
+    'GUI_EXPECTED_CENTER_TARGET_MISSING',
+    'GUI_EXPECTED_CENTERING_MISMATCH',
     'GUI_INVALID_SIZE',
     'GUI_CHILD_OUTSIDE_CLIPPED_PARENT',
     'GUI_CLICK_BOUNDS_MISMATCH',

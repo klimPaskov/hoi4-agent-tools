@@ -273,6 +273,7 @@ describe('MCP coding-agent workflows', () => {
           scenario,
           states: ['normal', 'hover', 'selected'],
           resolutions: [{ width: 960, height: 540 }],
+          relatedScenarios: [comparisonScenario],
           comparisonScenario,
         },
       }),
@@ -283,6 +284,7 @@ describe('MCP coding-agent workflows', () => {
       data: {
         windowName: 'synthetic_gui_window',
         stateCount: 3,
+        scenarioCount: 2,
         resolutionCount: 1,
         offlineRepresentation: true,
       },

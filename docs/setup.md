@@ -1,6 +1,6 @@
 # Setup
 
-HOI4 Agent Tools requires Node.js 22 or 24.
+HOI4 Agent Tools requires Node.js 22.19 or later in the Node 22 line, or Node.js 24.
 
 ## Install
 

@@ -175,7 +175,7 @@ describe('offline package and Registry metadata', () => {
       'LICENSE',
       'SECURITY.md',
     ]);
-    expect(packageJson.engines.node).toBe('^22.0.0 || ^24.0.0');
+    expect(packageJson.engines.node).toBe('^22.19.0 || ^24.0.0');
     expect(packageJson.publishConfig).toEqual({ access: 'public', provenance: true });
     expect(REQUIRED_PACKAGE_FILES).toContain('server.json');
   });
@@ -185,8 +185,8 @@ describe('offline package and Registry metadata', () => {
       path.join(projectRoot, '.github', 'workflows', 'release.yml'),
       'utf8',
     );
-    expect(workflow).toContain('PUBLISHER_VERSION="1.8.0"');
-    expect(workflow).toContain('fb9d2c15f7977b96cd162d5cd16f1663aa8c3f3990853fdbf81c66a98ae915e7');
+    expect(workflow).toContain('PUBLISHER_VERSION="1.8.1"');
+    expect(workflow).toContain('f7937a7908096f63147658e13f0f63a393a1c9fc722a2d10017593940d36e59e');
     expect(workflow).toContain('sha256sum --check --strict publisher-checksum.txt');
     expect(workflow).toContain('./mcp-publisher validate');
     expect(workflow).not.toContain('/latest/download/');

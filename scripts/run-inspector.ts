@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-inspector-'));
@@ -38,6 +39,24 @@ const publicToolNames = [
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
 
+interface InspectorPackageManifest {
+  bin?: string | Record<string, string>;
+}
+
+const inspectorPackagePath = fileURLToPath(
+  import.meta.resolve('@modelcontextprotocol/inspector/package.json'),
+);
+const inspectorPackage = JSON.parse(
+  await readFile(inspectorPackagePath, 'utf8'),
+) as InspectorPackageManifest;
+const inspectorBin =
+  typeof inspectorPackage.bin === 'string'
+    ? inspectorPackage.bin
+    : inspectorPackage.bin?.['mcp-inspector'];
+if (inspectorBin === undefined || path.isAbsolute(inspectorBin))
+  throw new Error('The official MCP Inspector package does not declare a relative executable.');
+const inspectorExecutable = path.resolve(path.dirname(inspectorPackagePath), inspectorBin);
+
 interface InspectorRun {
   code: number;
   stderr: string;
@@ -54,10 +73,16 @@ async function runInspector(
 ): Promise<InspectorRun> {
   const executable = process.execPath;
   const args = [
-    path.join(root, 'node_modules', '@modelcontextprotocol', 'inspector', 'cli', 'build', 'cli.js'),
+    inspectorExecutable,
     '--cli',
     'node',
     path.join(root, 'dist', 'bin', 'stdio.js'),
+    '-e',
+    `HOI4_AGENT_CONFIG=${config}`,
+    '--connect-timeout',
+    '60000',
+    '--format',
+    'json',
     '--method',
     method,
     ...methodArguments,
@@ -79,9 +104,18 @@ async function runInspector(
 }
 
 function successfulJson(run: InspectorRun, label: string): unknown {
-  if (run.code !== 0) throw new Error(`${label} failed\n${run.stderr}`);
+  if (run.code !== 0)
+    throw new Error(`${label} failed\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}`);
   try {
-    return JSON.parse(run.stdout.trim()) as unknown;
+    const parsed = JSON.parse(run.stdout.trim()) as unknown;
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      'result' in parsed
+    )
+      return parsed.result;
+    return parsed;
   } catch {
     throw new Error(`${label} returned non-JSON stdout\n${run.stdout}`);
   }
@@ -199,6 +233,8 @@ try {
       '--tool-name',
       'hoi4.event_inspect',
       '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
       'mode=scan',
     ]),
     'Inspector hoi4.event_inspect',
@@ -243,6 +279,8 @@ try {
       '--tool-name',
       'hoi4.event_render',
       '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
       'view=overview',
       'includeHtml=false',
     ]),
@@ -259,6 +297,8 @@ try {
       '--tool-name',
       'hoi4.event_compare',
       '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
       `proposedSources=${JSON.stringify([{ relativePath: 'events/inspector.txt', source: proposedSource }])}`,
       'render=false',
     ]),
@@ -272,6 +312,8 @@ try {
     await runInspector('tools/call', [
       '--tool-name',
       'hoi4.tech_inspect',
+      '--tool-arg',
+      'workspaceId=inspector',
       '--tool-arg',
       'mode=explain',
       '--tool-arg',
@@ -287,6 +329,8 @@ try {
     await runInspector('tools/call', [
       '--tool-name',
       'hoi4.tech_render',
+      '--tool-arg',
+      'workspaceId=inspector',
       '--tool-arg',
       'view=folder',
       '--tool-arg',
@@ -307,6 +351,8 @@ try {
       '--tool-name',
       'hoi4.tech_compare',
       '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
       `proposedSources=${JSON.stringify([{ relativePath: 'common/technologies/inspector.txt', source: proposedTechnologySource }])}`,
       '--tool-arg',
       'render=false',
@@ -321,6 +367,8 @@ try {
     await runInspector('tools/call', [
       '--tool-name',
       'hoi4.probability_inspect',
+      '--tool-arg',
+      'workspaceId=inspector',
       '--tool-arg',
       'adapter=national_focus_ai_will_do',
       '--tool-arg',

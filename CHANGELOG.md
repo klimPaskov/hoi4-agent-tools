@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 - 2026-08-09
+
+- Added named value-driven scripted-GUI scenario matrices with deterministic SVG, PNG, JSON, and per-element visibility, movement, size, text, and frame-change evidence.
+- Added scenario assertions for visible and hidden elements, background or panel containment, and exact label-to-control centering, with source-linked diagnostics across every supplied variant.
+- Modelled native HOI4 button-text centering and added automatic diagnostics for visibly off-center labels and text or controls crossing a parent background boundary.
+- Updated the production MCP SDK to 1.30.0, the official Inspector to 2.1.0, the Registry publisher to 1.8.1, and patched dependencies; the dependency audit reports no known vulnerabilities.
+- Updated the Inspector harness for the current CLI entry point, result envelope, explicit environment forwarding, and longer connection startup budget.
+- Generalized installed-game integration tests so mods without their own focus, event, or technology definitions still qualify and use the available vanilla-backed analysis surfaces.
+
 ## 2.3.13 - 2026-08-06
 
 - Repacked sparse sibling fan-outs around their structural parent instead of preserving avoidable long prerequisite connectors.

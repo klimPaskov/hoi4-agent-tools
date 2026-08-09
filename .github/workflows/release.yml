@@ -722,7 +722,7 @@ jobs:
       - name: Install and validate the pinned MCP Registry publisher
         shell: bash
         run: |
-          PUBLISHER_VERSION="1.8.0"
+          PUBLISHER_VERSION="1.8.1"
           RELEASE_BASE="https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}"
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output mcp-publisher.tar.gz \
@@ -730,7 +730,7 @@ jobs:
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output registry-checksums.txt \
             "${RELEASE_BASE}/registry_${PUBLISHER_VERSION}_checksums.txt"
-          echo "fb9d2c15f7977b96cd162d5cd16f1663aa8c3f3990853fdbf81c66a98ae915e7  registry-checksums.txt" | sha256sum --check --strict
+          echo "f7937a7908096f63147658e13f0f63a393a1c9fc722a2d10017593940d36e59e  registry-checksums.txt" | sha256sum --check --strict
           grep '  mcp-publisher_linux_amd64.tar.gz$' registry-checksums.txt > publisher-checksum.txt
           sed -i 's#mcp-publisher_linux_amd64.tar.gz#mcp-publisher.tar.gz#' publisher-checksum.txt
           sha256sum --check --strict publisher-checksum.txt

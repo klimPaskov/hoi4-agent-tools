@@ -528,18 +528,24 @@ function frameFor(
 
 function alignment(
   attributes: Record<string, GuiPropertyValue>,
+  buttonText: boolean,
 ): Pick<GuiTextLayout, 'horizontalAlignment' | 'verticalAlignment'> {
-  const format = scalarString(property(attributes, 'format'))?.toLowerCase() ?? '';
+  const explicitFormat = scalarString(property(attributes, 'format'))?.toLowerCase();
+  const format = explicitFormat ?? '';
   const horizontalAlignment = format.includes('center')
     ? 'center'
     : format.includes('right')
       ? 'right'
-      : 'left';
+      : buttonText && explicitFormat === undefined
+        ? 'center'
+        : 'left';
   const verticalAlignment = format.includes('bottom')
     ? 'bottom'
     : format.includes('center')
       ? 'center'
-      : 'top';
+      : buttonText && explicitFormat === undefined
+        ? 'center'
+        : 'top';
   return { horizontalAlignment, verticalAlignment };
 }
 
@@ -793,7 +799,8 @@ async function layoutElement(
     }
   }
 
-  const rawText = scalarString(property(definition.attributes, 'text', 'buttonText'));
+  const rawButtonText = scalarString(property(definition.attributes, 'buttonText'));
+  const rawText = scalarString(property(definition.attributes, 'text')) ?? rawButtonText;
   let text: GuiTextLayout | undefined;
   if (rawText !== undefined) {
     const resolved = resolveTokenText(rawText, scenario, context.localisation, rowValues);
@@ -853,7 +860,7 @@ async function layoutElement(
       measuredWidth,
       measuredHeight,
       metricSource: wrapped.metricSource,
-      ...alignment(definition.attributes),
+      ...alignment(definition.attributes, rawButtonText !== undefined),
       ...(fontName === undefined ? {} : { fontName }),
       glyphLines,
       overflowX: width > 0 && measuredWidth > width + 0.01,

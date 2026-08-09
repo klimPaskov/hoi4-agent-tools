@@ -24,11 +24,31 @@ Rewrite once, then inspect and render the result.
 
 1. Inspect the root window and its linked GUI, GFX, scripted-GUI, and localisation source.
 2. Render the normal state and the states relevant to the task, such as hover, selected, disabled, warning, empty list, full list, minimum value, maximum value, or long text.
-3. Check common resolutions and UI scales when positioning or clipping can change.
-4. Fix the existing mod-owned file with targeted patches, a complete supported source replacement, or a structured helper replacement.
-5. Rewrite once, then inspect and render the result.
+3. Add `relatedScenarios` for every meaningful value-driven version of the window, such as open and closed panels, empty and populated lists, unlocked and locked actions, low and high values, and alternate scripted-GUI property results.
+4. Check common resolutions and UI scales when positioning or clipping can change.
+5. Fix the existing mod-owned file with targeted patches, a complete supported source replacement, or a structured helper replacement.
+6. Rewrite once, then inspect and render the result.
 
-Inspection checks missing assets and localisation, invalid sizes, overlap, clipping, overflow, conflicting click regions, invisible blockers, broken parents or contexts, list-row cuts, state conflicts, trigger/effect gaps, and resolution drift.
+Inspection checks missing assets and localisation, invalid sizes, overlap, clipping, overflow, button-label centering, content crossing a background boundary, conflicting click regions, invisible blockers, broken parents or contexts, list-row cuts, state conflicts, trigger/effect gaps, and resolution drift. `hoi4.gui_render` returns a scripted-scenario gallery and JSON delta report alongside the generic state and resolution galleries.
+
+Preview scenarios can include exact layout expectations:
+
+```json
+{
+  "id": "populated-unlocked",
+  "flags": { "panel_open": true },
+  "lists": { "target_list": [{ "id": 1, "label": "First target" }] },
+  "visibility": { "target_list": true, "confirm_button": true },
+  "expectations": {
+    "visible": ["target_list", "confirm_button"],
+    "hidden": ["empty_message"],
+    "containedBy": { "confirm_button": "main_panel" },
+    "centeredOn": { "confirm_label": "confirm_button" }
+  }
+}
+```
+
+Selectors accept an element name, instance ID, or source ID. Visibility expectations diagnose elements that are missing or in the wrong scripted version. `containedBy` diagnoses text or controls that leave their intended background or panel. `centeredOn` uses rendered glyph bounds, so it catches labels that occupy the right text box but are visibly off-center on the button.
 
 Broad inspection indexes localisation actually referenced by GUI source and returns a connected workspace projection when the complete source graph is very large. The resource records full and returned node and edge counts, so an agent can identify the relevant window without loading unrelated vanilla UI into its prompt. Rendering remains targeted to the selected root, state, and resolution.
 

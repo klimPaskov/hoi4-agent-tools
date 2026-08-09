@@ -11,6 +11,7 @@ import {
 
 const scalarSchema = z.union([z.string().max(16_384), z.number(), z.boolean()]);
 const objectSchema = z.record(z.string(), scalarSchema);
+const elementNameSchema = z.string().min(1).max(256);
 const previewStateSchema = z.enum([
   'normal',
   'hover',
@@ -153,6 +154,15 @@ const GuiPreviewScenarioBodySchema = z
     scrollOffsets: z.record(z.string(), z.number().min(0)).default({}),
     guiCosts: z.record(z.string(), z.number()).default({}),
     scriptCosts: z.record(z.string(), z.number()).default({}),
+    expectations: z
+      .object({
+        visible: z.array(elementNameSchema).max(10_000).default([]),
+        hidden: z.array(elementNameSchema).max(10_000).default([]),
+        containedBy: z.record(elementNameSchema, elementNameSchema).default({}),
+        centeredOn: z.record(elementNameSchema, elementNameSchema).default({}),
+      })
+      .strict()
+      .default({ visible: [], hidden: [], containedBy: {}, centeredOn: {} }),
   })
   .strict()
   .superRefine((scenario, context) => {

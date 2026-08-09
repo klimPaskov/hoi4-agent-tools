@@ -463,6 +463,7 @@ export interface GuiStudioRenderInput {
   scenario: unknown;
   states?: GuiPreviewState[];
   resolutions?: { width: number; height: number; uiScale?: number }[];
+  relatedScenarios?: unknown[];
   comparisonScenario?: unknown;
   principal?: string;
   signal?: AbortSignal;
@@ -523,6 +524,79 @@ function scenarioWith(
   patch: Partial<GuiPreviewScenario>,
 ): GuiPreviewScenario {
   return parsePreviewScenario({ ...base, ...patch });
+}
+
+function assertUniqueScenarioIds(scenarios: readonly GuiPreviewScenario[]): void {
+  const seen = new Set<string>();
+  for (const scenario of scenarios) {
+    if (seen.has(scenario.id)) {
+      throw new ServiceError(
+        'GUI_SCENARIO_ID_DUPLICATE',
+        `GUI scenario id must be unique within one request: ${scenario.id}`,
+        { scenarioId: scenario.id },
+      );
+    }
+    seen.add(scenario.id);
+  }
+}
+
+function scenarioMatrixEvidence(scenes: readonly GuiScene[]): Record<string, unknown> {
+  const primary = scenes[0];
+  if (primary === undefined) return { offline: true, scenarios: [], changes: [] };
+  const elementKey = (element: GuiScene['elements'][number]) =>
+    `${element.sourceId}#${element.rowIndex ?? 0}`;
+  const primaryByKey = new Map(primary.elements.map((element) => [elementKey(element), element]));
+  return {
+    offline: true,
+    scenarios: scenes.map((scene) => ({
+      scenario: scene.scenario,
+      sourceRevision: scene.sourceRevision,
+      fidelity: scene.fidelity,
+      visibleElements: scene.elements
+        .filter(({ visible }) => visible)
+        .map(({ id, name }) => ({ id, name })),
+    })),
+    changes: scenes.slice(1).map((scene) => {
+      const currentByKey = new Map(scene.elements.map((element) => [elementKey(element), element]));
+      const keys = [...new Set([...primaryByKey.keys(), ...currentByKey.keys()])].sort(
+        (left, right) => compareCodeUnits(left, right),
+      );
+      const shown: string[] = [];
+      const hidden: string[] = [];
+      const moved: string[] = [];
+      const resized: string[] = [];
+      const textChanged: string[] = [];
+      const frameChanged: string[] = [];
+      for (const key of keys) {
+        const before = primaryByKey.get(key);
+        const after = currentByKey.get(key);
+        if (before?.visible !== true && after?.visible === true) shown.push(after.name);
+        if (before?.visible === true && after?.visible !== true) hidden.push(before.name);
+        if (before === undefined || after === undefined) continue;
+        if (
+          before.unclippedRect.x !== after.unclippedRect.x ||
+          before.unclippedRect.y !== after.unclippedRect.y
+        )
+          moved.push(after.name);
+        if (
+          before.unclippedRect.width !== after.unclippedRect.width ||
+          before.unclippedRect.height !== after.unclippedRect.height
+        )
+          resized.push(after.name);
+        if (before.text?.text !== after.text?.text) textChanged.push(after.name);
+        if (before.sprite?.frame !== after.sprite?.frame) frameChanged.push(after.name);
+      }
+      return {
+        scenarioId: scene.scenario.id,
+        shown,
+        hidden,
+        moved,
+        resized,
+        textChanged,
+        frameChanged,
+      };
+    }),
+  };
 }
 
 function fullImage(render: GuiRenderResult): GuiRenderResult['images'][number] {
@@ -710,6 +784,7 @@ export class ScriptedGuiStudio {
     input.signal?.throwIfAborted();
     const scenario = parsePreviewScenario(input.scenario);
     const relatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
+    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const scanned = await this.scanWindow(
       input.workspaceId,
       input.windowName,
@@ -802,6 +877,8 @@ export class ScriptedGuiStudio {
     const budget = new RenderBudget();
     const workspace = this.resolver.get(input.workspaceId, input.principal);
     const scenario = parsePreviewScenario(input.scenario);
+    const relatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
+    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const baselineScenario = parsePreviewScenario(
       input.comparisonScenario ?? { ...scenario, id: `${scenario.id}-comparison`, state: 'normal' },
     );
@@ -810,7 +887,11 @@ export class ScriptedGuiStudio {
       input.windowName,
       input.principal,
       input.signal,
-      [scenario.language, baselineScenario.language],
+      [
+        scenario.language,
+        baselineScenario.language,
+        ...relatedScenarios.map(({ language }) => language),
+      ],
     );
     const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget);
     const scene = await buildGuiScene(
@@ -821,6 +902,33 @@ export class ScriptedGuiStudio {
       catalog,
     );
     const render = await renderGuiScene(scene, undefined, input.signal, budget);
+    const scenarioScenes: GuiScene[] = [scene];
+    const scenarioItems: GalleryItem[] = [];
+    for (const variantScenario of [scenario, ...relatedScenarios]) {
+      input.signal?.throwIfAborted();
+      const variantScene =
+        variantScenario.id === scenario.id
+          ? scene
+          : await buildGuiScene(
+              scanned.graph,
+              scanned.files,
+              input.windowName,
+              variantScenario,
+              catalog,
+            );
+      if (variantScene !== scene) scenarioScenes.push(variantScene);
+      const variantRender =
+        variantScene === scene
+          ? render
+          : await renderGuiScene(variantScene, ['full'], input.signal, new RenderBudget());
+      const image = fullImage(variantRender);
+      scenarioItems.push({
+        label: variantScenario.description ?? variantScenario.id,
+        png: image.png,
+        width: image.width,
+        height: image.height,
+      });
+    }
     const stateScenes: GuiScene[] = [];
     const stateItems: GalleryItem[] = [];
     for (const state of input.states ?? [...galleryStates]) {
@@ -894,7 +1002,7 @@ export class ScriptedGuiStudio {
       scanned.graph,
       scene,
       scanned.files,
-      resolutionScenes,
+      scenarioScenes.slice(1),
       catalog,
     );
     const stateValidation = validateStateMatrix(stateScenes);
@@ -906,28 +1014,46 @@ export class ScriptedGuiStudio {
     validation.checks.push(...stateValidation.checks, ...resolutionValidation.checks);
     const completeValidation = withGraphDiagnostics(scanned.graph, validation);
 
+    const scenarioGallerySvg = renderGallerySvg(
+      `${input.windowName} scripted scenario matrix`,
+      scenarioItems,
+    );
     const stateGallerySvg = renderGallerySvg(`${input.windowName} state matrix`, stateItems);
     const resolutionGallerySvg = renderGallerySvg(
       `${input.windowName} resolution and UI-scale matrix`,
       resolutionItems,
     );
+    const scenarioGallerySize = galleryDimensions(scenarioItems);
     const stateGallerySize = galleryDimensions(stateItems);
     const resolutionGallerySize = galleryDimensions(resolutionItems);
-    budget.reserve(stateGallerySize.width, stateGallerySize.height, 'GUI state gallery PNG');
-    budget.reserve(
+    const galleryBudget = new RenderBudget();
+    galleryBudget.reserve(
+      scenarioGallerySize.width,
+      scenarioGallerySize.height,
+      'GUI scripted scenario gallery PNG',
+    );
+    galleryBudget.reserve(stateGallerySize.width, stateGallerySize.height, 'GUI state gallery PNG');
+    galleryBudget.reserve(
       resolutionGallerySize.width,
       resolutionGallerySize.height,
       'GUI resolution gallery PNG',
     );
-    budget.reserveRasterOperation(
+    galleryBudget.reserveRasterOperation(
+      `gui-gallery:${sha256Bytes(scenarioGallerySvg)}`,
+      'GUI scripted scenario gallery SVG rasterization',
+    );
+    galleryBudget.reserveRasterOperation(
       `gui-gallery:${sha256Bytes(stateGallerySvg)}`,
       'GUI state gallery SVG rasterization',
     );
-    budget.reserveRasterOperation(
+    galleryBudget.reserveRasterOperation(
       `gui-gallery:${sha256Bytes(resolutionGallerySvg)}`,
       'GUI resolution gallery SVG rasterization',
     );
-    const [stateGalleryPng, resolutionGalleryPng] = await Promise.all([
+    const [scenarioGalleryPng, stateGalleryPng, resolutionGalleryPng] = await Promise.all([
+      sharp(Buffer.from(scenarioGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
+        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+        .toBuffer(),
       sharp(Buffer.from(stateGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
         .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
         .toBuffer(),
@@ -983,7 +1109,28 @@ export class ScriptedGuiStudio {
       'application/json',
       `${canonicalJson(completeValidation)}\n`,
       'gui-validation-report',
-      [scene, ...stateScenes, ...resolutionScenes],
+      [...scenarioScenes, ...stateScenes, ...resolutionScenes],
+    );
+    add(
+      `${slug}-scenario-matrix.svg`,
+      'image/svg+xml',
+      scenarioGallerySvg,
+      'gui-scripted-scenario-matrix',
+      scenarioScenes,
+    );
+    add(
+      `${slug}-scenario-matrix.png`,
+      'image/png',
+      scenarioGalleryPng,
+      'gui-scripted-scenario-matrix',
+      scenarioScenes,
+    );
+    add(
+      `${slug}-scenario-matrix.json`,
+      'application/json',
+      `${canonicalJson(scenarioMatrixEvidence(scenarioScenes))}\n`,
+      'gui-scripted-scenario-matrix-json',
+      scenarioScenes,
     );
     add(
       `${slug}-state-matrix.svg`,
@@ -1042,6 +1189,7 @@ export class ScriptedGuiStudio {
       artifacts: stored,
       filesScanned: scanned.graph.filesScanned,
       render,
+      scenarioScenes,
       stateScenes,
       resolutionScenes,
       comparison,
