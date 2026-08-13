@@ -296,6 +296,7 @@ const artifactLogicalBatchMaxBytes = 536_870_912;
 const artifactHashYieldBytes = 16_777_216;
 const artifactPreflightYieldEntries = 256;
 const interruptedManifestMinimumAgeMs = 1_000;
+const artifactTemporaryPrefix = '.artifact-tmp-';
 const ownedArtifactContent = Symbol('ownedArtifactContent');
 const precomputedArtifactSha256 = Symbol('precomputedArtifactSha256');
 export const chunkedArtifactIndexMimeType = 'application/json';
@@ -523,13 +524,21 @@ async function artifactUsage(
           'Artifact storage contains a symbolic link or junction',
         );
       }
+      if (child.isFile() && child.name.startsWith(artifactTemporaryPrefix)) continue;
       const candidate = await containedGeneratedPath(
         root,
         path.relative(root, path.join(directory, child.name)),
       );
       if (child.isDirectory()) await walk(candidate);
       else if (child.isFile()) {
-        bytes += (await stat(candidate)).size;
+        let size: number;
+        try {
+          size = (await stat(candidate)).size;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw error;
+        }
+        bytes += size;
         if (child.name.endsWith('.manifest.json')) entries += 1;
         if (!Number.isSafeInteger(bytes)) {
           throw new ServiceError('ARTIFACT_STORAGE_LIMIT', 'Artifact storage size is unsafe');
@@ -648,6 +657,7 @@ async function existingManifestMatches(
     }
     return true;
   } catch (error) {
+    if (error instanceof ServiceError && error.code === 'ARTIFACT_NOT_FOUND') return false;
     if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID') throw error;
     const state = await interruptedManifestState(filePath, expectedBytes, signal);
     if (!state.interrupted) throw error;
@@ -668,7 +678,7 @@ async function publishExclusiveFile(
   signal?.throwIfAborted();
   const temporary = path.join(
     path.dirname(target),
-    `.artifact-tmp-${process.pid}-${randomUUID().replaceAll('-', '')}`,
+    `${artifactTemporaryPrefix}${process.pid}-${randomUUID().replaceAll('-', '')}`,
   );
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
@@ -853,14 +863,31 @@ export class ArtifactStore {
           continue;
         }
         if (!child.isFile() || !child.name.endsWith('.manifest.json')) continue;
-        const metadata = await lstat(candidate);
+        let metadata: Awaited<ReturnType<typeof lstat>>;
+        try {
+          metadata = await lstat(candidate);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw error;
+        }
         let manifest: ArtifactManifest;
         try {
           manifest = await readArtifactManifest(candidate, signal);
         } catch (error) {
+          if (error instanceof ServiceError && error.code === 'ARTIFACT_NOT_FOUND') continue;
           if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID')
             throw error;
-          const interrupted = await interruptedManifestState(candidate, undefined, signal);
+          let interrupted: Awaited<ReturnType<typeof interruptedManifestState>>;
+          try {
+            interrupted = await interruptedManifestState(candidate, undefined, signal);
+          } catch (interruptedError) {
+            if (
+              interruptedError instanceof ServiceError &&
+              interruptedError.code === 'ARTIFACT_NOT_FOUND'
+            )
+              continue;
+            throw interruptedError;
+          }
           if (!interrupted.interrupted) throw error;
           try {
             await unlink(candidate);

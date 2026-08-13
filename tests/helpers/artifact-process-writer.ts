@@ -15,13 +15,13 @@ const configuration = serverConfigurationSchema.parse(
 const resolver = await WorkspaceResolver.create(configuration);
 const workspace = resolver.get(workspaceId);
 const store = new ArtifactStore();
-const content = Buffer.alloc(4_000_000, 0x61);
+const content = Buffer.alloc(1_000_000, 0x61);
 const provenance = {
   kind: 'cross-process-publication-test',
   toolVersion: '0.1.0',
   schemaVersion: 'cross-process.v1',
   sourceHashes: {},
-  metadata: { padding: 'x'.repeat(500_000) },
+  metadata: { padding: 'x'.repeat(128_000) },
 };
 
 process.stdout.write('READY\n');

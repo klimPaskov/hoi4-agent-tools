@@ -4,6 +4,7 @@
 
 - Published artifact contents and provenance manifests atomically across independent MCP processes, preventing event, probability, GUI, and other concurrent inspections from observing partially written manifests.
 - Recovered clearly interrupted zero-filled or truncated provenance manifests during matching writes and storage pruning while continuing to reject arbitrary malformed or tampered manifests.
+- Tolerated temporary-file disappearance during concurrent storage scans without weakening artifact integrity validation.
 - Added cross-process publication, interrupted-write recovery, and fail-closed integrity regressions, then verified event inspection, probability inspection, and artifact-resource workflows against the repaired store.
 
 ## 2.5.0 - 2026-08-09

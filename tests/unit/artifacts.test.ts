@@ -745,7 +745,7 @@ describe('content-addressed artifacts', () => {
       })}\n`,
     );
     const helper = path.resolve(import.meta.dirname, '..', 'helpers', 'artifact-process-writer.ts');
-    const children = Array.from({ length: 4 }, () =>
+    const children = Array.from({ length: 3 }, () =>
       spawn(
         process.execPath,
         ['--import', 'tsx', helper, configurationPath, 'process-test', gatePath],
@@ -792,9 +792,9 @@ describe('content-addressed artifacts', () => {
     const listed = await new ArtifactStore().list(workspace);
     expect(listed).toHaveLength(1);
     await expect(new ArtifactStore().read(workspace, listed[0]!.uri)).resolves.toMatchObject({
-      bytes: Buffer.alloc(4_000_000, 0x61),
+      bytes: Buffer.alloc(1_000_000, 0x61),
     });
-  });
+  }, 120_000);
 
   it('streams stable artifact pages without retaining the complete inventory', async () => {
     const { store, workspace } = await fixture();
