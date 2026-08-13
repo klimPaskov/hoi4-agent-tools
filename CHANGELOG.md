@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1 - 2026-08-13
+
+- Published artifact contents and provenance manifests atomically across independent MCP processes, preventing event, probability, GUI, and other concurrent inspections from observing partially written manifests.
+- Recovered clearly interrupted zero-filled or truncated provenance manifests during matching writes and storage pruning while continuing to reject arbitrary malformed or tampered manifests.
+- Added cross-process publication, interrupted-write recovery, and fail-closed integrity regressions, then verified event inspection, probability inspection, and artifact-resource workflows against the repaired store.
+
 ## 2.5.0 - 2026-08-09
 
 - Added exact continuous-focus coordinates and linked palette IDs to compact national focus inspection results.

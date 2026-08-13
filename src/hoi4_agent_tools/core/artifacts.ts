@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { lstat, mkdir, open, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, lstat, mkdir, open, readFile, readdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { canonicalJson, compareCodeUnits, sha256Bytes } from './canonical.js';
@@ -295,6 +295,7 @@ const artifactManifestMaxBytes = 1_048_576;
 const artifactLogicalBatchMaxBytes = 536_870_912;
 const artifactHashYieldBytes = 16_777_216;
 const artifactPreflightYieldEntries = 256;
+const interruptedManifestMinimumAgeMs = 1_000;
 const ownedArtifactContent = Symbol('ownedArtifactContent');
 const precomputedArtifactSha256 = Symbol('precomputedArtifactSha256');
 export const chunkedArtifactIndexMimeType = 'application/json';
@@ -581,6 +582,117 @@ async function readArtifactManifest(
   }
 }
 
+async function readBoundedManifestBytes(
+  filePath: string,
+  signal?: AbortSignal,
+): Promise<{ bytes: Buffer; metadata: Awaited<ReturnType<typeof lstat>> }> {
+  signal?.throwIfAborted();
+  let metadata;
+  try {
+    metadata = await lstat(filePath);
+  } catch {
+    throw new ServiceError('ARTIFACT_NOT_FOUND', 'Artifact provenance manifest is unavailable');
+  }
+  if (metadata.isSymbolicLink() || !metadata.isFile()) {
+    throw new ServiceError('ARTIFACT_MANIFEST_INVALID', 'Artifact provenance manifest is invalid');
+  }
+  if (metadata.size > artifactManifestMaxBytes) {
+    throw new ServiceError(
+      'ARTIFACT_MANIFEST_LIMIT',
+      'Artifact provenance manifest exceeds its fixed byte limit',
+    );
+  }
+  try {
+    const bytes =
+      signal === undefined ? await readFile(filePath) : await readFile(filePath, { signal });
+    return { bytes, metadata };
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') throw error;
+    throw new ServiceError('ARTIFACT_NOT_FOUND', 'Artifact provenance manifest is unavailable');
+  }
+}
+
+function zeroFilled(bytes: Uint8Array): boolean {
+  return bytes.length === 0 || bytes.every((value) => value === 0);
+}
+
+async function interruptedManifestState(
+  filePath: string,
+  expectedBytes?: string,
+  signal?: AbortSignal,
+): Promise<{ interrupted: boolean; size: number }> {
+  const { bytes, metadata } = await readBoundedManifestBytes(filePath, signal);
+  const expected = expectedBytes === undefined ? undefined : Buffer.from(expectedBytes, 'utf8');
+  const expectedPrefix =
+    expected !== undefined &&
+    bytes.length < expected.length &&
+    expected.subarray(0, bytes.length).equals(bytes);
+  const staleZeroFill =
+    zeroFilled(bytes) && Date.now() - Number(metadata.mtimeMs) >= interruptedManifestMinimumAgeMs;
+  return { interrupted: expectedPrefix || staleZeroFill, size: Number(metadata.size) };
+}
+
+async function existingManifestMatches(
+  filePath: string,
+  expectedBytes: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!(await fileExists(filePath))) return false;
+  try {
+    const manifest = await readArtifactManifest(filePath, signal);
+    if (`${canonicalJson(manifest)}\n` !== expectedBytes) {
+      throw new ServiceError(
+        'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+        'Immutable artifact provenance manifest contains different bytes',
+      );
+    }
+    return true;
+  } catch (error) {
+    if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID') throw error;
+    const state = await interruptedManifestState(filePath, expectedBytes, signal);
+    if (!state.interrupted) throw error;
+    try {
+      await unlink(filePath);
+    } catch (unlinkError) {
+      if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
+    }
+    return false;
+  }
+}
+
+async function publishExclusiveFile(
+  target: string,
+  bytes: Uint8Array | string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  signal?.throwIfAborted();
+  const temporary = path.join(
+    path.dirname(target),
+    `.artifact-tmp-${process.pid}-${randomUUID().replaceAll('-', '')}`,
+  );
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(temporary, 'wx');
+    await handle.writeFile(bytes, signal === undefined ? undefined : { signal });
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    signal?.throwIfAborted();
+    try {
+      await link(temporary, target);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+      throw error;
+    }
+  } finally {
+    if (handle !== undefined) await handle.close().catch(() => undefined);
+    await unlink(temporary).catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    });
+  }
+}
+
 async function readVerifiedArtifactRange(
   filePath: string,
   expectedSha256: string,
@@ -742,7 +854,23 @@ export class ArtifactStore {
         }
         if (!child.isFile() || !child.name.endsWith('.manifest.json')) continue;
         const metadata = await lstat(candidate);
-        const manifest = await readArtifactManifest(candidate, signal);
+        let manifest: ArtifactManifest;
+        try {
+          manifest = await readArtifactManifest(candidate, signal);
+        } catch (error) {
+          if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID')
+            throw error;
+          const interrupted = await interruptedManifestState(candidate, undefined, signal);
+          if (!interrupted.interrupted) throw error;
+          try {
+            await unlink(candidate);
+          } catch (unlinkError) {
+            if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
+          }
+          usage.entries = Math.max(0, usage.entries - 1);
+          usage.bytes = Math.max(0, usage.bytes - interrupted.size);
+          continue;
+        }
         if (child.name !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
           throw new ServiceError(
             'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
@@ -1440,18 +1568,12 @@ export class ArtifactStore {
             );
           }
           if (duplicateManifest === undefined) {
-            const exists = await fileExists(artifact.manifestPath);
+            const exists = await existingManifestMatches(
+              artifact.manifestPath,
+              artifact.manifestBytes,
+              signal,
+            );
             signal?.throwIfAborted();
-            if (
-              exists &&
-              `${canonicalJson(await readArtifactManifest(artifact.manifestPath, signal))}\n` !==
-                artifact.manifestBytes
-            ) {
-              throw new ServiceError(
-                'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
-                'Immutable artifact provenance manifest contains different bytes',
-              );
-            }
             uniqueManifests.set(artifact.manifestPath, { ...artifact, exists });
           }
         }
@@ -1491,17 +1613,25 @@ export class ArtifactStore {
             if (artifact.exists) continue;
             await mkdir(artifact.directory, { recursive: true });
             signal?.throwIfAborted();
-            try {
-              await writeFile(artifact.target, artifact.bytes, {
-                flag: 'wx',
-                ...(signal === undefined ? {} : { signal }),
-              });
+            const created = await publishExclusiveFile(artifact.target, artifact.bytes, signal);
+            if (created) {
               createdTargets.push(artifact.target);
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-                createdTargets.push(artifact.target);
+            } else {
+              try {
+                await readVerifiedArtifactRange(
+                  artifact.target,
+                  artifact.artifact.sha256,
+                  { offset: 0, length: 1 },
+                  undefined,
+                  signal,
+                );
+              } catch (error) {
+                if ((error as Error).name === 'AbortError') throw error;
+                throw new ServiceError(
+                  'ARTIFACT_HASH_COLLISION',
+                  'Artifact path contains different bytes',
+                );
               }
-              throw error;
             }
           }
           for (const artifact of uniqueManifests.values()) {
@@ -1509,17 +1639,24 @@ export class ArtifactStore {
             if (artifact.exists) continue;
             await mkdir(artifact.directory, { recursive: true });
             signal?.throwIfAborted();
-            try {
-              await writeFile(artifact.manifestPath, artifact.manifestBytes, {
-                flag: 'wx',
-                ...(signal === undefined ? {} : { signal }),
-              });
+            const created = await publishExclusiveFile(
+              artifact.manifestPath,
+              artifact.manifestBytes,
+              signal,
+            );
+            if (created) {
               createdManifests.push(artifact.manifestPath);
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-                createdManifests.push(artifact.manifestPath);
-              }
-              throw error;
+            } else if (
+              !(await existingManifestMatches(
+                artifact.manifestPath,
+                artifact.manifestBytes,
+                signal,
+              ))
+            ) {
+              throw new ServiceError(
+                'ARTIFACT_MANIFEST_INVALID',
+                'Concurrent artifact provenance manifest publication did not complete',
+              );
             }
           }
           signal?.throwIfAborted();

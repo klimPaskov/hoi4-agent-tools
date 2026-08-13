@@ -8,6 +8,7 @@ import {
   utimes,
   writeFile,
 } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -609,6 +610,189 @@ describe('content-addressed artifacts', () => {
     );
     await expect(store.describe(workspace, artifact.uri)).rejects.toMatchObject({
       code: 'ARTIFACT_MANIFEST_LIMIT',
+    });
+  });
+
+  it('repairs an interrupted immutable manifest when the same artifact is stored again', async () => {
+    const { store, workspace } = await fixture();
+    const provenance = {
+      kind: 'manifest-recovery-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'manifest-recovery.v1',
+      sourceHashes: {},
+    };
+    const first = await store.put(
+      workspace,
+      'recoverable.json',
+      'application/json',
+      '{"value":1}\n',
+      provenance,
+    );
+    const manifestPath = path.join(
+      path.dirname(first.path),
+      `${first.name}.${first.provenanceHash}.manifest.json`,
+    );
+    const validManifest = await readFile(manifestPath);
+    await writeFile(manifestPath, Buffer.alloc(validManifest.length));
+    const stale = new Date(Date.now() - 60_000);
+    await utimes(manifestPath, stale, stale);
+
+    const repaired = await store.put(
+      workspace,
+      'recoverable.json',
+      'application/json',
+      '{"value":1}\n',
+      provenance,
+    );
+    expect(repaired.uri).toBe(first.uri);
+    await expect(store.read(workspace, repaired.uri)).resolves.toMatchObject({
+      bytes: Buffer.from('{"value":1}\n'),
+    });
+    expect(JSON.parse(await readFile(manifestPath, 'utf8'))).toMatchObject({
+      version: 2,
+      provenanceHash: first.provenanceHash,
+    });
+  });
+
+  it('reclaims stale zero-filled manifests instead of blocking unrelated artifact admission', async () => {
+    const { workspace } = await fixture();
+    const store = new ArtifactStore(1_000_000, 1, 100_000);
+    const provenance = {
+      kind: 'manifest-prune-recovery-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'manifest-prune-recovery.v1',
+      sourceHashes: {},
+    };
+    const first = await store.put(
+      workspace,
+      'stale.json',
+      'application/json',
+      '{"stale":true}\n',
+      provenance,
+    );
+    const manifestPath = path.join(
+      path.dirname(first.path),
+      `${first.name}.${first.provenanceHash}.manifest.json`,
+    );
+    const validManifest = await readFile(manifestPath);
+    await writeFile(manifestPath, Buffer.alloc(validManifest.length));
+    const stale = new Date(Date.now() - 60_000);
+    await utimes(manifestPath, stale, stale);
+
+    const second = await store.put(
+      workspace,
+      'current.json',
+      'application/json',
+      '{"current":true}\n',
+      provenance,
+    );
+    await expect(access(manifestPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(store.read(workspace, second.uri)).resolves.toMatchObject({
+      bytes: Buffer.from('{"current":true}\n'),
+    });
+  });
+
+  it('does not replace a non-transient malformed immutable manifest', async () => {
+    const { store, workspace } = await fixture();
+    const provenance = {
+      kind: 'manifest-refusal-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'manifest-refusal.v1',
+      sourceHashes: {},
+    };
+    const artifact = await store.put(
+      workspace,
+      'refuse.json',
+      'application/json',
+      '{}\n',
+      provenance,
+    );
+    const manifestPath = path.join(
+      path.dirname(artifact.path),
+      `${artifact.name}.${artifact.provenanceHash}.manifest.json`,
+    );
+    await writeFile(manifestPath, '{not-an-interrupted-prefix');
+    const stale = new Date(Date.now() - 60_000);
+    await utimes(manifestPath, stale, stale);
+
+    await expect(
+      store.put(workspace, 'refuse.json', 'application/json', '{}\n', provenance),
+    ).rejects.toMatchObject({ code: 'ARTIFACT_MANIFEST_INVALID' });
+  });
+
+  it('publishes one complete immutable manifest across independent processes', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-artifact-processes-'));
+    const mod = path.join(base, 'mod');
+    const runtime = path.join(base, 'runtime');
+    const gatePath = path.join(base, 'start');
+    const configurationPath = path.join(base, 'config.json');
+    await Promise.all([mkdir(mod), mkdir(runtime)]);
+    await writeFile(
+      configurationPath,
+      `${JSON.stringify({
+        version: 1,
+        serverStateRoot: path.join(base, 'state'),
+        storageRoots: [runtime],
+        workspaces: [
+          {
+            id: 'process-test',
+            name: 'Process test',
+            root: mod,
+            artifactRoot: path.join(runtime, 'artifacts'),
+            cacheRoot: path.join(runtime, 'cache'),
+          },
+        ],
+      })}\n`,
+    );
+    const helper = path.resolve(import.meta.dirname, '..', 'helpers', 'artifact-process-writer.ts');
+    const children = Array.from({ length: 4 }, () =>
+      spawn(
+        process.execPath,
+        ['--import', 'tsx', helper, configurationPath, 'process-test', gatePath],
+        {
+          cwd: path.resolve(import.meta.dirname, '..', '..'),
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        },
+      ),
+    );
+    const processes = children.map((child) => {
+      let ready!: () => void;
+      const readyPromise = new Promise<void>((resolve) => (ready = resolve));
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf8');
+        if (stdout.includes('READY')) ready();
+      });
+      child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+      const outcome = new Promise<{ code: number; stderr: string; stdout: string }>(
+        (resolve, reject) => {
+          child.once('error', reject);
+          child.once('exit', (code) => resolve({ code: code ?? 1, stderr, stdout }));
+        },
+      );
+      return { ready: readyPromise, outcome };
+    });
+    await Promise.all(processes.map(({ ready }) => ready));
+    await writeFile(gatePath, 'start\n');
+    const completed = await Promise.all(processes.map(({ outcome }) => outcome));
+    for (const result of completed) {
+      expect(result).toMatchObject({
+        code: 0,
+        stderr: '',
+        stdout: expect.stringMatching(/^READY\nDONE hoi4-agent:\/\//u),
+      });
+    }
+
+    const resolver = await WorkspaceResolver.create(
+      serverConfigurationSchema.parse(JSON.parse(await readFile(configurationPath, 'utf8'))),
+    );
+    const workspace = resolver.get('process-test');
+    const listed = await new ArtifactStore().list(workspace);
+    expect(listed).toHaveLength(1);
+    await expect(new ArtifactStore().read(workspace, listed[0]!.uri)).resolves.toMatchObject({
+      bytes: Buffer.alloc(4_000_000, 0x61),
     });
   });
 
