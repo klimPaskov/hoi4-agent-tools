@@ -2,7 +2,14 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## 2.5.2 - 2026-08-15
+
 - Distinguished HOI4 small and large technology layouts in graph data and source-positioned folder renders, including exact 72×72 small items selected by `force_use_small_tech_layout`.
+- Reverified the public Technology Tree Viewer MCP workflow across
+  `hoi4.tech_inspect`, `hoi4.tech_render`, and `hoi4.tech_compare` before
+  publication.
 
 ## 2.5.1 - 2026-08-13
 
