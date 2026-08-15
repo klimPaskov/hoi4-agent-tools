@@ -43,6 +43,7 @@ export interface TechnologyDefinition {
   researchCost?: string;
   doctrineName?: string;
   hidden: boolean | 'unknown';
+  layoutSize: 'small' | 'large' | 'unknown';
   folders: string[];
   categories: string[];
   tags: string[];

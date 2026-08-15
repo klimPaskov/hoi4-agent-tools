@@ -71,6 +71,7 @@ interface RenderNode {
   sourcePath?: string;
   sourceLine?: number;
   placement?: TechnologyPlacement;
+  layoutSize?: 'small' | 'large' | 'unknown';
 }
 
 interface RenderEdge {
@@ -88,8 +89,10 @@ interface PositionedNode extends RenderNode {
 }
 
 const MAX_RENDER_NODES = 2_000;
-const NODE_WIDTH = 210;
-const NODE_HEIGHT = 76;
+const LARGE_NODE_WIDTH = 183;
+const LARGE_NODE_HEIGHT = 84;
+const SMALL_NODE_WIDTH = 72;
+const SMALL_NODE_HEIGHT = 72;
 const GAP_X = 42;
 const GAP_Y = 42;
 const GENERATED_NODE_WIDTH = 180;
@@ -132,6 +135,7 @@ function technologyNode(
     kind: technology.kind,
     sourcePath: technology.source.path,
     sourceLine: technology.source.location.start.line,
+    layoutSize: technology.layoutSize,
     ...(placement === undefined ? {} : { placement }),
   };
 }
@@ -533,19 +537,25 @@ function issueKey(issue: { code: string; details: Record<string, unknown> }): st
 }
 
 function layoutFolder(nodes: readonly RenderNode[]): PositionedNode[] {
+  const dimensions = (node: RenderNode): { width: number; height: number } =>
+    node.layoutSize === 'small'
+      ? { width: SMALL_NODE_WIDTH, height: SMALL_NODE_HEIGHT }
+      : { width: LARGE_NODE_WIDTH, height: LARGE_NODE_HEIGHT };
   const sourcePixel = nodes.filter(
     ({ placement }) => placement?.pixelX !== undefined && placement.pixelY !== undefined,
   );
   if (sourcePixel.length === nodes.length && sourcePixel.length > 0) {
     const minimumX = Math.min(...sourcePixel.map(({ placement }) => placement!.pixelX!));
     const minimumY = Math.min(...sourcePixel.map(({ placement }) => placement!.pixelY!));
-    return sourcePixel.map((node) => ({
-      ...node,
-      x: PADDING + node.placement!.pixelX! - minimumX,
-      y: HEADER_HEIGHT + PADDING + node.placement!.pixelY! - minimumY,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-    }));
+    return sourcePixel.map((node) => {
+      const size = dimensions(node);
+      return {
+        ...node,
+        x: PADDING + node.placement!.pixelX! - minimumX,
+        y: HEADER_HEIGHT + PADDING + node.placement!.pixelY! - minimumY,
+        ...size,
+      };
+    });
   }
   const branchRoots = [
     ...new Set(nodes.map(({ placement }) => placement?.branchRootId ?? '<unresolved>')),
@@ -554,10 +564,13 @@ function layoutFolder(nodes: readonly RenderNode[]): PositionedNode[] {
   return nodes.map((node, index) => {
     const placement = node.placement;
     const lane = lanes.get(placement?.branchRootId ?? '<unresolved>') ?? 0;
-    const x = PADDING + lane * 680 + (placement?.x ?? index % 3) * (NODE_WIDTH + GAP_X);
+    const size = dimensions(node);
+    const x = PADDING + lane * 680 + (placement?.x ?? index % 3) * (LARGE_NODE_WIDTH + GAP_X);
     const y =
-      HEADER_HEIGHT + PADDING + (placement?.y ?? Math.floor(index / 3)) * (NODE_HEIGHT + GAP_Y);
-    return { ...node, x, y, width: NODE_WIDTH, height: NODE_HEIGHT };
+      HEADER_HEIGHT +
+      PADDING +
+      (placement?.y ?? Math.floor(index / 3)) * (LARGE_NODE_HEIGHT + GAP_Y);
+    return { ...node, x, y, ...size };
   });
 }
 
@@ -664,9 +677,12 @@ function svgFor(
   edges: readonly RenderEdge[],
   sourceAccurate: boolean,
 ): { svg: string; width: number; height: number } {
-  const maximumX = Math.max(PADDING + NODE_WIDTH, ...positioned.map(({ x, width }) => x + width));
+  const maximumX = Math.max(
+    PADDING + LARGE_NODE_WIDTH,
+    ...positioned.map(({ x, width }) => x + width),
+  );
   const maximumY = Math.max(
-    HEADER_HEIGHT + NODE_HEIGHT,
+    HEADER_HEIGHT + LARGE_NODE_HEIGHT,
     ...positioned.map(({ y, height }) => y + height),
   );
   const width = Math.ceil(maximumX + PADDING);
@@ -697,24 +713,37 @@ function svgFor(
   });
   const nodeSvg = positioned.map((node) => {
     const colour = colours(node.kind);
-    const label = node.label.length > 34 ? `${node.label.slice(0, 31)}…` : node.label;
+    const small = node.layoutSize === 'small';
+    const labelLimit = small ? 12 : 34;
+    const label =
+      node.label.length > labelLimit
+        ? `${node.label.slice(0, Math.max(1, labelLimit - 1))}…`
+        : node.label;
     const subtitle = node.subtitle.length > 48 ? `${node.subtitle.slice(0, 45)}…` : node.subtitle;
     const labelSvg = text.render(label, {
-      x: node.x + 12,
-      y: node.y + 30,
-      fontSize: 15,
+      x: node.x + (small ? 6 : 12),
+      y: node.y + (small ? 27 : 30),
+      fontSize: small ? 9 : 15,
       fill: '#f1f5f8',
       weight: 600,
-      targetWidth: Math.min(node.width - 24, Math.max(1, text.measure(label, 15))),
+      targetWidth: Math.min(
+        node.width - (small ? 12 : 24),
+        Math.max(1, text.measure(label, small ? 9 : 15)),
+      ),
     });
-    const subtitleSvg = text.render(subtitle, {
-      x: node.x + 12,
-      y: node.y + 56,
-      fontSize: 11,
+    const subtitleSvg = text.render(small ? 'SMALL' : subtitle, {
+      x: node.x + (small ? 6 : 12),
+      y: node.y + (small ? 51 : 58),
+      fontSize: small ? 8 : 11,
       fill: '#b8c4ce',
-      targetWidth: Math.min(node.width - 24, Math.max(1, text.measure(subtitle, 11))),
+      targetWidth: Math.min(
+        node.width - (small ? 12 : 24),
+        Math.max(1, text.measure(small ? 'SMALL' : subtitle, small ? 8 : 11)),
+      ),
     });
-    return `<g data-node-id="${escapeXml(node.id)}"${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${labelSvg}${subtitleSvg}</g>`;
+    const layoutAttribute =
+      node.layoutSize === undefined ? '' : ` data-layout-size="${node.layoutSize}"`;
+    return `<g data-node-id="${escapeXml(node.id)}"${layoutAttribute}${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.layoutSize === undefined ? '' : ` · ${node.layoutSize} layout`}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${labelSvg}${subtitleSvg}</g>`;
   });
   const title = text.render(titleText, {
     x: PADDING,

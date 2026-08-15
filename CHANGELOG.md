@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Distinguished HOI4 small and large technology layouts in graph data and source-positioned folder renders, including exact 72×72 small items selected by `force_use_small_tech_layout`.
+
 ## 2.5.1 - 2026-08-13
 
 - Published artifact contents and provenance manifests atomically across independent MCP processes, preventing event, probability, GUI, and other concurrent inspections from observing partially written manifests.

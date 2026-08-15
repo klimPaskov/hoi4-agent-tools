@@ -478,6 +478,14 @@ function parseTechnologyDefinitions(
             .filter((key) => !technologyStructuralFields.has(key) && !key.startsWith('@')),
         ),
       ].sort(compareCodeUnits);
+      const layoutExpression = firstValue(block, 'force_use_small_tech_layout');
+      const smallLayout = booleanValue(layoutExpression);
+      const layoutSize =
+        layoutExpression === undefined || smallLayout === false
+          ? 'large'
+          : smallLayout === true
+            ? 'small'
+            : 'unknown';
       const unsupportedFields = fragment.placements
         .filter(
           ({ technologyId, xExpression, yExpression }) =>
@@ -489,7 +497,19 @@ function parseTechnologyDefinitions(
           location: placement.location,
           reason:
             'The source coordinate expression is not a resolvable file-local numeric constant',
-        }));
+        }))
+        .concat(
+          layoutSize === 'unknown'
+            ? [
+                {
+                  field: 'force_use_small_tech_layout',
+                  expression: layoutExpression!,
+                  location: nodeLocation(document, block, id),
+                  reason: 'The technology layout-size expression is not a literal yes or no',
+                },
+              ]
+            : [],
+        );
       const doctrine = booleanValue(firstValue(block, 'doctrine')) === true;
       fragment.technologies.push({
         id,
@@ -506,6 +526,7 @@ function parseTechnologyDefinitions(
           ? {}
           : { doctrineName: firstValue(block, 'doctrine_name')! }),
         hidden: hiddenStatus(block),
+        layoutSize,
         folders: [...new Set(folders)].sort(compareCodeUnits),
         categories: [...new Set(categories)].sort(compareCodeUnits),
         tags: [...new Set(tags)].sort(compareCodeUnits),

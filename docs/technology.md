@@ -51,7 +51,7 @@ Game-backed and otherwise large workspaces automatically use focused analysis mo
 
 `hoi4.tech_render` returns authoritative JSON with deterministic SVG and PNG resources; set `includeHtml` when a bundled static report is useful. Available views are `summary`, `folder`, `dependencies`, `technology`, `doctrine`, `exclusive`, `memberships`, `bonuses`, `grants`, `unlocks`, `metadata`, `assets`, and `unresolved`.
 
-Folder renders use the actual folder assignments, gridbox geometry, and technology coordinates found in source. Dependency and other semantic views are explicitly labelled as generated analysis layouts. Missing sprites, textures, or localisation remain identifiable from JSON and vector output even when no icon raster is decoded.
+Folder renders use the actual folder assignments, gridbox geometry, technology coordinates, and HOI4 item size found in source. Technologies with `force_use_small_tech_layout = yes` render as 72×72 small items; normal technologies render as large items. The authoritative JSON and SVG expose `layoutSize` for every technology. Dependency and other semantic views are explicitly labelled as generated analysis layouts. Missing sprites, textures, or localisation remain identifiable from JSON and vector output even when no icon raster is decoded.
 
 Example folder render:
 

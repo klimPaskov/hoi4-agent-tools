@@ -157,6 +157,7 @@ function technologyMetadata(technology: TechnologyDefinition): Record<string, un
     researchCost: technology.researchCost ?? null,
     doctrineName: technology.doctrineName ?? null,
     hidden: technology.hidden,
+    layoutSize: technology.layoutSize,
     folders: technology.folders,
     categories: technology.categories,
     tags: technology.tags,

@@ -2,6 +2,7 @@ technologies = {
 	synthetic_tech_0000 = {
 		start_year = 1936
 		research_cost = 1.00
+		force_use_small_tech_layout = yes
 		folder = { name = synthetic_folder_00 position = { x = 0 y = 0 } }
 		folder = { name = synthetic_folder_01 position = { x = 10 y = 0 } }
 		path = { leads_to_tech = synthetic_tech_0001 }
@@ -15,6 +16,7 @@ technologies = {
 	synthetic_tech_0001 = {
 		start_year = 1936
 		research_cost = 1.25
+		force_use_small_tech_layout = no
 		folder = { name = synthetic_folder_00 position = { x = 1 y = 0 } }
 		folder = { name = synthetic_folder_01 position = { x = 11 y = 0 } }
 		path = { leads_to_tech = synthetic_tech_0002 }

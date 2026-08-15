@@ -87,6 +87,11 @@ function definition(index: number): string {
     `${id} = {`,
     `\tstart_year = ${year}`,
     `\tresearch_cost = ${index === 22 ? 50 : (1 + (local % 4) * 0.25).toFixed(2)}`,
+    ...(index === 0
+      ? ['\tforce_use_small_tech_layout = yes']
+      : index === 1
+        ? ['\tforce_use_small_tech_layout = no']
+        : []),
     ...(folder === 12 ? ['\tdoctrine = yes', '\tdoctrine_name = synthetic_legacy_doctrine'] : []),
     ...(index >= technologyCount - 2 ? ['\tallow = { always = no }'] : []),
     placements,

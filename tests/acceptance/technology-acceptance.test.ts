@@ -146,6 +146,12 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       '# Unknown fixture fields remain visible in the authoritative source record.',
     );
     expect(unknownFieldTechnology?.effectKeys).toContain('synthetic_unknown_field');
+    expect(graph.technologies.find(({ id }) => id === 'synthetic_tech_0000')?.layoutSize).toBe(
+      'small',
+    );
+    expect(graph.technologies.find(({ id }) => id === 'synthetic_tech_0001')?.layoutSize).toBe(
+      'large',
+    );
     expect(graph.technologies).toHaveLength(graphManifest.counts.totalTechnologyDefinitions);
     expect(graph.statistics.technologyCount).toBe(graphManifest.counts.technologies);
     expect(graph.statistics.legacyDoctrineCount).toBe(graphManifest.counts.legacyDoctrines);
@@ -398,6 +404,18 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       expect(rendered.svg, request.view).toContain('data-source-path=');
       expect(rendered.png.length, request.view).toBeGreaterThan(100);
       expect(rendered.sourceAccurate, request.view).toBe(request.view === 'folder');
+      if (request.view === 'folder') {
+        expect(rendered.svg).toContain('data-layout-size="small"');
+        expect(rendered.svg).toContain('width="72" height="72"');
+        expect(rendered.svg).toContain('data-layout-size="large"');
+        expect(rendered.svg).toContain('width="183" height="84"');
+        expect(authoritative.nodes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: 'synthetic_tech_0000', layoutSize: 'small' }),
+            expect.objectContaining({ id: 'synthetic_tech_0001', layoutSize: 'large' }),
+          ]),
+        );
+      }
     }
   }, 120_000);
 
