@@ -7,11 +7,13 @@ import { hostHeaderValidation } from '@modelcontextprotocol/sdk/server/middlewar
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import {
+  isInitializeRequest,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from '@modelcontextprotocol/sdk/types.js';
 import type { CoreEngine } from '../../core/engine.js';
 import type { ServerConfiguration } from '../../core/configuration.js';
 import { canonicalJson } from '../../core/canonical.js';
-import { MCP_PROTOCOL_VERSION } from '../../version.js';
 import {
   authenticate,
   bearerChallenge,
@@ -379,20 +381,20 @@ function rejectInvalidProtocolHeader(
   required: boolean,
 ): boolean {
   const value = request.headers['mcp-protocol-version'];
-  if (value === MCP_PROTOCOL_VERSION) return false;
+  if (typeof value === 'string' && SUPPORTED_PROTOCOL_VERSIONS.includes(value)) return false;
   if (value === undefined && !required) return false;
   if (value === undefined) {
     jsonRpcError(
       response,
       400,
-      `Missing MCP-Protocol-Version header; this server requires ${MCP_PROTOCOL_VERSION}`,
+      `Missing MCP-Protocol-Version header; this server supports ${SUPPORTED_PROTOCOL_VERSIONS.join(', ')}`,
     );
     return true;
   }
   jsonRpcError(
     response,
     400,
-    `Unsupported MCP protocol version; this server requires ${MCP_PROTOCOL_VERSION}`,
+    `Unsupported MCP protocol version; this server supports ${SUPPORTED_PROTOCOL_VERSIONS.join(', ')}`,
   );
   return true;
 }

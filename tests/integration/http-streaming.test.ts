@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { SUPPORTED_PROTOCOL_VERSIONS } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod/v4';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
@@ -175,7 +176,7 @@ describe('Streamable HTTP progress, cancellation, and resumption', () => {
     expect(closed).toHaveBeenCalledTimes(1);
   });
 
-  it('advertises the current final revision when HTTP requests an older SDK revision', async () => {
+  it('negotiates an older SDK revision when HTTP requests one', async () => {
     const handle = await instrumentedServer(
       () => new McpServer({ name: 'http-version-fixture', version: '1.0.0' }),
     );
@@ -204,11 +205,11 @@ describe('Streamable HTTP progress, cancellation, and resumption', () => {
         )
       : JSON.parse(responseText);
     expect(message).toMatchObject({
-      result: { protocolVersion },
+      result: { protocolVersion: '2025-06-18' },
     });
   });
 
-  it('rejects a non-current protocol header after final-only negotiation', async () => {
+  it('accepts a supported non-current protocol header after negotiation', async () => {
     const handle = await instrumentedServer(
       () => new McpServer({ name: 'http-version-fixture', version: '1.0.0' }),
     );
@@ -218,16 +219,7 @@ describe('Streamable HTTP progress, cancellation, and resumption', () => {
       headers: { ...headers(sessionId), 'mcp-protocol-version': '2025-06-18' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
     });
-    expect(response.status).toBe(400);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    await expect(response.json()).resolves.toEqual({
-      jsonrpc: '2.0',
-      error: {
-        code: -32_000,
-        message: `Unsupported MCP protocol version; this server requires ${protocolVersion}`,
-      },
-      id: null,
-    });
+    expect(response.status).toBe(200);
   });
 
   it('requires the negotiated protocol header on every subsequent HTTP method', async () => {
@@ -254,7 +246,7 @@ describe('Streamable HTTP progress, cancellation, and resumption', () => {
         jsonrpc: '2.0',
         error: {
           code: -32_000,
-          message: `Missing MCP-Protocol-Version header; this server requires ${protocolVersion}`,
+          message: `Missing MCP-Protocol-Version header; this server supports ${SUPPORTED_PROTOCOL_VERSIONS.join(', ')}`,
         },
         id: null,
       });

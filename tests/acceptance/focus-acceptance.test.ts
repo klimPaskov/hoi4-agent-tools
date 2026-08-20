@@ -466,8 +466,8 @@ describe('Focus Tree Workbench project-owned acceptance fixture', () => {
     );
     expect(hardDiagnostics(first.diagnostics)).toEqual([]);
 
-    expect(first.bundle.html).toContain('Offline HOI4 Agent Tools representation');
-    expect(first.bundle.html).toContain('not an in-game screenshot or editor');
+    expect(first.bundle.html).not.toContain('Offline HOI4 Agent Tools representation');
+    expect(first.bundle.html).not.toContain('not an in-game screenshot or editor');
     expect(first.bundle.svg).toContain('<svg');
     expect(first.bundle.svg).toContain('<image href="data:image/png;base64,');
     expect(first.bundle.svg).toContain('data-font-sha256=');
@@ -543,7 +543,7 @@ describe('Focus Tree Workbench project-owned acceptance fixture', () => {
       first.artifacts.map(({ name, sha256 }) => ({ name, sha256 })),
     );
 
-    expect(first.bundle.html).toContain('Offline source-derived review artifact');
+    expect(first.bundle.html).not.toContain('Offline source-derived review artifact');
     expect(first.bundle.svg).toContain('data-continuous-focus-id=');
     expect(first.bundle.svg).toContain('<image href="data:image/png;base64,');
     expect(first.bundle.svg).toContain('data-font-sha256=');

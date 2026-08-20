@@ -477,7 +477,7 @@ describe('local stdio transport', () => {
     await stop(child);
   }, 20_000);
 
-  it('advertises only the production final revision for every non-current request', async () => {
+  it('negotiates SDK-supported revisions and falls back to the latest for unknown ones', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-protocol-negotiation-'));
     const workspace = path.join(temporary, 'mod');
     await mkdir(workspace);
@@ -506,9 +506,12 @@ describe('local stdio transport', () => {
         })}\n`,
       );
       const response = await waitForMessage(child, id, []);
+      const expected = SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+        ? requested
+        : MCP_PROTOCOL_VERSION;
       expect(response).toMatchObject({
         result: {
-          protocolVersion: MCP_PROTOCOL_VERSION,
+          protocolVersion: expected,
         },
       });
       await stop(child);

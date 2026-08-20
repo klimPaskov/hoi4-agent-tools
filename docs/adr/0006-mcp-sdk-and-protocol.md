@@ -4,7 +4,7 @@
 
 - Status: accepted
 - Date: 2026-07-10
-- Last reviewed: 2026-08-09
+- Last reviewed: 2026-08-15
 
 ## Decision
 
@@ -16,4 +16,4 @@ Rechecked on 2026-08-09, `2025-11-25` remains the current final protocol. The br
 
 ## Consequences
 
-Capability negotiation is tested against every revision recognized by the pinned SDK, but the product transports advertise only the supported final `2025-11-25` revision. This avoids claiming historical feature gates for current structured outputs and resource links. The project rechecks the final protocol and SDK before every release after 2026-07-28. Experimental MCP Tasks are not foundational; normal progress and cancellation are used.
+Capability negotiation is tested against every revision recognized by the pinned SDK, and the product transports let the SDK negotiate any revision it supports (as of SDK 1.30.0: `2024-10-07` through `2025-11-25`). Unknown revisions fall back to the latest supported revision via the documented sentinel rewrite. This keeps coding-agent clients that only implement older revisions (for example Qoder, capped at `2025-06-18`) connectable instead of rejecting them at initialization. The HTTP transport accepts any supported revision in the `MCP-Protocol-Version` header. The project rechecks the final protocol and SDK before every release after 2026-07-28. Experimental MCP Tasks are not foundational; normal progress and cancellation are used.

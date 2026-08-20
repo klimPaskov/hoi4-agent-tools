@@ -1332,6 +1332,112 @@ describe('Focus Tree Workbench layout', () => {
     expect(x.get(convergence.id)).toBe(0);
   });
 
+  it('normalizes equivalent branches to structural rows before balancing them', () => {
+    const root = focusNode('uneven_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const left = focusNode(
+      'uneven_left',
+      { mode: 'fixed', x: -24, y: 2, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const right = focusNode(
+      'uneven_right',
+      { mode: 'fixed', x: 24, y: 6, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [root.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const leftLeaf = focusNode(
+      'uneven_left_leaf',
+      { mode: 'fixed', x: -24, y: 4, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [left.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const rightLeaf = focusNode(
+      'uneven_right_leaf',
+      { mode: 'fixed', x: 24, y: 11, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: [right.id], rawPassthrough: [] }],
+        },
+      },
+    );
+    const convergence = focusNode(
+      'uneven_convergence',
+      { mode: 'fixed', x: 0, y: 15, pinned: true },
+      {
+        convergence: true,
+        prerequisites: {
+          operator: 'and',
+          groups: [
+            { operator: 'or', focusIds: [leftLeaf.id], rawPassthrough: [] },
+            { operator: 'or', focusIds: [rightLeaf.id], rawPassthrough: [] },
+          ],
+        },
+      },
+    );
+    const authored = focusPlan([root, left, right, leftLeaf, rightLeaf, convergence]);
+    const before = layoutFocusTree(authored);
+    const compactPlan = compactFocusTreePlan(authored);
+    const after = layoutFocusTree(compactPlan, { aggressiveAestheticRepair: true });
+    const coordinates = Object.fromEntries(after.nodes.map(({ id, x, y }) => [id, { x, y }]));
+
+    expect(before.metrics!.connectors.longConnectorCount).toBeGreaterThan(0);
+    expect(coordinates).toEqual({
+      uneven_convergence: { x: 0, y: 3 },
+      uneven_left: { x: -1, y: 1 },
+      uneven_left_leaf: { x: -1, y: 2 },
+      uneven_right: { x: 1, y: 1 },
+      uneven_right_leaf: { x: 1, y: 2 },
+      uneven_root: { x: 0, y: 0 },
+    });
+    expect(after.metrics).toMatchObject({
+      connectors: { crossingCount: 0, longConnectorCount: 0, nodeIntersectionCount: 0 },
+      symmetry: {
+        asymmetricSiblingCohortCount: 0,
+        offAnchorSiblingCohortCount: 0,
+      },
+      spacing: { tooCloseSameRowPairCount: 0 },
+    });
+    expect(
+      after.diagnostics.filter(({ code }) =>
+        [
+          'FOCUS_LAYOUT_LINEAR_DETOUR',
+          'FOCUS_LAYOUT_LONG_CONNECTOR',
+          'FOCUS_LAYOUT_SIBLING_ANCHOR_DEVIATION',
+          'FOCUS_LAYOUT_SIBLING_ASYMMETRY',
+          'FOCUS_LAYOUT_STAIRCASE_CHAIN',
+          'FOCUS_LAYOUT_ZIGZAG_CHAIN',
+        ].includes(code),
+      ),
+    ).toEqual([]);
+    expect(compactFocusTreePlan(compactPlan).focuses.map(({ position }) => position)).toEqual(
+      compactPlan.focuses.map(({ position }) => position),
+    );
+    const reorderedPlan = focusPlan(
+      [root, left, right, leftLeaf, rightLeaf, convergence]
+        .map((focus) => structuredClone(focus))
+        .reverse(),
+    );
+    const reorderedLayout = layoutFocusTree(compactFocusTreePlan(reorderedPlan), {
+      aggressiveAestheticRepair: true,
+    });
+    expect(reorderedLayout.nodes).toEqual(after.nodes);
+    expect(reorderedLayout.layoutHash).toBe(after.layoutHash);
+  });
+
   it('reports objective focus-spacing and connector-length metrics', () => {
     const root = focusNode('metric_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
     const adjacent = focusNode('metric_adjacent', {
@@ -2514,8 +2620,8 @@ describe('Focus Tree Workbench rendering', () => {
     expect(first.svg).not.toMatch(/<text\b|font-family=/u);
     expect(first.svg).toContain('data-diagnostics="FOCUS_TEST_WARNING"');
     expect(first.sourceMap.mappings.map(({ focusId }) => focusId)).toEqual(['root', 'child']);
-    expect(first.html).toContain('Offline HOI4 Agent Tools representation');
-    expect(first.html).toContain('not an in-game screenshot or editor');
+    expect(first.html).not.toContain('Offline HOI4 Agent Tools representation');
+    expect(first.html).not.toContain('not an in-game screenshot or editor');
     const graph = JSON.parse(first.json) as {
       tree: { id: string };
       diagnostics: { code: string }[];

@@ -572,7 +572,8 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     ]);
     const firstImage = first.images[0];
     const secondImage = second.images[0];
-    expect(firstImage?.svg).toContain('OFFLINE APPROXIMATION · NOT HOI4');
+    expect(firstImage?.svg).not.toContain('OFFLINE APPROXIMATION');
+    expect(firstImage?.svg).not.toContain('NOT HOI4');
     expect(firstImage?.png.equals(secondImage?.png ?? Buffer.alloc(0))).toBe(true);
     expect(first.layoutJson).toBe(second.layoutJson);
   });
@@ -1041,7 +1042,7 @@ kernings count=0
     expect(full?.svg).toContain('translate(10 13) scale(1 1)');
     expect(full?.svg).not.toMatch(/<text\b|font-family=/u);
     expect(sha256Bytes(full?.png ?? Buffer.alloc(0))).toBe(
-      'd17b3953a3a73f110e20fd9465f20fc8c82dcb811cae785354535764c6deb6ea',
+      'd938e087766de4ebeaafa775d19fb5a46da32e14eb26a5ef208c85e605d8d75a',
     );
   });
 

@@ -2810,6 +2810,7 @@ describe('Agent Nudger map model and operations', () => {
       },
     });
     expect(first.html).toContain('Agent Nudger map - continent');
+    expect(first.html).not.toContain('Offline deterministic map representation');
     expect(first.html).not.toContain('Â');
     const withoutValueOverlays = await renderMap(snapshot.index, { layer: 'continent' });
     expect(withoutValueOverlays.hashes.png).not.toBe(first.hashes.png);

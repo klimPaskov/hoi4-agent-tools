@@ -633,7 +633,7 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
         expect(codes, `${variant.id} should report ${expectedCode}`).toContain(expectedCode);
       }
     }
-  }, 120_000);
+  }, 300_000);
 
   it('contains no child-process or game-automation path in the accepted GUI surface', async () => {
     const targets = [

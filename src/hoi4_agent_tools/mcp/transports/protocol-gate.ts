@@ -1,27 +1,32 @@
 import type { JSONRPCMessage, MessageExtraInfo } from '@modelcontextprotocol/sdk/types.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import {
+  isInitializeRequest,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from '@modelcontextprotocol/sdk/types.js';
 import type {
   Transport,
   TransportSendOptions,
 } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { MCP_PROTOCOL_VERSION } from '../../version.js';
 
 const unsupportedVersionSentinel = 'hoi4-agent-tools-final-only';
 
 function gateInitializeVersion(message: JSONRPCMessage): JSONRPCMessage {
-  if (!isInitializeRequest(message) || message.params.protocolVersion === MCP_PROTOCOL_VERSION) {
+  if (
+    !isInitializeRequest(message) ||
+    SUPPORTED_PROTOCOL_VERSIONS.includes(message.params.protocolVersion)
+  ) {
     return message;
   }
-  // SDK v1 negotiates every historical revision it knows. This server uses current-final
-  // resource-link and structured-output semantics, so force the SDK's documented fallback
-  // response to the sole production revision instead of claiming unimplemented feature gates.
+  // Unknown revisions cannot be negotiated. Rewrite them to an unsupported sentinel so the
+  // SDK applies its documented fallback response (the latest supported revision) instead of
+  // claiming unimplemented feature gates.
   return {
     ...message,
     params: { ...message.params, protocolVersion: unsupportedVersionSentinel },
   };
 }
 
-/** Restrict a concrete product transport to the documented final MCP revision. */
+/** Let the SDK negotiate any revision it supports and fall back to the latest for unknown ones. */
 export class FinalProtocolTransport implements Transport {
   onclose: NonNullable<Transport['onclose']> = () => undefined;
   onerror: NonNullable<Transport['onerror']> = () => undefined;

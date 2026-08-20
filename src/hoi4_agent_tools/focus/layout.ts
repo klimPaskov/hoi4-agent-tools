@@ -1919,6 +1919,7 @@ function* refineSiblingCohorts(
   initial: ConnectorQualityScore,
 ): LayoutSteps<ConnectorQualityScore> {
   let current = initial;
+  let evaluatedEdges = edges;
   for (let pass = 0; pass < 2; pass += 1) {
     let accepted = false;
     for (const [cohortIndex, cohort] of context.siblingCohorts.entries()) {
@@ -1947,7 +1948,7 @@ function* refineSiblingCohorts(
         }
         if (nodes.every((node) => override.get(node.id) === node.x)) continue;
         if (siblingBatchConflicts(context, cohortIds, override)) continue;
-        const candidateEdges = edgesWithXOverride(edges, override);
+        const candidateEdges = edgesWithXOverride(evaluatedEdges, override);
         const crossingSummary = yield* connectorCrossings(candidateEdges, context);
         if (crossingSummary.count > current.crossingCount) continue;
         const intersectionSummary = yield* connectorNodeIntersectionSummary(
@@ -1981,6 +1982,7 @@ function* refineSiblingCohorts(
         movePlacedFocusX(context, node, x);
       }
       current = best.score;
+      evaluatedEdges = edgesWithXOverride(evaluatedEdges, best.override);
       accepted = true;
     }
     if (!accepted) break;
@@ -2067,10 +2069,10 @@ const CONNECTOR_REFINEMENT_WORK_MAX = 7_000_000;
 function* refineConnectorQualityWithinBudget(context: LayoutContext): LayoutSteps<void> {
   const maximumAcceptedMoves = context.aggressiveAestheticRepair ? 32 : 24;
   const maximumCandidateNodes = context.aggressiveAestheticRepair ? 48 : 32;
-  const edges = yield* connectorEdges(context);
-  const crossingSummary = yield* connectorCrossings(edges, context);
-  const intersectionSummary = yield* connectorNodeIntersectionSummary(context, edges);
-  const symmetry = siblingQuality(context);
+  let edges = yield* connectorEdges(context);
+  let crossingSummary = yield* connectorCrossings(edges, context);
+  let intersectionSummary = yield* connectorNodeIntersectionSummary(context, edges);
+  let symmetry = siblingQuality(context);
   let current = connectorQualityScore(
     context,
     edges,
@@ -2078,8 +2080,20 @@ function* refineConnectorQualityWithinBudget(context: LayoutContext): LayoutStep
     intersectionSummary.count,
     symmetry,
   );
-  if (context.aggressiveAestheticRepair)
-    current = yield* refineSiblingCohorts(context, edges, current);
+  if (context.aggressiveAestheticRepair) {
+    yield* refineSiblingCohorts(context, edges, current);
+    edges = yield* connectorEdges(context);
+    crossingSummary = yield* connectorCrossings(edges, context);
+    intersectionSummary = yield* connectorNodeIntersectionSummary(context, edges);
+    symmetry = siblingQuality(context);
+    current = connectorQualityScore(
+      context,
+      edges,
+      crossingSummary.count,
+      intersectionSummary.count,
+      symmetry,
+    );
+  }
   const candidateIds = new Set<string>(intersectionSummary.involvedFocusIds);
   const longFocusIds = new Set<string>();
   for (const edge of edges.filter(longConnector)) {

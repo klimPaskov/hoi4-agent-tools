@@ -88,7 +88,7 @@ export async function renderContinuousFocusPalette(
   const rows = Math.max(1, Math.ceil(plan.focuses.length / columns));
   const usedColumns = Math.max(1, Math.min(columns, plan.focuses.length));
   const width = padding * 2 + usedColumns * cardWidth + Math.max(0, usedColumns - 1) * gap;
-  const height = padding * 2 + 84 + rows * cardHeight + Math.max(0, rows - 1) * gap;
+  const height = padding * 2 + 52 + rows * cardHeight + Math.max(0, rows - 1) * gap;
   if (options.rasterize !== false) {
     budget.reserve(width, height, 'continuous focus palette PNG');
   }
@@ -106,7 +106,7 @@ export async function renderContinuousFocusPalette(
     const column = index % columns;
     const row = Math.floor(index / columns);
     const x = padding + column * (cardWidth + gap);
-    const y = padding + 84 + row * (cardHeight + gap);
+    const y = padding + 52 + row * (cardHeight + gap);
     const entry = options.presentation?.entries[focus.id];
     const iconSprite = focus.icons[0]?.sprite;
     const icon = iconSprite === undefined ? undefined : options.presentation?.icons[iconSprite];
@@ -128,13 +128,7 @@ export async function renderContinuousFocusPalette(
     weight: 700,
     fill: '#f3f6f8',
   });
-  const notice = toolText.render('OFFLINE SOURCE MODEL \u00b7 NOT HOI4', {
-    x: padding,
-    y: padding + 27,
-    fontSize: 12,
-    fill: '#d7b65b',
-  });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>${escapeXml(plan.id)} continuous focus palette</title><desc>Offline source-derived continuous focus palette; not an in-game screenshot.</desc><defs>${toolText.definitions()}</defs><rect width="${width}" height="${height}" fill="#101820"/>${heading}${notice}${cards.join('')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>${escapeXml(plan.id)} continuous focus palette</title><desc>${plan.focuses.length} continuous focuses.</desc><defs>${toolText.definitions()}</defs><rect width="${width}" height="${height}" fill="#101820"/>${heading}${cards.join('')}</svg>`;
   const compiled = compileContinuousFocusPaletteWithSourceMap(plan);
   const json = `${canonicalJson({
     schemaVersion: 1,
@@ -172,7 +166,7 @@ export async function renderContinuousFocusPalette(
     },
     renderProfile: options.renderProfile ?? {},
   })}\n`;
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeXml(plan.id)} continuous focus palette</title><style>html{background:#101820;color:#f3f6f8;font:14px system-ui}body{margin:0;padding:24px}.notice{color:#d7b65b}svg{max-width:100%;height:auto;border:1px solid #385064}pre{white-space:pre-wrap}</style></head><body><h1>${escapeXml(plan.id)}</h1><p class="notice">Offline source-derived review artifact &mdash; not an in-game screenshot or editor.</p>${svg}<details><summary>Structured source model</summary><pre>${escapeXml(json)}</pre></details></body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeXml(plan.id)} continuous focus palette</title><style>html{background:#101820;color:#f3f6f8;font:14px system-ui}body{margin:0;padding:24px}svg{max-width:100%;height:auto;border:1px solid #385064}pre{white-space:pre-wrap}</style></head><body><h1>${escapeXml(plan.id)}</h1>${svg}<details><summary>Structured source model</summary><pre>${escapeXml(json)}</pre></details></body></html>`;
   options.signal?.throwIfAborted();
   let png = Buffer.alloc(0);
   if (options.rasterize !== false) {

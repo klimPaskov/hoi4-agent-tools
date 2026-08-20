@@ -1147,7 +1147,7 @@ async function layoutElement(
   }
 }
 
-/** Build a deterministic, offline approximation of a GUI window without launching HOI4. */
+/** Build a deterministic GUI scene from the connected source graph and scenario. */
 export async function buildGuiScene(
   graph: GuiSourceGraph,
   scannedFiles: readonly ScannedFile[],

@@ -361,7 +361,7 @@ function svgDocument(
   const parts: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${logicalWidth} ${logicalHeight}" role="img" aria-labelledby="title description">`,
     `<title id="title">${escapeXml(plan.id)} focus tree</title>`,
-    `<desc id="description">Offline HOI4 Agent Tools representation. ${plan.focuses.length} focuses.</desc>`,
+    `<desc id="description">${plan.focuses.length} focuses.</desc>`,
     '<defs>',
     '__DETERMINISTIC_FONT_DEFINITIONS__',
     '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8da2bc"/></marker>',
@@ -369,12 +369,6 @@ function svgDocument(
     '</defs>',
     '<rect width="100%" height="100%" fill="#111723"/>',
     toolText.render(plan.id, { x: padding, y: 36, fontSize: 22, weight: 700, fill: '#e8edf5' }),
-    toolText.render(`Offline agent render · layout ${layout.layoutHash.slice(0, 12)}`, {
-      x: padding,
-      y: 58,
-      fontSize: 12,
-      fill: '#95a4b8',
-    }),
     '<g id="prerequisites">',
   ];
   for (const edge of prerequisiteEdges) {
@@ -584,7 +578,7 @@ function htmlDocument(
 <body>
 <main class="canvas" aria-label="Focus tree artifact">${svg}</main>
 <aside class="panel">
-<div class="controls"><h1>${escapeXml(plan.id)}</h1><p class="notice">Offline HOI4 Agent Tools representation — not an in-game screenshot or editor.</p><label>Find focus<input id="search" type="search" placeholder="ID, title, branch, or lane"></label></div>
+<div class="controls"><h1>${escapeXml(plan.id)}</h1><label>Find focus<input id="search" type="search" placeholder="ID, title, branch, or lane"></label></div>
 <h2>Diagnostics</h2><ol>${diagnosticsHtml}</ol>
 <p class="muted">Source revision: <code>${escapeXml(plan.provenance.sourceHash)}</code></p>
 </aside>

@@ -13,6 +13,7 @@ import {
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import {
   ScriptedGuiStudio,
+  boundedGuiTransactionDiagnostics,
   fidelityCategories,
   parsePreviewScenario,
   type GuiPreviewScenario,
@@ -171,6 +172,88 @@ afterEach(async () => {
 });
 
 describe('ScriptedGuiStudio targeted source planning safety', () => {
+  it('bounds rewrite diagnostics by priority without tripping transaction structure limits', () => {
+    const diagnostics = [
+      ...Array.from({ length: 150 }, (_unused, index) => ({
+        code: `GUI_WARNING_${String(index)}`,
+        severity: 'warning' as const,
+        category: 'layout' as const,
+        message: `Warning ${String(index)}`,
+      })),
+      ...Array.from({ length: 40 }, (_unused, index) => ({
+        code: `GUI_BLOCKER_${String(index)}`,
+        severity: 'blocker' as const,
+        category: 'validation' as const,
+        message: `Blocker ${String(index)}`,
+      })),
+    ];
+
+    const bounded = boundedGuiTransactionDiagnostics(
+      diagnostics,
+      33,
+      'safety_window-rewrite-validation.json',
+    );
+
+    expect(bounded).toHaveLength(33);
+    expect(bounded.slice(0, 32).every(({ severity }) => severity === 'blocker')).toBe(true);
+    expect(bounded.at(-1)).toMatchObject({
+      code: 'GUI_REWRITE_DIAGNOSTICS_TRUNCATED',
+      severity: 'blocker',
+      details: { total: 190, returned: 33, omitted: 158, omittedHard: 8 },
+    });
+  });
+
+  it('applies a scalar patch when the surrounding GUI inventory has more than 100 diagnostics', async () => {
+    const source = [
+      'guiTypes = {',
+      '\tcontainerWindowType = {',
+      '\t\tname = "safety_window"',
+      '\t\tposition = { x = 10 y = 20 }',
+      '\t\tsize = { width = 320 height = 200 }',
+      '\t}',
+      '}',
+      '',
+    ].join('\n');
+    const harness = await createHarness(Buffer.from(source, 'utf8'));
+    const overNested = `${'guiTypes = { '.repeat(258)}${'} '.repeat(258)}\n`;
+    await Promise.all(
+      Array.from({ length: 120 }, (_unused, index) =>
+        writeFile(
+          path.join(path.dirname(harness.absolutePath), `over_limit_${String(index)}.gui`),
+          overNested,
+          'utf8',
+        ),
+      ),
+    );
+
+    const planned = await harness.studio.planSource({
+      workspaceId,
+      relativePath,
+      expectedSourceHash: sha256Bytes(harness.original),
+      patches: [patchFor(source, 'x = 10', 'x = 42')],
+      windowName: 'safety_window',
+      scenario: { id: 'large-inventory-scalar-patch', resolution: { width: 640, height: 360 } },
+    });
+
+    expect(planned.validation.passed).toBe(true);
+    expect(planned.diagnostics.length).toBeLessThanOrEqual(66);
+    expect(planned.diagnostics.map(({ code }) => code)).toContain(
+      'GUI_REWRITE_DIAGNOSTICS_TRUNCATED',
+    );
+    expect(planned.artifacts.map(({ name }) => name)).toContain(
+      'safety_window-rewrite-validation.json',
+    );
+
+    const applied = await harness.studio.applyPlannedSource(
+      workspaceId,
+      planned.transactionId,
+      planned.planHash,
+    );
+    expect(applied.state).toBe('applied');
+    expect(applied.diagnostics.length).toBeLessThanOrEqual(100);
+    expect(await readFile(harness.absolutePath, 'utf8')).toContain('x = 42');
+  });
+
   it('plans whole-file source replacement for an existing mod-owned GUI file', async () => {
     const source =
       '# caf\u00e9 remains Windows-1252\r\nguiTypes = { containerWindowType = { name = "safety_window" } }\r\n';
@@ -522,6 +605,7 @@ describe('ScriptedGuiStudio targeted source planning safety', () => {
       { name: 'safety_window-visual-diff.png', kind: 'gui-visual-diff' },
       { name: 'safety_window-visual-diff.json', kind: 'gui-visual-diff-json' },
       { name: 'safety_window-proposed-fidelity.json', kind: 'gui-proposed-fidelity' },
+      { name: 'safety_window-rewrite-validation.json', kind: 'gui-rewrite-validation' },
     ];
     const artifactsByName = new Map(planned.artifacts.map((artifact) => [artifact.name, artifact]));
     expect(planned.readDependencies).toEqual(

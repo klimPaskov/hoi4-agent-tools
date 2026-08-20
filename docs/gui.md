@@ -52,6 +52,8 @@ Selectors accept an element name, instance ID, or source ID. Visibility expectat
 
 Broad inspection indexes localisation actually referenced by GUI source and returns a connected workspace projection when the complete source graph is very large. The resource records full and returned node and edge counts, so an agent can identify the relevant window without loading unrelated vanilla UI into its prompt. Rendering remains targeted to the selected root, state, and resolution.
 
+GUI rewrites keep complete validation evidence in a linked JSON resource and retain the highest-priority findings in the transaction result. Large surrounding interface inventories therefore do not turn a small scalar patch into a transaction structure-limit error.
+
 ## Offline preview limits
 
 The renderer does not run the game engine. Each render includes a fidelity report that separates fields it models from fields it approximates, ignores, cannot resolve, or does not support. Treat that report as part of the review.

@@ -271,13 +271,7 @@ export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
     .map((element) => renderOverlay(element, variant, toolText))
     .join('');
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  const banner = toolText.render('OFFLINE APPROXIMATION \u00b7 NOT HOI4', {
-    x: view.viewBox.x + 15,
-    y: view.viewBox.y + 22,
-    fontSize: 11,
-    fill: '#f1c75b',
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}<g><rect x="${finite(view.viewBox.x + 8)}" y="${finite(view.viewBox.y + 8)}" width="215" height="20" rx="3" fill="#05080c" fill-opacity="0.82"/>${banner}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}</svg>`;
 }
 
 async function cooperativeParts<T>(
@@ -329,13 +323,7 @@ async function sceneToSvgCooperative(
     signal,
   );
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  const banner = toolText.render('OFFLINE APPROXIMATION \u00b7 NOT HOI4', {
-    x: view.viewBox.x + 15,
-    y: view.viewBox.y + 22,
-    fontSize: 11,
-    fill: '#f1c75b',
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}<g><rect x="${finite(view.viewBox.x + 8)}" y="${finite(view.viewBox.y + 8)}" width="215" height="20" rx="3" fill="#05080c" fill-opacity="0.82"/>${banner}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}</svg>`;
 }
 
 export function hierarchyToSvg(scene: GuiScene): string {
@@ -373,7 +361,7 @@ export function hierarchyToSvg(scene: GuiScene): string {
       return `${parentLine}<circle cx="${x}" cy="${y - 8}" r="4" fill="${colour}"/>${nameText}${detailText}`;
     })
     .join('');
-  const heading = toolText.render(`OFFLINE HIERARCHY \u00b7 ${scene.windowName}`, {
+  const heading = toolText.render(`${scene.windowName} \u00b7 HIERARCHY`, {
     x: 16,
     y: 20,
     fontSize: 12,
@@ -516,7 +504,7 @@ export function renderGallerySvg(title: string, items: readonly GalleryItem[]): 
       return `<g>${toolText.render(item.label, { x, y: y + 14, fontSize: 12, fill: '#f1c75b' })}<image x="${x}" y="${y + 22}" width="${finite(item.width * scale)}" height="${finite(item.height * scale)}" href="data:image/png;base64,${item.png.toString('base64')}"/></g>`;
     })
     .join('');
-  const heading = toolText.render(`${title} \u00b7 OFFLINE APPROXIMATION`, {
+  const heading = toolText.render(title, {
     x: 12,
     y: 24,
     fontSize: 15,

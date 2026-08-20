@@ -37,6 +37,7 @@ import {
   type TransactionManager,
   type TransactionManifest,
 } from '../core/transactions.js';
+import { TRANSACTION_MAX_DIAGNOSTICS } from '../core/transaction-limits.js';
 import type { ResolvedWorkspace, WorkspaceResolver } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { isSafeAnimationSourcePath } from './animation-manifest.js';
@@ -75,6 +76,7 @@ const staticGuiDefinitionPatterns = [
 
 export const GUI_TEXT_PACKAGE_MAX_FILES = 32;
 export const GUI_TEXT_PACKAGE_MAX_BYTES = 16_777_216;
+const GUI_TRANSACTION_PHASE_DIAGNOSTIC_BUDGET = Math.floor(TRANSACTION_MAX_DIAGNOSTICS / 3);
 
 type GuiTextPackageFileKind = 'gui' | 'gfx' | 'scripted-gui' | 'localisation';
 
@@ -89,6 +91,47 @@ interface PreparedGuiTextPackageFile {
   bytes: Buffer;
   absolutePath: string;
   loadOrder: number;
+}
+
+function hardDiagnostic(diagnostic: Diagnostic): boolean {
+  return diagnostic.severity === 'error' || diagnostic.severity === 'blocker';
+}
+
+export function boundedGuiTransactionDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  maximumDiagnostics: number,
+  evidenceArtifactName?: string,
+): Diagnostic[] {
+  if (diagnostics.length <= maximumDiagnostics) return [...diagnostics];
+  if (maximumDiagnostics <= 0) return [];
+  const retainedLimit = maximumDiagnostics - 1;
+  const hard = diagnostics.filter(hardDiagnostic);
+  const retainedHard = hard.slice(0, retainedLimit);
+  const retainedHardSet = new Set(retainedHard);
+  const retainedSoft = diagnostics
+    .filter((diagnostic) => !hardDiagnostic(diagnostic) && !retainedHardSet.has(diagnostic))
+    .slice(0, retainedLimit - retainedHard.length);
+  const omittedHard = hard.length - retainedHard.length;
+  return [
+    ...retainedHard,
+    ...retainedSoft,
+    {
+      code: 'GUI_REWRITE_DIAGNOSTICS_TRUNCATED',
+      severity: omittedHard > 0 ? 'blocker' : 'warning',
+      category: 'validation',
+      message:
+        evidenceArtifactName === undefined
+          ? `GUI rewrite validation produced ${diagnostics.length} diagnostics; transaction evidence retains the highest-priority ${maximumDiagnostics}`
+          : `GUI rewrite validation produced ${diagnostics.length} diagnostics; complete evidence is stored in ${evidenceArtifactName}`,
+      details: {
+        total: diagnostics.length,
+        returned: maximumDiagnostics,
+        omitted: diagnostics.length - retainedLimit,
+        omittedHard,
+        ...(evidenceArtifactName === undefined ? {} : { evidenceArtifactName }),
+      },
+    },
+  ];
 }
 
 function normalizeConfiguredRoot(value: string): string {
@@ -658,7 +701,7 @@ export function guiArtifactProvenance(
       })),
     },
     metadata: {
-      rendererLabel: 'OFFLINE APPROXIMATION · NOT HOI4',
+      rendererLabel: 'HOI4 Agent Tools deterministic GUI render',
       ...metadata,
       sourceHashInventory: sourceEvidence.inventory,
     },
@@ -1395,6 +1438,7 @@ export class ScriptedGuiStudio {
     const preflightDiagnostics: Diagnostic[] = [];
     const preflightChecks: { id: string; passed: boolean; message: string }[] = [];
     const preflightArtifacts: ArtifactLink[] = [];
+    let rewriteEvidenceArtifactName: string | undefined;
     let dependencyFiles = baseline.files;
     if (input.windowName !== undefined && input.scenario !== undefined) {
       let proposedFiles = overlayGuiTextPackageFiles(baseline.files, prepared);
@@ -1543,6 +1587,7 @@ export class ScriptedGuiStudio {
         input.signal,
       );
       const slug = safeSlug(input.windowName);
+      rewriteEvidenceArtifactName = `${slug}-rewrite-validation.json`;
       const metadata = {
         relativePath: input.relativePath,
         packageFiles: prepared.map(({ relativePath }) => relativePath),
@@ -1613,6 +1658,25 @@ export class ScriptedGuiStudio {
             metadata,
           ),
         },
+        {
+          name: rewriteEvidenceArtifactName,
+          mimeType: 'application/json',
+          content: `${canonicalJson({
+            sourceDiagnostics: proposedSourceDiagnostics,
+            graphDiagnostics: proposedGraph.diagnostics,
+            sceneDiagnostics: proposedScene.diagnostics,
+            validation: proposedValidation,
+            transactionDiagnostics: preflightDiagnostics,
+            transactionChecks: preflightChecks,
+          })}\n`,
+          provenance: guiArtifactProvenance(
+            proposedGraph,
+            'gui-rewrite-validation',
+            proposedScene,
+            [proposedScene],
+            metadata,
+          ),
+        },
       ];
       const stored = await this.artifacts.withAtomicWrites(
         workspace,
@@ -1622,6 +1686,11 @@ export class ScriptedGuiStudio {
       );
       preflightArtifacts.push(...stored.map(publicArtifactLink));
     }
+    const transactionPreflightDiagnostics = boundedGuiTransactionDiagnostics(
+      preflightDiagnostics,
+      GUI_TRANSACTION_PHASE_DIAGNOSTIC_BUDGET,
+      rewriteEvidenceArtifactName,
+    );
     const operationId = deterministicId('gui_source_change', {
       relativePath: input.relativePath,
       files: prepared.map(({ relativePath, bytes }) => ({
@@ -1657,7 +1726,7 @@ export class ScriptedGuiStudio {
       })),
       readDependencies: readDependenciesFromScannedFiles(dependencyFiles),
       artifacts: preflightArtifacts,
-      diagnostics: preflightDiagnostics,
+      diagnostics: transactionPreflightDiagnostics,
       validate: (proposed, signal) => {
         const diagnostics: Diagnostic[] = [];
         let present = true;
@@ -1687,7 +1756,11 @@ export class ScriptedGuiStudio {
           diagnostics.push(...blocking.map((diagnostic) => ({ ...diagnostic, operationId })));
         }
         return Promise.resolve({
-          diagnostics,
+          diagnostics: boundedGuiTransactionDiagnostics(
+            diagnostics,
+            GUI_TRANSACTION_PHASE_DIAGNOSTIC_BUDGET,
+            rewriteEvidenceArtifactName,
+          ),
           checks: [
             ...preflightChecks,
             {
@@ -1724,7 +1797,11 @@ export class ScriptedGuiStudio {
           ({ severity }) => severity === 'error' || severity === 'blocker',
         );
         return {
-          diagnostics: scanned.graph.diagnostics,
+          diagnostics: boundedGuiTransactionDiagnostics(
+            scanned.graph.diagnostics,
+            Math.max(0, TRANSACTION_MAX_DIAGNOSTICS - _manifest.diagnostics.length),
+            _manifest.artifacts.find(({ name }) => name.endsWith('-rewrite-validation.json'))?.name,
+          ),
           checks: [
             {
               id: 'post-write-gui-graph',

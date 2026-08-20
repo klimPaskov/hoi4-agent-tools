@@ -121,6 +121,53 @@ function compactStructuralAnchorX(
   return laneBases.get(focusLaneId(plan, focus)) ?? 0;
 }
 
+function structuralRows(plan: FocusTreePlan): Map<string, number> | undefined {
+  const focusIds = new Set(plan.focuses.map(({ id }) => id));
+  const parentsByFocus = new Map(
+    plan.focuses.map((focus) => [
+      focus.id,
+      [...new Set(prerequisiteIds(plan, focus.id).filter((parentId) => focusIds.has(parentId)))],
+    ]),
+  );
+  const childrenByFocus = new Map<string, string[]>();
+  const unresolvedParents = new Map<string, number>();
+  for (const focus of plan.focuses) {
+    const parents = parentsByFocus.get(focus.id) ?? [];
+    unresolvedParents.set(focus.id, parents.length);
+    for (const parentId of parents) {
+      const children = childrenByFocus.get(parentId) ?? [];
+      children.push(focus.id);
+      childrenByFocus.set(parentId, children);
+    }
+  }
+  for (const children of childrenByFocus.values())
+    children.sort((left, right) => compareCodeUnits(left, right));
+
+  const rows = new Map<string, number>();
+  const pending = [...plan.focuses]
+    .map(({ id }) => id)
+    .filter((focusId) => (unresolvedParents.get(focusId) ?? 0) === 0)
+    .sort((left, right) => compareCodeUnits(right, left));
+  for (const focusId of pending) rows.set(focusId, 0);
+  let visited = 0;
+  while (pending.length > 0) {
+    const focusId = pending.pop();
+    if (focusId === undefined) continue;
+    visited += 1;
+    const nextRow = (rows.get(focusId) ?? 0) + 1;
+    for (const childId of childrenByFocus.get(focusId) ?? []) {
+      rows.set(childId, Math.max(rows.get(childId) ?? 0, nextRow));
+      const remaining = (unresolvedParents.get(childId) ?? 0) - 1;
+      unresolvedParents.set(childId, remaining);
+      if (remaining === 0) pending.push(childId);
+    }
+  }
+
+  // The layout engine reports dependency cycles. Keep authored row preferences
+  // for a cyclic graph instead of inventing a partial topological reflow.
+  return visited === plan.focuses.length ? rows : undefined;
+}
+
 function mirrorSiblingCohorts(
   plan: FocusTreePlan,
   preferredX: Map<string, number>,
@@ -231,6 +278,7 @@ function straightenLinearChains(
 interface CompactCandidateStrategy {
   scale: number;
   compressRows: boolean;
+  structuralRows: boolean;
   mirrorSiblings: boolean;
   straightenChains: boolean;
 }
@@ -240,7 +288,13 @@ function compactCandidate(
   layout: FocusLayoutResult,
   strategy: CompactCandidateStrategy,
 ): FocusTreePlan {
-  const { scale, compressRows, mirrorSiblings, straightenChains } = strategy;
+  const {
+    scale,
+    compressRows,
+    structuralRows: useStructuralRows,
+    mirrorSiblings,
+    straightenChains,
+  } = strategy;
   const minimumX = Math.min(...layout.nodes.map(({ x }) => x));
   const maximumX = Math.max(...layout.nodes.map(({ x }) => x));
   const minimumY = Math.min(...layout.nodes.map(({ y }) => y));
@@ -258,11 +312,18 @@ function compactCandidate(
       compressRows ? (compactRows.get(node.y) ?? node.y - minimumY) : node.y - minimumY,
     ]),
   );
+  if (useStructuralRows) {
+    const normalizedRows = structuralRows(plan);
+    if (normalizedRows !== undefined) {
+      for (const [focusId, row] of normalizedRows) preferredY.set(focusId, row);
+    }
+  }
   const rows = new Map<number, typeof layout.nodes>();
   for (const node of layout.nodes) {
-    const row = rows.get(node.y) ?? [];
+    const y = preferredY.get(node.id) ?? node.y;
+    const row = rows.get(y) ?? [];
     row.push(node);
-    rows.set(node.y, row);
+    rows.set(y, row);
   }
   for (const row of rows.values()) {
     row.sort((left, right) => left.x - right.x || compareCodeUnits(left.id, right.id));
@@ -323,12 +384,12 @@ function compactScore(layout: FocusLayoutResult): readonly (number | string)[] {
     metrics.symmetry.offAnchorSiblingCohortCount,
     metrics.symmetry.totalSiblingDeviation,
     metrics.symmetry.totalSiblingAnchorDeviation,
+    metrics.connectors.maximumHorizontalSpan,
+    metrics.connectors.maximumManhattanSpan,
+    metrics.connectors.totalHorizontalSpan,
+    metrics.connectors.totalVerticalSpan,
     metrics.bounds.rowCount,
     metrics.bounds.columnCount,
-    metrics.connectors.maximumHorizontalSpan,
-    metrics.connectors.totalHorizontalSpan,
-    metrics.connectors.maximumManhattanSpan,
-    metrics.connectors.totalVerticalSpan,
     layout.layoutHash,
   ];
 }
@@ -359,14 +420,50 @@ function compactScales(focusCount: number): readonly number[] {
 
 function compactStrategies(focusCount: number): readonly CompactCandidateStrategy[] {
   const preservationStrategies = [
-    { scale: 1, compressRows: false, mirrorSiblings: false, straightenChains: false },
-    { scale: 1, compressRows: true, mirrorSiblings: false, straightenChains: false },
-    { scale: 1, compressRows: false, mirrorSiblings: false, straightenChains: true },
-    { scale: 1, compressRows: false, mirrorSiblings: true, straightenChains: false },
+    {
+      scale: 1,
+      compressRows: false,
+      structuralRows: false,
+      mirrorSiblings: false,
+      straightenChains: false,
+    },
+    {
+      scale: 1,
+      compressRows: true,
+      structuralRows: false,
+      mirrorSiblings: false,
+      straightenChains: false,
+    },
+    {
+      scale: 1,
+      compressRows: false,
+      structuralRows: false,
+      mirrorSiblings: false,
+      straightenChains: true,
+    },
+    {
+      scale: 1,
+      compressRows: false,
+      structuralRows: false,
+      mirrorSiblings: true,
+      straightenChains: false,
+    },
   ] as const;
   const compactStrategies = compactScales(focusCount).flatMap((scale) => [
-    { scale, compressRows: false, mirrorSiblings: true, straightenChains: true },
-    { scale, compressRows: true, mirrorSiblings: true, straightenChains: true },
+    {
+      scale,
+      compressRows: false,
+      structuralRows: false,
+      mirrorSiblings: true,
+      straightenChains: true,
+    },
+    {
+      scale,
+      compressRows: false,
+      structuralRows: true,
+      mirrorSiblings: true,
+      straightenChains: true,
+    },
   ]);
   return [...preservationStrategies, ...compactStrategies];
 }
@@ -391,6 +488,7 @@ export function compactFocusTreePlan(plan: FocusTreePlan): FocusTreePlan {
     ? compactCandidate(plan, currentLayout, {
         scale: 1,
         compressRows: false,
+        structuralRows: false,
         mirrorSiblings: false,
         straightenChains: false,
       })
@@ -460,6 +558,7 @@ export async function compactFocusTreePlanAsync(
     ? compactCandidate(plan, currentLayout, {
         scale: 1,
         compressRows: false,
+        structuralRows: false,
         mirrorSiblings: false,
         straightenChains: false,
       })
