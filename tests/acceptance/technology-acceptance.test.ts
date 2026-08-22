@@ -1,6 +1,7 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
@@ -328,6 +329,9 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(graph.technologies.length).toBeGreaterThan(1_000);
     expect(first.render.selectedIds).toHaveLength(500);
     expect(first.render.omittedNodeCount).toBe(graph.technologies.length - 500);
+    expect(first.render.renderedIconCount).toBe(500);
+    expect(first.render.unresolvedIconSprites).toEqual([]);
+    expect(first.render.svg.match(/<image /gu)).toHaveLength(500);
     expect(first.render.hashes).toEqual(second.render.hashes);
     expect(first.render.generatedAnalysisLayout).toBe(true);
     expect(first.focused).toHaveLength(graph.folders.length);
@@ -355,6 +359,106 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(compared.comparison.technologies.added).toEqual([]);
     expect(compared.comparison.technologies.removed).toEqual([]);
   }, 120_000);
+
+  it('resolves and renders every selected technology icon from the read-only game root', async () => {
+    const layeredRoot = path.join(temporaryRoot, 'layered-icons');
+    const gameRoot = path.join(layeredRoot, 'game');
+    const modRoot = path.join(layeredRoot, 'mod');
+    const put = async (root: string, relativePath: string, content: string | Buffer) => {
+      const target = path.join(root, relativePath);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, content);
+    };
+    const texturePath = 'gfx/interface/technologies/vanilla_shared.png';
+    await put(
+      gameRoot,
+      'interface/vanilla_technology_icons.gfx',
+      [
+        'spriteTypes = {',
+        `\tSpriteType = { name = GFX_layered_small_medium texturefile = "${texturePath}" }`,
+        `\tSpriteType = { name = GFX_layered_large_medium texturefile = "${texturePath}" }`,
+        '}',
+        '',
+      ].join('\n'),
+    );
+    await put(
+      gameRoot,
+      texturePath,
+      await sharp({ create: { width: 64, height: 64, channels: 4, background: '#d89a43' } })
+        .png()
+        .toBuffer(),
+    );
+    await put(
+      modRoot,
+      'common/technologies/layered_technologies.txt',
+      [
+        'technologies = {',
+        '\tlayered_small = {',
+        '\t\tstart_year = 1936',
+        '\t\tresearch_cost = 1',
+        '\t\tforce_use_small_tech_layout = yes',
+        '\t\tfolder = { name = layered_folder position = { x = 0 y = 0 } }',
+        '\t}',
+        '\tlayered_large = {',
+        '\t\tstart_year = 1936',
+        '\t\tresearch_cost = 1',
+        '\t\tfolder = { name = layered_folder position = { x = 1 y = 0 } }',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    await put(
+      modRoot,
+      'localisation/english/layered_l_english.yml',
+      '\ufeffl_english:\nlayered_small: "Layered Small"\nlayered_small_desc: "Small icon."\nlayered_large: "Layered Large"\nlayered_large_desc: "Large icon."\n',
+    );
+    const layeredConfiguration = serverConfigurationSchema.parse({
+      version: 1,
+      gameRoot,
+      serverStateRoot: path.join(layeredRoot, 'server-state'),
+      workspaceStorageRoot: path.join(layeredRoot, 'storage'),
+      workspaces: [{ id: 'layered-icons', name: 'Layered icons', root: modRoot, kind: 'mod' }],
+    });
+    const layeredEngine = new CoreEngine(await WorkspaceResolver.create(layeredConfiguration));
+    await layeredEngine.initialize();
+    const layeredViewer = new TechnologyTreeViewer(layeredEngine);
+    const layeredGraph = await layeredViewer.scan('layered-icons', { refresh: true });
+    expect(
+      layeredGraph.technologies.map(({ icon }) => ({
+        sprite: icon.sprite,
+        status: icon.status,
+        spritePath: icon.spritePath,
+        texturePath: icon.texturePath,
+      })),
+    ).toEqual([
+      {
+        sprite: 'GFX_layered_large_medium',
+        status: 'resolved',
+        spritePath: 'game:interface/vanilla_technology_icons.gfx',
+        texturePath,
+      },
+      {
+        sprite: 'GFX_layered_small_medium',
+        status: 'resolved',
+        spritePath: 'game:interface/vanilla_technology_icons.gfx',
+        texturePath,
+      },
+    ]);
+    const rendered = await layeredViewer.renderAndStore({
+      workspaceId: 'layered-icons',
+      view: 'folder',
+      folderId: 'layered_folder',
+    });
+    expect(rendered.render.renderedIconCount).toBe(2);
+    expect(rendered.render.unresolvedIconSprites).toEqual([]);
+    expect(rendered.render.svg.match(/<image /gu)).toHaveLength(2);
+    expect(rendered.render.svg).toContain(
+      'data-icon-sprite="GFX_layered_small_medium" data-source-path="mod:common/technologies/layered_technologies.txt"',
+    );
+    expect(rendered.render.svg).toContain('href="data:image/png;base64,');
+    expect(rendered.render.json).not.toContain('data:image/png;base64,');
+  });
 
   it('projects an oversized scan report without serializing the full graph', () => {
     const projected = technologyScanReport(graph, 1) as {

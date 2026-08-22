@@ -302,6 +302,18 @@ describe('GUI raster decoders', () => {
     expect(noMaskDecoded).toMatchObject({ format: 'rgba32' });
     if (!('unsupported' in noMaskDecoded)) expect([...noMaskDecoded.data]).toEqual([0, 0, 0, 255]);
 
+    const linearSizeHeader = ddsHeader(2, 2);
+    linearSizeHeader.writeUInt32LE(0x81_007, 8);
+    linearSizeHeader.writeUInt32LE(16, 20);
+    linearSizeHeader.writeUInt32LE(0x41, 80);
+    linearSizeHeader.writeUInt32LE(32, 88);
+    linearSizeHeader.writeUInt32LE(0x00ff_0000, 92);
+    linearSizeHeader.writeUInt32LE(0x0000_ff00, 96);
+    linearSizeHeader.writeUInt32LE(0x0000_00ff, 100);
+    linearSizeHeader.writeUInt32LE(0xff00_0000, 104);
+    const linearSizeDecoded = decodeDds(Buffer.concat([linearSizeHeader, Buffer.alloc(16, 0xff)]));
+    expect(linearSizeDecoded).toMatchObject({ width: 2, height: 2, format: 'rgba32' });
+
     const dxt3 = Buffer.alloc(16, 0xff);
     dxt3.writeUInt16LE(0xf800, 8);
     dxt3.writeUInt16LE(0x001f, 10);

@@ -20,6 +20,7 @@ export interface UnsupportedDds {
 export type DdsDecodeResult = DecodedDds | UnsupportedDds;
 
 const DDS_MAGIC = 0x2053_4444;
+const DDSD_PITCH = 0x8;
 const DDPF_FOURCC = 0x4;
 const DDPF_RGB = 0x40;
 
@@ -238,7 +239,9 @@ export function decodeDds(
   budget.reserve(width, height, 'DDS texture decode', {
     maximumPixels: RENDER_MAX_DECODED_PIXELS,
   });
-  const pitch = bytes.readUInt32LE(20);
+  const headerFlags = bytes.readUInt32LE(8);
+  const pitchOrLinearSize = bytes.readUInt32LE(20);
+  const rowPitch = (headerFlags & DDSD_PITCH) === 0 ? 0 : pitchOrLinearSize;
   const flags = bytes.readUInt32LE(80);
   const code = fourCc(bytes, 84).toUpperCase();
   if ((flags & DDPF_FOURCC) !== 0) {
@@ -309,7 +312,7 @@ export function decodeDds(
     bytes.readUInt32LE(100),
     bytes.readUInt32LE(104),
   ] as const;
-  const output = decodeRgb(bytes, 128, width, height, bitCount, pitch, masks);
+  const output = decodeRgb(bytes, 128, width, height, bitCount, rowPitch, masks);
   const format = bitCount === 24 ? 'rgb24' : 'rgba32';
   return output === undefined
     ? unsupported(format, 'The DDS RGB pixel data is truncated.')

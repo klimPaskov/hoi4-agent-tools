@@ -32,6 +32,8 @@ export interface TechnologyRenderOptions {
   maxNodes?: number;
   includeHtml?: boolean;
   comparison?: TechnologyGraphComparison;
+  /** Decoded sprite frames keyed by the Clausewitz sprite name. */
+  iconDataUris?: Readonly<Record<string, string>>;
   budget?: RenderBudget;
   signal?: AbortSignal;
 }
@@ -41,6 +43,8 @@ export interface TechnologyRenderBundle {
   graphRevision: string;
   selectedIds: string[];
   omittedNodeCount: number;
+  renderedIconCount: number;
+  unresolvedIconSprites: string[];
   sourceAccurate: boolean;
   generatedAnalysisLayout: boolean;
   width: number;
@@ -72,6 +76,7 @@ interface RenderNode {
   sourceLine?: number;
   placement?: TechnologyPlacement;
   layoutSize?: 'small' | 'large' | 'unknown';
+  iconSprite?: string;
 }
 
 interface RenderEdge {
@@ -136,6 +141,7 @@ function technologyNode(
     sourcePath: technology.source.path,
     sourceLine: technology.source.location.start.line,
     layoutSize: technology.layoutSize,
+    iconSprite: technology.icon.sprite,
     ...(placement === undefined ? {} : { placement }),
   };
 }
@@ -256,6 +262,7 @@ function viewSelection(
         kind: 'doctrine',
         sourcePath: definition.source.path,
         sourceLine: definition.source.location.start.line,
+        ...(definition.icon === undefined ? {} : { iconSprite: definition.icon.sprite }),
       });
     for (const definition of graph.doctrineDefinitions) {
       const from = `doctrine:${definition.kind}:${definition.id}`;
@@ -307,6 +314,7 @@ function viewSelection(
         kind: 'doctrine',
         sourcePath: doctrine.source.path,
         sourceLine: doctrine.source.location.start.line,
+        ...(doctrine.icon === undefined ? {} : { iconSprite: doctrine.icon.sprite }),
       });
       for (const targetId of doctrine.exclusiveIds) {
         const target = graph.doctrineDefinitions.find(({ id }) => id === targetId);
@@ -320,7 +328,11 @@ function viewSelection(
             kind: target === undefined ? 'unresolved' : 'doctrine',
             ...(target === undefined
               ? {}
-              : { sourcePath: target.source.path, sourceLine: target.source.location.start.line }),
+              : {
+                  sourcePath: target.source.path,
+                  sourceLine: target.source.location.start.line,
+                  ...(target.icon === undefined ? {} : { iconSprite: target.icon.sprite }),
+                }),
           });
         edges.push({ id: `${from}:xor:${to}`, from, to, kind: 'exclusive' });
       }
@@ -676,6 +688,7 @@ function svgFor(
   positioned: readonly PositionedNode[],
   edges: readonly RenderEdge[],
   sourceAccurate: boolean,
+  iconDataUris: Readonly<Record<string, string>>,
 ): { svg: string; width: number; height: number } {
   const maximumX = Math.max(
     PADDING + LARGE_NODE_WIDTH,
@@ -714,36 +727,56 @@ function svgFor(
   const nodeSvg = positioned.map((node) => {
     const colour = colours(node.kind);
     const small = node.layoutSize === 'small';
+    const iconDataUri = node.iconSprite === undefined ? undefined : iconDataUris[node.iconSprite];
+    const compactIcon = iconDataUri !== undefined && small && node.width <= SMALL_NODE_WIDTH;
+    const iconSize =
+      iconDataUri === undefined
+        ? 0
+        : compactIcon
+          ? Math.max(1, Math.min(node.width - 12, node.height - 12))
+          : Math.max(1, Math.min(64, node.height - 16, Math.floor(node.width * 0.36)));
+    const textInset = iconDataUri === undefined ? (small ? 6 : 12) : iconSize + 18;
+    const availableTextWidth = Math.max(1, node.width - textInset - (small ? 6 : 12));
     const labelLimit = small ? 12 : 34;
     const label =
       node.label.length > labelLimit
         ? `${node.label.slice(0, Math.max(1, labelLimit - 1))}…`
         : node.label;
     const subtitle = node.subtitle.length > 48 ? `${node.subtitle.slice(0, 45)}…` : node.subtitle;
-    const labelSvg = text.render(label, {
-      x: node.x + (small ? 6 : 12),
-      y: node.y + (small ? 27 : 30),
-      fontSize: small ? 9 : 15,
-      fill: '#f1f5f8',
-      weight: 600,
-      targetWidth: Math.min(
-        node.width - (small ? 12 : 24),
-        Math.max(1, text.measure(label, small ? 9 : 15)),
-      ),
-    });
-    const subtitleSvg = text.render(small ? 'SMALL' : subtitle, {
-      x: node.x + (small ? 6 : 12),
-      y: node.y + (small ? 51 : 58),
-      fontSize: small ? 8 : 11,
-      fill: '#b8c4ce',
-      targetWidth: Math.min(
-        node.width - (small ? 12 : 24),
-        Math.max(1, text.measure(small ? 'SMALL' : subtitle, small ? 8 : 11)),
-      ),
-    });
+    const labelSvg = compactIcon
+      ? ''
+      : text.render(label, {
+          x: node.x + textInset,
+          y: node.y + (small ? 27 : 30),
+          fontSize: small ? 9 : 15,
+          fill: '#f1f5f8',
+          weight: 600,
+          targetWidth: Math.min(
+            availableTextWidth,
+            Math.max(1, text.measure(label, small ? 9 : 15)),
+          ),
+        });
+    const subtitleSvg = compactIcon
+      ? ''
+      : text.render(small ? 'SMALL' : subtitle, {
+          x: node.x + textInset,
+          y: node.y + (small ? 51 : 58),
+          fontSize: small ? 8 : 11,
+          fill: '#b8c4ce',
+          targetWidth: Math.min(
+            availableTextWidth,
+            Math.max(1, text.measure(small ? 'SMALL' : subtitle, small ? 8 : 11)),
+          ),
+        });
+    const iconSvg =
+      iconDataUri === undefined
+        ? ''
+        : `<image href="${escapeXml(iconDataUri)}" x="${node.x + (compactIcon ? 6 : 8)}" y="${node.y + (node.height - iconSize) / 2}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet"/>`;
     const layoutAttribute =
       node.layoutSize === undefined ? '' : ` data-layout-size="${node.layoutSize}"`;
-    return `<g data-node-id="${escapeXml(node.id)}"${layoutAttribute}${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.layoutSize === undefined ? '' : ` · ${node.layoutSize} layout`}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${labelSvg}${subtitleSvg}</g>`;
+    const iconAttribute =
+      node.iconSprite === undefined ? '' : ` data-icon-sprite="${escapeXml(node.iconSprite)}"`;
+    return `<g data-node-id="${escapeXml(node.id)}"${layoutAttribute}${iconAttribute}${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.layoutSize === undefined ? '' : ` · ${node.layoutSize} layout`}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${iconSvg}${labelSvg}${subtitleSvg}</g>`;
   });
   const title = text.render(titleText, {
     x: PADDING,
@@ -782,7 +815,25 @@ export async function renderTechnologyGraph(
   const positioned = selection.sourceAccurate
     ? layoutFolder(retained)
     : layoutGenerated(retained, edges);
-  const rendered = svgFor(selection.title, positioned, edges, selection.sourceAccurate);
+  const iconDataUris = options.iconDataUris ?? {};
+  const requestedIconSprites = [
+    ...new Set(
+      retained.flatMap(({ iconSprite }) => (iconSprite === undefined ? [] : [iconSprite])),
+    ),
+  ].sort(compareCodeUnits);
+  const renderedIconSprites = requestedIconSprites.filter(
+    (sprite) => iconDataUris[sprite] !== undefined,
+  );
+  const unresolvedIconSprites = requestedIconSprites.filter(
+    (sprite) => iconDataUris[sprite] === undefined,
+  );
+  const rendered = svgFor(
+    selection.title,
+    positioned,
+    edges,
+    selection.sourceAccurate,
+    iconDataUris,
+  );
   const budget = options.budget ?? new RenderBudget();
   budget.reserve(rendered.width, rendered.height, `technology ${options.view} render`);
   budget.reserveRasterOperation(
@@ -800,6 +851,11 @@ export async function renderTechnologyGraph(
     nodes: retained,
     edges,
     omittedNodeCount: Math.max(0, selection.nodes.length - retained.length),
+    iconCoverage: {
+      requested: requestedIconSprites.length,
+      rendered: renderedIconSprites.length,
+      unresolvedSprites: unresolvedIconSprites,
+    },
     render: { width: rendered.width, height: rendered.height },
   })}\n`;
   const html =
@@ -809,6 +865,8 @@ export async function renderTechnologyGraph(
     graphRevision: graph.revision,
     selectedIds: retained.map(({ id }) => id),
     omittedNodeCount: Math.max(0, selection.nodes.length - retained.length),
+    renderedIconCount: renderedIconSprites.length,
+    unresolvedIconSprites,
     sourceAccurate: selection.sourceAccurate,
     generatedAnalysisLayout: !selection.sourceAccurate,
     width: rendered.width,
@@ -824,4 +882,19 @@ export async function renderTechnologyGraph(
       ...(html === undefined ? {} : { html: sha256Bytes(html) }),
     },
   };
+}
+
+/** Return only the sprite names that the bounded render selection will display. */
+export function technologyRenderIconSprites(
+  graph: TechnologyGraphSnapshot,
+  options: TechnologyRenderOptions,
+): string[] {
+  const maximum = Math.max(1, Math.min(options.maxNodes ?? 600, MAX_RENDER_NODES));
+  return [
+    ...new Set(
+      viewSelection(graph, options)
+        .nodes.slice(0, maximum)
+        .flatMap(({ iconSprite }) => (iconSprite === undefined ? [] : [iconSprite])),
+    ),
+  ].sort(compareCodeUnits);
 }

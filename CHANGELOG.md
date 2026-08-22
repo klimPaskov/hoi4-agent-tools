@@ -4,6 +4,13 @@
 
 No unreleased changes.
 
+## 2.5.3 - 2026-08-22
+
+- Resolved and embedded technology icons through the complete mod, dependency, and installed-game load order, including vanilla sprites used by mod content.
+- Recognized vanilla `SpriteType` capitalization consistently in the shared index and GUI source graph.
+- Decoded uncompressed vanilla DDS textures whose header stores total linear size instead of row pitch.
+- Added deterministic cross-root focus, scripted-GUI, and technology regressions plus an opt-in installed-game DDS render test.
+
 ## 2.5.2 - 2026-08-15
 
 - Distinguished HOI4 small and large technology layouts in graph data and source-positioned folder renders, including exact 72×72 small items selected by `force_use_small_tech_layout`.

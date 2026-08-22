@@ -15,6 +15,7 @@ import {
   SOURCE_MAX_NESTING,
   nodeLocation,
   type BlockNode,
+  type ScalarNode,
   type SourceDocument,
 } from './source/index.js';
 
@@ -82,6 +83,26 @@ export interface ReferenceRecord {
   to: string;
   path: string;
   location?: SourceLocation;
+}
+
+const spriteDefinitionKeys = new Set([
+  'spritetype',
+  'textspritetype',
+  'frameanimatedspritetype',
+  'corneredtilespritetype',
+  'maskedshieldtype',
+]);
+
+function firstScalarInsensitiveNode(block: BlockNode, ...keys: string[]): ScalarNode | undefined {
+  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
+  for (const assignment of assignments(block)) {
+    if (
+      assignment.value.type === 'scalar' &&
+      normalizedKeys.has(assignment.key.value.toLowerCase())
+    )
+      return assignment.value;
+  }
+  return undefined;
 }
 
 export interface IndexSkippedSource {
@@ -1115,11 +1136,12 @@ export class SymbolIndex {
           metadata: {},
         });
       } else if (
-        (key === 'spriteType' || key === 'frameAnimatedSpriteType') &&
-        firstScalar(child, 'name') !== undefined
+        sourcePath.endsWith('.gfx') &&
+        spriteDefinitionKeys.has(key.toLowerCase()) &&
+        firstScalarInsensitiveNode(child, 'name') !== undefined
       ) {
-        const name = firstScalar(child, 'name')!;
-        const texture = firstScalar(child, 'texturefile');
+        const name = firstScalarInsensitiveNode(child, 'name')!;
+        const texture = firstScalarInsensitiveNode(child, 'texturefile', 'textureFile');
         this.addSymbol({
           kind: 'sprite',
           id: name.value,
@@ -1130,9 +1152,7 @@ export class SymbolIndex {
           metadata: {
             spriteType: key,
             texture: texture?.value,
-            frames:
-              numeric(firstScalar(child, 'noOfFrames')?.value) ??
-              numeric(firstScalar(child, 'noofframes')?.value),
+            frames: numeric(firstScalarInsensitiveNode(child, 'noOfFrames', 'noofframes')?.value),
           },
         });
         if (texture !== undefined)

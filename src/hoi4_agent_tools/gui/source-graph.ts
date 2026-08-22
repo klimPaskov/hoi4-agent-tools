@@ -64,12 +64,12 @@ const explicitGuiElementTypes = new Set([
 ]);
 
 const spriteTypes = new Set([
-  'spriteType',
-  'textSpriteType',
-  'frameAnimatedSpriteType',
-  'corneredTileSpriteType',
-  'progressbarType',
-  'maskedShieldType',
+  'spritetype',
+  'textspritetype',
+  'frameanimatedspritetype',
+  'corneredtilespritetype',
+  'progressbartype',
+  'maskedshieldtype',
 ]);
 
 const modelledElementAttributes = new Set([
@@ -407,7 +407,8 @@ function indexSpritesAndFonts(
     for (const assignment of assignments(block)) {
       if (assignment.value.type !== 'block') continue;
       const child = assignment.value;
-      if (spriteTypes.has(assignment.key.value)) {
+      const spriteType = assignment.key.value.toLowerCase();
+      if (spriteTypes.has(spriteType)) {
         const name = firstScalarInsensitive(child, 'name');
         if (name !== undefined) {
           const id = deterministicId('gui_sprite', { path: file.displayPath, name });
@@ -429,7 +430,7 @@ function indexSpritesAndFonts(
             ...(texturePath === undefined ? {} : { texturePath }),
             ...(texturePath2 === undefined ? {} : { texturePath2 }),
             frameCount: Math.trunc(numberScalar(child, 'noOfFrames', 'noofframes') ?? 1),
-            frameAnimated: assignment.key.value === 'frameAnimatedSpriteType',
+            frameAnimated: spriteType === 'frameanimatedspritetype',
             ...(animationRateFps === undefined ? {} : { animationRateFps }),
             ...(looping === undefined ? {} : { looping }),
             ...(playOnShow === undefined ? {} : { playOnShow }),

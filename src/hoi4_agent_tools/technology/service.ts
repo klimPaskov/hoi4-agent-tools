@@ -14,6 +14,9 @@ import { ServiceError } from '../core/result.js';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { isPortablePathSegment } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { GuiAssetCatalog } from '../gui/assets.js';
+import { buildGuiSourceGraph } from '../gui/source-graph.js';
+import type { GuiSpriteDefinition } from '../gui/types.js';
 import { compareTechnologyGraphs, type TechnologyGraphComparison } from './compare.js';
 import { buildTechnologyGraph, technologyAssetPatterns } from './graph.js';
 import type {
@@ -35,6 +38,7 @@ import {
 } from './queries.js';
 import {
   renderTechnologyGraph,
+  technologyRenderIconSprites,
   type TechnologyRenderBundle,
   type TechnologyRenderOptions,
   type TechnologyRenderView,
@@ -213,9 +217,69 @@ function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['ge
     'history/countries/**/*.txt',
     ...under(roots.focus, '**/*.txt'),
     ...under(roots.interface, '**/*.gui'),
+    ...under(roots.interface, '**/*.gfx'),
+    ...under(roots.gfx, '**/*.gfx'),
     ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
     ...under(roots.localisation, '*.{yml,yaml}'),
   ].sort(compareCodeUnits);
+}
+
+function activeTechnologySprite(
+  spriteName: string,
+  spritePath: string | undefined,
+  sprites: readonly GuiSpriteDefinition[],
+): GuiSpriteDefinition | undefined {
+  return sprites.find(
+    (sprite) =>
+      sprite.name === spriteName && (spritePath === undefined || sprite.sourcePath === spritePath),
+  );
+}
+
+async function resolveTechnologyIconDataUris(
+  cached: CachedTechnologyGraph,
+  requestedSprites: ReadonlySet<string>,
+  budget: RenderBudget,
+  signal?: AbortSignal,
+): Promise<Record<string, string>> {
+  const icons = [
+    ...cached.graph.technologies.map(({ icon }) => icon),
+    ...cached.graph.doctrineDefinitions.flatMap(({ icon }) => icon ?? []),
+  ].filter(({ sprite }) => requestedSprites.has(sprite));
+  const spriteSourcePaths = new Set(
+    icons.flatMap(({ spritePath }) => (spritePath === undefined ? [] : [spritePath])),
+  );
+  const spriteFiles = cached.snapshot.files.filter(({ displayPath }) =>
+    spriteSourcePaths.has(displayPath),
+  );
+  if (spriteFiles.length === 0) return {};
+  const graph = buildGuiSourceGraph(spriteFiles, cached.snapshot.index);
+  const files = new Map<string, ScannedFile>();
+  for (const file of [...spriteFiles, ...cached.assetFiles]) files.set(file.displayPath, file);
+  const catalog = new GuiAssetCatalog(graph, [...files.values()], budget);
+  const unique = new Map<string, (typeof icons)[number]>();
+  for (const icon of icons) if (!unique.has(icon.sprite)) unique.set(icon.sprite, icon);
+  const entries = [...unique.entries()].sort(([left], [right]) => compareCodeUnits(left, right));
+  const dataUris: Record<string, string> = {};
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(8, entries.length) }, async () => {
+      while (cursor < entries.length) {
+        signal?.throwIfAborted();
+        const entry = entries[cursor];
+        cursor += 1;
+        if (entry === undefined) continue;
+        const [spriteName, icon] = entry;
+        const sprite = activeTechnologySprite(spriteName, icon.spritePath, graph.sprites);
+        if (sprite === undefined) continue;
+        const frame = await catalog.loadSpriteFrame(sprite, 0);
+        if (frame?.supported === true && frame.dataUri !== undefined)
+          dataUris[spriteName] = frame.dataUri;
+      }
+    }),
+  );
+  return Object.fromEntries(
+    Object.entries(dataUris).sort(([left], [right]) => compareCodeUnits(left, right)),
+  );
 }
 
 function technologyAnalysisMode(
@@ -733,6 +797,12 @@ export class TechnologyTreeViewer {
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
     const budget = new RenderBudget();
+    const cached = this.#state.current.get(input.workspaceId);
+    if (cached?.graph.revision !== graph.revision)
+      throw new ServiceError(
+        'TECH_RENDER_SOURCE_MISSING',
+        'Technology render source inventory is unavailable for the current graph',
+      );
     const renderOptions: TechnologyRenderOptions = {
       view: input.view,
       maxNodes: input.maxNodes ?? 1_000,
@@ -744,14 +814,31 @@ export class TechnologyTreeViewer {
       ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     };
-    const render = await renderTechnologyGraph(graph, renderOptions);
-    const focused: TechnologyRenderBundle[] = [];
     const focusedFolders =
       input.view === 'dependencies' && input.folderId === undefined
         ? graph.folders
             .filter((folder) => graph.placements.some(({ folderId }) => folderId === folder.id))
             .slice(0, FOCUSED_RENDER_LIMIT)
         : [];
+    const requestedIconSprites = new Set([
+      ...technologyRenderIconSprites(graph, renderOptions),
+      ...focusedFolders.flatMap(({ id }) =>
+        technologyRenderIconSprites(graph, {
+          view: 'folder',
+          folderId: id,
+          maxNodes: 1_000,
+        }),
+      ),
+    ]);
+    const iconDataUris = await resolveTechnologyIconDataUris(
+      cached,
+      requestedIconSprites,
+      budget,
+      input.signal,
+    );
+    renderOptions.iconDataUris = iconDataUris;
+    const render = await renderTechnologyGraph(graph, renderOptions);
+    const focused: TechnologyRenderBundle[] = [];
     for (const folder of focusedFolders) {
       input.signal?.throwIfAborted();
       focused.push(
@@ -760,6 +847,7 @@ export class TechnologyTreeViewer {
           folderId: folder.id,
           maxNodes: 1_000,
           includeHtml: false,
+          iconDataUris,
           budget,
           ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
@@ -802,6 +890,8 @@ export class TechnologyTreeViewer {
         omittedNodeCount: render.omittedNodeCount,
         sourceAccurate: render.sourceAccurate,
         generatedAnalysisLayout: render.generatedAnalysisLayout,
+        renderedIconCount: render.renderedIconCount,
+        unresolvedIconSprites: render.unresolvedIconSprites,
         hashes: render.hashes,
       },
       focusedFolders: focused.map((bundle, index) => ({
@@ -809,6 +899,8 @@ export class TechnologyTreeViewer {
         folderId: focusedFolders[index]?.id,
         selectedIds: bundle.selectedIds,
         omittedNodeCount: bundle.omittedNodeCount,
+        renderedIconCount: bundle.renderedIconCount,
+        unresolvedIconSprites: bundle.unresolvedIconSprites,
         hashes: bundle.hashes,
       })),
       focusedFolderCoverage: {
