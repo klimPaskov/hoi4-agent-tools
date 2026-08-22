@@ -3,6 +3,7 @@ import { compareCodeUnits, canonicalJson, sha256Bytes } from '../core/canonical.
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { PixelDiffBounds, RgbColor } from './bmp.js';
+import { buildMapCatalog } from './catalog.js';
 import type { MapWorkspaceIndex, ProvinceGeometry, StateRecord } from './model.js';
 import { validateMapAsync, type MapValidationResult } from './validation.js';
 
@@ -483,211 +484,67 @@ async function renderMetadata(
   options: Required<Omit<MapRenderOptions, 'signal' | 'budget'>>,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const victoryPoints = index.states
-    .flatMap((state) =>
-      state.victoryPoints.map(({ provinceId, value }) => ({
-        stateId: state.id,
-        provinceId,
-        value,
-        sourcePath: state.file.displayPath,
-      })),
-    )
-    .sort(
-      (left, right) =>
-        left.stateId - right.stateId ||
-        left.provinceId - right.provinceId ||
-        left.value - right.value,
-    );
-  const normalAdjacencies = [...(index.raster?.adjacency ?? [])]
-    .flatMap(([from, neighbors]) =>
-      [...neighbors].flatMap((to) => (from < to ? [{ from, to }] : [])),
-    )
-    .sort((left, right) => left.from - right.from || left.to - right.to);
+  const catalog = buildMapCatalog(index);
   return {
-    offline: true,
-    renderer: 'hoi4-agent-tools-agent-nudger',
+    ...catalog,
+    renderer: 'hoi4-agent-tools-map-workbench',
     layer: options.layer,
     overlays: options.overlays,
     scale: options.scale,
     width: index.raster?.width ?? 0,
     height: index.raster?.height ?? 0,
-    definitions: index.definitions.map(({ id, color, type, coastal, terrain, continent }) => ({
-      id,
-      color,
-      type,
-      coastal,
-      terrain,
-      continent,
-    })),
-    states: [...index.states]
-      .sort((left, right) => left.id - right.id)
-      .map(
-        ({
-          id,
-          name,
-          capital,
-          provinces,
-          resources,
-          stateBuildings,
-          provinceBuildings,
-          owner,
-          controller,
-          cores,
-          claims,
-        }) => ({
-          id,
-          name,
-          capital: capital ?? null,
-          manpower: index.statesById.get(id)?.manpower ?? 0,
-          category: index.statesById.get(id)?.category ?? '',
-          provinces: [...provinces].sort((a, b) => a - b),
-          resources: Object.fromEntries(
-            [...resources].sort(([left], [right]) => compareCodeUnits(left, right)),
-          ),
-          stateBuildings: Object.fromEntries(
-            [...stateBuildings].sort(([left], [right]) => compareCodeUnits(left, right)),
-          ),
-          provinceBuildings: Object.fromEntries(
-            [...provinceBuildings]
-              .sort(([left], [right]) => left - right)
-              .map(([provinceId, buildings]) => [
-                String(provinceId),
-                Object.fromEntries(
-                  [...buildings].sort(([left], [right]) => compareCodeUnits(left, right)),
-                ),
-              ]),
-          ),
-          owner: owner ?? null,
-          controller: controller ?? null,
-          cores: [...cores].sort(),
-          claims: [...claims].sort(),
-        }),
-      ),
-    regions: [...index.regions]
-      .sort((left, right) => left.id - right.id)
-      .map(({ id, name, provinces }) => ({
-        id,
-        name,
-        provinces: [...provinces].sort((a, b) => a - b),
-      })),
-    victoryPoints,
-    ports: [...index.ports]
-      .sort((left, right) => left.stateId - right.stateId || left.provinceId - right.provinceId)
-      .map(({ stateId, provinceId, level, coastal, adjacentSeaProvinceIds, positions }) => ({
-        stateId,
-        provinceId,
-        level,
-        coastal,
-        adjacentSeaProvinceIds: [...adjacentSeaProvinceIds].sort((left, right) => left - right),
-        positions: positions.map(
-          ({ building, x, y, z, rotation, adjacentSeaProvince, document, line }) => ({
-            building,
-            x,
-            y,
-            z,
-            rotation,
-            adjacentSeaProvince,
-            sourcePath: document.file.displayPath,
-            line,
-          }),
-        ),
-      })),
-    supplyNodes: index.supplyNodes.map(({ level, provinceId, document, line }) => ({
-      level,
-      provinceId,
-      sourcePath: document.file.displayPath,
-      line,
-    })),
-    railways: index.railways.map(
-      ({ level, declaredCount, provinces, document, line }, ordinal) => ({
-        ordinal,
-        level,
-        declaredCount,
-        provinces: [...provinces],
-        sourcePath: document.file.displayPath,
-        line,
-      }),
-    ),
-    adjacencies: index.adjacencies.map(
-      (
-        { from, to, type, through, startX, startY, stopX, stopY, rule, comment, document, line },
-        ordinal,
-      ) => ({
-        ordinal,
-        from,
-        to,
-        type,
-        through,
-        startX,
-        startY,
-        stopX,
-        stopY,
-        rule,
-        comment,
-        sourcePath: document.file.displayPath,
-        line,
-      }),
-    ),
-    normalAdjacencies,
-    buildingPositions: index.buildingPositions.map(
-      ({ stateId, building, x, y, z, rotation, adjacentSeaProvince, document, line }) => ({
-        stateId,
-        building,
-        x,
-        y,
-        z,
-        rotation,
-        adjacentSeaProvince,
-        sourcePath: document.file.displayPath,
-        line,
-      }),
-    ),
-    unitPositions: index.unitPositions.map(
-      ({ provinceId, type, x, y, z, rotation, offset, document, line }) => ({
-        provinceId,
-        type,
-        x,
-        y,
-        z,
-        rotation,
-        offset,
-        sourcePath: document.file.displayPath,
-        line,
-      }),
-    ),
-    weatherPositions: index.weatherPositions.map(
-      ({ strategicRegionId, x, y, z, size, document, line }) => ({
-        strategicRegionId,
-        x,
-        y,
-        z,
-        size,
-        sourcePath: document.file.displayPath,
-        line,
-      }),
-    ),
-    entityLocators: [...index.entityLocators]
-      .sort(
-        (left, right) =>
-          compareCodeUnits(left.entity, right.entity) || compareCodeUnits(left.name, right.name),
-      )
-      .map(({ entity, name, position, file }) => ({
-        entity,
-        name,
-        position: [...position],
-        sourcePath: file.displayPath,
-      })),
+    definitions: catalog.provinces.map(({ id, definition }) => ({ id, ...definition })),
+    regions: catalog.strategicRegions,
+    adjacencies: catalog.specialAdjacencies,
     validation: await validateMapAsync(index, signal === undefined ? {} : { signal }),
   };
 }
 
-function htmlDocument(title: string, png: Buffer, json: string): string {
+function htmlDocument(
+  title: string,
+  png: Buffer,
+  provinceHitMap: Buffer,
+  json: string,
+  renderScale: number,
+): string {
+  const escapedTitle = title
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+  const scriptJson = json.replaceAll('<', '\\u003c');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title><style>html{background:#10151b;color:#edf2f7;font:14px system-ui}body{margin:0;height:100vh;display:grid;grid-template-columns:minmax(0,1fr) 360px;overflow:hidden}.main{min-width:0;padding:14px;display:flex;flex-direction:column}.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}button,input,select{background:#202b38;color:#edf2f7;border:1px solid #526173;border-radius:4px;padding:6px 9px}input{min-width:260px;flex:1}.viewport{flex:1;min-height:0;overflow:hidden;border:1px solid #48515c;background:#080b0f;position:relative;touch-action:none}.viewport img{image-rendering:pixelated;transform-origin:0 0;position:absolute;max-width:none;cursor:grab;user-select:none}.viewport img.dragging{cursor:grabbing}.cursor{position:absolute;left:8px;bottom:8px;background:#10151bd9;padding:4px 7px;border-radius:3px;pointer-events:none}.side{border-left:1px solid #48515c;padding:14px;overflow:auto;background:#151d26}.results{display:grid;gap:4px;margin:8px 0 14px}.result{text-align:left;width:100%}.kind{color:#8fb7d9}.muted{color:#9ca9b5}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}h1{font-size:18px;margin:0 12px 0 0}h2{font-size:15px}</style></head><body><main class="main"><div class="toolbar"><h1>${escapedTitle}</h1><button id="out" type="button">-</button><button id="fit" type="button">Fit</button><button id="in" type="button">+</button><output id="zoom">100%</output><select id="kind"><option value="all">All IDs</option><option value="province">Provinces</option><option value="state">States</option><option value="strategic-region">Strategic regions</option></select><input id="search" type="search" placeholder="Find ID, localisation key, or name" autocomplete="off"></div><div class="viewport" id="viewport"><img id="map" draggable="false" alt="${escapedTitle}" src="data:image/png;base64,${png.toString('base64')}"><div class="cursor" id="cursor">Move over the map to inspect coordinates; click for IDs.</div></div></main><aside class="side"><h2>Search results</h2><div class="results" id="results"><span class="muted">Search by ID or name.</span></div><h2>Selection</h2><pre id="selection">Click a province or choose a search result.</pre><p class="muted">The complete source-linked catalog is embedded for navigation and is also available as the linked JSON resource.</p></aside><img id="hit" hidden src="data:image/png;base64,${provinceHitMap.toString('base64')}"><canvas id="hitCanvas" hidden></canvas><script>(()=>{const data=${scriptJson};const renderScale=${renderScale};const image=document.getElementById('map'),hit=document.getElementById('hit'),canvas=document.getElementById('hitCanvas'),viewport=document.getElementById('viewport'),zoomLabel=document.getElementById('zoom'),cursor=document.getElementById('cursor'),search=document.getElementById('search'),kind=document.getElementById('kind'),results=document.getElementById('results'),selection=document.getElementById('selection');const provinces=new Map(data.provinces.map(value=>[value.id,value])),states=new Map(data.states.map(value=>[value.id,value])),regions=new Map(data.strategicRegions.map(value=>[value.id,value]));let scale=1,x=0,y=0,drag=false,moved=false,lastX=0,lastY=0,hitContext=null;const draw=()=>{image.style.transform='translate('+x+'px,'+y+'px) scale('+scale+')';zoomLabel.value=Math.round(scale*100)+'%'};const fit=()=>{scale=Math.min(viewport.clientWidth/image.naturalWidth,viewport.clientHeight/image.naturalHeight);x=(viewport.clientWidth-image.naturalWidth*scale)/2;y=(viewport.clientHeight-image.naturalHeight*scale)/2;draw()};const zoom=(factor,cx=viewport.clientWidth/2,cy=viewport.clientHeight/2)=>{const next=Math.min(32,Math.max(.03,scale*factor));x=cx-(cx-x)*(next/scale);y=cy-(cy-y)*(next/scale);scale=next;draw()};const entity=(entityKind,id)=>entityKind==='province'?provinces.get(id):entityKind==='state'?states.get(id):regions.get(id);const linked=(province)=>({province,states:province.stateIds.map(id=>states.get(id)),strategicRegions:province.regionIds.map(id=>regions.get(id))});const show=(entityKind,id)=>{const value=entity(entityKind,id);selection.textContent=value?JSON.stringify(entityKind==='province'?linked(value):value,null,2):'No matching record.';if(value?.geometry){const g=value.geometry;x=viewport.clientWidth/2-g.centerX*renderScale*scale;y=viewport.clientHeight/2-g.centerY*renderScale*scale;draw()}};const searchable=[...data.provinces,...data.states,...data.strategicRegions].map(value=>({...value,search:[String(value.id),value.name.key,value.name.displayName,...value.name.values.map(item=>item.value)].join(' ').toLocaleLowerCase('en-US')}));const message=(text)=>Object.assign(document.createElement('span'),{className:'muted',textContent:text});const updateSearch=()=>{const query=search.value.trim().toLocaleLowerCase('en-US'),filter=kind.value;if(!query){results.replaceChildren(message('Search by ID or name.'));return}const matches=searchable.filter(value=>(filter==='all'||value.kind===filter)&&value.search.includes(query)).slice(0,100);results.replaceChildren(...matches.map(value=>{const button=document.createElement('button'),label=document.createElement('span');button.type='button';button.className='result';label.className='kind';label.textContent=value.kind;button.replaceChildren(label,document.createTextNode(' '+value.id+' — '+value.name.displayName));button.onclick=()=>show(value.kind,value.id);return button}),...(matches.length?[]:[message('No matches.')]))};const point=(event)=>{const bounds=viewport.getBoundingClientRect();const imageX=(event.clientX-bounds.left-x)/scale/renderScale,imageY=(event.clientY-bounds.top-y)/scale/renderScale;return{x:Math.floor(imageX),y:Math.floor(imageY)}};const provinceAt=(point)=>{if(!hitContext||point.x<0||point.y<0||point.x>=canvas.width||point.y>=canvas.height)return null;const pixel=hitContext.getImageData(point.x,point.y,1,1).data;const encoded=(pixel[0]<<16)|(pixel[1]<<8)|pixel[2];return encoded===0?null:encoded-1};hit.onload=()=>{canvas.width=hit.naturalWidth;canvas.height=hit.naturalHeight;hitContext=canvas.getContext('2d',{willReadFrequently:true});hitContext.drawImage(hit,0,0)};search.oninput=updateSearch;kind.onchange=updateSearch;document.getElementById('in').onclick=()=>zoom(1.25);document.getElementById('out').onclick=()=>zoom(.8);document.getElementById('fit').onclick=fit;viewport.addEventListener('wheel',event=>{event.preventDefault();const bounds=viewport.getBoundingClientRect();zoom(event.deltaY<0?1.15:.87,event.clientX-bounds.left,event.clientY-bounds.top)},{passive:false});image.addEventListener('pointerdown',event=>{drag=true;moved=false;lastX=event.clientX;lastY=event.clientY;image.setPointerCapture(event.pointerId);image.classList.add('dragging')});image.addEventListener('pointermove',event=>{const p=point(event),provinceId=provinceAt(p),province=provinceId===null?null:provinces.get(provinceId);cursor.textContent='pixel '+p.x+','+p.y+' | map '+p.x+','+(data.height-1-p.y)+(province?' | province '+province.id+' '+province.name.displayName+' | state '+province.stateIds.join(',')+' | region '+province.regionIds.join(','):'');if(!drag)return;const dx=event.clientX-lastX,dy=event.clientY-lastY;if(Math.abs(dx)+Math.abs(dy)>2)moved=true;x+=dx;y+=dy;lastX=event.clientX;lastY=event.clientY;draw()});image.addEventListener('pointerup',event=>{drag=false;image.classList.remove('dragging');if(!moved){const provinceId=provinceAt(point(event));if(provinceId!==null)show('province',provinceId)}});image.onload=fit;window.addEventListener('resize',fit);draw()})();</script></body></html>`;
+}
+
+function diffHtmlDocument(title: string, png: Buffer, json: string): string {
   const escapedTitle = title
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
   const escapedJson = json.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title><style>html{background:#10151b;color:#edf2f7;font:14px system-ui}body{margin:20px}.controls{display:flex;gap:8px;align-items:center;margin:12px 0}button{background:#263241;color:#edf2f7;border:1px solid #526173;border-radius:4px;padding:6px 10px}.viewport{height:70vh;overflow:hidden;border:1px solid #48515c;background:#080b0f;position:relative;touch-action:none}.viewport img{image-rendering:pixelated;transform-origin:0 0;position:absolute;max-width:none;cursor:grab;user-select:none}.viewport img.dragging{cursor:grabbing}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>${escapedTitle}</h1><div class="controls"><button id="out" type="button">-</button><button id="reset" type="button">Reset</button><button id="in" type="button">+</button><output id="zoom">100%</output></div><div class="viewport" id="viewport"><img id="map" draggable="false" alt="${escapedTitle}" src="data:image/png;base64,${png.toString('base64')}"></div><details><summary>Render metadata</summary><pre>${escapedJson}</pre></details><script>(()=>{const image=document.getElementById('map'),viewport=document.getElementById('viewport'),label=document.getElementById('zoom');let scale=1,x=0,y=0,drag=false,lastX=0,lastY=0;const draw=()=>{image.style.transform='translate('+x+'px,'+y+'px) scale('+scale+')';label.value=Math.round(scale*100)+'%'};const zoom=(factor,cx=viewport.clientWidth/2,cy=viewport.clientHeight/2)=>{const next=Math.min(16,Math.max(.1,scale*factor));x=cx-(cx-x)*(next/scale);y=cy-(cy-y)*(next/scale);scale=next;draw()};document.getElementById('in').onclick=()=>zoom(1.25);document.getElementById('out').onclick=()=>zoom(.8);document.getElementById('reset').onclick=()=>{scale=1;x=0;y=0;draw()};viewport.addEventListener('wheel',event=>{event.preventDefault();const bounds=viewport.getBoundingClientRect();zoom(event.deltaY<0?1.15:.87,event.clientX-bounds.left,event.clientY-bounds.top)},{passive:false});image.addEventListener('pointerdown',event=>{drag=true;lastX=event.clientX;lastY=event.clientY;image.setPointerCapture(event.pointerId);image.classList.add('dragging')});image.addEventListener('pointermove',event=>{if(!drag)return;x+=event.clientX-lastX;y+=event.clientY-lastY;lastX=event.clientX;lastY=event.clientY;draw()});image.addEventListener('pointerup',()=>{drag=false;image.classList.remove('dragging')});draw()})();</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapedTitle}</title><style>html{background:#10151b;color:#edf2f7;font:14px system-ui}body{margin:20px}.viewport{height:70vh;overflow:auto;border:1px solid #48515c;background:#080b0f}.viewport img{image-rendering:pixelated;max-width:none}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>${escapedTitle}</h1><div class="viewport"><img alt="${escapedTitle}" src="data:image/png;base64,${png.toString('base64')}"></div><details><summary>Diff metadata</summary><pre>${escapedJson}</pre></details></body></html>`;
+}
+
+async function encodeProvinceHitMap(index: MapWorkspaceIndex): Promise<Buffer> {
+  const raster = index.raster;
+  if (raster === undefined)
+    throw new ServiceError(
+      'MAP_RENDER_RASTER_MISSING',
+      'Cannot build a province hit map without a valid province raster',
+    );
+  const raw = Buffer.alloc(raster.width * raster.height * 3);
+  for (let offset = 0; offset < raster.provinceIds.length; offset += 1) {
+    const encoded = (raster.provinceIds[offset] ?? -1) + 1;
+    const target = offset * 3;
+    raw[target] = (encoded >> 16) & 255;
+    raw[target + 1] = (encoded >> 8) & 255;
+    raw[target + 2] = encoded & 255;
+  }
+  return sharp(raw, {
+    raw: { width: raster.width, height: raster.height, channels: 3 },
+    limitInputPixels: RENDER_MAX_PIXELS,
+  })
+    .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+    .toBuffer();
 }
 
 async function encodePng(
@@ -757,7 +614,14 @@ export async function renderMap(
   const png = await encodePng(raw, raster.width, raster.height, resolved.scale);
   options.signal?.throwIfAborted();
   const json = `${canonicalJson(await renderMetadata(index, resolved, options.signal))}\n`;
-  const html = htmlDocument(`Agent Nudger map - ${resolved.layer}`, png, json);
+  const provinceHitMap = await encodeProvinceHitMap(index);
+  const html = htmlDocument(
+    `HOI4 map - ${resolved.layer}`,
+    png,
+    provinceHitMap,
+    json,
+    resolved.scale,
+  );
   return {
     width: outputDimensions.width,
     height: outputDimensions.height,
@@ -1103,15 +967,14 @@ export async function renderMapDiff(
   const semantic = semanticMapDiff(before, after);
   const changedBounds = left.diffBounds(right);
   const metadata = {
-    offline: true,
-    renderer: 'hoi4-agent-tools-agent-nudger-diff',
+    renderer: 'hoi4-agent-tools-map-diff',
     changedBounds: changedBounds ?? null,
     changedProvinceIds: [...changedProvinceIds].sort((a, b) => a - b),
     semantic,
     ...(options.review === undefined ? {} : { review: options.review }),
   };
   const json = `${canonicalJson(metadata)}\n`;
-  const html = htmlDocument('Agent Nudger pixel and semantic diff', png, json);
+  const html = diffHtmlDocument('HOI4 map pixel and semantic diff', png, json);
   return {
     width: outputDimensions.width,
     height: outputDimensions.height,

@@ -20,3 +20,5 @@
 18. [Bounded technology helper expansion](0018-bounded-technology-helper-expansion.md)
 19. [Bounded event analysis](0019-bounded-event-analysis.md)
 20. [Domain-bounded scans](0020-domain-bounded-scans.md)
+21. [Client-root workspace context](0021-client-root-workspace-context.md)
+22. [Complete map catalog, navigation, and compact edits](0022-map-catalog-navigation-and-compact-edits.md)

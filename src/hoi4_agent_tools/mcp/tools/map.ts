@@ -11,11 +11,16 @@ import { emptyServiceResult } from '../../core/result.js';
 import {
   AgentNudger,
   allocateMapIdentifiersAsync,
+  buildMapCatalog,
   exportProvinceGeometryRowRuns,
+  lookupMapCoordinate,
   MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT,
+  renderMap,
+  searchMapCatalog,
   type AllocationEvidence,
   type MapAllocationRequest,
   type MapOperation,
+  type MapOverlay,
   type MapSemanticDiff,
   type MapValidationResult,
 } from '../../map/index.js';
@@ -117,6 +122,9 @@ const mapWorkspaceInspectOutputSchema = strictOperationResultSchema(
       inspectedStateCount: nonNegativeIntegerSchema,
       inspectedRegionCount: nonNegativeIntegerSchema,
       allocationCount: nonNegativeIntegerSchema,
+      queryMatchCount: nonNegativeIntegerSchema,
+      coordinateMatchCount: nonNegativeIntegerSchema,
+      overviewRendered: z.boolean(),
       provinceGeometryCount: nonNegativeIntegerSchema,
       provinceGeometryPixelCount: nonNegativeIntegerSchema,
       provinceGeometryRowRunCount: nonNegativeIntegerSchema,
@@ -452,8 +460,7 @@ export function registerMapTools(
     'hoi4.map_inspect',
     {
       title: 'Inspect HOI4 map',
-      description:
-        'Validate the map and write linked inspection evidence. ID selectors return bounded records; provinceIds also export exact row-run geometry.',
+      description: 'Render, validate, search, and click the complete map.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -462,10 +469,34 @@ export function registerMapTools(
             .max(MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT)
             .default([])
             .describe(
-              `Optional exact-geometry selector; exports row runs for at most ${MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT} province IDs`,
+              `Export row runs for up to ${MAP_PROVINCE_GEOMETRY_SELECTOR_LIMIT} province IDs`,
             ),
           stateIds: z.array(z.number().int().positive()).max(1_000).default([]),
           regionIds: z.array(z.number().int().positive()).max(1_000).default([]),
+          query: z.string().max(256).optional(),
+          queryLimit: z.number().int().min(1).max(1_000).default(100),
+          coordinates: z
+            .array(
+              z.discriminatedUnion('kind', [
+                z
+                  .object({
+                    kind: z.literal('pixel'),
+                    x: z.number().int().min(0),
+                    y: z.number().int().min(0),
+                  })
+                  .strict(),
+                z
+                  .object({
+                    kind: z.literal('map'),
+                    x: z.number(),
+                    z: z.number(),
+                  })
+                  .strict(),
+              ]),
+            )
+            .max(100)
+            .default([]),
+          includeOverview: z.boolean().default(true),
           allocationRequests: z.array(mapAllocationRequestSchema).max(100).default([]),
         })
         .strict(),
@@ -473,7 +504,17 @@ export function registerMapTools(
       annotations: artifactProducing,
     },
     async (
-      { workspaceId: requestedWorkspaceId, provinceIds, stateIds, regionIds, allocationRequests },
+      {
+        workspaceId: requestedWorkspaceId,
+        provinceIds,
+        stateIds,
+        regionIds,
+        query,
+        queryLimit,
+        coordinates,
+        includeOverview,
+        allocationRequests,
+      },
       extra,
     ) => {
       const workspaceId = await resolveServerWorkspaceId(
@@ -491,6 +532,13 @@ export function registerMapTools(
           progress.signal,
         );
         const sharedRevision = snapshot.revision;
+        const catalog = buildMapCatalog(snapshot.index);
+        const queryMatches =
+          query === undefined ? [] : searchMapCatalog(catalog, query, queryLimit);
+        const coordinateMatches = coordinates.map((coordinate) =>
+          lookupMapCoordinate(snapshot.index, coordinate),
+        );
+        const overviewRendered = includeOverview && snapshot.index.raster !== undefined;
         const selected = selectedMapEntities(snapshot, provinceIds, stateIds, regionIds);
         const provinceGeometry =
           provinceIds.length === 0
@@ -512,7 +560,7 @@ export function registerMapTools(
         const inspectionProvenance = {
           kind: 'map-inspect',
           toolVersion: PACKAGE_VERSION,
-          schemaVersion: 'map-inspect.v1',
+          schemaVersion: 'map-inspect.v2',
           sourceHashes: sourceEvidence.bounded.sourceHashes,
           metadata: {
             sharedRevision,
@@ -524,7 +572,7 @@ export function registerMapTools(
             name: `map-inspect.${snapshot.revision.slice(0, 16)}.json`,
             mimeType: 'application/json',
             content: `${canonicalJson({
-              schemaVersion: 1,
+              schemaVersion: 2,
               revision: snapshot.revision,
               sharedRevision,
               dimensions:
@@ -546,6 +594,10 @@ export function registerMapTools(
                 ports: snapshot.index.ports.length,
                 locators: snapshot.index.entityLocators.length,
               },
+              catalog,
+              query: query ?? null,
+              queryMatches,
+              coordinateMatches,
               selected,
               allocationPreviews,
               validation,
@@ -553,9 +605,53 @@ export function registerMapTools(
             })}\n`,
             provenance: inspectionProvenance,
             description:
-              'Complete map inspection, validation, selected records, and allocation previews',
+              'Complete searchable map catalog, inspection, validation, selected records, and allocation previews',
           },
         ];
+        if (overviewRendered) {
+          const overviewLayer = 'state' as const;
+          const overviewOverlays: MapOverlay[] = [
+            'coastlines',
+            'ports',
+            'victory-points',
+            'supply-nodes',
+            'railways',
+          ];
+          const overview = await renderMap(snapshot.index, {
+            layer: overviewLayer,
+            overlays: overviewOverlays,
+            signal: progress.signal,
+          });
+          const overviewProvenance = {
+            kind: 'map-inspect-overview',
+            toolVersion: PACKAGE_VERSION,
+            schemaVersion: 'map-inspect-overview.v1',
+            sourceHashes: sourceEvidence.bounded.sourceHashes,
+            renderProfile: {
+              layer: overviewLayer,
+              overlays: [...new Set(overviewOverlays)].sort(),
+              scale: 1,
+            },
+            metadata: { sourceHashInventory: sourceEvidence.bounded.inventory },
+          };
+          artifactWrites.push(
+            {
+              name: `map-overview.${snapshot.revision.slice(0, 16)}.png`,
+              mimeType: 'image/png',
+              content: overview.png,
+              provenance: overviewProvenance,
+              description: 'Complete rendered map overview',
+            },
+            {
+              name: `map-overview.${snapshot.revision.slice(0, 16)}.html`,
+              mimeType: 'text/html',
+              content: overview.html,
+              provenance: overviewProvenance,
+              description:
+                'Searchable and clickable full-map navigator with exact IDs, names, coordinates, and linked records',
+            },
+          );
+        }
         if (provinceGeometry !== undefined) {
           const {
             width,
@@ -622,6 +718,9 @@ export function registerMapTools(
           inspectedStateCount: selected.states.length,
           inspectedRegionCount: selected.regions.length,
           allocationCount: allocationPreviews.length,
+          queryMatchCount: queryMatches.length,
+          coordinateMatchCount: coordinateMatches.length,
+          overviewRendered,
           provinceGeometryCount: provinceGeometry?.provinces.length ?? 0,
           provinceGeometryPixelCount: provinceGeometry?.pixelCount ?? 0,
           provinceGeometryRowRunCount: provinceGeometry?.rowRunCount ?? 0,
@@ -648,7 +747,7 @@ export function registerMapTools(
     'hoi4.map_render',
     {
       title: 'Render map inspection artifacts',
-      description: 'Render deterministic offline map artifacts for one layer and bounded overlays.',
+      description: 'Render searchable full-map PNG, JSON, and HTML.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,
@@ -699,8 +798,7 @@ export function registerMapTools(
     'hoi4.map_rewrite',
     {
       title: 'Create or clean up map content',
-      description:
-        'Apply validated declarative map operations in one call and return linked pixel and semantic evidence.',
+      description: 'Apply map creation, edits, and ID swaps with visual and semantic evidence.',
       inputSchema: z
         .object({
           workspaceId: workspaceIdSchema,

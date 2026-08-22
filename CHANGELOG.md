@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 2.6.0 - 2026-08-22
+
+- Added a shared complete map catalog with resolved names, source locations, geometry, memberships, networks, positions, buildings, ports, adjacency, and localisation evidence.
+- Made map inspection return a full-map overview and a searchable, clickable HTML navigator with exact province hit testing and pixel/map coordinate lookup.
+- Added compact state and province creation defaults, rectangle province geometry, and one-call province, state, and strategic-region ID swapping with connected map-reference and standard localisation updates.
+
 ## 2.5.3 - 2026-08-22
 
 - Resolved and embedded technology icons through the complete mod, dependency, and installed-game load order, including vanilla sprites used by mod content.

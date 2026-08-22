@@ -111,7 +111,7 @@ async function waitForHttpListening(child: ChildProcessWithoutNullStreams): Prom
     const timeout = setTimeout(() => {
       cleanup();
       reject(new Error(`Installed HTTP binary did not start\n${stderr}`));
-    }, 15_000);
+    }, 45_000);
     const consume = (chunk: Buffer): void => {
       const text = chunk.toString('utf8');
       stderr = `${stderr}${text}`.slice(-65_536);

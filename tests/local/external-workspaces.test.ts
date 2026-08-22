@@ -206,12 +206,22 @@ local('local installed-game and external-mod integration', () => {
       layer: 'state',
       overlays: ['coastlines', 'supply-nodes', 'railways'],
     });
-    const metadata = JSON.parse(renderedMap.bundle.json) as { definitions?: unknown[] };
+    const metadata = JSON.parse(renderedMap.bundle.json) as {
+      definitions?: unknown[];
+      provinces?: unknown[];
+      states?: unknown[];
+      strategicRegions?: unknown[];
+    };
     expect(metadata.definitions?.length).toBeGreaterThan(1_000);
+    expect(metadata.provinces?.length).toBe(metadata.definitions?.length);
+    expect(metadata.states?.length).toBeGreaterThan(100);
+    expect(metadata.strategicRegions?.length).toBeGreaterThan(10);
     expect(renderedMap.bundle.width).toBeGreaterThan(1_000);
     expect(renderedMap.filesScanned.length).toBeGreaterThan(0);
     expect(renderedMap.artifacts).toHaveLength(3);
     expect(renderedMap.bundle.png.subarray(1, 4).toString('ascii')).toBe('PNG');
+    expect(renderedMap.bundle.html).toContain('Find ID, localisation key, or name');
+    expect(renderedMap.bundle.html).toContain('provinceAt');
   }, 600_000);
 
   it('analyzes a large vanilla and external-mod event family without copying or changing sources', async () => {

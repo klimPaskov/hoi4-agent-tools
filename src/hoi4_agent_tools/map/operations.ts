@@ -175,13 +175,14 @@ export interface UpdateStateOperation extends MapOperationBase {
 
 export interface SplitStateOperation extends MapOperationBase {
   kind: 'split_state' | 'create_state';
-  sourceStateId: number;
+  sourceStateId?: number;
   stateId?: number;
   provinceIds: number[];
   name?: string;
+  displayName?: string;
   fileName?: string;
   localisation?: StateLocalisationPolicy;
-  distribution: SplitStateDistributionPolicy;
+  distribution?: SplitStateDistributionPolicy | 'proportional';
 }
 
 export interface MergeStatesOperation extends MapOperationBase {
@@ -193,6 +194,7 @@ export interface MergeStatesOperation extends MapOperationBase {
 
 export type ProvinceGeometrySelection =
   | { kind: 'pixels'; pixels: PixelPoint[] }
+  | { kind: 'rectangle'; origin: PixelPoint; width: number; height: number }
   | {
       kind: 'mask';
       width: number;
@@ -232,7 +234,7 @@ export interface SplitProvinceOperation extends MapOperationBase {
   sourceProvinceId: number;
   provinceId?: number;
   geometry: ProvinceGeometrySelection;
-  definition:
+  definition?:
     | { method: 'inherit-source'; overrides?: ProvinceDefinitionInput }
     | {
         method: 'exact';
@@ -243,7 +245,7 @@ export interface SplitProvinceOperation extends MapOperationBase {
           continent: number;
         };
       };
-  distribution: SplitProvinceDistributionPolicy;
+  distribution?: SplitProvinceDistributionPolicy | 'inherit-source';
 }
 
 export interface MergeProvinceDistributionPolicy {
@@ -393,6 +395,15 @@ export interface UpdateEntityLocatorOperation extends MapOperationBase {
   position: [number, number, number];
 }
 
+export interface RenumberMapEntityOperation extends MapOperationBase {
+  kind: 'renumber_map_entity';
+  entity: 'province' | 'state' | 'strategic-region';
+  fromId: number;
+  toId: number;
+  collision?: 'swap' | 'reject';
+  renameLocalisation?: boolean;
+}
+
 export type MapOperation =
   | MoveStateProvincesOperation
   | UpdateStateOperation
@@ -416,7 +427,8 @@ export type MapOperation =
   | RemoveUnitPositionOperation
   | UpsertWeatherPositionOperation
   | RemoveWeatherPositionOperation
-  | UpdateEntityLocatorOperation;
+  | UpdateEntityLocatorOperation
+  | RenumberMapEntityOperation;
 
 type SimpleMapOperation =
   | AddAdjacencyOperation
@@ -490,6 +502,8 @@ interface StateData {
 }
 
 interface StatePatchFields {
+  id?: boolean;
+  name?: boolean;
   manpower?: boolean;
   category?: boolean;
   resources?: boolean;
@@ -677,6 +691,21 @@ function patchState(state: StateRecord, data: StateData, fields: StatePatchField
   const stateInsertions: string[] = [];
   const newline = state.document.newline;
   const stateIndent = lineIndent(state.document.text, state.assignment.start);
+  const patchStateScalar = (key: string, value: string, description: string): void => {
+    const assignment = assignmentFor(state.block, key);
+    if (assignment?.value.type === 'scalar') {
+      replacements.push({
+        start: assignment.value.start,
+        end: assignment.value.end,
+        text: value,
+        description,
+      });
+    } else {
+      stateInsertions.push(`${key} = ${value}`);
+    }
+  };
+  if (fields.id === true) patchStateScalar('id', numberText(data.id), 'Update state ID');
+  if (fields.name === true) patchStateScalar('name', quote(data.name), 'Update state name key');
   if (fields.manpower === true) {
     const assignment = assignmentFor(state.block, 'manpower');
     if (assignment?.value.type === 'scalar') {
@@ -828,20 +857,54 @@ function patchState(state: StateRecord, data: StateData, fields: StatePatchField
   return applyReplacements(state.document, replacements);
 }
 
-function patchRegion(region: StrategicRegionRecord, provinces: readonly number[]): Buffer {
-  const assignment = assignmentFor(region.block, 'provinces');
+function patchRegion(
+  region: StrategicRegionRecord,
+  provinces: readonly number[],
+  identity?: { id?: number; name?: string },
+  patchProvinces = true,
+): Buffer {
+  const replacements: SourceReplacement[] = [];
   const indent = lineIndent(region.document.text, region.assignment.start);
-  const rendered = `provinces = ${renderNumberList(provinces, `${indent}\t`, region.document.newline)}`;
-  const replacement =
-    assignment === undefined
-      ? blockInsertion(region.block, region.document.text, rendered, region.document.newline)
-      : {
-          start: assignment.start,
-          end: assignment.end,
-          text: rendered,
-          description: 'Update strategic region provinces',
-        };
-  return applyReplacements(region.document, [replacement]);
+  if (patchProvinces) {
+    const assignment = assignmentFor(region.block, 'provinces');
+    const rendered = `provinces = ${renderNumberList(provinces, `${indent}\t`, region.document.newline)}`;
+    replacements.push(
+      assignment === undefined
+        ? blockInsertion(region.block, region.document.text, rendered, region.document.newline)
+        : {
+            start: assignment.start,
+            end: assignment.end,
+            text: rendered,
+            description: 'Update strategic region provinces',
+          },
+    );
+  }
+  for (const [key, value] of [
+    ['id', identity?.id],
+    ['name', identity?.name],
+  ] as const) {
+    if (value === undefined) continue;
+    const renderedValue = key === 'name' ? quote(value) : numberText(value);
+    const scalar = assignmentFor(region.block, key);
+    if (scalar?.value.type === 'scalar') {
+      replacements.push({
+        start: scalar.value.start,
+        end: scalar.value.end,
+        text: renderedValue,
+        description: `Update strategic region ${key}`,
+      });
+    } else {
+      replacements.push(
+        blockInsertion(
+          region.block,
+          region.document.text,
+          `${key} = ${renderedValue}`,
+          region.document.newline,
+        ),
+      );
+    }
+  }
+  return applyReplacements(region.document, replacements);
 }
 
 function definitionLine(definition: ProvinceDefinition): string {
@@ -1430,8 +1493,28 @@ function requireMovePolicy(operation: MoveStateProvincesOperation): void {
 }
 
 function requireSplitPolicy(operation: SplitStateOperation): SplitStateDistributionPolicy {
-  const policy = (operation as unknown as { distribution?: Partial<SplitStateDistributionPolicy> })
-    .distribution;
+  const requested = operation.distribution;
+  if (
+    operation.kind === 'create_state' &&
+    (requested === undefined || requested === 'proportional')
+  ) {
+    return {
+      manpower: { method: 'proportional-by-land-pixels' },
+      resources: { method: 'proportional-by-land-pixels' },
+      stateBuildings: { method: 'proportional-by-land-pixels' },
+      owner: { method: 'copy-source' },
+      controller: { method: 'copy-source' },
+      cores: { method: 'copy-source' },
+      claims: { method: 'copy-source' },
+      victoryPoints: 'follow-province',
+      provinceBuildings: 'follow-province',
+      ports: 'follow-province',
+      supplyNodes: 'follow-province',
+      railways: 'follow-province',
+      positions: 'follow-province',
+    };
+  }
+  const policy = requested as Partial<SplitStateDistributionPolicy> | undefined;
   if (
     policy?.manpower === undefined ||
     policy.resources === undefined ||
@@ -2122,13 +2205,21 @@ function* applySplitState(
 ): MapOperationSteps<void> {
   const policy = requireSplitPolicy(operation);
   const index = currentIndex(base, changes);
-  const source = index.statesById.get(operation.sourceStateId);
-  if (source === undefined)
-    throw new ServiceError(
-      'MAP_STATE_NOT_FOUND',
-      `State ${operation.sourceStateId} does not exist`,
-    );
   const selected = uniqueSorted(operation.provinceIds);
+  const inferredSourceIds = uniqueSorted(
+    selected.flatMap((provinceId) => index.stateForProvince(provinceId).map(({ id }) => id)),
+  );
+  const sourceStateId =
+    operation.sourceStateId ?? (inferredSourceIds.length === 1 ? inferredSourceIds[0] : undefined);
+  if (sourceStateId === undefined)
+    throw new ServiceError(
+      'MAP_STATE_SOURCE_AMBIGUOUS',
+      'Source state could not be inferred because the selected provinces do not all belong to one state',
+      { provinceIds: selected, candidateStateIds: inferredSourceIds },
+    );
+  const source = index.statesById.get(sourceStateId);
+  if (source === undefined)
+    throw new ServiceError('MAP_STATE_NOT_FOUND', `State ${sourceStateId} does not exist`);
   const selectedSet = new Set(selected);
   if (selected.length === 0 || selected.some((id) => !source.provinces.includes(id))) {
     throw new ServiceError(
@@ -2154,13 +2245,35 @@ function* applySplitState(
   const sourceData = cloneState(source);
   const destinationData = cloneState(source);
   destinationData.id = allocation.id;
-  if (operation.name === undefined || operation.name.trim() === '')
+  const requestedKey = operation.name?.trim();
+  const displayName = operation.displayName?.trim();
+  if (
+    (requestedKey === undefined || requestedKey === '') &&
+    (displayName === undefined || displayName === '')
+  )
     throw new ServiceError(
       'MAP_STATE_NAME_REQUIRED',
-      'State creation requires an explicit localisation key',
+      'State creation requires name or displayName',
     );
-  destinationData.name = operation.name;
-  applyStateLocalisation(index, changes, operation, destinationData.name);
+  destinationData.name =
+    requestedKey === undefined || requestedKey === '' ? `STATE_${allocation.id}` : requestedKey;
+  const operationWithLocalisation =
+    displayName !== undefined && displayName !== '' && operation.localisation === undefined
+      ? {
+          ...operation,
+          localisation: {
+            method: 'upsert' as const,
+            language: 'l_english' as const,
+            value: displayName,
+            ...(index.localisationByKey.has(`l_english:${destinationData.name}`)
+              ? {}
+              : {
+                  file: `${index.sourceRoots.localisation[0] ?? 'localisation'}/english/hoi4_agent_map_l_english.yml`,
+                }),
+          },
+        }
+      : operation;
+  applyStateLocalisation(index, changes, operationWithLocalisation, destinationData.name);
   sourceData.provinces = sourceData.provinces.filter((id) => !selectedSet.has(id));
   destinationData.provinces = selected;
   [sourceData.manpower, destinationData.manpower] = splitScalar(
@@ -2545,6 +2658,43 @@ function* selectedPixels(
     }
     return offsets.subarray(0, uniqueCount);
   }
+  if (geometry.kind === 'rectangle') {
+    const { origin, width, height } = geometry;
+    const count = width * height;
+    if (
+      !Number.isSafeInteger(width) ||
+      !Number.isSafeInteger(height) ||
+      width <= 0 ||
+      height <= 0 ||
+      origin.x < 0 ||
+      origin.y < 0 ||
+      origin.x + width > raster.width ||
+      origin.y + height > raster.height
+    )
+      throw new ServiceError(
+        'MAP_GEOMETRY_OUT_OF_BOUNDS',
+        'Province rectangle must be a positive integer rectangle inside the active raster',
+        { origin, width, height, raster: { width: raster.width, height: raster.height } },
+      );
+    assertSelectedPixelBudget(count, 'Rectangle geometry');
+    const offsets = new Uint32Array(count);
+    let selectedIndex = 0;
+    for (let y = origin.y; y < origin.y + height; y += 1) {
+      yield* cancellationCheckpoint(signal, y - origin.y, 16);
+      for (let x = origin.x; x < origin.x + width; x += 1) {
+        const offset = y * raster.width + x;
+        if (raster.provinceIds[offset] !== provinceId)
+          throw new ServiceError(
+            'MAP_GEOMETRY_OUTSIDE_SOURCE',
+            'Every rectangle pixel must belong to the source province',
+            { x, y, provinceId },
+          );
+        offsets[selectedIndex] = offset;
+        selectedIndex += 1;
+      }
+    }
+    return offsets;
+  }
   if (geometry.kind === 'mask') {
     const offsets = yield* rasterMaskPixels(raster, geometry, signal);
     for (let indexOffset = 0; indexOffset < offsets.length; indexOffset += 1) {
@@ -2703,18 +2853,19 @@ function definitionFromOperation(
   id: number,
   allocatedColor: RgbColor,
 ): ProvinceDefinition {
+  const definitionPolicy = operation.definition ?? { method: 'inherit-source' as const };
   const values =
-    operation.definition.method === 'inherit-source'
+    definitionPolicy.method === 'inherit-source'
       ? {
-          type: operation.definition.overrides?.type ?? source.type,
-          coastal: operation.definition.overrides?.coastal ?? source.coastal,
-          terrain: operation.definition.overrides?.terrain ?? source.terrain,
-          continent: operation.definition.overrides?.continent ?? source.continent,
-          color: operation.definition.overrides?.color ?? allocatedColor,
+          type: definitionPolicy.overrides?.type ?? source.type,
+          coastal: definitionPolicy.overrides?.coastal ?? source.coastal,
+          terrain: definitionPolicy.overrides?.terrain ?? source.terrain,
+          continent: definitionPolicy.overrides?.continent ?? source.continent,
+          color: definitionPolicy.overrides?.color ?? allocatedColor,
         }
       : {
-          ...operation.definition.value,
-          color: operation.definition.value.color ?? allocatedColor,
+          ...definitionPolicy.value,
+          color: definitionPolicy.value.color ?? allocatedColor,
         };
   return {
     id,
@@ -2732,9 +2883,23 @@ function requireSplitProvincePolicy(
   operation: SplitProvinceOperation,
   source: ProvinceDefinition,
 ): void {
-  const policy = (
-    operation as unknown as { distribution?: Partial<SplitProvinceDistributionPolicy> }
-  ).distribution;
+  const requested = operation.distribution;
+  const policy: Partial<SplitProvinceDistributionPolicy> | undefined =
+    operation.kind === 'create_province' &&
+    (requested === undefined || requested === 'inherit-source')
+      ? {
+          state: source.type === 'land' ? 'inherit-source' : 'none',
+          strategicRegion: 'inherit-source',
+          victoryPoints: 'retain-source',
+          provinceBuildings: 'retain-source',
+          ports: 'retain-source',
+          supplyNodes: 'retain-source',
+          railways: 'retain-source',
+          adjacencies: 'retain-source',
+          positions: 'retain-source',
+          entityLocators: 'retain-source',
+        }
+      : (requested as Partial<SplitProvinceDistributionPolicy> | undefined);
   if (
     policy?.strategicRegion !== 'inherit-source' ||
     policy.victoryPoints !== 'retain-source' ||
@@ -4414,6 +4579,304 @@ function remapReferenceFiles(
   }
 }
 
+function renumberMapping(
+  existingIds: readonly number[],
+  operation: RenumberMapEntityOperation,
+): ReadonlyMap<number, number> {
+  const ids = new Set(existingIds);
+  if (!ids.has(operation.fromId))
+    throw new ServiceError(
+      'MAP_ENTITY_ID_NOT_FOUND',
+      `${operation.entity} ${operation.fromId} does not exist`,
+    );
+  if (operation.fromId === operation.toId)
+    throw new ServiceError(
+      'MAP_ENTITY_ID_UNCHANGED',
+      `${operation.entity} already uses ID ${operation.toId}`,
+    );
+  const targetOccupied = ids.has(operation.toId);
+  if (targetOccupied && (operation.collision ?? 'swap') === 'reject')
+    throw new ServiceError(
+      'MAP_ENTITY_ID_COLLISION',
+      `${operation.entity} ID ${operation.toId} already exists`,
+    );
+  return new Map([
+    [operation.fromId, operation.toId],
+    ...(targetOccupied ? ([[operation.toId, operation.fromId]] as const) : []),
+  ]);
+}
+
+function renameLocalisationKeys(
+  index: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  keys: ReadonlyMap<string, string>,
+  operationId: string,
+): void {
+  if (keys.size === 0) return;
+  for (const [from, to] of keys) {
+    const destination = index.localisationEntries.filter(({ entry }) => entry.key === to);
+    if (destination.length > 0 && !keys.has(to))
+      throw new ServiceError(
+        'MAP_LOCALISATION_KEY_COLLISION',
+        `Localisation key ${to} already exists`,
+        { from, to },
+      );
+  }
+  const documents = new Map<
+    string,
+    { document: LocalisationDocument; replacements: SourceReplacement[] }
+  >();
+  for (const { file, document, entry } of index.localisationEntries) {
+    if (file.rootKind !== 'mod') continue;
+    const replacementKey = keys.get(entry.key);
+    if (replacementKey === undefined) continue;
+    requireSafeLocalisationDocument(document, file.relativePath);
+    const group = documents.get(file.relativePath) ?? { document, replacements: [] };
+    const line = document.text.slice(entry.start, entry.end);
+    const keyOffset = line.indexOf(entry.key);
+    if (keyOffset < 0)
+      throw new ServiceError(
+        'MAP_LOCALISATION_KEY_SOURCE_INVALID',
+        `Localisation source line does not contain key ${entry.key}`,
+        { file: file.displayPath, line: entry.line },
+      );
+    group.replacements.push({
+      start: entry.start + keyOffset,
+      end: entry.start + keyOffset + entry.key.length,
+      text: replacementKey,
+      description: 'Renumber map localisation key',
+    });
+    documents.set(file.relativePath, group);
+  }
+  for (const [relativePath, { document, replacements }] of documents) {
+    const ordered = [...replacements].sort((left, right) => left.start - right.start);
+    let cursor = 0;
+    let text = '';
+    for (const replacement of ordered) {
+      if (replacement.start < cursor)
+        throw new ServiceError(
+          'MAP_LOCALISATION_REPLACEMENT_OVERLAP',
+          'Map localisation key replacements overlap',
+        );
+      text += document.text.slice(cursor, replacement.start) + replacement.text;
+      cursor = replacement.end;
+    }
+    text += document.text.slice(cursor);
+    addChange(changes, relativePath, encodeSource(text, 'utf8-bom'), operationId, 'text/yaml');
+  }
+}
+
+function remapBuildingPositionStateIds(
+  index: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  stateIds: ReadonlyMap<number, number>,
+  operationId: string,
+): void {
+  const documents = new Map(
+    index.buildingPositions.map((record) => [record.document.file.relativePath, record.document]),
+  );
+  for (const [relativePath, document] of documents) {
+    const replacements = index.buildingPositions
+      .filter((record) => record.document === document)
+      .flatMap((record): SourceReplacement[] => {
+        const stateId = stateIds.get(record.stateId);
+        const line = document.lines[record.line - 1];
+        return stateId === undefined || line === undefined
+          ? []
+          : [
+              {
+                start: line.start,
+                end: line.end,
+                text: replaceDelimitedFields(line.text, new Map([[0, numberText(stateId)]])),
+                description: 'Renumber building-position state reference',
+              },
+            ];
+      });
+    if (replacements.length > 0)
+      addChange(
+        changes,
+        relativePath,
+        applyTextRanges(document, replacements),
+        operationId,
+        'text/plain',
+      );
+  }
+}
+
+function remapWeatherPositionRegionIds(
+  index: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  regionIds: ReadonlyMap<number, number>,
+  operationId: string,
+): void {
+  const documents = new Map(
+    index.weatherPositions.map((record) => [record.document.file.relativePath, record.document]),
+  );
+  for (const [relativePath, document] of documents) {
+    const replacements = index.weatherPositions
+      .filter((record) => record.document === document)
+      .flatMap((record): SourceReplacement[] => {
+        const strategicRegionId = regionIds.get(record.strategicRegionId);
+        const line = document.lines[record.line - 1];
+        return strategicRegionId === undefined || line === undefined
+          ? []
+          : [
+              {
+                start: line.start,
+                end: line.end,
+                text: replaceDelimitedFields(
+                  line.text,
+                  new Map([[0, numberText(strategicRegionId)]]),
+                ),
+                description: 'Renumber weather-position strategic-region reference',
+              },
+            ];
+      });
+    if (replacements.length > 0)
+      addChange(
+        changes,
+        relativePath,
+        applyTextRanges(document, replacements),
+        operationId,
+        'text/plain',
+      );
+  }
+}
+
+function applyRenumberMapEntity(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RenumberMapEntityOperation,
+): void {
+  const index = currentIndex(base, changes);
+  if (!Number.isSafeInteger(operation.fromId) || !Number.isSafeInteger(operation.toId))
+    throw new ServiceError('MAP_ENTITY_ID_INVALID', 'Map IDs must be safe integers');
+  if (
+    (operation.entity === 'province' && (operation.fromId < 0 || operation.toId < 0)) ||
+    (operation.entity !== 'province' && (operation.fromId <= 0 || operation.toId <= 0))
+  )
+    throw new ServiceError('MAP_ENTITY_ID_INVALID', 'Map entity ID is outside its valid range');
+  if (operation.entity === 'province') {
+    const mapping = renumberMapping(
+      index.definitions.map(({ id }) => id),
+      operation,
+    );
+    const projectedIds = index.definitions.map(({ id }) => remapProvinceId(mapping, id));
+    if (!contiguous(projectedIds, 0))
+      throw new ServiceError(
+        'MAP_PROVINCE_ID_GAP',
+        'Province renumbering must preserve the contiguous zero-based ID table; use the default swap when the target is occupied',
+        { projectedIds: uniqueSorted(projectedIds) },
+      );
+    const definitionUpdates = new Map<number, ProvinceDefinition>();
+    for (const [fromId, toId] of mapping) {
+      const definition = required(
+        index.definitionsById.get(fromId),
+        'MAP_ENTITY_ID_NOT_FOUND',
+        `Province ${fromId} does not exist`,
+      );
+      definitionUpdates.set(fromId, { ...definition, id: toId });
+    }
+    addChange(
+      changes,
+      required(index.definitionFile, 'MAP_DEFINITION_FILE_MISSING', 'Definition file is missing')
+        .relativePath,
+      patchDefinitions(index, definitionUpdates, new Set(), []),
+      operation.id,
+      'text/plain',
+    );
+    for (const state of index.states) {
+      const data = cloneState(state);
+      const fields = remapStateProvinceData(data, mapping);
+      if (Object.values(fields).some(Boolean))
+        commitState(changes, state, data, fields, operation.id);
+    }
+    for (const region of index.regions) {
+      if (!region.provinces.some((id) => mapping.has(id))) continue;
+      commitRegion(
+        changes,
+        region,
+        uniqueSorted(region.provinces.map((id) => remapProvinceId(mapping, id))),
+        operation.id,
+      );
+    }
+    remapReferenceFiles(index, changes, mapping, operation.id);
+    if (operation.renameLocalisation ?? true) {
+      const keys = new Map<string, string>();
+      for (const [fromId, toId] of mapping) {
+        keys.set(`PROV${fromId}`, `PROV${toId}`);
+        keys.set(`VICTORY_POINTS_${fromId}`, `VICTORY_POINTS_${toId}`);
+      }
+      renameLocalisationKeys(currentIndex(base, changes), changes, keys, operation.id);
+    }
+    return;
+  }
+  if (operation.entity === 'state') {
+    const mapping = renumberMapping(
+      index.states.map(({ id }) => id),
+      operation,
+    );
+    const localisationKeys = new Map<string, string>();
+    for (const [fromId, toId] of mapping) {
+      const state = required(
+        index.statesById.get(fromId),
+        'MAP_ENTITY_ID_NOT_FOUND',
+        `State ${fromId} does not exist`,
+      );
+      const data = cloneState(state);
+      data.id = toId;
+      const standardName = state.name === `STATE_${fromId}`;
+      if (standardName) {
+        data.name = `STATE_${toId}`;
+        localisationKeys.set(state.name, data.name);
+      }
+      commitState(
+        changes,
+        state,
+        data,
+        { id: true, ...(standardName ? { name: true } : {}) },
+        operation.id,
+      );
+    }
+    remapBuildingPositionStateIds(index, changes, mapping, operation.id);
+    if (operation.renameLocalisation ?? true)
+      renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
+    return;
+  }
+  const mapping = renumberMapping(
+    index.regions.map(({ id }) => id),
+    operation,
+  );
+  const projectedIds = index.regions.map(({ id }) => mapping.get(id) ?? id);
+  if (!contiguous(projectedIds, 1))
+    throw new ServiceError(
+      'MAP_STRATEGIC_REGION_ID_GAP',
+      'Strategic-region renumbering must preserve the contiguous one-based ID table; use the default swap when the target is occupied',
+      { projectedIds: uniqueSorted(projectedIds) },
+    );
+  const localisationKeys = new Map<string, string>();
+  for (const [fromId, toId] of mapping) {
+    const region = required(
+      index.regionsById.get(fromId),
+      'MAP_ENTITY_ID_NOT_FOUND',
+      `Strategic region ${fromId} does not exist`,
+    );
+    const standardName = region.name === `STRATEGICREGION_${fromId}`;
+    const name = standardName ? `STRATEGICREGION_${toId}` : region.name;
+    if (standardName) localisationKeys.set(region.name, name);
+    addChange(
+      changes,
+      region.file.relativePath,
+      patchRegion(region, region.provinces, { id: toId, ...(standardName ? { name } : {}) }, false),
+      operation.id,
+      'text/plain',
+    );
+  }
+  remapWeatherPositionRegionIds(index, changes, mapping, operation.id);
+  if (operation.renameLocalisation ?? true)
+    renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
+}
+
 function applyEntityLocator(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -4534,6 +4997,8 @@ function* planMapOperationSteps(
         );
       else if (operation.kind === 'update_entity_locator')
         applyEntityLocator(base, changes, operation);
+      else if (operation.kind === 'renumber_map_entity')
+        applyRenumberMapEntity(base, changes, operation);
       else handleSimpleOperation(base, changes, operation as SimpleMapOperation);
     } catch (error) {
       if (signal?.aborted) throw error;

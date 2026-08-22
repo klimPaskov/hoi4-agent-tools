@@ -1,4 +1,5 @@
 export * from './bmp.js';
+export * from './catalog.js';
 export * from './limits.js';
 export * from './model.js';
 export * from './operations.js';

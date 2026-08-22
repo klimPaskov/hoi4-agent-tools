@@ -140,6 +140,22 @@ const provinceGeometrySchema = z.discriminatedUnion('kind', [
     .strict(),
   z
     .object({
+      kind: z.literal('rectangle'),
+      origin: pointSchema,
+      width: z.number().int().positive().max(RENDER_MAX_DIMENSION),
+      height: z.number().int().positive().max(RENDER_MAX_DIMENSION),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if (value.width * value.height > MAP_SELECTED_PIXEL_LIMIT)
+        context.addIssue({
+          code: 'custom',
+          path: ['width'],
+          message: `Rectangle selects more than ${MAP_SELECTED_PIXEL_LIMIT} pixels`,
+        });
+    }),
+  z
+    .object({
       kind: z.literal('mask'),
       width: z.number().int().positive().max(RENDER_MAX_DIMENSION),
       height: z.number().int().positive().max(RENDER_MAX_DIMENSION),
@@ -261,7 +277,7 @@ const provinceTypeDistributionSchema = z
   })
   .strict();
 
-const splitStateOperation = (kind: 'split_state' | 'create_state') =>
+const splitStateOperation = (kind: 'split_state') =>
   z
     .object({
       ...operationBase,
@@ -275,7 +291,25 @@ const splitStateOperation = (kind: 'split_state' | 'create_state') =>
       distribution: splitStateDistributionSchema,
     })
     .strict();
-const splitProvinceOperation = (kind: 'split_province' | 'create_province') =>
+const createStateOperation = z
+  .object({
+    ...operationBase,
+    kind: z.literal('create_state'),
+    sourceStateId: stateId.optional(),
+    stateId: stateId.optional(),
+    provinceIds: z.array(provinceId).min(1).max(100_000),
+    name: z.string().min(1).max(1000).optional(),
+    displayName: z.string().min(1).max(100_000).optional(),
+    fileName: z.string().max(255).optional(),
+    localisation: stateLocalisationSchema.optional(),
+    distribution: z.union([z.literal('proportional'), splitStateDistributionSchema]).optional(),
+  })
+  .strict()
+  .refine((value) => value.name !== undefined || value.displayName !== undefined, {
+    message: 'create_state requires name or displayName',
+    path: ['displayName'],
+  });
+const splitProvinceOperation = (kind: 'split_province') =>
   z
     .object({
       ...operationBase,
@@ -287,6 +321,19 @@ const splitProvinceOperation = (kind: 'split_province' | 'create_province') =>
       distribution: splitProvinceDistributionSchema,
     })
     .strict();
+const createProvinceOperation = z
+  .object({
+    ...operationBase,
+    kind: z.literal('create_province'),
+    sourceProvinceId: provinceId,
+    provinceId: provinceId.optional(),
+    geometry: provinceGeometrySchema,
+    definition: provinceDefinitionSchema.optional(),
+    distribution: z
+      .union([z.literal('inherit-source'), splitProvinceDistributionSchema])
+      .optional(),
+  })
+  .strict();
 const occurrenceSchema = z.number().int().min(0).optional();
 
 export const mapOperationSchema = z.discriminatedUnion('kind', [
@@ -379,7 +426,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   splitStateOperation('split_state'),
-  splitStateOperation('create_state'),
+  createStateOperation,
   z
     .object({
       ...operationBase,
@@ -390,7 +437,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   splitProvinceOperation('split_province'),
-  splitProvinceOperation('create_province'),
+  createProvinceOperation,
   z
     .object({
       ...operationBase,
@@ -430,6 +477,26 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       distribution: z.literal('move-membership'),
     })
     .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('renumber_map_entity'),
+      entity: z.enum(['province', 'state', 'strategic-region']),
+      fromId: z.number().int().min(0),
+      toId: z.number().int().min(0),
+      collision: z.enum(['swap', 'reject']).default('swap'),
+      renameLocalisation: z.boolean().default(true),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if (value.entity !== 'province' && (value.fromId === 0 || value.toId === 0)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fromId'],
+          message: 'State and strategic-region IDs must be positive',
+        });
+      }
+    }),
   z
     .object({
       ...operationBase,

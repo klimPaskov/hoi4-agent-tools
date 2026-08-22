@@ -40,6 +40,7 @@ Every edit is described by one complete declarative `map_rewrite` request. Befor
 - change province type, terrain, continent, and coastal state
 - add or remove normal and special adjacencies
 - update ports, victory points, supply nodes, railways, positions, and locators
+- renumber province, state, and strategic-region IDs with connected map references
 
 Natural language may help the coding agent draft the request. Geometry-changing work still requires exact selected provinces, polygons, masks, or pixel regions before the one-call rewrite can mutate source.
 
@@ -54,6 +55,9 @@ Never assume the numerically next ID is available.
 ## Agent map artifacts
 
 Generate map resources with pan-and-zoom HTML where useful, plus PNG and JSON outputs for:
+
+- searchable localised province, state, and strategic-region names and IDs
+- exact click and coordinate lookup backed by the province raster
 
 - province, state, and strategic-region borders
 - terrain and continent layers
@@ -77,11 +81,11 @@ Province bitmap edits must use exact colors with no anti-aliasing. Preserve dime
 
 Detect unknown colors, unregistered colors, holes, one-pixel artifacts, accidental thin corridors, and disconnected components for review. Do not classify every island or separated component as invalid.
 
-## State split and merge policies
+## State and province creation defaults
 
-Never guess the distribution of manpower, resources, buildings, victory points, ownership, control, cores, claims, supply nodes, or railways.
+The compact state-creation contract may infer the source only when every selected province belongs to one unambiguous state. Its documented default divides manpower, resources, and state buildings by land-pixel share, copies owner, controller, cores, and claims, and keeps province-bound data with its province. Compact province creation inherits its source definition and memberships and retains connected records on the source. These are stable operation semantics, not runtime guesses.
 
-Require explicit policies such as:
+Accept complete explicit policies when the caller needs different behavior, including:
 
 - remain with original state
 - move with a named province
@@ -89,7 +93,7 @@ Require explicit policies such as:
 - exact values in manifest
 - block until resolved
 
-Build the proposed result and its artifacts before mutation within the rewrite call. Keep the rewrite blocked and leave source untouched while required choices remain unresolved.
+Build the proposed result and its artifacts before mutation within the rewrite call. Keep the rewrite blocked and leave source untouched when the compact form is ambiguous or a supplied explicit policy is incomplete.
 
 ## Validation
 
@@ -121,6 +125,6 @@ Expose agent tools for scan, inspect, allocate, render, validate, and one-call r
 
 ## Acceptance fixtures
 
-Create synthetic fixtures for state creation, province movement, province split by mask, province merge, safe ID and color allocation, strategic-region updates, supply or railway updates, adjacency changes, exact automatic recovery after an injected failure, orphan-pixel detection, and invalid-reference detection. Prove that each authorized successful edit completes in one `map_rewrite` call and that blocked or failed calls leave no mixed source state.
+Create synthetic fixtures for compact and explicit state creation, province creation by rectangle, polygon, pixels, and mask, province movement, province merge, ID swapping and connected reference remapping, ID and color allocation, strategic-region updates, full-map name/ID navigation, exact coordinate lookup, supply or railway updates, adjacency changes, exact automatic recovery after an injected failure, orphan-pixel detection, and invalid-reference detection. Prove that each authorized successful edit completes in one `map_rewrite` call and that blocked or failed calls leave no mixed source state.
 
 Also run local integration tests against the installed game and at least one external mod workspace. Prove that unrelated files and unrelated bitmap regions remain unchanged.

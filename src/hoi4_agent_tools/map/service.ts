@@ -306,6 +306,7 @@ const provinceOperationKinds = new Set([
   'merge_provinces',
   'remove_province',
   'update_province_definition',
+  'renumber_map_entity',
   'add_normal_adjacency',
   'remove_normal_adjacency',
 ]);

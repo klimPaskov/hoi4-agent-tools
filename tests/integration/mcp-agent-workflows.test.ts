@@ -600,6 +600,8 @@ describe('MCP coding-agent workflows', () => {
           provinceIds: [1, 4, 999],
           stateIds: [1, 5, 999],
           regionIds: [1, 2, 999],
+          query: 'region',
+          coordinates: [{ kind: 'pixel', x: 10, y: 10 }],
           allocationRequests: [
             { kind: 'state' },
             {
@@ -619,6 +621,9 @@ describe('MCP coding-agent workflows', () => {
         inspectedStateCount: 3,
         inspectedRegionCount: 3,
         allocationCount: 2,
+        queryMatchCount: 2,
+        coordinateMatchCount: 1,
+        overviewRendered: true,
       },
     });
     const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
@@ -629,8 +634,18 @@ describe('MCP coding-agent workflows', () => {
         regions: expect.any(Array),
       },
       allocationPreviews: [expect.any(Object), expect.any(Object)],
+      catalog: {
+        provinces: expect.any(Array),
+        states: expect.any(Array),
+        strategicRegions: expect.any(Array),
+      },
+      queryMatches: expect.any(Array),
+      coordinateMatches: [expect.objectContaining({ provinceId: expect.any(Number) })],
       validation: expect.any(Object),
     });
+    expect(inspected.artifacts.map(({ mimeType }) => mimeType)).toEqual(
+      expect.arrayContaining(['application/json', 'image/png', 'text/html']),
+    );
 
     const rendered = resultOf(
       await client.callTool({

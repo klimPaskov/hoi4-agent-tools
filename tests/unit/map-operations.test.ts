@@ -11,6 +11,11 @@ import { TransactionManager } from '../../src/hoi4_agent_tools/core/transactions
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createBmp, type RgbColor } from '../../src/hoi4_agent_tools/map/bmp.js';
 import {
+  buildMapCatalog,
+  lookupMapCoordinate,
+  searchMapCatalog,
+} from '../../src/hoi4_agent_tools/map/catalog.js';
+import {
   MAP_TEXT_MAX_BYTES,
   MAP_TEXT_MAX_RECORDS,
   MapWorkspaceIndex,
@@ -2774,6 +2779,172 @@ describe('Agent Nudger map model and operations', () => {
     ]);
   });
 
+  it('builds a complete localised catalog with name search and exact coordinate lookup', async () => {
+    const { snapshot } = await setup();
+    const catalog = buildMapCatalog(snapshot.index);
+    expect(catalog.counts).toMatchObject({
+      provinces: 5,
+      states: 2,
+      strategicRegions: 1,
+      buildingPositions: 3,
+      unitPositions: 1,
+      weatherPositions: 2,
+    });
+    expect(catalog.states.find(({ id }) => id === 1)).toMatchObject({
+      name: { key: 'STATE_1', displayName: 'One' },
+      provinceIds: [1, 4],
+      regionIds: [1],
+      sourcePath: 'mod:history/states/1-ONE.txt',
+    });
+    expect(searchMapCatalog(catalog, 'one')).toMatchObject([
+      { kind: 'state', id: 1, displayName: 'One', score: 0 },
+    ]);
+    expect(lookupMapCoordinate(snapshot.index, { kind: 'pixel', x: 10, y: 10 })).toEqual({
+      coordinate: { kind: 'pixel', x: 10, y: 10 },
+      pixel: { x: 10, y: 10 },
+      provinceId: 1,
+      stateIds: [1],
+      regionIds: [1],
+    });
+    expect(lookupMapCoordinate(snapshot.index, { kind: 'map', x: 140, z: 245 })).toMatchObject({
+      pixel: { x: 140, y: 10 },
+      provinceId: 2,
+      stateIds: [2],
+      regionIds: [1],
+    });
+  });
+
+  it('creates states and provinces with compact defaults inferred from the selected source', async () => {
+    const { snapshot } = await setup();
+    const stateOperation = mapOperationSchema.parse({
+      id: 'create-state-compact',
+      kind: 'create_state',
+      provinceIds: [4],
+      displayName: 'Compact State',
+    }) as MapOperation;
+    const statePlan = planMapOperations(snapshot.index, [stateOperation]);
+    expect(statePlan.blockers).toEqual([]);
+    expect(statePlan.finalIndex.statesById.get(3)).toMatchObject({
+      id: 3,
+      name: 'STATE_3',
+      provinces: [4],
+      manpower: 500,
+      owner: 'AAA',
+      cores: ['AAA'],
+    });
+    expect(
+      statePlan.finalIndex.localisationByKey.get('l_english:STATE_3')?.at(-1)?.entry.value,
+    ).toBe('Compact State');
+
+    const provinceOperation = mapOperationSchema.parse({
+      id: 'create-province-compact',
+      kind: 'create_province',
+      sourceProvinceId: 4,
+      geometry: { kind: 'rectangle', origin: { x: 96, y: 1 }, width: 1, height: 1 },
+    }) as MapOperation;
+    const provincePlan = planMapOperations(snapshot.index, [provinceOperation]);
+    expect(provincePlan.blockers).toEqual([]);
+    expect(provincePlan.finalIndex.definitionsById.get(5)).toMatchObject({
+      id: 5,
+      type: 'land',
+      terrain: 'forest',
+      continent: 1,
+    });
+    expect(provincePlan.finalIndex.statesById.get(1)?.provinces).toEqual([1, 4, 5]);
+    expect(provincePlan.finalIndex.regionsById.get(1)?.provinces).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('renumbers province and state IDs by swapping every connected map reference', async () => {
+    const { snapshot } = await setup({
+      'localisation/english/map_l_english.yml': Buffer.from(
+        '\ufeffl_english:\nSTATE_1: "One"\nSTATE_2: "Two"\nPROV1: "West"\nPROV2: "East"\nVICTORY_POINTS_1: "West City"\nSTRATEGICREGION_1: "Region"\n',
+        'utf8',
+      ),
+    });
+    const provincePlan = planMapOperations(snapshot.index, [
+      mapOperationSchema.parse({
+        id: 'swap-provinces',
+        kind: 'renumber_map_entity',
+        entity: 'province',
+        fromId: 1,
+        toId: 2,
+      }) as MapOperation,
+    ]);
+    expect(provincePlan.blockers).toEqual([]);
+    expect(provincePlan.finalIndex.statesById.get(1)?.provinces).toEqual([2, 4]);
+    expect(provincePlan.finalIndex.statesById.get(2)?.provinces).toEqual([1]);
+    expect(provincePlan.finalIndex.supplyNodes).toMatchObject([{ provinceId: 2 }]);
+    expect(provincePlan.finalIndex.railways).toMatchObject([{ provinces: [2, 4, 1] }]);
+    expect(provincePlan.finalIndex.unitPositions).toMatchObject([{ provinceId: 2 }]);
+    expect(
+      provincePlan.finalIndex.localisationByKey.get('l_english:PROV2')?.at(-1)?.entry.value,
+    ).toBe('West');
+    expect(
+      provincePlan.finalIndex.localisationByKey.get('l_english:VICTORY_POINTS_2')?.at(-1)?.entry
+        .value,
+    ).toBe('West City');
+
+    const statePlan = planMapOperations(snapshot.index, [
+      mapOperationSchema.parse({
+        id: 'swap-states',
+        kind: 'renumber_map_entity',
+        entity: 'state',
+        fromId: 1,
+        toId: 2,
+      }) as MapOperation,
+    ]);
+    expect(statePlan.blockers).toEqual([]);
+    expect(statePlan.finalIndex.statesById.get(1)?.file.relativePath).toBe(
+      'history/states/2-TWO.txt',
+    );
+    expect(statePlan.finalIndex.statesById.get(2)?.file.relativePath).toBe(
+      'history/states/1-ONE.txt',
+    );
+    expect(statePlan.finalIndex.buildingPositions.map(({ stateId }) => stateId)).toEqual([2, 2, 1]);
+    expect(
+      statePlan.finalIndex.localisationByKey.get('l_english:STATE_2')?.at(-1)?.entry.value,
+    ).toBe('One');
+    expect(
+      statePlan.finalIndex.localisationByKey.get('l_english:STATE_1')?.at(-1)?.entry.value,
+    ).toBe('Two');
+  });
+
+  it('renumbers strategic-region IDs with names and weather references', async () => {
+    const { snapshot } = await setup({
+      'map/strategicregions/1-REGION.txt':
+        'strategic_region = {\n\tid = 1\n\tname = "STRATEGICREGION_1"\n\tprovinces = { 1 3 4 }\n}\n',
+      'map/strategicregions/2-REGION.txt':
+        'strategic_region = {\n\tid = 2\n\tname = "STRATEGICREGION_2"\n\tprovinces = { 2 }\n}\n',
+      'map/weatherpositions.txt': '1;10;0;245;small\n2;140;0;245;big\n',
+      'localisation/english/map_l_english.yml': Buffer.from(
+        '\ufeffl_english:\nSTATE_1: "One"\nSTATE_2: "Two"\nSTRATEGICREGION_1: "West Region"\nSTRATEGICREGION_2: "East Region"\n',
+        'utf8',
+      ),
+    });
+    const plan = planMapOperations(snapshot.index, [
+      mapOperationSchema.parse({
+        id: 'swap-regions',
+        kind: 'renumber_map_entity',
+        entity: 'strategic-region',
+        fromId: 1,
+        toId: 2,
+      }) as MapOperation,
+    ]);
+    expect(plan.blockers).toEqual([]);
+    expect(plan.finalIndex.regionsById.get(1)?.file.relativePath).toBe(
+      'map/strategicregions/2-REGION.txt',
+    );
+    expect(plan.finalIndex.regionsById.get(2)?.file.relativePath).toBe(
+      'map/strategicregions/1-REGION.txt',
+    );
+    expect(
+      plan.finalIndex.weatherPositions.map(({ strategicRegionId }) => strategicRegionId),
+    ).toEqual([2, 1]);
+    expect(
+      plan.finalIndex.localisationByKey.get('l_english:STRATEGICREGION_2')?.at(-1)?.entry.value,
+    ).toBe('West Region');
+  });
+
   it('produces deterministic layer renders and pixel/semantic diffs', async () => {
     const { snapshot } = await setup();
     const first = await renderMap(snapshot.index, {
@@ -2809,7 +2980,9 @@ describe('Agent Nudger map model and operations', () => {
         '1': { arms_factory: 1, naval_base: 1 },
       },
     });
-    expect(first.html).toContain('Agent Nudger map - continent');
+    expect(first.html).toContain('HOI4 map - continent');
+    expect(first.html).toContain('Find ID, localisation key, or name');
+    expect(first.html).toContain('provinceAt');
     expect(first.html).not.toContain('Offline deterministic map representation');
     expect(first.html).not.toContain('Â');
     const withoutValueOverlays = await renderMap(snapshot.index, { layer: 'continent' });
