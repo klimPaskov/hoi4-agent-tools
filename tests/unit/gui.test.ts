@@ -556,10 +556,10 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(scene.elements.find(({ name }) => name === 'title')?.text?.metricSource).toBe('bmfont');
     expect(scene.elements.find(({ name }) => name === 'animated')?.sprite?.frame).toBe(1);
     expect(scene.fidelity.ignored).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'fixedsize' }),
-        expect.objectContaining({ field: 'pdx_tooltip' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: 'pdx_tooltip' })]),
+    );
+    expect(scene.fidelity.modelled).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'fixedsize' })]),
     );
     expect(
       scene.elements.find(({ name, rowIndex }) => name === 'target_label' && rowIndex === 2)?.text
@@ -1196,7 +1196,65 @@ kernings count=0
     });
   });
 
-  it('reports partial rendering for every flattened special sprite and secondary effect input', async () => {
+  it('matches Clausewitz anchor inheritance, centerposition, percentages, clipping defaults, and local scale placement', async () => {
+    const png = await sharp({
+      create: { width: 8, height: 8, channels: 4, background: '#ffffff' },
+    })
+      .png()
+      .toBuffer();
+    const files = [
+      scanned(
+        'interface/anchors.gfx',
+        'spriteTypes = { spriteType = { name = "GFX_anchor" texturefile = "gfx/anchor.png" } }',
+      ),
+      scanned(
+        'interface/anchors.gui',
+        `guiTypes = { containerWindowType = {
+\tname = "anchor_window"
+\tsize = { width = 200 height = 100 }
+\tbackground = { spriteType = "GFX_anchor" }
+\ticonType = { name = "center_left" orientation = CENTER_LEFT position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "center_right" orientation = CENTER_RIGHT position = { x = -30 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "center_up" orientation = CENTER_UP position = { x = 10 y = 5 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "center_down" orientation = CENTER_DOWN position = { x = 10 y = -15 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "centered" position = { x = 50 y = 50 } centerposition = yes size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "scaled" position = { x = 10 y = 10 } scale = 2 size = { width = 10 height = 5 } spriteType = "GFX_anchor" }
+\ticonType = { name = "percent" position = { x = 50%% y = 0 } size = { width = 50%% height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "clipped_by_default" position = { x = 195 y = 95 } size = { width = 20 height = 20 } spriteType = "GFX_anchor" }
+\tinstantTextBoxType = { name = "bounded_text" position = { x = 0 y = 70 } text = "A long line of text that wraps into several lines" maxWidth = 100 maxHeight = 20 fixedsize = yes }
+\tcontainerWindowType = { name = "inherited_parent" orientation = CENTER origo = CENTER position = { x = 0 y = 0 } size = { width = 200 height = 100 } iconType = { name = "inherited_center" position = { x = 0 y = 0 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" } }
+} }`,
+      ),
+      scanned('gfx/anchor.png', png),
+    ];
+    const scene = await buildGuiScene(
+      sourceGraph(files),
+      files,
+      'anchor_window',
+      parsePreviewScenario({ id: 'anchors' }),
+    );
+    const rect = (name: string) =>
+      scene.elements.find((element) => element.name === name)?.unclippedRect;
+    expect(rect('center_left')).toEqual({ x: 10, y: 55, width: 20, height: 10 });
+    expect(rect('center_right')).toEqual({ x: 170, y: 55, width: 20, height: 10 });
+    expect(rect('center_up')).toEqual({ x: 110, y: 5, width: 20, height: 10 });
+    expect(rect('center_down')).toEqual({ x: 110, y: 85, width: 20, height: 10 });
+    expect(rect('centered')).toEqual({ x: 40, y: 45, width: 20, height: 10 });
+    expect(rect('scaled')).toEqual({ x: 10, y: 10, width: 20, height: 10 });
+    expect(rect('percent')).toEqual({ x: 100, y: 0, width: 100, height: 10 });
+    expect(rect('inherited_center')).toEqual({ x: 100, y: 50, width: 20, height: 10 });
+    expect(scene.elements.find(({ name }) => name === 'bounded_text')).toMatchObject({
+      unclippedRect: { x: 0, y: 70, width: 100, height: 20 },
+      text: { fixedSize: true, overflowY: true },
+    });
+    expect(scene.elements.find(({ name }) => name === 'clipped_by_default')).toMatchObject({
+      clipped: true,
+      rect: { x: 195, y: 95, width: 5, height: 5 },
+    });
+    expect((await renderGuiScene(scene, ['full'])).images[0]?.svg).toContain('gui-text-clip-');
+  });
+
+  it('composites cornered tiles, progress bars, and masked sprites instead of flattening them', async () => {
     const png = await sharp({
       create: { width: 8, height: 8, channels: 4, background: '#55d6be' },
     })
@@ -1207,9 +1265,9 @@ kernings count=0
         'interface/partial-sprites.gfx',
         `spriteTypes = {
 \ttextSpriteType = { name = "GFX_text_sprite" texturefile = "gfx/primary.png" }
-\tcorneredTileSpriteType = { name = "GFX_cornered" texturefile = "gfx/primary.png" }
-\tprogressbarType = { name = "GFX_progress" texturefile = "gfx/primary.png" textureFile2 = "gfx/secondary.png" }
-\tmaskedShieldType = { name = "GFX_masked" texturefile = "gfx/primary.png" effectFile = "gfx/partial.effect" }
+\tcorneredTileSpriteType = { name = "GFX_cornered" texturefile = "gfx/primary.png" borderSize = { x = 2 y = 2 } tilingCenter = yes }
+\tprogressbarType = { name = "GFX_progress" textureFile1 = "gfx/primary.png" textureFile2 = "gfx/secondary.png" horizontal = yes steps = 10 }
+\tmaskedShieldType = { name = "GFX_masked" textureFile1 = "gfx/primary.png" textureFile2 = "gfx/secondary.png" effectFile = "gfx/partial.effect" }
 }`,
       ),
       scanned(
@@ -1217,7 +1275,7 @@ kernings count=0
         `guiTypes = { containerWindowType = { name = "partial_sprite_window" size = { width = 80 height = 30 }
 \ticonType = { name = "text_sprite" position = { x = 0 y = 0 } size = { width = 16 height = 16 } spriteType = "GFX_text_sprite" }
 \ticonType = { name = "cornered" position = { x = 20 y = 0 } size = { width = 16 height = 16 } spriteType = "GFX_cornered" }
-\ticonType = { name = "progress" position = { x = 40 y = 0 } size = { width = 16 height = 16 } spriteType = "GFX_progress" }
+\tprogressbarType = { name = "progress" position = { x = 40 y = 0 } size = { width = 16 height = 16 } spriteType = "GFX_progress" minValue = 0 maxValue = 100 startValue = 50 }
 \ticonType = { name = "masked" position = { x = 60 y = 0 } size = { width = 16 height = 16 } spriteType = "GFX_masked" }
 } }`,
       ),
@@ -1235,23 +1293,38 @@ kernings count=0
       }),
     );
     const unsupportedFields = new Set(scene.fidelity.unsupported.map(({ field }) => field));
-    expect(unsupportedFields).toEqual(
-      new Set([
-        'text_sprite_semantics',
-        'cornered_tile_semantics',
-        'progressbar_sprite_semantics',
-        'masked_shield_semantics',
-        'textureFile2',
-        'effectFile',
+    expect(unsupportedFields).toEqual(new Set(['effectFile']));
+    expect(scene.fidelity.modelled.map(({ field }) => field)).toEqual(
+      expect.arrayContaining([
+        'cornered_tile_composition',
+        'progressbar_composition',
+        'masked_shield_composition',
       ]),
     );
     expect(
       scene.fidelity.approximated.filter(({ field }) => field === 'sprite_frame'),
-    ).toHaveLength(4);
-    expect(scene.fidelity.modelled.filter(({ field }) => field === 'sprite_frame')).toHaveLength(0);
+    ).toHaveLength(1);
+    expect(scene.fidelity.modelled.filter(({ field }) => field === 'sprite_frame')).toHaveLength(3);
     expect(
       scene.diagnostics.filter(({ code }) => code === 'GUI_SPRITE_RENDER_PARTIAL'),
-    ).toHaveLength(4);
+    ).toHaveLength(1);
+    expect(scene.elements.find(({ name }) => name === 'cornered')).toMatchObject({
+      spriteRenderMode: 'cornered-tile',
+      spriteBorderSize: { width: 2, height: 2 },
+      spriteTilingCenter: true,
+    });
+    expect(scene.elements.find(({ name }) => name === 'progress')).toMatchObject({
+      spriteRenderMode: 'progressbar',
+      progressRatio: 0.5,
+      secondarySprite: { supported: true },
+    });
+    expect(scene.elements.find(({ name }) => name === 'masked')).toMatchObject({
+      spriteRenderMode: 'masked-shield',
+      secondarySprite: { supported: true },
+    });
+    const rendered = await renderGuiScene(scene, ['full']);
+    expect(rendered.images[0]?.svg).toContain('<pattern');
+    expect(rendered.images[0]?.svg).toContain('<mask');
   });
 
   it('wraps text incrementally and blocks per-text, aggregate-text, and layout work excess', async () => {

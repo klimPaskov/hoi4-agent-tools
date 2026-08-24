@@ -295,7 +295,10 @@ function guiLocalisationPatterns(
 }
 
 function normalizedAssetReference(value: string): string | undefined {
-  const normalized = value.replaceAll('\\', '/').replace(/^\/+|^\.\//u, '');
+  const normalized = value
+    .replaceAll('\\', '/')
+    .replace(/^\/+|^\.\//u, '')
+    .replace(/\/+/gu, '/');
   return isSafeAnimationSourcePath(normalized) ? normalized : undefined;
 }
 
@@ -382,9 +385,21 @@ function collectNamedAttributes(
   }
 }
 
+function localisationIconTokens(value: string): string[] {
+  return [...value.matchAll(/£([A-Za-z0-9_.:+-]+)/gu)]
+    .map((match) => match[1])
+    .filter((token): token is string => token !== undefined && token.length > 0);
+}
+
+function localisationIconSpriteCandidates(token: string): string[] {
+  const normalized = token.startsWith('GFX_') ? token : `GFX_${token}`;
+  return [...new Set([normalized, `${normalized}_texticon`, `${normalized}_text_icon`])];
+}
+
 function referencedAssetPatternsForWindow(graph: GuiSourceGraph, windowName: string): string[] {
   const spriteNames = new Set<string>();
   const fontNames = new Set<string>();
+  const textValues = new Set<string>();
   for (const element of selectedElements(graph, windowName)) {
     collectNamedAttributes(
       element.attributes,
@@ -392,22 +407,38 @@ function referencedAssetPatternsForWindow(graph: GuiSourceGraph, windowName: str
       spriteNames,
     );
     collectNamedAttributes(element.attributes, new Set(['font', 'buttonFont']), fontNames);
+    collectNamedAttributes(element.attributes, new Set(['text', 'buttonText']), textValues);
   }
-  const spritesByName = new Map(graph.sprites.map((sprite) => [sprite.name, sprite]));
+  for (const localisation of graph.localisation) {
+    if (textValues.has(localisation.key)) textValues.add(localisation.value);
+  }
+  for (const value of textValues) {
+    for (const token of localisationIconTokens(value)) {
+      for (const candidate of localisationIconSpriteCandidates(token)) spriteNames.add(candidate);
+    }
+  }
+  const spritesByName = new Map(
+    graph.sprites.map((sprite) => [sprite.name.toLocaleLowerCase('en-US'), sprite]),
+  );
   const selectedSprites = new Map<string, GuiSourceGraph['sprites'][number]>();
   const pendingSprites = [...spriteNames];
   while (pendingSprites.length > 0) {
     const name = pendingSprites.pop();
-    if (name === undefined || selectedSprites.has(name)) continue;
-    const sprite = spritesByName.get(name);
+    if (name === undefined) continue;
+    const key = name.toLocaleLowerCase('en-US');
+    if (selectedSprites.has(key)) continue;
+    const sprite = spritesByName.get(key);
     if (sprite === undefined) continue;
-    selectedSprites.set(name, sprite);
+    selectedSprites.set(key, sprite);
     if (sprite.staticFallback !== undefined) pendingSprites.push(sprite.staticFallback);
   }
   const selectedManifests = graph.animationSources.filter(({ sprite }) =>
-    selectedSprites.has(sprite),
+    selectedSprites.has(sprite.toLocaleLowerCase('en-US')),
   );
-  const selectedFonts = graph.fonts.filter(({ name }) => fontNames.has(name));
+  const selectedFontNames = new Set([...fontNames].map((name) => name.toLocaleLowerCase('en-US')));
+  const selectedFonts = graph.fonts.filter(({ name }) =>
+    selectedFontNames.has(name.toLocaleLowerCase('en-US')),
+  );
   const references = [
     ...[...selectedSprites.values()].flatMap(({ texturePath, texturePath2 }) =>
       [texturePath, texturePath2].filter((value): value is string => value !== undefined),

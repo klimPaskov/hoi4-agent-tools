@@ -85,6 +85,7 @@ function normalizeAssetPath(value: string): string {
   return value
     .replaceAll('\\', '/')
     .replace(/^\/+|^\.\//u, '')
+    .replace(/\/+/gu, '/')
     .toLowerCase();
 }
 
@@ -332,7 +333,22 @@ export class GuiAssetCatalog {
     sprite: GuiSpriteDefinition,
     requestedFrame: number,
   ): Promise<GuiTextureFrame | undefined> {
-    const texturePath = sprite.texturePath;
+    return this.loadSpriteTextureFrame(sprite, sprite.texturePath, requestedFrame, 'primary');
+  }
+
+  public loadSecondarySpriteFrame(
+    sprite: GuiSpriteDefinition,
+    requestedFrame: number,
+  ): Promise<GuiTextureFrame | undefined> {
+    return this.loadSpriteTextureFrame(sprite, sprite.texturePath2, requestedFrame, 'secondary');
+  }
+
+  private loadSpriteTextureFrame(
+    sprite: GuiSpriteDefinition,
+    texturePath: string | undefined,
+    requestedFrame: number,
+    layer: 'primary' | 'secondary',
+  ): Promise<GuiTextureFrame | undefined> {
     if (texturePath === undefined) return Promise.resolve(undefined);
     const frameCount = Math.max(1, sprite.frameCount);
     const frame = Math.max(0, Math.min(frameCount - 1, Math.trunc(requestedFrame)));
@@ -344,14 +360,20 @@ export class GuiAssetCatalog {
       textureFile === undefined
         ? `${sprite.sourcePath}:${texturePath}`
         : `${textureFile.displayPath}:${textureFile.sha256}`;
-    const key = `${textureIdentity}:${frameCount}:${frame}`;
+    const key = `${textureIdentity}:${frameCount}:${frame}:${layer}`;
     let promise = this.frames.get(key);
     if (promise === undefined) {
       promise = this.decodeSpriteFrame(sprite, texturePath, frameCount, frame, key);
       this.frames.set(key, promise);
     }
     return promise.then((decoded) =>
-      decoded === undefined ? undefined : { ...decoded, spriteName: sprite.name },
+      decoded === undefined
+        ? undefined
+        : {
+            ...decoded,
+            spriteName: layer === 'primary' ? sprite.name : `${sprite.name}#secondary`,
+            texturePath,
+          },
     );
   }
 

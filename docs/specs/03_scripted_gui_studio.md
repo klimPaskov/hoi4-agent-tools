@@ -60,19 +60,26 @@ The images are the studio's own representation of the parsed GUI. Never describe
 Model:
 
 - nested parent offsets
-- clipping and container bounds
-- element scale
+- Clausewitz orientation, element origin, center-position, and inherited container coordinate origin
+- `%` and `%%` relative coordinates and dimensions
+- clipping, fixed text bounds, and container bounds
+- element and UI scale
 - sprite dimensions
 - frame selection
-- text alignment and wrapping
+- nine-slice cornered tiles with optional center tiling
+- filled/background progress-bar composition
+- masked-shield texture composition
+- text alignment, wrapping, maximum dimensions, and fixed-size truncation
 - font metrics
+- inline localisation GFX icons
+- mod, dependency, and installed-game asset resolution
 - button and icon states
 - z-order
 - scroll-list row placement
 - visibility state
 - animation frame sampling
 
-Keep the rendering model modular. Every render must include a fidelity report listing fully modelled fields, approximated fields, ignored fields, missing assets, and unresolved dynamic values.
+Keep the rendering model modular. Every render must include a fidelity report listing fully modelled fields, approximated fields, ignored fields, missing assets, and unresolved dynamic values. An unsupported engine shader may change the final appearance, but it must never make a resolved vanilla base texture disappear from the render.
 
 ## Visual and script validation
 

@@ -31,6 +31,10 @@ Rewrite once, then inspect and render the result.
 
 Inspection checks missing assets and localisation, invalid sizes, overlap, clipping, overflow, button-label centering, content crossing a background boundary, conflicting click regions, invisible blockers, broken parents or contexts, list-row cuts, state conflicts, trigger/effect gaps, and resolution drift. `hoi4.gui_render` returns a scripted-scenario gallery and JSON delta report alongside the generic state and resolution galleries.
 
+The renderer resolves sprites and fonts through the complete mod, dependency, and installed-game load order. Mod windows therefore render ordinary vanilla sprites, tiled vanilla panels, progress bars, masked shields, button frames, and localisation icons such as `£command_power` without copying game assets into the mod. Case differences in GFX and font identifiers do not prevent a valid asset from resolving.
+
+Layout follows Clausewitz orientation and element-origin anchors, including `CENTER_LEFT`, `CENTER_RIGHT`, `CENTER_UP`, `CENTER_DOWN`, `origo`, `centerposition`, inherited container coordinate origins, local scale, and both `%` and `%%` relative dimensions. Text boxes use native font metrics together with `maxWidth`, `maxHeight`, alignment, wrapping, and `fixedsize` clipping. Cornered tile sprites use fixed nine-slice borders and optional center tiling; progress bars composite their filled and background textures; masked shields composite their background and mask textures.
+
 Preview scenarios can include exact layout expectations:
 
 ```json
@@ -60,4 +64,4 @@ The renderer does not run the game engine. Each render includes a fidelity repor
 
 Unresolved numeric runtime values such as `[?variable|format]` render as `[X]`. Unresolved text-returning scripted or scoped localisation such as `[GetStatusText]`, `[FROM.GetName]`, and `[?leader_scope.GetName]` renders as `[dynamic_loc]`. Provide scenario values when the exact value matters. Supported HOI4 `§` localisation colour controls are applied to preview text and `§!` restores the default colour.
 
-A rewrite stops if malformed or unsupported GUI script makes the requested change ambiguous. Runtime animation, masking, tiling, hardcoded controls, and dynamic values may require exact game precedents even when a useful offline preview is available.
+A rewrite stops if malformed or unsupported GUI script makes the requested change ambiguous. Frame-sheet animation, nine-slice tiling, progress composition, masking, and the primary and secondary textures referenced by vanilla GFX definitions render offline. Engine shader programs, hardcoded controls, and dynamic values that are not supplied by a scenario remain fidelity-report entries; an unexecuted shader never hides its resolved base texture.

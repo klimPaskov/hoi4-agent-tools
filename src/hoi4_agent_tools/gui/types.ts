@@ -84,6 +84,10 @@ export interface GuiSpriteDefinition {
   effectFile?: string;
   staticFallback?: string;
   declaredSize?: GuiSize;
+  borderSize?: GuiSize;
+  tilingCenter?: boolean;
+  horizontal?: boolean;
+  steps?: number;
   rawSource: string;
 }
 
@@ -273,8 +277,20 @@ export interface GuiTextLayout {
   glyphLines: GuiTextGlyphLine[];
   overflowX: boolean;
   overflowY: boolean;
+  fixedSize: boolean;
   unresolvedTokens: string[];
   colourRuns?: GuiTextColourRun[][];
+  inlineIcons?: GuiTextInlineIcon[];
+}
+
+export interface GuiTextInlineIcon {
+  token: string;
+  spriteName: string;
+  lineIndex: number;
+  offsetX: number;
+  width: number;
+  height: number;
+  sprite?: GuiTextureFrame;
 }
 
 export interface GuiTextColourRun {
@@ -326,6 +342,8 @@ export interface GuiTextureFrame {
   reason?: string;
 }
 
+export type GuiSpriteRenderMode = 'stretch' | 'cornered-tile' | 'progressbar' | 'masked-shield';
+
 export interface GuiSceneElement {
   id: string;
   sourceId: string;
@@ -345,6 +363,11 @@ export interface GuiSceneElement {
   state: GuiPreviewState;
   progressRatio?: number;
   sprite?: GuiTextureFrame;
+  secondarySprite?: GuiTextureFrame;
+  spriteRenderMode?: GuiSpriteRenderMode;
+  spriteBorderSize?: GuiSize;
+  spriteTilingCenter?: boolean;
+  progressHorizontal?: boolean;
   text?: GuiTextLayout;
   sourcePath: string;
   location?: SourceLocation;

@@ -190,6 +190,49 @@ local('local installed-game and external-mod integration', () => {
         ({ sprite }) => sprite?.supported === true && sprite.dataUri !== undefined,
       ),
     ).toBe(true);
+    const vanillaSpriteNames = new Set(
+      scannedGui.graph.sprites
+        .filter(({ sourcePath }) => sourcePath.startsWith('game:'))
+        .map(({ name }) => name.toLocaleLowerCase('en-US')),
+    );
+    const unavailableVanillaSprites = first.render.scene.elements
+      .filter(
+        ({ sprite }) =>
+          sprite !== undefined &&
+          vanillaSpriteNames.has(sprite.spriteName.toLocaleLowerCase('en-US')) &&
+          (!sprite.supported || sprite.dataUri === undefined),
+      )
+      .map(({ name, sprite }) => ({ name, sprite: sprite?.spriteName, reason: sprite?.reason }));
+    expect(unavailableVanillaSprites).toEqual([]);
+    const unavailableVanillaSecondarySprites = first.render.scene.elements
+      .filter(
+        ({ sprite, secondarySprite }) =>
+          secondarySprite !== undefined &&
+          sprite !== undefined &&
+          vanillaSpriteNames.has(sprite.spriteName.toLocaleLowerCase('en-US')) &&
+          (!secondarySprite.supported || secondarySprite.dataUri === undefined),
+      )
+      .map(({ name, sprite, secondarySprite }) => ({
+        name,
+        sprite: sprite?.spriteName,
+        reason: secondarySprite?.reason,
+      }));
+    expect(unavailableVanillaSecondarySprites).toEqual([]);
+    const unavailableVanillaInlineIcons = first.render.scene.elements.flatMap(({ name, text }) =>
+      (text?.inlineIcons ?? [])
+        .filter(
+          ({ spriteName, sprite }) =>
+            vanillaSpriteNames.has(spriteName.toLocaleLowerCase('en-US')) &&
+            (sprite?.supported !== true || sprite.dataUri === undefined),
+        )
+        .map(({ token, spriteName, sprite }) => ({
+          name,
+          token,
+          sprite: spriteName,
+          reason: sprite?.reason,
+        })),
+    );
+    expect(unavailableVanillaInlineIcons).toEqual([]);
     const glyphSources = first.render.scene.elements.flatMap(
       ({ text }) => text?.glyphLines.map(({ source }) => source) ?? [],
     );

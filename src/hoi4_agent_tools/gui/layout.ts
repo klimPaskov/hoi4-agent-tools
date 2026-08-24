@@ -31,6 +31,8 @@ import type {
   GuiSceneElement,
   GuiSourceGraph,
   GuiTextColourRun,
+  GuiTextGlyphLine,
+  GuiTextInlineIcon,
   GuiTextLayout,
 } from './types.js';
 import { emptyFidelityReport } from './types.js';
@@ -38,29 +40,6 @@ import { emptyFidelityReport } from './types.js';
 const clickableTypes = /(?:button|checkbox|editbox|scrollbar|progressbar)/iu;
 const numericDynamicPlaceholder = '[X]';
 const textDynamicPlaceholder = '[dynamic_loc]';
-
-const partialSpriteSemantics: Readonly<Record<string, { field: string; detail: string }>> = {
-  textSpriteType: {
-    field: 'text_sprite_semantics',
-    detail:
-      'Engine text-sprite generation is not modelled; only the resolved primary texture is shown.',
-  },
-  corneredTileSpriteType: {
-    field: 'cornered_tile_semantics',
-    detail:
-      'Corner and edge tiling is not modelled; the primary texture is stretched as one frame.',
-  },
-  progressbarType: {
-    field: 'progressbar_sprite_semantics',
-    detail:
-      'Progressbar sprite composition is not modelled; only the resolved primary texture is shown.',
-  },
-  maskedShieldType: {
-    field: 'masked_shield_semantics',
-    detail:
-      'Mask, shield, and secondary-texture composition is not modelled; only the resolved primary texture is shown.',
-  },
-};
 
 function property(
   attributes: Record<string, GuiPropertyValue>,
@@ -104,11 +83,16 @@ interface VisibleHoiText {
   text: string;
   colours: Array<string | undefined>;
   hasColourMarkup: boolean;
+  inlineIcons: Array<{ marker: string; token: string }>;
 }
+
+const inlineIconMarkerStart = 0xe000;
+const inlineIconMarkerEnd = 0xf8ff;
 
 function visibleHoiText(value: string): VisibleHoiText {
   const characters: string[] = [];
   const colours: Array<string | undefined> = [];
+  const inlineIcons: Array<{ marker: string; token: string }> = [];
   let colour: string | undefined;
   let hasColourMarkup = false;
   for (let index = 0; index < value.length; index += 1) {
@@ -123,8 +107,17 @@ function visibleHoiText(value: string): VisibleHoiText {
     if (character === '\u00a3') {
       let cursor = index + 1;
       while (cursor < value.length && !/[\s\u00a3]/u.test(value[cursor] ?? '')) cursor += 1;
-      characters.push('\u25c6');
-      colours.push(colour);
+      const token = value.slice(index + 1, cursor);
+      const markerCodePoint = inlineIconMarkerStart + inlineIcons.length;
+      if (token.length === 0 || markerCodePoint > inlineIconMarkerEnd) {
+        characters.push('\u25c6');
+        colours.push(colour);
+      } else {
+        const marker = String.fromCodePoint(markerCodePoint);
+        inlineIcons.push({ marker, token });
+        characters.push(marker);
+        colours.push(colour);
+      }
       index = cursor - 1;
       continue;
     }
@@ -137,18 +130,28 @@ function visibleHoiText(value: string): VisibleHoiText {
     characters.push(character);
     colours.push(colour);
   }
-  return { text: characters.join(''), colours, hasColourMarkup };
+  return { text: characters.join(''), colours, hasColourMarkup, inlineIcons };
 }
 
 function scalarNumber(value: GuiPropertyValue | undefined, reference: number): number | undefined {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return undefined;
-  if (value.endsWith('%')) {
-    const percent = Number(value.slice(0, -1));
+  if (/%%?$/u.test(value)) {
+    const percent = Number(value.replace(/%%?$/u, ''));
     return Number.isFinite(percent) ? (reference * percent) / 100 : undefined;
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function scaledNumber(
+  value: GuiPropertyValue | undefined,
+  reference: number,
+  scale: number,
+): number | undefined {
+  const resolved = scalarNumber(value, reference);
+  if (resolved === undefined) return undefined;
+  return typeof value === 'string' && /%%?$/u.test(value) ? resolved : resolved * scale;
 }
 
 function scalarBoolean(value: GuiPropertyValue | undefined): boolean | undefined {
@@ -348,6 +351,122 @@ function resolveTokenText(
   return { text, unresolved: [...new Set(unresolved)].sort(), missingLocalisation };
 }
 
+interface ResolvedInlineIcon {
+  marker: string;
+  token: string;
+  spriteName: string;
+  width: number;
+  height: number;
+  sprite?: GuiTextInlineIcon['sprite'];
+}
+
+function measureTextWithInlineIcons(
+  catalog: GuiAssetCatalog,
+  fontName: string | undefined,
+  text: string,
+  fontSize: number,
+  inlineIcons: ReadonlyMap<string, ResolvedInlineIcon>,
+) {
+  if (inlineIcons.size === 0 || ![...inlineIcons.keys()].some((marker) => text.includes(marker)))
+    return catalog.measureText(fontName, text, fontSize);
+  let width = 0;
+  let lineHeight = fontSize * 1.2;
+  let source: GuiTextLayout['metricSource'] = 'approximation';
+  const missingGlyphs = new Set<number>();
+  let segment = '';
+  const commit = (): void => {
+    if (segment.length === 0) return;
+    const measured = catalog.measureText(fontName, segment, fontSize);
+    width += measured.width;
+    lineHeight = Math.max(lineHeight, measured.lineHeight);
+    source = measured.source;
+    for (const codePoint of measured.missingGlyphs) missingGlyphs.add(codePoint);
+    segment = '';
+  };
+  for (const character of text) {
+    const icon = inlineIcons.get(character);
+    if (icon === undefined) segment += character;
+    else {
+      commit();
+      width += icon.width;
+      lineHeight = Math.max(lineHeight, icon.height);
+    }
+  }
+  commit();
+  return { width, lineHeight, source, missingGlyphs: [...missingGlyphs] };
+}
+
+async function shapeTextWithInlineIcons(
+  catalog: GuiAssetCatalog,
+  fontName: string | undefined,
+  text: string,
+  fontSize: number,
+  lineIndex: number,
+  inlineIcons: ReadonlyMap<string, ResolvedInlineIcon>,
+): Promise<{ glyphLine: GuiTextGlyphLine; icons: GuiTextInlineIcon[] }> {
+  if (inlineIcons.size === 0 || ![...inlineIcons.keys()].some((marker) => text.includes(marker)))
+    return { glyphLine: await catalog.shapeText(fontName, text, fontSize), icons: [] };
+  const base = await catalog.shapeText(
+    fontName,
+    Array.from(text)
+      .filter((character) => !inlineIcons.has(character))
+      .join(''),
+    fontSize,
+  );
+  const glyphs: GuiTextGlyphLine['glyphs'] = [];
+  const missingGlyphs = new Set<number>();
+  const sourceHashes = new Set<string>([base.sourceHash]);
+  const sources = new Set<GuiTextGlyphLine['source']>([base.source]);
+  let baseline = base.baseline;
+  let baselineModelled = base.baselineModelled;
+  let penX = 0;
+  let segment = '';
+  const icons: GuiTextInlineIcon[] = [];
+  const commit = async (): Promise<void> => {
+    if (segment.length === 0) return;
+    const shaped = await catalog.shapeText(fontName, segment, fontSize);
+    sourceHashes.add(shaped.sourceHash);
+    sources.add(shaped.source);
+    baseline = Math.max(baseline, shaped.baseline);
+    baselineModelled &&= shaped.baselineModelled;
+    for (const codePoint of shaped.missingGlyphs) missingGlyphs.add(codePoint);
+    glyphs.push(...shaped.glyphs.map((glyph) => ({ ...glyph, x: glyph.x + penX })));
+    penX += shaped.width;
+    segment = '';
+  };
+  for (const character of text) {
+    const icon = inlineIcons.get(character);
+    if (icon === undefined) segment += character;
+    else {
+      await commit();
+      icons.push({
+        token: icon.token,
+        spriteName: icon.spriteName,
+        lineIndex,
+        offsetX: penX,
+        width: icon.width,
+        height: icon.height,
+        ...(icon.sprite === undefined ? {} : { sprite: icon.sprite }),
+      });
+      penX += icon.width;
+    }
+  }
+  await commit();
+  return {
+    glyphLine: {
+      source: sources.size === 1 ? [...sources][0]! : 'deterministic-fallback',
+      sourceHash:
+        sourceHashes.size === 1 ? [...sourceHashes][0]! : hashCanonical([...sourceHashes].sort()),
+      width: penX,
+      baseline,
+      baselineModelled,
+      glyphs,
+      missingGlyphs: [...missingGlyphs].sort((left, right) => left - right),
+    },
+    icons,
+  };
+}
+
 function wrapText(
   catalog: GuiAssetCatalog,
   fontName: string | undefined,
@@ -356,6 +475,7 @@ function wrapText(
   fontSize: number,
   maximumWidth: number,
   work: GuiSceneWorkBudget,
+  inlineIcons: ReadonlyMap<string, ResolvedInlineIcon> = new Map(),
 ): {
   lines: string[];
   widths: number[];
@@ -394,7 +514,13 @@ function wrapText(
     }
     const committedText = characters.join('');
     work.spendTextLayout('committed text line measurement');
-    const committed = catalog.measureText(fontName, committedText, fontSize);
+    const committed = measureTextWithInlineIcons(
+      catalog,
+      fontName,
+      committedText,
+      fontSize,
+      inlineIcons,
+    );
     lines.push(committedText);
     widths.push(committed.width);
     colourLines.push(lineColours);
@@ -427,12 +553,24 @@ function wrapText(
     let previousWordWidth = 0;
     for (const word of words) {
       work.spendTextLayout('text word measurement');
-      const measuredWord = catalog.measureText(fontName, word.text, fontSize);
+      const measuredWord = measureTextWithInlineIcons(
+        catalog,
+        fontName,
+        word.text,
+        fontSize,
+        inlineIcons,
+      );
       retainMissingGlyphs(measuredWord.missingGlyphs);
       let candidateWidth = measuredWord.width;
       if (previousWord !== undefined) {
         work.spendTextLayout('text word-boundary measurement');
-        const boundary = catalog.measureText(fontName, `${previousWord} ${word.text}`, fontSize);
+        const boundary = measureTextWithInlineIcons(
+          catalog,
+          fontName,
+          `${previousWord} ${word.text}`,
+          fontSize,
+          inlineIcons,
+        );
         retainMissingGlyphs(boundary.missingGlyphs);
         candidateWidth = currentWidth + boundary.width - previousWordWidth;
       }
@@ -466,18 +604,30 @@ function colourRunsForLine(
   colours: readonly (string | undefined)[],
   fontSize: number,
   work: GuiSceneWorkBudget,
+  inlineIcons: ReadonlyMap<string, ResolvedInlineIcon> = new Map(),
 ): GuiTextColourRun[] {
   if (!colours.some((colour) => colour !== undefined) || line.length === 0) return [];
   const runs: GuiTextColourRun[] = [];
   let start = 0;
   let offsetX = 0;
   while (start < line.length) {
+    const inlineIcon = inlineIcons.get(line[start] ?? '');
+    if (inlineIcon !== undefined) {
+      offsetX += inlineIcon.width;
+      start += 1;
+      continue;
+    }
     const colour = colours[start] ?? defaultTextColour;
     let end = start + 1;
-    while (end < line.length && (colours[end] ?? defaultTextColour) === colour) end += 1;
+    while (
+      end < line.length &&
+      !inlineIcons.has(line[end] ?? '') &&
+      (colours[end] ?? defaultTextColour) === colour
+    )
+      end += 1;
     const text = line.slice(start, end);
     work.spendTextLayout('localisation colour-run measurement');
-    const width = catalog.measureText(fontName, text, fontSize).width;
+    const width = measureTextWithInlineIcons(catalog, fontName, text, fontSize, inlineIcons).width;
     runs.push({ text, colour, offsetX, width });
     offsetX += width;
     start = end;
@@ -526,6 +676,11 @@ function frameFor(
   return Math.min(frameCount - 1, mapped);
 }
 
+function textIconSpriteCandidates(token: string): string[] {
+  const normalized = token.startsWith('GFX_') ? token : `GFX_${token}`;
+  return [normalized, `${normalized}_texticon`, `${normalized}_text_icon`];
+}
+
 function alignment(
   attributes: Record<string, GuiPropertyValue>,
   buttonText: boolean,
@@ -547,6 +702,40 @@ function alignment(
         ? 'center'
         : 'top';
   return { horizontalAlignment, verticalAlignment };
+}
+
+type HorizontalAnchor = 'left' | 'center' | 'right';
+type VerticalAnchor = 'top' | 'center' | 'bottom';
+
+function anchorAxes(value: string): {
+  horizontal: HorizontalAnchor;
+  vertical: VerticalAnchor;
+} {
+  const normalized = value.toLowerCase().replaceAll('-', '_');
+  if (normalized === 'center_left') return { horizontal: 'left', vertical: 'center' };
+  if (normalized === 'center_right') return { horizontal: 'right', vertical: 'center' };
+  if (normalized === 'center_up' || normalized === 'center_upper')
+    return { horizontal: 'center', vertical: 'top' };
+  if (normalized === 'center_down' || normalized === 'center_lower')
+    return { horizontal: 'center', vertical: 'bottom' };
+  if (normalized === 'upper_right') return { horizontal: 'right', vertical: 'top' };
+  if (normalized === 'lower_left') return { horizontal: 'left', vertical: 'bottom' };
+  if (normalized === 'lower_right') return { horizontal: 'right', vertical: 'bottom' };
+  if (normalized === 'center') return { horizontal: 'center', vertical: 'center' };
+  return { horizontal: 'left', vertical: 'top' };
+}
+
+function anchoredCoordinate(
+  start: number,
+  span: number,
+  offset: number,
+  anchor: HorizontalAnchor | VerticalAnchor,
+): number {
+  return anchor === 'right' || anchor === 'bottom'
+    ? start + span + offset
+    : anchor === 'center'
+      ? start + span / 2 + offset
+      : start + offset;
 }
 
 interface LayoutContext {
@@ -649,6 +838,7 @@ async function layoutElement(
   rowIndex?: number,
   rowValues?: Readonly<Record<string, string | number | boolean>>,
   parentInstanceId?: string,
+  inheritedOrientation = 'upper_left',
 ): Promise<void> {
   context.work.admitElement(depth);
   const { scenario, catalog, fidelity, diagnostics } = context;
@@ -659,21 +849,29 @@ async function layoutElement(
   const position = objectProperty(property(definition.attributes, 'position'));
   const size = objectProperty(property(definition.attributes, 'size'));
   const localX =
-    scalarNumber(position === undefined ? undefined : property(position, 'x'), parentRect.width) ??
-    0;
+    scaledNumber(
+      position === undefined ? undefined : property(position, 'x'),
+      parentRect.width,
+      parentScale,
+    ) ?? 0;
   const localY =
-    scalarNumber(position === undefined ? undefined : property(position, 'y'), parentRect.height) ??
-    0;
+    scaledNumber(
+      position === undefined ? undefined : property(position, 'y'),
+      parentRect.height,
+      parentScale,
+    ) ?? 0;
   let width =
-    (scalarNumber(
+    scaledNumber(
       size === undefined ? undefined : property(size, 'width', 'x'),
       parentRect.width,
-    ) ?? 0) * scale;
+      scale,
+    ) ?? 0;
   let height =
-    (scalarNumber(
+    scaledNumber(
       size === undefined ? undefined : property(size, 'height', 'y'),
       parentRect.height,
-    ) ?? 0) * scale;
+      scale,
+    ) ?? 0;
   const background = objectProperty(property(definition.attributes, 'background'));
   const spriteName =
     scalarString(property(definition.attributes, 'spriteType', 'quadTextureSprite')) ??
@@ -685,6 +883,8 @@ async function layoutElement(
   const spriteDefinition =
     spriteName === undefined ? undefined : context.spritesByName.get(spriteName.toLowerCase());
   let sprite: GuiSceneElement['sprite'];
+  let secondarySprite: GuiSceneElement['secondarySprite'];
+  let spriteRenderMode: GuiSceneElement['spriteRenderMode'];
   if (spriteName !== undefined && spriteDefinition === undefined) {
     const partialInventory = context.graph.edges.some(
       (edge) =>
@@ -712,22 +912,15 @@ async function layoutElement(
     );
   } else if (spriteDefinition !== undefined) {
     const partialAppearance: string[] = [];
-    const specialSemantics = partialSpriteSemantics[spriteDefinition.spriteType];
-    if (specialSemantics !== undefined) {
-      addFidelity(
-        fidelity,
-        'unsupported',
-        specialSemantics.field,
-        specialSemantics.detail,
-        definition,
-      );
-      partialAppearance.push(specialSemantics.detail);
-    }
-    if (spriteDefinition.texturePath2 !== undefined) {
-      const detail = `Secondary texture ${spriteDefinition.texturePath2} is retained in the source graph but is not composited.`;
-      addFidelity(fidelity, 'unsupported', 'textureFile2', detail, definition);
-      partialAppearance.push(detail);
-    }
+    const spriteType = spriteDefinition.spriteType.toLowerCase();
+    spriteRenderMode =
+      spriteType === 'corneredtilespritetype'
+        ? 'cornered-tile'
+        : spriteType === 'progressbartype'
+          ? 'progressbar'
+          : spriteType === 'maskedshieldtype'
+            ? 'masked-shield'
+            : 'stretch';
     if (spriteDefinition.effectFile !== undefined) {
       const detail = `Effect ${spriteDefinition.effectFile} is retained in the source graph but is not executed by the offline renderer.`;
       addFidelity(fidelity, 'unsupported', 'effectFile', detail, definition);
@@ -744,6 +937,8 @@ async function layoutElement(
       );
     const frame = frameFor(definition, spriteDefinition, scenario);
     sprite = await catalog.loadSpriteFrame(spriteDefinition, frame);
+    if (spriteDefinition.texturePath2 !== undefined)
+      secondarySprite = await catalog.loadSecondarySpriteFrame(spriteDefinition, frame);
     if (!sprite?.supported) {
       addFidelity(
         fidelity,
@@ -772,6 +967,40 @@ async function layoutElement(
           : `${spriteDefinition.name} frame ${sprite.frame + 1}/${sprite.frameCount} shows only the primary resolved texture; additional sprite semantics are omitted.`,
         definition,
       );
+      if (spriteRenderMode === 'cornered-tile')
+        addFidelity(
+          fidelity,
+          spriteDefinition.borderSize === undefined ? 'approximated' : 'modelled',
+          'cornered_tile_composition',
+          spriteDefinition.borderSize === undefined
+            ? `${spriteDefinition.name} has no borderSize, so the full texture fills the element.`
+            : `${spriteDefinition.name} uses fixed corners and edges with a ${spriteDefinition.borderSize.width}x${spriteDefinition.borderSize.height} source border${spriteDefinition.tilingCenter === true ? ' and a tiled center' : ''}.`,
+          definition,
+        );
+      if (spriteRenderMode === 'progressbar' || spriteRenderMode === 'masked-shield') {
+        const detail =
+          secondarySprite?.supported === true
+            ? `Primary and secondary textures for ${spriteDefinition.name} are composited.`
+            : `Secondary texture for ${spriteDefinition.name} could not be rendered.`;
+        addFidelity(
+          fidelity,
+          secondarySprite?.supported === true ? 'modelled' : 'missing',
+          spriteRenderMode === 'progressbar'
+            ? 'progressbar_composition'
+            : 'masked_shield_composition',
+          detail,
+          definition,
+        );
+        if (secondarySprite !== undefined && !secondarySprite.supported)
+          diagnostics.push(
+            diagnostic(
+              'GUI_SECONDARY_TEXTURE_UNSUPPORTED',
+              'warning',
+              secondarySprite.reason ?? detail,
+              definition,
+            ),
+          );
+      }
       if (spriteDefinition.frameAnimated) {
         addFidelity(
           fidelity,
@@ -819,9 +1048,67 @@ async function layoutElement(
       resolvedFontMetrics.nativeSize ??
       context.catalog.fontDefinition(fontName ?? '')?.size ??
       16;
-    const maxWidth =
-      (scalarNumber(property(definition.attributes, 'maxWidth'), width / scale) ?? width / scale) *
-      scale;
+    const resolvedInlineIcons = new Map<string, ResolvedInlineIcon>();
+    for (const inlineIcon of visibleText.inlineIcons) {
+      const candidates = textIconSpriteCandidates(inlineIcon.token);
+      const iconDefinition = candidates
+        .map((candidate) => context.spritesByName.get(candidate.toLowerCase()))
+        .find((candidate) => candidate !== undefined);
+      const iconHeight = fontSize * scale;
+      const iconSprite =
+        iconDefinition === undefined ? undefined : await catalog.loadSpriteFrame(iconDefinition, 0);
+      const iconWidth =
+        iconSprite?.supported === true && iconSprite.height > 0
+          ? iconHeight * (iconSprite.width / iconSprite.height)
+          : iconHeight;
+      const spriteName = iconDefinition?.name ?? candidates[0]!;
+      resolvedInlineIcons.set(inlineIcon.marker, {
+        marker: inlineIcon.marker,
+        token: inlineIcon.token,
+        spriteName,
+        width: iconWidth,
+        height: iconHeight,
+        ...(iconSprite === undefined ? {} : { sprite: iconSprite }),
+      });
+      if (iconSprite?.supported === true)
+        addFidelity(
+          fidelity,
+          'modelled',
+          'inline_text_icon',
+          `Localisation icon £${inlineIcon.token} uses ${spriteName}.`,
+          definition,
+        );
+      else {
+        addFidelity(
+          fidelity,
+          'missing',
+          'inline_text_icon',
+          iconSprite?.reason ?? `No sprite resolves localisation icon £${inlineIcon.token}.`,
+          definition,
+        );
+        diagnostics.push(
+          diagnostic(
+            'GUI_TEXT_ICON_MISSING',
+            'warning',
+            iconSprite?.reason ?? `No sprite resolves localisation icon £${inlineIcon.token}.`,
+            definition,
+          ),
+        );
+      }
+    }
+    const declaredMaxWidth = scaledNumber(
+      property(definition.attributes, 'maxWidth'),
+      parentRect.width,
+      scale,
+    );
+    const declaredMaxHeight = scaledNumber(
+      property(definition.attributes, 'maxHeight'),
+      parentRect.height,
+      scale,
+    );
+    if (width === 0 && declaredMaxWidth !== undefined) width = declaredMaxWidth;
+    if (height === 0 && declaredMaxHeight !== undefined) height = declaredMaxHeight;
+    const maxWidth = declaredMaxWidth ?? width;
     const wrapped = wrapText(
       catalog,
       fontName,
@@ -830,10 +1117,22 @@ async function layoutElement(
       fontSize * scale,
       maxWidth,
       context.work,
+      resolvedInlineIcons,
     );
-    const glyphLines = [];
-    for (const line of wrapped.lines)
-      glyphLines.push(await catalog.shapeText(fontName, line, fontSize * scale));
+    const glyphLines: GuiTextGlyphLine[] = [];
+    const inlineIcons: GuiTextInlineIcon[] = [];
+    for (const [lineIndex, line] of wrapped.lines.entries()) {
+      const shaped = await shapeTextWithInlineIcons(
+        catalog,
+        fontName,
+        line,
+        fontSize * scale,
+        lineIndex,
+        resolvedInlineIcons,
+      );
+      glyphLines.push(shaped.glyphLine);
+      inlineIcons.push(...shaped.icons);
+    }
     const colourRuns = visibleText.hasColourMarkup
       ? wrapped.lines.map((line, index) =>
           colourRunsForLine(
@@ -843,6 +1142,7 @@ async function layoutElement(
             wrapped.colourLines[index] ?? [],
             fontSize * scale,
             context.work,
+            resolvedInlineIcons,
           ),
         )
       : undefined;
@@ -865,8 +1165,10 @@ async function layoutElement(
       glyphLines,
       overflowX: width > 0 && measuredWidth > width + 0.01,
       overflowY: height > 0 && measuredHeight > height + 0.01,
+      fixedSize: scalarBoolean(property(definition.attributes, 'fixedsize')) ?? false,
       unresolvedTokens: resolved.unresolved,
       ...(colourRuns === undefined ? {} : { colourRuns }),
+      ...(inlineIcons.length === 0 ? {} : { inlineIcons }),
     };
     if (wrapped.metricSource === 'approximation')
       addFidelity(
@@ -935,28 +1237,28 @@ async function layoutElement(
   }
 
   const orientation =
-    scalarString(property(definition.attributes, 'orientation'))?.toLowerCase() ?? 'upper_left';
+    scalarString(property(definition.attributes, 'orientation'))?.toLowerCase() ??
+    inheritedOrientation;
   const origo =
     scalarString(property(definition.attributes, 'origo'))?.toLowerCase() ?? 'upper_left';
-  let x = parentRect.x + localX * scale;
-  let y = parentRect.y + localY * scale;
-  if (orientation.includes('right')) x = parentRect.x + parentRect.width - localX * scale - width;
-  else if (orientation.includes('center')) x = parentRect.x + parentRect.width / 2 + localX * scale;
-  if (orientation.includes('lower') || orientation.includes('bottom'))
-    y = parentRect.y + parentRect.height - localY * scale - height;
-  else if (orientation.includes('center'))
-    y = parentRect.y + parentRect.height / 2 + localY * scale;
-  if (origo.includes('center')) {
+  const orientationAxes = anchorAxes(orientation);
+  let x = anchoredCoordinate(parentRect.x, parentRect.width, localX, orientationAxes.horizontal);
+  let y = anchoredCoordinate(parentRect.y, parentRect.height, localY, orientationAxes.vertical);
+  const centerPosition = scalarBoolean(property(definition.attributes, 'centerposition')) ?? false;
+  const origoAxes = centerPosition
+    ? { horizontal: 'center' as const, vertical: 'center' as const }
+    : anchorAxes(origo);
+  if (origoAxes.horizontal === 'center') {
     x -= width / 2;
-    y -= height / 2;
-  } else {
-    if (origo.includes('right')) x -= width;
-    if (origo.includes('lower') || origo.includes('bottom')) y -= height;
-  }
+  } else if (origoAxes.horizontal === 'right') x -= width;
+  if (origoAxes.vertical === 'center') y -= height / 2;
+  else if (origoAxes.vertical === 'bottom') y -= height;
   const scrollOffset =
     (scenario.scrollOffsets[definition.name] ?? scenario.scrollOffsets[definition.id] ?? 0) * scale;
   const unclippedRect = { x, y, width: Math.max(0, width), height: Math.max(0, height) };
-  const ownClipping = scalarBoolean(property(definition.attributes, 'clipping')) ?? false;
+  const ownClipping =
+    scalarBoolean(property(definition.attributes, 'clipping')) ??
+    (background !== undefined && /(?:containerwindow|windowtype)/iu.test(definition.elementType));
   const availableClip =
     inheritedClip === undefined ? unclippedRect : rectIntersection(inheritedClip, unclippedRect);
   const clipRect = inheritedClip;
@@ -1015,6 +1317,17 @@ async function layoutElement(
     state,
     ...(progressRatio === undefined ? {} : { progressRatio }),
     ...(sprite === undefined ? {} : { sprite }),
+    ...(secondarySprite === undefined ? {} : { secondarySprite }),
+    ...(spriteRenderMode === undefined ? {} : { spriteRenderMode }),
+    ...(spriteDefinition?.borderSize === undefined
+      ? {}
+      : { spriteBorderSize: spriteDefinition.borderSize }),
+    ...(spriteDefinition?.tilingCenter === undefined
+      ? {}
+      : { spriteTilingCenter: spriteDefinition.tilingCenter }),
+    ...(spriteDefinition === undefined
+      ? {}
+      : { progressHorizontal: spriteDefinition.horizontal ?? true }),
     ...(text === undefined ? {} : { text }),
     sourcePath: definition.sourcePath,
     ...(definition.location === undefined ? {} : { location: definition.location }),
@@ -1115,6 +1428,7 @@ async function layoutElement(
           index,
           row,
           instanceId,
+          origo,
         );
         const rendered = context.instancesById.get(`${child.id}${instanceSuffix}#row-${index}`);
         rowHeight = Math.max(rowHeight, rendered?.unclippedRect.height ?? 0);
@@ -1142,6 +1456,7 @@ async function layoutElement(
         rowIndex,
         rowValues,
         instanceId,
+        origo,
       );
     }
   }

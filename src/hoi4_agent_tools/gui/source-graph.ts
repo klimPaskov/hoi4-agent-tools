@@ -88,6 +88,8 @@ const modelledElementAttributes = new Set([
   'font',
   'fontSize',
   'maxWidth',
+  'maxHeight',
+  'fixedsize',
   'format',
   'buttonText',
   'buttonFont',
@@ -99,12 +101,11 @@ const modelledElementAttributes = new Set([
   'minValue',
   'maxValue',
   'startValue',
+  'centerposition',
 ]);
 
 const ignoredElementAttributes = new Set([
   'margin',
-  'maxHeight',
-  'fixedsize',
   'pdx_tooltip',
   'pdx_tooltip_delayed',
   'hint_tag',
@@ -119,7 +120,6 @@ const ignoredElementAttributes = new Set([
   'smooth_scrolling',
   'borderSize',
   'stepSize',
-  'centerposition',
   'fullScreen',
   'moveable',
   'show_position',
@@ -229,6 +229,17 @@ function sizeFrom(block: BlockNode): GuiSize | undefined {
   if (size === undefined) return undefined;
   const width = numberScalar(size, 'width', 'x');
   const height = numberScalar(size, 'height', 'y');
+  return width === undefined || height === undefined ? undefined : { width, height };
+}
+
+function nestedSizeFrom(block: BlockNode, key: string): GuiSize | undefined {
+  const nested = assignments(block).find(
+    (assignment) =>
+      assignment.key.value.toLowerCase() === key.toLowerCase() && assignment.value.type === 'block',
+  )?.value;
+  if (nested?.type !== 'block') return undefined;
+  const width = numberScalar(nested, 'width', 'x');
+  const height = numberScalar(nested, 'height', 'y');
   return width === undefined || height === undefined ? undefined : { width, height };
 }
 
@@ -412,7 +423,12 @@ function indexSpritesAndFonts(
         const name = firstScalarInsensitive(child, 'name');
         if (name !== undefined) {
           const id = deterministicId('gui_sprite', { path: file.displayPath, name });
-          const texturePath = firstScalarInsensitive(child, 'texturefile', 'textureFile');
+          const texturePath = firstScalarInsensitive(
+            child,
+            'texturefile',
+            'textureFile',
+            'textureFile1',
+          );
           const texturePath2 = firstScalarInsensitive(child, 'textureFile2');
           const staticFallback = firstScalarInsensitive(child, 'static_fallback', 'staticFallback');
           const animationRateFps = numberScalar(child, 'animation_rate_fps');
@@ -421,6 +437,10 @@ function indexSpritesAndFonts(
           const pauseOnLoop = numberScalar(child, 'pause_on_loop');
           const effectFile = firstScalarInsensitive(child, 'effectFile');
           const declaredSize = sizeFrom(child);
+          const borderSize = nestedSizeFrom(child, 'borderSize');
+          const tilingCenter = boolScalar(child, 'tilingCenter');
+          const horizontal = boolScalar(child, 'horizontal');
+          const steps = numberScalar(child, 'steps');
           const definition: GuiSpriteDefinition = {
             id,
             name,
@@ -438,6 +458,10 @@ function indexSpritesAndFonts(
             ...(effectFile === undefined ? {} : { effectFile }),
             ...(staticFallback === undefined ? {} : { staticFallback }),
             ...(declaredSize === undefined ? {} : { declaredSize }),
+            ...(borderSize === undefined ? {} : { borderSize }),
+            ...(tilingCenter === undefined ? {} : { tilingCenter }),
+            ...(horizontal === undefined ? {} : { horizontal }),
+            ...(steps === undefined ? {} : { steps: Math.trunc(steps) }),
             rawSource: raw(document, assignment),
           };
           addDomainEntry(sprites, definition, 'sprite');
@@ -451,6 +475,19 @@ function indexSpritesAndFonts(
               spriteType: definition.spriteType,
               frameCount: definition.frameCount,
               frameAnimated: definition.frameAnimated,
+              ...(definition.borderSize === undefined
+                ? {}
+                : {
+                    borderSize: {
+                      width: definition.borderSize.width,
+                      height: definition.borderSize.height,
+                    },
+                  }),
+              ...(definition.tilingCenter === undefined
+                ? {}
+                : { tilingCenter: definition.tilingCenter }),
+              ...(definition.horizontal === undefined ? {} : { horizontal: definition.horizontal }),
+              ...(definition.steps === undefined ? {} : { steps: definition.steps }),
               ...(definition.animationRateFps === undefined
                 ? {}
                 : { animationRateFps: definition.animationRateFps }),
@@ -718,9 +755,11 @@ function linkAnimationSources(
   textureNodes: ReadonlyMap<string, string>,
   frameNodes: ReadonlyMap<string, string>,
 ): void {
-  const spritesByName = new Map(sprites.map((sprite) => [sprite.name, sprite]));
+  const spritesByName = new Map(
+    sprites.map((sprite) => [sprite.name.toLocaleLowerCase('en-US'), sprite]),
+  );
   for (const manifest of manifests) {
-    const sprite = spritesByName.get(manifest.sprite);
+    const sprite = spritesByName.get(manifest.sprite.toLocaleLowerCase('en-US'));
     addEdge(
       edges,
       'animation_provenance',
@@ -856,8 +895,10 @@ function linkGraph(
   fontAssetNodes: ReadonlyMap<string, string>,
   pendingDecisionEdges: { from: string; target: string; location: SourceLocation }[],
 ): void {
-  const spriteByName = new Map(sprites.map((sprite) => [sprite.name, sprite]));
-  const fontByName = new Map(fonts.map((font) => [font.name, font]));
+  const spriteByName = new Map(
+    sprites.map((sprite) => [sprite.name.toLocaleLowerCase('en-US'), sprite]),
+  );
+  const fontByName = new Map(fonts.map((font) => [font.name.toLocaleLowerCase('en-US'), font]));
   const elementByName = new Map<string, GuiElementDefinition>();
   for (const element of [...elements].sort((a, b) => a.definitionOrder - b.definitionOrder)) {
     if (!elementByName.has(element.name)) elementByName.set(element.name, element);
@@ -901,7 +942,7 @@ function linkGraph(
       `${sprite.name}_fallback`,
     ].filter((value): value is string => value !== undefined);
     const fallback = candidates
-      .map((name) => spriteByName.get(name))
+      .map((name) => spriteByName.get(name.toLocaleLowerCase('en-US')))
       .find((value) => value !== undefined);
     if (fallback !== undefined)
       addEdge(edges, 'static_fallback', sprite.id, fallback.id, true, {}, sprite.location);
@@ -942,7 +983,7 @@ function linkGraph(
       (value): value is string => typeof value === 'string' && value.trim().length > 0,
     );
     if (spriteName !== undefined) {
-      const sprite = spriteByName.get(spriteName);
+      const sprite = spriteByName.get(spriteName.toLocaleLowerCase('en-US'));
       addEdge(
         edges,
         'uses_sprite',
@@ -957,7 +998,7 @@ function linkGraph(
       (value): value is string => typeof value === 'string' && value.trim().length > 0,
     );
     if (fontName !== undefined) {
-      const font = fontByName.get(fontName);
+      const font = fontByName.get(fontName.toLocaleLowerCase('en-US'));
       addEdge(
         edges,
         'uses_font',

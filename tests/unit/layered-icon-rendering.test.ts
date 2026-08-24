@@ -39,7 +39,8 @@ beforeAll(async () => {
     [
       'spriteTypes = {',
       `\tSpriteType = { name = GFX_vanilla_focus_shared texturefile = "${texturePath}" }`,
-      `\tSpriteType = { name = GFX_vanilla_gui_shared texturefile = "${texturePath}" }`,
+      '\tSpriteType = { name = GFX_vanilla_gui_shared texturefile = "gfx//interface//layered//vanilla_shared.png" }',
+      `\tSpriteType = { name = GFX_command_power texturefile = "${texturePath}" }`,
       '}',
       '',
     ].join('\n'),
@@ -85,6 +86,12 @@ beforeAll(async () => {
       '\t\t\tsize = { width = 64 height = 64 }',
       '\t\t\tspriteType = GFX_vanilla_gui_shared',
       '\t\t}',
+      '\t\tinstantTextBoxType = {',
+      '\t\t\tname = layered_cost',
+      '\t\t\tposition = { x = 10 y = 92 }',
+      '\t\t\tsize = { width = 140 height = 20 }',
+      '\t\t\ttext = LAYERED_COST',
+      '\t\t}',
       '\t}',
       '}',
       '',
@@ -93,7 +100,7 @@ beforeAll(async () => {
   await put(
     modRoot,
     'localisation/english/layered_l_english.yml',
-    '\ufeffl_english:\nlayered_focus: "Layered Focus"\nlayered_focus_desc: "Uses a vanilla sprite."\n',
+    '\ufeffl_english:\nlayered_focus: "Layered Focus"\nlayered_focus_desc: "Uses a vanilla sprite."\nLAYERED_COST: "Cost £command_power 10"\n',
   );
   const configuration = serverConfigurationSchema.parse({
     version: 1,
@@ -155,10 +162,24 @@ describe('layered icon rendering', () => {
     )?.sprite;
     expect(sprite).toMatchObject({
       spriteName: 'GFX_vanilla_gui_shared',
-      texturePath: 'gfx/interface/layered/vanilla_shared.png',
+      texturePath: 'gfx//interface//layered//vanilla_shared.png',
       supported: true,
     });
     expect(sprite?.dataUri).toMatch(/^data:image\/png;base64,/u);
     expect(rendered.render.images[0]?.svg).toContain('href="data:image/png;base64,');
+    const inlineIcon = rendered.render.scene.elements.find(({ name }) => name === 'layered_cost')
+      ?.text?.inlineIcons?.[0];
+    expect(inlineIcon).toMatchObject({
+      token: 'command_power',
+      spriteName: 'GFX_command_power',
+      sprite: {
+        texturePath: 'gfx/interface/layered/vanilla_shared.png',
+        supported: true,
+      },
+    });
+    expect(rendered.render.images[0]?.svg).toContain('data-inline-icon="command_power"');
+    expect(rendered.render.scene.diagnostics.map(({ code }) => code)).not.toContain(
+      'GUI_TEXT_ICON_MISSING',
+    );
   });
 });

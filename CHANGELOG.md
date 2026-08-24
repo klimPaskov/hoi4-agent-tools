@@ -4,6 +4,13 @@
 
 No unreleased changes.
 
+## 2.7.0 - 2026-08-24
+
+- Made scripted-GUI layout follow Clausewitz orientation, element-origin, center-position, relative-dimension, local-scale, container-clipping, and fixed text-bound behavior.
+- Added deterministic nine-slice cornered tiles, filled/background progress bars, masked shields, and inline localisation GFX icons.
+- Resolved ordinary and inline GUI assets case-insensitively through mod, dependency, and installed-game layers so vanilla graphics remain visible in mod renders.
+- Removed synthetic state-color overlays from normal renders and retained actual sprite-frame evidence for the requested state.
+
 ## 2.6.0 - 2026-08-22
 
 - Added a shared complete map catalog with resolved names, source locations, geometry, memberships, networks, positions, buildings, ports, adjacency, and localisation evidence.

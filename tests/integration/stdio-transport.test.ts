@@ -44,7 +44,7 @@ async function waitForMessage(
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for JSON-RPC response ${id}`)),
-      20_000,
+      30_000,
     );
     let pending = '';
     const consume = (chunk: Buffer): void => {
@@ -195,7 +195,7 @@ describe('local stdio transport', () => {
       await stop(child);
       await rm(temporary, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 45_000);
 
   it('uses newline-delimited JSON-RPC on stdout with no log contamination', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-'));

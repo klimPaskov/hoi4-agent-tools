@@ -425,10 +425,10 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
     expect(scene.fidelity.modelled.length).toBeGreaterThan(0);
     expect(scene.fidelity.approximated.length).toBeGreaterThan(0);
     expect(scene.fidelity.ignored).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'fixedsize' }),
-        expect.objectContaining({ field: 'pdx_tooltip' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: 'pdx_tooltip' })]),
+    );
+    expect(scene.fidelity.modelled).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'fixedsize' })]),
     );
     expect(scene.fidelity.missing.some(({ field }) => field === 'font_glyphs')).toBe(true);
     expect(scene.fidelity.unsupported.some(({ field }) => field === 'rotation')).toBe(true);

@@ -108,13 +108,24 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
       (glyphLine === undefined || glyphLine.source === 'deterministic-fallback'
         ? text.lineHeight * 0.8
         : glyphLine.baseline);
+    const horizontalScale =
+      glyphLine !== undefined && glyphLine.width > 0 && width > 0 ? width / glyphLine.width : 1;
+    const inlineIconMarkup = (text.inlineIcons ?? [])
+      .filter((icon) => icon.lineIndex === index)
+      .map((icon) => {
+        const iconRect = {
+          x: originX + icon.offsetX * horizontalScale,
+          y: lineTop + (text.lineHeight - icon.height) / 2,
+          width: icon.width * horizontalScale,
+          height: icon.height,
+        };
+        if (icon.sprite?.supported === true && icon.sprite.dataUri !== undefined)
+          return `<image data-inline-icon="${escapeXml(icon.token)}" ${rectAttributes(iconRect)} href="${icon.sprite.dataUri}" preserveAspectRatio="xMidYMid meet"/>`;
+        return `<g data-inline-icon-missing="${escapeXml(icon.token)}"><rect ${rectAttributes(iconRect)} fill="#331f3f" stroke="#ff42d0" stroke-width="1"/><path d="M ${finite(iconRect.x)} ${finite(iconRect.y)} L ${finite(iconRect.x + iconRect.width)} ${finite(iconRect.y + iconRect.height)} M ${finite(iconRect.x + iconRect.width)} ${finite(iconRect.y)} L ${finite(iconRect.x)} ${finite(iconRect.y + iconRect.height)}" stroke="#ff42d0"/></g>`;
+      })
+      .join('');
     const colourRuns = text.colourRuns?.[index] ?? [];
     if (colourRuns.length > 0) {
-      const runWidth = colourRuns.reduce(
-        (maximum, run) => Math.max(maximum, run.offsetX + run.width),
-        0,
-      );
-      const horizontalScale = runWidth > 0 && width > 0 ? width / runWidth : 1;
       return `<g data-hoi4-colour-runs="true">${colourRuns
         .map((run) =>
           toolText.render(run.text, {
@@ -127,29 +138,28 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
             ...(run.width > 0 ? { targetWidth: run.width * horizontalScale } : {}),
           }),
         )
-        .join('')}</g>`;
+        .join('')}${inlineIconMarkup}</g>`;
     }
     if (glyphLine?.source === 'fontkit-path') {
-      const horizontalScale = glyphLine.width > 0 && width > 0 ? width / glyphLine.width : 1;
       return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphLine.glyphs
         .filter((glyph) => glyph.kind === 'outline')
         .map(
           (glyph) =>
             `<use href="#${outlineDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y)}) scale(${finite(glyph.scale * horizontalScale)} ${finite(-glyph.scale)})"/>`,
         )
-        .join('')}</g>`;
+        .join('')}${inlineIconMarkup}</g>`;
     }
     if (glyphLine?.source === 'bmfont-atlas') {
-      const horizontalScale = glyphLine.width > 0 && width > 0 ? width / glyphLine.width : 1;
       return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphLine.glyphs
         .filter((glyph) => glyph.kind === 'bitmap')
         .map(
           (glyph) =>
             `<use href="#${bitmapDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y - glyphLine.baseline)}) scale(${finite(horizontalScale)} 1)"/>`,
         )
-        .join('')}</g>`;
+        .join('')}${inlineIconMarkup}</g>`;
     }
-    return toolText.render(line, {
+    const visibleLine = line.replace(/[\uE000-\uF8FF]/gu, ' ');
+    return `<g>${toolText.render(visibleLine, {
       x: originX,
       y: baseline,
       fontSize: text.fontSize,
@@ -157,9 +167,169 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
       stroke: '#12151a',
       strokeWidth: 0.6,
       ...(width > 0 ? { targetWidth: width } : {}),
-    });
+    })}${inlineIconMarkup}</g>`;
   });
-  return `<g data-source-id="${escapeXml(element.sourceId)}" fill="#f5f2e8" stroke="#12151a" stroke-width="0.6" paint-order="stroke">${lines.join('')}</g>`;
+  const textClipId = `gui-text-clip-${sha256Bytes(element.id).slice(0, 20)}`;
+  const clipDefinition = text.fixedSize
+    ? `<defs><clipPath id="${textClipId}"><rect ${rectAttributes(rect)}/></clipPath></defs>`
+    : '';
+  const clip = text.fixedSize ? ` clip-path="url(#${textClipId})"` : '';
+  return `${clipDefinition}<g data-source-id="${escapeXml(element.sourceId)}" fill="#f5f2e8" stroke="#12151a" stroke-width="0.6" paint-order="stroke"${clip}>${lines.join('')}</g>`;
+}
+
+function renderSpriteImage(sprite: NonNullable<GuiSceneElement['sprite']>, rect: GuiRect): string {
+  if (!sprite.supported || sprite.dataUri === undefined) return '';
+  return `<image ${rectAttributes(rect)} href="${sprite.dataUri}" preserveAspectRatio="none"/>`;
+}
+
+function renderSpriteSlice(
+  sprite: NonNullable<GuiSceneElement['sprite']>,
+  source: GuiRect,
+  destination: GuiRect,
+): string {
+  if (
+    !sprite.supported ||
+    sprite.dataUri === undefined ||
+    source.width <= 0 ||
+    source.height <= 0 ||
+    destination.width <= 0 ||
+    destination.height <= 0
+  )
+    return '';
+  return `<svg ${rectAttributes(destination)} viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden"><image x="0" y="0" width="${finite(sprite.width)}" height="${finite(sprite.height)}" href="${sprite.dataUri}" preserveAspectRatio="none"/></svg>`;
+}
+
+function renderTiledSpriteSlice(
+  element: GuiSceneElement,
+  sprite: NonNullable<GuiSceneElement['sprite']>,
+  source: GuiRect,
+  destination: GuiRect,
+): string {
+  if (
+    !sprite.supported ||
+    sprite.dataUri === undefined ||
+    source.width <= 0 ||
+    source.height <= 0 ||
+    destination.width <= 0 ||
+    destination.height <= 0
+  )
+    return '';
+  const tileWidth = Math.max(1, source.width * element.scale);
+  const tileHeight = Math.max(1, source.height * element.scale);
+  const id = `gui-tile-${sha256Bytes(`${element.id}:${source.x}:${source.y}:${source.width}:${source.height}`).slice(0, 20)}`;
+  return `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" x="${finite(destination.x)}" y="${finite(destination.y)}" width="${finite(tileWidth)}" height="${finite(tileHeight)}"><svg width="${finite(tileWidth)}" height="${finite(tileHeight)}" viewBox="${finite(source.x)} ${finite(source.y)} ${finite(source.width)} ${finite(source.height)}" preserveAspectRatio="none" overflow="hidden"><image x="0" y="0" width="${finite(sprite.width)}" height="${finite(sprite.height)}" href="${sprite.dataUri}" preserveAspectRatio="none"/></svg></pattern></defs><rect ${rectAttributes(destination)} fill="url(#${id})"/>`;
+}
+
+function renderCorneredTile(element: GuiSceneElement): string {
+  const sprite = element.sprite;
+  const rect = element.unclippedRect;
+  const border = element.spriteBorderSize;
+  if (
+    sprite?.supported !== true ||
+    sprite.dataUri === undefined ||
+    border === undefined ||
+    border.width <= 0 ||
+    border.height <= 0
+  )
+    return sprite === undefined ? '' : renderSpriteImage(sprite, rect);
+  const sourceBorderX = Math.min(border.width, sprite.width / 2);
+  const sourceBorderY = Math.min(border.height, sprite.height / 2);
+  const destinationBorderX = Math.min(sourceBorderX * element.scale, rect.width / 2);
+  const destinationBorderY = Math.min(sourceBorderY * element.scale, rect.height / 2);
+  const sourceWidths = [sourceBorderX, sprite.width - sourceBorderX * 2, sourceBorderX];
+  const sourceHeights = [sourceBorderY, sprite.height - sourceBorderY * 2, sourceBorderY];
+  const destinationWidths = [
+    destinationBorderX,
+    rect.width - destinationBorderX * 2,
+    destinationBorderX,
+  ];
+  const destinationHeights = [
+    destinationBorderY,
+    rect.height - destinationBorderY * 2,
+    destinationBorderY,
+  ];
+  const sourceXs = [0, sourceBorderX, sprite.width - sourceBorderX];
+  const sourceYs = [0, sourceBorderY, sprite.height - sourceBorderY];
+  const destinationXs = [
+    rect.x,
+    rect.x + destinationBorderX,
+    rect.x + rect.width - destinationBorderX,
+  ];
+  const destinationYs = [
+    rect.y,
+    rect.y + destinationBorderY,
+    rect.y + rect.height - destinationBorderY,
+  ];
+  const parts: string[] = [];
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      const source = {
+        x: sourceXs[column] ?? 0,
+        y: sourceYs[row] ?? 0,
+        width: sourceWidths[column] ?? 0,
+        height: sourceHeights[row] ?? 0,
+      };
+      const destination = {
+        x: destinationXs[column] ?? rect.x,
+        y: destinationYs[row] ?? rect.y,
+        width: destinationWidths[column] ?? 0,
+        height: destinationHeights[row] ?? 0,
+      };
+      parts.push(
+        row === 1 && column === 1 && element.spriteTilingCenter === true
+          ? renderTiledSpriteSlice(element, sprite, source, destination)
+          : renderSpriteSlice(sprite, source, destination),
+      );
+    }
+  }
+  return parts.join('');
+}
+
+function renderProgressbar(element: GuiSceneElement): string {
+  const rect = element.unclippedRect;
+  const sprite = element.sprite;
+  const secondary = element.secondarySprite;
+  const ratio = Math.max(0, Math.min(1, element.progressRatio ?? 1));
+  const background = secondary === undefined ? '' : renderSpriteImage(secondary, rect);
+  if (sprite?.supported !== true || sprite.dataUri === undefined) return background;
+  if (ratio <= 0) return background;
+  const horizontal = element.progressHorizontal !== false;
+  const filled = horizontal
+    ? { x: rect.x, y: rect.y, width: rect.width * ratio, height: rect.height }
+    : {
+        x: rect.x,
+        y: rect.y + rect.height * (1 - ratio),
+        width: rect.width,
+        height: rect.height * ratio,
+      };
+  const source = horizontal
+    ? { x: 0, y: 0, width: sprite.width * ratio, height: sprite.height }
+    : {
+        x: 0,
+        y: sprite.height * (1 - ratio),
+        width: sprite.width,
+        height: sprite.height * ratio,
+      };
+  return `${background}${renderSpriteSlice(sprite, source, filled)}`;
+}
+
+function renderMaskedShield(element: GuiSceneElement): string {
+  const rect = element.unclippedRect;
+  const sprite = element.sprite;
+  const mask = element.secondarySprite;
+  if (sprite?.supported !== true || sprite.dataUri === undefined) return '';
+  if (mask?.supported !== true || mask.dataUri === undefined)
+    return renderSpriteImage(sprite, rect);
+  const id = `gui-mask-${sha256Bytes(element.id).slice(0, 20)}`;
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" ${rectAttributes(rect)}><image ${rectAttributes(rect)} href="${mask.dataUri}" preserveAspectRatio="none"/></mask></defs><image ${rectAttributes(rect)} href="${sprite.dataUri}" preserveAspectRatio="none" mask="url(#${id})"/>`;
+}
+
+function renderElementSprite(element: GuiSceneElement): string {
+  if (element.sprite?.supported !== true || element.sprite.dataUri === undefined) return '';
+  if (element.spriteRenderMode === 'cornered-tile') return renderCorneredTile(element);
+  if (element.spriteRenderMode === 'progressbar') return renderProgressbar(element);
+  if (element.spriteRenderMode === 'masked-shield') return renderMaskedShield(element);
+  return renderSpriteImage(element.sprite, element.unclippedRect);
 }
 
 function renderBaseElement(
@@ -172,30 +342,18 @@ function renderBaseElement(
   const clip = clipId === undefined ? '' : ` clip-path="url(#${clipId})"`;
   const content: string[] = [];
   if (element.sprite?.supported === true && element.sprite.dataUri !== undefined) {
-    content.push(
-      `<image ${rectAttributes(rect)} href="${element.sprite.dataUri}" preserveAspectRatio="none"/>`,
-    );
+    content.push(renderElementSprite(element));
   } else if (element.sprite !== undefined) {
     content.push(
       `<rect ${rectAttributes(rect)} fill="#331f3f" stroke="#ff42d0" stroke-width="1"/><path d="M ${finite(rect.x)} ${finite(rect.y)} L ${finite(rect.x + rect.width)} ${finite(rect.y + rect.height)} M ${finite(rect.x + rect.width)} ${finite(rect.y)} L ${finite(rect.x)} ${finite(rect.y + rect.height)}" stroke="#ff42d0"/>`,
     );
   }
-  if (element.progressRatio !== undefined) {
+  if (element.progressRatio !== undefined && element.spriteRenderMode !== 'progressbar') {
     content.push(
       `<rect x="${finite(rect.x)}" y="${finite(rect.y)}" width="${finite(rect.width * element.progressRatio)}" height="${finite(rect.height)}" fill="#5ecf8d" fill-opacity="0.65"/>`,
     );
   }
   content.push(renderText(element, toolText));
-  if (element.state === 'hover')
-    content.push(`<rect ${rectAttributes(rect)} fill="#fff" opacity="0.08"/>`);
-  if (element.state === 'selected' || element.state === 'active')
-    content.push(`<rect ${rectAttributes(rect)} fill="none" stroke="#ffd166" stroke-width="2"/>`);
-  if (element.state === 'locked' || element.state === 'disabled')
-    content.push(`<rect ${rectAttributes(rect)} fill="#111820" opacity="0.5"/>`);
-  if (element.state === 'warning')
-    content.push(`<rect ${rectAttributes(rect)} fill="none" stroke="#ff5d5d" stroke-width="3"/>`);
-  if (element.state === 'completed')
-    content.push(`<rect ${rectAttributes(rect)} fill="none" stroke="#5ecf8d" stroke-width="2"/>`);
   return `<g id="${escapeXml(element.id)}" data-source="${escapeXml(element.sourcePath)}" data-source-id="${escapeXml(element.sourceId)}"${clip}>${content.join('')}</g>`;
 }
 
@@ -388,6 +546,23 @@ function sceneLayoutEvidence(scene: GuiScene): Record<string, unknown> {
               format: element.sprite.format,
               supported: element.sprite.supported,
               ...(element.sprite.reason === undefined ? {} : { reason: element.sprite.reason }),
+            },
+          }),
+      ...(element.secondarySprite === undefined
+        ? {}
+        : {
+            secondarySprite: {
+              spriteName: element.secondarySprite.spriteName,
+              texturePath: element.secondarySprite.texturePath,
+              frame: element.secondarySprite.frame,
+              frameCount: element.secondarySprite.frameCount,
+              width: element.secondarySprite.width,
+              height: element.secondarySprite.height,
+              format: element.secondarySprite.format,
+              supported: element.secondarySprite.supported,
+              ...(element.secondarySprite.reason === undefined
+                ? {}
+                : { reason: element.secondarySprite.reason }),
             },
           }),
       ...(element.text === undefined
