@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   customWeightedPoolManifestSchema,
+  probabilityEvaluateInputSchema,
   probabilityScenarioSetSchema,
   probabilitySequenceInputSchema,
   probabilitySimulateInputSchema,
@@ -24,6 +25,7 @@ describe('published probability examples', () => {
       [probabilitySimulateInputSchema, 'event-mtth-simulate-input.json'],
       [probabilitySweepInputSchema, 'focus-route-sweep-input.json'],
       [probabilitySequenceInputSchema, 'adaptive-event-sequence-input.json'],
+      [probabilityEvaluateInputSchema, 'scoped-dynamic-pools-evaluate-input.json'],
     ] as const;
 
     for (const [schema, name] of cases) {

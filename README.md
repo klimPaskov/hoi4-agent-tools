@@ -9,7 +9,7 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 - Maps: navigate the complete rendered map by ID or localised name; inspect provinces, states, regions, adjacency, supply, railways, and positions; create states and provinces; change IDs; and repair connected map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
-- AI and MTTH: evaluate weighted choices and timing across explicit scenarios, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
+- AI and MTTH: evaluate weighted choices and timing across explicit scenarios, bind special scope chains, enumerate dynamic target pools, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
 
 ## Setup
 

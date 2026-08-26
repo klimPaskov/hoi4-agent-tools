@@ -14,6 +14,7 @@ import type {
   WeightedCandidate,
 } from './model.js';
 import { Rational } from './rational.js';
+import { scopedExpressionValue } from './scenario-state.js';
 import { evaluateTriggerBlock } from './trigger-evaluator.js';
 
 export interface RationalInterval {
@@ -93,6 +94,8 @@ function scenarioNumber(scenario: ProbabilityScenario, expression: string): unkn
     Object.hasOwn(scenario.state, `variable.${expression.slice(4)}`)
   )
     return scenario.state[`variable.${expression.slice(4)}`];
+  const scoped = scopedExpressionValue(scenario, expression);
+  if (scoped !== undefined) return scoped;
   return undefined;
 }
 

@@ -4,6 +4,13 @@
 
 No unreleased changes.
 
+## 2.8.0 - 2026-08-26
+
+- Added structured `ROOT`, `THIS`, `PREV`, `FROM` chain, saved-scope, and event-target bindings to probability scenarios.
+- Added deterministic enumeration and exact complete-pool shares for declared dynamic destination, opposition, donor, and other runtime scope pools.
+- Extended exact branching, sweeps, and simulation to update scoped and pool-candidate state without flattening it into the root scenario.
+- Added MCP resource counts, a published callable example, 2,048-candidate coverage, and source-linked trigger traces for dynamic scope pools.
+
 ## 2.7.0 - 2026-08-24
 
 - Made scripted-GUI layout follow Clausewitz orientation, element-origin, center-position, relative-dimension, local-scale, container-clipping, and fixed text-bound behavior.

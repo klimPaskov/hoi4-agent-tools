@@ -205,6 +205,58 @@ describe('AI and MTTH acceptance corpus', () => {
     );
   });
 
+  it('binds source-backed scope filters and returns complete dynamic pool membership', async () => {
+    const result = await analyzer.evaluate({
+      workspaceId: 'probability-acceptance',
+      adapter: 'direct_random',
+      source: { inlineClausewitz: 'random = { chance = FROM.chance }' },
+      scenarioSet: {
+        schemaVersion: '1.0',
+        id: 'scoped-acceptance',
+        scenarios: [
+          {
+            id: 'scoped-acceptance',
+            state: {},
+            scopes: {
+              FROM: { id: 'origin', actor: 'FRA', state: { 'variable.chance': 40 } },
+            },
+            scopePools: [
+              {
+                id: 'relief_donors',
+                bindAs: 'FROM',
+                selection: 'uniform',
+                complete: true,
+                filter: { scriptedTrigger: 'has_synthetic_helper' },
+                candidates: [
+                  { id: 'AAA', actor: 'AAA', state: { has_war: false, 'variable.pressure': 60 } },
+                  { id: 'BBB', actor: 'BBB', state: { has_war: false, 'variable.pressure': 10 } },
+                  { id: 'CCC', actor: 'CCC', state: { has_war: true, 'variable.pressure': 0 } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      outputs: ['json'],
+    });
+    expect(result.scenarios[0]?.candidates[0]?.conditionalProbability).toBe(0.4);
+    expect(result.scenarios[0]?.scopePools?.[0]).toMatchObject({
+      eligibleCandidateIds: ['AAA', 'CCC'],
+      unresolvedCandidateIds: [],
+      candidates: [
+        { id: 'AAA', conditionalProbability: 0.5 },
+        { id: 'BBB', conditionalProbability: 0 },
+        { id: 'CCC', conditionalProbability: 0.5 },
+      ],
+    });
+    expect(
+      result.scenarios[0]?.scopePools?.[0]?.candidates.some(({ trace }) =>
+        trace.some(({ provenance }) => provenance?.helperChain?.includes('has_synthetic_helper')),
+      ),
+    ).toBe(true);
+    expect(probabilityAnalysisResultSchema.safeParse(result).success).toBe(true);
+  });
+
   it('resolves file-local constants, global script constants, MTTH variables, and scripted-trigger helpers', async () => {
     const focus = await analyzer.evaluate({
       workspaceId: 'probability-acceptance',

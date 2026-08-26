@@ -1,0 +1,50 @@
+{
+  "adapter": "event_option_ai_chance",
+  "source": {
+    "inlineClausewitz": "country_event = { id = scoped.1 option = { name = scoped.1.a ai_chance = { base = 1 modifier = { factor = 3 FROM = { tag = FRA } } } } option = { name = scoped.1.b ai_chance = { base = 1 } } }"
+  },
+  "scenarioSet": {
+    "schemaVersion": "1.0",
+    "id": "scoped_dynamic_pools",
+    "scenarios": [
+      {
+        "id": "france_origin",
+        "state": {},
+        "scopes": {
+          "FROM": {
+            "id": "origin",
+            "type": "country",
+            "actor": "FRA",
+            "state": {}
+          }
+        },
+        "scopePools": [
+          {
+            "id": "destination",
+            "bindAs": "FROM",
+            "selection": "uniform",
+            "complete": true,
+            "filter": {
+              "inlineClausewitz": "FROM = { is_ai = yes }"
+            },
+            "candidates": [
+              {
+                "id": "GER",
+                "type": "country",
+                "actor": "GER",
+                "state": { "is_ai": true }
+              },
+              {
+                "id": "ITA",
+                "type": "country",
+                "actor": "ITA",
+                "state": { "is_ai": true }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": ["json", "unresolved"]
+}

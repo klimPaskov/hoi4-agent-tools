@@ -7,6 +7,7 @@ import type {
   SimulationSummary,
   WeightedSurface,
 } from './model.js';
+import { withScenarioPathValue } from './scenario-state.js';
 import { evaluateExactCandidates } from './evaluation.js';
 
 export interface SimulationResult {
@@ -304,7 +305,7 @@ function sampledScenario(
   unresolved: ProbabilityUnresolved[],
 ): ProbabilityScenario {
   const inputs = scenario.uncertainInputs ?? [];
-  const state = { ...scenario.state };
+  let sampled = { ...scenario, state: { ...scenario.state } };
   for (const input of inputs) {
     let value: string | number | boolean | null | undefined;
     const plannedUniform = continuous.get(input.path);
@@ -329,9 +330,9 @@ function sampledScenario(
         message: `Distribution parameters for ${input.path} are incomplete or invalid`,
         path: input.path,
       });
-    } else state[input.path] = value;
+    } else sampled = withScenarioPathValue(sampled, input.path, value);
   }
-  return { ...scenario, state, uncertainInputs: [] };
+  return { ...sampled, uncertainInputs: [] };
 }
 
 function quantileForConfidence(confidence: number): number {

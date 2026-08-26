@@ -15,6 +15,14 @@ import type {
   ValueTraceStep,
   WeightedCandidate,
 } from './model.js';
+import {
+  resolveScopeContext,
+  rootScopeContext,
+  rootStateValue,
+  scopeIdentity,
+  scopeStateValue,
+  type ProbabilityScopeContext,
+} from './scenario-state.js';
 
 export interface TriggerEvaluation {
   state: TriState;
@@ -78,23 +86,20 @@ function unresolved(
   };
 }
 
-function stateValue(scenario: ProbabilityScenario, key: string): unknown {
-  if (Object.hasOwn(scenario.state, key)) return scenario.state[key];
-  if (Object.hasOwn(scenario.state, `trigger.${key}`)) return scenario.state[`trigger.${key}`];
-  return undefined;
-}
-
 function evaluateCheckVariable(
   block: BlockNode,
   scenario: ProbabilityScenario,
   candidate: WeightedCandidate,
   assignment: AssignmentNode,
+  scopeContext: ProbabilityScopeContext,
 ): TriggerEvaluation {
   const variable = firstScalar(block, 'var')?.value;
   const target = firstScalar(block, 'value')?.value;
   if (variable === undefined || target === undefined)
     return unresolved(assignment, candidate, 'check_variable requires declared var and value');
-  const left = stateValue(scenario, `variable.${variable}`) ?? stateValue(scenario, variable);
+  const left =
+    scopeStateValue(scenario, `variable.${variable}`, scopeContext) ??
+    scopeStateValue(scenario, variable, scopeContext);
   const leftNumber = numeric(left);
   const rightNumber = numeric(target);
   if (leftNumber === undefined || rightNumber === undefined)
@@ -125,14 +130,22 @@ function evaluateAssignmentCore(
   candidate: WeightedCandidate,
   definitions: ClausewitzEvaluationDefinitions,
   helperStack: string[],
+  scopeContext: ProbabilityScopeContext,
 ): TriggerEvaluation {
   const key = assignment.key.value;
   if (assignment.value.type === 'block') {
     if (key === 'AND')
-      return evaluateTriggerBlock(assignment.value, scenario, candidate, definitions, helperStack);
+      return evaluateTriggerBlock(
+        assignment.value,
+        scenario,
+        candidate,
+        definitions,
+        helperStack,
+        scopeContext,
+      );
     if (key === 'OR') {
       const children = assignments(assignment.value).map((child) =>
-        evaluateAssignment(child, scenario, candidate, definitions, helperStack),
+        evaluateAssignment(child, scenario, candidate, definitions, helperStack, scopeContext),
       );
       return {
         state: combineOr(children.map(({ state }) => state)),
@@ -142,7 +155,7 @@ function evaluateAssignmentCore(
     }
     if (key === 'NOT' || key === 'NOR' || key === 'NAND') {
       const children = assignments(assignment.value).map((child) =>
-        evaluateAssignment(child, scenario, candidate, definitions, helperStack),
+        evaluateAssignment(child, scenario, candidate, definitions, helperStack, scopeContext),
       );
       const base =
         key === 'NAND'
@@ -155,18 +168,36 @@ function evaluateAssignmentCore(
       };
     }
     if (key === 'check_variable')
-      return evaluateCheckVariable(assignment.value, scenario, candidate, assignment);
+      return evaluateCheckVariable(assignment.value, scenario, candidate, assignment, scopeContext);
     if (key === 'is_in_array' || key === 'is_variable_in_array') {
       const arrayId = firstScalar(assignment.value, 'array')?.value;
       const declaredValue = firstScalar(assignment.value, 'value')?.value;
       if (arrayId === undefined || declaredValue === undefined)
         return unresolved(assignment, candidate, `${key} requires array and value`);
-      const array = stateValue(scenario, `array.${arrayId}`);
+      const array =
+        scopeStateValue(scenario, `array.${arrayId}`, scopeContext) ??
+        rootStateValue(scenario, `array.${arrayId}`);
       if (!Array.isArray(array))
         return unresolved(assignment, candidate, `Scenario does not declare array ${arrayId}`);
-      const compared = stateValue(scenario, declaredValue) ?? declaredValue;
+      const compared =
+        ['THIS', 'ROOT', 'PREV'].includes(declaredValue.toUpperCase()) ||
+        resolveScopeContext(scenario, declaredValue, scopeContext) !== undefined
+          ? scopeIdentity(
+              resolveScopeContext(scenario, declaredValue, scopeContext) ?? scopeContext,
+            )
+          : (scopeStateValue(scenario, declaredValue, scopeContext) ?? declaredValue);
       return { state: array.includes(compared) ? 'true' : 'false', unresolved: [] };
     }
+    const resolvedScope = resolveScopeContext(scenario, key, scopeContext);
+    if (resolvedScope !== undefined)
+      return evaluateTriggerBlock(
+        assignment.value,
+        scenario,
+        candidate,
+        definitions,
+        helperStack,
+        resolvedScope,
+      );
     const helper = definitions.scriptedTriggers.get(key);
     if (helper !== undefined) {
       if (helperStack.includes(key))
@@ -199,13 +230,14 @@ function evaluateAssignmentCore(
         },
         definitions,
         [...helperStack, key],
+        scopeContext,
       );
       return {
         ...evaluated,
         helperProvenance: [helperProvenance, ...(evaluated.helperProvenance ?? [])],
       };
     }
-    const declaredScope = bool(stateValue(scenario, `scope.${key}`));
+    const declaredScope = bool(rootStateValue(scenario, `scope.${key}`));
     if (declaredScope !== undefined)
       return { state: declaredScope ? 'true' : 'false', unresolved: [] };
     return unresolved(
@@ -223,19 +255,25 @@ function evaluateAssignmentCore(
       : { state: value ? 'true' : 'false', unresolved: [] };
   }
   if (key === 'has_country_flag' || key === 'has_global_flag' || key === 'has_state_flag') {
-    return { state: scenario.flags?.includes(right) === true ? 'true' : 'false', unresolved: [] };
+    const flags = scopeContext.expression === 'ROOT' ? scenario.flags : scopeContext.binding.flags;
+    return { state: flags?.includes(right) === true ? 'true' : 'false', unresolved: [] };
   }
   if (key === 'has_event_target') {
+    const eventTargets = scopeContext.binding.eventTargets ?? scenario.eventTargets;
     return {
-      state: Object.hasOwn(scenario.eventTargets ?? {}, right) ? 'true' : 'false',
+      state: Object.hasOwn(eventTargets ?? {}, right) ? 'true' : 'false',
       unresolved: [],
     };
   }
   if (key === 'tag' || key === 'original_tag') {
-    if (scenario.actor === undefined)
+    const actor =
+      scopeContext.expression === 'ROOT'
+        ? scenario.actor
+        : (scopeContext.binding.actor ?? scopeContext.binding.id);
+    if (actor === undefined)
       return unresolved(assignment, candidate, `Scenario does not declare actor for ${key}`);
     return {
-      state: compare(scenario.actor, right, assignment.operator.text) ? 'true' : 'false',
+      state: compare(actor, right, assignment.operator.text) ? 'true' : 'false',
       unresolved: [],
     };
   }
@@ -277,13 +315,14 @@ function evaluateAssignmentCore(
       },
       definitions,
       [...helperStack, key],
+      scopeContext,
     );
     return {
       ...evaluated,
       helperProvenance: [helperProvenance, ...(evaluated.helperProvenance ?? [])],
     };
   }
-  const declared = stateValue(scenario, key);
+  const declared = scopeStateValue(scenario, key, scopeContext);
   if (declared === undefined)
     return unresolved(assignment, candidate, `Scenario does not declare trigger ${key}`);
   const expectedBoolean = bool(right);
@@ -315,6 +354,7 @@ function evaluateAssignment(
   candidate: WeightedCandidate,
   definitions: ClausewitzEvaluationDefinitions,
   helperStack: string[],
+  scopeContext: ProbabilityScopeContext,
 ): TriggerEvaluation {
   const evaluated = evaluateAssignmentCore(
     assignment,
@@ -322,6 +362,7 @@ function evaluateAssignment(
     candidate,
     definitions,
     helperStack,
+    scopeContext,
   );
   const source = candidate.provenance[0];
   const provenance =
@@ -359,12 +400,13 @@ export function evaluateTriggerBlock(
   candidate: WeightedCandidate,
   definitions: ClausewitzEvaluationDefinitions,
   helperStack: string[] = [],
+  scopeContext: ProbabilityScopeContext = rootScopeContext(scenario),
 ): TriggerEvaluation {
   const override = scenario.candidateOverrides?.[candidate.id];
   if (override !== undefined) return { state: override ? 'true' : 'false', unresolved: [] };
   if (block === undefined) return { state: 'true', unresolved: [] };
   const children = assignments(block).map((assignment) =>
-    evaluateAssignment(assignment, scenario, candidate, definitions, helperStack),
+    evaluateAssignment(assignment, scenario, candidate, definitions, helperStack, scopeContext),
   );
   return {
     state: combineAnd(children.map(({ state }) => state)),

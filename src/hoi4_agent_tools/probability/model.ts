@@ -129,6 +129,35 @@ export interface ScenarioScheduleEntry {
   addFlags?: string[];
 }
 
+export type ProbabilityScopeType =
+  | 'country'
+  | 'state'
+  | 'character'
+  | 'unit_leader'
+  | 'operative'
+  | 'strategic_region'
+  | 'province'
+  | 'unknown';
+
+export interface ProbabilityScopeBinding {
+  id: string;
+  type?: ProbabilityScopeType;
+  actor?: string;
+  state: Record<string, ScenarioValue>;
+  flags?: string[];
+  eventTargets?: Record<string, string>;
+  weight?: number | string;
+}
+
+export interface ProbabilityScopePool {
+  id: string;
+  bindAs?: string;
+  selection: 'enumeration' | 'uniform' | 'proportional_categorical';
+  complete: boolean;
+  filter?: { inlineClausewitz?: string; scriptedTrigger?: string };
+  candidates: ProbabilityScopeBinding[];
+}
+
 export interface ProbabilityScenario {
   id: string;
   label?: string;
@@ -138,6 +167,8 @@ export interface ProbabilityScenario {
   state: Record<string, ScenarioValue>;
   flags?: string[];
   eventTargets?: Record<string, string>;
+  scopes?: Record<string, ProbabilityScopeBinding>;
+  scopePools?: ProbabilityScopePool[];
   candidateOverrides?: Record<string, boolean>;
   uncertainInputs?: UncertainInput[];
   correlations?: Array<{ left: string; right: string; coefficient: number }>;
@@ -280,6 +311,7 @@ export interface ScenarioAnalysis {
     minimumHazardContribution: number;
     maximumHazardContribution: number;
   }>;
+  scopePools?: ScopePoolAnalysis[];
   summary: {
     topOutcomes: string[];
     bottomEligibleOutcomes: string[];
@@ -292,6 +324,28 @@ export interface ScenarioAnalysis {
       metric: 'probability' | 'raw_value';
     };
   };
+  unresolved: ProbabilityUnresolved[];
+}
+
+export interface ScopePoolCandidateAnalysis {
+  id: string;
+  eligibility: TriState;
+  weight?: RationalJson;
+  conditionalProbability?: number;
+  exactConditionalProbability?: RationalJson;
+  trace: ValueTraceStep[];
+  unresolved: ProbabilityUnresolved[];
+}
+
+export interface ScopePoolAnalysis {
+  id: string;
+  bindAs: string;
+  selection: ProbabilityScopePool['selection'];
+  poolComplete: boolean;
+  candidates: ScopePoolCandidateAnalysis[];
+  eligibleCandidateIds: string[];
+  unresolvedCandidateIds: string[];
+  poolTotal?: RationalJson;
   unresolved: ProbabilityUnresolved[];
 }
 

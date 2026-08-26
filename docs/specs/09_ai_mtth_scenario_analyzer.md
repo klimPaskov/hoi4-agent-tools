@@ -95,6 +95,10 @@ A scenario can define:
 - correlations between uncertain values
 - scheduled state changes across a time horizon
 
+Exact special-scope bindings must support `ROOT`, `THIS`, `PREV`, `FROM` chains, saved scopes, and event targets. Inner triggers execute against the bound scope state rather than a coarse caller-supplied boolean.
+
+Scenarios may declare dynamic scope pools over large country, state, character, or other catalogs. Each pool identifies the candidate scope alias, filter trigger, selection rule, completeness, and per-candidate state. Evaluation must enumerate eligible, excluded, and unresolved members deterministically and normalize only complete uniform or proportional pools.
+
 Use three-valued trigger evaluation: true, false, or unresolved.
 
 An unresolved trigger must propagate into an interval, branch set, or sampled uncertainty result. It must not silently become false or true.

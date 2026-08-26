@@ -23,3 +23,4 @@
 21. [Client-root workspace context](0021-client-root-workspace-context.md)
 22. [Complete map catalog, navigation, and compact edits](0022-map-catalog-navigation-and-compact-edits.md)
 23. [Vanilla GUI composition and layout fidelity](0023-vanilla-gui-composition-and-layout-fidelity.md)
+24. [Probability scope bindings and dynamic pools](0024-probability-scope-bindings-and-dynamic-pools.md)

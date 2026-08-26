@@ -9,6 +9,7 @@ import type {
   WeightedSurface,
 } from './model.js';
 import { conditionBreakpointValues, evaluateSurfaceScenarios } from './evaluation.js';
+import { scenarioPathValue, withScenarioPathValue } from './scenario-state.js';
 
 export interface SweepRequest {
   paths: string[];
@@ -47,7 +48,7 @@ function declaredValues(
     );
     if (values.length > 0) return [...new Set(values)].sort((left, right) => left - right);
   }
-  const current = scenario.state[path];
+  const current = scenarioPathValue(scenario, path);
   if (typeof current === 'number') return [current];
   throw new ServiceError(
     'PROBABILITY_SWEEP_RANGE_REQUIRED',
@@ -72,9 +73,16 @@ function point(
   value: number,
   assigned: Record<string, number>,
 ): SweepPoint {
+  const base: ProbabilityScenario = { ...scenario, uncertainInputs: [] };
   const evaluated = evaluateSurfaceScenarios(
     surface,
-    [{ ...scenario, state: { ...scenario.state, ...assigned }, uncertainInputs: [] }],
+    [
+      Object.entries(assigned).reduce<ProbabilityScenario>(
+        (updated, [assignedPath, assignedValue]) =>
+          withScenarioPathValue(updated, assignedPath, assignedValue),
+        base,
+      ),
+    ],
     definitions,
   )[0]!;
   return {

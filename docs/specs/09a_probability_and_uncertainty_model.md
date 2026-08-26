@@ -92,6 +92,10 @@ For missing candidate pools, return raw values and bounded statements only. Neve
 
 For an input range, use interval arithmetic when monotonicity is proven. Use bounded search or sampling when it is not.
 
+Scope bindings are structured scenario state. `FROM` and chained special scopes must preserve their own actor, flags, variables, arrays, event targets, and parent relationship. Sweeps and simulations may address scoped values without flattening them into root state.
+
+Dynamic scope-pool enumeration is exact over the declared catalog. Pool membership uses three-valued trigger evaluation for each bound candidate. Uniform or proportional probability requires an explicitly complete catalog, resolved membership, and resolved non-negative weights; enumeration itself remains available when those normalization requirements are not met.
+
 ## 6. Scenario matrices
 
 A scenario matrix is user-defined coverage, not a probability distribution unless row weights are supplied.

@@ -206,6 +206,193 @@ describe('AI and MTTH analyzer', () => {
     ).toEqual([0.25, 0.75]);
   });
 
+  it('binds chained FROM scopes and enumerates large dynamic scope pools', async () => {
+    const { engine, workspaceId } = await fixture();
+    const analyzer = new ProbabilityAnalyzer(engine);
+    const result = await analyzer.evaluate({
+      workspaceId,
+      adapter: 'event_option_ai_chance',
+      source: {
+        inlineClausewitz: `country_event = {
+ id = scoped.1
+ option = {
+  name = scoped.1.a
+  ai_chance = {
+   base = 1
+   modifier = {
+    factor = 4
+    FROM = {
+     check_variable = { var = pressure value = 5 compare = greater_than_or_equals }
+     FROM = { tag = FRA }
+    }
+   }
+  }
+ }
+ option = { name = scoped.1.b ai_chance = { base = 1 } }
+}`,
+      },
+      scenarioSet: {
+        schemaVersion: '1.0',
+        id: 'scoped-pools',
+        scenarios: [
+          {
+            id: 'bound',
+            actor: 'ROOT_TAG',
+            state: {},
+            eventTargets: { coordinator: 'origin_owner' },
+            scopes: {
+              FROM: { id: 'origin', actor: 'GER', state: { 'variable.pressure': 7 } },
+              'FROM.FROM': { id: 'origin_owner', actor: 'FRA', state: {} },
+            },
+            scopePools: [
+              {
+                id: 'destination',
+                bindAs: 'FROM',
+                selection: 'uniform',
+                complete: true,
+                filter: {
+                  inlineClausewitz:
+                    'event_target:coordinator = { tag = FRA } FROM = { is_ai = yes check_variable = { var = access value = 1 compare = greater_than_or_equals } }',
+                },
+                candidates: [
+                  { id: 'AAA', actor: 'AAA', state: { is_ai: true, 'variable.access': 2 } },
+                  { id: 'BBB', actor: 'BBB', state: { is_ai: false, 'variable.access': 3 } },
+                  { id: 'CCC', actor: 'CCC', state: { is_ai: true, 'variable.access': 1 } },
+                ],
+              },
+              {
+                id: 'opposition',
+                bindAs: 'FROM',
+                selection: 'enumeration',
+                complete: true,
+                filter: { inlineClausewitz: 'FROM = { has_country_flag = opposition }' },
+                candidates: [
+                  { id: 'AAA', actor: 'AAA', state: {}, flags: [] },
+                  { id: 'BBB', actor: 'BBB', state: {}, flags: ['opposition'] },
+                ],
+              },
+              {
+                id: 'relief_donor',
+                bindAs: 'FROM',
+                selection: 'proportional_categorical',
+                complete: true,
+                filter: {
+                  inlineClausewitz:
+                    'FROM = { check_variable = { var = relief_ready value = 1 compare = greater_than_or_equals } }',
+                },
+                candidates: [
+                  {
+                    id: 'AAA',
+                    actor: 'AAA',
+                    state: { 'variable.relief_ready': 1, 'variable.donor_weight': 1 },
+                    weight: 'FROM.donor_weight',
+                  },
+                  {
+                    id: 'CCC',
+                    actor: 'CCC',
+                    state: { 'variable.relief_ready': 1, 'variable.donor_weight': 3 },
+                    weight: 'FROM.donor_weight',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      outputs: ['json'],
+    });
+
+    expect(
+      result.scenarios[0]?.candidates.map(({ conditionalProbability }) => conditionalProbability),
+    ).toEqual([0.8, 0.2]);
+    const pools = new Map(result.scenarios[0]?.scopePools?.map((pool) => [pool.id, pool]));
+    expect(pools.get('destination')).toMatchObject({
+      eligibleCandidateIds: ['AAA', 'CCC'],
+      unresolvedCandidateIds: [],
+      candidates: [
+        { id: 'AAA', conditionalProbability: 0.5 },
+        { id: 'BBB', conditionalProbability: 0 },
+        { id: 'CCC', conditionalProbability: 0.5 },
+      ],
+    });
+    expect(pools.get('opposition')?.eligibleCandidateIds).toEqual(['BBB']);
+    expect(
+      pools
+        .get('relief_donor')
+        ?.candidates.map(({ id, conditionalProbability }) => ({ id, conditionalProbability })),
+    ).toEqual([
+      { id: 'AAA', conditionalProbability: 0.25 },
+      { id: 'CCC', conditionalProbability: 0.75 },
+    ]);
+    expect(result.status).toBe('complete');
+  });
+
+  it('sweeps scoped values and enumerates thousands of dynamic candidates without truncation', async () => {
+    const { engine, workspaceId } = await fixture();
+    const analyzer = new ProbabilityAnalyzer(engine);
+    const candidates = Array.from({ length: 2_048 }, (_, index) => ({
+      id: `country_${String(index).padStart(4, '0')}`,
+      actor: `C${String(index).padStart(4, '0')}`,
+      state: { is_ai: index % 2 === 0 },
+    }));
+    const evaluated = await analyzer.evaluate({
+      workspaceId,
+      adapter: 'direct_random',
+      source: { inlineClausewitz: 'random = { chance = 50 }' },
+      scenarioSet: {
+        schemaVersion: '1.0',
+        id: 'large-scope-pool',
+        scenarios: [
+          {
+            id: 'baseline',
+            state: {},
+            scopePools: [
+              {
+                id: 'destinations',
+                bindAs: 'FROM',
+                selection: 'enumeration',
+                complete: true,
+                filter: { inlineClausewitz: 'FROM = { is_ai = yes }' },
+                candidates,
+              },
+            ],
+          },
+        ],
+      },
+      outputs: ['json'],
+    });
+    expect(evaluated.scenarios[0]?.scopePools?.[0]?.candidates).toHaveLength(2_048);
+    expect(evaluated.scenarios[0]?.scopePools?.[0]?.eligibleCandidateIds).toHaveLength(1_024);
+
+    const swept = await analyzer.sweep({
+      workspaceId,
+      adapter: 'direct_random',
+      source: { inlineClausewitz: 'random = { chance = FROM.chance }' },
+      scenarioSet: {
+        schemaVersion: '1.0',
+        id: 'scoped-sweep',
+        scenarios: [
+          {
+            id: 'range',
+            state: {},
+            scopes: { FROM: { id: 'origin', state: { 'variable.chance': 10 } } },
+            uncertainInputs: [{ path: 'scopes.FROM.variable.chance', range: { min: 10, max: 90 } }],
+          },
+        ],
+      },
+      sweep: {
+        paths: ['scopes.FROM.variable.chance'],
+        steps: 3,
+        pairwise: false,
+        findRankReversals: true,
+      },
+      outputs: ['json'],
+    });
+    expect(
+      swept.sweep?.points.map(({ candidates: rows }) => rows[0]?.conditionalProbability),
+    ).toEqual([0.1, 0.5, 0.9]);
+  });
+
   it('keeps AST provenance and diagnoses modifier duplication and named target bands', async () => {
     const { engine, workspaceId } = await fixture();
     const result = await new ProbabilityAnalyzer(engine).evaluate({

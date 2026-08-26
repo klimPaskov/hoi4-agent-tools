@@ -351,6 +351,11 @@ const descriptors = Object.fromEntries(
         'Apply declared external factors only after source-local operations.',
       ],
       poolNormalizationRules: normalizationRule(source.selectionRule),
+      supportedExpressions: [
+        ...source.supportedExpressions,
+        'scenario-bound ROOT/THIS/PREV/FROM scope chains, saved scopes, and event targets',
+        'declared dynamic scope-pool filters with uniform or proportional selection',
+      ],
       timingConversion:
         source.selectionRule === 'median_daily_hazard'
           ? [

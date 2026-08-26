@@ -42,6 +42,50 @@ A scenario contains only state the caller is willing to declare. Missing values 
 }
 ```
 
+Use `scopes` to bind exact Clausewitz scope expressions. A binding carries its own actor, state, flags, and event targets, so a `FROM` trigger is evaluated against `FROM` rather than the root country. Chained names such as `FROM.FROM`, plus `ROOT`, `THIS`, `PREV`, `scope:name`, and `event_target:name`, are resolved without replacing their inner conditions with a single boolean. Scoped numeric expressions such as `FROM.variable_name` and uncertain paths such as `scopes.FROM.variable.variable_name` use the same binding.
+
+Use `scopePools` when source logic builds a destination, target, opposition, donor, or other runtime candidate set. Each pool supplies a candidate catalog, the scope alias to bind, and either an inline trigger filter or a named scripted trigger. The result enumerates every eligible, excluded, and unresolved candidate. `uniform` and `proportional_categorical` pools also return exact shares when `complete` is true; an incomplete catalog is still enumerated but is not normalized.
+
+```json
+{
+  "id": "relief_routes",
+  "state": {},
+  "scopes": {
+    "FROM": {
+      "id": "origin",
+      "type": "country",
+      "actor": "FRA",
+      "state": { "variable.relief_pressure": 7 }
+    }
+  },
+  "scopePools": [
+    {
+      "id": "relief_donor",
+      "bindAs": "FROM",
+      "selection": "proportional_categorical",
+      "complete": true,
+      "filter": {
+        "inlineClausewitz": "FROM = { check_variable = { var = relief_ready value = 1 compare = greater_than_or_equals } }"
+      },
+      "candidates": [
+        {
+          "id": "GER",
+          "actor": "GER",
+          "state": { "variable.relief_ready": 1, "variable.donor_weight": 1 },
+          "weight": "FROM.donor_weight"
+        },
+        {
+          "id": "ITA",
+          "actor": "ITA",
+          "state": { "variable.relief_ready": 1, "variable.donor_weight": 3 },
+          "weight": "FROM.donor_weight"
+        }
+      ]
+    }
+  ]
+}
+```
+
 Focus, technology, and doctrine probabilities require a complete candidate pool. Their engine rule is an independent uniform score race, not weight divided by total weight. Focus scenarios use `focus.external_factors_complete: true` only after the caller has supplied every relevant prerequisite and strategy factor. Technology and doctrine scenarios use `technology.external_factors_complete: true` only after cost, date, bonus, strategy, and candidate effects are accounted for.
 
 Decision and mission adapters intentionally return scores and ranks without inventing normalized probabilities. Event-option and `random_list` adapters normalize only their complete local pools. Direct random remains an independent percentage. MTTH horizon chance uses the versioned game timing model and returns a bound when an inactive-to-active polling phase is unknown.
@@ -60,6 +104,8 @@ Authoritative JSON keeps these fields separate:
 - scenario prevalence.
 
 Every candidate includes source provenance with a stable AST path, an ordered modifier trace, support level, and unresolved analysis. `external` support means the parsed candidate is valid but its surrounding game factors were not fully declared. The tool response stays compact; complete matrices, traces, simulations, comparisons, and visuals are linked MCP resources.
+
+Every evaluated scope pool is stored with the scenario in authoritative JSON. Pool rows include eligibility, resolved weight, exact conditional share when supported, trigger traces, eligible IDs, unresolved IDs, and unresolved evidence. Compact MCP responses report pool and pool-candidate counts without copying the full catalog into the prompt.
 
 Nested `random_list` entries report both their conditional share inside the immediate list and their full path probability through every enclosing list. Dynamic parent paths remain explicit unresolved evidence.
 

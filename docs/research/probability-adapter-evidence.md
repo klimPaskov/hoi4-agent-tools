@@ -55,7 +55,8 @@ When a game root is configured, adapter execution verifies `launcher-settings.js
 The analyzer reports, but does not guess or execute:
 
 - arbitrary effects used to calculate later weights;
-- unprovided scopes, event targets, game rules, DLC state, dynamic identifiers, meta effects, or scripted-localisation results;
+- scope chains, event targets, game rules, DLC state, dynamic identifiers, meta effects, or scripted-localisation results that are neither present in source nor declared through structured scenario bindings;
+- runtime scope pools whose candidate catalog is not declared; declared catalogs are filtered and enumerated exactly, while normalized shares additionally require explicit completeness;
 - parameterized scripted triggers whose arguments cannot be resolved from the selected source;
 - recursive MTTH variables or helper cycles;
 - incomplete focus, technology, doctrine, event-option, or random-list candidate pools;

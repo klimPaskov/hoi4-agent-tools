@@ -182,6 +182,80 @@ describe('probability MCP workflow', () => {
     ).toBe(0);
   });
 
+  it('accepts scoped FROM bindings and returns enumerated dynamic pools through MCP resources', async () => {
+    const { client } = await connected();
+    const evaluated = await client.callTool({
+      name: 'hoi4.probability_evaluate',
+      arguments: {
+        adapter: 'event_option_ai_chance',
+        source: {
+          inlineClausewitz:
+            'country_event = { id = scoped.2 option = { name = scoped.2.a ai_chance = { base = 1 modifier = { factor = 3 FROM = { tag = FRA } } } } option = { name = scoped.2.b ai_chance = { base = 1 } } }',
+        },
+        scenarioSet: {
+          schemaVersion: '1.0',
+          id: 'scoped-mcp',
+          scenarios: [
+            {
+              id: 'baseline',
+              state: {},
+              scopes: { FROM: { id: 'origin', actor: 'FRA', state: {} } },
+              scopePools: [
+                {
+                  id: 'destination',
+                  bindAs: 'FROM',
+                  selection: 'uniform',
+                  complete: true,
+                  filter: { inlineClausewitz: 'FROM = { is_ai = yes }' },
+                  candidates: [
+                    { id: 'AAA', actor: 'AAA', state: { is_ai: true } },
+                    { id: 'BBB', actor: 'BBB', state: { is_ai: false } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        outputs: ['json'],
+      },
+    });
+    expect(evaluated.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_ANALYZED',
+      data: { analysisStatus: 'complete', scopePools: 1, scopePoolCandidates: 2 },
+    });
+    const structured = evaluated.structuredContent as {
+      artifacts: Array<{ uri: string; mimeType: string }>;
+    };
+    const jsonArtifact = structured.artifacts.find(
+      ({ mimeType }) => mimeType === 'application/json',
+    );
+    expect(jsonArtifact).toBeDefined();
+    const resource = await client.readResource({ uri: jsonArtifact!.uri });
+    const content = resource.contents[0];
+    expect(content).toBeDefined();
+    if (content === undefined || !('text' in content)) return;
+    const result = JSON.parse(content.text) as {
+      scenarios: Array<{
+        candidates: Array<{ conditionalProbability: number }>;
+        scopePools: Array<{
+          eligibleCandidateIds: string[];
+          candidates: Array<{ id: string; conditionalProbability: number }>;
+        }>;
+      }>;
+    };
+    expect(
+      result.scenarios[0]?.candidates.map(({ conditionalProbability }) => conditionalProbability),
+    ).toEqual([0.75, 0.25]);
+    expect(result.scenarios[0]?.scopePools[0]).toMatchObject({
+      eligibleCandidateIds: ['AAA'],
+      candidates: [
+        { id: 'AAA', conditionalProbability: 1 },
+        { id: 'BBB', conditionalProbability: 0 },
+      ],
+    });
+  });
+
   it('keeps every probability operation out of the mod source tree', async () => {
     const { client, mod } = await connected();
     const before = await treeSnapshot(mod);

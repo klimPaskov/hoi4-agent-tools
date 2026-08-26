@@ -167,6 +167,8 @@ const analysisDataSchema = z
     cacheKey: sha256Schema,
     scenarios: nonNegativeIntegerSchema,
     candidates: nonNegativeIntegerSchema,
+    scopePools: nonNegativeIntegerSchema.optional(),
+    scopePoolCandidates: nonNegativeIntegerSchema.optional(),
     unresolved: nonNegativeIntegerSchema,
     diagnostics: nonNegativeIntegerSchema,
     sweepPoints: nonNegativeIntegerSchema.optional(),
@@ -254,6 +256,23 @@ function analysisData(result: Awaited<ReturnType<ProbabilityAnalyzer['evaluate']
     cacheKey: result.metadata.cacheKey,
     scenarios: result.scenarios.length,
     candidates: result.scenarios.reduce((sum, scenario) => sum + scenario.candidates.length, 0),
+    ...(result.scenarios.some(({ scopePools }) => (scopePools?.length ?? 0) > 0)
+      ? {
+          scopePools: result.scenarios.reduce(
+            (sum, scenario) => sum + (scenario.scopePools?.length ?? 0),
+            0,
+          ),
+          scopePoolCandidates: result.scenarios.reduce(
+            (sum, scenario) =>
+              sum +
+              (scenario.scopePools?.reduce(
+                (poolSum, pool) => poolSum + pool.candidates.length,
+                0,
+              ) ?? 0),
+            0,
+          ),
+        }
+      : {}),
     unresolved: result.unresolved.length,
     diagnostics: result.diagnostics.length,
     ...(result.sweep === undefined ? {} : { sweepPoints: result.sweep.points.length }),

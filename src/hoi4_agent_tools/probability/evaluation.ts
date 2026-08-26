@@ -13,6 +13,8 @@ import type {
   WeightedSurface,
 } from './model.js';
 import { Rational, sumRationals, uniformRaceProbabilities } from './rational.js';
+import { withScenarioPathValue } from './scenario-state.js';
+import { evaluateScopePools } from './scope-pools.js';
 import { evaluateTriggerBlock } from './trigger-evaluator.js';
 import { evaluateCandidateValue } from './value-evaluator.js';
 
@@ -361,7 +363,7 @@ function scenarioBranches(
       break;
     }
     branches = branches.flatMap((branch) =>
-      values.map((value) => ({ ...branch, state: { ...branch.state, [input.path]: value } })),
+      values.map((value) => withScenarioPathValue(branch, input.path, value)),
     );
     if (values.length > 1) bounded = true;
   }
@@ -727,10 +729,12 @@ export function evaluateSurfaceScenarios(
       },
     );
     rankCandidates(candidates);
+    const scopePools = evaluateScopePools(scenario, definitions);
     const allUnresolved = [
       ...surface.unsupported,
       ...expanded.unresolved,
       ...candidates.flatMap(({ unresolved }) => unresolved),
+      ...scopePools.flatMap(({ unresolved }) => unresolved),
     ];
     const timing =
       horizonDays === undefined
@@ -763,6 +767,7 @@ export function evaluateSurfaceScenarios(
               ? 'score_only'
               : 'exact',
       candidates,
+      ...(scopePools.length === 0 ? {} : { scopePools }),
       ...(exactValues.length === candidates.length &&
       surface.adapter.selectionRule === 'proportional_categorical'
         ? { poolTotal: sumRationals(exactValues).toJSON() }

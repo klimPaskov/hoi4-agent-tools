@@ -102,6 +102,64 @@ const uncertainInputSchema = z
       });
   });
 
+const probabilityScopeBindingSchema = z
+  .object({
+    id: z.string().min(1).max(512),
+    type: z
+      .enum([
+        'country',
+        'state',
+        'character',
+        'unit_leader',
+        'operative',
+        'strategic_region',
+        'province',
+        'unknown',
+      ])
+      .optional(),
+    actor: z.string().max(256).optional(),
+    state: z.record(z.string().min(1).max(1024), scenarioValueSchema).default({}),
+    flags: z.array(z.string().min(1).max(512)).max(100_000).optional(),
+    eventTargets: z.record(z.string().max(512), z.string().max(512)).optional(),
+    weight: z.union([z.number().nonnegative(), z.string().min(1).max(1024)]).optional(),
+  })
+  .strict();
+
+const probabilityScopePoolSchema = z
+  .object({
+    id: z.string().min(1).max(512),
+    bindAs: z.string().min(1).max(512).default('THIS'),
+    selection: z
+      .enum(['enumeration', 'uniform', 'proportional_categorical'])
+      .default('enumeration'),
+    complete: z.boolean().default(false),
+    filter: z
+      .object({
+        inlineClausewitz: z.string().min(1).max(1_048_576).optional(),
+        scriptedTrigger: z.string().min(1).max(512).optional(),
+      })
+      .strict()
+      .superRefine((filter, context) => {
+        if ((filter.inlineClausewitz === undefined) === (filter.scriptedTrigger === undefined))
+          context.addIssue({
+            code: 'custom',
+            message: 'Scope-pool filter requires exactly one inlineClausewitz or scriptedTrigger',
+          });
+      })
+      .optional(),
+    candidates: z.array(probabilityScopeBindingSchema).min(1).max(100_000),
+  })
+  .strict()
+  .superRefine((pool, context) => {
+    const ids = pool.candidates.map(({ id }) => id);
+    if (new Set(ids).size !== ids.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['candidates'],
+        message: 'Scope-pool candidate IDs must be unique',
+      });
+  });
+
 export const probabilityScenarioSchema = z
   .object({
     id: z.string().min(1).max(512),
@@ -112,6 +170,8 @@ export const probabilityScenarioSchema = z
     state: z.record(z.string().min(1).max(1024), scenarioValueSchema),
     flags: z.array(z.string().min(1).max(512)).max(100_000).optional(),
     eventTargets: z.record(z.string().max(512), z.string().max(512)).optional(),
+    scopes: z.record(z.string().min(1).max(512), probabilityScopeBindingSchema).optional(),
+    scopePools: z.array(probabilityScopePoolSchema).max(100_000).optional(),
     candidateOverrides: z.record(z.string().max(512), z.boolean()).optional(),
     uncertainInputs: z.array(uncertainInputSchema).max(10_000).optional(),
     correlations: z
@@ -142,6 +202,13 @@ export const probabilityScenarioSchema = z
   })
   .strict()
   .superRefine((scenario, context) => {
+    const poolIds = scenario.scopePools?.map(({ id }) => id) ?? [];
+    if (new Set(poolIds).size !== poolIds.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['scopePools'],
+        message: 'Scope-pool IDs must be unique within a scenario',
+      });
     const paths = scenario.uncertainInputs?.map(({ path }) => path) ?? [];
     if (new Set(paths).size !== paths.length)
       context.addIssue({
@@ -658,6 +725,32 @@ const candidateAnalysisSchema = z
   })
   .strict();
 
+const scopePoolCandidateAnalysisSchema = z
+  .object({
+    id: z.string(),
+    eligibility: z.enum(['true', 'false', 'unresolved']),
+    weight: rationalJsonSchema.optional(),
+    conditionalProbability: z.number().min(0).max(1).optional(),
+    exactConditionalProbability: rationalJsonSchema.optional(),
+    trace: z.array(valueTraceSchema),
+    unresolved: z.array(probabilityUnresolvedSchema),
+  })
+  .strict();
+
+const scopePoolAnalysisSchema = z
+  .object({
+    id: z.string(),
+    bindAs: z.string(),
+    selection: z.enum(['enumeration', 'uniform', 'proportional_categorical']),
+    poolComplete: z.boolean(),
+    candidates: z.array(scopePoolCandidateAnalysisSchema),
+    eligibleCandidateIds: z.array(z.string()),
+    unresolvedCandidateIds: z.array(z.string()),
+    poolTotal: rationalJsonSchema.optional(),
+    unresolved: z.array(probabilityUnresolvedSchema),
+  })
+  .strict();
+
 const scenarioAnalysisSchema = z
   .object({
     id: z.string(),
@@ -687,6 +780,7 @@ const scenarioAnalysisSchema = z
           .strict(),
       )
       .optional(),
+    scopePools: z.array(scopePoolAnalysisSchema).optional(),
     summary: z
       .object({
         topOutcomes: z.array(z.string()),
