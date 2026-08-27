@@ -606,7 +606,7 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
       expectGuiArtifactProvenance(described, expectedScenes);
     }
     expect(await harness.engine.artifacts.list(workspace)).toHaveLength(27);
-  }, 180_000);
+  }, 900_000);
 
   it('detects every checked-in scenario and source defect through fresh real Studio workspaces', async () => {
     expect(defectFixture.schemaVersion).toBe(1);

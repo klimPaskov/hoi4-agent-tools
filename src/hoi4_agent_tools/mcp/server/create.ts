@@ -12,7 +12,7 @@ import { registerProbabilityTools } from '../tools/probability.js';
 import { registerMcpResources } from '../resources/register.js';
 
 export const SERVER_INSTRUCTIONS =
-  'Use focus tools for focus trees, GUI tools for interfaces, and map tools for map data. Start unfamiliar event chains with hoi4.event_inspect. Event tools are read-only. Start technology and doctrine work with hoi4.tech_inspect. Technology tools are read-only. Start weighted AI, MTTH, random, and declared-pool analysis with hoi4.probability_inspect. Probability tools are read-only. Large evidence is linked as resources.';
+  'Use focus tools for focus trees, GUI tools for interfaces, and map tools for map data. Start unfamiliar event chains with hoi4.event_inspect. Event tools are read-only. Start technology and doctrine work with hoi4.tech_inspect. Technology tools are read-only. Start weighted AI, MTTH, random, and declared-pool analysis with hoi4.probability_inspect. Probability tools are read-only. Long GUI calls emit periodic progress heartbeats when the client requests progress. Large evidence is linked as resources.';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
   const server = new McpServer(

@@ -41,7 +41,7 @@ import {
   nonNegativeIntegerSchema,
   sha256Schema,
 } from '../server/output-schemas.js';
-import { progressReporter } from '../server/progress.js';
+import { progressReporter, withProgressHeartbeat } from '../server/progress.js';
 import {
   errorResult,
   setInlineFilesScanned,
@@ -236,22 +236,25 @@ export function registerGuiTools(
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building GUI source graph');
-        const inspection =
-          windowName === undefined || scenario === undefined
-            ? studio
-                .scan(workspaceId, context.principal, progress.signal)
-                .then(({ graph }) => ({ graph, linted: undefined }))
-            : studio
-                .lint({
-                  workspaceId,
-                  windowName,
-                  scenario,
-                  ...(relatedScenarios === undefined ? {} : { relatedScenarios }),
-                  ...(context.principal === undefined ? {} : { principal: context.principal }),
-                  signal: progress.signal,
-                })
-                .then((linted) => ({ graph: linted.graph, linted }));
-        const inspected = await inspection;
+        const inspected = await withProgressHeartbeat(
+          async () => {
+            if (windowName === undefined || scenario === undefined) {
+              const { graph } = await studio.scan(workspaceId, context.principal, progress.signal);
+              return { graph, linted: undefined };
+            }
+            const linted = await studio.lint({
+              workspaceId,
+              windowName,
+              scenario,
+              ...(relatedScenarios === undefined ? {} : { relatedScenarios }),
+              ...(context.principal === undefined ? {} : { principal: context.principal }),
+              signal: progress.signal,
+            });
+            return { graph: linted.graph, linted };
+          },
+          progress,
+          'Inspecting GUI sources and linked assets',
+        );
         const { graph, linted } = inspected;
         const sharedRevision = hashCanonical(graph.sourceHashes);
         const workspace = engine.resolver.get(workspaceId, context.principal);
@@ -384,29 +387,34 @@ export function registerGuiTools(
     try {
       const progress = progressReporter(extra);
       await progress.report(0, 4, 'Building GUI source graph');
-      const rendered = await studio.renderAndStore({
-        workspaceId,
-        windowName,
-        scenario: input.scenario,
-        ...(input.states === undefined ? {} : { states: input.states }),
-        ...(input.resolutions === undefined
-          ? {}
-          : {
-              resolutions: input.resolutions.map(({ width, height, uiScale }) => ({
-                width,
-                height,
-                ...(uiScale === undefined ? {} : { uiScale }),
-              })),
-            }),
-        ...(input.relatedScenarios === undefined
-          ? {}
-          : { relatedScenarios: input.relatedScenarios }),
-        ...(input.comparisonScenario === undefined
-          ? {}
-          : { comparisonScenario: input.comparisonScenario }),
-        ...(context.principal === undefined ? {} : { principal: context.principal }),
-        signal: progress.signal,
-      });
+      const rendered = await withProgressHeartbeat(
+        () =>
+          studio.renderAndStore({
+            workspaceId,
+            windowName,
+            scenario: input.scenario,
+            ...(input.states === undefined ? {} : { states: input.states }),
+            ...(input.resolutions === undefined
+              ? {}
+              : {
+                  resolutions: input.resolutions.map(({ width, height, uiScale }) => ({
+                    width,
+                    height,
+                    ...(uiScale === undefined ? {} : { uiScale }),
+                  })),
+                }),
+            ...(input.relatedScenarios === undefined
+              ? {}
+              : { relatedScenarios: input.relatedScenarios }),
+            ...(input.comparisonScenario === undefined
+              ? {}
+              : { comparisonScenario: input.comparisonScenario }),
+            ...(context.principal === undefined ? {} : { principal: context.principal }),
+            signal: progress.signal,
+          }),
+        progress,
+        'Rendering GUI variants and visual diagnostics',
+      );
       await progress.report(3, 4, 'Preparing GUI result');
       const diagnostics = rendered.validation.diagnostics;
       const result = emptyServiceResult(workspaceId, {
@@ -626,31 +634,41 @@ export function registerGuiTools(
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Validating the requested GUI result');
         const compilation = input.mode === 'helpers' ? compileGuiHelpers(input.helper!) : undefined;
-        const plannedTransaction = await studio.planSource({
-          workspaceId,
-          relativePath,
-          ...(input.mode === 'patches'
-            ? {
-                expectedSourceHash: input.expectedSourceHash!,
-                patches: input.patches!,
-              }
-            : {
-                source: input.mode === 'source' ? input.source! : compilation!.source,
-                ...(input.additionalFiles === undefined
-                  ? {}
-                  : { additionalFiles: input.additionalFiles }),
-              }),
-          windowName,
-          scenario,
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          signal: progress.signal,
-        });
+        const plannedTransaction = await withProgressHeartbeat(
+          () =>
+            studio.planSource({
+              workspaceId,
+              relativePath,
+              ...(input.mode === 'patches'
+                ? {
+                    expectedSourceHash: input.expectedSourceHash!,
+                    patches: input.patches!,
+                  }
+                : {
+                    source: input.mode === 'source' ? input.source! : compilation!.source,
+                    ...(input.additionalFiles === undefined
+                      ? {}
+                      : { additionalFiles: input.additionalFiles }),
+                  }),
+              windowName,
+              scenario,
+              ...(context.principal === undefined ? {} : { principal: context.principal }),
+              signal: progress.signal,
+            }),
+          progress,
+          'Preparing GUI rewrite',
+        );
         await progress.report(2, 3, 'Applying and validating the GUI rewrite');
-        const execution = await executePlannedTransaction(
-          engine,
-          plannedTransaction,
-          context.principal,
-          progress.signal,
+        const execution = await withProgressHeartbeat(
+          () =>
+            executePlannedTransaction(
+              engine,
+              plannedTransaction,
+              context.principal,
+              progress.signal,
+            ),
+          progress,
+          'Applying GUI rewrite',
         );
         const transaction = execution.transaction;
         const planned = {

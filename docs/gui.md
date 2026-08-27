@@ -58,6 +58,8 @@ Broad inspection indexes localisation actually referenced by GUI source and retu
 
 GUI rewrites keep complete validation evidence in a linked JSON resource and retain the highest-priority findings in the transaction result. Large surrounding interface inventories therefore do not turn a small scalar patch into a transaction structure-limit error.
 
+Large inspections, renders, and rewrites send periodic MCP progress heartbeats while a service stage is still running. Clients that request progress can reset their idle request timer from these notifications; there is no 180-second GUI operation limit in the server, and cancellation still follows the request signal.
+
 ## Offline preview limits
 
 The renderer does not run the game engine. Each render includes a fidelity report that separates fields it models from fields it approximates, ignores, cannot resolve, or does not support. Treat that report as part of the review.

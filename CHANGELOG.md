@@ -4,6 +4,10 @@
 
 No unreleased changes.
 
+## 2.8.1 - 2026-08-27
+
+- Added periodic MCP progress heartbeats for long GUI inspections, renders, and rewrites, with repeated progress notifications that preserve monotonic work values and still honor cancellation.
+
 ## 2.8.0 - 2026-08-26
 
 - Added structured `ROOT`, `THIS`, `PREV`, `FROM` chain, saved-scope, and event-target bindings to probability scenarios.
