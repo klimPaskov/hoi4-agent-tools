@@ -264,6 +264,7 @@ export class GuiAssetCatalog {
     private readonly graph: GuiSourceGraph,
     scannedFiles: readonly ScannedFile[],
     private readonly budget = new RenderBudget(),
+    language = 'l_english',
   ) {
     for (const file of scannedFiles
       .filter((candidate) => candidate.shadowedBy === undefined)
@@ -275,16 +276,44 @@ export class GuiAssetCatalog {
       candidates.push(file);
       this.basenames.set(basename, candidates);
     }
-    for (const definition of graph.fonts)
-      this.fontDefinitions.set(definition.name.toLowerCase(), definition);
+    const normalizedLanguage = language.toLocaleLowerCase('en-US');
+    for (const definition of graph.fonts) {
+      const key = definition.name.toLocaleLowerCase('en-US');
+      const existing = this.fontDefinitions.get(key);
+      const definitionMatches = definition.languages.some(
+        (candidate) => candidate.toLocaleLowerCase('en-US') === normalizedLanguage,
+      );
+      const existingMatches =
+        existing?.languages.some(
+          (candidate) => candidate.toLocaleLowerCase('en-US') === normalizedLanguage,
+        ) ?? false;
+      if (
+        existing === undefined ||
+        (definitionMatches && !existingMatches) ||
+        (definitionMatches === existingMatches && existing.override && !definition.override) ||
+        (definitionMatches === existingMatches &&
+          existing.languages.length > 0 &&
+          definition.languages.length === 0)
+      )
+        this.fontDefinitions.set(key, definition);
+    }
   }
 
   public resolveFile(assetPath: string, relativeTo?: string): ScannedFile | undefined {
     const normalized = normalizeAssetPath(assetPath);
+    const extension = path.posix.extname(normalized);
+    const rasterExtensions = ['.png', '.bmp', '.tga', '.dds', '.svg'];
     const normalizedCandidates =
-      path.posix.extname(normalized).length === 0
+      extension.length === 0
         ? [normalized, `${normalized}.fnt`, `${normalized}.ttf`, `${normalized}.otf`]
-        : [normalized];
+        : rasterExtensions.includes(extension)
+          ? [
+              normalized,
+              ...rasterExtensions
+                .filter((candidate) => candidate !== extension)
+                .map((candidate) => `${normalized.slice(0, -extension.length)}${candidate}`),
+            ]
+          : [normalized];
     for (const candidatePath of normalizedCandidates) {
       const direct = this.files.get(candidatePath);
       if (direct !== undefined) return direct;
@@ -553,13 +582,14 @@ export class GuiAssetCatalog {
         if (previous !== undefined)
           penX += (entry.bmfont.kerning.get(`${previous}:${codePoint}`) ?? 0) * scale;
         const pagePath = entry.bmfont.pages[metric.page];
+        const pageFile =
+          pagePath === undefined ? undefined : this.resolveBmFontPage(entry, pagePath, metric.page);
         const raster =
-          pagePath === undefined
+          pageFile === undefined
             ? undefined
-            : await this.loadBmFontGlyph(entry, pagePath, metric, codePoint);
-        if (raster !== undefined && pagePath !== undefined) {
-          const page = this.resolveFile(pagePath, entry.sourceFile.relativePath);
-          if (page !== undefined) pageHashes.add(page.sha256);
+            : await this.loadBmFontGlyph(entry, pageFile, metric, codePoint);
+        if (raster !== undefined && pageFile !== undefined) {
+          pageHashes.add(pageFile.sha256);
           glyphs.push({
             kind: 'bitmap',
             key: `${entry.sourceFile.sha256}:${codePoint}:${Math.max(1, fontSize)}`,
@@ -688,16 +718,16 @@ export class GuiAssetCatalog {
 
   private loadBmFontGlyph(
     entry: FontMetricEntry,
-    pagePath: string,
+    pageFile: ScannedFile,
     metric: BmFontCharacter,
     codePoint: number,
   ): Promise<{ dataUri: string; width: number; height: number } | undefined> {
     if (metric.width <= 0 || metric.height <= 0) return Promise.resolve(undefined);
-    const key = `${entry.sourceFile.sha256}:${pagePath}:${codePoint}:${metric.x}:${metric.y}:${metric.width}:${metric.height}`;
+    const key = `${entry.sourceFile.sha256}:${pageFile.sha256}:${codePoint}:${metric.x}:${metric.y}:${metric.width}:${metric.height}`;
     let promise = this.glyphRasters.get(key);
     if (promise === undefined) {
       promise = (async () => {
-        const raster = await this.loadRaster(pagePath, entry.sourceFile.relativePath);
+        const raster = await this.loadRaster(pageFile.relativePath);
         if (
           !raster.supported ||
           metric.x < 0 ||
@@ -734,6 +764,44 @@ export class GuiAssetCatalog {
       this.glyphRasters.set(key, promise);
     }
     return promise;
+  }
+
+  private resolveBmFontPage(
+    entry: FontMetricEntry,
+    pagePath: string,
+    pageIndex: number,
+  ): ScannedFile | undefined {
+    const normalizedPage = normalizeAssetPath(pagePath);
+    const relativePage = normalizeAssetPath(
+      path.posix.join(
+        path.posix.dirname(normalizeAssetPath(entry.sourceFile.relativePath)),
+        normalizedPage,
+      ),
+    );
+    const rasterExtensions = ['.png', '.bmp', '.tga', '.dds', '.svg'];
+    for (const candidate of [relativePage, normalizedPage]) {
+      const candidateExtension = path.posix.extname(candidate).toLowerCase();
+      const candidateStem = candidate.slice(0, -candidateExtension.length);
+      const variants =
+        candidateExtension.length === 0
+          ? rasterExtensions.map((suffix) => `${candidate}${suffix}`)
+          : rasterExtensions.includes(candidateExtension)
+            ? [candidate, ...rasterExtensions.map((suffix) => `${candidateStem}${suffix}`)]
+            : [candidate];
+      for (const variant of variants) {
+        const file = this.files.get(variant);
+        if (file !== undefined) return file;
+      }
+    }
+    if (pageIndex === 0) {
+      const sourcePath = normalizeAssetPath(entry.sourceFile.relativePath);
+      const sourceStem = sourcePath.slice(0, -path.posix.extname(sourcePath).length);
+      for (const suffix of rasterExtensions) {
+        const file = this.files.get(`${sourceStem}${suffix}`);
+        if (file !== undefined) return file;
+      }
+    }
+    return this.resolveFile(pagePath, entry.sourceFile.relativePath);
   }
 
   private async decodeRaster(file: ScannedFile): Promise<LoadedRaster> {

@@ -4,6 +4,14 @@
 
 No unreleased changes.
 
+## 2.8.2 - 2026-08-27
+
+- Composed top-level scripted-GUI child windows through `parent_scripted_gui`, instantiated external dynamic-list entry containers, and applied row-scoped image, frame, position, visibility, and enabled values.
+- Applied constant scripted visibility and click-enabled triggers, narrowed target scans and diagnostics to linked GUI surfaces, and accepted documented installed-game scripted-GUI contexts without hard false failures.
+- Rendered language-correct HOI4 bitmap fonts and recovered installed-game first-page atlases whose actual filename omits the declared page suffix.
+- Resolved alternate installed raster extensions, stopped shared sprite textures from producing false symbol collisions, cached unchanged scanned bytes, refreshed active artifact recency, and reclaimed stale temporary artifact debris.
+- Made concurrent artifact accounting tolerate entries that finish publishing between enumeration and inspection, and emit the first long-operation progress heartbeat immediately.
+
 ## 2.8.1 - 2026-08-27
 
 - Added periodic MCP progress heartbeats for long GUI inspections, renders, and rewrites, with repeated progress notifications that preserve monotonic work values and still honor cancellation.

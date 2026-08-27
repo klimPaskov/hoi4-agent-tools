@@ -152,7 +152,7 @@
           "replacement": "context_type = synthetic_void"
         }
       ],
-      "expectedDiagnosticCodes": ["GUI_SCRIPTED_CONTEXT_INVALID"]
+      "expectedDiagnosticCodes": ["GUI_SCRIPTED_CONTEXT_UNKNOWN"]
     },
     {
       "id": "missing-modal-sprite",

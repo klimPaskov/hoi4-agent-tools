@@ -86,6 +86,9 @@ export async function withProgressHeartbeat<T>(
   };
   const timer = setInterval(tick, intervalMs);
   timer.unref();
+  // Tell the client which opaque stage has started immediately. Waiting for the first interval
+  // leaves short-but-expensive stages silent and makes keep-alive behavior scheduler-dependent.
+  tick();
   try {
     return await (typeof operation === 'function' ? operation() : operation);
   } finally {

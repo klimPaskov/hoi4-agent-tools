@@ -27,6 +27,15 @@ export interface ScanOptions {
   signal?: AbortSignal;
 }
 
+interface CachedSourceBytes {
+  size: number;
+  modifiedMs: number;
+  changedMs: number;
+  inode: number;
+  sha256: string;
+  bytes: Buffer;
+}
+
 function normalizeRelative(value: string): string {
   return value.replaceAll('\\', '/').replace(/^\.\//u, '');
 }
@@ -58,11 +67,39 @@ function hiddenByReplacePath(
 }
 
 export class WorkspaceScanner {
+  readonly #sourceCache = new Map<string, CachedSourceBytes>();
+  #sourceCacheBytes = 0;
+  readonly #sourceCacheMaxBytes: number;
+
   public constructor(
     private readonly serverMaxFiles = 20_000,
     private readonly serverMaxBytes = 134_217_728,
     private readonly serverMaxFileBytes = 67_108_864,
-  ) {}
+  ) {
+    this.#sourceCacheMaxBytes = Math.max(
+      serverMaxFileBytes,
+      Math.min(536_870_912, serverMaxBytes * 2),
+    );
+  }
+
+  private cacheKey(absolutePath: string): string {
+    const resolved = path.resolve(absolutePath);
+    return process.platform === 'win32' ? resolved.toLocaleLowerCase('en-US') : resolved;
+  }
+
+  private retainSource(key: string, source: CachedSourceBytes): void {
+    const previous = this.#sourceCache.get(key);
+    if (previous !== undefined) this.#sourceCacheBytes -= previous.bytes.length;
+    this.#sourceCache.delete(key);
+    this.#sourceCache.set(key, source);
+    this.#sourceCacheBytes += source.bytes.length;
+    while (this.#sourceCacheBytes > this.#sourceCacheMaxBytes && this.#sourceCache.size > 1) {
+      const oldest = this.#sourceCache.entries().next().value;
+      if (oldest === undefined) break;
+      this.#sourceCache.delete(oldest[0]);
+      this.#sourceCacheBytes -= oldest[1].bytes.length;
+    }
+  }
 
   async scan(workspace: ResolvedWorkspace, options: ScanOptions): Promise<ScannedFile[]> {
     options.signal?.throwIfAborted();
@@ -113,6 +150,7 @@ export class WorkspaceScanner {
         const relativePath = normalizeRelative(String(match));
         if (hiddenByReplacePath(workspace, root, relativePath)) continue;
         const absolutePath = path.join(root.path, relativePath);
+        const cacheKey = this.cacheKey(absolutePath);
         const handle = await open(absolutePath, 'r');
         try {
           const metadata = await handle.stat();
@@ -121,11 +159,30 @@ export class WorkspaceScanner {
           if (metadata.size > remaining || metadata.size > this.serverMaxFileBytes) {
             throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit');
           }
-          const bytes = await readBoundedFile(
-            handle,
-            Math.min(remaining, this.serverMaxFileBytes),
-            options.signal,
-          );
+          const cached = this.#sourceCache.get(cacheKey);
+          const retained =
+            cached?.size === metadata.size &&
+            cached.modifiedMs === metadata.mtimeMs &&
+            cached.changedMs === metadata.ctimeMs &&
+            cached.inode === metadata.ino
+              ? cached
+              : undefined;
+          const bytes =
+            retained?.bytes ??
+            (await readBoundedFile(
+              handle,
+              Math.min(remaining, this.serverMaxFileBytes),
+              options.signal,
+            ));
+          const sha256 = retained?.sha256 ?? sha256Bytes(bytes);
+          this.retainSource(cacheKey, {
+            size: metadata.size,
+            modifiedMs: metadata.mtimeMs,
+            changedMs: metadata.ctimeMs,
+            inode: metadata.ino,
+            sha256,
+            bytes,
+          });
           totalBytes += bytes.length;
           result.push({
             absolutePath,
@@ -135,7 +192,7 @@ export class WorkspaceScanner {
             loadOrder: root.loadOrder,
             size: bytes.length,
             modifiedMs: metadata.mtimeMs,
-            sha256: sha256Bytes(bytes),
+            sha256,
             bytes,
           });
         } finally {

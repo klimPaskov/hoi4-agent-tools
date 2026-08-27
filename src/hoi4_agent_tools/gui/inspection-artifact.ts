@@ -8,7 +8,7 @@ export const GUI_INSPECTION_COMPRESSION_THRESHOLD = 134_217_728;
 export const GUI_INSPECTION_FULL_GRAPH_NODE_LIMIT = 50_000;
 
 export interface GuiInspectionGraphProjection {
-  mode: 'workspace-overlay-and-selected';
+  mode: 'workspace-overlay-and-selected' | 'selected-window';
   fullCounts: Record<string, number>;
   returnedCounts: Record<string, number>;
 }
@@ -73,52 +73,139 @@ export function projectGuiGraphForArtifact(
   selectedSourceIds: readonly string[] = [],
   fullGraphNodeLimit = GUI_INSPECTION_FULL_GRAPH_NODE_LIMIT,
 ): GuiInspectionGraphArtifact {
-  if (graph.nodes.length <= fullGraphNodeLimit) return { graph };
+  const selectedWindow = selectedSourceIds.length > 0;
+  if (!selectedWindow && graph.nodes.length <= fullGraphNodeLimit) return { graph };
 
   const retainedIds = new Set(selectedSourceIds);
-  for (const node of graph.nodes) if (isWorkspaceGraphSeed(node)) retainedIds.add(node.id);
-  const retainedEdges = graph.edges.filter(
-    ({ from, to }) => retainedIds.has(from) || retainedIds.has(to),
-  );
-  for (const edge of retainedEdges) {
+  if (selectedWindow) {
+    const selectedElementNames = new Set(
+      graph.elements.filter(({ id }) => retainedIds.has(id)).map(({ name }) => name),
+    );
+    const retainedScriptedGuiNames = new Set(
+      graph.scriptedGuis
+        .filter(
+          ({ windowName, parentWindowName }) =>
+            (windowName !== undefined && selectedElementNames.has(windowName)) ||
+            (parentWindowName !== undefined && selectedElementNames.has(parentWindowName)),
+        )
+        .map(({ name }) => name),
+    );
+    let addedRelatedScriptedGui = true;
+    while (addedRelatedScriptedGui) {
+      addedRelatedScriptedGui = false;
+      for (const scripted of graph.scriptedGuis) {
+        if (scripted.parentScriptedGui === undefined) continue;
+        if (
+          retainedScriptedGuiNames.has(scripted.parentScriptedGui) &&
+          !retainedScriptedGuiNames.has(scripted.name)
+        ) {
+          retainedScriptedGuiNames.add(scripted.name);
+          addedRelatedScriptedGui = true;
+        }
+        if (
+          retainedScriptedGuiNames.has(scripted.name) &&
+          !retainedScriptedGuiNames.has(scripted.parentScriptedGui)
+        ) {
+          retainedScriptedGuiNames.add(scripted.parentScriptedGui);
+          addedRelatedScriptedGui = true;
+        }
+      }
+    }
+    for (const scripted of graph.scriptedGuis)
+      if (retainedScriptedGuiNames.has(scripted.name)) retainedIds.add(scripted.id);
+  } else {
+    for (const node of graph.nodes) if (isWorkspaceGraphSeed(node)) retainedIds.add(node.id);
+  }
+  const retainedEdges: GuiSourceGraph['edges'] = [];
+  const retainedEdgeIds = new Set<string>();
+  let addedDependency = true;
+  while (addedDependency) {
+    addedDependency = false;
+    for (const edge of graph.edges) {
+      if (!retainedIds.has(edge.from) || retainedEdgeIds.has(edge.id)) continue;
+      retainedEdges.push(edge);
+      retainedEdgeIds.add(edge.id);
+      if (!retainedIds.has(edge.to)) {
+        retainedIds.add(edge.to);
+        addedDependency = true;
+      }
+    }
+  }
+  for (const edge of graph.edges) {
+    if (
+      !retainedIds.has(edge.to) ||
+      retainedEdgeIds.has(edge.id) ||
+      !['contains', 'decision_category_entry'].includes(edge.kind)
+    )
+      continue;
+    retainedEdges.push(edge);
+    retainedEdgeIds.add(edge.id);
     retainedIds.add(edge.from);
-    retainedIds.add(edge.to);
   }
   const retainedLocalisation = new Set(
     graph.nodes
       .filter(({ id, kind }) => kind === 'localisation' && retainedIds.has(id))
       .map(({ name, path }) => `${path}\u0000${name}`),
   );
+  const retainedPaths = new Set([
+    ...graph.elements.filter(({ id }) => retainedIds.has(id)).map(({ sourcePath }) => sourcePath),
+    ...graph.sprites.filter(({ id }) => retainedIds.has(id)).map(({ sourcePath }) => sourcePath),
+    ...graph.fonts.filter(({ id }) => retainedIds.has(id)).map(({ sourcePath }) => sourcePath),
+    ...graph.scriptedGuis
+      .filter(({ id }) => retainedIds.has(id))
+      .map(({ sourcePath }) => sourcePath),
+    ...graph.animationSources
+      .filter(({ id }) => retainedIds.has(id))
+      .map(({ sourcePath }) => sourcePath),
+    ...graph.scriptedLocalisation
+      .filter(({ id }) => retainedIds.has(id))
+      .map(({ sourcePath }) => sourcePath),
+  ]);
   const retainedGraph: GuiSourceGraph = {
     ...graph,
     nodes: graph.nodes.filter(({ id }) => retainedIds.has(id)),
     edges: retainedEdges,
     elements: graph.elements.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     sprites: graph.sprites.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     fonts: graph.fonts.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     scriptedGuis: graph.scriptedGuis.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     animationSources: graph.animationSources.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     scriptedLocalisation: graph.scriptedLocalisation.filter(
-      ({ id, sourcePath }) => retainedIds.has(id) || isWorkspaceSource(sourcePath),
+      ({ id, sourcePath }) =>
+        retainedIds.has(id) || (!selectedWindow && isWorkspaceSource(sourcePath)),
     ),
     localisation: graph.localisation.filter(({ key, sourcePath }) =>
       retainedLocalisation.has(`${sourcePath}\u0000${key}`),
     ),
+    diagnostics: selectedWindow
+      ? graph.diagnostics.filter(
+          ({ code, location, related }) =>
+            (code === 'GUI_ANIMATION_SOURCE_MANIFEST_INVALID' &&
+              location?.path.startsWith('mod:hoi4_agent/animation_sources/') === true) ||
+            (location !== undefined && retainedPaths.has(location.path)) ||
+            related?.some(({ path }) => retainedPaths.has(path)) === true,
+        )
+      : graph.diagnostics,
   };
   return {
     graph: retainedGraph,
     projection: {
-      mode: 'workspace-overlay-and-selected',
+      mode: selectedWindow ? 'selected-window' : 'workspace-overlay-and-selected',
       fullCounts: graphCounts(graph),
       returnedCounts: graphCounts(retainedGraph),
     },

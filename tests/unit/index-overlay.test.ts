@@ -247,6 +247,29 @@ describe('load-order scanner and shared index', () => {
     ).toBe(false);
   });
 
+  it('allows multiple sprite definitions to share one texture without a symbol collision', () => {
+    const index = SymbolIndex.build([
+      scannedSourceFile(
+        'interface/shared-texture.gfx',
+        `spriteTypes = {
+	spriteType = { name = GFX_first texturefile = "gfx/interface/shared.dds" }
+	spriteType = { name = GFX_second texturefile = "gfx/interface/shared.dds" }
+}`,
+      ),
+    ]);
+
+    expect(index.findAll('texture', 'gfx/interface/shared.dds')).toHaveLength(2);
+    expect(
+      index.findAll('texture', 'gfx/interface/shared.dds').every(({ overridden }) => !overridden),
+    ).toBe(true);
+    expect(
+      index.diagnostics.some(
+        ({ code, message }) =>
+          code === 'INDEX_SYMBOL_COLLISION' && message.includes('texture:gfx/interface/shared.dds'),
+      ),
+    ).toBe(false);
+  });
+
   it('skips a source instead of indexing its partial tree after the nesting ceiling', () => {
     const depth = 5_000;
     const source = `root = ${'{ nested = '.repeat(depth)}yes${' }'.repeat(depth)}\n`;

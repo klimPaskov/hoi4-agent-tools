@@ -427,11 +427,30 @@ function actionElementName(action: string): string {
 }
 
 function attachedScriptedGuis(graph: GuiSourceGraph, scene: GuiScene): ScriptedGuiDefinition[] {
-  return graph.scriptedGuis.filter(
-    (definition) =>
-      definition.windowName === scene.windowName ||
-      definition.parentWindowName === scene.windowName,
+  const attachedNames = new Set(
+    graph.scriptedGuis
+      .filter(
+        (definition) =>
+          definition.windowName === scene.windowName ||
+          definition.parentWindowName === scene.windowName,
+      )
+      .map(({ name }) => name),
   );
+  let added = true;
+  while (added) {
+    added = false;
+    for (const definition of graph.scriptedGuis) {
+      if (
+        definition.parentScriptedGui === undefined ||
+        !attachedNames.has(definition.parentScriptedGui) ||
+        attachedNames.has(definition.name)
+      )
+        continue;
+      attachedNames.add(definition.name);
+      added = true;
+    }
+  }
+  return graph.scriptedGuis.filter(({ name }) => attachedNames.has(name));
 }
 
 function normalizedCostResource(value: string): string {
@@ -595,16 +614,6 @@ function validateOverlapAndGeometry(
         ),
       );
     }
-    if (element.clickable && !element.visible)
-      diagnostics.push(
-        issue(
-          'GUI_INVISIBLE_CLICK_BLOCKER',
-          'error',
-          'design',
-          `${element.name} remains clickable while invisible in this scenario.`,
-          element,
-        ),
-      );
   }
   const visiblePairCount = (visible.length * (visible.length - 1)) / 2;
   if (work.admitPairs(visiblePairCount, 'GUI overlap validation', diagnostics)) {
@@ -826,20 +835,16 @@ function validateReferencesAndScript(
   }
 
   const validContexts = new Set([
-    'country',
-    'state',
-    'unit_leader',
-    'operative',
-    'character',
-    'division',
+    'player_context',
+    'selected_country_context',
+    'selected_state_context',
     'decision',
     'decision_category',
-    'national_focus',
-    'shared_focus',
-    'technology',
-    'equipment',
-    'military_industrial_organization',
-    'special_project',
+    'diplomatic_action',
+    'diplomacy_target_context',
+    'national_focus_context',
+    'country_mapicon',
+    'state_mapicon',
   ]);
   const names = new Set(graph.scriptedGuis.map(({ name }) => name));
   const windowNames = new Set(graph.elements.map(({ name }) => name));
@@ -854,10 +859,10 @@ function validateReferencesAndScript(
       });
     } else if (!validContexts.has(scripted.contextType)) {
       diagnostics.push({
-        code: 'GUI_SCRIPTED_CONTEXT_INVALID',
-        severity: 'error',
+        code: 'GUI_SCRIPTED_CONTEXT_UNKNOWN',
+        severity: 'warning',
         category: 'reference',
-        message: `Scripted GUI ${scripted.name} uses unknown context_type ${scripted.contextType}.`,
+        message: `Scripted GUI ${scripted.name} uses context_type ${scripted.contextType}, which is not in the renderer's installed-game and documented context inventory.`,
         ...(scripted.location === undefined ? {} : { location: scripted.location }),
       });
     }
@@ -891,18 +896,37 @@ function validateReferencesAndScript(
   if (attached.length > 0) {
     const effects = new Set(attached.flatMap(({ effects }) => effects.map(actionElementName)));
     const triggers = new Set(attached.flatMap(({ triggers }) => triggers.map(actionElementName)));
+    const elementsById = new Map(graph.elements.map((element) => [element.id, element]));
     for (const button of scene.elements.filter(({ elementType }) => /button/iu.test(elementType))) {
-      if (!effects.has(button.name))
+      const source = elementsById.get(button.sourceId);
+      const tooltipOnly =
+        !effects.has(button.name) &&
+        !triggers.has(button.name) &&
+        (typeof source?.attributes.pdx_tooltip === 'string' ||
+          typeof source?.attributes.pdx_tooltip_delayed === 'string') &&
+        source.attributes.text === undefined &&
+        source.attributes.buttonText === undefined;
+      if (!effects.has(button.name) && !triggers.has(button.name) && !tooltipOnly)
         diagnostics.push(
           issue(
             'GUI_BUTTON_EFFECT_MISSING',
             'error',
             'reference',
-            `Button ${button.name} has no matching scripted GUI click effect.`,
+            `Button ${button.name} has no matching scripted GUI click effect or tooltip-only role.`,
             button,
           ),
         );
-      if (!triggers.has(button.name))
+      if (triggers.has(button.name) && !effects.has(button.name))
+        diagnostics.push(
+          issue(
+            'GUI_BUTTON_EFFECT_MISSING',
+            'warning',
+            'reference',
+            `Button ${button.name} is controlled by a scripted GUI trigger but has no matching click effect.`,
+            button,
+          ),
+        );
+      if (effects.has(button.name) && !triggers.has(button.name))
         diagnostics.push(
           issue(
             'GUI_BUTTON_TRIGGER_MISSING',
@@ -1593,14 +1617,18 @@ function validationResult(
   return {
     diagnostics: sorted,
     checks: codes.map((code) => {
-      const count = sorted.filter((diagnostic) => diagnostic.code === code).length;
+      const matching = sorted.filter((diagnostic) => diagnostic.code === code);
+      const count = matching.length;
+      const blockingCount = matching.filter(
+        ({ severity }) => severity === 'error' || severity === 'blocker',
+      ).length;
       return {
         id: code.toLowerCase(),
-        passed: count === 0,
+        passed: blockingCount === 0,
         message:
           count === 0
             ? `${code} not detected.`
-            : `${code} detected ${count} time${count === 1 ? '' : 's'}.`,
+            : `${code} detected ${count} time${count === 1 ? '' : 's'}${blockingCount === 0 ? ' as non-blocking findings' : `, including ${blockingCount} blocking finding${blockingCount === 1 ? '' : 's'}`}.`,
       };
     }),
   };
@@ -1680,7 +1708,6 @@ export async function validateGuiScene(
     'GUI_INVALID_SIZE',
     'GUI_CHILD_OUTSIDE_CLIPPED_PARENT',
     'GUI_CLICK_BOUNDS_MISMATCH',
-    'GUI_INVISIBLE_CLICK_BLOCKER',
     'GUI_CONFLICTING_CLICK_REGIONS',
     'GUI_MISSING_SPRITE',
     'GUI_MISSING_TEXTURE',
@@ -1690,7 +1717,7 @@ export async function validateGuiScene(
     'GUI_ANIMATION_SHEET_DIMENSION_INVALID',
     'GUI_ANIMATION_STATIC_FALLBACK_MISSING',
     'GUI_PARENT_WINDOW_INVALID',
-    'GUI_SCRIPTED_CONTEXT_INVALID',
+    'GUI_SCRIPTED_CONTEXT_UNKNOWN',
     'GUI_Z_ORDER_RISK',
     'GUI_SCROLL_ROW_CUTOFF',
     'GUI_RESOLUTION_DRIFT',

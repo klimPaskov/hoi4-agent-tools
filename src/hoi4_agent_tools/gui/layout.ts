@@ -34,6 +34,7 @@ import type {
   GuiTextGlyphLine,
   GuiTextInlineIcon,
   GuiTextLayout,
+  ScriptedGuiDynamicListDefinition,
 } from './types.js';
 import { emptyFidelityReport } from './types.js';
 
@@ -314,10 +315,17 @@ function resolveTokenText(
   );
   text = replaceTextBounded(
     text,
-    /\[\?([A-Za-z0-9_.-]+)(?:\|[^\]]+)?\]/gu,
+    /\[\?([^\]|]+)(?:\|[^\]]+)?\]/gu,
     (match) => {
       const key = match[1] ?? '';
-      const replacement = rowValues?.[key] ?? scenario.variables[key] ?? scenario.scriptedGui[key];
+      const shortKey = key.slice(key.lastIndexOf('.') + 1);
+      const replacement =
+        rowValues?.[key] ??
+        rowValues?.[shortKey] ??
+        scenario.variables[key] ??
+        scenario.variables[shortKey] ??
+        scenario.scriptedGui[key] ??
+        scenario.scriptedGui[shortKey];
       if (replacement === undefined) {
         unresolved.push(match[0]);
         return /(?:^|\.)Get[A-Za-z0-9_]+$/u.test(key)
@@ -639,10 +647,18 @@ function frameFor(
   element: GuiElementDefinition,
   sprite: GuiSourceGraph['sprites'][number],
   scenario: GuiPreviewScenario,
+  rowValues?: Readonly<Record<string, string | number | boolean>>,
 ): number {
   const frameCount = Math.max(1, sprite.frameCount);
   const selected = scenario.selectedFrames[element.name] ?? scenario.selectedFrames[sprite.name];
   if (selected !== undefined) return Math.min(frameCount - 1, selected);
+  const scriptedFrame =
+    rowValues?.[`${element.name}.frame`] ?? scenario.scriptedGui[`${element.name}.frame`];
+  if (typeof scriptedFrame === 'number' && Number.isFinite(scriptedFrame))
+    return Math.min(
+      frameCount - 1,
+      Math.max(0, Math.trunc(scriptedFrame > 0 ? scriptedFrame - 1 : scriptedFrame)),
+    );
   const explicit = scalarNumber(property(element.attributes, 'frame'), frameCount);
   if (explicit !== undefined)
     return Math.min(
@@ -745,6 +761,9 @@ interface LayoutContext {
   fidelity: FidelityReport;
   diagnostics: Diagnostic[];
   elementsById: Map<string, GuiElementDefinition>;
+  elementsByName: Map<string, GuiElementDefinition>;
+  dynamicListsByName: Map<string, ScriptedGuiDynamicListDefinition>;
+  constantElementEnabled: Readonly<Record<string, boolean>>;
   spritesByName: Map<string, GuiSourceGraph['sprites'][number]>;
   localisation: Map<string, string>;
   output: GuiSceneElement[];
@@ -839,6 +858,7 @@ async function layoutElement(
   rowValues?: Readonly<Record<string, string | number | boolean>>,
   parentInstanceId?: string,
   inheritedOrientation = 'upper_left',
+  inheritedVisible = true,
 ): Promise<void> {
   context.work.admitElement(depth);
   const { scenario, catalog, fidelity, diagnostics } = context;
@@ -848,18 +868,30 @@ async function layoutElement(
   const scale = parentScale * localScale;
   const position = objectProperty(property(definition.attributes, 'position'));
   const size = objectProperty(property(definition.attributes, 'size'));
+  const scriptedX =
+    rowValues?.[`${definition.name}.x`] ?? scenario.scriptedGui[`${definition.name}.x`];
+  const scriptedY =
+    rowValues?.[`${definition.name}.y`] ?? scenario.scriptedGui[`${definition.name}.y`];
   const localX =
+    (typeof scriptedX === 'number' && Number.isFinite(scriptedX)
+      ? scriptedX * parentScale
+      : undefined) ??
     scaledNumber(
       position === undefined ? undefined : property(position, 'x'),
       parentRect.width,
       parentScale,
-    ) ?? 0;
+    ) ??
+    0;
   const localY =
+    (typeof scriptedY === 'number' && Number.isFinite(scriptedY)
+      ? scriptedY * parentScale
+      : undefined) ??
     scaledNumber(
       position === undefined ? undefined : property(position, 'y'),
       parentRect.height,
       parentScale,
-    ) ?? 0;
+    ) ??
+    0;
   let width =
     scaledNumber(
       size === undefined ? undefined : property(size, 'width', 'x'),
@@ -873,7 +905,13 @@ async function layoutElement(
       scale,
     ) ?? 0;
   const background = objectProperty(property(definition.attributes, 'background'));
+  const scriptedImage =
+    rowValues?.[`${definition.name}.image`] ??
+    rowValues?.[definition.name] ??
+    scenario.scriptedGui[`${definition.name}.image`] ??
+    scenario.scriptedGui[definition.name];
   const spriteName =
+    (typeof scriptedImage === 'string' && scriptedImage.length > 0 ? scriptedImage : undefined) ??
     scalarString(property(definition.attributes, 'spriteType', 'quadTextureSprite')) ??
     scalarString(
       background === undefined
@@ -935,7 +973,7 @@ async function layoutElement(
           definition,
         ),
       );
-    const frame = frameFor(definition, spriteDefinition, scenario);
+    const frame = frameFor(definition, spriteDefinition, scenario, rowValues);
     sprite = await catalog.loadSpriteFrame(spriteDefinition, frame);
     if (spriteDefinition.texturePath2 !== undefined)
       secondarySprite = await catalog.loadSecondarySpriteFrame(spriteDefinition, frame);
@@ -1027,6 +1065,22 @@ async function layoutElement(
       }
     }
   }
+  if (typeof scriptedImage === 'string' && scriptedImage.length > 0)
+    addFidelity(
+      fidelity,
+      'modelled',
+      'scripted_gui_image',
+      `Scenario property selected ${scriptedImage} for ${definition.name}.`,
+      definition,
+    );
+  if (typeof scriptedX === 'number' || typeof scriptedY === 'number')
+    addFidelity(
+      fidelity,
+      'modelled',
+      'scripted_gui_position',
+      `Scenario properties positioned ${definition.name} at ${localX},${localY} before anchoring.`,
+      definition,
+    );
 
   const rawButtonText = scalarString(property(definition.attributes, 'buttonText'));
   const rawText = scalarString(property(definition.attributes, 'text')) ?? rawButtonText;
@@ -1265,21 +1319,32 @@ async function layoutElement(
   const clipped =
     clipRect !== undefined &&
     (availableClip === undefined || !equalRect(unclippedRect, availableClip));
+  const scriptedVisible =
+    rowValues?.[`${definition.name}.visible`] ?? scenario.scriptedGui[`${definition.name}.visible`];
   const explicitlyVisible =
-    scenario.visibility[definition.name] ?? scenario.visibility[definition.id];
-  const visible = explicitlyVisible ?? (availableClip !== undefined || inheritedClip === undefined);
+    scenario.visibility[definition.name] ??
+    scenario.visibility[definition.id] ??
+    (typeof scriptedVisible === 'boolean' ? scriptedVisible : undefined);
+  const visible =
+    inheritedVisible &&
+    (explicitlyVisible ?? (availableClip !== undefined || inheritedClip === undefined));
   const clickThrough =
     scalarBoolean(
       property(definition.attributes, 'clickThrough', 'alwaystransparent', 'allwaystransparent'),
     ) ?? false;
-  const clickable = clickableTypes.test(definition.elementType) && !clickThrough;
+  const scriptedEnabled =
+    rowValues?.[`${definition.name}.enabled`] ??
+    scenario.scriptedGui[`${definition.name}.enabled`] ??
+    context.constantElementEnabled[definition.name];
+  const clickable =
+    clickableTypes.test(definition.elementType) && !clickThrough && scriptedEnabled !== false;
   const state: GuiPreviewState = scenario.elementStates[definition.name] ?? scenario.state;
   const zPriority = scalarNumber(property(definition.attributes, 'priority'), 0) ?? 0;
   let progressRatio: number | undefined;
   if (/progressbar/iu.test(definition.elementType)) {
     const minimum = scalarNumber(property(definition.attributes, 'minValue'), 1) ?? 0;
     const maximum = scalarNumber(property(definition.attributes, 'maxValue'), 1) ?? 100;
-    const scriptedValue = scenario.scriptedGui[definition.name];
+    const scriptedValue = rowValues?.[definition.name] ?? scenario.scriptedGui[definition.name];
     let value =
       typeof scriptedValue === 'number'
         ? scriptedValue
@@ -1388,11 +1453,15 @@ async function layoutElement(
   if (state === 'empty-list') rows = [];
   if (state === 'full-list' && rows === undefined)
     rows = Array.from({ length: 12 }, (_unused, index) => ({ index }));
-  if (
-    rows !== undefined &&
-    childDefinitions.length > 0 &&
-    /(?:grid|listbox|scroll)/iu.test(definition.elementType)
-  ) {
+  const dynamicList = context.dynamicListsByName.get(definition.name);
+  const listElement = /(?:grid|listbox|scroll)/iu.test(definition.elementType);
+  const slotSize = objectProperty(property(definition.attributes, 'slotsize'));
+  const slotHeight = scaledNumber(
+    slotSize === undefined ? undefined : property(slotSize, 'height', 'y'),
+    height,
+    scale,
+  );
+  if (rows !== undefined && childDefinitions.length > 0 && listElement) {
     const spacingValue = objectProperty(property(definition.attributes, 'spacing'));
     const spacingY =
       scalarNumber(
@@ -1429,17 +1498,81 @@ async function layoutElement(
           row,
           instanceId,
           origo,
+          visible,
         );
         const rendered = context.instancesById.get(`${child.id}${instanceSuffix}#row-${index}`);
         rowHeight = Math.max(rowHeight, rendered?.unclippedRect.height ?? 0);
       }
-      rowY += rowHeight + spacingY * scale;
+      rowY += (slotHeight ?? rowHeight) + spacingY * scale;
     }
     addFidelity(
       fidelity,
       'modelled',
       'scroll_rows',
       `Expanded ${rows.length} scenario rows for ${definition.name}.`,
+      definition,
+    );
+  } else if (rows !== undefined && dynamicList !== undefined && listElement) {
+    let rowY = 0;
+    let renderedRows = 0;
+    for (const [index, row] of rows.entries()) {
+      context.work.spend('scripted GUI dynamic-list row expansion');
+      const explicitTemplate = row.entryContainer;
+      const templateName =
+        (typeof explicitTemplate === 'string' && explicitTemplate.length > 0
+          ? explicitTemplate
+          : undefined) ??
+        (row.countryScope === true
+          ? (dynamicList.countryScopeEntryContainer ?? dynamicList.entryContainer)
+          : (dynamicList.entryContainer ?? dynamicList.countryScopeEntryContainer));
+      const template =
+        templateName === undefined ? undefined : context.elementsByName.get(templateName);
+      if (template === undefined) {
+        diagnostics.push(
+          diagnostic(
+            'GUI_DYNAMIC_LIST_TEMPLATE_MISSING',
+            'error',
+            templateName === undefined
+              ? `Dynamic list ${definition.name} has no entry container for scenario row ${index}.`
+              : `Dynamic list ${definition.name} cannot resolve entry container ${templateName}.`,
+            definition,
+          ),
+        );
+        continue;
+      }
+      const templatePosition = objectProperty(property(template.attributes, 'position'));
+      const originalY =
+        scalarNumber(
+          templatePosition === undefined ? undefined : property(templatePosition, 'y'),
+          height,
+        ) ?? 0;
+      const shiftedParent = {
+        ...childParentRect,
+        y: childParentRect.y + rowY - originalY * scale,
+      };
+      await layoutElement(
+        template,
+        shiftedParent,
+        childClip,
+        scale,
+        depth + 1,
+        context,
+        `${instanceSuffix}#row-${index}`,
+        index,
+        row,
+        instanceId,
+        origo,
+        visible,
+      );
+      const rendered = context.instancesById.get(`${template.id}${instanceSuffix}#row-${index}`);
+      rowY += slotHeight ?? rendered?.unclippedRect.height ?? 0;
+      renderedRows += 1;
+    }
+    addFidelity(
+      fidelity,
+      renderedRows === rows.length ? 'modelled' : 'missing',
+      'scripted_gui_dynamic_list',
+      `Expanded ${renderedRows}/${rows.length} scenario rows for ${definition.name} through its scripted-GUI entry containers.`,
       definition,
     );
   } else {
@@ -1457,6 +1590,7 @@ async function layoutElement(
         rowValues,
         instanceId,
         origo,
+        visible,
       );
     }
   }
@@ -1549,11 +1683,50 @@ export async function buildGuiScene(
       `No exact ${scenario.language} bucket; used available localisation entries.`,
     );
   }
-  let scriptedWindowVisible = true;
-  for (const scripted of graph.scriptedGuis.filter(
-    (definition) =>
-      definition.windowName === windowName || definition.parentWindowName === windowName,
+  const relevantScriptedGuiNames = new Set(
+    graph.scriptedGuis
+      .filter(
+        (definition) =>
+          definition.windowName === windowName || definition.parentWindowName === windowName,
+      )
+      .map(({ name }) => name),
+  );
+  let addedRelatedScriptedGui = true;
+  while (addedRelatedScriptedGui) {
+    addedRelatedScriptedGui = false;
+    for (const definition of graph.scriptedGuis) {
+      if (
+        definition.parentScriptedGui === undefined ||
+        !relevantScriptedGuiNames.has(definition.parentScriptedGui) ||
+        relevantScriptedGuiNames.has(definition.name)
+      )
+        continue;
+      relevantScriptedGuiNames.add(definition.name);
+      addedRelatedScriptedGui = true;
+    }
+  }
+  const scriptedWindowVisibility: Record<string, boolean> = {};
+  const constantElementVisibility: Record<string, boolean> = {};
+  const constantElementEnabled: Record<string, boolean> = {};
+  const dynamicListsByName = new Map<string, ScriptedGuiDynamicListDefinition>();
+  for (const scripted of graph.scriptedGuis.filter(({ name }) =>
+    relevantScriptedGuiNames.has(name),
   )) {
+    for (const dynamicList of scripted.dynamicListDefinitions)
+      dynamicListsByName.set(dynamicList.name, dynamicList);
+    for (const trigger of scripted.triggerDefinitions) {
+      if (trigger.constantResult === undefined) continue;
+      if (trigger.name.endsWith('_visible'))
+        constantElementVisibility[trigger.elementName] = trigger.constantResult;
+      if (trigger.name.endsWith('_click_enabled'))
+        constantElementEnabled[trigger.elementName] = trigger.constantResult;
+      addFidelity(
+        fidelity,
+        'modelled',
+        'scripted_gui_constant_trigger',
+        `${trigger.name} resolves to ${trigger.constantResult ? 'yes' : 'no'}.`,
+      );
+    }
     addFidelity(
       fidelity,
       'modelled',
@@ -1564,7 +1737,9 @@ export async function buildGuiScene(
     const mockedVisibility =
       scenario.visibility[scripted.name] ?? scenario.scriptedGui[`${scripted.name}.visible`];
     if (typeof mockedVisibility === 'boolean') {
-      scriptedWindowVisible &&= mockedVisibility;
+      if (scripted.windowName !== undefined)
+        scriptedWindowVisibility[scripted.windowName] =
+          (scriptedWindowVisibility[scripted.windowName] ?? true) && mockedVisibility;
       addFidelity(
         fidelity,
         'modelled',
@@ -1580,10 +1755,22 @@ export async function buildGuiScene(
       );
     }
   }
-  const layoutScenario = scriptedWindowVisible
-    ? scenario
-    : { ...scenario, visibility: { ...scenario.visibility, [root.name]: false } };
+  const layoutScenario = {
+    ...scenario,
+    visibility: {
+      ...scriptedWindowVisibility,
+      ...constantElementVisibility,
+      ...scenario.visibility,
+    },
+  };
   const output: GuiSceneElement[] = [];
+  const elementsByName = new Map<string, GuiElementDefinition>();
+  for (const element of [...graph.elements].sort(
+    (left, right) =>
+      compareCodeUnits(right.sourcePath, left.sourcePath) ||
+      right.definitionOrder - left.definitionOrder,
+  ))
+    if (!elementsByName.has(element.name)) elementsByName.set(element.name, element);
   const context: LayoutContext = {
     graph,
     scenario: layoutScenario,
@@ -1591,6 +1778,9 @@ export async function buildGuiScene(
     fidelity,
     diagnostics,
     elementsById,
+    elementsByName,
+    dynamicListsByName,
+    constantElementEnabled,
     spritesByName: new Map(graph.sprites.map((sprite) => [sprite.name.toLowerCase(), sprite])),
     localisation,
     output,
@@ -1605,6 +1795,69 @@ export async function buildGuiScene(
     height: scenario.resolution.height,
   };
   await layoutElement(root, viewport, viewport, baseScale, 0, context);
+  const scriptedByName = new Map(graph.scriptedGuis.map((scripted) => [scripted.name, scripted]));
+  const pendingAttached = graph.scriptedGuis
+    .filter(
+      ({ name, parentScriptedGui, windowName: scriptedWindowName }) =>
+        relevantScriptedGuiNames.has(name) &&
+        parentScriptedGui !== undefined &&
+        scriptedWindowName !== undefined &&
+        scriptedWindowName !== windowName,
+    )
+    .sort((left, right) => compareCodeUnits(left.name, right.name));
+  let attachmentProgress = true;
+  while (pendingAttached.length > 0 && attachmentProgress) {
+    attachmentProgress = false;
+    for (let index = pendingAttached.length - 1; index >= 0; index -= 1) {
+      const scripted = pendingAttached[index]!;
+      const parentScripted =
+        scripted.parentScriptedGui === undefined
+          ? undefined
+          : scriptedByName.get(scripted.parentScriptedGui);
+      const parentWindowName = parentScripted?.windowName;
+      const parentDefinition =
+        parentWindowName === undefined ? undefined : elementsByName.get(parentWindowName);
+      const parentScene =
+        parentDefinition === undefined ? undefined : context.instancesById.get(parentDefinition.id);
+      const attachedDefinition =
+        scripted.windowName === undefined ? undefined : elementsByName.get(scripted.windowName);
+      if (parentScene === undefined || attachedDefinition === undefined) continue;
+      if (!context.instancesById.has(attachedDefinition.id)) {
+        await layoutElement(
+          attachedDefinition,
+          parentScene.unclippedRect,
+          parentScene.unclippedRect,
+          parentScene.scale,
+          parentScene.depth + 1,
+          context,
+          '',
+          undefined,
+          undefined,
+          parentScene.id,
+          'upper_left',
+          parentScene.visible,
+        );
+        addFidelity(
+          fidelity,
+          'modelled',
+          'parent_scripted_gui_attachment',
+          `${scripted.windowName} is attached to ${parentWindowName} through ${scripted.parentScriptedGui}.`,
+          attachedDefinition,
+        );
+      }
+      pendingAttached.splice(index, 1);
+      attachmentProgress = true;
+    }
+  }
+  for (const scripted of pendingAttached) {
+    diagnostics.push({
+      code: 'GUI_PARENT_SCRIPTED_WINDOW_UNRESOLVED',
+      severity: 'error',
+      category: 'reference',
+      message: `Could not attach ${scripted.windowName ?? '<missing window>'} through parent scripted GUI ${scripted.parentScriptedGui ?? '<missing parent>'}.`,
+      ...(scripted.location === undefined ? {} : { location: scripted.location }),
+    });
+  }
   output.sort((left, right) => left.zIndex - right.zIndex || compareCodeUnits(left.id, right.id));
   const bounds = unionRects(
     output.filter(({ visible }) => visible).map(({ unclippedRect }) => unclippedRect),

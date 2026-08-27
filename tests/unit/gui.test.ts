@@ -590,6 +590,206 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(first.layoutJson).toBe(second.layoutJson);
   });
 
+  it('applies scripted image, frame, position, and inherited visibility scenario properties', async () => {
+    const files = await fixtureFiles();
+    const graph = sourceGraph(files);
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'test_window',
+      parsePreviewScenario({
+        id: 'scripted-properties',
+        resolution: { width: 1920, height: 1080 },
+        scriptedGui: {
+          animated: 'GFX_test',
+          'animated.frame': 2,
+          'animated.x': 42,
+          'animated.y': 77,
+          'confirmation_modal.visible': false,
+        },
+      }),
+    );
+    expect(scene.elements.find(({ name }) => name === 'animated')).toMatchObject({
+      rect: { x: 42, y: 77 },
+      sprite: { spriteName: 'GFX_test', frame: 1 },
+    });
+    expect(scene.elements.find(({ name }) => name === 'confirmation_modal')?.visible).toBe(false);
+    expect(scene.elements.find(({ name }) => name === 'confirm')?.visible).toBe(false);
+    expect(scene.fidelity.modelled).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'scripted_gui_image', elementId: expect.any(String) }),
+        expect.objectContaining({ field: 'scripted_gui_position', elementId: expect.any(String) }),
+      ]),
+    );
+  });
+
+  it('applies parent-scripted-GUI visibility to the owned child window without hiding the shell', async () => {
+    const files = [
+      scanned(
+        'interface/scripted-children.gui',
+        'guiTypes = { containerWindowType = { name = "shell_window" position = { x = 100 y = 50 } size = { width = 200 height = 100 } } containerWindowType = { name = "child_window" position = { x = 12 y = 20 } size = { width = 100 height = 50 } instantTextBoxType = { name = "child_label" text = "LABEL" } } }',
+      ),
+      scanned(
+        'common/scripted_guis/scripted-children.txt',
+        'scripted_gui = { shell_gui = { context_type = player_context window_name = shell_window visible = { always = yes } } child_gui = { context_type = player_context parent_scripted_gui = shell_gui window_name = child_window visible = { always = yes } } }',
+      ),
+      scanned(
+        'localisation/english/scripted_children_l_english.yml',
+        '\uFEFFl_english:\nLABEL: "Child"\n',
+      ),
+    ];
+    const scene = await buildGuiScene(
+      sourceGraph(files),
+      files,
+      'shell_window',
+      parsePreviewScenario({
+        id: 'scripted-child-hidden',
+        resolution: { width: 1920, height: 1080 },
+        scriptedGui: {
+          'shell_gui.visible': true,
+          'child_gui.visible': false,
+        },
+      }),
+    );
+    expect(scene.elements.find(({ name }) => name === 'shell_window')?.visible).toBe(true);
+    expect(scene.elements.find(({ name }) => name === 'child_window')?.visible).toBe(false);
+    expect(scene.elements.find(({ name }) => name === 'child_label')?.visible).toBe(false);
+    expect(scene.elements.find(({ name }) => name === 'child_window')?.unclippedRect).toMatchObject(
+      {
+        x: 112,
+        y: 70,
+      },
+    );
+    expect(scene.fidelity.modelled).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'parent_scripted_gui_attachment' }),
+      ]),
+    );
+  });
+
+  it('applies literal scripted-GUI visibility and enabled triggers without scenario mocks', async () => {
+    const files = [
+      scanned(
+        'interface/constant-triggers.gui',
+        'guiTypes = { containerWindowType = { name = "constant_window" size = { width = 200 height = 100 } buttonType = { name = "hidden_action" size = { width = 80 height = 20 } } buttonType = { name = "disabled_action" position = { y = 30 } size = { width = 80 height = 20 } } } }',
+      ),
+      scanned(
+        'common/scripted_guis/constant-triggers.txt',
+        'scripted_gui = { constant_gui = { context_type = player_context window_name = constant_window effects = { disabled_action_click = { } } triggers = { hidden_action_visible = { always = no } disabled_action_click_enabled = { always = no } } } }',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    expect(
+      graph.scriptedGuis[0]?.triggerDefinitions.map(({ name, elementName, constantResult }) => ({
+        name,
+        elementName,
+        constantResult,
+      })),
+    ).toEqual([
+      {
+        name: 'disabled_action_click_enabled',
+        elementName: 'disabled_action',
+        constantResult: false,
+      },
+      { name: 'hidden_action_visible', elementName: 'hidden_action', constantResult: false },
+    ]);
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'constant_window',
+      parsePreviewScenario({ id: 'constant-triggers', resolution: { width: 1920, height: 1080 } }),
+    );
+    expect(scene.elements.find(({ name }) => name === 'hidden_action')?.visible).toBe(false);
+    expect(scene.elements.find(({ name }) => name === 'disabled_action')).toMatchObject({
+      visible: true,
+      clickable: false,
+    });
+  });
+
+  it('expands scripted-GUI external dynamic-list entry containers with declared slot spacing', async () => {
+    const files = [
+      scanned(
+        'interface/external-list.gui',
+        `guiTypes = {
+	containerWindowType = {
+		name = "external_list_window"
+		size = { width = 300 height = 200 }
+		gridBoxType = {
+			name = "external_list"
+			position = { x = 20 y = 30 }
+			size = { width = 200 height = 100 }
+			slotsize = { width = 200 height = 24 }
+			max_slots_horizontal = 1
+		}
+	}
+	containerWindowType = {
+		name = "generic_entry"
+		position = { x = 3 y = 2 }
+		size = { width = 180 height = 20 }
+		instantTextBoxType = { name = "generic_label" text = "[?global.entries^entry_index.GetName]" }
+	}
+	containerWindowType = {
+		name = "country_entry"
+		position = { x = 3 y = 2 }
+		size = { width = 180 height = 20 }
+		instantTextBoxType = { name = "country_label" text = "[label]" }
+	}
+}`,
+      ),
+      scanned(
+        'common/scripted_guis/external-list.txt',
+        `scripted_gui = {
+	external_list_gui = {
+		context_type = country
+		window_name = external_list_window
+		dynamic_lists = {
+			external_list = {
+				entry_container = "generic_entry"
+				country_scope_entry_container = "country_entry"
+			}
+		}
+	}
+}`,
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const scripted = graph.scriptedGuis.find(({ name }) => name === 'external_list_gui');
+    expect(scripted?.dynamicListDefinitions).toEqual([
+      expect.objectContaining({
+        name: 'external_list',
+        entryContainer: 'generic_entry',
+        countryScopeEntryContainer: 'country_entry',
+      }),
+    ]);
+    expect(
+      graph.edges.filter(({ kind, resolved }) => kind === 'dynamic_list_template' && resolved),
+    ).toHaveLength(2);
+
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'external_list_window',
+      parsePreviewScenario({
+        id: 'external-list',
+        resolution: { width: 1920, height: 1080 },
+        lists: {
+          external_list: [{ GetName: 'Generic row' }, { label: 'Country row', countryScope: true }],
+        },
+      }),
+    );
+    expect(scene.elements.find(({ name }) => name === 'generic_label')?.text?.text).toBe(
+      'Generic row',
+    );
+    expect(scene.elements.find(({ name }) => name === 'country_label')?.text?.text).toBe(
+      'Country row',
+    );
+    expect(scene.elements.find(({ name }) => name === 'generic_entry')?.unclippedRect.y).toBe(30);
+    expect(scene.elements.find(({ name }) => name === 'country_entry')?.unclippedRect.y).toBe(54);
+    expect(scene.fidelity.modelled).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'scripted_gui_dynamic_list' })]),
+    );
+  });
+
   it('distinguishes numeric and text dynamic placeholders and renders HOI4 localisation colour runs', async () => {
     const files = [
       scanned(
@@ -1157,6 +1357,57 @@ kernings count=0
     const measured = catalog.measureText('limited_font', missingText, 16);
     expect(measured.missingGlyphs).toHaveLength(GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES);
     expect(new Set(measured.missingGlyphs).size).toBe(GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES);
+  });
+
+  it('selects the base bitmap font unless the preview language has an exact override', () => {
+    const files = [
+      scanned(
+        'interface/fonts.gfx',
+        `bitmapfonts = {
+	bitmapfont = { name = "hoi_font" fontfiles = { "gfx/fonts/base_font" } }
+	bitmapfont_override = { name = "hoi_font" fontfiles = { "gfx/fonts/japanese/font" } languages = { "l_japanese" } }
+}`,
+      ),
+      scanned('gfx/fonts/base_font.fnt', 'info size=16\ncommon lineHeight=16\n'),
+      scanned('gfx/fonts/japanese/font.fnt', 'info size=18\ncommon lineHeight=18\n'),
+    ];
+    const graph = sourceGraph(files);
+    const english = new GuiAssetCatalog(graph, files, new RenderBudget(), 'l_english');
+    const japanese = new GuiAssetCatalog(graph, files, new RenderBudget(), 'l_japanese');
+    expect(english.fontDefinition('hoi_font')).toMatchObject({
+      override: false,
+      assetPaths: ['gfx/fonts/base_font'],
+    });
+    expect(japanese.fontDefinition('hoi_font')).toMatchObject({
+      override: true,
+      languages: ['l_japanese'],
+      assetPaths: ['gfx/fonts/japanese/font'],
+    });
+  });
+
+  it('uses the BMFont source-stem atlas when the declared first page is absent', async () => {
+    const png = await sharp({
+      create: { width: 8, height: 8, channels: 4, background: '#ffffff' },
+    })
+      .png()
+      .toBuffer();
+    const files = [
+      scanned(
+        'interface/fonts.gfx',
+        'bitmapfont = { name = "mismatched_font" fontfiles = { "gfx/fonts/mismatched_font" } }',
+      ),
+      scanned(
+        'gfx/fonts/mismatched_font.fnt',
+        'info size=16\ncommon lineHeight=16 base=12\npage id=0 file="mismatched_font_0.dds"\nchar id=65 x=0 y=0 width=4 height=5 xadvance=4 page=0\n',
+      ),
+      scanned('gfx/fonts/mismatched_font.png', png),
+    ];
+    const catalog = new GuiAssetCatalog(sourceGraph(files), files);
+    await expect(catalog.shapeText('mismatched_font', 'A', 16)).resolves.toMatchObject({
+      source: 'bmfont-atlas',
+      missingGlyphs: [],
+      glyphs: [expect.objectContaining({ kind: 'bitmap' })],
+    });
   });
 
   it('deduplicates shared texture frames and keeps a ceiling for distinct raster work', async () => {

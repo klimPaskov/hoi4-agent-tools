@@ -10,7 +10,7 @@ import type { GuiSourceGraph } from '../../src/hoi4_agent_tools/gui/types.js';
 const gunzipAsync = promisify(gunzip);
 
 describe('GUI inspection artifact encoding', () => {
-  it('projects large graphs to workspace and selected connections', () => {
+  it('projects targeted graphs to only the selected window connections', () => {
     const graph: GuiSourceGraph = {
       complete: true,
       skippedSourceCount: 0,
@@ -40,6 +40,13 @@ describe('GUI inspection artifact encoding', () => {
           metadata: {},
         },
         {
+          id: 'animation',
+          kind: 'animation_source_manifest',
+          name: 'animation',
+          path: 'mod:hoi4_agent/animation_sources/linked/manifest.json',
+          metadata: {},
+        },
+        {
           id: 'omitted',
           kind: 'sprite',
           name: 'omitted',
@@ -57,6 +64,14 @@ describe('GUI inspection artifact encoding', () => {
           resolved: true,
           metadata: {},
         },
+        {
+          id: 'c',
+          kind: 'animation_provenance',
+          from: 'unrelated',
+          to: 'animation',
+          resolved: true,
+          metadata: {},
+        },
       ],
       elements: [],
       sprites: [],
@@ -71,16 +86,57 @@ describe('GUI inspection artifact encoding', () => {
     };
     const projected = projectGuiGraphForArtifact(graph, ['selected'], 1);
     expect(projected.projection).toMatchObject({
-      mode: 'workspace-overlay-and-selected',
-      fullCounts: { nodes: 5, edges: 2 },
-      returnedCounts: { nodes: 4, edges: 2 },
+      mode: 'selected-window',
+      fullCounts: { nodes: 6, edges: 3 },
+      returnedCounts: { nodes: 3, edges: 2 },
     });
     expect(projected.graph.nodes.map(({ id }) => id)).toEqual([
-      'mod',
-      'linked',
       'selected',
       'unrelated',
+      'animation',
     ]);
+  });
+
+  it('retains the workspace overlay for a broad large-graph inspection', () => {
+    const graph: GuiSourceGraph = {
+      complete: true,
+      skippedSourceCount: 0,
+      skippedSources: [],
+      skippedPossibleSymbolKinds: [],
+      nodes: [
+        { id: 'mod', kind: 'gui_file', name: 'mod', path: 'mod:interface/a.gui', metadata: {} },
+        {
+          id: 'linked',
+          kind: 'sprite',
+          name: 'linked',
+          path: 'game:interface/a.gfx',
+          metadata: {},
+        },
+        {
+          id: 'omitted',
+          kind: 'sprite',
+          name: 'omitted',
+          path: 'game:interface/b.gfx',
+          metadata: {},
+        },
+      ],
+      edges: [
+        { id: 'a', kind: 'uses_sprite', from: 'mod', to: 'linked', resolved: true, metadata: {} },
+      ],
+      elements: [],
+      sprites: [],
+      fonts: [],
+      scriptedGuis: [],
+      animationSources: [],
+      scriptedLocalisation: [],
+      localisation: [],
+      sourceHashes: {},
+      filesScanned: [],
+      diagnostics: [],
+    };
+    const projected = projectGuiGraphForArtifact(graph, [], 1);
+    expect(projected.projection?.mode).toBe('workspace-overlay-and-selected');
+    expect(projected.graph.nodes.map(({ id }) => id)).toEqual(['mod', 'linked']);
   });
 
   it('keeps small JSON directly readable', async () => {

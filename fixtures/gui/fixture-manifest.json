@@ -16,9 +16,9 @@
     "guiSourceSha256": "0949098bd6b77fdf379ed9ea87e2de8fcaafd02787f947b9426f0aadf0004c36",
     "animationStripPngSha256": "28b451b70f307084d6cb038884408991423eff6cf58a5aacafcd9ba24ccf6fa8",
     "fontAtlasPngSha256": "a4319cfd9578f9293ee04cbde3b734d7a5e1d840e518f75e6edd3900df03f05a",
-    "fullSvgSha256": "7fdd8f479dcbeae598327318bd6354ac12bda42a708c529b9562f7ac3a6e0c64",
+    "fullSvgSha256": "94f13af649a9db807159f32b889cd7f4cffe8373d50e0fd8b75812707dfcc164",
     "fullPngSha256": "7a00e531c5e08f69f3e82ca99856a1b381d355e5cd2c8b7e01a5b23e6e500815",
-    "layoutJsonSha256": "899a632df82e99dad60166ad34f2c546de11b265ebe0f3d04e071bb99b7353d3"
+    "layoutJsonSha256": "357659a763fed76858791ba82ca174fac3a97f70a272ab869f2b61ae4f586179"
   },
   "defectVariantIds": [
     "conflicting-tabs",

@@ -38,6 +38,7 @@ export type GuiEdgeKind =
   | 'button_effect'
   | 'button_trigger'
   | 'property_target'
+  | 'dynamic_list_template'
   | 'decision_category_entry'
   | 'static_fallback'
   | 'animation_provenance'
@@ -99,6 +100,8 @@ export interface GuiFontDefinition {
   sourcePath: string;
   location?: SourceLocation;
   kind: GuiFontKind;
+  override: boolean;
+  languages: string[];
   assetPaths: string[];
   size?: number;
   rawSource?: string;
@@ -149,17 +152,35 @@ export interface ScriptedGuiDefinition {
   effects: string[];
   effectDefinitions: ScriptedGuiEffectDefinition[];
   triggers: string[];
+  triggerDefinitions: ScriptedGuiTriggerDefinition[];
   properties: string[];
   dynamicLists: string[];
+  dynamicListDefinitions: ScriptedGuiDynamicListDefinition[];
   aiWeights: string[];
   aiEnabled: boolean;
   rawSource: string;
+}
+
+export interface ScriptedGuiDynamicListDefinition {
+  name: string;
+  entryContainer?: string;
+  countryScopeEntryContainer?: string;
+  rawSource: string;
+  location?: SourceLocation;
 }
 
 export interface ScriptedGuiEffectDefinition {
   name: string;
   elementName: string;
   costs: Record<string, number>;
+  rawSource: string;
+  location?: SourceLocation;
+}
+
+export interface ScriptedGuiTriggerDefinition {
+  name: string;
+  elementName: string;
+  constantResult?: boolean;
   rawSource: string;
   location?: SourceLocation;
 }

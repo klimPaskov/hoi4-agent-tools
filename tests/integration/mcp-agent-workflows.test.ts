@@ -549,9 +549,16 @@ describe('MCP coding-agent workflows', () => {
         edges: Array<{ kind: string; resolved: boolean }>;
       };
     };
-    expect(packageInspection.graph.nodes.map(({ path: sourcePath }) => sourcePath)).toEqual(
-      expect.arrayContaining(packageFiles.map(({ relativePath: file }) => `mod:${file}`)),
+    const projectedPaths = packageInspection.graph.nodes.map(({ path: sourcePath }) => sourcePath);
+    expect(projectedPaths).toEqual(
+      expect.arrayContaining([
+        'mod:interface/package_window.gui',
+        'mod:common/scripted_guis/package_window.txt',
+        'mod:localisation/english/package_window_l_english.yml',
+      ]),
     );
+    expect(projectedPaths).not.toContain('mod:interface/package_companion.gui');
+    expect(projectedPaths).not.toContain('mod:interface/package_window.gfx');
     expect(packageInspection.graph.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'window', resolved: true }),

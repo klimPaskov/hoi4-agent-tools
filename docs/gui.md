@@ -33,7 +33,11 @@ Inspection checks missing assets and localisation, invalid sizes, overlap, clipp
 
 The renderer resolves sprites and fonts through the complete mod, dependency, and installed-game load order. Mod windows therefore render ordinary vanilla sprites, tiled vanilla panels, progress bars, masked shields, button frames, and localisation icons such as `£command_power` without copying game assets into the mod. Case differences in GFX and font identifiers do not prevent a valid asset from resolving.
 
+Bitmap text uses the language-appropriate HOI4 font definition and its real glyph atlas. The default language uses the base font rather than an unrelated language override, and the renderer recognizes installed-game atlases whose filename omits a page suffix declared by the matching `.fnt` file.
+
 Layout follows Clausewitz orientation and element-origin anchors, including `CENTER_LEFT`, `CENTER_RIGHT`, `CENTER_UP`, `CENTER_DOWN`, `origo`, `centerposition`, inherited container coordinate origins, local scale, and both `%` and `%%` relative dimensions. Text boxes use native font metrics together with `maxWidth`, `maxHeight`, alignment, wrapping, and `fixedsize` clipping. Cornered tile sprites use fixed nine-slice borders and optional center tiling; progress bars composite their filled and background textures; masked shields composite their background and mask textures.
+
+Scripted-GUI composition follows `parent_scripted_gui` chains even when the linked child window is a top-level sibling in the `.gui` file. Literal `always = yes` and `always = no` visibility and click-enabled blocks are applied automatically. Scenario properties can select an element image or frame, move it with `.x` and `.y`, and control `.visible` or `.enabled` values. Dynamic lists instantiate their declared `entry_container` or `country_scope_entry_container`; each scenario row can select the country template with `countryScope`, choose an explicit `entryContainer`, and provide row-scoped text, image, frame, position, visibility, and enabled values.
 
 Preview scenarios can include exact layout expectations:
 

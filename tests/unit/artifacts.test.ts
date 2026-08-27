@@ -353,6 +353,71 @@ describe('content-addressed artifacts', () => {
     });
   });
 
+  it('refreshes reused artifact recency so active evidence survives entry pruning', async () => {
+    const { workspace } = await fixture();
+    const store = new ArtifactStore(100_000, 2, 10_000);
+    const provenance = {
+      kind: 'recency-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'recency.v1',
+      sourceHashes: {},
+    };
+    const first = await store.put(workspace, 'first.json', 'application/json', '{}\n', provenance);
+    const second = await store.put(
+      workspace,
+      'second.json',
+      'application/json',
+      '[]\n',
+      provenance,
+    );
+    const manifestPath = (artifact: typeof first) =>
+      path.join(
+        path.dirname(artifact.path),
+        `${artifact.name}.${artifact.provenanceHash}.manifest.json`,
+      );
+    const old = new Date(Date.now() - 120_000);
+    const newer = new Date(Date.now() - 60_000);
+    await utimes(manifestPath(first), old, old);
+    await utimes(manifestPath(second), newer, newer);
+
+    await store.put(workspace, 'first.json', 'application/json', '{}\n', provenance);
+    const third = await store.put(
+      workspace,
+      'third.json',
+      'application/json',
+      '{"third":true}\n',
+      provenance,
+    );
+
+    await expect(store.read(workspace, first.uri)).resolves.toMatchObject({ name: 'first.json' });
+    await expect(store.read(workspace, second.uri)).rejects.toMatchObject({
+      code: 'ARTIFACT_NOT_FOUND',
+    });
+    await expect(store.read(workspace, third.uri)).resolves.toMatchObject({ name: 'third.json' });
+  });
+
+  it('reclaims stale temporary files and empty artifact shard directories during admission', async () => {
+    const { store, workspace } = await fixture();
+    const emptyRoot = path.join(workspace.artifactRoot, 'stale-shard', 'empty-leaf');
+    await mkdir(emptyRoot, { recursive: true });
+    const temporary = path.join(emptyRoot, '.artifact-tmp-stale');
+    await writeFile(temporary, 'stale temporary bytes');
+    const stale = new Date(Date.now() - 20 * 60_000);
+    await utimes(temporary, stale, stale);
+
+    await store.put(workspace, 'cleanup.json', 'application/json', '{}\n', {
+      kind: 'debris-cleanup-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'cleanup.v1',
+      sourceHashes: {},
+    });
+
+    await expect(access(temporary)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(path.join(workspace.artifactRoot, 'stale-shard'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('rejects a generated artifact shard that escapes through a symlink or junction', async () => {
     const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-artifact-containment-'));
     const mod = path.join(base, 'mod');

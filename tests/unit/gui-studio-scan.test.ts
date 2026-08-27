@@ -32,15 +32,15 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
     );
     await writeFile(
       path.join(root, 'custom_ui', 'window.gui'),
-      'guiTypes = { containerWindowType = { name = "custom_window" size = { width = 128 height = 64 } buttonType = { name = "custom_button" size = { width = 64 height = 24 } spriteType = "GFX_custom_used" buttonText = "CUSTOM_BUTTON" } } }\n',
+      'guiTypes = { containerWindowType = { name = "custom_window" size = { width = 128 height = 96 } buttonType = { name = "custom_button" size = { width = 64 height = 24 } spriteType = "GFX_custom_used" buttonText = "CUSTOM_BUTTON" } gridBoxType = { name = "custom_list" position = { x = 0 y = 48 } size = { width = 64 height = 32 } slotsize = { width = 64 height = 16 } } } containerWindowType = { name = "custom_child_window" position = { x = 64 y = 24 } size = { width = 32 height = 32 } iconType = { name = "custom_child_icon" spriteType = "GFX_custom_child" } } containerWindowType = { name = "custom_entry" size = { width = 64 height = 16 } iconType = { name = "custom_entry_icon" spriteType = "GFX_custom_entry" } } }\n',
     );
     await writeFile(
       path.join(root, 'custom_art', 'definitions.gfx'),
-      'spriteTypes = { spriteType = { name = "GFX_custom_used" texturefile = "custom_art/used.png" } spriteType = { name = "GFX_custom_unused" texturefile = "custom_art/unused.png" } }\n',
+      'spriteTypes = { spriteType = { name = "GFX_custom_used" texturefile = "custom_art/used.png" } spriteType = { name = "GFX_custom_child" texturefile = "custom_art/child.tga" } spriteType = { name = "GFX_custom_entry" texturefile = "custom_art/entry.png" } spriteType = { name = "GFX_custom_unused" texturefile = "custom_art/unused.png" } }\n',
     );
     await writeFile(
       path.join(root, 'custom_logic', 'controller.txt'),
-      'scripted_gui = { custom_controller = { context_type = country window_name = custom_window effects = { custom_button_click = { } } triggers = { custom_button_click_enabled = { always = yes } } } }\n',
+      'scripted_gui = { custom_controller = { context_type = player_context window_name = custom_window effects = { custom_button_click = { } } triggers = { custom_button_click_enabled = { always = yes } } dynamic_lists = { custom_list = { entry_container = "custom_entry" } } } custom_child_controller = { context_type = player_context parent_scripted_gui = custom_controller window_name = custom_child_window visible = { always = yes } } }\n',
     );
     await writeFile(
       path.join(root, 'common', 'scripted_guis', 'ignored.txt'),
@@ -66,6 +66,8 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
       .toBuffer();
     await Promise.all([
       writeFile(path.join(root, 'custom_art', 'used.png'), used),
+      writeFile(path.join(root, 'custom_art', 'child.png'), used),
+      writeFile(path.join(root, 'custom_art', 'entry.png'), used),
       writeFile(path.join(root, 'custom_art', 'unused.png'), unused),
     ]);
 
@@ -106,7 +108,12 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
     const linted = await studio.lint({
       workspaceId: 'custom',
       windowName: 'custom_window',
-      scenario: { id: 'custom', resolution: { width: 320, height: 200 } },
+      scenario: {
+        id: 'custom',
+        resolution: { width: 320, height: 200 },
+        scriptedGui: { 'custom_child_controller.visible': true },
+        lists: { custom_list: [{ id: 1 }] },
+      },
     });
     expect(linted.graph.filesScanned.some((file) => file.endsWith('custom_art/used.png'))).toBe(
       true,
@@ -114,8 +121,20 @@ describe('Scripted GUI Studio configured roots and lazy assets', () => {
     expect(linted.graph.filesScanned.some((file) => file.endsWith('custom_art/unused.png'))).toBe(
       false,
     );
+    expect(linted.graph.filesScanned.some((file) => file.endsWith('custom_art/child.png'))).toBe(
+      true,
+    );
+    expect(linted.graph.filesScanned.some((file) => file.endsWith('custom_art/entry.png'))).toBe(
+      true,
+    );
     expect(
       linted.scene.elements.find(({ name }) => name === 'custom_button')?.sprite?.supported,
+    ).toBe(true);
+    expect(
+      linted.scene.elements.find(({ name }) => name === 'custom_child_icon')?.sprite?.supported,
+    ).toBe(true);
+    expect(
+      linted.scene.elements.find(({ name }) => name === 'custom_entry_icon')?.sprite?.supported,
     ).toBe(true);
 
     const french = await studio.lint({

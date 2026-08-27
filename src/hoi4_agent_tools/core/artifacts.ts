@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { link, lstat, mkdir, open, readFile, readdir, stat, unlink } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { canonicalJson, compareCodeUnits, sha256Bytes } from './canonical.js';
@@ -293,6 +293,7 @@ const artifactReadBufferBytes = 1_048_576;
 const artifactPageMaxEntries = 100;
 const artifactManifestMaxBytes = 1_048_576;
 const artifactLogicalBatchMaxBytes = 536_870_912;
+const artifactDebrisMinimumAgeMs = 15 * 60 * 1_000;
 const artifactHashYieldBytes = 16_777_216;
 const artifactPreflightYieldEntries = 256;
 const interruptedManifestMinimumAgeMs = 1_000;
@@ -507,6 +508,26 @@ async function artifactUsage(
 ): Promise<{ bytes: number; entries: number }> {
   let bytes = 0;
   let entries = 0;
+  const canonicalRoot = await containedGeneratedPath(root);
+  const resolveListedPath = async (
+    directory: string,
+    name: string,
+  ): Promise<string | undefined> => {
+    const lexicalPath = path.join(directory, name);
+    try {
+      return await containedGeneratedPath(canonicalRoot, path.relative(canonicalRoot, lexicalPath));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      if (error instanceof ServiceError && error.code === 'PATH_GENERATED_ROOT_ESCAPE') {
+        try {
+          await lstat(lexicalPath);
+        } catch (metadataError) {
+          if ((metadataError as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+        }
+      }
+      throw error;
+    }
+  };
   const walk = async (directory: string): Promise<void> => {
     signal?.throwIfAborted();
     let children;
@@ -524,11 +545,19 @@ async function artifactUsage(
           'Artifact storage contains a symbolic link or junction',
         );
       }
-      if (child.isFile() && child.name.startsWith(artifactTemporaryPrefix)) continue;
-      const candidate = await containedGeneratedPath(
-        root,
-        path.relative(root, path.join(directory, child.name)),
-      );
+      if (child.isFile() && child.name.startsWith(artifactTemporaryPrefix)) {
+        const temporary = await resolveListedPath(directory, child.name);
+        if (temporary === undefined) continue;
+        try {
+          const metadata = await lstat(temporary);
+          if (Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs) await unlink(temporary);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+        continue;
+      }
+      const candidate = await resolveListedPath(directory, child.name);
+      if (candidate === undefined) continue;
       if (child.isDirectory()) await walk(candidate);
       else if (child.isFile()) {
         let size: number;
@@ -545,8 +574,18 @@ async function artifactUsage(
         }
       }
     }
+    if (directory !== canonicalRoot) {
+      try {
+        await rmdir(directory);
+      } catch (error) {
+        if (
+          !['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')
+        )
+          throw error;
+      }
+    }
   };
-  await walk(await containedGeneratedPath(root));
+  await walk(canonicalRoot);
   return { bytes, entries };
 }
 
@@ -588,6 +627,26 @@ async function readArtifactManifest(
     return validated.data as ArtifactManifest;
   } catch {
     throw new ServiceError('ARTIFACT_MANIFEST_INVALID', 'Artifact provenance manifest is invalid');
+  }
+}
+
+async function refreshArtifactManifest(filePath: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(filePath, 'r+');
+    const metadata = await handle.stat();
+    if (!metadata.isFile())
+      throw new ServiceError(
+        'ARTIFACT_MANIFEST_INVALID',
+        'Artifact provenance manifest is invalid',
+      );
+    const now = new Date();
+    await handle.utimes(now, now);
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    throw new ServiceError('ARTIFACT_NOT_FOUND', 'Artifact provenance manifest is unavailable');
+  } finally {
+    await handle?.close().catch(() => undefined);
   }
 }
 
@@ -934,6 +993,54 @@ export class ArtifactStore {
       }
     };
     await walk(await containedGeneratedPath(workspace.artifactRoot));
+    const referencedTargets = new Set([
+      ...retained.map(({ targetPath }) => targetPath),
+      ...protectedTargets,
+    ]);
+    const reclaimDebris = async (directory: string): Promise<void> => {
+      signal?.throwIfAborted();
+      let children;
+      try {
+        children = await readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw error;
+      }
+      for (const child of children) {
+        signal?.throwIfAborted();
+        if (child.isSymbolicLink())
+          throw new ServiceError(
+            'ARTIFACT_STORAGE_UNSAFE',
+            'Artifact storage contains a symbolic link or junction',
+          );
+        const candidate = await containedGeneratedPath(
+          workspace.artifactRoot,
+          path.relative(workspace.artifactRoot, path.join(directory, child.name)),
+        );
+        if (child.isDirectory()) {
+          await reclaimDebris(candidate);
+          continue;
+        }
+        if (!child.isFile() || child.name.endsWith('.manifest.json')) continue;
+        const temporary = child.name.startsWith(artifactTemporaryPrefix);
+        if (!temporary && referencedTargets.has(candidate)) continue;
+        let metadata;
+        try {
+          metadata = await lstat(candidate);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw error;
+        }
+        if (Date.now() - metadata.mtimeMs < artifactDebrisMinimumAgeMs) continue;
+        try {
+          await unlink(candidate);
+          if (!temporary) usage.bytes = Math.max(0, usage.bytes - metadata.size);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
+    };
+    await reclaimDebris(await containedGeneratedPath(workspace.artifactRoot));
     retained.sort(
       (left, right) =>
         left.modifiedAt - right.modifiedAt ||
@@ -1687,6 +1794,10 @@ export class ArtifactStore {
             }
           }
           signal?.throwIfAborted();
+          for (const artifact of uniqueManifests.values()) {
+            await refreshArtifactManifest(artifact.manifestPath);
+          }
+          signal?.throwIfAborted();
           // The caller's commit callback is the ownership boundary. Once entered,
           // it completes or fails under its own critical-phase rules; a late abort
           // cannot make the store remove evidence already committed elsewhere.
@@ -1766,6 +1877,7 @@ export class ArtifactStore {
       signal,
     );
     this.#verifiedContent.set(verificationKey, identity);
+    await refreshArtifactManifest(manifestPath);
     return { bytes, mimeType: manifest.mimeType, name, totalSize };
   }
 

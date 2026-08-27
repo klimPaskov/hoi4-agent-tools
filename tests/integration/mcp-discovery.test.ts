@@ -314,7 +314,12 @@ describe('MCP discovery', () => {
       undefined,
       { onprogress: (update) => progress.push(update.progress) },
     );
-    expect(progress).toEqual([0, 3]);
+    expect(progress.at(0)).toBe(0);
+    expect(progress.at(-1)).toBe(3);
+    expect(progress.length).toBeGreaterThanOrEqual(3);
+    expect(progress.every((value, index) => index === 0 || value >= progress[index - 1]!)).toBe(
+      true,
+    );
     const artifacts = (
       inspection.structuredContent as { artifacts: Array<Record<string, unknown>> }
     ).artifacts;

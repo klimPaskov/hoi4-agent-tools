@@ -1429,7 +1429,9 @@ export class SymbolIndex {
       const active = candidates[0]!;
       this.#active.set(key, active);
       const additiveCategory =
-        active.kind === 'decision_category' || active.kind === 'technology_category';
+        active.kind === 'decision_category' ||
+        active.kind === 'technology_category' ||
+        active.kind === 'texture';
       for (const candidate of group) {
         candidate.overridden = additiveCategory ? candidate.sourceShadowed : candidate !== active;
       }

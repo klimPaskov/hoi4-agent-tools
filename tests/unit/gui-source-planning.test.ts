@@ -237,7 +237,7 @@ describe('ScriptedGuiStudio targeted source planning safety', () => {
 
     expect(planned.validation.passed).toBe(true);
     expect(planned.diagnostics.length).toBeLessThanOrEqual(66);
-    expect(planned.diagnostics.map(({ code }) => code)).toContain(
+    expect(planned.diagnostics.map(({ code }) => code)).not.toContain(
       'GUI_REWRITE_DIAGNOSTICS_TRUNCATED',
     );
     expect(planned.artifacts.map(({ name }) => name)).toContain(

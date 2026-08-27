@@ -36,6 +36,8 @@ import type {
   GuiSourceNode,
   GuiSpriteDefinition,
   ScriptedGuiDefinition,
+  ScriptedGuiDynamicListDefinition,
+  ScriptedGuiTriggerDefinition,
 } from './types.js';
 
 const explicitGuiElementTypes = new Set([
@@ -97,6 +99,8 @@ const modelledElementAttributes = new Set([
   'allwaystransparent',
   'clickThrough',
   'spacing',
+  'slotsize',
+  'max_slots_horizontal',
   'priority',
   'minValue',
   'maxValue',
@@ -510,6 +514,11 @@ function indexSpritesAndFonts(
                   .map((entry) => entry.value),
               ),
             );
+          const languages = childBlocks(child, 'languages').flatMap((languageBlock) =>
+            languageBlock.entries
+              .filter((entry) => entry.type === 'scalar')
+              .map((entry) => entry.value),
+          );
           const id = deterministicId('gui_font', { path: file.displayPath, name });
           const font: GuiFontDefinition = {
             id,
@@ -517,6 +526,8 @@ function indexSpritesAndFonts(
             sourcePath: file.displayPath,
             location: nodeLocation(document, assignment, name),
             kind: 'bitmapfont',
+            override: assignment.key.value === 'bitmapfont_override',
+            languages,
             assetPaths,
             rawSource: raw(document, assignment),
           };
@@ -527,7 +538,12 @@ function indexSpritesAndFonts(
             name,
             path: file.displayPath,
             ...(font.location === undefined ? {} : { location: font.location }),
-            metadata: { kind: font.kind, assetPaths },
+            metadata: {
+              kind: font.kind,
+              override: font.override,
+              languages,
+              assetPaths,
+            },
           });
           addEdge(edges, 'contains', fileNodeId, id, true, {}, font.location);
         }
@@ -569,6 +585,17 @@ function directEffectCosts(block: BlockNode): Record<string, number> {
   return costs;
 }
 
+function constantTriggerResult(value: SourceValue): boolean | undefined {
+  if (value.type !== 'block') return undefined;
+  const entries = assignments(value);
+  if (entries.length !== 1 || entries[0]?.key.value.toLowerCase() !== 'always') return undefined;
+  const result = entries[0].value;
+  if (result.type !== 'scalar') return undefined;
+  if (result.value.toLowerCase() === 'yes') return true;
+  if (result.value.toLowerCase() === 'no') return false;
+  return undefined;
+}
+
 function indexScriptedGuis(
   document: SourceDocument,
   file: ScannedFile,
@@ -592,9 +619,42 @@ function indexScriptedGuis(
         location: nodeLocation(document, effect, effect.key.value),
       }));
       const effects = effectDefinitions.map(({ name: effect }) => effect);
-      const triggers = namedAssignments(block, 'triggers').map(({ key }) => key.value);
+      const triggerDefinitions: ScriptedGuiTriggerDefinition[] = namedAssignments(
+        block,
+        'triggers',
+      ).map((trigger) => {
+        const constantResult = constantTriggerResult(trigger.value);
+        return {
+          name: trigger.key.value,
+          elementName: actionElementName(trigger.key.value),
+          ...(constantResult === undefined ? {} : { constantResult }),
+          rawSource: raw(document, trigger),
+          location: nodeLocation(document, trigger, trigger.key.value),
+        };
+      });
+      const triggers = triggerDefinitions.map(({ name: trigger }) => trigger);
       const properties = namedAssignments(block, 'properties').map(({ key }) => key.value);
-      const dynamicLists = namedAssignments(block, 'dynamic_lists').map(({ key }) => key.value);
+      const dynamicListDefinitions: ScriptedGuiDynamicListDefinition[] = namedAssignments(
+        block,
+        'dynamic_lists',
+      ).map((dynamicList) => {
+        const entryContainer =
+          dynamicList.value.type === 'block'
+            ? firstScalarInsensitive(dynamicList.value, 'entry_container')
+            : undefined;
+        const countryScopeEntryContainer =
+          dynamicList.value.type === 'block'
+            ? firstScalarInsensitive(dynamicList.value, 'country_scope_entry_container')
+            : undefined;
+        return {
+          name: dynamicList.key.value,
+          ...(entryContainer === undefined ? {} : { entryContainer }),
+          ...(countryScopeEntryContainer === undefined ? {} : { countryScopeEntryContainer }),
+          rawSource: raw(document, dynamicList),
+          location: nodeLocation(document, dynamicList, dynamicList.key.value),
+        };
+      });
+      const dynamicLists = dynamicListDefinitions.map(({ name: dynamicList }) => dynamicList);
       const aiWeights = namedAssignments(block, 'ai_weights').map(({ key }) => key.value);
       const contextType = firstScalarInsensitive(block, 'context_type');
       const windowName = firstScalarInsensitive(block, 'window_name');
@@ -620,8 +680,12 @@ function indexScriptedGuis(
         effects: effects.sort((a, b) => compareCodeUnits(a, b)),
         effectDefinitions: effectDefinitions.sort((a, b) => compareCodeUnits(a.name, b.name)),
         triggers: triggers.sort((a, b) => compareCodeUnits(a, b)),
+        triggerDefinitions: triggerDefinitions.sort((a, b) => compareCodeUnits(a.name, b.name)),
         properties: properties.sort((a, b) => compareCodeUnits(a, b)),
         dynamicLists: dynamicLists.sort((a, b) => compareCodeUnits(a, b)),
+        dynamicListDefinitions: dynamicListDefinitions.sort((left, right) =>
+          compareCodeUnits(left.name, right.name),
+        ),
         aiWeights: aiWeights.sort((a, b) => compareCodeUnits(a, b)),
         aiEnabled:
           childBlocks(block, 'ai_enabled').length > 0 || childBlocks(block, 'ai_check').length > 0,
@@ -637,8 +701,28 @@ function indexScriptedGuis(
         metadata: {
           effects: definition.effects,
           triggers: definition.triggers,
+          constantTriggers: definition.triggerDefinitions.flatMap(
+            ({ name: trigger, elementName, constantResult }) =>
+              constantResult === undefined ? [] : [{ trigger, elementName, constantResult }],
+          ),
           properties: definition.properties,
           dynamicLists: definition.dynamicLists,
+          dynamicListEntryContainers: definition.dynamicListDefinitions.flatMap(
+            ({ name: dynamicList, entryContainer, countryScopeEntryContainer }) => [
+              ...(entryContainer === undefined
+                ? []
+                : [{ dynamicList, scope: 'generic', container: entryContainer }]),
+              ...(countryScopeEntryContainer === undefined
+                ? []
+                : [
+                    {
+                      dynamicList,
+                      scope: 'country',
+                      container: countryScopeEntryContainer,
+                    },
+                  ]),
+            ],
+          ),
           aiWeights: definition.aiWeights,
           aiEnabled: definition.aiEnabled,
         },
@@ -898,7 +982,17 @@ function linkGraph(
   const spriteByName = new Map(
     sprites.map((sprite) => [sprite.name.toLocaleLowerCase('en-US'), sprite]),
   );
-  const fontByName = new Map(fonts.map((font) => [font.name.toLocaleLowerCase('en-US'), font]));
+  const fontByName = new Map<string, GuiFontDefinition>();
+  for (const font of fonts) {
+    const key = font.name.toLocaleLowerCase('en-US');
+    const existing = fontByName.get(key);
+    if (
+      existing === undefined ||
+      (existing.override && !font.override) ||
+      (existing.languages.length > 0 && font.languages.length === 0)
+    )
+      fontByName.set(key, font);
+  }
   const elementByName = new Map<string, GuiElementDefinition>();
   for (const element of [...elements].sort((a, b) => a.definitionOrder - b.definitionOrder)) {
     if (!elementByName.has(element.name)) elementByName.set(element.name, element);
@@ -1011,7 +1105,12 @@ function linkGraph(
     }
     for (const key of localisationAttributeNames) {
       const value = element.attributes[key];
-      if (typeof value !== 'string' || value.trim().length === 0) continue;
+      if (
+        typeof value !== 'string' ||
+        value.trim().length === 0 ||
+        !isStaticGuiLocalisationReference(value)
+      )
+        continue;
       const entry = localisationByKey.get(value);
       addEdge(
         edges,
@@ -1113,6 +1212,24 @@ function linkGraph(
         gui.location,
       );
     }
+    for (const dynamicList of gui.dynamicListDefinitions) {
+      for (const [scope, containerName] of [
+        ['generic', dynamicList.entryContainer],
+        ['country', dynamicList.countryScopeEntryContainer],
+      ] as const) {
+        if (containerName === undefined) continue;
+        const element = elementByName.get(containerName);
+        addEdge(
+          edges,
+          'dynamic_list_template',
+          gui.id,
+          element?.id ?? `gui_element:${containerName}`,
+          element !== undefined,
+          { dynamicList: dynamicList.name, scope, containerName },
+          dynamicList.location,
+        );
+      }
+    }
   }
 
   for (const pending of pendingDecisionEdges) {
@@ -1137,6 +1254,11 @@ const localisationAttributeNames = [
   'hint_tag',
 ] as const;
 
+function isStaticGuiLocalisationReference(value: string): boolean {
+  const trimmed = value.trim();
+  return !(trimmed.startsWith('[') && trimmed.endsWith(']'));
+}
+
 function referencedGuiLocalisationKeys(
   elements: readonly GuiElementDefinition[],
   scriptedLocalisation: readonly GuiScriptedLocalisationDefinition[],
@@ -1145,7 +1267,12 @@ function referencedGuiLocalisationKeys(
   for (const element of elements) {
     for (const attribute of localisationAttributeNames) {
       const value = element.attributes[attribute];
-      if (typeof value === 'string' && value.trim().length > 0) keys.add(value);
+      if (
+        typeof value === 'string' &&
+        value.trim().length > 0 &&
+        isStaticGuiLocalisationReference(value)
+      )
+        keys.add(value);
     }
   }
   return keys;
@@ -1165,6 +1292,7 @@ function skippedInventoryCouldResolve(edge: GuiSourceEdge, sharedIndex: SymbolIn
     case 'button_effect':
     case 'button_trigger':
     case 'property_target':
+    case 'dynamic_list_template':
       return sharedIndex.hasSkippedSourceForKind('gui_element');
     case 'parent_scripted_gui':
     case 'decision_category_entry':
@@ -1336,6 +1464,8 @@ export function buildGuiSourceGraph(
             name: path.posix.basename(normalized, '.fnt'),
             sourcePath: file.displayPath,
             kind: 'bmfont',
+            override: false,
+            languages: [],
             assetPaths: [file.relativePath],
           },
           'font',
