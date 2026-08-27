@@ -37,13 +37,19 @@ Bitmap text uses the language-appropriate HOI4 font definition and its real glyp
 
 Layout follows Clausewitz orientation and element-origin anchors, including `CENTER_LEFT`, `CENTER_RIGHT`, `CENTER_UP`, `CENTER_DOWN`, `origo`, `centerposition`, inherited container coordinate origins, local scale, and both `%` and `%%` relative dimensions. Text boxes use native font metrics together with `maxWidth`, `maxHeight`, alignment, wrapping, and `fixedsize` clipping. Cornered tile sprites use fixed nine-slice borders and optional center tiling; progress bars composite their filled and background textures; masked shields composite their background and mask textures.
 
-Scripted-GUI composition follows `parent_scripted_gui` chains even when the linked child window is a top-level sibling in the `.gui` file. Literal `always = yes` and `always = no` visibility and click-enabled blocks are applied automatically. Scenario properties can select an element image or frame, move it with `.x` and `.y`, and control `.visible` or `.enabled` values. Dynamic lists instantiate their declared `entry_container` or `country_scope_entry_container`; each scenario row can select the country template with `countryScope`, choose an explicit `entryContainer`, and provide row-scoped text, image, frame, position, visibility, and enabled values.
+Scripted-GUI composition follows `parent_scripted_gui` chains even when the linked child window is a top-level sibling in the `.gui` file. Literal `always = yes` and `always = no` visibility and click-enabled blocks are applied automatically. A scenario's `values` object supplies concrete runtime values in one place: variable names resolve numeric text, scripted-localisation names resolve dynamic labels, a progress-bar element name sets its fill value, and element keys ending in `.image`, `.frame`, `.x`, `.y`, `.visible`, or `.enabled` update that visual property. Scripted-GUI property expressions such as `image = "[GetMeterSprite]"` or `x = meter_fill_width` consume matching scenario values automatically. Dynamic lists instantiate their declared `entry_container` or `country_scope_entry_container`; each scenario row can select the country template with `countryScope`, choose an explicit `entryContainer`, and provide row-scoped text, image, frame, position, visibility, and enabled values.
 
 Preview scenarios can include exact layout expectations:
 
 ```json
 {
   "id": "populated-unlocked",
+  "values": {
+    "threat": 73,
+    "GetThreatLabel": "High",
+    "threat_meter": 73,
+    "confirm_button.enabled": true
+  },
   "flags": { "panel_open": true },
   "lists": { "target_list": [{ "id": 1, "label": "First target" }] },
   "visibility": { "target_list": true, "confirm_button": true },
@@ -68,6 +74,6 @@ Large inspections, renders, and rewrites send periodic MCP progress heartbeats w
 
 The renderer does not run the game engine. Each render includes a fidelity report that separates fields it models from fields it approximates, ignores, cannot resolve, or does not support. Treat that report as part of the review.
 
-Unresolved numeric runtime values such as `[?variable|format]` render as `[X]`. Unresolved text-returning scripted or scoped localisation such as `[GetStatusText]`, `[FROM.GetName]`, and `[?leader_scope.GetName]` renders as `[dynamic_loc]`. Provide scenario values when the exact value matters. Supported HOI4 `§` localisation colour controls are applied to preview text and `§!` restores the default colour.
+Unresolved numeric runtime values such as `[?variable|format]` render as `[X]`. Unresolved text-returning scripted or scoped localisation such as `[GetStatusText]`, `[FROM.GetName]`, and `[?leader_scope.GetName]` renders as `[dynamic_loc]`. Put `variable` or `GetStatusText` in the scenario's `values` object when the exact value matters; the same scenario can set the related meter or state-dependent controls. Supported HOI4 `§` localisation colour controls are applied to preview text and `§!` restores the default colour.
 
 A rewrite stops if malformed or unsupported GUI script makes the requested change ambiguous. Frame-sheet animation, nine-slice tiling, progress composition, masking, and the primary and secondary textures referenced by vanilla GFX definitions render offline. Engine shader programs, hardcoded controls, and dynamic values that are not supplied by a scenario remain fidelity-report entries; an unexecuted shader never hides its resolved base texture.

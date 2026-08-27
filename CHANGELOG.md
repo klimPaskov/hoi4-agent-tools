@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 2.8.3 - 2026-08-27
+
+- Centered native button labels when HOI4 GUI source uses `text =` instead of `buttonText =`, matching the in-game horizontal and vertical alignment inside button frames.
+- Added one scenario `values` map for concrete runtime variables, dynamic text, meter fills, sprites, frames, positions, visibility, and enabled states so agents can render complete value-driven GUI versions without assembling several low-level override maps.
+
 ## 2.8.2 - 2026-08-27
 
 - Composed top-level scripted-GUI child windows through `parent_scripted_gui`, instantiated external dynamic-list entry containers, and applied row-scoped image, frame, position, visibility, and enabled values.

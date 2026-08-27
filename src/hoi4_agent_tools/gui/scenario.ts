@@ -147,6 +147,7 @@ const GuiPreviewScenarioBodySchema = z
     flags: z.record(z.string(), z.boolean()).default({}),
     lists: z.record(z.string(), z.array(objectSchema).max(10_000)).default({}),
     localisation: z.record(z.string(), z.string()).default({}),
+    values: objectSchema.default({}),
     scriptedGui: objectSchema.default({}),
     visibility: z.record(z.string(), z.boolean()).default({}),
     elementStates: z.record(z.string(), previewStateSchema).default({}),

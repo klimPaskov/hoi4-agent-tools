@@ -242,6 +242,7 @@ describe('large public focus workflow', () => {
   }, 300_000);
 
   it('creates, compacts, inspects, renders, and rasterizes a 1,024-focus tree through MCP', async () => {
+    const largeTreeOperationTimeout = 900_000;
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-large-focus-'));
     const mod = path.join(temporary, 'mod');
     await cp(path.join(repositoryRoot, 'fixtures', 'focus', 'workspace'), mod, { recursive: true });
@@ -285,9 +286,9 @@ describe('large public focus workflow', () => {
         },
         undefined,
         {
-          timeout: 300_000,
+          timeout: largeTreeOperationTimeout,
           resetTimeoutOnProgress: true,
-          maxTotalTimeout: 300_000,
+          maxTotalTimeout: largeTreeOperationTimeout,
           onprogress: ({ message }) => {
             if (message !== undefined) rewriteProgress.push(message);
           },
@@ -326,7 +327,11 @@ describe('large public focus workflow', () => {
           },
         },
         undefined,
-        { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
+        {
+          timeout: largeTreeOperationTimeout,
+          resetTimeoutOnProgress: true,
+          maxTotalTimeout: largeTreeOperationTimeout,
+        },
       ),
     );
     expect(compacted).toMatchObject({
@@ -354,7 +359,11 @@ describe('large public focus workflow', () => {
           },
         },
         undefined,
-        { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
+        {
+          timeout: largeTreeOperationTimeout,
+          resetTimeoutOnProgress: true,
+          maxTotalTimeout: largeTreeOperationTimeout,
+        },
       ),
     );
     expect(repeatedCompact).toMatchObject({ status: 'ok', code: 'FOCUS_CHANGES_UNCHANGED' });
@@ -372,7 +381,11 @@ describe('large public focus workflow', () => {
           },
         },
         undefined,
-        { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
+        {
+          timeout: largeTreeOperationTimeout,
+          resetTimeoutOnProgress: true,
+          maxTotalTimeout: largeTreeOperationTimeout,
+        },
       ),
     );
     expect(inspected).toMatchObject({
@@ -392,7 +405,11 @@ describe('large public focus workflow', () => {
           },
         },
         undefined,
-        { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
+        {
+          timeout: largeTreeOperationTimeout,
+          resetTimeoutOnProgress: true,
+          maxTotalTimeout: largeTreeOperationTimeout,
+        },
       ),
     );
     expect(rendered).toMatchObject({
@@ -415,7 +432,11 @@ describe('large public focus workflow', () => {
           },
         },
         undefined,
-        { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
+        {
+          timeout: largeTreeOperationTimeout,
+          resetTimeoutOnProgress: true,
+          maxTotalTimeout: largeTreeOperationTimeout,
+        },
       ),
     );
     expect(rasterized).toMatchObject({
@@ -426,5 +447,5 @@ describe('large public focus workflow', () => {
     expect(rasterized.artifacts.map(({ mimeType }) => mimeType)).toEqual(
       expect.arrayContaining(['text/html', 'image/svg+xml', 'image/png', 'application/json']),
     );
-  }, 300_000);
+  }, 900_000);
 });

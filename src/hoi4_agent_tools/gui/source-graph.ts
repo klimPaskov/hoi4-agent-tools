@@ -633,7 +633,20 @@ function indexScriptedGuis(
         };
       });
       const triggers = triggerDefinitions.map(({ name: trigger }) => trigger);
-      const properties = namedAssignments(block, 'properties').map(({ key }) => key.value);
+      const propertyAssignments = namedAssignments(block, 'properties');
+      const properties = propertyAssignments.map(({ key }) => key.value);
+      const propertyDefinitions = propertyAssignments.map((property) => ({
+        elementName: property.key.value,
+        attributes:
+          property.value.type === 'block'
+            ? (sourceValueToProperty(property.value, constantsFor(document)) as Record<
+                string,
+                GuiPropertyValue
+              >)
+            : {},
+        rawSource: raw(document, property),
+        location: nodeLocation(document, property, property.key.value),
+      }));
       const dynamicListDefinitions: ScriptedGuiDynamicListDefinition[] = namedAssignments(
         block,
         'dynamic_lists',
@@ -682,6 +695,9 @@ function indexScriptedGuis(
         triggers: triggers.sort((a, b) => compareCodeUnits(a, b)),
         triggerDefinitions: triggerDefinitions.sort((a, b) => compareCodeUnits(a.name, b.name)),
         properties: properties.sort((a, b) => compareCodeUnits(a, b)),
+        propertyDefinitions: propertyDefinitions.sort((a, b) =>
+          compareCodeUnits(a.elementName, b.elementName),
+        ),
         dynamicLists: dynamicLists.sort((a, b) => compareCodeUnits(a, b)),
         dynamicListDefinitions: dynamicListDefinitions.sort((left, right) =>
           compareCodeUnits(left.name, right.name),

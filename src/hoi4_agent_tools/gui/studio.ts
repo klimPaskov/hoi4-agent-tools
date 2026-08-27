@@ -526,8 +526,8 @@ function referencedAssetPatternsForWindow(
 function scenarioSpriteNames(scenarios: readonly GuiPreviewScenario[]): string[] {
   return [
     ...new Set(
-      scenarios.flatMap(({ scriptedGui }) =>
-        Object.entries(scriptedGui)
+      scenarios.flatMap(({ values, scriptedGui }) =>
+        Object.entries({ ...scriptedGui, ...values })
           .filter(
             ([key, value]) =>
               typeof value === 'string' &&

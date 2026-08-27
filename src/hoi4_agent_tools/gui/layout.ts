@@ -322,6 +322,8 @@ function resolveTokenText(
       const replacement =
         rowValues?.[key] ??
         rowValues?.[shortKey] ??
+        scenario.values[key] ??
+        scenario.values[shortKey] ??
         scenario.variables[key] ??
         scenario.variables[shortKey] ??
         scenario.scriptedGui[key] ??
@@ -344,7 +346,10 @@ function resolveTokenText(
       if (key === 'X' || key === 'dynamic_loc') return match[0];
       const countryKey = key.replace(/^(?:ROOT|This)\./u, '');
       const replacement =
+        rowValues?.[key] ??
         rowValues?.[countryKey] ??
+        scenario.values[key] ??
+        scenario.values[countryKey] ??
         scenario.country?.[countryKey] ??
         scenario.stateValues?.[countryKey] ??
         scenario.scriptedGui[key];
@@ -357,6 +362,18 @@ function resolveTokenText(
     'GUI scope substitution',
   );
   return { text, unresolved: [...new Set(unresolved)].sort(), missingLocalisation };
+}
+
+function scenarioExpressionValue(
+  expression: GuiPropertyValue,
+  values: Readonly<Record<string, string | number | boolean>>,
+): string | number | boolean | undefined {
+  if (typeof expression !== 'string') return undefined;
+  const variableMatch = /^\[\?([^\]|]+)(?:\|[^\]]+)?\]$/u.exec(expression);
+  const localisationMatch = /^\[([^\]]+)\]$/u.exec(expression);
+  const token = variableMatch?.[1] ?? localisationMatch?.[1] ?? expression;
+  const shortToken = token.slice(token.lastIndexOf('.') + 1);
+  return values[token] ?? values[shortToken];
 }
 
 interface ResolvedInlineIcon {
@@ -653,7 +670,9 @@ function frameFor(
   const selected = scenario.selectedFrames[element.name] ?? scenario.selectedFrames[sprite.name];
   if (selected !== undefined) return Math.min(frameCount - 1, selected);
   const scriptedFrame =
-    rowValues?.[`${element.name}.frame`] ?? scenario.scriptedGui[`${element.name}.frame`];
+    rowValues?.[`${element.name}.frame`] ??
+    scenario.values[`${element.name}.frame`] ??
+    scenario.scriptedGui[`${element.name}.frame`];
   if (typeof scriptedFrame === 'number' && Number.isFinite(scriptedFrame))
     return Math.min(
       frameCount - 1,
@@ -869,9 +888,13 @@ async function layoutElement(
   const position = objectProperty(property(definition.attributes, 'position'));
   const size = objectProperty(property(definition.attributes, 'size'));
   const scriptedX =
-    rowValues?.[`${definition.name}.x`] ?? scenario.scriptedGui[`${definition.name}.x`];
+    rowValues?.[`${definition.name}.x`] ??
+    scenario.values[`${definition.name}.x`] ??
+    scenario.scriptedGui[`${definition.name}.x`];
   const scriptedY =
-    rowValues?.[`${definition.name}.y`] ?? scenario.scriptedGui[`${definition.name}.y`];
+    rowValues?.[`${definition.name}.y`] ??
+    scenario.values[`${definition.name}.y`] ??
+    scenario.scriptedGui[`${definition.name}.y`];
   const localX =
     (typeof scriptedX === 'number' && Number.isFinite(scriptedX)
       ? scriptedX * parentScale
@@ -908,6 +931,8 @@ async function layoutElement(
   const scriptedImage =
     rowValues?.[`${definition.name}.image`] ??
     rowValues?.[definition.name] ??
+    scenario.values[`${definition.name}.image`] ??
+    scenario.values[definition.name] ??
     scenario.scriptedGui[`${definition.name}.image`] ??
     scenario.scriptedGui[definition.name];
   const spriteName =
@@ -1084,6 +1109,9 @@ async function layoutElement(
 
   const rawButtonText = scalarString(property(definition.attributes, 'buttonText'));
   const rawText = scalarString(property(definition.attributes, 'text')) ?? rawButtonText;
+  const embeddedButtonText =
+    rawText !== undefined &&
+    (rawButtonText !== undefined || definition.elementType.toLowerCase().includes('button'));
   let text: GuiTextLayout | undefined;
   if (rawText !== undefined) {
     const resolved = resolveTokenText(rawText, scenario, context.localisation, rowValues);
@@ -1214,7 +1242,7 @@ async function layoutElement(
       measuredWidth,
       measuredHeight,
       metricSource: wrapped.metricSource,
-      ...alignment(definition.attributes, rawButtonText !== undefined),
+      ...alignment(definition.attributes, embeddedButtonText),
       ...(fontName === undefined ? {} : { fontName }),
       glyphLines,
       overflowX: width > 0 && measuredWidth > width + 0.01,
@@ -1320,7 +1348,9 @@ async function layoutElement(
     clipRect !== undefined &&
     (availableClip === undefined || !equalRect(unclippedRect, availableClip));
   const scriptedVisible =
-    rowValues?.[`${definition.name}.visible`] ?? scenario.scriptedGui[`${definition.name}.visible`];
+    rowValues?.[`${definition.name}.visible`] ??
+    scenario.values[`${definition.name}.visible`] ??
+    scenario.scriptedGui[`${definition.name}.visible`];
   const explicitlyVisible =
     scenario.visibility[definition.name] ??
     scenario.visibility[definition.id] ??
@@ -1334,6 +1364,7 @@ async function layoutElement(
     ) ?? false;
   const scriptedEnabled =
     rowValues?.[`${definition.name}.enabled`] ??
+    scenario.values[`${definition.name}.enabled`] ??
     scenario.scriptedGui[`${definition.name}.enabled`] ??
     context.constantElementEnabled[definition.name];
   const clickable =
@@ -1344,7 +1375,16 @@ async function layoutElement(
   if (/progressbar/iu.test(definition.elementType)) {
     const minimum = scalarNumber(property(definition.attributes, 'minValue'), 1) ?? 0;
     const maximum = scalarNumber(property(definition.attributes, 'maxValue'), 1) ?? 100;
-    const scriptedValue = rowValues?.[definition.name] ?? scenario.scriptedGui[definition.name];
+    const startValueToken = scalarString(property(definition.attributes, 'startValue'));
+    const shortStartValueToken = startValueToken?.slice(startValueToken.lastIndexOf('.') + 1);
+    const scriptedValue =
+      rowValues?.[definition.name] ??
+      scenario.values[definition.name] ??
+      (startValueToken === undefined ? undefined : scenario.values[startValueToken]) ??
+      (shortStartValueToken === undefined ? undefined : scenario.values[shortStartValueToken]) ??
+      (startValueToken === undefined ? undefined : scenario.variables[startValueToken]) ??
+      (shortStartValueToken === undefined ? undefined : scenario.variables[shortStartValueToken]) ??
+      scenario.scriptedGui[definition.name];
     let value =
       typeof scriptedValue === 'number'
         ? scriptedValue
@@ -1708,12 +1748,29 @@ export async function buildGuiScene(
   const scriptedWindowVisibility: Record<string, boolean> = {};
   const constantElementVisibility: Record<string, boolean> = {};
   const constantElementEnabled: Record<string, boolean> = {};
+  const resolvedScriptedProperties: Record<string, string | number | boolean> = {};
   const dynamicListsByName = new Map<string, ScriptedGuiDynamicListDefinition>();
   for (const scripted of graph.scriptedGuis.filter(({ name }) =>
     relevantScriptedGuiNames.has(name),
   )) {
     for (const dynamicList of scripted.dynamicListDefinitions)
       dynamicListsByName.set(dynamicList.name, dynamicList);
+    for (const propertyDefinition of scripted.propertyDefinitions) {
+      for (const [attribute, expression] of Object.entries(propertyDefinition.attributes)) {
+        const suffix = attribute.toLowerCase();
+        if (!['image', 'frame', 'x', 'y', 'visible', 'enabled'].includes(suffix)) continue;
+        const resolved = scenarioExpressionValue(expression, scenario.values);
+        if (resolved === undefined) continue;
+        const key = `${propertyDefinition.elementName}.${suffix}`;
+        if (scenario.values[key] === undefined) resolvedScriptedProperties[key] = resolved;
+        addFidelity(
+          fidelity,
+          'modelled',
+          'scripted_gui_scenario_property',
+          `${key} resolved from a scenario runtime value.`,
+        );
+      }
+    }
     for (const trigger of scripted.triggerDefinitions) {
       if (trigger.constantResult === undefined) continue;
       if (trigger.name.endsWith('_visible'))
@@ -1735,7 +1792,9 @@ export async function buildGuiScene(
     );
     if (scripted.visibleExpression === undefined) continue;
     const mockedVisibility =
-      scenario.visibility[scripted.name] ?? scenario.scriptedGui[`${scripted.name}.visible`];
+      scenario.visibility[scripted.name] ??
+      scenario.values[`${scripted.name}.visible`] ??
+      scenario.scriptedGui[`${scripted.name}.visible`];
     if (typeof mockedVisibility === 'boolean') {
       if (scripted.windowName !== undefined)
         scriptedWindowVisibility[scripted.windowName] =
@@ -1757,6 +1816,10 @@ export async function buildGuiScene(
   }
   const layoutScenario = {
     ...scenario,
+    values: {
+      ...resolvedScriptedProperties,
+      ...scenario.values,
+    },
     visibility: {
       ...scriptedWindowVisibility,
       ...constantElementVisibility,

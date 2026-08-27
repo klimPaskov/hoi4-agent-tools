@@ -154,11 +154,19 @@ export interface ScriptedGuiDefinition {
   triggers: string[];
   triggerDefinitions: ScriptedGuiTriggerDefinition[];
   properties: string[];
+  propertyDefinitions: ScriptedGuiPropertyDefinition[];
   dynamicLists: string[];
   dynamicListDefinitions: ScriptedGuiDynamicListDefinition[];
   aiWeights: string[];
   aiEnabled: boolean;
   rawSource: string;
+}
+
+export interface ScriptedGuiPropertyDefinition {
+  elementName: string;
+  attributes: Record<string, GuiPropertyValue>;
+  rawSource: string;
+  location?: SourceLocation;
 }
 
 export interface ScriptedGuiDynamicListDefinition {
@@ -266,6 +274,7 @@ export interface GuiPreviewScenario {
   flags: Record<string, boolean>;
   lists: Record<string, Record<string, string | number | boolean>[]>;
   localisation: Record<string, string>;
+  values: Record<string, string | number | boolean>;
   scriptedGui: Record<string, string | number | boolean>;
   visibility: Record<string, boolean>;
   elementStates: Record<string, GuiPreviewState>;

@@ -1089,6 +1089,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
 		size = { width = 240 height = 140 }
 		background = { spriteType = "GFX_contract_panel" }
 		buttonType = { name = "native_button" position = { x = 20 y = 20 } size = { width = 100 height = 30 } spriteType = "GFX_contract_button" buttonText = "NATIVE_BUTTON" }
+		buttonType = { name = "text_button" position = { x = 130 y = 20 } size = { width = 100 height = 30 } spriteType = "GFX_contract_button" text = "TEXT_BUTTON" }
 		buttonType = {
 			name = "overlay_button"
 			position = { x = 20 y = 60 }
@@ -1109,7 +1110,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       ),
       scanned(
         'localisation/english/contracts_l_english.yml',
-        '\uFEFFl_english:\nNATIVE_BUTTON: "Native"\nOVERLAY_LABEL: "Overlay"\n',
+        '\uFEFFl_english:\nNATIVE_BUTTON: "Native"\nTEXT_BUTTON: "Text"\nOVERLAY_LABEL: "Overlay"\n',
       ),
     ];
     const graph = sourceGraph(files);
@@ -1120,6 +1121,10 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       parsePreviewScenario({ id: 'contract-base', resolution: { width: 640, height: 360 } }),
     );
     expect(base.elements.find(({ name }) => name === 'native_button')?.text).toMatchObject({
+      horizontalAlignment: 'center',
+      verticalAlignment: 'center',
+    });
+    expect(base.elements.find(({ name }) => name === 'text_button')?.text).toMatchObject({
       horizontalAlignment: 'center',
       verticalAlignment: 'center',
     });
@@ -1576,6 +1581,47 @@ kernings count=0
     const rendered = await renderGuiScene(scene, ['full']);
     expect(rendered.images[0]?.svg).toContain('<pattern');
     expect(rendered.images[0]?.svg).toContain('<mask');
+  });
+
+  it('applies one scenario values map to runtime text, progress fills, and element state', async () => {
+    const files = [
+      scanned(
+        'interface/value-scenario.gui',
+        `guiTypes = { containerWindowType = { name = "value_window" size = { width = 240 height = 80 }
+\tinstantTextBoxType = { name = "status_text" text = "VALUE_STATUS" size = { width = 220 height = 24 } }
+\tprogressbarType = { name = "threat_meter" position = { y = 30 } size = { width = 200 height = 16 } minValue = 0 maxValue = 100 startValue = threat }
+\tbuttonType = { name = "conditional_action" position = { y = 52 } size = { width = 100 height = 20 } text = "ACTION" }
+} }`,
+      ),
+      scanned(
+        'localisation/english/value_scenario_l_english.yml',
+        '\uFEFFl_english:\nVALUE_STATUS: "Threat: [?threat|0] — [GetThreatLabel]"\nACTION: "Respond"\n',
+      ),
+      scanned(
+        'common/scripted_guis/value-scenario.txt',
+        'scripted_gui = { value_gui = { context_type = player_context window_name = value_window properties = { status_text = { x = threat_offset } } } }',
+      ),
+    ];
+    const scene = await buildGuiScene(
+      sourceGraph(files),
+      files,
+      'value_window',
+      parsePreviewScenario({
+        id: 'high-threat',
+        values: {
+          threat: 73,
+          threat_offset: 18,
+          GetThreatLabel: 'High',
+          'conditional_action.visible': false,
+        },
+      }),
+    );
+    expect(scene.elements.find(({ name }) => name === 'status_text')?.text?.text).toBe(
+      'Threat: 73 — High',
+    );
+    expect(scene.elements.find(({ name }) => name === 'threat_meter')?.progressRatio).toBe(0.73);
+    expect(scene.elements.find(({ name }) => name === 'status_text')?.rect.x).toBe(18);
+    expect(scene.elements.find(({ name }) => name === 'conditional_action')?.visible).toBe(false);
   });
 
   it('wraps text incrementally and blocks per-text, aggregate-text, and layout work excess', async () => {
