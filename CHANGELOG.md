@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 2.8.7 - 2026-08-28
+
+- Isolate stale, foreign, oversized, malformed, and address-mismatched artifact manifests so one bad generated record cannot block unrelated probability, event, GUI, or other MCP evidence routes.
+- Repair corrupted deterministic manifests from recomputed expected bytes, validate cached probability resources before reuse, and keep direct foreign-artifact access unavailable without exposing cross-workspace content.
+
 ## 2.8.6 - 2026-08-28
 
 - Generate source-aware scripted-GUI scenarios from complete parent/child surfaces, real scripted-localisation candidates, simple threshold conditions, coherent tab states, scoped values, meter ranges, and dynamic-list rows while keeping explicit scenario values authoritative.

@@ -261,15 +261,19 @@ function assertManifestIntegrity(
   workspace: ResolvedWorkspace,
 ): void {
   assertManifestAddressIntegrity(manifest, expected);
-  if (
-    manifest.workspaceIdentity !== workspace.workspaceIdentity ||
-    manifest.ownerIdentity !== workspace.ownerIdentity
-  ) {
-    throw new ServiceError(
-      'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
-      'Artifact provenance manifest does not match its immutable address',
-    );
+  if (!manifestBelongsToWorkspace(manifest, workspace)) {
+    throw new ServiceError('ARTIFACT_NOT_FOUND', 'Artifact provenance manifest is unavailable');
   }
+}
+
+function manifestBelongsToWorkspace(
+  manifest: ArtifactManifest,
+  workspace: ResolvedWorkspace,
+): boolean {
+  return (
+    manifest.workspaceIdentity === workspace.workspaceIdentity &&
+    manifest.ownerIdentity === workspace.ownerIdentity
+  );
 }
 
 function assertManifestAddressIntegrity(
@@ -286,6 +290,39 @@ function assertManifestAddressIntegrity(
       'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
       'Artifact provenance manifest does not match its immutable address',
     );
+  }
+}
+
+function recoverableManifestError(error: unknown): error is ServiceError {
+  return (
+    error instanceof ServiceError &&
+    [
+      'ARTIFACT_NOT_FOUND',
+      'ARTIFACT_MANIFEST_INVALID',
+      'ARTIFACT_MANIFEST_LIMIT',
+      'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+    ].includes(error.code)
+  );
+}
+
+async function enumerableArtifactManifest(
+  workspace: ResolvedWorkspace,
+  directory: string,
+  entryName: string,
+  signal?: AbortSignal,
+): Promise<ArtifactManifest | undefined> {
+  try {
+    const manifest = await readArtifactManifest(path.join(directory, entryName), signal);
+    if (entryName !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) return undefined;
+    assertManifestAddressIntegrity(manifest, {
+      sha256: path.basename(directory),
+      provenanceHash: manifest.provenanceHash,
+      name: manifest.name,
+    });
+    return manifestBelongsToWorkspace(manifest, workspace) ? manifest : undefined;
+  } catch (error) {
+    if (recoverableManifestError(error)) return undefined;
+    throw error;
   }
 }
 
@@ -724,6 +761,20 @@ async function existingManifestMatches(
   try {
     const manifest = await readArtifactManifest(filePath, signal);
     if (`${canonicalJson(manifest)}\n` !== expectedBytes) {
+      const expected = artifactManifestSchema.parse(JSON.parse(expectedBytes) as unknown);
+      try {
+        assertManifestAddressIntegrity(manifest, {
+          sha256: expected.sha256,
+          provenanceHash: expected.provenanceHash,
+          name: expected.name,
+        });
+      } catch (error) {
+        if (!recoverableManifestError(error)) throw error;
+        await unlink(filePath).catch((unlinkError: unknown) => {
+          if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
+        });
+        return false;
+      }
       throw new ServiceError(
         'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
         'Immutable artifact provenance manifest contains different bytes',
@@ -732,9 +783,18 @@ async function existingManifestMatches(
     return true;
   } catch (error) {
     if (error instanceof ServiceError && error.code === 'ARTIFACT_NOT_FOUND') return false;
-    if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID') throw error;
+    if (
+      !(error instanceof ServiceError) ||
+      !['ARTIFACT_MANIFEST_INVALID', 'ARTIFACT_MANIFEST_LIMIT'].includes(error.code)
+    )
+      throw error;
     const state = await interruptedManifestState(filePath, expectedBytes, signal);
-    if (!state.interrupted) throw error;
+    if (!state.interrupted) {
+      await unlink(filePath).catch((unlinkError: unknown) => {
+        if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
+      });
+      return false;
+    }
     try {
       await unlink(filePath);
     } catch (unlinkError) {
@@ -949,40 +1009,39 @@ export class ArtifactStore {
           manifest = await readArtifactManifest(candidate, signal);
         } catch (error) {
           if (error instanceof ServiceError && error.code === 'ARTIFACT_NOT_FOUND') continue;
-          if (!(error instanceof ServiceError) || error.code !== 'ARTIFACT_MANIFEST_INVALID')
-            throw error;
-          let interrupted: Awaited<ReturnType<typeof interruptedManifestState>>;
-          try {
-            interrupted = await interruptedManifestState(candidate, undefined, signal);
-          } catch (interruptedError) {
-            if (
-              interruptedError instanceof ServiceError &&
-              interruptedError.code === 'ARTIFACT_NOT_FOUND'
-            )
-              continue;
-            throw interruptedError;
-          }
-          if (!interrupted.interrupted) throw error;
+          if (!recoverableManifestError(error)) throw error;
           try {
             await unlink(candidate);
           } catch (unlinkError) {
             if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
           }
           usage.entries = Math.max(0, usage.entries - 1);
-          usage.bytes = Math.max(0, usage.bytes - interrupted.size);
+          usage.bytes = Math.max(0, usage.bytes - metadata.size);
           continue;
         }
-        if (child.name !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
-          throw new ServiceError(
-            'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
-            'Artifact provenance manifest filename does not match its contents',
-          );
+        try {
+          if (child.name !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
+            throw new ServiceError(
+              'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+              'Artifact provenance manifest filename does not match its contents',
+            );
+          }
+          assertManifestAddressIntegrity(manifest, {
+            sha256: path.basename(directory),
+            provenanceHash: manifest.provenanceHash,
+            name: manifest.name,
+          });
+        } catch (error) {
+          if (!recoverableManifestError(error)) throw error;
+          try {
+            await unlink(candidate);
+          } catch (unlinkError) {
+            if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkError;
+          }
+          usage.entries = Math.max(0, usage.entries - 1);
+          usage.bytes = Math.max(0, usage.bytes - metadata.size);
+          continue;
         }
-        assertManifestAddressIntegrity(manifest, {
-          sha256: path.basename(directory),
-          provenanceHash: manifest.provenanceHash,
-          name: manifest.name,
-        });
         const targetPath = await containedGeneratedPath(
           workspace.artifactRoot,
           path.relative(workspace.artifactRoot, path.join(directory, manifest.name)),
@@ -1139,28 +1198,17 @@ export class ArtifactStore {
             ),
           );
         } else if (entry.isFile() && entry.name.endsWith('.manifest.json')) {
-          const manifest = await readArtifactManifest(
-            await containedGeneratedPath(
-              workspace.artifactRoot,
-              path.relative(workspace.artifactRoot, candidate),
-            ),
+          await containedGeneratedPath(
+            workspace.artifactRoot,
+            path.relative(workspace.artifactRoot, candidate),
+          );
+          const manifest = await enumerableArtifactManifest(
+            workspace,
+            directory,
+            entry.name,
             signal,
           );
-          if (entry.name !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
-            throw new ServiceError(
-              'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
-              'Artifact provenance manifest filename does not match its contents',
-            );
-          }
-          assertManifestIntegrity(
-            manifest,
-            {
-              sha256: path.basename(directory),
-              provenanceHash: manifest.provenanceHash,
-              name: manifest.name,
-            },
-            workspace,
-          );
+          if (manifest === undefined) continue;
           results.push({
             uri: this.uri(workspace.id, manifest.sha256, manifest.provenanceHash, manifest.name),
             name: manifest.name,
@@ -1207,28 +1255,12 @@ export class ArtifactStore {
     let hasMore = false;
     const visitManifest = async (directory: string, entryName: string): Promise<void> => {
       signal?.throwIfAborted();
-      const manifest = await readArtifactManifest(
-        await containedGeneratedPath(
-          workspace.artifactRoot,
-          path.relative(workspace.artifactRoot, path.join(directory, entryName)),
-        ),
-        signal,
+      await containedGeneratedPath(
+        workspace.artifactRoot,
+        path.relative(workspace.artifactRoot, path.join(directory, entryName)),
       );
-      if (entryName !== `${manifest.name}.${manifest.provenanceHash}.manifest.json`) {
-        throw new ServiceError(
-          'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
-          'Artifact provenance manifest filename does not match its contents',
-        );
-      }
-      assertManifestIntegrity(
-        manifest,
-        {
-          sha256: path.basename(directory),
-          provenanceHash: manifest.provenanceHash,
-          name: manifest.name,
-        },
-        workspace,
-      );
+      const manifest = await enumerableArtifactManifest(workspace, directory, entryName, signal);
+      if (manifest === undefined) return;
       const uri = this.uri(workspace.id, manifest.sha256, manifest.provenanceHash, manifest.name);
       revision.update(`${Buffer.byteLength(uri, 'utf8')}:${uri}`);
       total += 1;
@@ -1318,6 +1350,23 @@ export class ArtifactStore {
         parsed.name,
       ),
     };
+  }
+
+  async available(
+    workspace: ResolvedWorkspace,
+    artifacts: readonly Pick<ArtifactLink, 'uri'>[],
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    for (const artifact of artifacts) {
+      signal?.throwIfAborted();
+      try {
+        await this.describe(workspace, artifact.uri, signal);
+      } catch (error) {
+        if (recoverableManifestError(error)) return false;
+        throw error;
+      }
+    }
+    return true;
   }
 
   async put(

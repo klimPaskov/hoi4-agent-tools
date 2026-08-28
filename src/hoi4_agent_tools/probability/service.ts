@@ -1067,13 +1067,14 @@ export class ProbabilityAnalyzer {
     principal?: string,
   ): Promise<ProbabilityAnalysisResult> {
     const cached = this.state.byCacheKey.get(result.metadata.cacheKey);
+    const workspace = this.engine.resolver.get(result.metadata.workspaceId, principal);
     if (
       cached?.operation === result.operation &&
       cached.status === result.status &&
-      visualOutputs(outputs).length === 0
+      visualOutputs(outputs).length === 0 &&
+      (await this.engine.artifacts.available(workspace, cached.resources, signal))
     )
       return cached;
-    const workspace = this.engine.resolver.get(result.metadata.workspaceId, principal);
     const provenance = {
       kind: 'probability-analysis',
       toolVersion: PACKAGE_VERSION,

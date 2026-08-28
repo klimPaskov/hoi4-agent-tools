@@ -511,14 +511,17 @@ describe('content-addressed artifacts', () => {
     const reusedPhysicalStore = (await WorkspaceResolver.create(configured(secondMod))).get(
       'shared',
     );
-    await expect(store.list(reusedPhysicalStore)).rejects.toMatchObject({
-      code: 'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+    await expect(store.list(reusedPhysicalStore)).resolves.toEqual([]);
+    await expect(store.listPage(reusedPhysicalStore, { limit: 10 })).resolves.toMatchObject({
+      artifacts: [],
+      total: 0,
+      hasMore: false,
     });
     await expect(store.describe(reusedPhysicalStore, artifact.uri)).rejects.toMatchObject({
-      code: 'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+      code: 'ARTIFACT_NOT_FOUND',
     });
     await expect(store.read(reusedPhysicalStore, artifact.uri)).rejects.toMatchObject({
-      code: 'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+      code: 'ARTIFACT_NOT_FOUND',
     });
   });
 
@@ -563,6 +566,53 @@ describe('content-addressed artifacts', () => {
     await expect(store.list(secondWorkspace)).resolves.toEqual([
       expect.objectContaining({ name: 'current.bin' }),
     ]);
+  });
+
+  it('isolates a corrupted manifest instead of blocking unrelated artifact admission', async () => {
+    const { workspace } = await fixture();
+    const store = new ArtifactStore(1_000_000, 1, 100_000);
+    const provenance = {
+      kind: 'manifest-integrity-recovery-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'manifest-integrity-recovery.v1',
+      sourceHashes: {},
+    };
+    const corrupted = await store.put(
+      workspace,
+      'corrupted.json',
+      'application/json',
+      '{"corrupted":true}\n',
+      provenance,
+    );
+    const manifestPath = path.join(
+      path.dirname(corrupted.path),
+      `${corrupted.name}.${corrupted.provenanceHash}.manifest.json`,
+    );
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.mimeType = 'text/plain';
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+
+    await expect(store.list(workspace)).resolves.toEqual([]);
+    await expect(store.listPage(workspace, { limit: 10 })).resolves.toMatchObject({
+      artifacts: [],
+      total: 0,
+      hasMore: false,
+    });
+    await expect(store.read(workspace, corrupted.uri)).rejects.toMatchObject({
+      code: 'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+    });
+
+    const current = await store.put(
+      workspace,
+      'current.json',
+      'application/json',
+      '{"current":true}\n',
+      provenance,
+    );
+    await expect(access(manifestPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(store.read(workspace, current.uri)).resolves.toMatchObject({
+      bytes: Buffer.from('{"current":true}\n'),
+    });
   });
 
   it('honors cancellation while enumerating and verifying artifacts', async () => {
@@ -800,7 +850,7 @@ describe('content-addressed artifacts', () => {
     });
   });
 
-  it('does not replace a non-transient malformed immutable manifest', async () => {
+  it('repairs a malformed immutable manifest from recomputed expected bytes', async () => {
     const { store, workspace } = await fixture();
     const provenance = {
       kind: 'manifest-refusal-test',
@@ -823,9 +873,17 @@ describe('content-addressed artifacts', () => {
     const stale = new Date(Date.now() - 60_000);
     await utimes(manifestPath, stale, stale);
 
-    await expect(
-      store.put(workspace, 'refuse.json', 'application/json', '{}\n', provenance),
-    ).rejects.toMatchObject({ code: 'ARTIFACT_MANIFEST_INVALID' });
+    const repaired = await store.put(
+      workspace,
+      'refuse.json',
+      'application/json',
+      '{}\n',
+      provenance,
+    );
+    expect(repaired.uri).toBe(artifact.uri);
+    await expect(store.read(workspace, repaired.uri)).resolves.toMatchObject({
+      bytes: Buffer.from('{}\n'),
+    });
   });
 
   it('publishes one complete immutable manifest across independent processes', async () => {
