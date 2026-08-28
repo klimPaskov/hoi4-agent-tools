@@ -1310,6 +1310,95 @@ kernings count=0
     expect(rendered.images[0]?.svg).not.toContain(` ${guessedY}) scale(`);
   });
 
+  it('keeps distinct HOI4 font atlases, face colours, and native glyphs in localisation colour runs', async () => {
+    const redAtlas = await sharp({
+      create: { width: 16, height: 12, channels: 4, background: '#00000000' },
+    })
+      .composite([
+        {
+          input: Buffer.from(
+            '<svg width="16" height="12"><path d="M1 11 4 1 7 11ZM9 1h6v10H9Z" fill="white"/></svg>',
+          ),
+        },
+      ])
+      .png()
+      .toBuffer();
+    const greenAtlas = await sharp({
+      create: { width: 16, height: 12, channels: 4, background: '#00000000' },
+    })
+      .composite([
+        {
+          input: Buffer.from(
+            '<svg width="16" height="12"><circle cx="4" cy="6" r="4" fill="white"/><path d="M9 2h6v8H9Z" fill="white"/></svg>',
+          ),
+        },
+      ])
+      .png()
+      .toBuffer();
+    const font = (page: string): string => `info size=16
+common lineHeight=16 base=12 scaleW=16 scaleH=12 pages=1
+page id=0 file="${page}"
+chars count=2
+char id=65 x=0 y=0 width=8 height=12 xadvance=8 page=0
+char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
+`;
+    const files = [
+      scanned(
+        'interface/font-faces.gui',
+        'guiTypes = { containerWindowType = { name = "font_faces" size = { width = 160 height = 60 } instantTextBoxType = { name = "red_face" position = { x = 4 y = 4 } size = { width = 80 height = 20 } text = "FONT_FACE_TEXT" font = "red_font" } instantTextBoxType = { name = "green_face" position = { x = 4 y = 28 } size = { width = 80 height = 20 } text = "FONT_FACE_TEXT" font = "green_font" } } }',
+      ),
+      scanned(
+        'interface/font-faces.gfx',
+        'bitmapfonts = { bitmapfont = { name = "red_font" path = "fonts/red.fnt" color = 0xffff0000 border_color = 0x00000000 } bitmapfont = { name = "green_font" path = "fonts/green.fnt" color = 0xff00ff00 border_color = 0xff000000 } }',
+      ),
+      scanned(
+        'localisation/english/font_faces_l_english.yml',
+        '\uFEFFl_english:\nFONT_FACE_TEXT: "A §YB§!"\n',
+      ),
+      scanned('fonts/red.fnt', font('red.png')),
+      scanned('fonts/red.png', redAtlas),
+      scanned('fonts/green.fnt', font('green.png')),
+      scanned('fonts/green.png', greenAtlas),
+    ];
+    const graph = sourceGraph(files);
+    expect(graph.fonts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'red_font',
+          colour: '#ff0000ff',
+          borderColour: '#00000000',
+        }),
+        expect.objectContaining({
+          name: 'green_font',
+          colour: '#00ff00ff',
+          borderColour: '#000000ff',
+        }),
+      ]),
+    );
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'font_faces',
+      parsePreviewScenario({ id: 'font-faces', resolution: { width: 320, height: 200 } }),
+    );
+    const redText = scene.elements.find(({ name }) => name === 'red_face')?.text;
+    const greenText = scene.elements.find(({ name }) => name === 'green_face')?.text;
+    expect(redText).toMatchObject({ colour: '#ff0000ff', borderColour: '#00000000' });
+    expect(greenText).toMatchObject({ colour: '#00ff00ff', borderColour: '#000000ff' });
+    expect(redText?.glyphLines[0]?.source).toBe('bmfont-atlas');
+    expect(greenText?.glyphLines[0]?.source).toBe('bmfont-atlas');
+    expect(redText?.glyphLines[0]?.sourceHash).not.toBe(greenText?.glyphLines[0]?.sourceHash);
+    expect(redText?.colourRuns?.[0]?.[0]?.colour).toBe('#ff0000ff');
+    const rendered = await renderGuiScene(scene, ['full']);
+    const svg = rendered.images[0]?.svg ?? '';
+    expect(svg.match(/data-hoi4-colour-runs="true"/gu)).toHaveLength(2);
+    expect(svg).toContain(`data-font-sha256="${redText?.glyphLines[0]?.sourceHash}"`);
+    expect(svg).toContain(`data-font-sha256="${greenText?.glyphLines[0]?.sourceHash}"`);
+    expect(svg).toContain('data-font-colour="#ff0000ff"');
+    expect(svg).toContain('data-font-colour="#00ff00ff"');
+    expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
+  });
+
   it('bounds BMFont bytes, records, fields, pages, character maps, and kerning maps', () => {
     expect(() => parseBmFont('x'.repeat(GUI_BMFONT_MAX_BYTES + 1))).toThrowError(
       expect.objectContaining({ code: 'GUI_FONT_BYTES_BLOCKED' }),
@@ -1369,7 +1458,7 @@ kernings count=0
       scanned(
         'interface/fonts.gfx',
         `bitmapfonts = {
-	bitmapfont = { name = "hoi_font" fontfiles = { "gfx/fonts/base_font" } }
+	bitmapfont = { name = "hoi_font" fontfiles = { "gfx/fonts/base_font" } color = 0xff112233 border_color = 0xff010203 }
 	bitmapfont_override = { name = "hoi_font" fontfiles = { "gfx/fonts/japanese/font" } languages = { "l_japanese" } }
 }`,
       ),
@@ -1382,11 +1471,15 @@ kernings count=0
     expect(english.fontDefinition('hoi_font')).toMatchObject({
       override: false,
       assetPaths: ['gfx/fonts/base_font'],
+      colour: '#112233ff',
+      borderColour: '#010203ff',
     });
     expect(japanese.fontDefinition('hoi_font')).toMatchObject({
       override: true,
       languages: ['l_japanese'],
       assetPaths: ['gfx/fonts/japanese/font'],
+      colour: '#112233ff',
+      borderColour: '#010203ff',
     });
   });
 

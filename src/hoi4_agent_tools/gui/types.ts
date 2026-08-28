@@ -104,6 +104,8 @@ export interface GuiFontDefinition {
   languages: string[];
   assetPaths: string[];
   size?: number;
+  colour?: string;
+  borderColour?: string;
   rawSource?: string;
 }
 
@@ -304,6 +306,8 @@ export interface GuiTextLayout {
   horizontalAlignment: 'left' | 'center' | 'right';
   verticalAlignment: 'top' | 'center' | 'bottom';
   fontName?: string;
+  colour?: string;
+  borderColour?: string;
   glyphLines: GuiTextGlyphLine[];
   overflowX: boolean;
   overflowY: boolean;

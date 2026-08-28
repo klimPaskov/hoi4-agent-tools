@@ -13,6 +13,7 @@ import type {
   GuiRenderVariant,
   GuiScene,
   GuiSceneElement,
+  GuiTextGlyphLine,
 } from './types.js';
 
 const defaultVariants: readonly GuiRenderVariant[] = [
@@ -82,6 +83,45 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
   ].join('');
 }
 
+function colourMatrix(colour: string): string {
+  const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/iu.exec(colour);
+  if (match === null) return '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0';
+  const rgb = match[1]!;
+  const alpha = match[2] ?? 'ff';
+  const component = (offset: number): number =>
+    Number.parseInt(rgb.slice(offset, offset + 2), 16) / 255;
+  return `${finite(component(0))} 0 0 0 0 0 ${finite(component(2))} 0 0 0 0 0 ${finite(component(4))} 0 0 0 0 0 ${finite(Number.parseInt(alpha, 16) / 255)} 0`;
+}
+
+function bitmapTintDefinition(id: string, colour: string): string {
+  return `<filter id="${id}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${colourMatrix(colour)}"/></filter>`;
+}
+
+function actualGlyphMarkup(
+  glyphLine: GuiTextGlyphLine,
+  originX: number,
+  baseline: number,
+  horizontalScale: number,
+): string {
+  if (glyphLine.source === 'fontkit-path')
+    return glyphLine.glyphs
+      .filter((glyph) => glyph.kind === 'outline')
+      .map(
+        (glyph) =>
+          `<use href="#${outlineDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y)}) scale(${finite(glyph.scale * horizontalScale)} ${finite(-glyph.scale)})"/>`,
+      )
+      .join('');
+  if (glyphLine.source === 'bmfont-atlas')
+    return glyphLine.glyphs
+      .filter((glyph) => glyph.kind === 'bitmap')
+      .map(
+        (glyph) =>
+          `<use href="#${bitmapDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y - glyphLine.baseline)}) scale(${finite(horizontalScale)} 1)"/>`,
+      )
+      .join('');
+  return '';
+}
+
 function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRenderer): string {
   const text = element.text;
   if (text === undefined || text.lines.length === 0) return '';
@@ -125,6 +165,29 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
       })
       .join('');
     const colourRuns = text.colourRuns?.[index] ?? [];
+    if (
+      colourRuns.length > 0 &&
+      glyphLine !== undefined &&
+      glyphLine.source !== 'deterministic-fallback'
+    ) {
+      const definitions: string[] = [];
+      const renderedRuns = colourRuns.map((run, runIndex) => {
+        const key = `${element.id}:${index}:${runIndex}:${run.colour}`;
+        const clipId = `gui-font-run-clip-${sha256Bytes(key).slice(0, 20)}`;
+        const runX = originX + run.offsetX * horizontalScale;
+        definitions.push(
+          `<clipPath id="${clipId}"><rect x="${finite(runX - 0.25)}" y="${finite(lineTop)}" width="${finite(run.width * horizontalScale + 0.5)}" height="${finite(text.lineHeight)}"/></clipPath>`,
+        );
+        const glyphs = actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale);
+        if (glyphLine.source === 'bmfont-atlas') {
+          const filterId = `gui-font-tint-${sha256Bytes(key).slice(0, 20)}`;
+          definitions.push(bitmapTintDefinition(filterId, run.colour));
+          return `<g clip-path="url(#${clipId})" filter="url(#${filterId})" data-font-colour="${run.colour}">${glyphs}</g>`;
+        }
+        return `<g clip-path="url(#${clipId})" fill="${run.colour}" stroke="${text.borderColour ?? '#12151a'}" data-font-colour="${run.colour}">${glyphs}</g>`;
+      });
+      return `<g data-hoi4-colour-runs="true" data-font-sha256="${glyphLine.sourceHash}"><defs>${definitions.join('')}</defs>${renderedRuns.join('')}${inlineIconMarkup}</g>`;
+    }
     if (colourRuns.length > 0) {
       return `<g data-hoi4-colour-runs="true">${colourRuns
         .map((run) =>
@@ -133,7 +196,7 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
             y: baseline,
             fontSize: text.fontSize,
             fill: run.colour,
-            stroke: '#12151a',
+            stroke: text.borderColour ?? '#12151a',
             strokeWidth: 0.6,
             ...(run.width > 0 ? { targetWidth: run.width * horizontalScale } : {}),
           }),
@@ -141,30 +204,22 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
         .join('')}${inlineIconMarkup}</g>`;
     }
     if (glyphLine?.source === 'fontkit-path') {
-      return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphLine.glyphs
-        .filter((glyph) => glyph.kind === 'outline')
-        .map(
-          (glyph) =>
-            `<use href="#${outlineDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y)}) scale(${finite(glyph.scale * horizontalScale)} ${finite(-glyph.scale)})"/>`,
-        )
-        .join('')}${inlineIconMarkup}</g>`;
+      return `<g data-font-sha256="${glyphLine.sourceHash}" fill="${text.colour ?? '#f5f2e8'}" stroke="${text.borderColour ?? '#12151a'}" data-font-colour="${text.colour ?? '#f5f2e8'}">${actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale)}${inlineIconMarkup}</g>`;
     }
     if (glyphLine?.source === 'bmfont-atlas') {
-      return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphLine.glyphs
-        .filter((glyph) => glyph.kind === 'bitmap')
-        .map(
-          (glyph) =>
-            `<use href="#${bitmapDefinitionId(glyph.key)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y - glyphLine.baseline)}) scale(${finite(horizontalScale)} 1)"/>`,
-        )
-        .join('')}${inlineIconMarkup}</g>`;
+      const glyphs = actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale);
+      if (text.colour === undefined)
+        return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphs}${inlineIconMarkup}</g>`;
+      const filterId = `gui-font-tint-${sha256Bytes(`${element.id}:${index}:${text.colour}`).slice(0, 20)}`;
+      return `<g data-font-sha256="${glyphLine.sourceHash}" data-font-colour="${text.colour}"><defs>${bitmapTintDefinition(filterId, text.colour)}</defs><g filter="url(#${filterId})">${glyphs}</g>${inlineIconMarkup}</g>`;
     }
     const visibleLine = line.replace(/[\uE000-\uF8FF]/gu, ' ');
     return `<g>${toolText.render(visibleLine, {
       x: originX,
       y: baseline,
       fontSize: text.fontSize,
-      fill: '#f5f2e8',
-      stroke: '#12151a',
+      fill: text.colour ?? '#f5f2e8',
+      stroke: text.borderColour ?? '#12151a',
       strokeWidth: 0.6,
       ...(width > 0 ? { targetWidth: width } : {}),
     })}${inlineIconMarkup}</g>`;

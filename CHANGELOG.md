@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 2.8.4 - 2026-08-28
+
+- Render each declared HOI4 font face with its own glyph atlas, native metrics, face colour, border colour, and inherited language-override styling.
+- Keep native HOI4 bitmap or outline glyphs when localisation colour markup changes part of a line instead of replacing the line with the generic tool font.
+
 ## 2.8.3 - 2026-08-27
 
 - Centered native button labels when HOI4 GUI source uses `text =` instead of `buttonText =`, matching the in-game horizontal and vertical alignment inside button frames.

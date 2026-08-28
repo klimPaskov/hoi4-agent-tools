@@ -228,6 +228,14 @@ function boolScalar(block: BlockNode, ...keys: string[]): boolean | undefined {
   return undefined;
 }
 
+function paradoxColour(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const match = /^0x([0-9a-f]{8})$/iu.exec(value.trim());
+  if (match === null) return undefined;
+  const argb = match[1]!;
+  return `#${argb.slice(2)}${argb.slice(0, 2)}`.toLowerCase();
+}
+
 function sizeFrom(block: BlockNode): GuiSize | undefined {
   const size = childBlocks(block, 'size')[0];
   if (size === undefined) return undefined;
@@ -519,6 +527,10 @@ function indexSpritesAndFonts(
               .filter((entry) => entry.type === 'scalar')
               .map((entry) => entry.value),
           );
+          const colour = paradoxColour(firstScalarInsensitive(child, 'color', 'colour'));
+          const borderColour = paradoxColour(
+            firstScalarInsensitive(child, 'border_color', 'borderColor', 'border_colour'),
+          );
           const id = deterministicId('gui_font', { path: file.displayPath, name });
           const font: GuiFontDefinition = {
             id,
@@ -529,6 +541,8 @@ function indexSpritesAndFonts(
             override: assignment.key.value === 'bitmapfont_override',
             languages,
             assetPaths,
+            ...(colour === undefined ? {} : { colour }),
+            ...(borderColour === undefined ? {} : { borderColour }),
             rawSource: raw(document, assignment),
           };
           addDomainEntry(fonts, font, 'font');
@@ -543,6 +557,8 @@ function indexSpritesAndFonts(
               override: font.override,
               languages,
               assetPaths,
+              ...(colour === undefined ? {} : { colour }),
+              ...(borderColour === undefined ? {} : { borderColour }),
             },
           });
           addEdge(edges, 'contains', fileNodeId, id, true, {}, font.location);

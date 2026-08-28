@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.8.3/schemas/custom-weighted-pool.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.8.4/schemas/custom-weighted-pool.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {

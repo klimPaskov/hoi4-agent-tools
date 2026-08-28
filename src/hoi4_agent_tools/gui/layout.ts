@@ -630,6 +630,7 @@ function colourRunsForLine(
   fontSize: number,
   work: GuiSceneWorkBudget,
   inlineIcons: ReadonlyMap<string, ResolvedInlineIcon> = new Map(),
+  defaultColour = defaultTextColour,
 ): GuiTextColourRun[] {
   if (!colours.some((colour) => colour !== undefined) || line.length === 0) return [];
   const runs: GuiTextColourRun[] = [];
@@ -642,12 +643,12 @@ function colourRunsForLine(
       start += 1;
       continue;
     }
-    const colour = colours[start] ?? defaultTextColour;
+    const colour = colours[start] ?? defaultColour;
     let end = start + 1;
     while (
       end < line.length &&
       !inlineIcons.has(line[end] ?? '') &&
-      (colours[end] ?? defaultTextColour) === colour
+      (colours[end] ?? defaultColour) === colour
     )
       end += 1;
     const text = line.slice(start, end);
@@ -1123,6 +1124,7 @@ async function layoutElement(
     displayText = visibleText.text;
     context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const fontName = scalarString(property(definition.attributes, 'font', 'buttonFont'));
+    const fontDefinition = fontName === undefined ? undefined : catalog.fontDefinition(fontName);
     const resolvedFontMetrics = catalog.resolvedFontMetrics(fontName);
     const explicitFontSize = scalarNumber(property(definition.attributes, 'fontSize'), 16);
     const fontSize =
@@ -1225,6 +1227,7 @@ async function layoutElement(
             fontSize * scale,
             context.work,
             resolvedInlineIcons,
+            fontDefinition?.colour ?? defaultTextColour,
           ),
         )
       : undefined;
@@ -1244,6 +1247,10 @@ async function layoutElement(
       metricSource: wrapped.metricSource,
       ...alignment(definition.attributes, embeddedButtonText),
       ...(fontName === undefined ? {} : { fontName }),
+      ...(fontDefinition?.colour === undefined ? {} : { colour: fontDefinition.colour }),
+      ...(fontDefinition?.borderColour === undefined
+        ? {}
+        : { borderColour: fontDefinition.borderColour }),
       glyphLines,
       overflowX: width > 0 && measuredWidth > width + 0.01,
       overflowY: height > 0 && measuredHeight > height + 0.01,
@@ -1266,6 +1273,14 @@ async function layoutElement(
         'modelled',
         'font_metrics',
         `${wrapped.metricSource} metrics for ${fontName ?? '<default>'}.`,
+        definition,
+      );
+    if (fontDefinition?.colour !== undefined || fontDefinition?.borderColour !== undefined)
+      addFidelity(
+        fidelity,
+        'modelled',
+        'font_definition_style',
+        `Font ${fontDefinition.name} uses its declared face and colour styling.`,
         definition,
       );
     const missingGlyphs = [

@@ -297,6 +297,26 @@ export class GuiAssetCatalog {
       )
         this.fontDefinitions.set(key, definition);
     }
+    const baseDefinitions = new Map<string, GuiFontDefinition>();
+    for (const definition of graph.fonts) {
+      if (definition.override || definition.languages.length > 0) continue;
+      const key = definition.name.toLocaleLowerCase('en-US');
+      if (!baseDefinitions.has(key)) baseDefinitions.set(key, definition);
+    }
+    for (const [key, definition] of this.fontDefinitions) {
+      if (!definition.override) continue;
+      const base = baseDefinitions.get(key);
+      if (base === undefined) continue;
+      this.fontDefinitions.set(key, {
+        ...definition,
+        ...(definition.colour === undefined && base.colour !== undefined
+          ? { colour: base.colour }
+          : {}),
+        ...(definition.borderColour === undefined && base.borderColour !== undefined
+          ? { borderColour: base.borderColour }
+          : {}),
+      });
+    }
   }
 
   public resolveFile(assetPath: string, relativeTo?: string): ScannedFile | undefined {
