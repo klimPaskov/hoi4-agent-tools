@@ -756,8 +756,16 @@ function validateReferencesAndScript(
   const selectedFontNames = new Set(
     scene.elements.flatMap(({ text }) => (text?.fontName === undefined ? [] : [text.fontName])),
   );
+  const sceneLanguage = scene.scenario.language.toLocaleLowerCase('en-US');
   const selectedFontIds = new Set(
-    graph.fonts.filter(({ name }) => selectedFontNames.has(name)).map(({ id }) => id),
+    graph.fonts
+      .filter(
+        ({ name, languages }) =>
+          selectedFontNames.has(name) &&
+          (languages.length === 0 ||
+            languages.some((language) => language.toLocaleLowerCase('en-US') === sceneLanguage)),
+      )
+      .map(({ id }) => id),
   );
   const selectedManifestIds = new Set(
     graph.animationSources

@@ -234,7 +234,7 @@ export const GuiGeneratedScenarioOptionsSchema = z
       .max(64)
       .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
       .default('generated'),
-    preservePlaceholder: z.boolean().default(true),
+    preservePlaceholder: z.boolean().default(false),
     numericMinimum: z.number().min(-1_000_000_000).max(1_000_000_000).default(0),
     numericMaximum: z.number().min(-1_000_000_000).max(1_000_000_000).default(100),
     integerValues: z.boolean().default(true),

@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 2.8.6 - 2026-08-28
+
+- Generate source-aware scripted-GUI scenarios from complete parent/child surfaces, real scripted-localisation candidates, simple threshold conditions, coherent tab states, scoped values, meter ranges, and dynamic-list rows while keeping explicit scenario values authoritative.
+- Preserve native HOI4 bitmap-font antialiasing and shadow pixels when applying face and localisation colours, including global and per-font `textcolors` palettes.
+- Prevent stale workspace artifacts and irrelevant language font atlases from blocking GUI calls, resolve alternate vanilla raster extensions and repeated path separators, and keep placeholder scenarios opt-in so their intentionally unresolved state does not pollute normal validation.
+
 ## 2.8.5 - 2026-08-28
 
 - Render bitmap-font face and localisation colours through alpha masks, including black source atlases, and load exact per-font HOI4 `textcolors` palettes.

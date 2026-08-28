@@ -522,6 +522,49 @@ describe('content-addressed artifacts', () => {
     });
   });
 
+  it('reclaims self-consistent artifacts from an earlier workspace identity under pressure', async () => {
+    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-artifact-stale-binding-'));
+    const firstMod = path.join(base, 'first-mod');
+    const secondMod = path.join(base, 'second-mod');
+    const storage = path.join(base, 'storage');
+    const artifactRoot = path.join(storage, 'artifacts');
+    const cacheRoot = path.join(storage, 'cache');
+    await Promise.all([mkdir(firstMod), mkdir(secondMod)]);
+    const configured = (root: string) =>
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(base, 'server-state'),
+        storageRoots: [storage],
+        workspaces: [{ id: 'shared', name: 'Shared', root, artifactRoot, cacheRoot }],
+      });
+    const store = new ArtifactStore(12_000, 20, 10_000);
+    const firstWorkspace = (await WorkspaceResolver.create(configured(firstMod))).get('shared');
+    await store.put(firstWorkspace, 'old.bin', 'application/octet-stream', Buffer.alloc(6_000, 1), {
+      kind: 'stale-binding-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'binding.v1',
+      sourceHashes: {},
+    });
+    const secondWorkspace = (await WorkspaceResolver.create(configured(secondMod))).get('shared');
+    await expect(
+      store.put(
+        secondWorkspace,
+        'current.bin',
+        'application/octet-stream',
+        Buffer.alloc(6_000, 2),
+        {
+          kind: 'stale-binding-test',
+          toolVersion: '0.1.0',
+          schemaVersion: 'binding.v1',
+          sourceHashes: {},
+        },
+      ),
+    ).resolves.toMatchObject({ name: 'current.bin' });
+    await expect(store.list(secondWorkspace)).resolves.toEqual([
+      expect.objectContaining({ name: 'current.bin' }),
+    ]);
+  });
+
   it('honors cancellation while enumerating and verifying artifacts', async () => {
     const { store, workspace } = await fixture();
     const artifact = await store.put(

@@ -260,9 +260,23 @@ function assertManifestIntegrity(
   expected: { sha256: string; provenanceHash: string; name: string },
   workspace: ResolvedWorkspace,
 ): void {
+  assertManifestAddressIntegrity(manifest, expected);
   if (
     manifest.workspaceIdentity !== workspace.workspaceIdentity ||
-    manifest.ownerIdentity !== workspace.ownerIdentity ||
+    manifest.ownerIdentity !== workspace.ownerIdentity
+  ) {
+    throw new ServiceError(
+      'ARTIFACT_MANIFEST_INTEGRITY_FAILED',
+      'Artifact provenance manifest does not match its immutable address',
+    );
+  }
+}
+
+function assertManifestAddressIntegrity(
+  manifest: ArtifactManifest,
+  expected: { sha256: string; provenanceHash: string; name: string },
+): void {
+  if (
     manifest.sha256 !== expected.sha256 ||
     manifest.provenanceHash !== expected.provenanceHash ||
     manifest.name !== expected.name ||
@@ -324,6 +338,7 @@ interface PreparedArtifactWrite {
 
 interface RetainedArtifactManifest {
   manifest: ArtifactManifest;
+  staleIdentity: boolean;
   manifestPath: string;
   manifestBytes: number;
   modifiedAt: number;
@@ -963,15 +978,11 @@ export class ArtifactStore {
             'Artifact provenance manifest filename does not match its contents',
           );
         }
-        assertManifestIntegrity(
-          manifest,
-          {
-            sha256: path.basename(directory),
-            provenanceHash: manifest.provenanceHash,
-            name: manifest.name,
-          },
-          workspace,
-        );
+        assertManifestAddressIntegrity(manifest, {
+          sha256: path.basename(directory),
+          provenanceHash: manifest.provenanceHash,
+          name: manifest.name,
+        });
         const targetPath = await containedGeneratedPath(
           workspace.artifactRoot,
           path.relative(workspace.artifactRoot, path.join(directory, manifest.name)),
@@ -984,6 +995,9 @@ export class ArtifactStore {
         }
         retained.push({
           manifest,
+          staleIdentity:
+            manifest.workspaceIdentity !== workspace.workspaceIdentity ||
+            manifest.ownerIdentity !== workspace.ownerIdentity,
           manifestPath: candidate,
           manifestBytes: metadata.size,
           modifiedAt: metadata.mtimeMs,
@@ -1043,6 +1057,7 @@ export class ArtifactStore {
     await reclaimDebris(await containedGeneratedPath(workspace.artifactRoot));
     retained.sort(
       (left, right) =>
+        Number(right.staleIdentity) - Number(left.staleIdentity) ||
         left.modifiedAt - right.modifiedAt ||
         compareCodeUnits(left.manifestPath, right.manifestPath),
     );
@@ -1076,7 +1091,7 @@ export class ArtifactStore {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
-      const verificationPrefix = `${workspace.workspaceIdentity}\0${workspace.ownerIdentity}\0${candidate.targetPath}\0`;
+      const verificationPrefix = `${candidate.manifest.workspaceIdentity}\0${candidate.manifest.ownerIdentity}\0${candidate.targetPath}\0`;
       for (const key of this.#verifiedContent.keys()) {
         if (key.startsWith(verificationPrefix)) this.#verifiedContent.delete(key);
       }

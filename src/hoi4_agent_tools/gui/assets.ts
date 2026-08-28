@@ -777,11 +777,6 @@ export class GuiAssetCatalog {
           .ensureAlpha()
           .raw()
           .toBuffer({ resolveWithObject: true });
-        for (let index = 0; index < extracted.data.length; index += 4) {
-          extracted.data[index] = 255;
-          extracted.data[index + 1] = 255;
-          extracted.data[index + 2] = 255;
-        }
         const png = await sharp(extracted.data, {
           raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
           limitInputPixels: RENDER_MAX_DECODED_PIXELS,

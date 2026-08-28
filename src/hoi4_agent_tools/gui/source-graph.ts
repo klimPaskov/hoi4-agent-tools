@@ -159,7 +159,31 @@ export function guiElementAttributeFidelity(key: string): GuiElementAttributeFid
 }
 
 function normalizeAssetPath(value: string): string {
-  return value.replaceAll('\\', '/').replace(/^\.\//u, '').replace(/^\//u, '').toLowerCase();
+  return value
+    .replaceAll('\\', '/')
+    .replace(/^\/+|^\.\//u, '')
+    .replace(/\/+/gu, '/')
+    .toLowerCase();
+}
+
+function textureNodeFor(
+  textureNodes: ReadonlyMap<string, string>,
+  texturePath: string,
+): string | undefined {
+  const normalized = normalizeAssetPath(texturePath);
+  const extension = path.posix.extname(normalized);
+  const rasterExtensions = ['.png', '.bmp', '.tga', '.dds'];
+  const candidates = rasterExtensions.includes(extension)
+    ? [
+        normalized,
+        ...rasterExtensions
+          .filter((candidate) => candidate !== extension)
+          .map((candidate) => `${normalized.slice(0, -extension.length)}${candidate}`),
+      ]
+    : [normalized];
+  return candidates
+    .map((candidate) => textureNodes.get(candidate))
+    .find((value) => value !== undefined);
 }
 
 function scalarValue(value: string, constants: ReadonlyMap<string, string>): GuiPropertyValue {
@@ -446,6 +470,7 @@ function indexSpritesAndFonts(
   edges: GuiSourceEdge[],
   sprites: GuiSpriteDefinition[],
   fonts: GuiFontDefinition[],
+  globalTextColours: Record<string, string>,
 ): void {
   const walk = (block: BlockNode): void => {
     for (const assignment of assignments(block)) {
@@ -553,14 +578,21 @@ function indexSpritesAndFonts(
             firstScalarInsensitive(child, 'border_color', 'borderColor', 'border_colour'),
           );
           const textColours = textColoursFrom(child);
-          const id = deterministicId('gui_font', { path: file.displayPath, name });
+          const override = assignment.key.value === 'bitmapfont_override';
+          const id = deterministicId('gui_font', {
+            path: file.displayPath,
+            name,
+            override,
+            languages,
+            assetPaths,
+          });
           const font: GuiFontDefinition = {
             id,
             name,
             sourcePath: file.displayPath,
             location: nodeLocation(document, assignment, name),
             kind: 'bitmapfont',
-            override: assignment.key.value === 'bitmapfont_override',
+            override,
             languages,
             assetPaths,
             ...(colour === undefined ? {} : { colour }),
@@ -587,6 +619,9 @@ function indexSpritesAndFonts(
           });
           addEdge(edges, 'contains', fileNodeId, id, true, {}, font.location);
         }
+      }
+      if (assignment.key.value === 'bitmapfonts') {
+        Object.assign(globalTextColours, textColoursFrom(child));
       }
       walk(child);
     }
@@ -947,8 +982,24 @@ function indexScriptedLocalisation(
     if (assignment.value.type !== 'block') continue;
     const name = firstScalar(assignment.value, 'name')?.value;
     if (name === undefined) continue;
-    const localisationKeys = childBlocks(assignment.value, 'text')
-      .flatMap((textBlock) => firstScalar(textBlock, 'localisation_key')?.value ?? [])
+    const choices = childBlocks(assignment.value, 'text').flatMap((textBlock) => {
+      const localisationKey = firstScalarInsensitive(
+        textBlock,
+        'localisation_key',
+        'localization_key',
+      );
+      if (localisationKey === undefined) return [];
+      const trigger = childBlocks(textBlock, 'trigger')[0];
+      return [
+        {
+          localisationKey,
+          ...(trigger === undefined ? {} : { triggerExpression: raw(document, trigger) }),
+          rawSource: raw(document, textBlock),
+        },
+      ];
+    });
+    const localisationKeys = choices
+      .map(({ localisationKey }) => localisationKey)
       .sort((left, right) => compareCodeUnits(left, right));
     const id = deterministicId('scripted_localisation', { path: file.displayPath, name });
     const location = nodeLocation(document, assignment, name);
@@ -960,6 +1011,7 @@ function indexScriptedLocalisation(
         sourcePath: file.displayPath,
         location,
         localisationKeys,
+        choices,
         rawSource: raw(document, assignment),
       },
       'scripted localisation',
@@ -970,7 +1022,13 @@ function indexScriptedLocalisation(
       name,
       path: file.displayPath,
       location,
-      metadata: { localisationKeys },
+      metadata: {
+        localisationKeys,
+        choices: choices.map(({ localisationKey, triggerExpression }) => ({
+          localisationKey,
+          ...(triggerExpression === undefined ? {} : { triggerExpression }),
+        })),
+      },
     });
     addEdge(edges, 'contains', fileNodeId, id, true, {}, location);
   }
@@ -1075,7 +1133,7 @@ function linkGraph(
   for (const sprite of sprites) {
     for (const [index, texturePath] of [sprite.texturePath, sprite.texturePath2].entries()) {
       if (texturePath === undefined) continue;
-      const textureId = textureNodes.get(normalizeAssetPath(texturePath));
+      const textureId = textureNodeFor(textureNodes, texturePath);
       addEdge(
         edges,
         'uses_texture',
@@ -1423,6 +1481,7 @@ export function buildGuiSourceGraph(
   const elements: GuiElementDefinition[] = [];
   const sprites: GuiSpriteDefinition[] = [];
   const fonts: GuiFontDefinition[] = [];
+  const textColours: Record<string, string> = {};
   const scriptedGuis: ScriptedGuiDefinition[] = [];
   const animationSources: GuiAnimationSourceManifest[] = [];
   const scriptedLocalisation: GuiScriptedLocalisationDefinition[] = [];
@@ -1550,7 +1609,7 @@ export function buildGuiSourceGraph(
       diagnostics.pushMany(document.diagnostics);
     if (kind === 'gui_file') indexGuiElements(document, file, fileNodeId, nodes, edges, elements);
     if (kind === 'gfx_file') {
-      indexSpritesAndFonts(document, file, fileNodeId, nodes, edges, sprites, fonts);
+      indexSpritesAndFonts(document, file, fileNodeId, nodes, edges, sprites, fonts, textColours);
     }
     if (kind === 'scripted_gui_file') {
       indexScriptedGuis(document, file, fileNodeId, nodes, edges, scriptedGuis);
@@ -1656,6 +1715,9 @@ export function buildGuiSourceGraph(
     elements,
     sprites,
     fonts,
+    textColours: Object.fromEntries(
+      Object.entries(textColours).sort(([left], [right]) => compareCodeUnits(left, right)),
+    ),
     scriptedGuis,
     animationSources,
     scriptedLocalisation,

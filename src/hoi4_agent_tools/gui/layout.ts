@@ -1134,7 +1134,10 @@ async function layoutElement(
     if (state === 'missing-localisation') displayText = `\u00a7R${rawText}_MISSING\u00a7!`;
     const fontName = scalarString(property(definition.attributes, 'font', 'buttonFont'));
     const fontDefinition = fontName === undefined ? undefined : catalog.fontDefinition(fontName);
-    const visibleText = visibleHoiText(displayText, fontDefinition?.textColours);
+    const visibleText = visibleHoiText(displayText, {
+      ...context.graph.textColours,
+      ...fontDefinition?.textColours,
+    });
     displayText = visibleText.text;
     context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const resolvedFontMetrics = catalog.resolvedFontMetrics(fontName);

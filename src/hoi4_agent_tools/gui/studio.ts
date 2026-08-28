@@ -461,10 +461,11 @@ function localisationIconSpriteCandidates(token: string): string[] {
   return [...new Set([normalized, `${normalized}_texticon`, `${normalized}_text_icon`])];
 }
 
-function referencedAssetPatternsForWindow(
+export function referencedAssetPatternsForWindow(
   graph: GuiSourceGraph,
   windowName: string,
   additionalSpriteNames: readonly string[] = [],
+  languages: readonly string[] = ['l_english'],
 ): string[] {
   const spriteNames = new Set<string>(additionalSpriteNames);
   const fontNames = new Set<string>();
@@ -486,6 +487,45 @@ function referencedAssetPatternsForWindow(
       for (const candidate of localisationIconSpriteCandidates(token)) spriteNames.add(candidate);
     }
   }
+  const relatedScriptedGuiNames = new Set(
+    graph.scriptedGuis
+      .filter(
+        (definition) =>
+          definition.windowName === windowName || definition.parentWindowName === windowName,
+      )
+      .map(({ name }) => name),
+  );
+  let addedRelatedScriptedGui = true;
+  while (addedRelatedScriptedGui) {
+    addedRelatedScriptedGui = false;
+    for (const definition of graph.scriptedGuis) {
+      if (
+        definition.parentScriptedGui === undefined ||
+        !relatedScriptedGuiNames.has(definition.parentScriptedGui) ||
+        relatedScriptedGuiNames.has(definition.name)
+      )
+        continue;
+      relatedScriptedGuiNames.add(definition.name);
+      addedRelatedScriptedGui = true;
+    }
+  }
+  const dynamicImageTokens = new Set(
+    graph.scriptedGuis
+      .filter(({ name }) => relatedScriptedGuiNames.has(name))
+      .flatMap(({ propertyDefinitions }) => propertyDefinitions)
+      .flatMap(({ attributes }) => {
+        const image = Object.entries(attributes).find(
+          ([key]) => key.toLocaleLowerCase('en-US') === 'image',
+        )?.[1];
+        if (typeof image !== 'string') return [];
+        const match = /^\[([^\]]+)\]$/u.exec(image);
+        return match?.[1] === undefined ? [] : [match[1]];
+      }),
+  );
+  for (const definition of graph.scriptedLocalisation) {
+    if (!dynamicImageTokens.has(definition.name)) continue;
+    for (const candidate of definition.localisationKeys) spriteNames.add(candidate);
+  }
   const spritesByName = new Map(
     graph.sprites.map((sprite) => [sprite.name.toLocaleLowerCase('en-US'), sprite]),
   );
@@ -505,8 +545,23 @@ function referencedAssetPatternsForWindow(
     selectedSprites.has(sprite.toLocaleLowerCase('en-US')),
   );
   const selectedFontNames = new Set([...fontNames].map((name) => name.toLocaleLowerCase('en-US')));
-  const selectedFonts = graph.fonts.filter(({ name }) =>
-    selectedFontNames.has(name.toLocaleLowerCase('en-US')),
+  const normalizedLanguages = new Set(
+    languages.flatMap((language) => {
+      const normalized = language.toLocaleLowerCase('en-US');
+      return [normalized, normalized.replace(/^l_/u, '')];
+    }),
+  );
+  const selectedFonts = graph.fonts.filter(
+    ({ name, languages: fontLanguages }) =>
+      selectedFontNames.has(name.toLocaleLowerCase('en-US')) &&
+      (fontLanguages.length === 0 ||
+        fontLanguages.some((language) => {
+          const normalized = language.toLocaleLowerCase('en-US');
+          return (
+            normalizedLanguages.has(normalized) ||
+            normalizedLanguages.has(normalized.replace(/^l_/u, ''))
+          );
+        })),
   );
   const references = [
     ...[...selectedSprites.values()].flatMap(({ texturePath, texturePath2 }) =>
@@ -987,6 +1042,7 @@ export class ScriptedGuiStudio {
       definitions.graph,
       windowName,
       additionalSpriteNames,
+      languages,
     );
     const exactReferenced =
       referencedPatterns.length === 0
@@ -1746,6 +1802,8 @@ export class ScriptedGuiStudio {
       const proposedAssetPatterns = referencedAssetPatternsForWindow(
         proposedGraph,
         input.windowName,
+        [],
+        [scenario.language],
       );
       const exactProposedAssets =
         proposedAssetPatterns.length === 0

@@ -43,6 +43,7 @@ import {
   type GuiScene,
   type GuiSourceGraph,
 } from '../../src/hoi4_agent_tools/gui/index.js';
+import { referencedAssetPatternsForWindow } from '../../src/hoi4_agent_tools/gui/studio.js';
 
 function scanned(relativePath: string, content: Buffer | string): ScannedFile {
   const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
@@ -834,26 +835,34 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(rendered.images[0]?.svg).toContain('fill="#ff3232"');
   });
 
-  it('generates deterministic plausible GUI scenarios while preserving explicit values', () => {
+  it('generates deterministic source-aware scenarios with coherent panes, scopes, sprites, and values', () => {
     const files = [
       scanned(
         'interface/generated-scenario.gui',
-        'guiTypes = { containerWindowType = { name = "generated_window" size = { width = 400 height = 180 } instantTextBoxType = { name = "generated_text" text = "GENERATED_TEXT" } progressbarType = { name = "threat_meter" size = { width = 100 height = 10 } } } }',
+        'guiTypes = { containerWindowType = { name = "generated_window" size = { width = 400 height = 180 } instantTextBoxType = { name = "generated_text" text = "GENERATED_TEXT" } iconType = { name = "threat_icon" } progressbarType = { name = "threat_meter" size = { width = 100 height = 10 } minValue = 10 maxValue = 20 startValue = threat_value } buttonType = { name = "status_tab_button_idle" } buttonType = { name = "status_tab_button_active" } buttonType = { name = "history_tab_button_idle" } buttonType = { name = "history_tab_button_active" } } containerWindowType = { name = "status_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "history_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "target_row" size = { width = 200 height = 20 } } }',
       ),
       scanned(
         'common/scripted_guis/generated-scenario.txt',
-        'scripted_gui = { generated_gui = { context_type = country window_name = generated_window dynamic_lists = { target_list = { entry_container = "target_row" } } } }',
+        'scripted_gui = { generated_gui = { context_type = country window_name = generated_window visible = { always = yes } dynamic_lists = { target_list = { entry_container = "target_row" } } properties = { threat_icon = { image = "[GetThreatSprite]" } } triggers = { status_tab_button_idle_visible = { always = yes } status_tab_button_active_visible = { always = yes } history_tab_button_idle_visible = { always = yes } history_tab_button_active_visible = { always = yes } } } status_gui = { context_type = country parent_scripted_gui = generated_gui window_name = status_pane visible = { has_country_flag = show_status } } history_gui = { context_type = country parent_scripted_gui = generated_gui window_name = history_pane visible = { has_country_flag = show_history } } }',
+      ),
+      scanned(
+        'common/scripted_localisation/generated-scenario.txt',
+        'defined_text = { name = GetThreatSprite text = { trigger = { threat_bar > 79 } localization_key = GFX_threat_high } text = { trigger = { always = yes } localization_key = GFX_threat_low } } defined_text = { name = GetThreatStatus text = { trigger = { threat > 79 } localization_key = THREAT_ESCALATING } text = { trigger = { always = yes } localization_key = THREAT_CONTAINED } }',
+      ),
+      scanned(
+        'interface/generated-scenario.gfx',
+        'spriteTypes = { spriteType = { name = "GFX_threat_low" textureFile = "gfx/interface/threat_low.dds" } spriteType = { name = "GFX_threat_high" textureFile = "gfx/interface/threat_high.dds" } }',
       ),
       scanned(
         'localisation/english/generated_scenario_l_english.yml',
-        '\uFEFFl_english:\nGENERATED_TEXT: "Leader: [GetDynamicLeader] Risk: [?risk|.0] Country: [ROOT.GetName]"\n',
+        '\uFEFFl_english:\nGENERATED_TEXT: "Status: [GetThreatStatus] Leader: [GetDynamicLeader] Risk: [?risk|.0] Country: [ROOT.GetName] Donor: [FROM.GetName]"\nTHREAT_CONTAINED: "§GContained§!"\nTHREAT_ESCALATING: "§REscalating§!"\n',
       ),
     ];
     const graph = sourceGraph(files);
     const base = parsePreviewScenario({
       id: 'placeholder',
       resolution: { width: 640, height: 360 },
-      values: { risk: 42 },
+      values: { risk: 42, threat: 85 },
     });
     const options = parseGeneratedScenarioOptions({
       count: 2,
@@ -863,6 +872,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       listRowsMinimum: 2,
       listRowsMaximum: 2,
     });
+    expect(options.preservePlaceholder).toBe(false);
     const first = generateGuiPreviewScenarios(graph, 'generated_window', base, options);
     const second = generateGuiPreviewScenarios(graph, 'generated_window', base, options);
     expect(first).toEqual(second);
@@ -873,11 +883,115 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
         risk: 42,
         GetDynamicLeader: expect.any(String),
         'ROOT.GetName': expect.any(String),
+        'FROM.GetName': expect.any(String),
+        GetThreatStatus: '§REscalating§!',
+        GetThreatSprite: 'GFX_threat_high',
+        threat_meter: expect.any(Number),
+        threat_value: expect.any(Number),
       },
       lists: { target_list: [expect.any(Object), expect.any(Object)] },
     });
     expect(first[0]?.values.GetDynamicLeader).not.toBe('[dynamic_loc]');
     expect(first[0]?.values['ROOT.GetName']).not.toBe('[dynamic_loc]');
+    expect(first[0]?.values['ROOT.GetName']).not.toBe(first[0]?.values['FROM.GetName']);
+    expect(first[0]?.values.GetName).toBeUndefined();
+    expect(first[0]?.values.GetThreatSprite).not.toBe('In Progress');
+    expect(first[0]?.values.threat_bar).toBe(85);
+    expect(first[0]?.selectedFrames).toEqual({});
+    expect(first[0]?.visibility.generated_gui).toBe(true);
+    expect(
+      [first[0]?.visibility.status_gui, first[0]?.visibility.history_gui].filter(Boolean),
+    ).toHaveLength(1);
+    expect(
+      [
+        first[0]?.visibility.status_tab_button_idle,
+        first[0]?.visibility.status_tab_button_active,
+      ].filter(Boolean),
+    ).toHaveLength(1);
+    expect(
+      [
+        first[0]?.visibility.history_tab_button_idle,
+        first[0]?.visibility.history_tab_button_active,
+      ].filter(Boolean),
+    ).toHaveLength(1);
+    expect(first[0]?.values.threat_meter).toBeGreaterThanOrEqual(10);
+    expect(first[0]?.values.threat_meter).toBeLessThanOrEqual(20);
+    expect(first[0]?.values.threat_value).toBe(first[0]?.values.threat_meter);
+
+    const sampled = Array.from(
+      { length: 128 },
+      (_unused, index) =>
+        generateGuiPreviewScenarios(
+          graph,
+          'generated_window',
+          parsePreviewScenario({ id: `sample-${index}` }),
+          parseGeneratedScenarioOptions({ count: 1, seed: `sample-${index}` }),
+        )[0]!,
+    );
+    const sampledThreats = sampled.map(({ values }) => Number(values.threat));
+    expect(new Set(sampledThreats).size).toBeGreaterThan(50);
+    expect(sampledThreats.some((value) => value <= 79)).toBe(true);
+    expect(sampledThreats.some((value) => value > 79)).toBe(true);
+    for (const generated of sampled) {
+      const threat = Number(generated.values.threat);
+      expect(generated.values.threat_bar).toBe(threat);
+      expect(generated.values.GetThreatStatus).toBe(
+        threat > 79 ? '§REscalating§!' : '§GContained§!',
+      );
+      expect(generated.values.GetThreatSprite).toBe(
+        threat > 79 ? 'GFX_threat_high' : 'GFX_threat_low',
+      );
+      expect(
+        [generated.visibility.status_gui, generated.visibility.history_gui].filter(Boolean),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('scans dynamic scripted-localisation sprites and only relevant language font atlases', () => {
+    const files = [
+      scanned(
+        'interface/referenced-assets.gui',
+        'guiTypes = { containerWindowType = { name = "asset_window" size = { width = 200 height = 100 } iconType = { name = "dynamic_icon" } instantTextBoxType = { name = "label" text = "LABEL" font = "hoi_font" } } }',
+      ),
+      scanned(
+        'common/scripted_guis/referenced-assets.txt',
+        'scripted_gui = { asset_gui = { context_type = country window_name = asset_window properties = { dynamic_icon = { image = "[GetDynamicSprite]" } } } }',
+      ),
+      scanned(
+        'common/scripted_localisation/referenced-assets.txt',
+        'defined_text = { name = GetDynamicSprite text = { trigger = { always = yes } localization_key = GFX_dynamic_low } text = { trigger = { always = no } localization_key = GFX_dynamic_high } }',
+      ),
+      scanned(
+        'interface/referenced-assets.gfx',
+        'spriteTypes = { spriteType = { name = "GFX_dynamic_low" textureFile = "gfx//interface//dynamic_low.tga" } spriteType = { name = "GFX_dynamic_high" textureFile = "gfx/interface/dynamic_high.dds" } } bitmapfonts = { bitmapfont = { name = "hoi_font" path = "fonts/hoi_font.fnt" } bitmapfont_override = { name = "hoi_font" languages = { l_english } path = "fonts/hoi_font_english.fnt" } bitmapfont_override = { name = "hoi_font" languages = { l_simp_chinese } path = "fonts/hoi_font_chinese.fnt" } }',
+      ),
+      scanned('gfx/interface/dynamic_low.dds', rgb32Dds()),
+      scanned(
+        'localisation/english/referenced_assets_l_english.yml',
+        '\uFEFFl_english:\nLABEL: "Assets"\n',
+      ),
+    ];
+    const patterns = referencedAssetPatternsForWindow(
+      sourceGraph(files),
+      'asset_window',
+      [],
+      ['l_english'],
+    );
+    expect(patterns).toEqual(
+      expect.arrayContaining([
+        'gfx/interface/dynamic_low.dds',
+        'gfx/interface/dynamic_high.dds',
+        'fonts/hoi_font.fnt',
+        'fonts/hoi_font_english.fnt',
+      ]),
+    );
+    expect(patterns).not.toContain('fonts/hoi_font_chinese.fnt');
+    expect(
+      sourceGraph(files).edges.find(
+        ({ kind, metadata }) =>
+          kind === 'uses_texture' && metadata.texturePath === 'gfx//interface//dynamic_low.tga',
+      ),
+    ).toMatchObject({ resolved: true });
   });
 
   it('blocks aggregate scenario rows and nested list scene multiplication before expansion', async () => {
@@ -1365,7 +1479,7 @@ kernings count=0
       .composite([
         {
           input: Buffer.from(
-            '<svg width="16" height="12"><path d="M0 0h8v12H0zM9 1h6v10H9Z" fill="black"/></svg>',
+            '<svg width="16" height="12"><path d="M1 1h7v11H1zM10 2h6v10h-6Z" fill="black" fill-opacity="0.85"/><path d="M0 0h7v11H0zM9 1h6v10H9Z" fill="white"/></svg>',
           ),
         },
       ])
@@ -1397,11 +1511,11 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
       ),
       scanned(
         'interface/font-faces.gfx',
-        'bitmapfonts = { bitmapfont = { name = "red_font" path = "fonts/red.fnt" color = 0xffff0000 border_color = 0x00000000 textcolors = { Y = { 250 170 10 } } } bitmapfont = { name = "green_font" path = "fonts/green.fnt" color = 0xff00ff00 border_color = 0xff000000 } }',
+        'bitmapfonts = { textcolors = { R = { 200 30 40 } } bitmapfont = { name = "red_font" path = "fonts/red.fnt" color = 0xffff0000 border_color = 0x00000000 textcolors = { Y = { 250 170 10 } } } bitmapfont = { name = "green_font" path = "fonts/green.fnt" color = 0xff00ff00 border_color = 0xff000000 } }',
       ),
       scanned(
         'localisation/english/font_faces_l_english.yml',
-        '\uFEFFl_english:\nFONT_FACE_TEXT: "A §YB§!"\n',
+        '\uFEFFl_english:\nFONT_FACE_TEXT: "A §YB§! §RA§!"\n',
       ),
       scanned('fonts/red.fnt', font('red.png')),
       scanned('fonts/red.png', redAtlas),
@@ -1424,6 +1538,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
         }),
       ]),
     );
+    expect(graph.textColours).toEqual({ R: '#c81e28' });
     const scene = await buildGuiScene(
       graph,
       files,
@@ -1439,6 +1554,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(redText?.glyphLines[0]?.sourceHash).not.toBe(greenText?.glyphLines[0]?.sourceHash);
     expect(redText?.colourRuns?.[0]?.[0]?.colour).toBe('#ff0000ff');
     expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#faaa0a')).toBe(true);
+    expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#c81e28')).toBe(true);
     const rendered = await renderGuiScene(scene, ['full']);
     const svg = rendered.images[0]?.svg ?? '';
     expect(svg.match(/data-hoi4-colour-runs="true"/gu)).toHaveLength(2);
@@ -1446,6 +1562,8 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(svg).toContain(`data-font-sha256="${greenText?.glyphLines[0]?.sourceHash}"`);
     expect(svg).toContain('data-font-colour="#ff0000ff"');
     expect(svg).toContain('data-font-colour="#00ff00ff"');
+    expect(svg).toContain('<feColorMatrix');
+    expect(svg).not.toContain('<mask');
     expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
     const png = rendered.images[0]?.png;
     expect(png).toBeDefined();
@@ -1470,6 +1588,11 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(
       pixels.some(
         ({ red, green, blue, alpha }) => red > 160 && green > 100 && blue < 120 && alpha > 100,
+      ),
+    ).toBe(true);
+    expect(
+      pixels.some(
+        ({ red, green, blue, alpha }) => red < 40 && green < 40 && blue < 40 && alpha > 100,
       ),
     ).toBe(true);
   });
@@ -1528,34 +1651,59 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(new Set(measured.missingGlyphs).size).toBe(GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES);
   });
 
-  it('selects the base bitmap font unless the preview language has an exact override', () => {
+  it('selects and validates only the bitmap font for the preview language', async () => {
     const files = [
       scanned(
         'interface/fonts.gfx',
         `bitmapfonts = {
-	bitmapfont = { name = "hoi_font" fontfiles = { "gfx/fonts/base_font" } color = 0xff112233 border_color = 0xff010203 }
-	bitmapfont_override = { name = "hoi_font" fontfiles = { "gfx/fonts/japanese/font" } languages = { "l_japanese" } }
+	bitmapfont = { name = "hoi_font" fontfiles = { "gfx/fonts/base_font.fnt" } color = 0xff112233 border_color = 0xff010203 }
+	bitmapfont_override = { name = "hoi_font" fontfiles = { "gfx/fonts/japanese/font.fnt" } languages = { "l_japanese" } }
 }`,
       ),
+      scanned(
+        'interface/fonts.gui',
+        'guiTypes = { containerWindowType = { name = "font_window" size = { width = 200 height = 100 } instantTextBoxType = { name = "label" text = "FONT_LABEL" font = "hoi_font" size = { width = 160 height = 40 } } } }',
+      ),
+      scanned(
+        'localisation/english/fonts_l_english.yml',
+        '\ufeffl_english:\nFONT_LABEL: "English"\n',
+      ),
       scanned('gfx/fonts/base_font.fnt', 'info size=16\ncommon lineHeight=16\n'),
-      scanned('gfx/fonts/japanese/font.fnt', 'info size=18\ncommon lineHeight=18\n'),
     ];
     const graph = sourceGraph(files);
     const english = new GuiAssetCatalog(graph, files, new RenderBudget(), 'l_english');
     const japanese = new GuiAssetCatalog(graph, files, new RenderBudget(), 'l_japanese');
     expect(english.fontDefinition('hoi_font')).toMatchObject({
       override: false,
-      assetPaths: ['gfx/fonts/base_font'],
+      assetPaths: ['gfx/fonts/base_font.fnt'],
       colour: '#112233ff',
       borderColour: '#010203ff',
     });
     expect(japanese.fontDefinition('hoi_font')).toMatchObject({
       override: true,
       languages: ['l_japanese'],
-      assetPaths: ['gfx/fonts/japanese/font'],
+      assetPaths: ['gfx/fonts/japanese/font.fnt'],
       colour: '#112233ff',
       borderColour: '#010203ff',
     });
+    const englishScene = await buildGuiScene(
+      graph,
+      files,
+      'font_window',
+      parsePreviewScenario({ id: 'english-font', language: 'l_english' }),
+      english,
+    );
+    const englishValidation = await validateGuiScene(graph, englishScene, files, [], english);
+    expect(englishValidation.diagnostics.map(({ code }) => code)).not.toContain('GUI_MISSING_FONT');
+    const japaneseScene = await buildGuiScene(
+      graph,
+      files,
+      'font_window',
+      parsePreviewScenario({ id: 'japanese-font', language: 'l_japanese' }),
+      japanese,
+    );
+    const japaneseValidation = await validateGuiScene(graph, japaneseScene, files, [], japanese);
+    expect(japaneseValidation.diagnostics.map(({ code }) => code)).toContain('GUI_MISSING_FONT');
   });
 
   it('uses the BMFont source-stem atlas when the declared first page is absent', async () => {
@@ -1954,6 +2102,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
       elements: [],
       sprites: [],
       fonts: [],
+      textColours: {},
       scriptedGuis: [],
       animationSources: [],
       scriptedLocalisation: [],
@@ -2028,6 +2177,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
       elements: [],
       sprites: [],
       fonts: [],
+      textColours: {},
       scriptedGuis: [],
       animationSources: [],
       scriptedLocalisation: [],

@@ -217,6 +217,13 @@ export interface GuiScriptedLocalisationDefinition {
   sourcePath: string;
   location?: SourceLocation;
   localisationKeys: string[];
+  choices: GuiScriptedLocalisationChoice[];
+  rawSource: string;
+}
+
+export interface GuiScriptedLocalisationChoice {
+  localisationKey: string;
+  triggerExpression?: string;
   rawSource: string;
 }
 
@@ -230,6 +237,7 @@ export interface GuiSourceGraph {
   elements: GuiElementDefinition[];
   sprites: GuiSpriteDefinition[];
   fonts: GuiFontDefinition[];
+  textColours: Record<string, string>;
   scriptedGuis: ScriptedGuiDefinition[];
   animationSources: GuiAnimationSourceManifest[];
   scriptedLocalisation: GuiScriptedLocalisationDefinition[];

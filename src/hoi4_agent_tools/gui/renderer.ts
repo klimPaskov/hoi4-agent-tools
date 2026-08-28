@@ -84,7 +84,18 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
 }
 
 function bitmapTintMarkup(id: string, colour: string, glyphs: string, rect: GuiRect): string {
-  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:alpha" ${rectAttributes(rect)}><g>${glyphs}</g></mask></defs><rect ${rectAttributes(rect)} fill="${colour}" mask="url(#${id})"/>`;
+  const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/iu.exec(colour);
+  const rgb = match?.[1] ?? 'ffffff';
+  const alpha = match?.[2] ?? 'ff';
+  const channels = [
+    Number.parseInt(rgb.slice(0, 2), 16) / 255,
+    Number.parseInt(rgb.slice(2, 4), 16) / 255,
+    Number.parseInt(rgb.slice(4, 6), 16) / 255,
+    Number.parseInt(alpha, 16) / 255,
+  ].map(finite);
+  const [red, green, blue, opacity] = channels;
+  const matrix = `${red} 0 0 0 0 0 ${green} 0 0 0 0 0 ${blue} 0 0 0 0 0 ${opacity} 0`;
+  return `<defs><filter id="${id}" filterUnits="userSpaceOnUse" ${rectAttributes(rect)} color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrix}"/></filter></defs><g filter="url(#${id})">${glyphs}</g>`;
 }
 
 function actualGlyphMarkup(

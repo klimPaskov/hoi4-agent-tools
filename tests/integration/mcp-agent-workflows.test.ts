@@ -317,7 +317,7 @@ describe('MCP coding-agent workflows', () => {
       data: {
         windowName: 'synthetic_gui_window',
         stateCount: 3,
-        scenarioCount: 3,
+        scenarioCount: 2,
         resolutionCount: 1,
         offlineRepresentation: true,
       },
