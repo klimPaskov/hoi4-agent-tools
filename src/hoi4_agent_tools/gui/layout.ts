@@ -65,19 +65,28 @@ function scalarString(value: GuiPropertyValue | undefined): string | undefined {
 
 const defaultTextColour = '#f5f2e8';
 const hoi4TextColours: Readonly<Record<string, string>> = {
-  B: '#4aa3df',
-  C: '#55d6d6',
-  G: '#56b870',
-  H: '#e7b454',
-  L: '#9aa7b3',
-  M: '#d16bd4',
-  O: '#e58b3c',
-  R: '#e05a5a',
-  T: '#4bc6b9',
-  W: defaultTextColour,
-  Y: '#f1c75b',
-  b: '#4aa3df',
-  g: '#87939e',
+  C: '#23ceff',
+  L: '#c3b091',
+  W: '#ffffff',
+  B: '#0000ff',
+  G: '#009f03',
+  R: '#ff3232',
+  b: '#000000',
+  g: '#b0b0b0',
+  Y: '#ffbd00',
+  H: '#ffbd00',
+  T: '#ffffff',
+  O: '#ff7019',
+  '0': '#cb00cb',
+  '1': '#8078d3',
+  '2': '#5170f3',
+  '3': '#518fdc',
+  '4': '#5abee7',
+  '5': '#3fb5c2',
+  '6': '#77ccba',
+  '7': '#99d199',
+  '8': '#d1d175',
+  '9': '#d1a675',
 };
 
 interface VisibleHoiText {
@@ -90,7 +99,10 @@ interface VisibleHoiText {
 const inlineIconMarkerStart = 0xe000;
 const inlineIconMarkerEnd = 0xf8ff;
 
-function visibleHoiText(value: string): VisibleHoiText {
+function visibleHoiText(
+  value: string,
+  fontTextColours: Readonly<Record<string, string>> = {},
+): VisibleHoiText {
   const characters: string[] = [];
   const colours: Array<string | undefined> = [];
   const inlineIcons: Array<{ marker: string; token: string }> = [];
@@ -101,7 +113,7 @@ function visibleHoiText(value: string): VisibleHoiText {
     const next = value[index + 1];
     if (character === '\u00a7' && next !== undefined && /^[A-Za-z0-9!]$/u.test(next)) {
       hasColourMarkup = true;
-      colour = next === '!' ? undefined : hoi4TextColours[next];
+      colour = next === '!' ? undefined : (fontTextColours[next] ?? hoi4TextColours[next]);
       index += 1;
       continue;
     }
@@ -1120,11 +1132,11 @@ async function layoutElement(
     const state = scenario.elementStates[definition.name] ?? scenario.state;
     if (state === 'long-text') displayText = `${displayText} — ${displayText} — ${displayText}`;
     if (state === 'missing-localisation') displayText = `\u00a7R${rawText}_MISSING\u00a7!`;
-    const visibleText = visibleHoiText(displayText);
-    displayText = visibleText.text;
-    context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const fontName = scalarString(property(definition.attributes, 'font', 'buttonFont'));
     const fontDefinition = fontName === undefined ? undefined : catalog.fontDefinition(fontName);
+    const visibleText = visibleHoiText(displayText, fontDefinition?.textColours);
+    displayText = visibleText.text;
+    context.work.admitText(displayText, `GUI text for ${definition.name}`);
     const resolvedFontMetrics = catalog.resolvedFontMetrics(fontName);
     const explicitFontSize = scalarNumber(property(definition.attributes, 'fontSize'), 16);
     const fontSize =

@@ -53,7 +53,8 @@ import {
   renderGuiScene,
   type GalleryItem,
 } from './renderer.js';
-import { parsePreviewScenario } from './scenario.js';
+import { generateGuiPreviewScenarios } from './scenario-generator.js';
+import { parseGeneratedScenarioOptions, parsePreviewScenario } from './scenario.js';
 import { buildGuiSourceGraph } from './source-graph.js';
 import { assertGuiSourcePatchesSafe } from './source-patch.js';
 import type {
@@ -628,6 +629,7 @@ export interface GuiStudioRenderInput {
   states?: GuiPreviewState[];
   resolutions?: { width: number; height: number; uiScale?: number }[];
   relatedScenarios?: unknown[];
+  generatedScenarios?: unknown;
   comparisonScenario?: unknown;
   principal?: string;
   signal?: AbortSignal;
@@ -638,6 +640,7 @@ export interface GuiStudioLintInput {
   windowName: string;
   scenario: unknown;
   relatedScenarios?: unknown[];
+  generatedScenarios?: unknown;
   principal?: string;
   signal?: AbortSignal;
 }
@@ -1029,17 +1032,38 @@ export class ScriptedGuiStudio {
     input: GuiStudioLintInput,
   ): Promise<{ scene: GuiScene; graph: GuiSourceGraph; validation: GuiValidationResult }> {
     input.signal?.throwIfAborted();
-    const scenario = parsePreviewScenario(input.scenario);
-    const relatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
-    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
+    const placeholderScenario = parsePreviewScenario(input.scenario);
+    const explicitRelatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
     const scanned = await this.scanWindow(
       input.workspaceId,
       input.windowName,
       input.principal,
       input.signal,
-      [scenario.language, ...relatedScenarios.map(({ language }) => language)],
-      scenarioSpriteNames([scenario, ...relatedScenarios]),
+      [placeholderScenario.language, ...explicitRelatedScenarios.map(({ language }) => language)],
+      scenarioSpriteNames([placeholderScenario, ...explicitRelatedScenarios]),
     );
+    const generatedOptions =
+      input.generatedScenarios === undefined
+        ? undefined
+        : parseGeneratedScenarioOptions(input.generatedScenarios);
+    const generatedScenarios =
+      generatedOptions === undefined
+        ? []
+        : generateGuiPreviewScenarios(
+            scanned.graph,
+            input.windowName,
+            placeholderScenario,
+            generatedOptions,
+          );
+    const scenario = generatedScenarios[0] ?? placeholderScenario;
+    const relatedScenarios = [
+      ...(generatedOptions?.preservePlaceholder === true && generatedScenarios.length > 0
+        ? [placeholderScenario]
+        : []),
+      ...generatedScenarios.slice(1),
+      ...explicitRelatedScenarios,
+    ];
+    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const budget = new RenderBudget();
     const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
     const scene = await buildGuiScene(
@@ -1140,24 +1164,53 @@ export class ScriptedGuiStudio {
     input.signal?.throwIfAborted();
     const budget = new RenderBudget();
     const workspace = this.resolver.get(input.workspaceId, input.principal);
-    const scenario = parsePreviewScenario(input.scenario);
-    const relatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
-    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
-    const baselineScenario = parsePreviewScenario(
-      input.comparisonScenario ?? { ...scenario, id: `${scenario.id}-comparison`, state: 'normal' },
-    );
+    const placeholderScenario = parsePreviewScenario(input.scenario);
+    const explicitRelatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
+    const requestedBaselineScenario =
+      input.comparisonScenario === undefined
+        ? undefined
+        : parsePreviewScenario(input.comparisonScenario);
     const scanned = await this.scanWindow(
       input.workspaceId,
       input.windowName,
       input.principal,
       input.signal,
       [
-        scenario.language,
-        baselineScenario.language,
-        ...relatedScenarios.map(({ language }) => language),
+        placeholderScenario.language,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario.language]),
+        ...explicitRelatedScenarios.map(({ language }) => language),
       ],
-      scenarioSpriteNames([scenario, baselineScenario, ...relatedScenarios]),
+      scenarioSpriteNames([
+        placeholderScenario,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+        ...explicitRelatedScenarios,
+      ]),
     );
+    const generatedOptions =
+      input.generatedScenarios === undefined
+        ? undefined
+        : parseGeneratedScenarioOptions(input.generatedScenarios);
+    const generatedScenarios =
+      generatedOptions === undefined
+        ? []
+        : generateGuiPreviewScenarios(
+            scanned.graph,
+            input.windowName,
+            placeholderScenario,
+            generatedOptions,
+          );
+    const scenario = generatedScenarios[0] ?? placeholderScenario;
+    const relatedScenarios = [
+      ...(generatedOptions?.preservePlaceholder === true && generatedScenarios.length > 0
+        ? [placeholderScenario]
+        : []),
+      ...generatedScenarios.slice(1),
+      ...explicitRelatedScenarios,
+    ];
+    assertUniqueScenarioIds([scenario, ...relatedScenarios]);
+    const baselineScenario =
+      requestedBaselineScenario ??
+      parsePreviewScenario({ ...scenario, id: `${scenario.id}-comparison`, state: 'normal' });
     const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
     const scene = await buildGuiScene(
       scanned.graph,

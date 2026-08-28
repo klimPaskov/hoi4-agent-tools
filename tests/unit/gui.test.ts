@@ -32,7 +32,9 @@ import {
   decodeDds,
   decodeTga,
   emptyFidelityReport,
+  generateGuiPreviewScenarios,
   parseBmFont,
+  parseGeneratedScenarioOptions,
   parsePreviewScenario,
   planGuiHelperCompilation,
   renderGuiScene,
@@ -820,16 +822,62 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     const runs = text?.colourRuns?.flat() ?? [];
     expect(
       runs.some(
-        ({ text: value, colour }) => value.includes('[dynamic_loc]') && colour === '#f1c75b',
+        ({ text: value, colour }) => value.includes('[dynamic_loc]') && colour === '#ffbd00',
       ),
     ).toBe(true);
     expect(
-      runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#e05a5a'),
+      runs.some(({ text: value, colour }) => value.includes('[X]') && colour === '#ff3232'),
     ).toBe(true);
     const rendered = await renderGuiScene(scene, ['full']);
     expect(rendered.images[0]?.svg).toContain('data-hoi4-colour-runs="true"');
-    expect(rendered.images[0]?.svg).toContain('fill="#f1c75b"');
-    expect(rendered.images[0]?.svg).toContain('fill="#e05a5a"');
+    expect(rendered.images[0]?.svg).toContain('fill="#ffbd00"');
+    expect(rendered.images[0]?.svg).toContain('fill="#ff3232"');
+  });
+
+  it('generates deterministic plausible GUI scenarios while preserving explicit values', () => {
+    const files = [
+      scanned(
+        'interface/generated-scenario.gui',
+        'guiTypes = { containerWindowType = { name = "generated_window" size = { width = 400 height = 180 } instantTextBoxType = { name = "generated_text" text = "GENERATED_TEXT" } progressbarType = { name = "threat_meter" size = { width = 100 height = 10 } } } }',
+      ),
+      scanned(
+        'common/scripted_guis/generated-scenario.txt',
+        'scripted_gui = { generated_gui = { context_type = country window_name = generated_window dynamic_lists = { target_list = { entry_container = "target_row" } } } }',
+      ),
+      scanned(
+        'localisation/english/generated_scenario_l_english.yml',
+        '\uFEFFl_english:\nGENERATED_TEXT: "Leader: [GetDynamicLeader] Risk: [?risk|.0] Country: [ROOT.GetName]"\n',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const base = parsePreviewScenario({
+      id: 'placeholder',
+      resolution: { width: 640, height: 360 },
+      values: { risk: 42 },
+    });
+    const options = parseGeneratedScenarioOptions({
+      count: 2,
+      seed: 'fixed-seed',
+      numericMinimum: 10,
+      numericMaximum: 20,
+      listRowsMinimum: 2,
+      listRowsMaximum: 2,
+    });
+    const first = generateGuiPreviewScenarios(graph, 'generated_window', base, options);
+    const second = generateGuiPreviewScenarios(graph, 'generated_window', base, options);
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(2);
+    expect(first[0]).toMatchObject({
+      id: 'placeholder-generated-1',
+      values: {
+        risk: 42,
+        GetDynamicLeader: expect.any(String),
+        'ROOT.GetName': expect.any(String),
+      },
+      lists: { target_list: [expect.any(Object), expect.any(Object)] },
+    });
+    expect(first[0]?.values.GetDynamicLeader).not.toBe('[dynamic_loc]');
+    expect(first[0]?.values['ROOT.GetName']).not.toBe('[dynamic_loc]');
   });
 
   it('blocks aggregate scenario rows and nested list scene multiplication before expansion', async () => {
@@ -1317,7 +1365,7 @@ kernings count=0
       .composite([
         {
           input: Buffer.from(
-            '<svg width="16" height="12"><path d="M1 11 4 1 7 11ZM9 1h6v10H9Z" fill="white"/></svg>',
+            '<svg width="16" height="12"><path d="M0 0h8v12H0zM9 1h6v10H9Z" fill="black"/></svg>',
           ),
         },
       ])
@@ -1349,7 +1397,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
       ),
       scanned(
         'interface/font-faces.gfx',
-        'bitmapfonts = { bitmapfont = { name = "red_font" path = "fonts/red.fnt" color = 0xffff0000 border_color = 0x00000000 } bitmapfont = { name = "green_font" path = "fonts/green.fnt" color = 0xff00ff00 border_color = 0xff000000 } }',
+        'bitmapfonts = { bitmapfont = { name = "red_font" path = "fonts/red.fnt" color = 0xffff0000 border_color = 0x00000000 textcolors = { Y = { 250 170 10 } } } bitmapfont = { name = "green_font" path = "fonts/green.fnt" color = 0xff00ff00 border_color = 0xff000000 } }',
       ),
       scanned(
         'localisation/english/font_faces_l_english.yml',
@@ -1367,6 +1415,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
           name: 'red_font',
           colour: '#ff0000ff',
           borderColour: '#00000000',
+          textColours: { Y: '#faaa0a' },
         }),
         expect.objectContaining({
           name: 'green_font',
@@ -1389,6 +1438,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(greenText?.glyphLines[0]?.source).toBe('bmfont-atlas');
     expect(redText?.glyphLines[0]?.sourceHash).not.toBe(greenText?.glyphLines[0]?.sourceHash);
     expect(redText?.colourRuns?.[0]?.[0]?.colour).toBe('#ff0000ff');
+    expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#faaa0a')).toBe(true);
     const rendered = await renderGuiScene(scene, ['full']);
     const svg = rendered.images[0]?.svg ?? '';
     expect(svg.match(/data-hoi4-colour-runs="true"/gu)).toHaveLength(2);
@@ -1397,6 +1447,31 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(svg).toContain('data-font-colour="#ff0000ff"');
     expect(svg).toContain('data-font-colour="#00ff00ff"');
     expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
+    const png = rendered.images[0]?.png;
+    expect(png).toBeDefined();
+    if (png === undefined) return;
+    const { data } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const pixels = Array.from({ length: data.length / 4 }, (_unused, index) => ({
+      red: data[index * 4] ?? 0,
+      green: data[index * 4 + 1] ?? 0,
+      blue: data[index * 4 + 2] ?? 0,
+      alpha: data[index * 4 + 3] ?? 0,
+    }));
+    expect(
+      pixels.some(
+        ({ red, green, blue, alpha }) => red > 160 && green < 80 && blue < 80 && alpha > 100,
+      ),
+    ).toBe(true);
+    expect(
+      pixels.some(
+        ({ red, green, blue, alpha }) => red < 80 && green > 160 && blue < 80 && alpha > 100,
+      ),
+    ).toBe(true);
+    expect(
+      pixels.some(
+        ({ red, green, blue, alpha }) => red > 160 && green > 100 && blue < 120 && alpha > 100,
+      ),
+    ).toBe(true);
   });
 
   it('bounds BMFont bytes, records, fields, pages, character maps, and kerning maps', () => {

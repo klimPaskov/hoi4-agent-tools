@@ -83,18 +83,8 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
   ].join('');
 }
 
-function colourMatrix(colour: string): string {
-  const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/iu.exec(colour);
-  if (match === null) return '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0';
-  const rgb = match[1]!;
-  const alpha = match[2] ?? 'ff';
-  const component = (offset: number): number =>
-    Number.parseInt(rgb.slice(offset, offset + 2), 16) / 255;
-  return `${finite(component(0))} 0 0 0 0 0 ${finite(component(2))} 0 0 0 0 0 ${finite(component(4))} 0 0 0 0 0 ${finite(Number.parseInt(alpha, 16) / 255)} 0`;
-}
-
-function bitmapTintDefinition(id: string, colour: string): string {
-  return `<filter id="${id}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${colourMatrix(colour)}"/></filter>`;
+function bitmapTintMarkup(id: string, colour: string, glyphs: string, rect: GuiRect): string {
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:alpha" ${rectAttributes(rect)}><g>${glyphs}</g></mask></defs><rect ${rectAttributes(rect)} fill="${colour}" mask="url(#${id})"/>`;
 }
 
 function actualGlyphMarkup(
@@ -180,9 +170,14 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
         );
         const glyphs = actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale);
         if (glyphLine.source === 'bmfont-atlas') {
-          const filterId = `gui-font-tint-${sha256Bytes(key).slice(0, 20)}`;
-          definitions.push(bitmapTintDefinition(filterId, run.colour));
-          return `<g clip-path="url(#${clipId})" filter="url(#${filterId})" data-font-colour="${run.colour}">${glyphs}</g>`;
+          const maskId = `gui-font-mask-${sha256Bytes(key).slice(0, 20)}`;
+          const runRect = {
+            x: runX - 0.25,
+            y: lineTop,
+            width: run.width * horizontalScale + 0.5,
+            height: text.lineHeight,
+          };
+          return `<g clip-path="url(#${clipId})" data-font-colour="${run.colour}">${bitmapTintMarkup(maskId, run.colour, glyphs, runRect)}</g>`;
         }
         return `<g clip-path="url(#${clipId})" fill="${run.colour}" stroke="${text.borderColour ?? '#12151a'}" data-font-colour="${run.colour}">${glyphs}</g>`;
       });
@@ -210,8 +205,9 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
       const glyphs = actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale);
       if (text.colour === undefined)
         return `<g data-font-sha256="${glyphLine.sourceHash}">${glyphs}${inlineIconMarkup}</g>`;
-      const filterId = `gui-font-tint-${sha256Bytes(`${element.id}:${index}:${text.colour}`).slice(0, 20)}`;
-      return `<g data-font-sha256="${glyphLine.sourceHash}" data-font-colour="${text.colour}"><defs>${bitmapTintDefinition(filterId, text.colour)}</defs><g filter="url(#${filterId})">${glyphs}</g>${inlineIconMarkup}</g>`;
+      const maskId = `gui-font-mask-${sha256Bytes(`${element.id}:${index}:${text.colour}`).slice(0, 20)}`;
+      const lineRect = { x: originX, y: lineTop, width, height: text.lineHeight };
+      return `<g data-font-sha256="${glyphLine.sourceHash}" data-font-colour="${text.colour}">${bitmapTintMarkup(maskId, text.colour, glyphs, lineRect)}${inlineIconMarkup}</g>`;
     }
     const visibleLine = line.replace(/[\uE000-\uF8FF]/gu, ' ');
     return `<g>${toolText.render(visibleLine, {

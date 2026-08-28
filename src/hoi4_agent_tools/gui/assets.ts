@@ -315,6 +315,7 @@ export class GuiAssetCatalog {
         ...(definition.borderColour === undefined && base.borderColour !== undefined
           ? { borderColour: base.borderColour }
           : {}),
+        textColours: { ...base.textColours, ...definition.textColours },
       });
     }
   }
@@ -768,11 +769,23 @@ export class GuiAssetCatalog {
           `GUI BMFont glyph U+${codePoint.toString(16).toUpperCase()}`,
           { maximumPixels: RENDER_MAX_DECODED_PIXELS },
         );
-        const png = await sharp(raster.data, {
+        const extracted = await sharp(raster.data, {
           raw: { width: raster.width, height: raster.height, channels: 4 },
           limitInputPixels: RENDER_MAX_DECODED_PIXELS,
         })
           .extract({ left: metric.x, top: metric.y, width: metric.width, height: metric.height })
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        for (let index = 0; index < extracted.data.length; index += 4) {
+          extracted.data[index] = 255;
+          extracted.data[index + 1] = 255;
+          extracted.data[index + 2] = 255;
+        }
+        const png = await sharp(extracted.data, {
+          raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
+          limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+        })
           .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
           .toBuffer();
         return {

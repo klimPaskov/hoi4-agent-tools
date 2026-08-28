@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
-import type { GuiPreviewScenario } from './types.js';
+import type { GuiGeneratedScenarioOptions, GuiPreviewScenario } from './types.js';
 import {
   GUI_SCENARIO_MAX_KEYS,
   GUI_SCENARIO_MAX_LIST_KEYS,
@@ -223,7 +223,50 @@ export const GuiPreviewScenarioSchema = z.preprocess((input) => {
   return input;
 }, GuiPreviewScenarioBodySchema);
 
+export const GuiGeneratedScenarioOptionsSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    count: z.number().int().min(1).max(16).default(1),
+    seed: z.string().min(1).max(256).default('auto'),
+    idPrefix: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
+      .default('generated'),
+    preservePlaceholder: z.boolean().default(true),
+    numericMinimum: z.number().min(-1_000_000_000).max(1_000_000_000).default(0),
+    numericMaximum: z.number().min(-1_000_000_000).max(1_000_000_000).default(100),
+    integerValues: z.boolean().default(true),
+    listRowsMinimum: z.number().int().min(0).max(100).default(1),
+    listRowsMaximum: z.number().int().min(0).max(100).default(5),
+    trueProbability: z.number().min(0).max(1).default(0.7),
+    visibility: z.enum(['show-all', 'varied']).default('varied'),
+    elementStates: z.enum(['normal', 'varied']).default('normal'),
+    textSamples: z
+      .array(z.string().min(1).max(128))
+      .min(1)
+      .max(64)
+      .default(['Operational', 'Ready', 'Stable', 'Available', 'In Progress']),
+  })
+  .strict()
+  .superRefine((options, context) => {
+    if (options.numericMaximum < options.numericMinimum)
+      context.addIssue({
+        code: 'custom',
+        path: ['numericMaximum'],
+        message: 'numericMaximum must be greater than or equal to numericMinimum',
+      });
+    if (options.listRowsMaximum < options.listRowsMinimum)
+      context.addIssue({
+        code: 'custom',
+        path: ['listRowsMaximum'],
+        message: 'listRowsMaximum must be greater than or equal to listRowsMinimum',
+      });
+  });
+
 export type GuiPreviewScenarioInput = z.input<typeof GuiPreviewScenarioSchema>;
+export type GuiGeneratedScenarioOptionsInput = z.input<typeof GuiGeneratedScenarioOptionsSchema>;
 
 export function parsePreviewScenario(input: unknown): GuiPreviewScenario {
   return GuiPreviewScenarioSchema.parse(input) as GuiPreviewScenario;
@@ -231,4 +274,8 @@ export function parsePreviewScenario(input: unknown): GuiPreviewScenario {
 
 export function defaultPreviewScenario(id = 'default'): GuiPreviewScenario {
   return parsePreviewScenario({ id });
+}
+
+export function parseGeneratedScenarioOptions(input: unknown): GuiGeneratedScenarioOptions {
+  return GuiGeneratedScenarioOptionsSchema.parse(input);
 }

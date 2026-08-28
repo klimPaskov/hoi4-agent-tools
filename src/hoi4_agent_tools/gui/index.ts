@@ -6,6 +6,7 @@ export * from './layout.js';
 export * from './limits.js';
 export * from './renderer.js';
 export * from './scenario.js';
+export * from './scenario-generator.js';
 export * from './source-graph.js';
 export * from './source-patch.js';
 export * from './studio.js';

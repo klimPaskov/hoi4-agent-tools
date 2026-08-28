@@ -236,6 +236,27 @@ function paradoxColour(value: string | undefined): string | undefined {
   return `#${argb.slice(2)}${argb.slice(0, 2)}`.toLowerCase();
 }
 
+function textColoursFrom(block: BlockNode): Record<string, string> {
+  const textColours = childBlocks(block, 'textcolors')[0];
+  if (textColours === undefined) return {};
+  const result: Record<string, string> = {};
+  for (const entry of assignments(textColours)) {
+    if (entry.value.type !== 'block') continue;
+    const channels = entry.value.entries
+      .filter((channel) => channel.type === 'scalar')
+      .map((channel) => Number(channel.value));
+    if (channels.length < 3 || channels.slice(0, 3).some((channel) => !Number.isFinite(channel)))
+      continue;
+    const [red, green, blue] = channels.map((channel) =>
+      Math.max(0, Math.min(255, Math.round(channel))),
+    );
+    result[entry.key.value] = `#${red!.toString(16).padStart(2, '0')}${green!
+      .toString(16)
+      .padStart(2, '0')}${blue!.toString(16).padStart(2, '0')}`;
+  }
+  return result;
+}
+
 function sizeFrom(block: BlockNode): GuiSize | undefined {
   const size = childBlocks(block, 'size')[0];
   if (size === undefined) return undefined;
@@ -531,6 +552,7 @@ function indexSpritesAndFonts(
           const borderColour = paradoxColour(
             firstScalarInsensitive(child, 'border_color', 'borderColor', 'border_colour'),
           );
+          const textColours = textColoursFrom(child);
           const id = deterministicId('gui_font', { path: file.displayPath, name });
           const font: GuiFontDefinition = {
             id,
@@ -543,6 +565,7 @@ function indexSpritesAndFonts(
             assetPaths,
             ...(colour === undefined ? {} : { colour }),
             ...(borderColour === undefined ? {} : { borderColour }),
+            ...(Object.keys(textColours).length === 0 ? {} : { textColours }),
             rawSource: raw(document, assignment),
           };
           addDomainEntry(fonts, font, 'font');
@@ -559,6 +582,7 @@ function indexSpritesAndFonts(
               assetPaths,
               ...(colour === undefined ? {} : { colour }),
               ...(borderColour === undefined ? {} : { borderColour }),
+              ...(Object.keys(textColours).length === 0 ? {} : { textColours }),
             },
           });
           addEdge(edges, 'contains', fileNodeId, id, true, {}, font.location);

@@ -287,13 +287,13 @@ describe('MCP coding-agent workflows', () => {
       data: {
         complete: true,
         windowName: 'synthetic_gui_window',
-        scenarioId: 'synthetic-acceptance',
+        scenarioId: 'synthetic-acceptance-generated-1',
       },
     });
     const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
     expect(inspection).toMatchObject({
       offline: true,
-      scenario: expect.objectContaining({ id: 'synthetic-acceptance' }),
+      scenario: expect.objectContaining({ id: 'synthetic-acceptance-generated-1' }),
       fidelity: expect.any(Object),
     });
 
@@ -317,7 +317,7 @@ describe('MCP coding-agent workflows', () => {
       data: {
         windowName: 'synthetic_gui_window',
         stateCount: 3,
-        scenarioCount: 2,
+        scenarioCount: 3,
         resolutionCount: 1,
         offlineRepresentation: true,
       },

@@ -12,6 +12,7 @@ import { emptyServiceResult, ServiceError } from '../../core/result.js';
 import { SOURCE_MAX_BYTES } from '../../core/source/index.js';
 import {
   GuiHelperDocumentSchema,
+  GuiGeneratedScenarioOptionsSchema,
   GuiPreviewScenarioSchema,
   GUI_TEXT_PACKAGE_MAX_FILES,
   ScriptedGuiStudio,
@@ -141,6 +142,10 @@ const compactGuiScenarioSchema = compactValidatedInputSchema(
   GuiPreviewScenarioSchema,
   `Complete GUI preview scenario: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
 );
+const compactGeneratedScenarioOptionsSchema = compactValidatedInputSchema(
+  GuiGeneratedScenarioOptionsSchema,
+  `Options: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
+);
 const compactGuiHelperSchema = compactValidatedInputSchema(
   GuiHelperDocumentSchema,
   `Complete GUI helper document: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
@@ -160,6 +165,7 @@ const guiInspectInput = z
     windowName: z.string().min(1).max(256).optional(),
     scenario: compactGuiScenarioSchema.optional(),
     relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
+    generatedScenarios: compactGeneratedScenarioOptionsSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -174,6 +180,13 @@ const guiInspectInput = z
         code: 'custom',
         path: ['relatedScenarios'],
         message: 'relatedScenarios requires a window scenario',
+      });
+    }
+    if (value.generatedScenarios !== undefined && value.scenario === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['generatedScenarios'],
+        message: 'generatedScenarios requires a window scenario',
       });
     }
   });
@@ -217,14 +230,19 @@ export function registerGuiTools(
     'hoi4.gui_inspect',
     {
       title: 'Inspect scripted GUI',
-      description:
-        'Inspect GUI, GFX, script, localisation, and animation sources. Window/scenario selectors add offline visual and interaction diagnostics.',
+      description: 'Inspect GUI sources and scenarios.',
       inputSchema: guiInspectInput,
       outputSchema: guiScanOutputSchema,
       annotations: artifactProducing,
     },
     async (
-      { workspaceId: requestedWorkspaceId, windowName, scenario, relatedScenarios },
+      {
+        workspaceId: requestedWorkspaceId,
+        windowName,
+        scenario,
+        relatedScenarios,
+        generatedScenarios,
+      },
       extra,
     ) => {
       const workspaceId = await resolveServerWorkspaceId(
@@ -247,6 +265,7 @@ export function registerGuiTools(
               windowName,
               scenario,
               ...(relatedScenarios === undefined ? {} : { relatedScenarios }),
+              generatedScenarios: generatedScenarios ?? {},
               ...(context.principal === undefined ? {} : { principal: context.principal }),
               signal: progress.signal,
             });
@@ -372,6 +391,7 @@ export function registerGuiTools(
       resolutions?:
         Array<{ width: number; height: number; uiScale?: number | undefined }> | undefined;
       relatedScenarios?: unknown[] | undefined;
+      generatedScenarios?: unknown;
       comparisonScenario?: unknown;
     },
     extra: Parameters<typeof progressReporter>[0],
@@ -406,6 +426,7 @@ export function registerGuiTools(
             ...(input.relatedScenarios === undefined
               ? {}
               : { relatedScenarios: input.relatedScenarios }),
+            generatedScenarios: input.generatedScenarios ?? {},
             ...(input.comparisonScenario === undefined
               ? {}
               : { comparisonScenario: input.comparisonScenario }),
@@ -459,63 +480,73 @@ export function registerGuiTools(
       states: z.array(previewStateSchema).max(14).optional(),
       resolutions: z.array(resolutionSchema).min(1).max(16).optional(),
       relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
+      generatedScenarios: compactGeneratedScenarioOptionsSchema.optional(),
       comparisonScenario: compactGuiScenarioSchema.optional(),
     })
     .strict()
-    .superRefine(({ scenario, states, resolutions, relatedScenarios }, context) => {
-      const budget = new RenderBudget();
-      try {
-        const stateCount = states?.length ?? 14;
-        for (let index = 0; index < 9 + stateCount; index += 1) {
+    .superRefine(
+      ({ scenario, states, resolutions, relatedScenarios, generatedScenarios }, context) => {
+        const budget = new RenderBudget();
+        try {
+          const stateCount = states?.length ?? 14;
+          for (let index = 0; index < 9 + stateCount; index += 1) {
+            budget.reserve(
+              scenario.resolution.width,
+              scenario.resolution.height,
+              'GUI request variant',
+            );
+          }
+          for (const resolution of resolutions ?? [
+            { width: 1280, height: 720 },
+            { width: 1920, height: 1080 },
+            { width: 2560, height: 1440 },
+            { width: 1920, height: 1080 },
+          ]) {
+            budget.reserve(resolution.width, resolution.height, 'GUI resolution variant');
+          }
+          const generatedCount =
+            generatedScenarios?.enabled === false ? 0 : (generatedScenarios?.count ?? 1);
+          const scenarioCount =
+            generatedCount === 0
+              ? 1 + (relatedScenarios?.length ?? 0)
+              : generatedCount +
+                (generatedScenarios?.preservePlaceholder === false ? 0 : 1) +
+                (relatedScenarios?.length ?? 0);
+          const stateColumns = Math.min(3, Math.max(1, stateCount));
+          const stateRows = Math.max(1, Math.ceil(stateCount / stateColumns));
+          budget.reserve(stateColumns * 420, 46 + stateRows * 280, 'GUI state gallery');
+          const resolutionCount = resolutions?.length ?? 4;
+          const resolutionColumns = Math.min(3, Math.max(1, resolutionCount));
+          const resolutionRows = Math.max(1, Math.ceil(resolutionCount / resolutionColumns));
           budget.reserve(
-            scenario.resolution.width,
-            scenario.resolution.height,
-            'GUI request variant',
+            resolutionColumns * 420,
+            46 + resolutionRows * 280,
+            'GUI resolution gallery',
           );
+          const scenarioBudget = new RenderBudget();
+          const scenarioColumns = Math.min(3, Math.max(1, scenarioCount));
+          const scenarioRows = Math.max(1, Math.ceil(scenarioCount / scenarioColumns));
+          scenarioBudget.reserve(
+            scenarioColumns * 420,
+            46 + scenarioRows * 280,
+            'GUI scripted scenario gallery',
+          );
+        } catch (error) {
+          if (error instanceof ServiceError) {
+            context.addIssue({ code: 'custom', message: `${error.code}: ${error.message}` });
+            return;
+          }
+          throw error;
         }
-        for (const resolution of resolutions ?? [
-          { width: 1280, height: 720 },
-          { width: 1920, height: 1080 },
-          { width: 2560, height: 1440 },
-          { width: 1920, height: 1080 },
-        ]) {
-          budget.reserve(resolution.width, resolution.height, 'GUI resolution variant');
-        }
-        const scenarioCount = 1 + (relatedScenarios?.length ?? 0);
-        const stateColumns = Math.min(3, Math.max(1, stateCount));
-        const stateRows = Math.max(1, Math.ceil(stateCount / stateColumns));
-        budget.reserve(stateColumns * 420, 46 + stateRows * 280, 'GUI state gallery');
-        const resolutionCount = resolutions?.length ?? 4;
-        const resolutionColumns = Math.min(3, Math.max(1, resolutionCount));
-        const resolutionRows = Math.max(1, Math.ceil(resolutionCount / resolutionColumns));
-        budget.reserve(
-          resolutionColumns * 420,
-          46 + resolutionRows * 280,
-          'GUI resolution gallery',
-        );
-        const scenarioBudget = new RenderBudget();
-        const scenarioColumns = Math.min(3, Math.max(1, scenarioCount));
-        const scenarioRows = Math.max(1, Math.ceil(scenarioCount / scenarioColumns));
-        scenarioBudget.reserve(
-          scenarioColumns * 420,
-          46 + scenarioRows * 280,
-          'GUI scripted scenario gallery',
-        );
-      } catch (error) {
-        if (error instanceof ServiceError) {
-          context.addIssue({ code: 'custom', message: `${error.code}: ${error.message}` });
-          return;
-        }
-        throw error;
-      }
-    });
+      },
+    );
 
   server.registerTool(
     'hoi4.gui_render',
     {
       title: 'Render scripted GUI artifacts',
       description:
-        'Render deterministic GUI review artifacts, named value-driven scenario variants, generic states, resolutions, click regions, hierarchy, comparisons, and layout diagnostics.',
+        'Render GUI states, resolutions, generated or explicit scenarios, hierarchy, comparisons, and diagnostics.',
       inputSchema: renderInput,
       outputSchema: guiRenderOutputSchema,
       annotations: artifactProducing,

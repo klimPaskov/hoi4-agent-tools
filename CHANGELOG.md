@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 2.8.5 - 2026-08-28
+
+- Render bitmap-font face and localisation colours through alpha masks, including black source atlases, and load exact per-font HOI4 `textcolors` palettes.
+- Generate configurable seeded GUI scenarios with plausible dynamic text, numeric values, meters, lists, visibility, control states, and animation frames while retaining explicit values and the unresolved placeholder view.
+
 ## 2.8.4 - 2026-08-28
 
 - Render each declared HOI4 font face with its own glyph atlas, native metrics, face colour, border colour, and inherited language-override styling.

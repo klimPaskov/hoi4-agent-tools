@@ -106,6 +106,7 @@ export interface GuiFontDefinition {
   size?: number;
   colour?: string;
   borderColour?: string;
+  textColours?: Record<string, string>;
   rawSource?: string;
 }
 
@@ -285,6 +286,23 @@ export interface GuiPreviewScenario {
   guiCosts: Record<string, number>;
   scriptCosts: Record<string, number>;
   expectations: GuiScenarioExpectations;
+}
+
+export interface GuiGeneratedScenarioOptions {
+  enabled: boolean;
+  count: number;
+  seed: string;
+  idPrefix: string;
+  preservePlaceholder: boolean;
+  numericMinimum: number;
+  numericMaximum: number;
+  integerValues: boolean;
+  listRowsMinimum: number;
+  listRowsMaximum: number;
+  trueProbability: number;
+  visibility: 'show-all' | 'varied';
+  elementStates: 'normal' | 'varied';
+  textSamples: string[];
 }
 
 export interface GuiRect {
