@@ -177,16 +177,16 @@ function renderText(element: GuiSceneElement, toolText: DeterministicSvgTextRend
         const clipId = `gui-font-run-clip-${sha256Bytes(key).slice(0, 20)}`;
         const runX = originX + run.offsetX * horizontalScale;
         definitions.push(
-          `<clipPath id="${clipId}"><rect x="${finite(runX - 0.25)}" y="${finite(lineTop)}" width="${finite(run.width * horizontalScale + 0.5)}" height="${finite(text.lineHeight)}"/></clipPath>`,
+          `<clipPath id="${clipId}"><rect x="${finite(runX - 0.25)}" y="${finite(lineTop - text.lineHeight)}" width="${finite(run.width * horizontalScale + 0.5)}" height="${finite(text.lineHeight * 3)}"/></clipPath>`,
         );
         const glyphs = actualGlyphMarkup(glyphLine, originX, baseline, horizontalScale);
         if (glyphLine.source === 'bmfont-atlas') {
           const maskId = `gui-font-mask-${sha256Bytes(key).slice(0, 20)}`;
           const runRect = {
             x: runX - 0.25,
-            y: lineTop,
+            y: lineTop - text.lineHeight,
             width: run.width * horizontalScale + 0.5,
-            height: text.lineHeight,
+            height: text.lineHeight * 3,
           };
           return `<g clip-path="url(#${clipId})" data-font-colour="${run.colour}">${bitmapTintMarkup(maskId, run.colour, glyphs, runRect)}</g>`;
         }

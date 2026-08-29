@@ -947,6 +947,50 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     }
   });
 
+  it('keeps generated values within displayed limits and favours ordinary values', () => {
+    const files = [
+      scanned(
+        'interface/bounded-scenario.gui',
+        'guiTypes = { containerWindowType = { name = "bounded_window" size = { width = 300 height = 100 } instantTextBoxType = { name = "bounded_text" text = "BOUNDED_TEXT" } } }',
+      ),
+      scanned(
+        'localisation/english/bounded_scenario_l_english.yml',
+        '\ufeffl_english:\nBOUNDED_TEXT: "Capacity: [?capacity|.0]/10 Used: [?used|.0]/[?limit|.0]"\n',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const generated = Array.from(
+      { length: 128 },
+      (_unused, index) =>
+        generateGuiPreviewScenarios(
+          graph,
+          'bounded_window',
+          parsePreviewScenario({ id: `bounded-${index}` }),
+          parseGeneratedScenarioOptions({ count: 1, seed: `bounded-${index}` }),
+        )[0]!,
+    );
+    for (const scenario of generated) {
+      expect(Number(scenario.values.capacity)).toBeGreaterThanOrEqual(0);
+      expect(Number(scenario.values.capacity)).toBeLessThanOrEqual(10);
+      expect(Number(scenario.values.used)).toBeLessThanOrEqual(Number(scenario.values.limit));
+    }
+    const capacities = generated.map(({ values }) => Number(values.capacity));
+    expect(capacities.filter((value) => value >= 3 && value <= 7).length).toBeGreaterThan(80);
+    expect(capacities.filter((value) => value === 0 || value === 10).length).toBeLessThan(8);
+    const conflictingBounds = generateGuiPreviewScenarios(
+      graph,
+      'bounded_window',
+      parsePreviewScenario({ id: 'bounded-conflict' }),
+      parseGeneratedScenarioOptions({
+        count: 1,
+        seed: 'bounded-conflict',
+        numericMinimum: 50,
+        numericMaximum: 100,
+      }),
+    )[0]!;
+    expect(conflictingBounds.values.capacity).toBe(10);
+  });
+
   it('scans dynamic scripted-localisation sprites and only relevant language font atlases', () => {
     const files = [
       scanned(
@@ -1704,6 +1748,70 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     );
     const japaneseValidation = await validateGuiScene(graph, japaneseScene, files, [], japanese);
     expect(japaneseValidation.diagnostics.map(({ code }) => code)).toContain('GUI_MISSING_FONT');
+  });
+
+  it('uses the highest-load-order font and never selects an unrelated language override', () => {
+    const vanilla = {
+      ...scanned(
+        'interface/vanilla-fonts.gfx',
+        'bitmapfonts = { bitmapfont = { name = "priority_font" path = "fonts/vanilla.fnt" color = 0xffffffff } bitmapfont_override = { name = "orphan_font" path = "fonts/japanese.fnt" languages = { l_japanese } } }',
+      ),
+      displayPath: 'game:interface/vanilla-fonts.gfx',
+      rootKind: 'game' as const,
+      loadOrder: 0,
+    };
+    const mod = {
+      ...scanned(
+        'interface/mod-fonts.gfx',
+        'bitmapfonts = { bitmapfont = { name = "priority_font" path = "fonts/mod.fnt" color = { 0.2 0.4 0.6 1.0 } border_color = 0x112233 } }',
+      ),
+      displayPath: 'mod:interface/mod-fonts.gfx',
+      rootKind: 'mod' as const,
+      loadOrder: 10,
+    };
+    const files = [vanilla, mod];
+    const catalog = new GuiAssetCatalog(sourceGraph(files), files, new RenderBudget(), 'l_english');
+    expect(catalog.fontDefinition('priority_font')).toMatchObject({
+      sourcePath: 'mod:interface/mod-fonts.gfx',
+      assetPaths: ['fonts/mod.fnt'],
+      colour: '#336699ff',
+      borderColour: '#112233ff',
+    });
+    expect(catalog.fontDefinition('orphan_font')).toBeUndefined();
+  });
+
+  it('measures colour runs from shaped prefixes so kerning does not shift later colours', async () => {
+    const fontBytes = await readFile(
+      new URL(
+        import.meta.resolve('@fontsource-variable/roboto/files/roboto-latin-wght-normal.woff2'),
+      ),
+    );
+    const files = [
+      scanned(
+        'interface/kerned-colours.gui',
+        'guiTypes = { containerWindowType = { name = "kerned_window" size = { width = 240 height = 50 } instantTextBoxType = { name = "kerned_text" size = { width = 220 height = 30 } text = "KERNED_TEXT" font = "kerned_font" fontSize = 20 } } }',
+      ),
+      scanned(
+        'interface/kerned-colours.gfx',
+        'bitmapfonts = { textcolors = { Y = { 238 201 35 } } bitmapfont = { name = "kerned_font" path = "fonts/kerned.woff2" color = 0xffffffff } }',
+      ),
+      scanned(
+        'localisation/english/kerned_colours_l_english.yml',
+        '\ufeffl_english:\nKERNED_TEXT: "AV§YATAR§!"\n',
+      ),
+      scanned('fonts/kerned.woff2', fontBytes),
+    ];
+    const scene = await buildGuiScene(
+      sourceGraph(files),
+      files,
+      'kerned_window',
+      parsePreviewScenario({ id: 'kerned-colours' }),
+    );
+    const text = scene.elements.find(({ name }) => name === 'kerned_text')?.text;
+    const runs = text?.colourRuns?.[0] ?? [];
+    expect(runs).toHaveLength(2);
+    expect(runs[0]?.offsetX).toBe(0);
+    expect((runs[0]?.width ?? 0) + (runs[1]?.width ?? 0)).toBeCloseTo(text?.lineWidths[0] ?? 0, 5);
   });
 
   it('uses the BMFont source-stem atlas when the declared first page is absent', async () => {

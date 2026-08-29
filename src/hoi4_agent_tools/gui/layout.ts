@@ -647,11 +647,9 @@ function colourRunsForLine(
   if (!colours.some((colour) => colour !== undefined) || line.length === 0) return [];
   const runs: GuiTextColourRun[] = [];
   let start = 0;
-  let offsetX = 0;
   while (start < line.length) {
     const inlineIcon = inlineIcons.get(line[start] ?? '');
     if (inlineIcon !== undefined) {
-      offsetX += inlineIcon.width;
       start += 1;
       continue;
     }
@@ -664,10 +662,24 @@ function colourRunsForLine(
     )
       end += 1;
     const text = line.slice(start, end);
-    work.spendTextLayout('localisation colour-run measurement');
-    const width = measureTextWithInlineIcons(catalog, fontName, text, fontSize, inlineIcons).width;
+    work.spendTextLayout('localisation colour-run prefix measurement');
+    const offsetX = measureTextWithInlineIcons(
+      catalog,
+      fontName,
+      line.slice(0, start),
+      fontSize,
+      inlineIcons,
+    ).width;
+    work.spendTextLayout('localisation colour-run end measurement');
+    const endX = measureTextWithInlineIcons(
+      catalog,
+      fontName,
+      line.slice(0, end),
+      fontSize,
+      inlineIcons,
+    ).width;
+    const width = Math.max(0, endX - offsetX);
     runs.push({ text, colour, offsetX, width });
-    offsetX += width;
     start = end;
   }
   return runs;

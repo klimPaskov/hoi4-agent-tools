@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 2.8.8 - 2026-08-29
+
+- Correct GUI font selection so mod definitions override lower-load-order game definitions, language-specific overrides only apply to their language, and extensionless WOFF assets resolve.
+- Accept numeric-block and six-digit Paradox colors, normalize fractional text-color channels, and place color runs from kerning-aware measurements without clipping glyph overhangs.
+- Make generated GUI scenarios favour ordinary values, respect literal numeric limits and progress ranges, and keep current/limit pairs coherent.
+
 ## 2.8.7 - 2026-08-28
 
 - Isolate stale, foreign, oversized, malformed, and address-mismatched artifact manifests so one bad generated record cannot block unrelated probability, event, GUI, or other MCP evidence routes.

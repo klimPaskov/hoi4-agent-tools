@@ -252,12 +252,38 @@ function boolScalar(block: BlockNode, ...keys: string[]): boolean | undefined {
   return undefined;
 }
 
+function colourChannels(value: BlockNode | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const channels = value.entries
+    .filter((entry) => entry.type === 'scalar')
+    .map((entry) => Number(entry.value));
+  if (channels.length < 3 || channels.slice(0, 4).some((channel) => !Number.isFinite(channel)))
+    return undefined;
+  const normalized = channels.slice(0, 4).every((channel) => channel >= 0 && channel <= 1);
+  const bytes = channels
+    .slice(0, 4)
+    .map((channel) => Math.max(0, Math.min(255, Math.round(channel * (normalized ? 255 : 1)))));
+  while (bytes.length < 4) bytes.push(255);
+  return `#${bytes.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function paradoxColour(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
-  const match = /^0x([0-9a-f]{8})$/iu.exec(value.trim());
+  const match = /^0x([0-9a-f]{6}|[0-9a-f]{8})$/iu.exec(value.trim());
   if (match === null) return undefined;
+  if (match[1]!.length === 6) return `#${match[1]!.toLowerCase()}ff`;
   const argb = match[1]!;
   return `#${argb.slice(2)}${argb.slice(0, 2)}`.toLowerCase();
+}
+
+function colourFrom(block: BlockNode, ...keys: string[]): string | undefined {
+  const normalized = new Set(keys.map((key) => key.toLowerCase()));
+  for (const assignment of assignments(block)) {
+    if (!normalized.has(assignment.key.value.toLowerCase())) continue;
+    if (assignment.value.type === 'scalar') return paradoxColour(assignment.value.value);
+    return colourChannels(assignment.value);
+  }
+  return undefined;
 }
 
 function textColoursFrom(block: BlockNode): Record<string, string> {
@@ -266,17 +292,8 @@ function textColoursFrom(block: BlockNode): Record<string, string> {
   const result: Record<string, string> = {};
   for (const entry of assignments(textColours)) {
     if (entry.value.type !== 'block') continue;
-    const channels = entry.value.entries
-      .filter((channel) => channel.type === 'scalar')
-      .map((channel) => Number(channel.value));
-    if (channels.length < 3 || channels.slice(0, 3).some((channel) => !Number.isFinite(channel)))
-      continue;
-    const [red, green, blue] = channels.map((channel) =>
-      Math.max(0, Math.min(255, Math.round(channel))),
-    );
-    result[entry.key.value] = `#${red!.toString(16).padStart(2, '0')}${green!
-      .toString(16)
-      .padStart(2, '0')}${blue!.toString(16).padStart(2, '0')}`;
+    const colour = colourChannels(entry.value);
+    if (colour !== undefined) result[entry.key.value] = colour.slice(0, 7);
   }
   return result;
 }
@@ -554,8 +571,8 @@ function indexSpritesAndFonts(
           addEdge(edges, 'contains', fileNodeId, id, true, {}, definition.location);
         }
       } else if (
-        assignment.key.value === 'bitmapfont' ||
-        assignment.key.value === 'bitmapfont_override'
+        assignment.key.value.toLowerCase() === 'bitmapfont' ||
+        assignment.key.value.toLowerCase() === 'bitmapfont_override'
       ) {
         const name = firstScalarInsensitive(child, 'name');
         if (name !== undefined) {
@@ -573,12 +590,10 @@ function indexSpritesAndFonts(
               .filter((entry) => entry.type === 'scalar')
               .map((entry) => entry.value),
           );
-          const colour = paradoxColour(firstScalarInsensitive(child, 'color', 'colour'));
-          const borderColour = paradoxColour(
-            firstScalarInsensitive(child, 'border_color', 'borderColor', 'border_colour'),
-          );
+          const colour = colourFrom(child, 'color', 'colour');
+          const borderColour = colourFrom(child, 'border_color', 'borderColor', 'border_colour');
           const textColours = textColoursFrom(child);
-          const override = assignment.key.value === 'bitmapfont_override';
+          const override = assignment.key.value.toLowerCase() === 'bitmapfont_override';
           const id = deterministicId('gui_font', {
             path: file.displayPath,
             name,
@@ -620,7 +635,7 @@ function indexSpritesAndFonts(
           addEdge(edges, 'contains', fileNodeId, id, true, {}, font.location);
         }
       }
-      if (assignment.key.value === 'bitmapfonts') {
+      if (assignment.key.value.toLowerCase() === 'bitmapfonts') {
         Object.assign(globalTextColours, textColoursFrom(child));
       }
       walk(child);

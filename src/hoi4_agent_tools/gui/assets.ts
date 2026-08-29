@@ -266,6 +266,9 @@ export class GuiAssetCatalog {
     private readonly budget = new RenderBudget(),
     language = 'l_english',
   ) {
+    const sourceLoadOrder = new Map(
+      scannedFiles.map((file) => [file.displayPath, file.loadOrder] as const),
+    );
     for (const file of scannedFiles
       .filter((candidate) => candidate.shadowedBy === undefined)
       .sort((left, right) => compareCodeUnits(left.relativePath, right.relativePath))) {
@@ -277,31 +280,45 @@ export class GuiAssetCatalog {
       this.basenames.set(basename, candidates);
     }
     const normalizedLanguage = language.toLocaleLowerCase('en-US');
-    for (const definition of graph.fonts) {
-      const key = definition.name.toLocaleLowerCase('en-US');
-      const existing = this.fontDefinitions.get(key);
-      const definitionMatches = definition.languages.some(
+    const eligibleFonts = graph.fonts.filter(
+      (definition) =>
+        definition.languages.length === 0 ||
+        definition.languages.some(
+          (candidate) => candidate.toLocaleLowerCase('en-US') === normalizedLanguage,
+        ),
+    );
+    const definitionPriority = (definition: GuiFontDefinition): readonly number[] => {
+      const languageMatch = definition.languages.some(
         (candidate) => candidate.toLocaleLowerCase('en-US') === normalizedLanguage,
       );
-      const existingMatches =
-        existing?.languages.some(
-          (candidate) => candidate.toLocaleLowerCase('en-US') === normalizedLanguage,
-        ) ?? false;
-      if (
-        existing === undefined ||
-        (definitionMatches && !existingMatches) ||
-        (definitionMatches === existingMatches && existing.override && !definition.override) ||
-        (definitionMatches === existingMatches &&
-          existing.languages.length > 0 &&
-          definition.languages.length === 0)
-      )
+      return [
+        languageMatch ? 1 : 0,
+        sourceLoadOrder.get(definition.sourcePath) ?? 0,
+        languageMatch === definition.override ? 1 : 0,
+      ];
+    };
+    const higherPriority = (left: GuiFontDefinition, right: GuiFontDefinition): boolean => {
+      const leftPriority = definitionPriority(left);
+      const rightPriority = definitionPriority(right);
+      for (let index = 0; index < leftPriority.length; index += 1) {
+        if (leftPriority[index] !== rightPriority[index])
+          return leftPriority[index]! > rightPriority[index]!;
+      }
+      return false;
+    };
+    for (const definition of eligibleFonts) {
+      const key = definition.name.toLocaleLowerCase('en-US');
+      const existing = this.fontDefinitions.get(key);
+      if (existing === undefined || higherPriority(definition, existing))
         this.fontDefinitions.set(key, definition);
     }
     const baseDefinitions = new Map<string, GuiFontDefinition>();
-    for (const definition of graph.fonts) {
+    for (const definition of eligibleFonts) {
       if (definition.override || definition.languages.length > 0) continue;
       const key = definition.name.toLocaleLowerCase('en-US');
-      if (!baseDefinitions.has(key)) baseDefinitions.set(key, definition);
+      const existing = baseDefinitions.get(key);
+      if (existing === undefined || higherPriority(definition, existing))
+        baseDefinitions.set(key, definition);
     }
     for (const [key, definition] of this.fontDefinitions) {
       if (!definition.override) continue;
@@ -326,7 +343,14 @@ export class GuiAssetCatalog {
     const rasterExtensions = ['.png', '.bmp', '.tga', '.dds', '.svg'];
     const normalizedCandidates =
       extension.length === 0
-        ? [normalized, `${normalized}.fnt`, `${normalized}.ttf`, `${normalized}.otf`]
+        ? [
+            normalized,
+            `${normalized}.fnt`,
+            `${normalized}.ttf`,
+            `${normalized}.otf`,
+            `${normalized}.woff`,
+            `${normalized}.woff2`,
+          ]
         : rasterExtensions.includes(extension)
           ? [
               normalized,

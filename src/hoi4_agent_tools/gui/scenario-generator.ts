@@ -69,6 +69,10 @@ class ScenarioRandom {
     return Math.floor(this.next() * (maximum - minimum + 1)) + minimum;
   }
 
+  public ordinary(): number {
+    return (this.next() + this.next() + this.next()) / 3;
+  }
+
   public pick<T>(values: readonly T[]): T {
     return values[Math.min(values.length - 1, Math.floor(this.next() * values.length))]!;
   }
@@ -239,22 +243,93 @@ function generatedNumber(
 ): number {
   const boundedMinimum = Math.max(options.numericMinimum, minimum);
   const boundedMaximum = Math.min(options.numericMaximum, maximum);
-  const low = Math.min(boundedMinimum, boundedMaximum);
-  const high = Math.max(boundedMinimum, boundedMaximum);
-  const value = low + random.next() * (high - low);
+  const [low, high] =
+    boundedMinimum <= boundedMaximum
+      ? [boundedMinimum, boundedMaximum]
+      : maximum < options.numericMinimum
+        ? [maximum, maximum]
+        : [minimum, minimum];
+  const value = low + random.ordinary() * (high - low);
   return options.integerValues ? Math.round(value) : Math.round(value * 100) / 100;
+}
+
+interface NumericRange {
+  minimum?: number;
+  maximum?: number;
+}
+
+interface NumericRelationship {
+  value: string;
+  limit: string;
+}
+
+function sourceNumericConstraints(texts: readonly string[]): {
+  ranges: Map<string, NumericRange>;
+  relationships: NumericRelationship[];
+} {
+  const ranges = new Map<string, NumericRange>();
+  const relationships: NumericRelationship[] = [];
+  const update = (key: string, range: NumericRange): void => {
+    const current = ranges.get(key) ?? {};
+    const minimum =
+      range.minimum === undefined
+        ? current.minimum
+        : current.minimum === undefined
+          ? range.minimum
+          : Math.max(current.minimum, range.minimum);
+    const maximum =
+      range.maximum === undefined
+        ? current.maximum
+        : current.maximum === undefined
+          ? range.maximum
+          : Math.min(current.maximum, range.maximum);
+    ranges.set(key, {
+      ...(minimum === undefined ? {} : { minimum }),
+      ...(maximum === undefined ? {} : { maximum }),
+    });
+  };
+  const token = String.raw`\[\?([^\]|]+)(?:\|[^\]]+)?\]`;
+  for (const text of texts) {
+    for (const match of text.matchAll(
+      new RegExp(`${token}\\s*(?:/|of)\\s*(-?(?:\\d+\\.?\\d*|\\.\\d+))`, 'giu'),
+    )) {
+      const key = match[1];
+      const maximum = Number(match[2]);
+      if (key !== undefined && Number.isFinite(maximum)) update(key, { maximum });
+    }
+    for (const match of text.matchAll(
+      new RegExp(`(-?(?:\\d+\\.?\\d*|\\.\\d+))\\s*(?:-|to)\\s*${token}`, 'giu'),
+    )) {
+      const minimum = Number(match[1]);
+      const key = match[2];
+      if (key !== undefined && Number.isFinite(minimum)) update(key, { minimum });
+    }
+    for (const match of text.matchAll(new RegExp(`${token}\\s*(?:/|of)\\s*${token}`, 'giu'))) {
+      const value = match[1];
+      const limit = match[2];
+      if (value !== undefined && limit !== undefined) relationships.push({ value, limit });
+    }
+  }
+  return { ranges, relationships };
 }
 
 function generatedNumberForKey(
   key: string,
   options: GuiGeneratedScenarioOptions,
   random: ScenarioRandom,
+  inferred: NumericRange = {},
 ): number {
   const lower = key.toLocaleLowerCase('en-US');
-  if (/(?:ratio|fraction|progress)$/u.test(lower)) return generatedNumber(options, random, 0, 1);
+  if (/(?:ratio|fraction|progress)$/u.test(lower))
+    return generatedNumber(options, random, inferred.minimum ?? 0, inferred.maximum ?? 1);
   if (/(?:percent|percentage|support|stability|war_support|legitimacy|threat|charge)/u.test(lower))
-    return generatedNumber(options, random, 0, 100);
-  return generatedNumber(options, random);
+    return generatedNumber(options, random, inferred.minimum ?? 0, inferred.maximum ?? 100);
+  return generatedNumber(
+    options,
+    random,
+    inferred.minimum ?? options.numericMinimum,
+    inferred.maximum ?? options.numericMaximum,
+  );
 }
 
 function setIfMissing(
@@ -553,7 +628,9 @@ export function generateGuiPreviewScenarios(
   if (!options.enabled) return [];
   const scripted = relatedScriptedGuis(graph, windowName);
   const elements = relevantElements(graph, windowName, scripted);
-  const tokens = tokensIn(sourceTexts(graph, elements, base.language, scripted));
+  const relevantSourceTexts = sourceTexts(graph, elements, base.language, scripted);
+  const tokens = tokensIn(relevantSourceTexts);
+  const numericConstraints = sourceNumericConstraints(relevantSourceTexts);
   const imageTokens = new Set<string>();
   const booleanTokens = new Set<string>();
   const frameTokens = new Set<string>();
@@ -622,7 +699,11 @@ export function generateGuiPreviewScenarios(
     const elementStates = { ...base.elementStates };
     const scopedCountries = new Map<string, string>();
     for (const key of tokens.numeric)
-      setIfMissing(values, key, generatedNumberForKey(key, options, random));
+      setIfMissing(
+        values,
+        key,
+        generatedNumberForKey(key, options, random, numericConstraints.ranges.get(key)),
+      );
     for (const [elementName, { minimum, maximum }] of progressRanges) {
       const element = elements.find(({ name }) => name === elementName);
       const startValueToken =
@@ -646,6 +727,17 @@ export function generateGuiPreviewScenarios(
       const sourceKey = key.slice(0, -'_bar'.length);
       const sourceValue = values[sourceKey];
       if (typeof sourceValue === 'number') values[key] = sourceValue;
+    }
+    for (const { value: valueKey, limit: limitKey } of numericConstraints.relationships) {
+      if (base.values[valueKey] !== undefined) continue;
+      const value = values[valueKey];
+      const limit = values[limitKey];
+      if (typeof value !== 'number' || typeof limit !== 'number') continue;
+      const minimum = Math.min(
+        numericConstraints.ranges.get(valueKey)?.minimum ?? options.numericMinimum,
+        limit,
+      );
+      values[valueKey] = Math.max(minimum, Math.min(value, limit));
     }
     for (const key of tokens.textual)
       setIfMissing(values, key, plausibleText(key, random, options.textSamples, scopedCountries));
