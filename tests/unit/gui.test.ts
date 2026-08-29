@@ -1517,16 +1517,27 @@ kernings count=0
   });
 
   it('keeps distinct HOI4 font atlases, face colours, and native glyphs in localisation colour runs', async () => {
-    const redAtlas = await sharp({
-      create: { width: 16, height: 12, channels: 4, background: '#00000000' },
+    const invertedAtlasPixels = Buffer.alloc(16 * 12 * 4);
+    for (let offset = 0; offset < invertedAtlasPixels.length; offset += 4) {
+      invertedAtlasPixels[offset] = 255;
+      invertedAtlasPixels[offset + 1] = 255;
+      invertedAtlasPixels[offset + 2] = 255;
+    }
+    for (const [startX, startY, glyphWidth, glyphHeight] of [
+      [0, 0, 7, 11],
+      [9, 1, 6, 10],
+    ] as const)
+      for (let y = startY; y < startY + glyphHeight; y += 1)
+        for (let x = startX; x < startX + glyphWidth; x += 1) {
+          const offset = (y * 16 + x) * 4;
+          invertedAtlasPixels[offset] = 0;
+          invertedAtlasPixels[offset + 1] = 0;
+          invertedAtlasPixels[offset + 2] = 0;
+          invertedAtlasPixels[offset + 3] = 255;
+        }
+    const redAtlas = await sharp(invertedAtlasPixels, {
+      raw: { width: 16, height: 12, channels: 4 },
     })
-      .composite([
-        {
-          input: Buffer.from(
-            '<svg width="16" height="12"><path d="M1 1h7v11H1zM10 2h6v10h-6Z" fill="black" fill-opacity="0.85"/><path d="M0 0h7v11H0zM9 1h6v10H9Z" fill="white"/></svg>',
-          ),
-        },
-      ])
       .png()
       .toBuffer();
     const greenAtlas = await sharp({
@@ -1542,7 +1553,7 @@ kernings count=0
       .png()
       .toBuffer();
     const font = (page: string): string => `info size=16
-common lineHeight=16 base=12 scaleW=16 scaleH=12 pages=1
+common lineHeight=16 base=12 scaleW=16 scaleH=12 pages=1 packed=0 alphaChnl=1 redChnl=0 greenChnl=0 blueChnl=0
 page id=0 file="${page}"
 chars count=2
 char id=65 x=0 y=0 width=8 height=12 xadvance=8 page=0
@@ -1595,6 +1606,9 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(greenText).toMatchObject({ colour: '#00ff00ff', borderColour: '#000000ff' });
     expect(redText?.glyphLines[0]?.source).toBe('bmfont-atlas');
     expect(greenText?.glyphLines[0]?.source).toBe('bmfont-atlas');
+    expect(redText?.glyphLines[0]?.glyphs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ borderDataUri: expect.any(String) })]),
+    );
     expect(redText?.glyphLines[0]?.sourceHash).not.toBe(greenText?.glyphLines[0]?.sourceHash);
     expect(redText?.colourRuns?.[0]?.[0]?.colour).toBe('#ff0000ff');
     expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#faaa0a')).toBe(true);
@@ -1607,6 +1621,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(svg).toContain('data-font-colour="#ff0000ff"');
     expect(svg).toContain('data-font-colour="#00ff00ff"');
     expect(svg).toContain('<feColorMatrix');
+    expect(svg).toContain('gui-font-bitmap-border-');
     expect(svg).not.toContain('<mask');
     expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
     const png = rendered.images[0]?.png;

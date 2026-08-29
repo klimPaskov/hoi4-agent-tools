@@ -57,6 +57,7 @@ interface BmFontMetrics {
   pages: string[];
   characters: Map<number, BmFontCharacter>;
   kerning: Map<string, number>;
+  channelRoles?: readonly [number, number, number, number];
 }
 
 interface FontMetricEntry {
@@ -130,6 +131,7 @@ export function parseBmFont(text: string): BmFontMetrics | undefined {
   let size = 16;
   let lineHeight = 16;
   let base: number | undefined;
+  let channelRoles: readonly [number, number, number, number] | undefined;
   const pages = new Map<number, string>();
   const characters = new Map<number, BmFontCharacter>();
   const kerning = new Map<string, number>();
@@ -156,6 +158,9 @@ export function parseBmFont(text: string): BmFontMetrics | undefined {
       const fields = parseFields(line);
       lineHeight = typeof fields.lineHeight === 'number' ? fields.lineHeight : lineHeight;
       base = typeof fields.base === 'number' ? fields.base : base;
+      const roles = [fields.redChnl, fields.greenChnl, fields.blueChnl, fields.alphaChnl];
+      if (roles.every((role) => typeof role === 'number'))
+        channelRoles = roles as [number, number, number, number];
       recognised = true;
     } else if (line.startsWith('page ')) {
       const fields = parseFields(line);
@@ -240,6 +245,7 @@ export function parseBmFont(text: string): BmFontMetrics | undefined {
         pages: [...pages.entries()].sort(([left], [right]) => left - right).map(([, page]) => page),
         characters,
         kerning,
+        ...(channelRoles === undefined ? {} : { channelRoles }),
       }
     : undefined;
 }
@@ -255,7 +261,7 @@ export class GuiAssetCatalog {
   private readonly frames = new Map<string, Promise<GuiTextureFrame | undefined>>();
   private readonly glyphRasters = new Map<
     string,
-    Promise<{ dataUri: string; width: number; height: number } | undefined>
+    Promise<{ dataUri: string; borderDataUri?: string; width: number; height: number } | undefined>
   >();
   private readonly metrics = new Map<string, FontMetricEntry | null>();
   private readonly fontDefinitions = new Map<string, GuiFontDefinition>();
@@ -639,6 +645,7 @@ export class GuiAssetCatalog {
             kind: 'bitmap',
             key: `${entry.sourceFile.sha256}:${codePoint}:${Math.max(1, fontSize)}`,
             dataUri: raster.dataUri,
+            ...(raster.borderDataUri === undefined ? {} : { borderDataUri: raster.borderDataUri }),
             x: penX + metric.xOffset * scale,
             y: metric.yOffset * scale,
             width: raster.width * scale,
@@ -766,7 +773,9 @@ export class GuiAssetCatalog {
     pageFile: ScannedFile,
     metric: BmFontCharacter,
     codePoint: number,
-  ): Promise<{ dataUri: string; width: number; height: number } | undefined> {
+  ): Promise<
+    { dataUri: string; borderDataUri?: string; width: number; height: number } | undefined
+  > {
     if (metric.width <= 0 || metric.height <= 0) return Promise.resolve(undefined);
     const key = `${entry.sourceFile.sha256}:${pageFile.sha256}:${codePoint}:${metric.x}:${metric.y}:${metric.width}:${metric.height}`;
     let promise = this.glyphRasters.get(key);
@@ -801,14 +810,65 @@ export class GuiAssetCatalog {
           .ensureAlpha()
           .raw()
           .toBuffer({ resolveWithObject: true });
-        const png = await sharp(extracted.data, {
-          raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
-          limitInputPixels: RENDER_MAX_DECODED_PIXELS,
-        })
-          .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-          .toBuffer();
+        const channelRoles = entry.bmfont?.channelRoles;
+        let facePixels = extracted.data;
+        let borderPixels: Buffer | undefined;
+        if (channelRoles?.some((role) => role === 0) === true) {
+          facePixels = Buffer.alloc(extracted.data.length);
+          borderPixels = channelRoles.some((role) => role === 1)
+            ? Buffer.alloc(extracted.data.length)
+            : undefined;
+          let backgroundSamples = 0;
+          let backgroundTotal = 0;
+          for (let offset = 0; offset < extracted.data.length; offset += 4) {
+            const borderCoverage = channelRoles.reduce(
+              (maximum, role, channel) =>
+                role === 1 ? Math.max(maximum, extracted.data[offset + channel] ?? 0) : maximum,
+              0,
+            );
+            if (borderCoverage !== 0) continue;
+            for (let channel = 0; channel < 4; channel += 1) {
+              if (channelRoles[channel] !== 0) continue;
+              backgroundTotal += extracted.data[offset + channel] ?? 0;
+              backgroundSamples += 1;
+            }
+          }
+          const invertedFace = backgroundSamples > 0 && backgroundTotal / backgroundSamples > 127;
+          for (let offset = 0; offset < extracted.data.length; offset += 4) {
+            let faceCoverage = 0;
+            let borderCoverage = 0;
+            for (let channel = 0; channel < 4; channel += 1) {
+              const sample = extracted.data[offset + channel] ?? 0;
+              if (channelRoles[channel] === 0)
+                faceCoverage = Math.max(faceCoverage, invertedFace ? 255 - sample : sample);
+              if (channelRoles[channel] === 1) borderCoverage = Math.max(borderCoverage, sample);
+            }
+            facePixels[offset] = 255;
+            facePixels[offset + 1] = 255;
+            facePixels[offset + 2] = 255;
+            facePixels[offset + 3] = faceCoverage;
+            if (borderPixels !== undefined) {
+              borderPixels[offset] = 255;
+              borderPixels[offset + 1] = 255;
+              borderPixels[offset + 2] = 255;
+              borderPixels[offset + 3] = borderCoverage;
+            }
+          }
+        }
+        const encodeMask = (pixels: Buffer): Promise<Buffer> =>
+          sharp(pixels, {
+            raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
+            limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+          })
+            .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+            .toBuffer();
+        const png = await encodeMask(facePixels);
+        const borderPng = borderPixels === undefined ? undefined : await encodeMask(borderPixels);
         return {
           dataUri: `data:image/png;base64,${png.toString('base64')}`,
+          ...(borderPng === undefined
+            ? {}
+            : { borderDataUri: `data:image/png;base64,${borderPng.toString('base64')}` }),
           width: metric.width,
           height: metric.height,
         };

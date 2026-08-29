@@ -373,6 +373,7 @@ export interface GuiBitmapTextGlyph {
   kind: 'bitmap';
   key: string;
   dataUri: string;
+  borderDataUri?: string;
   x: number;
   y: number;
   width: number;

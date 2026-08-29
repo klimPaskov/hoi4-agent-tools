@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 2.8.9 - 2026-08-29
+
+- Decode BMFont channel roles so installed HOI4 atlases render their face and outline masks separately instead of losing localisation colours.
+- Infer black-on-white and white-on-transparent glyph-mask polarity, preserving support for both vanilla fonts and custom mod fonts.
+
 ## 2.8.8 - 2026-08-29
 
 - Correct GUI font selection so mod definitions override lower-load-order game definitions, language-specific overrides only apply to their language, and extensionless WOFF assets resolve.
