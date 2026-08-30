@@ -818,29 +818,15 @@ export class GuiAssetCatalog {
           borderPixels = channelRoles.some((role) => role === 1)
             ? Buffer.alloc(extracted.data.length)
             : undefined;
-          let backgroundSamples = 0;
-          let backgroundTotal = 0;
-          for (let offset = 0; offset < extracted.data.length; offset += 4) {
-            const borderCoverage = channelRoles.reduce(
-              (maximum, role, channel) =>
-                role === 1 ? Math.max(maximum, extracted.data[offset + channel] ?? 0) : maximum,
-              0,
-            );
-            if (borderCoverage !== 0) continue;
-            for (let channel = 0; channel < 4; channel += 1) {
-              if (channelRoles[channel] !== 0) continue;
-              backgroundTotal += extracted.data[offset + channel] ?? 0;
-              backgroundSamples += 1;
-            }
-          }
-          const invertedFace = backgroundSamples > 0 && backgroundTotal / backgroundSamples > 127;
+          // BMFont role 0 is coverage, not a per-glyph light/dark bitmap. Vanilla atlases may
+          // contain glyphs with either more filled or more empty pixels, so polarity inference
+          // from an individual crop corrupts neighboring letters inconsistently.
           for (let offset = 0; offset < extracted.data.length; offset += 4) {
             let faceCoverage = 0;
             let borderCoverage = 0;
             for (let channel = 0; channel < 4; channel += 1) {
               const sample = extracted.data[offset + channel] ?? 0;
-              if (channelRoles[channel] === 0)
-                faceCoverage = Math.max(faceCoverage, invertedFace ? 255 - sample : sample);
+              if (channelRoles[channel] === 0) faceCoverage = Math.max(faceCoverage, sample);
               if (channelRoles[channel] === 1) borderCoverage = Math.max(borderCoverage, sample);
             }
             facePixels[offset] = 255;

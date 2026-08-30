@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 2.8.10 - 2026-08-30
+
+- Fix vanilla BMFont corruption by following declared face and outline channel coverage directly instead of guessing polarity independently for each glyph.
+- Add full-word mixed-colour raster coverage and pixel-level face/outline mask checks for glyphs with very different filled areas.
+- Keep cross-process artifact admission stable when Windows temporarily locks an in-progress artifact file, and retain tool-discovery headroom for multi-digit patch versions.
+
 ## 2.8.9 - 2026-08-29
 
 - Decode BMFont channel roles so installed HOI4 atlases render their face and outline masks separately instead of losing localisation colours.

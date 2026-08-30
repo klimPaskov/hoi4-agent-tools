@@ -598,13 +598,18 @@ async function artifactUsage(
         );
       }
       if (child.isFile() && child.name.startsWith(artifactTemporaryPrefix)) {
-        const temporary = await resolveListedPath(directory, child.name);
-        if (temporary === undefined) continue;
+        const temporary = path.join(directory, child.name);
         try {
           const metadata = await lstat(temporary);
+          if (metadata.isSymbolicLink())
+            throw new ServiceError(
+              'ARTIFACT_STORAGE_UNSAFE',
+              'Artifact storage contains a symbolic link or junction',
+            );
           if (Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs) await unlink(temporary);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          if (!['ENOENT', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? ''))
+            throw error;
         }
         continue;
       }

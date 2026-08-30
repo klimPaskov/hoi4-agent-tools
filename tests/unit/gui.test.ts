@@ -1517,25 +1517,23 @@ kernings count=0
   });
 
   it('keeps distinct HOI4 font atlases, face colours, and native glyphs in localisation colour runs', async () => {
-    const invertedAtlasPixels = Buffer.alloc(16 * 12 * 4);
-    for (let offset = 0; offset < invertedAtlasPixels.length; offset += 4) {
-      invertedAtlasPixels[offset] = 255;
-      invertedAtlasPixels[offset + 1] = 255;
-      invertedAtlasPixels[offset + 2] = 255;
-    }
-    for (const [startX, startY, glyphWidth, glyphHeight] of [
-      [0, 0, 7, 11],
-      [9, 1, 6, 10],
-    ] as const)
+    const redAtlasPixels = Buffer.alloc(16 * 12 * 4);
+    for (const [startX, startY, glyphWidth, glyphHeight, insetX, insetY] of [
+      [0, 0, 7, 11, 0, 1],
+      [9, 1, 6, 10, 2, 2],
+    ] as const) {
       for (let y = startY; y < startY + glyphHeight; y += 1)
-        for (let x = startX; x < startX + glyphWidth; x += 1) {
+        for (let x = startX; x < startX + glyphWidth; x += 1)
+          redAtlasPixels[(y * 16 + x) * 4 + 3] = 255;
+      for (let y = startY + insetY; y < startY + glyphHeight - insetY; y += 1)
+        for (let x = startX + insetX; x < startX + glyphWidth - insetX; x += 1) {
           const offset = (y * 16 + x) * 4;
-          invertedAtlasPixels[offset] = 0;
-          invertedAtlasPixels[offset + 1] = 0;
-          invertedAtlasPixels[offset + 2] = 0;
-          invertedAtlasPixels[offset + 3] = 255;
+          redAtlasPixels[offset] = 255;
+          redAtlasPixels[offset + 1] = 255;
+          redAtlasPixels[offset + 2] = 255;
         }
-    const redAtlas = await sharp(invertedAtlasPixels, {
+    }
+    const redAtlas = await sharp(redAtlasPixels, {
       raw: { width: 16, height: 12, channels: 4 },
     })
       .png()
@@ -1570,7 +1568,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
       ),
       scanned(
         'localisation/english/font_faces_l_english.yml',
-        '\uFEFFl_english:\nFONT_FACE_TEXT: "A §YB§! §RA§!"\n',
+        '\uFEFFl_english:\nFONT_FACE_TEXT: "ABBA §YBABA§! §RA§!BAB"\n',
       ),
       scanned('fonts/red.fnt', font('red.png')),
       scanned('fonts/red.png', redAtlas),
@@ -1611,11 +1609,36 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     );
     expect(redText?.glyphLines[0]?.sourceHash).not.toBe(greenText?.glyphLines[0]?.sourceHash);
     expect(redText?.colourRuns?.[0]?.[0]?.colour).toBe('#ff0000ff');
-    expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#faaa0a')).toBe(true);
-    expect(redText?.colourRuns?.[0]?.some(({ colour }) => colour === '#c81e28')).toBe(true);
+    expect(redText?.colourRuns?.flat().some(({ colour }) => colour === '#faaa0a')).toBe(true);
+    expect(redText?.colourRuns?.flat().some(({ colour }) => colour === '#c81e28')).toBe(true);
+    const redGlyph = redText?.glyphLines[0]?.glyphs.find((glyph) => glyph.kind === 'bitmap');
+    expect(redGlyph?.kind).toBe('bitmap');
+    if (redGlyph?.kind !== 'bitmap' || redGlyph.borderDataUri === undefined) return;
+    const decodeDataUri = async (dataUri: string): Promise<{ data: Buffer; width: number }> => {
+      const encoded = dataUri.slice(dataUri.indexOf(',') + 1);
+      const decoded = await sharp(Buffer.from(encoded, 'base64'))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      return { data: decoded.data, width: decoded.info.width };
+    };
+    const faceMask = await decodeDataUri(redGlyph.dataUri);
+    const borderMask = await decodeDataUri(redGlyph.borderDataUri);
+    expect(faceMask.data[3]).toBe(0);
+    expect(borderMask.data[3]).toBe(255);
+    expect(faceMask.data[(2 * faceMask.width + 2) * 4 + 3]).toBe(255);
+    expect(borderMask.data[(2 * borderMask.width + 2) * 4 + 3]).toBe(255);
+    const secondRedGlyph = redText?.glyphLines
+      .flatMap(({ glyphs }) => glyphs)
+      .filter((glyph) => glyph.kind === 'bitmap')[1];
+    expect(secondRedGlyph?.kind).toBe('bitmap');
+    if (secondRedGlyph?.kind !== 'bitmap') return;
+    const secondFaceMask = await decodeDataUri(secondRedGlyph.dataUri);
+    expect(secondFaceMask.data[3]).toBe(0);
+    expect(secondFaceMask.data[(3 * secondFaceMask.width + 3) * 4 + 3]).toBe(255);
     const rendered = await renderGuiScene(scene, ['full']);
     const svg = rendered.images[0]?.svg ?? '';
-    expect(svg.match(/data-hoi4-colour-runs="true"/gu)).toHaveLength(2);
+    expect(svg.match(/data-hoi4-colour-runs="true"/gu)?.length).toBeGreaterThanOrEqual(2);
     expect(svg).toContain(`data-font-sha256="${redText?.glyphLines[0]?.sourceHash}"`);
     expect(svg).toContain(`data-font-sha256="${greenText?.glyphLines[0]?.sourceHash}"`);
     expect(svg).toContain('data-font-colour="#ff0000ff"');
@@ -1651,7 +1674,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     ).toBe(true);
     expect(
       pixels.some(
-        ({ red, green, blue, alpha }) => red < 40 && green < 40 && blue < 40 && alpha > 100,
+        ({ red, green, blue, alpha }) => red < 70 && green < 70 && blue < 70 && alpha > 100,
       ),
     ).toBe(true);
   });

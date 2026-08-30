@@ -140,7 +140,7 @@ const previewStateSchema = z.enum([
 
 const compactGuiScenarioSchema = compactValidatedInputSchema(
   GuiPreviewScenarioSchema,
-  `Complete GUI preview scenario: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
+  `GUI preview scenario: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
 );
 const compactGeneratedScenarioOptionsSchema = compactValidatedInputSchema(
   GuiGeneratedScenarioOptionsSchema,
@@ -148,7 +148,7 @@ const compactGeneratedScenarioOptionsSchema = compactValidatedInputSchema(
 );
 const compactGuiHelperSchema = compactValidatedInputSchema(
   GuiHelperDocumentSchema,
-  `Complete GUI helper document: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
+  `GUI helper document: https://github.com/klimPaskov/hoi4-agent-tools/blob/v${PACKAGE_VERSION}/docs/gui.md`,
 );
 
 const guiBaseInput = z
