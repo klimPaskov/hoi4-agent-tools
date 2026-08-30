@@ -47,6 +47,7 @@ interface BmFontCharacter {
   yOffset: number;
   xAdvance: number;
   page: number;
+  channelMask: number;
 }
 
 interface BmFontMetrics {
@@ -212,6 +213,7 @@ export function parseBmFont(text: string): BmFontMetrics | undefined {
                 ? fields.width
                 : 0,
           page: typeof fields.page === 'number' ? fields.page : 0,
+          channelMask: typeof fields.chnl === 'number' ? fields.chnl : 15,
         });
       }
       recognised = true;
@@ -633,8 +635,9 @@ export class GuiAssetCatalog {
         if (previous !== undefined)
           penX += (entry.bmfont.kerning.get(`${previous}:${codePoint}`) ?? 0) * scale;
         const pagePath = entry.bmfont.pages[metric.page];
-        const pageFile =
-          pagePath === undefined ? undefined : this.resolveBmFontPage(entry, pagePath, metric.page);
+        // Older shipped HOI4 descriptors omit the page record entirely. Page zero still uses the
+        // descriptor stem (for example garamond_12.fnt -> garamond_12.dds/tga).
+        const pageFile = this.resolveBmFontPage(entry, pagePath ?? '', metric.page);
         const raster =
           pageFile === undefined
             ? undefined
@@ -811,24 +814,74 @@ export class GuiAssetCatalog {
           .raw()
           .toBuffer({ resolveWithObject: true });
         const channelRoles = entry.bmfont?.channelRoles;
-        let facePixels = extracted.data;
+        const channelRanges = [0, 1, 2, 3].map((channel) => {
+          let minimum = 255;
+          let maximum = 0;
+          for (let offset = channel; offset < extracted.data.length; offset += 4) {
+            const sample = extracted.data[offset] ?? 0;
+            minimum = Math.min(minimum, sample);
+            maximum = Math.max(maximum, sample);
+          }
+          return maximum - minimum;
+        });
+        const channelSelected = (channel: number): boolean => {
+          if (metric.channelMask === 15) return true;
+          const maskForChannel = [4, 2, 1, 8][channel] ?? 0;
+          return (metric.channelMask & maskForChannel) !== 0;
+        };
+        const informativeChannels = (role: number): number[] =>
+          channelRoles === undefined
+            ? []
+            : channelRoles
+                .map((candidate, channel) => ({ candidate, channel }))
+                .filter(
+                  ({ candidate, channel }) =>
+                    candidate === role &&
+                    channelSelected(channel) &&
+                    (channelRanges[channel] ?? 0) > 0,
+                )
+                .map(({ channel }) => channel);
+        const alphaIsInformative = (channelRanges[3] ?? 0) > 0;
+        let faceChannels = informativeChannels(0);
+        let borderChannels = informativeChannels(1);
+        if (faceChannels.length === 0) {
+          if (borderChannels.length > 0) {
+            // Some vanilla fonts declare their only useful alpha bitmap as the outline
+            // channel even though the atlas contains no separate face channel. In that case
+            // the alpha bitmap is the face; treating constant-white RGB as coverage produces
+            // an opaque rectangle for every glyph.
+            faceChannels = borderChannels;
+            borderChannels = [];
+          } else {
+            faceChannels = alphaIsInformative
+              ? [3]
+              : channelRanges
+                  .map((range, channel) => ({ range, channel }))
+                  .filter(({ range }) => range > 0)
+                  .map(({ channel }) => channel);
+          }
+        }
+        const facePixels = Buffer.alloc(extracted.data.length);
         let borderPixels: Buffer | undefined;
-        if (channelRoles?.some((role) => role === 0) === true) {
-          facePixels = Buffer.alloc(extracted.data.length);
-          borderPixels = channelRoles.some((role) => role === 1)
-            ? Buffer.alloc(extracted.data.length)
-            : undefined;
+        if (faceChannels.length > 0) {
+          borderPixels =
+            borderChannels.length > 0 ? Buffer.alloc(extracted.data.length) : undefined;
           // BMFont role 0 is coverage, not a per-glyph light/dark bitmap. Vanilla atlases may
           // contain glyphs with either more filled or more empty pixels, so polarity inference
           // from an individual crop corrupts neighboring letters inconsistently.
           for (let offset = 0; offset < extracted.data.length; offset += 4) {
             let faceCoverage = 0;
             let borderCoverage = 0;
-            for (let channel = 0; channel < 4; channel += 1) {
+            for (const channel of faceChannels) {
               const sample = extracted.data[offset + channel] ?? 0;
-              if (channelRoles[channel] === 0) faceCoverage = Math.max(faceCoverage, sample);
-              if (channelRoles[channel] === 1) borderCoverage = Math.max(borderCoverage, sample);
+              faceCoverage = Math.max(faceCoverage, sample);
             }
+            for (const channel of borderChannels)
+              borderCoverage = Math.max(borderCoverage, extracted.data[offset + channel] ?? 0);
+            // Vanilla's compressed multi-channel atlases can bleed a neighboring glyph into
+            // an RGB face crop while the alpha silhouette remains correctly bounded. The
+            // face is the intersection, not the union, of those declared layers.
+            if (borderChannels.length > 0) faceCoverage = Math.min(faceCoverage, borderCoverage);
             facePixels[offset] = 255;
             facePixels[offset + 1] = 255;
             facePixels[offset + 2] = 255;

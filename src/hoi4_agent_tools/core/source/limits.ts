@@ -2,13 +2,12 @@ import type { Diagnostic } from '../diagnostics.js';
 
 export const SOURCE_DIAGNOSTIC_LIMIT = 100;
 export const SOURCE_MAX_NESTING = 256;
-export const SOURCE_MAX_BYTES = 8_388_608;
-// Large authored HOI4 focus and scripted-effect files can exceed 250k tokens while remaining well
-// below the byte and nesting ceilings. Keep enough room for those files without allowing an
-// unbounded token inventory.
-export const SOURCE_TOKEN_LIMIT = 1_000_000;
-export const SOURCE_ENTRY_LIMIT = 100_000;
-export const SOURCE_LINE_LIMIT = 250_000;
+// This is a parser ceiling, not the aggregate workspace-scan or remote request ceiling. Large
+// generated focus, event, and scripted-effect sources routinely exceed 8 MiB in real agentic mods.
+export const SOURCE_MAX_BYTES = 33_554_432;
+export const SOURCE_TOKEN_LIMIT = 4_000_000;
+export const SOURCE_ENTRY_LIMIT = 1_000_000;
+export const SOURCE_LINE_LIMIT = 2_000_000;
 
 /**
  * Parser ceilings that intentionally return no document or a structurally partial document.

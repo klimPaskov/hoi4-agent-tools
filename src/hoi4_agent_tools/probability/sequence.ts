@@ -537,6 +537,17 @@ function initialState(
   scenario: ProbabilityScenario,
 ): SequenceState {
   const candidateIds = new Set<string>();
+  const state: SequenceState = {
+    day: 0,
+    step: 0,
+    values: { ...(manifest.state ?? {}), ...scenario.state },
+    candidates: [],
+    timerMinDays: manifest.selection.timerMinDays ?? 0,
+    timerMaxDays: manifest.selection.timerMaxDays ?? manifest.selection.timerMinDays ?? 0,
+    terminal: false,
+    selectedIds: [],
+    selectionDays: {},
+  };
   const candidates = manifest.candidates.map((candidate) => {
     if (candidateIds.has(candidate.id))
       throw new ServiceError(
@@ -545,24 +556,23 @@ function initialState(
         { id: candidate.id },
       );
     candidateIds.add(candidate.id);
-    const weight =
-      typeof candidate.weight === 'number' ? candidate.weight : Number(candidate.weight);
-    const cap =
-      candidate.cap === undefined
-        ? undefined
-        : typeof candidate.cap === 'number'
-          ? candidate.cap
-          : Number(candidate.cap);
-    if (!Number.isFinite(weight) || (cap !== undefined && !Number.isFinite(cap)))
+    const weight = numberExpression(candidate.weight, state);
+    const cap = candidate.cap === undefined ? undefined : numberExpression(candidate.cap, state);
+    if (
+      weight === undefined ||
+      !Number.isFinite(weight) ||
+      (cap !== undefined && !Number.isFinite(cap))
+    )
       throw new ServiceError(
         'SEQUENCE_INITIAL_VALUE_INVALID',
-        'Initial custom pool weights and caps must resolve numerically',
+        'Initial custom pool weights and caps must resolve from manifest or scenario state',
         { id: candidate.id },
       );
+    const boundedWeight = cap === undefined ? weight : Math.min(weight, cap);
     return {
       id: candidate.id,
       ...(candidate.category === undefined ? {} : { category: candidate.category }),
-      weight: rounded(weight, manifest.selection.rounding),
+      weight: rounded(boundedWeight, manifest.selection.rounding),
       ...(cap === undefined ? {} : { cap: rounded(cap, manifest.selection.rounding) }),
       active: true,
       oneTime: candidate.oneTime ?? false,
@@ -570,16 +580,46 @@ function initialState(
       cooldownUntil: 0,
     };
   });
+  state.candidates = candidates;
+  return state;
+}
+
+export interface CustomPoolPointEvaluation {
+  candidates: Array<{
+    id: string;
+    weight: number;
+    eligible: boolean;
+    probability: number;
+  }>;
+  poolTotal: number;
+  unresolved: ProbabilityUnresolved[];
+}
+
+/** Evaluate one declared dynamic pool at the supplied scenario state before transitions run. */
+export function evaluateCustomPoolPoint(
+  manifest: CustomWeightedPoolManifest,
+  scenario: ProbabilityScenario,
+): CustomPoolPointEvaluation {
+  const state = initialState(manifest, scenario);
+  const unresolved: ProbabilityUnresolved[] = [];
+  const eligible = eligibleCandidates(state, manifest, unresolved);
+  const eligibleIds = new Set(eligible.map(({ id }) => id));
+  const poolTotal = eligible.reduce((sum, candidate) => sum + candidate.weight, 0);
   return {
-    day: 0,
-    step: 0,
-    values: { ...(manifest.state ?? {}), ...scenario.state },
-    candidates,
-    timerMinDays: manifest.selection.timerMinDays ?? 0,
-    timerMaxDays: manifest.selection.timerMaxDays ?? manifest.selection.timerMinDays ?? 0,
-    terminal: false,
-    selectedIds: [],
-    selectionDays: {},
+    candidates: state.candidates.map((candidate) => ({
+      id: candidate.id,
+      weight: candidate.weight,
+      eligible: eligibleIds.has(candidate.id),
+      probability: !eligibleIds.has(candidate.id)
+        ? 0
+        : manifest.selection.mode === 'categorical_weighted'
+          ? poolTotal <= 0
+            ? 0
+            : candidate.weight / poolTotal
+          : Math.max(0, Math.min(1, candidate.weight / 100)),
+    })),
+    poolTotal,
+    unresolved,
   };
 }
 

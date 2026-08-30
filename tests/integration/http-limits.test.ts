@@ -170,8 +170,8 @@ describe('Streamable HTTP deployment limits', () => {
   it('admits escaped full GUI packages and maximum map-mask envelopes under defaults', async () => {
     const handle = await limitedServer({});
     const session = await initializeSession(handle);
-    const sourceFile = '\n'.repeat(SOURCE_MAX_BYTES);
-    expect(SOURCE_MAX_BYTES * 2).toBe(GUI_TEXT_PACKAGE_MAX_BYTES);
+    const sourceFile = '\n'.repeat(GUI_TEXT_PACKAGE_MAX_BYTES / 2);
+    expect(SOURCE_MAX_BYTES).toBeGreaterThan(GUI_TEXT_PACKAGE_MAX_BYTES);
     const guiRequest = JSON.stringify({
       jsonrpc: '2.0',
       id: 2,

@@ -74,6 +74,115 @@ async function connected(): Promise<{ client: Client; mod: string }> {
 }
 
 describe('probability MCP workflow', () => {
+  it('evaluates and compares complete declared dynamic candidate pools', async () => {
+    const { client } = await connected();
+    const manifest = (secondWeight: number) => ({
+      schemaVersion: '1.0',
+      id: 'owner-action-pool',
+      selection: { mode: 'categorical_weighted', cadence: 'daily' },
+      state: { reserve_weight: 3 },
+      candidates: [
+        { id: 'advisor', weight: 'state.reserve_weight', eligibleWhen: 'state.can_advise == true' },
+        { id: 'law', weight: secondWeight, eligibleWhen: 'state.can_change_law == true' },
+        { id: 'command', weight: 2, eligibleWhen: 'state.at_war == true' },
+      ],
+      transitions: [],
+    });
+    const scenarioSet = {
+      schemaVersion: '1.0',
+      id: 'owner-actions',
+      scenarios: [
+        {
+          id: 'all-valid',
+          state: { can_advise: true, can_change_law: true, at_war: true },
+        },
+        {
+          id: 'peace',
+          state: { can_advise: true, can_change_law: true, at_war: false },
+        },
+      ],
+    };
+    const inspected = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'custom_weighted_pool',
+        customPoolManifest: manifest(5),
+      },
+    });
+    expect(inspected.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_SOURCE_INSPECTED',
+      data: {
+        adapterId: 'custom_weighted_pool',
+        poolComplete: true,
+        candidates: 3,
+      },
+    });
+    const evaluated = await client.callTool({
+      name: 'hoi4.probability_evaluate',
+      arguments: {
+        adapter: 'custom_weighted_pool',
+        customPoolManifest: manifest(5),
+        scenarioSet,
+      },
+    });
+    expect(evaluated.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_ANALYZED',
+      data: {
+        analysisStatus: 'complete',
+        adapterId: 'custom_weighted_pool',
+        candidates: 6,
+      },
+    });
+    const artifact = (evaluated.structuredContent as { artifacts: Array<{ uri: string }> })
+      .artifacts[0];
+    expect(artifact).toBeDefined();
+    const resource = await client.readResource({ uri: artifact!.uri });
+    const content = resource.contents[0];
+    expect(content !== undefined && 'text' in content).toBe(true);
+    if (content === undefined || !('text' in content)) return;
+    const json = JSON.parse(content.text) as {
+      scenarios: Array<{
+        id: string;
+        poolComplete: boolean;
+        candidates: Array<{ id: string; conditionalProbability: number; eligibility: string }>;
+      }>;
+    };
+    expect(json.scenarios.find(({ id }) => id === 'all-valid')).toMatchObject({
+      poolComplete: true,
+      candidates: [
+        { id: 'advisor', conditionalProbability: 0.3, eligibility: 'true' },
+        { id: 'law', conditionalProbability: 0.5, eligibility: 'true' },
+        { id: 'command', conditionalProbability: 0.2, eligibility: 'true' },
+      ],
+    });
+    expect(json.scenarios.find(({ id }) => id === 'peace')?.candidates[2]).toMatchObject({
+      id: 'command',
+      conditionalProbability: 0,
+      eligibility: 'false',
+    });
+
+    const compared = await client.callTool({
+      name: 'hoi4.probability_compare',
+      arguments: {
+        adapter: 'custom_weighted_pool',
+        beforeManifest: manifest(5),
+        afterManifest: manifest(7),
+        scenarioSet,
+      },
+    });
+    expect(compared.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'PROBABILITY_ANALYZED',
+      data: {
+        operation: 'compare',
+        analysisStatus: 'complete',
+        adapterId: 'custom_weighted_pool',
+      },
+    });
+  });
+
   it('evaluates proposed weighted source and serves authoritative JSON plus deterministic visuals', async () => {
     const { client } = await connected();
     const evaluated = await client.callTool({

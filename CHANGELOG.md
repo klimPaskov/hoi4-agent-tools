@@ -4,6 +4,13 @@
 
 No unreleased changes.
 
+## 2.8.11 - 2026-08-30
+
+- Render vanilla HOI4 bitmap fonts with their native atlas masks, legacy page fallbacks, inverted-mask handling, declared glyph channels, crisp scaled sampling, borders, and localisation colours; qualify every shipped descriptor and base font family.
+- Keep large event and technology workspaces complete by separating game and mod scans, accepting large legitimate Clausewitz sources, retaining large state-access inventories, and removing automatic focused-analysis fallbacks.
+- Inspect, evaluate, and compare complete declared dynamic weighted pools with scenario-resolved candidate weights, eligibility, exact probabilities, and complete candidate inventories.
+- Authenticate GitHub release-state API checks so release publication does not fail on anonymous API limits.
+
 ## 2.8.10 - 2026-08-30
 
 - Fix vanilla BMFont corruption by following declared face and outline channel coverage directly instead of guessing polarity independently for each glyph.

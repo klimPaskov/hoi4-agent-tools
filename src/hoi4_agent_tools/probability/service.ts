@@ -37,8 +37,9 @@ import type {
   WeightedSurface,
 } from './model.js';
 import { renderProbabilityResult, type ProbabilityVisual } from './render.js';
-import { analyzeSequence } from './sequence.js';
+import { analyzeSequence, evaluateCustomPoolPoint } from './sequence.js';
 import { simulateSurface } from './simulation.js';
+import { Rational } from './rational.js';
 import {
   discoverWeightedSurface,
   inventoryWeightedSurfaces,
@@ -56,7 +57,8 @@ export interface ProbabilityServiceContext {
 
 export interface ProbabilityAnalysisRequest extends ProbabilityServiceContext {
   adapter: ProbabilityAdapterId;
-  source: ProbabilitySourceInput;
+  source?: ProbabilitySourceInput;
+  customPoolManifest?: CustomWeightedPoolManifest;
   scenarioSet: ProbabilityScenarioSet;
   candidatePool?: string[];
   horizonDays?: number;
@@ -92,8 +94,10 @@ export interface ProbabilitySequenceRequest extends ProbabilityServiceContext {
 
 export interface ProbabilityCompareRequest extends ProbabilityServiceContext {
   adapter: ProbabilityAdapterId;
-  before: ProbabilitySourceInput;
-  after: ProbabilitySourceInput;
+  before?: ProbabilitySourceInput;
+  after?: ProbabilitySourceInput;
+  beforeManifest?: CustomWeightedPoolManifest;
+  afterManifest?: CustomWeightedPoolManifest;
   scenarioSet: ProbabilityScenarioSet;
   candidatePool?: string[];
   horizonDays?: number;
@@ -833,6 +837,72 @@ function customSurface(
   };
 }
 
+function customPoolScenarios(
+  surface: WeightedSurface,
+  manifest: CustomWeightedPoolManifest,
+  scenarioSet: ProbabilityScenarioSet,
+): ProbabilityAnalysisResult['scenarios'] {
+  return scenarioSet.scenarios.map((scenario) => {
+    const point = evaluateCustomPoolPoint(manifest, scenario);
+    const ordered = [...point.candidates].sort(
+      (left, right) => right.probability - left.probability || compareCodeUnits(left.id, right.id),
+    );
+    const rank = new Map(ordered.map((candidate, index) => [candidate.id, index + 1]));
+    const candidates = point.candidates.map((candidate) => {
+      const exactWeight = Rational.parse(candidate.weight);
+      const exactPoolTotal = Rational.parse(point.poolTotal);
+      const exactProbability = !candidate.eligible
+        ? Rational.zero
+        : manifest.selection.mode === 'categorical_weighted'
+          ? exactWeight !== undefined && exactPoolTotal !== undefined && !exactPoolTotal.isZero()
+            ? exactWeight.divide(exactPoolTotal)
+            : undefined
+          : exactWeight?.divide(new Rational(100n)).max(Rational.zero).min(Rational.one);
+      const unresolved = point.unresolved.filter(
+        ({ candidateId }) => candidateId === undefined || candidateId === candidate.id,
+      );
+      return {
+        id: candidate.id,
+        eligibility: candidate.eligible ? ('true' as const) : ('false' as const),
+        supportLevel: unresolved.length === 0 ? ('exact' as const) : ('unsupported' as const),
+        rawValue: exactWeight?.toJSON() ?? null,
+        conditionalProbability: candidate.probability,
+        ...(exactProbability === undefined
+          ? {}
+          : { exactConditionalProbability: exactProbability.toJSON() }),
+        rank: candidate.eligible ? (rank.get(candidate.id) ?? null) : null,
+        trace: [],
+        provenance: surface.candidates.find(({ id }) => id === candidate.id)?.provenance ?? [],
+        unresolved,
+      };
+    });
+    const eligible = ordered.filter(({ eligible }) => eligible);
+    return {
+      id: scenario.id,
+      ...(scenario.label === undefined ? {} : { label: scenario.label }),
+      ...(scenario.prevalence === undefined ? {} : { prevalence: scenario.prevalence }),
+      poolComplete: true,
+      supportLevel: point.unresolved.length === 0 ? ('exact' as const) : ('unsupported' as const),
+      candidates,
+      ...(Rational.parse(point.poolTotal) === undefined
+        ? {}
+        : { poolTotal: Rational.parse(point.poolTotal)!.toJSON() }),
+      summary: {
+        topOutcomes: eligible.slice(0, 3).map(({ id }) => id),
+        bottomEligibleOutcomes: eligible.slice(-3).map(({ id }) => id),
+        impossibleOutcomes: ordered
+          .filter(({ probability }) => probability === 0)
+          .map(({ id }) => id),
+        unresolvedOutcomes: candidates
+          .filter(({ unresolved }) => unresolved.length > 0)
+          .map(({ id }) => id),
+        dominantFactors: [],
+      },
+      unresolved: point.unresolved,
+    };
+  });
+}
+
 export class ProbabilityAnalyzer {
   private readonly state: AnalyzerState;
 
@@ -1126,10 +1196,74 @@ export class ProbabilityAnalyzer {
     adapter?: ProbabilityAdapterId,
     source?: ProbabilitySourceInput,
     candidatePool: readonly string[] = [],
+    customPoolManifest?: CustomWeightedPoolManifest,
   ): Promise<ProbabilityInspectResult> {
-    if (source === undefined)
+    if (source === undefined && customPoolManifest === undefined)
       return { adapters: probabilityAdapters(), artifacts: [], filesScanned: [] };
-    const snapshot = await this.scan(context, [source.path]);
+    if (customPoolManifest !== undefined && source !== undefined)
+      throw new ServiceError(
+        'PROBABILITY_INPUT_AMBIGUOUS',
+        'Provide either source or customPoolManifest for inspection',
+      );
+    if (customPoolManifest !== undefined && adapter !== 'custom_weighted_pool')
+      throw new ServiceError(
+        'PROBABILITY_ADAPTER_MISMATCH',
+        'customPoolManifest inspection requires adapter custom_weighted_pool',
+      );
+    const snapshot = await this.scan(context, [source?.path]);
+    if (customPoolManifest !== undefined) {
+      const surface = customSurface(customPoolManifest, snapshot.revision);
+      const gameVersionVerification = await this.verifyGameVersion(context, 'custom_weighted_pool');
+      const report = {
+        schemaVersion: 'probability-inspection.v2',
+        workspaceId: context.workspaceId,
+        surface: {
+          id: surface.id,
+          adapter: surface.adapter,
+          poolComplete: true,
+          sourceRevision: surface.sourceRevision,
+          sourceHash: surface.sourceHash,
+          gameVersionVerification,
+          candidateCount: surface.candidates.length,
+          candidates: surface.candidates.map((candidate) => ({
+            id: candidate.id,
+            sourceKind: candidate.sourceKind,
+            provenance: candidate.provenance,
+            hasEligibility:
+              customPoolManifest.candidates.find(({ id }) => id === candidate.id)?.eligibleWhen !==
+              undefined,
+            hasWeightBlock: true,
+            requiredInputs: [],
+            referencedProvenance: [],
+            analysisSupport: 'exact' as const,
+          })),
+          requiredInputs: [],
+          unsupported: [],
+        },
+      };
+      const workspace = this.engine.resolver.get(context.workspaceId, context.principal);
+      const artifact = await this.engine.artifacts.putChunked(
+        workspace,
+        `probability-inspect-${surface.sourceHash.slice(0, 12)}.json`,
+        'application/json',
+        `${canonicalJson(report)}\n`,
+        {
+          kind: 'probability-inspection',
+          toolVersion: PACKAGE_VERSION,
+          schemaVersion: 'probability-inspection.v2',
+          sourceHashes: { aggregate: surface.sourceHash },
+        },
+        'Declared custom weighted-pool inventory',
+        context.signal,
+      );
+      return {
+        adapters: probabilityAdapters(),
+        surface: report.surface,
+        artifacts: [publicArtifactLink(artifact)],
+        filesScanned: [],
+      };
+    }
+    const selectedSource = source!;
     const storeDiscovery = async (
       inventory: WeightedSurfaceInventory,
       reason: NonNullable<ProbabilityInspectResult['discovery']>['reason'],
@@ -1138,7 +1272,8 @@ export class ProbabilityAnalyzer {
         ({ candidateCount }) => candidateCount > 0,
       );
       const matchingIdentifier = availableAdapters.filter(
-        ({ identifierMatchCount }) => source.identifier !== undefined && identifierMatchCount > 0,
+        ({ identifierMatchCount }) =>
+          selectedSource.identifier !== undefined && identifierMatchCount > 0,
       );
       const matchingPool = availableAdapters.filter(
         ({ candidatePoolMatchCount }) => candidatePool.length > 0 && candidatePoolMatchCount > 0,
@@ -1197,7 +1332,7 @@ export class ProbabilityAnalyzer {
       };
     };
     if (adapter === undefined) {
-      const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
+      const inventory = inventoryWeightedSurfaces(snapshot, selectedSource, candidatePool);
       return storeDiscovery(
         inventory,
         inventory.adapters.some(({ candidateCount }) => candidateCount > 0)
@@ -1208,7 +1343,7 @@ export class ProbabilityAnalyzer {
     const gameVersionVerification = await this.verifyGameVersion(context, adapter);
     let surface: WeightedSurface;
     try {
-      surface = discoverWeightedSurface(snapshot, adapter, source, candidatePool);
+      surface = discoverWeightedSurface(snapshot, adapter, selectedSource, candidatePool);
     } catch (error) {
       if (
         !(error instanceof ServiceError) ||
@@ -1216,7 +1351,7 @@ export class ProbabilityAnalyzer {
           error.code !== 'PROBABILITY_IDENTIFIER_NOT_FOUND')
       )
         throw error;
-      const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
+      const inventory = inventoryWeightedSurfaces(snapshot, selectedSource, candidatePool);
       const requested = inventory.adapters.find(({ adapterId }) => adapterId === adapter);
       const reason =
         error.code === 'PROBABILITY_IDENTIFIER_NOT_FOUND'
@@ -1332,21 +1467,41 @@ export class ProbabilityAnalyzer {
         'PROBABILITY_SCENARIO_WORKSPACE_MISMATCH',
         'Scenario set belongs to a different workspace',
       );
+    const usingManifest = request.customPoolManifest !== undefined;
+    if (usingManifest !== (request.source === undefined))
+      throw new ServiceError(
+        'PROBABILITY_INPUT_AMBIGUOUS',
+        'Provide exactly one source or customPoolManifest',
+      );
+    if (usingManifest && request.adapter !== 'custom_weighted_pool')
+      throw new ServiceError(
+        'PROBABILITY_ADAPTER_MISMATCH',
+        'customPoolManifest requires the custom_weighted_pool adapter',
+      );
+    if (!usingManifest && request.adapter === 'custom_weighted_pool')
+      throw new ServiceError(
+        'PROBABILITY_MANIFEST_REQUIRED',
+        'custom_weighted_pool requires customPoolManifest',
+      );
     const gameVersionVerification = await this.verifyGameVersion(request, request.adapter);
-    const snapshot = await this.scan(request, [request.source.path]);
-    const surface = discoverWeightedSurface(
-      snapshot,
-      request.adapter,
-      request.source,
-      request.candidatePool ?? [],
-    );
+    const snapshot = await this.scan(request, [request.source?.path]);
+    const surface = usingManifest
+      ? customSurface(request.customPoolManifest!, snapshot.revision)
+      : discoverWeightedSurface(
+          snapshot,
+          request.adapter,
+          request.source!,
+          request.candidatePool ?? [],
+        );
     const definitions = ClausewitzEvaluationDefinitions.build(snapshot);
     const metadata = this.metadata(
       request,
       snapshot,
       surface,
       request.scenarioSet,
-      request.candidatePool ?? [],
+      usingManifest
+        ? request.customPoolManifest!.candidates.map(({ id }) => id)
+        : (request.candidatePool ?? []),
       gameVersionVerification,
       {
         operation,
@@ -1359,12 +1514,14 @@ export class ProbabilityAnalyzer {
     );
     const cached = this.state.byCacheKey.get(metadata.cacheKey);
     if (cached !== undefined) return { result: cached, surface, definitions, snapshot };
-    const scenarios = evaluateSurfaceScenarios(
-      surface,
-      request.scenarioSet.scenarios,
-      definitions,
-      request.horizonDays,
-    );
+    const scenarios = usingManifest
+      ? customPoolScenarios(surface, request.customPoolManifest!, request.scenarioSet)
+      : evaluateSurfaceScenarios(
+          surface,
+          request.scenarioSet.scenarios,
+          definitions,
+          request.horizonDays,
+        );
     return {
       result: this.buildResult(operation, metadata, surface, scenarios, {
         ...(request.acceptanceBands === undefined
@@ -1671,12 +1828,43 @@ export class ProbabilityAnalyzer {
   }
 
   public async compare(request: ProbabilityCompareRequest): Promise<ProbabilityAnalysisResult> {
-    const before = await this.analyzeUnstored('evaluate', { ...request, source: request.before });
-    const after = await this.analyzeUnstored('evaluate', {
-      ...request,
-      source: request.after,
-      refresh: false,
-    });
+    const manifestMode =
+      request.beforeManifest !== undefined || request.afterManifest !== undefined;
+    if (manifestMode !== (request.before === undefined && request.after === undefined))
+      throw new ServiceError(
+        'PROBABILITY_COMPARE_INPUT_AMBIGUOUS',
+        'Compare either before/after sources or beforeManifest/afterManifest',
+      );
+    if (
+      manifestMode &&
+      (request.beforeManifest === undefined || request.afterManifest === undefined)
+    )
+      throw new ServiceError(
+        'PROBABILITY_COMPARE_MANIFEST_REQUIRED',
+        'Custom-pool comparison requires both beforeManifest and afterManifest',
+      );
+    if (!manifestMode && (request.before === undefined || request.after === undefined))
+      throw new ServiceError(
+        'PROBABILITY_COMPARE_SOURCE_REQUIRED',
+        'Source comparison requires both before and after',
+      );
+    const before = manifestMode
+      ? await this.analyzeUnstored('evaluate', {
+          ...request,
+          customPoolManifest: request.beforeManifest!,
+        })
+      : await this.analyzeUnstored('evaluate', { ...request, source: request.before! });
+    const after = manifestMode
+      ? await this.analyzeUnstored('evaluate', {
+          ...request,
+          customPoolManifest: request.afterManifest!,
+          refresh: false,
+        })
+      : await this.analyzeUnstored('evaluate', {
+          ...request,
+          source: request.after!,
+          refresh: false,
+        });
     const metadata = {
       ...after.result.metadata,
       cacheKey: hashCanonical({

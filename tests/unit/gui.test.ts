@@ -1544,7 +1544,7 @@ kernings count=0
       .composite([
         {
           input: Buffer.from(
-            '<svg width="16" height="12"><circle cx="4" cy="6" r="4" fill="white"/><path d="M9 2h6v8H9Z" fill="white"/></svg>',
+            '<svg width="16" height="12"><circle cx="4" cy="6" r="4" fill="black"/><path d="M9 2h6v8H9Z" fill="black"/></svg>',
           ),
         },
       ])
@@ -1645,6 +1645,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(svg).toContain('data-font-colour="#00ff00ff"');
     expect(svg).toContain('<feColorMatrix');
     expect(svg).toContain('gui-font-bitmap-border-');
+    expect(svg).toContain('image-rendering="optimizeSpeed"');
     expect(svg).not.toContain('<mask');
     expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
     const png = rendered.images[0]?.png;

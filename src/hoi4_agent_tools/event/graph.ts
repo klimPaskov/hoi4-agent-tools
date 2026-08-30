@@ -1886,14 +1886,9 @@ export function buildEventGraph(
   budget.check();
 
   const diagnostics = sortDiagnostics([...snapshot.diagnostics, ...partial.diagnostics]);
-  const complete =
-    !focused &&
-    snapshot.complete &&
-    graph.unresolved.length === 0 &&
-    !graph.issues.some(
-      ({ classification, severity }) =>
-        classification === 'unresolved_analysis' || severity === 'blocker',
-    );
+  // Coverage completeness is independent from defects discovered in the source. A full,
+  // untruncated analysis remains complete when it correctly reports missing or dynamic links.
+  const complete = !focused && snapshot.complete;
   const nodes = sortNodes(graph.nodes);
   const edges = stableUnique(graph.edges);
   const stateAccesses = stableUnique(graph.stateAccesses);

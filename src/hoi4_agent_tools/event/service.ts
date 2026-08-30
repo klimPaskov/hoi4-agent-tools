@@ -191,17 +191,12 @@ function eventGraphCacheKey(
   return `${workspaceId}\0${projectHelpers ? 'expanded' : 'structural'}\0${analysisMode}`;
 }
 
-function isGameBackedWorkspace(workspace: ReturnType<CoreEngine['resolver']['get']>): boolean {
-  return workspace.roots.some(({ kind }) => kind === 'game');
-}
-
 const serviceState = new WeakMap<CoreEngine, SharedEventServiceState>();
 const EVENT_GRAPH_ARTIFACT_MAX_BYTES = 67_108_864;
 const EVENT_GRAPH_ARTIFACT_MAX_CHUNKS = 1_024;
 const EVENT_SCAN_FULL_GRAPH_RECORD_LIMIT = 100_000;
 const EVENT_SCAN_SUMMARY_SAMPLE_LIMIT = 100;
 const EVENT_FOCUSED_EVIDENCE_LIMIT = 2_000;
-const EVENT_FOCUSED_GRAPH_FILE_THRESHOLD = 1_000;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const graphHashCache = new WeakMap<EventGraphSnapshot, string>();
 
@@ -1065,8 +1060,7 @@ export class EventChainViewer {
     const generation = engineGeneration(this.engine, workspaceId);
     const requestedProjectHelpers = options.projectHelpers ?? true;
     const requestedAnalysisMode = options.analysisMode ?? 'full';
-    const autoFocused = isGameBackedWorkspace(workspace) && requestedAnalysisMode === 'full';
-    const cacheAnalysisMode = autoFocused ? 'focused' : requestedAnalysisMode;
+    const cacheAnalysisMode = requestedAnalysisMode;
     const cacheProjectHelpers = cacheAnalysisMode === 'focused' ? false : requestedProjectHelpers;
     const cacheKey = eventGraphCacheKey(workspaceId, cacheProjectHelpers, cacheAnalysisMode);
     const cached = this.#state.current.get(cacheKey);
@@ -1082,7 +1076,7 @@ export class EventChainViewer {
       ) ??
       this.#state.current.get(eventGraphCacheKey(workspaceId, !requestedProjectHelpers)) ??
       this.#state.current.get(eventGraphCacheKey(workspaceId, requestedProjectHelpers));
-    const scanFocused = autoFocused || requestedAnalysisMode === 'focused';
+    const scanFocused = requestedAnalysisMode === 'focused';
     const snapshot =
       options.refresh !== true && sibling?.generation === generation
         ? sibling.snapshot
@@ -1098,10 +1092,7 @@ export class EventChainViewer {
     if (cached?.snapshot.revision === snapshot.revision && cached.generation === generation) {
       return cached.graph;
     }
-    const buildAnalysisMode =
-      autoFocused || snapshot.files.length > EVENT_FOCUSED_GRAPH_FILE_THRESHOLD
-        ? 'focused'
-        : 'full';
+    const buildAnalysisMode = requestedAnalysisMode;
     const projectHelpers = buildAnalysisMode === 'focused' ? false : requestedProjectHelpers;
     const graph = buildEventGraph(snapshot, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -1126,16 +1117,10 @@ export class EventChainViewer {
         input.mode !== 'roots' &&
         input.mode !== 'trace' &&
         input.mode !== 'explain_path',
-      ...(input.mode === 'trace' || input.mode === 'explain_path'
-        ? { analysisMode: 'focused' as const }
-        : {}),
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
-    // Keep the service result's graph identity distinct from a prior scan while
-    // reusing its structural cache and avoiding a second large graph build.
-    const graph =
-      input.mode === 'trace' || input.mode === 'explain_path' ? { ...scannedGraph } : scannedGraph;
+    const graph = scannedGraph;
     const maxDepth = input.maxDepth ?? 8;
     const maxNodes = input.maxNodes ?? 500;
     const maxEdges = input.maxEdges ?? 2_000;

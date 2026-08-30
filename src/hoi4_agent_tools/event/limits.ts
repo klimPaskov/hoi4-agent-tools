@@ -2,9 +2,9 @@ import { ServiceError } from '../core/result.js';
 
 export const EVENT_GRAPH_MAX_NODES = 250_000;
 export const EVENT_GRAPH_MAX_EDGES = 500_000;
-export const EVENT_GRAPH_MAX_STATE_ACCESSES = 250_000;
-export const EVENT_GRAPH_MAX_STATE_LINKS = 250_000;
-export const EVENT_GRAPH_MAX_STATE_LINK_CANDIDATES = 500_000;
+export const EVENT_GRAPH_MAX_STATE_ACCESSES = 1_000_000;
+export const EVENT_GRAPH_MAX_STATE_LINKS = 1_000_000;
+export const EVENT_GRAPH_MAX_STATE_LINK_CANDIDATES = 2_000_000;
 // Installed-game scans can legitimately produce more than twenty thousand source-linked
 // findings before an agent narrows the query. Keep the graph bounded, but do not reject a
 // complete large workspace merely because its diagnostics are numerous.
@@ -14,7 +14,7 @@ export const EVENT_GRAPH_MAX_HELPER_DEPTH = 64;
 export const EVENT_GRAPH_MAX_HELPER_PROJECTIONS = 200_000;
 export const EVENT_GRAPH_MAX_HELPER_STATE_PROJECTIONS = 50_000;
 export const EVENT_GRAPH_MAX_CONDITION_TEXT = 16_384;
-export const EVENT_GRAPH_WORK_LIMIT = 5_000_000;
+export const EVENT_GRAPH_WORK_LIMIT = 10_000_000;
 export const EVENT_FRAGMENT_CACHE_MAX_ENTRIES = 10_000;
 export const EVENT_FRAGMENT_CACHE_MAX_SOURCE_BYTES = 134_217_728;
 export const EVENT_PROPOSED_SOURCE_MAX_FILES = 64;

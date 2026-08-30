@@ -64,7 +64,6 @@ const outputs = z.array(probabilityOutputSchema).max(10).optional();
 const commonShape = {
   workspaceId: workspaceIdSchema,
   adapter: probabilityAdapterIdSchema,
-  source: nestedSource,
   scenarioSet: nestedScenarios,
   candidatePool,
   horizonDays: z.number().positive().max(1_000_000).optional(),
@@ -79,22 +78,58 @@ const inspectInput = z
     workspaceId: workspaceIdSchema,
     adapter: probabilityAdapterIdSchema.optional(),
     source: nestedSource.optional(),
+    customPoolManifest: nestedManifest.optional(),
     candidatePool,
     refresh: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.adapter !== undefined && value.source === undefined)
+    if (value.source !== undefined && value.customPoolManifest !== undefined)
+      context.addIssue({
+        code: 'custom',
+        message: 'Provide either source or customPoolManifest',
+      });
+    if (
+      value.adapter !== undefined &&
+      value.source === undefined &&
+      value.customPoolManifest === undefined
+    )
       context.addIssue({
         code: 'custom',
         message:
           'An adapter requires a source; provide a source alone to discover compatible adapters',
       });
+    if (value.customPoolManifest !== undefined && value.adapter !== 'custom_weighted_pool')
+      context.addIssue({
+        code: 'custom',
+        path: ['adapter'],
+        message: 'customPoolManifest requires adapter custom_weighted_pool',
+      });
   });
-const evaluateInput = z.object(commonShape).strict();
+const evaluateInput = z
+  .object({
+    ...commonShape,
+    source: nestedSource.optional(),
+    customPoolManifest: nestedManifest.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.source === undefined) === (value.customPoolManifest === undefined))
+      context.addIssue({
+        code: 'custom',
+        message: 'Provide exactly one source or customPoolManifest',
+      });
+    if (value.customPoolManifest !== undefined && value.adapter !== 'custom_weighted_pool')
+      context.addIssue({
+        code: 'custom',
+        path: ['adapter'],
+        message: 'customPoolManifest requires adapter custom_weighted_pool',
+      });
+  });
 const sweepInput = z
   .object({
     ...commonShape,
+    source: nestedSource,
     sweep: z
       .object({
         paths: z.array(z.string().min(1).max(1024)).min(1).max(32),
@@ -108,6 +143,7 @@ const sweepInput = z
 const simulateInput = z
   .object({
     ...commonShape,
+    source: nestedSource,
     samples: z.number().int().min(100).max(10_000_000).default(100_000),
     seed: z.number().int().min(-2_147_483_648).max(2_147_483_647).default(1),
     confidenceLevel: z.number().min(0.5).max(0.9999).default(0.95),
@@ -133,8 +169,10 @@ const compareInput = z
   .object({
     workspaceId: workspaceIdSchema,
     adapter: probabilityAdapterIdSchema,
-    before: nestedSource,
-    after: nestedSource,
+    before: nestedSource.optional(),
+    after: nestedSource.optional(),
+    beforeManifest: nestedManifest.optional(),
+    afterManifest: nestedManifest.optional(),
     scenarioSet: nestedScenarios,
     candidatePool,
     horizonDays: z.number().positive().max(1_000_000).optional(),
@@ -143,7 +181,29 @@ const compareInput = z
     outputs,
     refresh: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const sourceMode = value.before !== undefined || value.after !== undefined;
+    const manifestMode = value.beforeManifest !== undefined || value.afterManifest !== undefined;
+    if (sourceMode === manifestMode)
+      context.addIssue({
+        code: 'custom',
+        message: 'Compare either before/after sources or beforeManifest/afterManifest',
+      });
+    if (sourceMode && (value.before === undefined || value.after === undefined))
+      context.addIssue({ code: 'custom', message: 'Source comparison requires before and after' });
+    if (manifestMode && (value.beforeManifest === undefined || value.afterManifest === undefined))
+      context.addIssue({
+        code: 'custom',
+        message: 'Custom-pool comparison requires beforeManifest and afterManifest',
+      });
+    if (manifestMode && value.adapter !== 'custom_weighted_pool')
+      context.addIssue({
+        code: 'custom',
+        path: ['adapter'],
+        message: 'Manifest comparison requires adapter custom_weighted_pool',
+      });
+  });
 const renderInput = z
   .object({
     workspaceId: workspaceIdSchema,
@@ -325,8 +385,7 @@ export function registerProbabilityTools(
     'hoi4.probability_inspect',
     {
       title: 'Inspect AI and MTTH weighted logic',
-      description:
-        'List versioned adapters, or provide a source alone to discover compatible weighted adapters, candidate pools, capabilities, provenance, and unsupported constructs before narrowing the request.',
+      description: 'Discover weighted adapters, candidates, provenance, and required inputs.',
       inputSchema: inspectInput,
       outputSchema: inspectOutput,
       annotations: readOnly,
@@ -347,6 +406,7 @@ export function registerProbabilityTools(
           input.adapter,
           input.source as ProbabilityAnalysisRequest['source'] | undefined,
           input.candidatePool,
+          input.customPoolManifest as ProbabilitySequenceRequest['customPoolManifest'] | undefined,
         );
         const result = emptyServiceResult(base.workspaceId, {
           adapters: inspected.adapters.length,
@@ -408,8 +468,7 @@ export function registerProbabilityTools(
     'hoi4.probability_evaluate',
     {
       title: 'Evaluate AI and MTTH scenarios',
-      description:
-        'Evaluate eligibility, modifier traces, exact values, proven probabilities, MTTH timing, bounds, and unresolved inputs.',
+      description: 'Evaluate weights and probabilities under explicit scenarios.',
       inputSchema: evaluateInput,
       outputSchema: analysisOutput,
       annotations: readOnly,
@@ -443,8 +502,7 @@ export function registerProbabilityTools(
     'hoi4.probability_sweep',
     {
       title: 'Sweep AI and MTTH parameters',
-      description:
-        'Evaluate declared ranges, sensitivity, breakpoints, and rank reversals without inventing world state.',
+      description: 'Evaluate declared ranges, breakpoints, and rank reversals.',
       inputSchema: sweepInput,
       outputSchema: analysisOutput,
       annotations: readOnly,
@@ -478,8 +536,7 @@ export function registerProbabilityTools(
     'hoi4.probability_simulate',
     {
       title: 'Simulate uncertain weighted scenarios',
-      description:
-        'Run reproducible seeded Monte Carlo analysis with distributions, supported correlations, and confidence intervals.',
+      description: 'Run seeded simulations with distributions and confidence intervals.',
       inputSchema: simulateInput,
       outputSchema: analysisOutput,
       annotations: readOnly,
@@ -513,8 +570,7 @@ export function registerProbabilityTools(
     'hoi4.probability_sequence',
     {
       title: 'Analyze a declared weighted sequence',
-      description:
-        'Analyze only manifest-declared recovery, caps, cooldowns, removals, resets, timers, and terminal states.',
+      description: 'Analyze a manifest-declared dynamic weighted sequence.',
       inputSchema: sequenceInput,
       outputSchema: analysisOutput,
       annotations: readOnly,
@@ -548,8 +604,7 @@ export function registerProbabilityTools(
     'hoi4.probability_compare',
     {
       title: 'Compare weighted source patches',
-      description:
-        'Compare real or proposed source under identical scenarios with modifier, score, probability, timing, and rank attribution.',
+      description: 'Compare sources or declared pools under identical scenarios.',
       inputSchema: compareInput,
       outputSchema: analysisOutput,
       annotations: readOnly,
@@ -583,8 +638,7 @@ export function registerProbabilityTools(
     'hoi4.probability_render',
     {
       title: 'Render AI and MTTH analysis',
-      description:
-        'Render cached analysis data as deterministic ranking, matrix, waterfall, timing, sensitivity, sequence, comparison, or unresolved resources.',
+      description: 'Render cached probability analysis as deterministic resources.',
       inputSchema: renderInput,
       outputSchema: analysisOutput,
       annotations: readOnly,

@@ -53,7 +53,6 @@ const GRAPH_ARTIFACT_BYTES = 134_217_728;
 const GRAPH_ARTIFACT_CHUNKS = 2_048;
 const HISTORY_ENTRIES = 12;
 const FOCUSED_RENDER_LIMIT = 32;
-const FOCUSED_GRAPH_FILE_THRESHOLD = 1_000;
 
 export type TechnologyAnalysisMode =
   'scan' | 'folders' | 'trace' | 'explain' | 'unlocks' | 'bonus_coverage' | 'lint' | 'impact';
@@ -224,6 +223,65 @@ function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['ge
   ].sort(compareCodeUnits);
 }
 
+function recomputeTechnologyShadowing(files: ScannedFile[]): void {
+  const groups = new Map<string, ScannedFile[]>();
+  for (const file of files) {
+    delete file.shadowedBy;
+    const key = file.relativePath.replaceAll('\\', '/').toLowerCase();
+    const group = groups.get(key) ?? [];
+    group.push(file);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    group.sort(
+      (left, right) =>
+        right.loadOrder - left.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+    );
+    const active = group[0]!;
+    for (const shadowed of group.slice(1)) shadowed.shadowedBy = active.displayPath;
+  }
+}
+
+async function scanTechnologySources(
+  engine: CoreEngine,
+  workspaceId: string,
+  workspace: ReturnType<CoreEngine['resolver']['get']>,
+  principal?: string,
+  signal?: AbortSignal,
+): Promise<ScanSnapshot> {
+  const patterns = technologyScanPatterns(workspace);
+  const scans = await Promise.all([
+    engine.scan(
+      workspaceId,
+      { patterns, rootKinds: ['mod', 'dependency', 'fixture'] },
+      principal,
+      signal,
+    ),
+    ...(workspace.roots.some(({ kind }) => kind === 'game')
+      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game'] }, principal, signal)]
+      : []),
+  ]);
+  const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));
+  recomputeTechnologyShadowing(files);
+  files.sort(
+    (left, right) =>
+      left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+  );
+  const index = engine.indexFiles(files);
+  return {
+    workspaceId,
+    revision: hashCanonical(
+      files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
+    ),
+    files,
+    index,
+    complete: scans.every(({ complete }) => complete) && index.complete,
+    skippedSourceCount: index.skippedSourceCount,
+    skippedSources: index.skippedSources,
+    diagnostics: [...scans.flatMap(({ diagnostics }) => diagnostics), ...index.diagnostics],
+  };
+}
+
 function activeTechnologySprite(
   spriteName: string,
   spritePath: string | undefined,
@@ -280,15 +338,6 @@ async function resolveTechnologyIconDataUris(
   return Object.fromEntries(
     Object.entries(dataUris).sort(([left], [right]) => compareCodeUnits(left, right)),
   );
-}
-
-function technologyAnalysisMode(
-  workspace: ReturnType<CoreEngine['resolver']['get']>,
-  snapshot: ScanSnapshot,
-): 'full' | 'focused' {
-  return workspace.gameRoot !== undefined || snapshot.files.length > FOCUSED_GRAPH_FILE_THRESHOLD
-    ? 'focused'
-    : 'full';
 }
 
 function rememberGraph(state: SharedTechnologyState, graph: TechnologyGraphSnapshot): void {
@@ -665,13 +714,14 @@ export class TechnologyTreeViewer {
     const generation = this.engine.generation(workspaceId);
     const cached = this.#state.current.get(workspaceId);
     if (options.refresh !== true && cached?.generation === generation) return cached.graph;
-    const snapshot = await this.engine.scan(
+    const snapshot = await scanTechnologySources(
+      this.engine,
       workspaceId,
-      { patterns: technologyScanPatterns(workspace) },
+      workspace,
       options.principal,
       options.signal,
     );
-    const analysisMode = technologyAnalysisMode(workspace, snapshot);
+    const analysisMode = 'full' as const;
     const preliminary = buildTechnologyGraph(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,

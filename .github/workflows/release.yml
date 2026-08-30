@@ -310,6 +310,8 @@ jobs:
       - name: Capture and validate the immutable exact-tag and release state
         id: image_state
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -325,6 +327,7 @@ jobs:
             "https://ghcr.io/v2/klimpaskov/hoi4-agent-tools/manifests/${VERSION}")"
           RELEASE_STATUS="$(curl --silent --show-error --location --output "$RELEASE_JSON" \
             --write-out '%{http_code}' --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
             --header 'X-GitHub-Api-Version: 2026-03-10' \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}")"
           DIGEST=''

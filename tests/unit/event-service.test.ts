@@ -108,7 +108,7 @@ describe('Event Chain Viewer service', () => {
       selector: { kind: 'event', eventId: 'service.1' },
       direction: 'downstream',
     });
-    expect(trace.graph).not.toBe(scanned.graph);
+    expect(trace.graph).toBe(scanned.graph);
     expect(trace.graph).toStrictEqual(scanned.graph);
     expect(scan).toHaveBeenCalledTimes(1);
 
@@ -122,7 +122,7 @@ describe('Event Chain Viewer service', () => {
     expect(scan).toHaveBeenCalledTimes(3);
   });
 
-  it('bounds large event workspaces before workspace-wide passes can exhaust the server', async () => {
+  it('keeps full workspace-wide event analysis for large workspaces', async () => {
     const { engine, sourcePath } = await fixture();
     const eventsRoot = path.dirname(sourcePath);
     await Promise.all(
@@ -140,9 +140,9 @@ describe('Event Chain Viewer service', () => {
       mode: 'roots',
     });
 
-    expect(inspected.graph.analysisMode).toBe('focused');
-    expect(inspected.graph.complete).toBe(false);
-    expect(inspected.graph.unresolved).toContainEqual(
+    expect(inspected.graph.analysisMode).toBe('full');
+    expect(inspected.graph.complete).toBe(true);
+    expect(inspected.graph.unresolved).not.toContainEqual(
       expect.objectContaining({
         blockers: [expect.objectContaining({ code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED' })],
       }),

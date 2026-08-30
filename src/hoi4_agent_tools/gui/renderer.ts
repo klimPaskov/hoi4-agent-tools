@@ -82,7 +82,7 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
       .sort(([left], [right]) => compareCodeUnits(left, right))
       .map(
         ([key, glyph]) =>
-          `<image id="${bitmapDefinitionId(key)}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.dataUri}" preserveAspectRatio="none"/>${glyph.borderDataUri === undefined ? '' : `<image id="${bitmapDefinitionId(key, 'border')}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.borderDataUri}" preserveAspectRatio="none"/>`}`,
+          `<image id="${bitmapDefinitionId(key)}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.dataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed"/>${glyph.borderDataUri === undefined ? '' : `<image id="${bitmapDefinitionId(key, 'border')}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.borderDataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed"/>`}`,
       ),
   ].join('');
 }
