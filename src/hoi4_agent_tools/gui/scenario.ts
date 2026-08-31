@@ -133,7 +133,15 @@ const GuiPreviewScenarioBodySchema = z
       .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u),
     description: z.string().max(500).optional(),
     resolution: GuiPreviewResolutionSchema.default({ width: 1920, height: 1080 }),
-    uiScale: z.number().positive().min(0.25).max(4).default(1),
+    uiScale: z
+      .number()
+      .positive()
+      .min(0.25)
+      .max(4)
+      .default(1)
+      .describe(
+        'In-game UI scale. Use 1 for the normal 1920x1080 layout; this changes layout geometry and is not an output-image zoom.',
+      ),
     state: previewStateSchema.default('normal'),
     language: z
       .string()

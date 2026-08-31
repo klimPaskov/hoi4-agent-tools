@@ -847,7 +847,7 @@ export class GuiAssetCatalog {
         const raster =
           pageFile === undefined
             ? undefined
-            : await this.loadBmFontGlyph(entry, pageFile, metric, codePoint);
+            : await this.loadBmFontGlyph(entry, pageFile, metric, codePoint, scale);
         if (raster !== undefined && pageFile !== undefined) {
           pageHashes.add(pageFile.sha256);
           glyphs.push({
@@ -857,8 +857,8 @@ export class GuiAssetCatalog {
             ...(raster.borderDataUri === undefined ? {} : { borderDataUri: raster.borderDataUri }),
             x: penX + metric.xOffset * scale,
             y: metric.yOffset * scale,
-            width: raster.width * scale,
-            height: raster.height * scale,
+            width: raster.width * (scale > 1 ? 1 : scale),
+            height: raster.height * (scale > 1 ? 1 : scale),
           });
         } else if (
           metric.width > 0 &&
@@ -982,11 +982,15 @@ export class GuiAssetCatalog {
     pageFile: ScannedFile,
     metric: BmFontCharacter,
     codePoint: number,
+    scale: number,
   ): Promise<
     { dataUri: string; borderDataUri?: string; width: number; height: number } | undefined
   > {
     if (metric.width <= 0 || metric.height <= 0) return Promise.resolve(undefined);
-    const key = `${entry.sourceFile.sha256}:${pageFile.sha256}:${codePoint}:${metric.x}:${metric.y}:${metric.width}:${metric.height}`;
+    const rasterScale = scale > 1 ? scale : 1;
+    const targetWidth = Math.max(1, Math.round(metric.width * rasterScale));
+    const targetHeight = Math.max(1, Math.round(metric.height * rasterScale));
+    const key = `${entry.sourceFile.sha256}:${pageFile.sha256}:${codePoint}:${metric.x}:${metric.y}:${metric.width}:${metric.height}:${targetWidth}:${targetHeight}`;
     let promise = this.glyphRasters.get(key);
     if (promise === undefined) {
       promise = (async () => {
@@ -1006,8 +1010,8 @@ export class GuiAssetCatalog {
           `GUI BMFont glyph rasterization U+${codePoint.toString(16).toUpperCase()}`,
         );
         this.budget.reserve(
-          metric.width,
-          metric.height,
+          targetWidth,
+          targetHeight,
           `GUI BMFont glyph U+${codePoint.toString(16).toUpperCase()}`,
           { maximumPixels: RENDER_MAX_DECODED_PIXELS },
         );
@@ -1142,13 +1146,21 @@ export class GuiAssetCatalog {
             }
           }
         }
-        const encodeMask = (pixels: Buffer): Promise<Buffer> =>
-          sharp(pixels, {
+        const encodeMask = (pixels: Buffer): Promise<Buffer> => {
+          let pipeline = sharp(pixels, {
             raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
             limitInputPixels: RENDER_MAX_DECODED_PIXELS,
-          })
+          });
+          if (targetWidth !== extracted.info.width || targetHeight !== extracted.info.height) {
+            pipeline = pipeline.resize(targetWidth, targetHeight, {
+              fit: 'fill',
+              kernel: scale >= 1 ? sharp.kernel.nearest : sharp.kernel.lanczos3,
+            });
+          }
+          return pipeline
             .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
             .toBuffer();
+        };
         const png = await encodeMask(facePixels);
         const borderPng = borderPixels === undefined ? undefined : await encodeMask(borderPixels);
         return {
@@ -1156,8 +1168,8 @@ export class GuiAssetCatalog {
           ...(borderPng === undefined
             ? {}
             : { borderDataUri: `data:image/png;base64,${borderPng.toString('base64')}` }),
-          width: metric.width,
-          height: metric.height,
+          width: targetWidth,
+          height: targetHeight,
         };
       })();
       this.glyphRasters.set(key, promise);

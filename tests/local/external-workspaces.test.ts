@@ -37,6 +37,7 @@ const modRoot = process.env.HOI4_EXTERNAL_MOD_ROOT;
 const dependencyRoots = (process.env.HOI4_DEPENDENCY_ROOTS ?? '')
   .split(path.delimiter)
   .filter(Boolean);
+const guiFidelityWindow = process.env.HOI4_GUI_FIDELITY_WINDOW;
 const local = gameRoot === undefined || modRoot === undefined ? describe.skip : describe;
 let runtimeRoot = '';
 
@@ -171,9 +172,17 @@ local('local installed-game and external-mod integration', () => {
           right.childIds.length - left.childIds.length || compareCodeUnits(left.name, right.name),
       );
     expect(candidates.length).toBeGreaterThan(0);
+    const selectedWindow =
+      guiFidelityWindow === undefined
+        ? candidates[0]
+        : candidates.find(({ name }) => name === guiFidelityWindow);
+    expect(
+      selectedWindow,
+      `GUI fidelity window ${guiFidelityWindow ?? '<automatic>'} was not found`,
+    ).toBeDefined();
     const renderInput = {
       workspaceId: 'external',
-      windowName: candidates[0]!.name,
+      windowName: selectedWindow!.name,
       scenario: defaultPreviewScenario('local-integration'),
       states: ['normal' as const],
       resolutions: [{ width: 1920, height: 1080, uiScale: 1 }],
@@ -242,6 +251,26 @@ local('local installed-game and external-mod integration', () => {
     expect(
       glyphSources.some((source) => source === 'fontkit-path' || source === 'bmfont-atlas'),
     ).toBe(true);
+    const unresolvedDeclaredFonts = first.render.scene.elements
+      .filter(
+        ({ visible, text }) =>
+          visible &&
+          text?.fontName !== undefined &&
+          text.text.trim() !== '' &&
+          (text.metricSource === 'approximation' ||
+            text.glyphLines.some(
+              ({ source, missingGlyphs }) =>
+                source === 'deterministic-fallback' || missingGlyphs.length > 0,
+            )),
+      )
+      .map(({ name, text }) => ({
+        name,
+        font: text?.fontName,
+        metricSource: text?.metricSource,
+        glyphSources: text?.glyphLines.map(({ source }) => source),
+        missingGlyphs: text?.glyphLines.flatMap(({ missingGlyphs }) => missingGlyphs),
+      }));
+    expect(unresolvedDeclaredFonts).toEqual([]);
     expect(first.artifacts.length).toBeGreaterThan(10);
   }, 600_000);
 

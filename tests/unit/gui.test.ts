@@ -1744,10 +1744,12 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(svg).toContain(`data-font-sha256="${greenText?.glyphLines[0]?.sourceHash}"`);
     expect(svg).toContain('data-font-colour="#ff0000ff"');
     expect(svg).toContain('data-font-colour="#00ff00ff"');
-    expect(svg).toContain('<feColorMatrix');
+    expect(svg).not.toContain('<feColorMatrix');
     expect(svg).toContain('gui-font-bitmap-border-');
     expect(svg).toContain('image-rendering="optimizeSpeed"');
-    expect(svg).not.toContain('<mask');
+    expect(svg).toContain('style="image-rendering:pixelated"');
+    expect(svg).toContain('style="mask-type:alpha"');
+    expect(svg).toContain('<mask id="gui-font-face-');
     expect(svg).toMatch(/data-hoi4-colour-runs="true"[\s\S]*?<use href="#gui-font-bitmap-/u);
     const png = rendered.images[0]?.png;
     expect(png).toBeDefined();
@@ -1779,6 +1781,36 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
         ({ red, green, blue, alpha }) => red < 70 && green < 70 && blue < 70 && alpha > 100,
       ),
     ).toBe(true);
+
+    const enlargedScene = await buildGuiScene(
+      graph,
+      files,
+      'font_faces',
+      parsePreviewScenario({
+        id: 'font-faces-enlarged',
+        resolution: { width: 1920, height: 1080 },
+        uiScale: 4,
+      }),
+    );
+    const enlargedGlyph = enlargedScene.elements
+      .find(({ name }) => name === 'red_face')
+      ?.text?.glyphLines[0]?.glyphs.find((glyph) => glyph.kind === 'bitmap');
+    expect(enlargedGlyph?.kind).toBe('bitmap');
+    if (enlargedGlyph?.kind !== 'bitmap') return;
+    expect(enlargedGlyph.width).toBe(32);
+    expect(enlargedGlyph.height).toBe(48);
+    const enlargedMask = await decodeDataUri(enlargedGlyph.dataUri);
+    expect(enlargedMask.width).toBe(32);
+    const enlargedAlphaValues = new Set(
+      Array.from(
+        { length: enlargedMask.data.length / 4 },
+        (_unused, index) => enlargedMask.data[index * 4 + 3],
+      ),
+    );
+    expect(enlargedAlphaValues).toEqual(new Set([0, 255]));
+    const enlargedRender = await renderGuiScene(enlargedScene, ['cropped']);
+    expect(enlargedRender.images[0]?.svg).toContain('style="mask-type:alpha"');
+    expect(enlargedRender.images[0]?.svg).not.toContain('<feColorMatrix');
   });
 
   it('separates a shipped-style RGB face from an alpha outline when channel declarations lie', async () => {

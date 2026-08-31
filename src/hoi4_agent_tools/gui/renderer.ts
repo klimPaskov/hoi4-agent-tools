@@ -82,7 +82,7 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
       .sort(([left], [right]) => compareCodeUnits(left, right))
       .map(
         ([key, glyph]) =>
-          `<image id="${bitmapDefinitionId(key)}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.dataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed"/>${glyph.borderDataUri === undefined ? '' : `<image id="${bitmapDefinitionId(key, 'border')}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.borderDataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed"/>`}`,
+          `<image id="${bitmapDefinitionId(key)}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.dataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated"/>${glyph.borderDataUri === undefined ? '' : `<image id="${bitmapDefinitionId(key, 'border')}" width="${finite(glyph.width)}" height="${finite(glyph.height)}" href="${glyph.borderDataUri}" preserveAspectRatio="none" image-rendering="optimizeSpeed" style="image-rendering:pixelated"/>`}`,
       ),
   ].join('');
 }
@@ -91,15 +91,8 @@ function bitmapTintMarkup(id: string, colour: string, glyphs: string, rect: GuiR
   const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/iu.exec(colour);
   const rgb = match?.[1] ?? 'ffffff';
   const alpha = match?.[2] ?? 'ff';
-  const channels = [
-    Number.parseInt(rgb.slice(0, 2), 16) / 255,
-    Number.parseInt(rgb.slice(2, 4), 16) / 255,
-    Number.parseInt(rgb.slice(4, 6), 16) / 255,
-    Number.parseInt(alpha, 16) / 255,
-  ].map(finite);
-  const [red, green, blue, opacity] = channels;
-  const matrix = `${red} 0 0 0 0 0 ${green} 0 0 0 0 0 ${blue} 0 0 0 0 0 ${opacity} 0`;
-  return `<defs><filter id="${id}" filterUnits="userSpaceOnUse" ${rectAttributes(rect)} color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrix}"/></filter></defs><g filter="url(#${id})">${glyphs}</g>`;
+  const opacity = finite(Number.parseInt(alpha, 16) / 255);
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" ${rectAttributes(rect)} style="mask-type:alpha"><g>${glyphs}</g></mask></defs><rect ${rectAttributes(rect)} fill="#${rgb}"${opacity >= 1 ? '' : ` fill-opacity="${opacity}"`} mask="url(#${id})"/>`;
 }
 
 function actualGlyphMarkup(
@@ -129,7 +122,7 @@ function actualGlyphMarkup(
           );
         const x = originX + glyph.x * horizontalScale;
         const y = baseline + glyph.y - glyphLine.baseline;
-        return `<use href="#${bitmapDefinitionId(glyph.key, bitmapLayer)}" transform="translate(${finite(nativePixelGrid ? Math.round(x) : x)} ${finite(nativePixelGrid ? Math.round(y) : y)}) scale(${finite(horizontalScale)} 1)"/>`;
+        return `<use href="#${bitmapDefinitionId(glyph.key, bitmapLayer)}" transform="translate(${finite(nativePixelGrid ? Math.round(x) : x)} ${finite(nativePixelGrid ? Math.round(y) : y)}) scale(${finite(horizontalScale)} 1)" image-rendering="optimizeSpeed" style="image-rendering:pixelated"/>`;
       })
       .join('');
   return '';

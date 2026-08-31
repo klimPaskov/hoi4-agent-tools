@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 3.0.2 - 2026-08-31
+
+- Render enlarged HOI4 bitmap glyphs as pre-scaled atlas masks so VPS and Linux output stays crisp instead of depending on platform SVG interpolation.
+- Apply bitmap-font face, border, and localisation colours with portable alpha masks instead of SVG colour-matrix filters that could be ignored by remote rasterizers.
+- Clarify that GUI `uiScale` represents the in-game layout scale and is not an artifact zoom control.
+
 ## 3.0.1 - 2026-08-31
 
 - Render technology folders with the source GUI's actual small and regular item geometry, infer small items from equipment unlock behavior, and include horizontal or vertical year guides.

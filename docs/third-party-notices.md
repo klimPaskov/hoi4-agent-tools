@@ -2,7 +2,7 @@
 
 ## Roboto
 
-HOI4 Agent Tools depends on `@fontsource-variable/roboto` version 5.2.10 for deterministic, host-independent artifact labels and the project-owned synthetic BMFont fixture.
+HOI4 Agent Tools depends on `@fontsource-variable/roboto` version 5.3.0 for deterministic, host-independent artifact labels and the project-owned synthetic BMFont fixture.
 
 Copyright 2011 The Roboto Project Authors (<https://github.com/googlefonts/roboto-classic>). Roboto-Italic[wdth,wght].ttf: Copyright 2011 The Roboto Project Authors (<https://github.com/googlefonts/roboto-classic>).
 

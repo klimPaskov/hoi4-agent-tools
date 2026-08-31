@@ -195,7 +195,14 @@ const resolutionSchema = z
   .object({
     width: z.number().int().min(320).max(RENDER_MAX_DIMENSION),
     height: z.number().int().min(200).max(RENDER_MAX_DIMENSION),
-    uiScale: z.number().min(0.25).max(4).optional(),
+    uiScale: z
+      .number()
+      .min(0.25)
+      .max(4)
+      .optional()
+      .describe(
+        'In-game UI scale for this resolution. Use 1 at 1920x1080; do not use it to enlarge an artifact.',
+      ),
   })
   .strict()
   .superRefine(({ width, height }, context) => {
