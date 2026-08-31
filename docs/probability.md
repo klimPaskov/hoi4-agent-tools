@@ -16,7 +16,9 @@ Use them for event timing and option weights, decision and mission scores, focus
 
 All seven tools are read-only. Proposed source is parsed in memory and never written. When an installed game root is configured, evaluation fails closed unless `launcher-settings.json` identifies the supported HOI4 build and checksum. Results otherwise state that they target the adapter version without claiming local-game verification.
 
-Pass a source without an adapter when the surface type is not yet known. Inspection returns every compatible adapter, candidate counts, and example candidate IDs. If a requested adapter, identifier, or candidate pool does not match the source, inspection returns the same discovery result with an explanation and suggested adapter instead of `PROBABILITY_SURFACE_EMPTY`; evaluation, sweeps, and simulation remain strict and still reject an empty requested surface.
+Pass a source without an adapter when the surface type is not yet known. Inspection returns every compatible adapter, candidate counts, and example candidate IDs. If a requested adapter, identifier, or candidate pool does not match the source, inspection returns the same discovery result with an explanation and suggested adapter instead of `PROBABILITY_SURFACE_EMPTY`.
+
+Evaluation, sweep, simulation, and source comparison also accept an omitted adapter. When a source selector identifies one unambiguous weighted surface, the analyzer selects that source-backed adapter automatically. If a caller supplies a mismatched adapter or `custom_weighted_pool` for a source-backed request, the analyzer corrects it when the source has exactly one match. `customPoolManifest`, `beforeManifest`, and `afterManifest` use the custom-pool adapter automatically; `PROBABILITY_SURFACE_EMPTY` is reserved for sources with no weighted surface, while genuinely multi-adapter sources ask the caller to narrow by identifier or line.
 
 ## Scenarios
 

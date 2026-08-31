@@ -14,6 +14,10 @@ async function main(): Promise<void> {
   const engine = await createEngine();
   const context = {};
   const server = createMcpServer(engine, context);
+  if (process.env.HOI4_AGENT_TOOLS_CHAOSX === '1') {
+    const { registerChaosxTools } = await import('../hoi4_agent_tools/mcp/tools/chaosx.js');
+    registerChaosxTools(server, engine, context);
+  }
   server.server.onerror = (error): void => {
     const fatalInputError =
       error instanceof StdioFrameLimitError || error instanceof StdioInvalidUtf8Error;

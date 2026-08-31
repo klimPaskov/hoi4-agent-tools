@@ -22,10 +22,12 @@ import type {
   TechnologyExternalSourceKind,
   TechnologyGridbox,
   TechnologyHelperCall,
+  TechnologyItemLayout,
   TechnologySourceFragment,
   TechnologySourceProvenance,
   TechnologyUnlockKind,
   TechnologyUnresolvedAnalysis,
+  TechnologyYearMarker,
 } from './model.js';
 
 export interface TechnologySourceAnalysisContext {
@@ -480,12 +482,7 @@ function parseTechnologyDefinitions(
       ].sort(compareCodeUnits);
       const layoutExpression = firstValue(block, 'force_use_small_tech_layout');
       const smallLayout = booleanValue(layoutExpression);
-      const layoutSize =
-        layoutExpression === undefined || smallLayout === false
-          ? 'large'
-          : smallLayout === true
-            ? 'small'
-            : 'unknown';
+      const layoutSize = smallLayout === true ? 'small' : 'unknown';
       const unsupportedFields = fragment.placements
         .filter(
           ({ technologyId, xExpression, yExpression }) =>
@@ -731,6 +728,20 @@ function parseModernDoctrines(
   }
 }
 
+function technologyFolderContainer(namedContainers: readonly string[]): string | undefined {
+  return [...namedContainers].reverse().find((name) => /_folder(?:_|$)/iu.test(name));
+}
+
+function technologyItemLayoutName(
+  name: string,
+): { folderId: string; layoutSize: 'small' | 'large' } | undefined {
+  const small = /^techtree_(.+)_small_item$/iu.exec(name);
+  if (small?.[1] !== undefined) return { folderId: small[1], layoutSize: 'small' };
+  const large = /^techtree_(.+)_item$/iu.exec(name);
+  if (large?.[1] !== undefined) return { folderId: large[1], layoutSize: 'large' };
+  return undefined;
+}
+
 function parseTechnologyGridboxes(
   file: ScannedFile,
   document: SourceDocument,
@@ -738,9 +749,12 @@ function parseTechnologyGridboxes(
   signal?: AbortSignal,
 ): void {
   if (!normalizedPath(file).endsWith('.gui')) return;
-  const stack: Array<{ block: BlockNode; namedContainers: string[] }> = [
-    { block: document.root, namedContainers: [] },
-  ];
+  const stack: Array<{
+    block: BlockNode;
+    namedContainers: string[];
+    offsetX: number;
+    offsetY: number;
+  }> = [{ block: document.root, namedContainers: [], offsetX: 0, offsetY: 0 }];
   let visited = 0;
   while (stack.length > 0) {
     if (visited % 128 === 0) signal?.throwIfAborted();
@@ -751,11 +765,14 @@ function parseTechnologyGridboxes(
       const block = assignment.value;
       const elementType = assignment.key.value.toLowerCase();
       const name = firstScalar(block, 'name');
+      const position = childBlocks(block, 'position')[0];
+      const localX = numericLiteral(position === undefined ? undefined : firstValue(position, 'x'));
+      const localY = numericLiteral(position === undefined ? undefined : firstValue(position, 'y'));
+      const absoluteX = current.offsetX + (localX ?? 0);
+      const absoluteY = current.offsetY + (localY ?? 0);
+      const folderId = technologyFolderContainer(current.namedContainers);
       if (elementType === 'gridboxtype' && name?.value.endsWith('_tree') === true) {
-        const position = childBlocks(block, 'position')[0];
         const slotSize = childBlocks(block, 'slotsize')[0];
-        const x = numericLiteral(position === undefined ? undefined : firstValue(position, 'x'));
-        const y = numericLiteral(position === undefined ? undefined : firstValue(position, 'y'));
         const width = numericLiteral(
           slotSize === undefined ? undefined : firstValue(slotSize, 'width'),
         );
@@ -769,16 +786,14 @@ function parseTechnologyGridboxes(
             offset: assignment.start,
           }),
           name: name.value,
-          ...(current.namedContainers.at(-1) === undefined
-            ? {}
-            : { folderId: current.namedContainers.at(-1)! }),
+          ...(folderId === undefined ? {} : { folderId }),
           position: {
-            ...(x === undefined ? {} : { x }),
-            ...(y === undefined ? {} : { y }),
-            ...(position === undefined || x !== undefined
+            ...(localX === undefined ? {} : { x: absoluteX }),
+            ...(localY === undefined ? {} : { y: absoluteY }),
+            ...(position === undefined || localX !== undefined
               ? {}
               : { xExpression: firstValue(position, 'x') ?? '<missing>' }),
-            ...(position === undefined || y !== undefined
+            ...(position === undefined || localY !== undefined
               ? {}
               : { yExpression: firstValue(position, 'y') ?? '<missing>' }),
           },
@@ -801,12 +816,90 @@ function parseTechnologyGridboxes(
         };
         fragment.gridboxes.push(gridbox);
       }
+      if (elementType === 'containerwindowtype' && name !== undefined) {
+        const item = technologyItemLayoutName(name.value);
+        if (item !== undefined) {
+          const size = childBlocks(block, 'size')[0];
+          const width = numericLiteral(size === undefined ? undefined : firstValue(size, 'width'));
+          const height = numericLiteral(
+            size === undefined ? undefined : firstValue(size, 'height'),
+          );
+          const layout: TechnologyItemLayout = {
+            id: deterministicId('tech-item-layout', {
+              name: name.value,
+              path: file.displayPath,
+              offset: assignment.start,
+            }),
+            name: name.value,
+            folderId: item.folderId,
+            layoutSize: item.layoutSize,
+            position: {
+              ...(localX === undefined ? {} : { x: localX }),
+              ...(localY === undefined ? {} : { y: localY }),
+              ...(position === undefined || localX !== undefined
+                ? {}
+                : { xExpression: firstValue(position, 'x') ?? '<missing>' }),
+              ...(position === undefined || localY !== undefined
+                ? {}
+                : { yExpression: firstValue(position, 'y') ?? '<missing>' }),
+            },
+            size: {
+              ...(width === undefined ? {} : { width }),
+              ...(height === undefined ? {} : { height }),
+              ...(size === undefined || width !== undefined
+                ? {}
+                : { widthExpression: firstValue(size, 'width') ?? '<missing>' }),
+              ...(size === undefined || height !== undefined
+                ? {}
+                : { heightExpression: firstValue(size, 'height') ?? '<missing>' }),
+            },
+            location: nodeLocation(document, assignment, name.value),
+            sourcePath: file.displayPath,
+            loadOrder: file.loadOrder,
+          };
+          fragment.itemLayouts.push(layout);
+        }
+      }
+      if (elementType === 'instanttextboxtype' && name !== undefined && folderId !== undefined) {
+        const text = firstValue(block, 'text');
+        const year =
+          text === undefined
+            ? undefined
+            : /^(?:18|19|20)\d{2}$/u.test(text)
+              ? Number(text)
+              : undefined;
+        if (year !== undefined && localX !== undefined && localY !== undefined) {
+          const marker: TechnologyYearMarker = {
+            id: deterministicId('tech-year-marker', {
+              name: name.value,
+              year,
+              path: file.displayPath,
+              offset: assignment.start,
+            }),
+            name: name.value,
+            folderId,
+            year,
+            position: { x: absoluteX, y: absoluteY },
+            location: nodeLocation(document, assignment, name.value),
+            sourcePath: file.displayPath,
+            loadOrder: file.loadOrder,
+          };
+          fragment.yearMarkers.push(marker);
+        }
+      }
       const namedContainers =
         name !== undefined &&
         (elementType === 'containerwindowtype' || elementType === 'windowtype')
           ? [...current.namedContainers, name.value]
           : current.namedContainers;
-      stack.push({ block, namedContainers });
+      const positionedContainer =
+        elementType === 'containerwindowtype' || elementType === 'windowtype';
+      stack.push({
+        block,
+        namedContainers,
+        offsetX: positionedContainer ? absoluteX : current.offsetX,
+        offsetY: positionedContainer ? absoluteY : current.offsetY,
+      });
     }
   }
 }
@@ -1120,6 +1213,8 @@ export function analyzeTechnologySource(
     folders: [],
     placements: [],
     gridboxes: [],
+    itemLayouts: [],
+    yearMarkers: [],
     edges: [],
     categories: [],
     doctrineDefinitions: [],

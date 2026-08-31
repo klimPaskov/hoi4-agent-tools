@@ -56,13 +56,31 @@ function byId<T extends { id: string }>(values: readonly T[]): Map<string, T> {
 function placementSignature(values: readonly TechnologyPlacement[]): string {
   return hashCanonical(
     values
-      .map(({ folderId, x, y, xExpression, yExpression }) => ({
-        folderId,
-        x: x ?? null,
-        y: y ?? null,
-        xExpression: xExpression ?? null,
-        yExpression: yExpression ?? null,
-      }))
+      .map(
+        ({
+          folderId,
+          x,
+          y,
+          xExpression,
+          yExpression,
+          layoutSize,
+          layoutWidth,
+          layoutHeight,
+          layoutOffsetX,
+          layoutOffsetY,
+        }) => ({
+          folderId,
+          x: x ?? null,
+          y: y ?? null,
+          xExpression: xExpression ?? null,
+          yExpression: yExpression ?? null,
+          layoutSize: layoutSize ?? null,
+          layoutWidth: layoutWidth ?? null,
+          layoutHeight: layoutHeight ?? null,
+          layoutOffsetX: layoutOffsetX ?? null,
+          layoutOffsetY: layoutOffsetY ?? null,
+        }),
+      )
       .sort(
         (left, right) =>
           compareCodeUnits(left.folderId, right.folderId) ||

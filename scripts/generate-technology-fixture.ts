@@ -159,6 +159,20 @@ async function main(): Promise<void> {
     gridboxes.push(
       'containerWindowType = {',
       `\tname = ${folderId(folder)}`,
+      ...(folder === 1
+        ? [
+            '\tinstantTextBoxType = {',
+            '\t\tname = synthetic_year_1936',
+            '\t\tposition = { x = 0 y = -60 }',
+            '\t\ttext = "1936"',
+            '\t}',
+            '\tinstantTextBoxType = {',
+            '\t\tname = synthetic_year_1940',
+            '\t\tposition = { x = 440 y = -60 }',
+            '\t\ttext = "1940"',
+            '\t}',
+          ]
+        : []),
       ...roots.flatMap((rootId, branch) => [
         '\tgridBoxType = {',
         `\t\tname = ${rootId}_tree`,
@@ -169,6 +183,20 @@ async function main(): Promise<void> {
       ]),
       '}',
     );
+    if (folder === 1) {
+      gridboxes.push(
+        'containerWindowType = {',
+        '\tname = techtree_synthetic_folder_01_small_item',
+        '\tposition = { x = 0 y = 0 }',
+        '\tsize = { width = 64 height = 64 }',
+        '}',
+        'containerWindowType = {',
+        '\tname = techtree_synthetic_folder_01_item',
+        '\tposition = { x = -44 y = -6 }',
+        '\tsize = { width = 176 height = 82 }',
+        '}',
+      );
+    }
   }
   await put('interface/synthetic_technology_view.gui', `${gridboxes.join('\n')}\n`);
 

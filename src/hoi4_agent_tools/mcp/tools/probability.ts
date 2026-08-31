@@ -63,7 +63,7 @@ const candidatePool = z.array(z.string().min(1).max(512)).max(100_000).optional(
 const outputs = z.array(probabilityOutputSchema).max(10).optional();
 const commonShape = {
   workspaceId: workspaceIdSchema,
-  adapter: probabilityAdapterIdSchema,
+  adapter: probabilityAdapterIdSchema.optional(),
   scenarioSet: nestedScenarios,
   candidatePool,
   horizonDays: z.number().positive().max(1_000_000).optional(),
@@ -99,7 +99,11 @@ const inspectInput = z
         message:
           'An adapter requires a source; provide a source alone to discover compatible adapters',
       });
-    if (value.customPoolManifest !== undefined && value.adapter !== 'custom_weighted_pool')
+    if (
+      value.customPoolManifest !== undefined &&
+      value.adapter !== undefined &&
+      value.adapter !== 'custom_weighted_pool'
+    )
       context.addIssue({
         code: 'custom',
         path: ['adapter'],
@@ -119,7 +123,11 @@ const evaluateInput = z
         code: 'custom',
         message: 'Provide exactly one source or customPoolManifest',
       });
-    if (value.customPoolManifest !== undefined && value.adapter !== 'custom_weighted_pool')
+    if (
+      value.customPoolManifest !== undefined &&
+      value.adapter !== undefined &&
+      value.adapter !== 'custom_weighted_pool'
+    )
       context.addIssue({
         code: 'custom',
         path: ['adapter'],
@@ -168,7 +176,7 @@ const sequenceInput = z
 const compareInput = z
   .object({
     workspaceId: workspaceIdSchema,
-    adapter: probabilityAdapterIdSchema,
+    adapter: probabilityAdapterIdSchema.optional(),
     before: nestedSource.optional(),
     after: nestedSource.optional(),
     beforeManifest: nestedManifest.optional(),
@@ -197,7 +205,7 @@ const compareInput = z
         code: 'custom',
         message: 'Custom-pool comparison requires beforeManifest and afterManifest',
       });
-    if (manifestMode && value.adapter !== 'custom_weighted_pool')
+    if (manifestMode && value.adapter !== undefined && value.adapter !== 'custom_weighted_pool')
       context.addIssue({
         code: 'custom',
         path: ['adapter'],

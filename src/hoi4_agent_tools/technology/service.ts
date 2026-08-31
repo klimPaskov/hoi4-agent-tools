@@ -19,6 +19,7 @@ import { buildGuiSourceGraph } from '../gui/source-graph.js';
 import type { GuiSpriteDefinition } from '../gui/types.js';
 import { compareTechnologyGraphs, type TechnologyGraphComparison } from './compare.js';
 import { buildTechnologyGraph, technologyAssetPatterns } from './graph.js';
+import { TECHNOLOGY_GRAPH_SCHEMA_VERSION } from './model.js';
 import type {
   TechnologyDefectClass,
   TechnologyGraphSnapshot,
@@ -516,13 +517,15 @@ function validateGraph(value: unknown): TechnologyGraphSnapshot {
   const graph = value as Partial<TechnologyGraphSnapshot>;
   const sourceHashes = (value as Record<string, unknown>).sourceHashes;
   if (
-    graph.schemaVersion !== 1 ||
+    graph.schemaVersion !== TECHNOLOGY_GRAPH_SCHEMA_VERSION ||
     typeof graph.workspaceId !== 'string' ||
     typeof graph.workspaceIdentity !== 'string' ||
     typeof graph.revision !== 'string' ||
     !Array.isArray(graph.technologies) ||
     !Array.isArray(graph.edges) ||
     !Array.isArray(graph.placements) ||
+    !Array.isArray(graph.itemLayouts) ||
+    !Array.isArray(graph.yearMarkers) ||
     sourceHashes === null ||
     typeof sourceHashes !== 'object'
   )

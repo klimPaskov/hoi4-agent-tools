@@ -5,7 +5,11 @@ import { ServiceError } from '../core/result.js';
 import { DeterministicSvgTextRenderer } from '../core/svg-text.js';
 import type { TechnologyGraphComparison } from './compare.js';
 import { traceTechnology } from './queries.js';
-import type { TechnologyGraphSnapshot, TechnologyPlacement } from './model.js';
+import type {
+  TechnologyGraphSnapshot,
+  TechnologyPlacement,
+  TechnologyYearMarker,
+} from './model.js';
 
 export type TechnologyRenderView =
   | 'summary'
@@ -93,6 +97,11 @@ interface PositionedNode extends RenderNode {
   height: number;
 }
 
+interface PositionedYearMarker extends TechnologyYearMarker {
+  x: number;
+  y: number;
+}
+
 const MAX_RENDER_NODES = 2_000;
 const LARGE_NODE_WIDTH = 183;
 const LARGE_NODE_HEIGHT = 84;
@@ -140,7 +149,7 @@ function technologyNode(
     kind: technology.kind,
     sourcePath: technology.source.path,
     sourceLine: technology.source.location.start.line,
-    layoutSize: technology.layoutSize,
+    layoutSize: placement?.layoutSize ?? technology.layoutSize,
     iconSprite: technology.icon.sprite,
     ...(placement === undefined ? {} : { placement }),
   };
@@ -158,12 +167,14 @@ function viewSelection(
 ): {
   nodes: RenderNode[];
   edges: RenderEdge[];
+  yearMarkers: TechnologyYearMarker[];
   sourceAccurate: boolean;
   title: string;
   payload: Record<string, unknown>;
 } {
   const nodes: RenderNode[] = [];
   const edges: RenderEdge[] = [];
+  let yearMarkers: TechnologyYearMarker[] = [];
   let title: string;
   let sourceAccurate = false;
   if (options.view === 'summary') {
@@ -223,6 +234,7 @@ function viewSelection(
         .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
     );
     sourceAccurate = true;
+    yearMarkers = graph.yearMarkers.filter(({ folderId }) => folderId === options.folderId);
   } else if (options.view === 'dependencies' || options.view === 'technology') {
     const ids =
       options.technologyId === undefined
@@ -529,6 +541,7 @@ function viewSelection(
   return {
     nodes: selectedNodes,
     edges: selectedEdges,
+    yearMarkers,
     sourceAccurate,
     title,
     payload: {
@@ -538,6 +551,7 @@ function viewSelection(
       generatedAnalysisLayout: !sourceAccurate,
       nodes: selectedNodes,
       edges: selectedEdges,
+      yearMarkers,
       graphRevision: graph.revision,
       analysisBoundary: graph.analysisBoundary,
     },
@@ -548,42 +562,80 @@ function issueKey(issue: { code: string; details: Record<string, unknown> }): st
   return sha256Bytes(canonicalJson({ code: issue.code, details: issue.details })).slice(0, 20);
 }
 
-function layoutFolder(nodes: readonly RenderNode[]): PositionedNode[] {
+function layoutFolder(
+  nodes: readonly RenderNode[],
+  yearMarkers: readonly TechnologyYearMarker[],
+): {
+  nodes: PositionedNode[];
+  yearMarkers: PositionedYearMarker[];
+  yearAxis?: 'horizontal' | 'vertical';
+} {
   const dimensions = (node: RenderNode): { width: number; height: number } =>
-    node.layoutSize === 'small'
-      ? { width: SMALL_NODE_WIDTH, height: SMALL_NODE_HEIGHT }
-      : { width: LARGE_NODE_WIDTH, height: LARGE_NODE_HEIGHT };
+    node.placement?.layoutWidth !== undefined && node.placement.layoutHeight !== undefined
+      ? { width: node.placement.layoutWidth, height: node.placement.layoutHeight }
+      : node.layoutSize === 'small'
+        ? { width: SMALL_NODE_WIDTH, height: SMALL_NODE_HEIGHT }
+        : { width: LARGE_NODE_WIDTH, height: LARGE_NODE_HEIGHT };
   const sourcePixel = nodes.filter(
     ({ placement }) => placement?.pixelX !== undefined && placement.pixelY !== undefined,
   );
   if (sourcePixel.length === nodes.length && sourcePixel.length > 0) {
-    const minimumX = Math.min(...sourcePixel.map(({ placement }) => placement!.pixelX!));
-    const minimumY = Math.min(...sourcePixel.map(({ placement }) => placement!.pixelY!));
-    return sourcePixel.map((node) => {
+    const sourceNodeX = (node: RenderNode): number =>
+      node.placement!.pixelX! + (node.placement?.layoutOffsetX ?? 0);
+    const sourceNodeY = (node: RenderNode): number =>
+      node.placement!.pixelY! + (node.placement?.layoutOffsetY ?? 0);
+    const minimumX = Math.min(
+      ...sourcePixel.map(sourceNodeX),
+      ...yearMarkers.map(({ position }) => position.x),
+    );
+    const minimumY = Math.min(
+      ...sourcePixel.map(sourceNodeY),
+      ...yearMarkers.map(({ position }) => position.y),
+    );
+    const positionedNodes = sourcePixel.map((node) => {
       const size = dimensions(node);
       return {
         ...node,
-        x: PADDING + node.placement!.pixelX! - minimumX,
-        y: HEADER_HEIGHT + PADDING + node.placement!.pixelY! - minimumY,
+        x: PADDING + sourceNodeX(node) - minimumX,
+        y: HEADER_HEIGHT + PADDING + sourceNodeY(node) - minimumY,
         ...size,
       };
     });
+    const positionedYearMarkers = yearMarkers.map((marker) => ({
+      ...marker,
+      x: PADDING + marker.position.x - minimumX,
+      y: HEADER_HEIGHT + PADDING + marker.position.y - minimumY,
+    }));
+    const xValues = yearMarkers.map(({ position }) => position.x);
+    const yValues = yearMarkers.map(({ position }) => position.y);
+    const xSpan = xValues.length === 0 ? 0 : Math.max(...xValues) - Math.min(...xValues);
+    const ySpan = yValues.length === 0 ? 0 : Math.max(...yValues) - Math.min(...yValues);
+    return {
+      nodes: positionedNodes,
+      yearMarkers: positionedYearMarkers,
+      ...(yearMarkers.length === 0
+        ? {}
+        : { yearAxis: xSpan >= ySpan ? ('horizontal' as const) : ('vertical' as const) }),
+    };
   }
   const branchRoots = [
     ...new Set(nodes.map(({ placement }) => placement?.branchRootId ?? '<unresolved>')),
   ].sort(compareCodeUnits);
   const lanes = new Map(branchRoots.map((id, index) => [id, index]));
-  return nodes.map((node, index) => {
-    const placement = node.placement;
-    const lane = lanes.get(placement?.branchRootId ?? '<unresolved>') ?? 0;
-    const size = dimensions(node);
-    const x = PADDING + lane * 680 + (placement?.x ?? index % 3) * (LARGE_NODE_WIDTH + GAP_X);
-    const y =
-      HEADER_HEIGHT +
-      PADDING +
-      (placement?.y ?? Math.floor(index / 3)) * (LARGE_NODE_HEIGHT + GAP_Y);
-    return { ...node, x, y, ...size };
-  });
+  return {
+    nodes: nodes.map((node, index) => {
+      const placement = node.placement;
+      const lane = lanes.get(placement?.branchRootId ?? '<unresolved>') ?? 0;
+      const size = dimensions(node);
+      const x = PADDING + lane * 680 + (placement?.x ?? index % 3) * (LARGE_NODE_WIDTH + GAP_X);
+      const y =
+        HEADER_HEIGHT +
+        PADDING +
+        (placement?.y ?? Math.floor(index / 3)) * (LARGE_NODE_HEIGHT + GAP_Y);
+      return { ...node, x, y, ...size };
+    }),
+    yearMarkers: [],
+  };
 }
 
 function layoutGenerated(
@@ -689,14 +741,18 @@ function svgFor(
   edges: readonly RenderEdge[],
   sourceAccurate: boolean,
   iconDataUris: Readonly<Record<string, string>>,
+  yearMarkers: readonly PositionedYearMarker[],
+  yearAxis?: 'horizontal' | 'vertical',
 ): { svg: string; width: number; height: number } {
   const maximumX = Math.max(
     PADDING + LARGE_NODE_WIDTH,
     ...positioned.map(({ x, width }) => x + width),
+    ...yearMarkers.map(({ x }) => x + 70),
   );
   const maximumY = Math.max(
     HEADER_HEIGHT + LARGE_NODE_HEIGHT,
     ...positioned.map(({ y, height }) => y + height),
+    ...yearMarkers.map(({ y }) => y + 30),
   );
   const width = Math.ceil(maximumX + PADDING);
   const height = Math.ceil(maximumY + PADDING);
@@ -711,6 +767,20 @@ function svgFor(
     );
   const byId = new Map(positioned.map((node) => [node.id, node]));
   const text = new DeterministicSvgTextRenderer();
+  const yearGuideSvg = yearMarkers.map((marker) => {
+    const guide =
+      yearAxis === 'vertical'
+        ? `<line x1="${PADDING}" y1="${marker.y + 15}" x2="${width - PADDING}" y2="${marker.y + 15}" stroke="#34495c" stroke-width="1" stroke-dasharray="5 7"/>`
+        : `<line x1="${marker.x + 24}" y1="${HEADER_HEIGHT}" x2="${marker.x + 24}" y2="${height - PADDING}" stroke="#34495c" stroke-width="1" stroke-dasharray="5 7"/>`;
+    const label = text.render(String(marker.year), {
+      x: marker.x,
+      y: marker.y + 22,
+      fontSize: 18,
+      fill: '#c7d4df',
+      weight: 700,
+    });
+    return `<g data-tech-year="${marker.year}" data-year-axis="${yearAxis ?? 'horizontal'}" data-source-path="${escapeXml(marker.sourcePath)}" data-source-line="${marker.location.start.line}">${guide}${label}</g>`;
+  });
   const edgeSvg = edges.flatMap((edge) => {
     const from = byId.get(edge.from);
     const to = byId.get(edge.to);
@@ -792,7 +862,7 @@ function svgFor(
   return {
     width,
     height,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(titleText)}"><defs><marker id="tech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8298ad"/></marker>${text.definitions()}</defs><rect width="100%" height="100%" fill="#0d1721"/>${title}${mode}<g>${edgeSvg.join('')}</g><g>${nodeSvg.join('')}</g></svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(titleText)}"><defs><marker id="tech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8298ad"/></marker>${text.definitions()}</defs><rect width="100%" height="100%" fill="#0d1721"/>${title}${mode}<g>${yearGuideSvg.join('')}</g><g>${edgeSvg.join('')}</g><g>${nodeSvg.join('')}</g></svg>`,
   };
 }
 
@@ -812,9 +882,10 @@ export async function renderTechnologyGraph(
   const edges = selection.edges.filter(
     ({ from, to }) => retainedIds.has(from) && retainedIds.has(to),
   );
-  const positioned = selection.sourceAccurate
-    ? layoutFolder(retained)
-    : layoutGenerated(retained, edges);
+  const folderLayout = selection.sourceAccurate
+    ? layoutFolder(retained, selection.yearMarkers)
+    : { nodes: layoutGenerated(retained, edges), yearMarkers: [] as PositionedYearMarker[] };
+  const positioned = folderLayout.nodes;
   const iconDataUris = options.iconDataUris ?? {};
   const requestedIconSprites = [
     ...new Set(
@@ -833,6 +904,8 @@ export async function renderTechnologyGraph(
     edges,
     selection.sourceAccurate,
     iconDataUris,
+    folderLayout.yearMarkers,
+    folderLayout.yearAxis,
   );
   const budget = options.budget ?? new RenderBudget();
   budget.reserve(rendered.width, rendered.height, `technology ${options.view} render`);
@@ -857,6 +930,10 @@ export async function renderTechnologyGraph(
       unresolvedSprites: unresolvedIconSprites,
     },
     render: { width: rendered.width, height: rendered.height },
+    yearGuide: {
+      axis: folderLayout.yearAxis ?? null,
+      markerCount: folderLayout.yearMarkers.length,
+    },
   })}\n`;
   const html =
     options.includeHtml === true ? htmlFor(selection.title, rendered.svg, json) : undefined;

@@ -386,6 +386,37 @@ local('local installed-game and external-mod integration', () => {
     expect(graph.doctrineDefinitions.length).toBeGreaterThan(0);
     expect(graph.folders.length).toBeGreaterThan(5);
     expect(graph.placements.length).toBeGreaterThan(400);
+    expect(graph.itemLayouts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          folderId: 'infantry_folder',
+          layoutSize: 'small',
+          size: expect.objectContaining({ width: 72, height: 72 }),
+        }),
+        expect.objectContaining({
+          folderId: 'infantry_folder',
+          layoutSize: 'large',
+          size: expect.objectContaining({ width: 183, height: 84 }),
+        }),
+      ]),
+    );
+    expect(
+      graph.yearMarkers
+        .filter(({ folderId }) => folderId === 'infantry_folder')
+        .map(({ year }) => year),
+    ).toEqual(expect.arrayContaining([1918, 1936, 1940, 1944]));
+    const infantryRender = await viewer.renderAndStore({
+      workspaceId: 'external',
+      view: 'folder',
+      folderId: 'infantry_folder',
+      maxNodes: 1_000,
+    });
+    expect(infantryRender.render.svg).toContain('data-tech-year="1918"');
+    expect(infantryRender.render.svg).toContain('data-year-axis="horizontal"');
+    expect(infantryRender.render.svg).toContain('data-layout-size="small"');
+    expect(infantryRender.render.svg).toContain('width="72" height="72"');
+    expect(infantryRender.render.svg).toContain('data-layout-size="large"');
+    expect(infantryRender.render.svg).toContain('width="183" height="84"');
 
     const selectedTechnologies = [vanilla[0]!, ...(external[0] === undefined ? [] : [external[0]])];
     for (const technology of selectedTechnologies) {

@@ -71,6 +71,19 @@ export function probabilityDomainScanPatterns(
   ]);
 }
 
+/** Text sources needed to discover country flags and leader portraits. */
+export function countryAssetDiscoveryPatterns(workspace: ResolvedWorkspace): string[] {
+  const roots = workspace.registration.roots;
+  return uniquePatterns([
+    'history/countries/**/*.txt',
+    'common/characters/**/*.txt',
+    'common/scripted_effects/**/*.txt',
+    'events/**/*.txt',
+    ...under(roots.interface, '**/*.gfx'),
+    ...under(roots.gfx, '**/*.gfx'),
+  ]);
+}
+
 export function exactChangedFilePatterns(relativePaths: readonly string[]): string[] {
   return uniquePatterns(
     relativePaths.map((relativePath) => relativePath.replaceAll('\\', '/').replace(/^\.\//u, '')),

@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 3.0.1 - 2026-08-31
+
+- Render technology folders with the source GUI's actual small and regular item geometry, infer small items from equipment unlock behavior, and include horizontal or vertical year guides.
+- Restore the opt-in `chaosx.focus_country_assets` and `chaosx.visual_revision` tools with direct and stdio discovery coverage.
+- Infer unambiguous source-backed probability adapters for evaluate, sweep, simulation, and comparison calls, including calls that previously failed with `PROBABILITY_MANIFEST_REQUIRED` or `PROBABILITY_SURFACE_EMPTY` after a mismatched adapter selection.
+
 ## 3.0.0 - 2026-08-31
 
 - Promote the complete focus, GUI, map, event, technology, and probability MCP surface to the stable 3.0 release line after full synthetic, installed-game, external-workspace, transport, package, Inspector, and Registry qualification.

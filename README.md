@@ -72,7 +72,7 @@ On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repo
 | `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.   |
 | `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                           |
 | `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                   |
-| `hoi4.tech_render`          | Render source layouts, dependency paths, unlocks, grants, metadata, and asset coverage.   |
+| `hoi4.tech_render`          | Render source layouts with real item sizes and year guides, plus dependencies and assets. |
 | `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.      |
 | `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs.  |
 | `hoi4.probability_evaluate` | Evaluate exact values, probabilities, timing, bounds, and unresolved inputs.              |
@@ -81,6 +81,8 @@ On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repo
 | `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.          |
 | `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                     |
 | `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.         |
+
+Set `HOI4_AGENT_TOOLS_CHAOSX=1` on the server process to expose the optional `chaosx.focus_country_assets` and `chaosx.visual_revision` tools used by ChaosX workflows. They remain absent from the default public tool list.
 
 Large outputs are linked `hoi4-agent://` resources. For resources over 1 MiB, follow the `continuationUri` returned in `_meta` until it is `null`; clients may also request byte ranges with `?offset=<bytes>&length=<bytes>`.
 

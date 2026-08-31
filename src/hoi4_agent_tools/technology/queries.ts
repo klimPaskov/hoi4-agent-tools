@@ -46,6 +46,8 @@ function technologyRecordCount(graph: TechnologyGraphSnapshot): number {
     graph.categories.length +
     graph.placements.length +
     graph.gridboxes.length +
+    graph.itemLayouts.length +
+    graph.yearMarkers.length +
     graph.edges.length +
     graph.unlocks.length +
     graph.unlockTargets.length +
@@ -102,6 +104,8 @@ export function technologyScanReport(
       categories: graph.categories.length,
       placements: graph.placements.length,
       gridboxes: graph.gridboxes.length,
+      itemLayouts: graph.itemLayouts.length,
+      yearMarkers: graph.yearMarkers.length,
       edges: graph.edges.length,
       unlocks: graph.unlocks.length,
       unlockTargets: graph.unlockTargets.length,

@@ -105,7 +105,6 @@ describe('probability MCP workflow', () => {
     const inspected = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
-        adapter: 'custom_weighted_pool',
         customPoolManifest: manifest(5),
       },
     });
@@ -121,7 +120,6 @@ describe('probability MCP workflow', () => {
     const evaluated = await client.callTool({
       name: 'hoi4.probability_evaluate',
       arguments: {
-        adapter: 'custom_weighted_pool',
         customPoolManifest: manifest(5),
         scenarioSet,
       },
@@ -570,8 +568,34 @@ describe('probability MCP workflow', () => {
       },
     });
     expect(evaluated.structuredContent).toMatchObject({
-      status: 'error',
-      code: 'PROBABILITY_SURFACE_EMPTY',
+      status: 'ok',
+      data: {
+        operation: 'evaluate',
+        adapterId: 'national_focus_ai_will_do',
+        candidates: 1,
+      },
+    });
+
+    const compared = await client.callTool({
+      name: 'hoi4.probability_compare',
+      arguments: {
+        adapter: 'custom_weighted_pool',
+        before: { inlineClausewitz: source },
+        after: { inlineClausewitz: source.replace('factor = 2', 'factor = 4') },
+        scenarioSet: {
+          schemaVersion: '1.0',
+          id: 'source-backed-auto-adapter-comparison',
+          scenarios: [{ id: 'baseline', state: {} }],
+        },
+      },
+    });
+    expect(compared.structuredContent).toMatchObject({
+      status: 'ok',
+      data: {
+        operation: 'compare',
+        adapterId: 'national_focus_ai_will_do',
+        candidates: 1,
+      },
     });
   });
 

@@ -9,6 +9,16 @@ containerWindowType = {
 }
 containerWindowType = {
 	name = synthetic_folder_01
+	instantTextBoxType = {
+		name = synthetic_year_1936
+		position = { x = 0 y = -60 }
+		text = "1936"
+	}
+	instantTextBoxType = {
+		name = synthetic_year_1940
+		position = { x = 440 y = -60 }
+		text = "1940"
+	}
 	gridBoxType = {
 		name = synthetic_tech_0000_tree
 		position = { x = 0 y = 0 }
@@ -21,6 +31,16 @@ containerWindowType = {
 		slotsize = { width = 110 height = 96 }
 		format = UP
 	}
+}
+containerWindowType = {
+	name = techtree_synthetic_folder_01_small_item
+	position = { x = 0 y = 0 }
+	size = { width = 64 height = 64 }
+}
+containerWindowType = {
+	name = techtree_synthetic_folder_01_item
+	position = { x = -44 y = -6 }
+	size = { width = 176 height = 82 }
 }
 containerWindowType = {
 	name = synthetic_folder_02

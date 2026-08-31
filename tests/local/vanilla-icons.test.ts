@@ -7,7 +7,7 @@ import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { TechnologyTreeViewer } from '../../src/hoi4_agent_tools/technology/index.js';
 
-const gameRoot = process.env.HOI4_TEST_GAME_ROOT;
+const gameRoot = process.env.HOI4_GAME_ROOT;
 const enabled = gameRoot !== undefined && gameRoot.length > 0;
 let temporaryRoot: string | undefined;
 let viewer: TechnologyTreeViewer;

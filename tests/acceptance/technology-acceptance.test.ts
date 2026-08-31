@@ -151,7 +151,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       'small',
     );
     expect(graph.technologies.find(({ id }) => id === 'synthetic_tech_0001')?.layoutSize).toBe(
-      'large',
+      'unknown',
     );
     expect(graph.technologies).toHaveLength(graphManifest.counts.totalTechnologyDefinitions);
     expect(graph.statistics.technologyCount).toBe(graphManifest.counts.technologies);
@@ -398,12 +398,36 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         '\t\tresearch_cost = 1',
         '\t\tforce_use_small_tech_layout = yes',
         '\t\tfolder = { name = layered_folder position = { x = 0 y = 0 } }',
+        '\t\tpath = { leads_to_tech = layered_large }',
         '\t}',
         '\tlayered_large = {',
         '\t\tstart_year = 1936',
         '\t\tresearch_cost = 1',
         '\t\tfolder = { name = layered_folder position = { x = 1 y = 0 } }',
+        '\t\tenable_equipments = { layered_equipment }',
         '\t}',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    await put(
+      modRoot,
+      'interface/layered_technology_view.gui',
+      [
+        'guiTypes = {',
+        '\tcontainerWindowType = {',
+        '\t\tname = layered_folder',
+        '\t\tinstantTextBoxType = { name = layered_year_1936 position = { x = -110 y = 0 } text = "1936" }',
+        '\t\tinstantTextBoxType = { name = layered_year_1940 position = { x = -110 y = 96 } text = "1940" }',
+        '\t\tgridBoxType = {',
+        '\t\t\tname = layered_small_tree',
+        '\t\t\tposition = { x = 0 y = 0 }',
+        '\t\t\tslotsize = { width = 90 height = 96 }',
+        '\t\t\tformat = LEFT',
+        '\t\t}',
+        '\t}',
+        '\tcontainerWindowType = { name = techtree_layered_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } }',
+        '\tcontainerWindowType = { name = techtree_layered_folder_item position = { x = -56 y = -7 } size = { width = 183 height = 84 } }',
         '}',
         '',
       ].join('\n'),
@@ -424,6 +448,21 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     await layeredEngine.initialize();
     const layeredViewer = new TechnologyTreeViewer(layeredEngine);
     const layeredGraph = await layeredViewer.scan('layered-icons', { refresh: true });
+    expect(layeredGraph.itemLayouts).toHaveLength(2);
+    expect(layeredGraph.yearMarkers.map(({ year }) => year)).toEqual([1936, 1940]);
+    expect(
+      layeredGraph.placements.map(({ technologyId, layoutSize, layoutWidth, layoutHeight }) => ({
+        technologyId,
+        layoutSize,
+        layoutWidth,
+        layoutHeight,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { technologyId: 'layered_large', layoutSize: 'large', layoutWidth: 183, layoutHeight: 84 },
+        { technologyId: 'layered_small', layoutSize: 'small', layoutWidth: 72, layoutHeight: 72 },
+      ]),
+    );
     expect(
       layeredGraph.technologies.map(({ icon }) => ({
         sprite: icon.sprite,
@@ -457,6 +496,13 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       'data-icon-sprite="GFX_layered_small_medium" data-source-path="mod:common/technologies/layered_technologies.txt"',
     );
     expect(rendered.render.svg).toContain('href="data:image/png;base64,');
+    expect(rendered.render.svg).toContain('data-tech-year="1936"');
+    expect(rendered.render.svg).toContain('data-tech-year="1940"');
+    expect(rendered.render.svg).toContain('data-year-axis="vertical"');
+    expect(rendered.render.svg).toContain('data-layout-size="small"');
+    expect(rendered.render.svg).toContain('width="72" height="72"');
+    expect(rendered.render.svg).toContain('data-layout-size="large"');
+    expect(rendered.render.svg).toContain('width="183" height="84"');
     expect(rendered.render.json).not.toContain('data:image/png;base64,');
   });
 
@@ -510,9 +556,12 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       expect(rendered.sourceAccurate, request.view).toBe(request.view === 'folder');
       if (request.view === 'folder') {
         expect(rendered.svg).toContain('data-layout-size="small"');
-        expect(rendered.svg).toContain('width="72" height="72"');
+        expect(rendered.svg).toContain('width="64" height="64"');
         expect(rendered.svg).toContain('data-layout-size="large"');
-        expect(rendered.svg).toContain('width="183" height="84"');
+        expect(rendered.svg).toContain('width="176" height="82"');
+        expect(rendered.svg).toContain('data-tech-year="1936"');
+        expect(rendered.svg).toContain('data-tech-year="1940"');
+        expect(rendered.svg).toContain('data-year-axis="horizontal"');
         expect(authoritative.nodes).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ id: 'synthetic_tech_0000', layoutSize: 'small' }),

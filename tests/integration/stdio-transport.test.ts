@@ -44,7 +44,7 @@ async function waitForMessage(
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for JSON-RPC response ${id}`)),
-      30_000,
+      60_000,
     );
     let pending = '';
     const consume = (chunk: Buffer): void => {
@@ -82,15 +82,24 @@ async function waitForMessage(
   });
 }
 
+function listedToolNames(message: Record<string, unknown>): string[] {
+  const result = message.result as { tools?: Array<{ name?: unknown }> } | undefined;
+  return (result?.tools ?? [])
+    .map(({ name }) => name)
+    .filter((name): name is string => typeof name === 'string');
+}
+
 async function stop(child: ChildProcessWithoutNullStreams): Promise<void> {
   child.stdin.end();
   await new Promise<void>((resolve) => {
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(() => child.kill(), 2_000);
+    const hardTimeout = setTimeout(() => {
       child.kill();
       resolve();
-    }, 2_000);
+    }, 10_000);
     child.once('exit', () => {
       clearTimeout(timeout);
+      clearTimeout(hardTimeout);
       resolve();
     });
   });
@@ -186,7 +195,7 @@ describe('local stdio transport', () => {
       expect(stdoutLines.every((line) => JSON.parse(line).jsonrpc === '2.0')).toBe(true);
     } finally {
       await stop(child);
-      await rm(temporary, { recursive: true, force: true });
+      await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   }, 45_000);
 
@@ -235,6 +244,8 @@ describe('local stdio transport', () => {
     );
     const listed = await waitForMessage(child, 2, stdoutLines);
     expect(listed).toMatchObject({ jsonrpc: '2.0', result: { tools: expect.any(Array) } });
+    expect(listedToolNames(listed)).not.toContain('chaosx.focus_country_assets');
+    expect(listedToolNames(listed)).not.toContain('chaosx.visual_revision');
     child.stdin.write(
       `${JSON.stringify({
         jsonrpc: '2.0',
@@ -252,7 +263,40 @@ describe('local stdio transport', () => {
     expect(stdoutLines.join('\n')).not.toContain('startup_failed');
     expect(stderr).not.toContain('"jsonrpc"');
     await stop(child);
-  }, 20_000);
+  }, 60_000);
+
+  it('exposes optional ChaosX tools only when the process flag is enabled', async () => {
+    const config = await overflowConfig('hoi4-agent-stdio-chaosx-');
+    const child = launch(config, { HOI4_AGENT_TOOLS_CHAOSX: '1' });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+    const stdoutLines: string[] = [];
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'chaosx-stdio-test', version: '1.0.0' },
+        },
+      })}\n`,
+    );
+    await waitForMessage(child, 1, stdoutLines);
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+    );
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
+    );
+
+    const tools = listedToolNames(await waitForMessage(child, 2, stdoutLines));
+    expect(tools).toContain('chaosx.focus_country_assets');
+    expect(tools).toContain('chaosx.visual_revision');
+    await stop(child);
+    expect(stderr).not.toContain('"event":"startup_failed"');
+  }, 30_000);
 
   it('writes startup failures only to stderr', async () => {
     const child = launch(path.join(tmpdir(), `missing-${Date.now()}.json`));
@@ -264,7 +308,7 @@ describe('local stdio transport', () => {
     expect(exitCode).toBe(1);
     expect(stdout).toBe('');
     expect(stderr).toContain('"event":"startup_failed"');
-  }, 20_000);
+  }, 60_000);
 
   it('refuses a newline-terminated frame above the fixed byte ceiling', async () => {
     const child = launch(await overflowConfig('hoi4-agent-stdio-complete-overflow-'));

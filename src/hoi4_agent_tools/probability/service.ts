@@ -59,7 +59,7 @@ export interface ProbabilityServiceContext {
 }
 
 export interface ProbabilityAnalysisRequest extends ProbabilityServiceContext {
-  adapter: ProbabilityAdapterId;
+  adapter?: ProbabilityAdapterId;
   source?: ProbabilitySourceInput;
   customPoolManifest?: CustomWeightedPoolManifest;
   scenarioSet: ProbabilityScenarioSet;
@@ -96,7 +96,7 @@ export interface ProbabilitySequenceRequest extends ProbabilityServiceContext {
 }
 
 export interface ProbabilityCompareRequest extends ProbabilityServiceContext {
-  adapter: ProbabilityAdapterId;
+  adapter?: ProbabilityAdapterId;
   before?: ProbabilitySourceInput;
   after?: ProbabilitySourceInput;
   beforeManifest?: CustomWeightedPoolManifest;
@@ -172,6 +172,59 @@ interface AnalyzerState {
 }
 
 const states = new WeakMap<CoreEngine, AnalyzerState>();
+
+function resolveSourceBackedAdapter(
+  snapshot: ScanSnapshot,
+  source: ProbabilitySourceInput,
+  candidatePool: readonly string[],
+  requested?: ProbabilityAdapterId,
+): ProbabilityAdapterId {
+  if (requested !== undefined && requested !== 'custom_weighted_pool') {
+    try {
+      discoverWeightedSurface(snapshot, requested, source, candidatePool);
+      return requested;
+    } catch (error) {
+      if (
+        !(error instanceof ServiceError) ||
+        (error.code !== 'PROBABILITY_SURFACE_EMPTY' &&
+          error.code !== 'PROBABILITY_IDENTIFIER_NOT_FOUND')
+      )
+        throw error;
+    }
+  }
+  const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
+  const viable = inventory.adapters
+    .filter(
+      ({ candidateCount, identifierMatchCount, candidatePoolMatchCount }) =>
+        candidateCount > 0 &&
+        (source.identifier === undefined || identifierMatchCount > 0) &&
+        (candidatePool.length === 0 || candidatePoolMatchCount > 0),
+    )
+    .sort(
+      (left, right) =>
+        right.identifierMatchCount - left.identifierMatchCount ||
+        right.candidatePoolMatchCount - left.candidatePoolMatchCount ||
+        right.candidateCount - left.candidateCount ||
+        compareCodeUnits(left.adapterId, right.adapterId),
+    );
+  if (viable.length === 1) return viable[0]!.adapterId;
+  if (viable.length === 0)
+    throw new ServiceError('PROBABILITY_SURFACE_EMPTY', 'No weighted blocks matched this request', {
+      requestedAdapter: requested,
+      source,
+      candidatePool,
+      availableAdapters: inventory.adapters.filter(({ candidateCount }) => candidateCount > 0),
+    });
+  throw new ServiceError(
+    'PROBABILITY_ADAPTER_AMBIGUOUS',
+    'Several weighted adapters match this source; select one adapter or narrow the source by identifier or line',
+    {
+      requestedAdapter: requested,
+      source,
+      matchingAdapters: viable,
+    },
+  );
+}
 
 function analyzerState(engine: CoreEngine): AnalyzerState {
   let state = states.get(engine);
@@ -1226,7 +1279,11 @@ export class ProbabilityAnalyzer {
         'PROBABILITY_INPUT_AMBIGUOUS',
         'Provide either source or customPoolManifest for inspection',
       );
-    if (customPoolManifest !== undefined && adapter !== 'custom_weighted_pool')
+    if (
+      customPoolManifest !== undefined &&
+      adapter !== undefined &&
+      adapter !== 'custom_weighted_pool'
+    )
       throw new ServiceError(
         'PROBABILITY_ADAPTER_MISMATCH',
         'customPoolManifest inspection requires adapter custom_weighted_pool',
@@ -1498,27 +1555,34 @@ export class ProbabilityAnalyzer {
         'PROBABILITY_INPUT_AMBIGUOUS',
         'Provide exactly one source or customPoolManifest',
       );
-    if (usingManifest && request.adapter !== 'custom_weighted_pool')
+    if (
+      usingManifest &&
+      request.adapter !== undefined &&
+      request.adapter !== 'custom_weighted_pool'
+    )
       throw new ServiceError(
         'PROBABILITY_ADAPTER_MISMATCH',
         'customPoolManifest requires the custom_weighted_pool adapter',
       );
-    if (!usingManifest && request.adapter === 'custom_weighted_pool')
-      throw new ServiceError(
-        'PROBABILITY_MANIFEST_REQUIRED',
-        'custom_weighted_pool requires customPoolManifest',
-      );
-    const gameVersionVerification = await this.verifyGameVersion(request, request.adapter);
     const snapshot = await this.scan(
       request,
       [request.source?.path],
       usingManifest ? 'none' : request.source?.inlineClausewitz === undefined ? 'domain' : 'shared',
     );
+    const resolvedAdapter = usingManifest
+      ? 'custom_weighted_pool'
+      : resolveSourceBackedAdapter(
+          snapshot,
+          request.source!,
+          request.candidatePool ?? [],
+          request.adapter,
+        );
+    const gameVersionVerification = await this.verifyGameVersion(request, resolvedAdapter);
     const surface = usingManifest
       ? customSurface(request.customPoolManifest!, snapshot.revision)
       : discoverWeightedSurface(
           snapshot,
-          request.adapter,
+          resolvedAdapter,
           request.source!,
           request.candidatePool ?? [],
         );

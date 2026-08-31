@@ -2,7 +2,7 @@ import type { JsonValue } from '../core/canonical.js';
 import type { Diagnostic, DiagnosticSeverity, SourceLocation } from '../core/diagnostics.js';
 import type { IndexSkippedSource } from '../core/index.js';
 
-export const TECHNOLOGY_GRAPH_SCHEMA_VERSION = 1 as const;
+export const TECHNOLOGY_GRAPH_SCHEMA_VERSION = 2 as const;
 export const TECHNOLOGY_PARSER_VERSION = 'clausewitz-cst.v1' as const;
 
 export type TechnologyConfidence = 'confirmed' | 'high' | 'medium' | 'low' | 'unresolved';
@@ -94,9 +94,43 @@ export interface TechnologyPlacement {
   gridboxId?: string;
   pixelX?: number;
   pixelY?: number;
+  layoutSize?: 'small' | 'large' | 'unknown';
+  itemLayoutId?: string;
+  layoutWidth?: number;
+  layoutHeight?: number;
+  layoutOffsetX?: number;
+  layoutOffsetY?: number;
   geometryStatus?: 'source_pixel' | 'source_coordinate' | 'unresolved';
   sourceAccurate: true;
   location: SourceLocation;
+}
+
+export interface TechnologyItemLayout {
+  id: string;
+  name: string;
+  folderId: string;
+  layoutSize: 'small' | 'large';
+  position: { x?: number; y?: number; xExpression?: string; yExpression?: string };
+  size: {
+    width?: number;
+    height?: number;
+    widthExpression?: string;
+    heightExpression?: string;
+  };
+  location: SourceLocation;
+  sourcePath: string;
+  loadOrder: number;
+}
+
+export interface TechnologyYearMarker {
+  id: string;
+  name: string;
+  folderId: string;
+  year: number;
+  position: { x: number; y: number };
+  location: SourceLocation;
+  sourcePath: string;
+  loadOrder: number;
 }
 
 export interface TechnologyGridbox {
@@ -260,6 +294,8 @@ export interface TechnologyGraphStatistics {
   folderCount: number;
   placementCount: number;
   gridboxCount: number;
+  itemLayoutCount: number;
+  yearMarkerCount: number;
   prerequisiteCount: number;
   exclusiveCount: number;
   categoryCount: number;
@@ -295,6 +331,8 @@ export interface TechnologyGraphSnapshot {
   folders: TechnologyFolder[];
   placements: TechnologyPlacement[];
   gridboxes: TechnologyGridbox[];
+  itemLayouts: TechnologyItemLayout[];
+  yearMarkers: TechnologyYearMarker[];
   edges: TechnologyEdge[];
   categories: TechnologyCategory[];
   doctrineDefinitions: DoctrineDefinition[];
@@ -320,6 +358,8 @@ export interface TechnologySourceFragment {
   folders: TechnologyFolder[];
   placements: TechnologyPlacement[];
   gridboxes: TechnologyGridbox[];
+  itemLayouts: TechnologyItemLayout[];
+  yearMarkers: TechnologyYearMarker[];
   edges: TechnologyEdge[];
   categories: TechnologyCategory[];
   doctrineDefinitions: Array<Omit<DoctrineDefinition, 'icon'> & { iconSprite?: string }>;

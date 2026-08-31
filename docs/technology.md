@@ -49,7 +49,7 @@ Game-backed and otherwise large workspaces automatically use focused analysis mo
 
 ## Render
 
-`hoi4.tech_render` returns authoritative JSON with deterministic SVG and PNG resources; set `includeHtml` when a bundled static report is useful. Available views are `summary`, `folder`, `dependencies`, `technology`, `doctrine`, `exclusive`, `memberships`, `bonuses`, `grants`, `unlocks`, `metadata`, `assets`, and `unresolved`.
+`hoi4.tech_render` returns authoritative JSON with deterministic SVG and PNG resources; set `includeHtml` when a bundled static report is useful. Folder renders read the actual `techtree_<folder>_item` and `techtree_<folder>_small_item` geometry, choose the small item for technologies that do not unlock equipment or explicitly force it, and include the source GUI's horizontal or vertical year guide. Available views are `summary`, `folder`, `dependencies`, `technology`, `doctrine`, `exclusive`, `memberships`, `bonuses`, `grants`, `unlocks`, `metadata`, `assets`, and `unresolved`.
 
 Folder renders use the actual folder assignments, gridbox geometry, technology coordinates, and HOI4 item size found in source. Technologies with `force_use_small_tech_layout = yes` render as compact icon items; normal technologies render as large items with their icon and label. Sprite declarations and texture files resolve through the active load order across the mod, configured dependencies, and the detected or configured game installation, so vanilla icons used by a mod appear in SVG, PNG, and HTML artifacts. The authoritative JSON and SVG expose `layoutSize`, rendered-icon coverage, and unresolved sprite names without embedding image data in JSON. Dependency and other semantic views are explicitly labelled as generated analysis layouts.
 

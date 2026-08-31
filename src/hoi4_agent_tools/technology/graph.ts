@@ -32,12 +32,14 @@ import {
   type TechnologyGridbox,
   type TechnologyHelperCall,
   type TechnologyIconStatus,
+  type TechnologyItemLayout,
   type TechnologyIssue,
   type TechnologyPlacement,
   type TechnologySourceFragment,
   type TechnologyUnlock,
   type TechnologyUnlockTarget,
   type TechnologyUnresolvedAnalysis,
+  type TechnologyYearMarker,
 } from './model.js';
 
 export interface TechnologyGraphBuildOptions {
@@ -256,12 +258,80 @@ function activeGridboxes(values: readonly TechnologyGridbox[]): TechnologyGridbo
     );
 }
 
+function activeItemLayouts(values: readonly TechnologyItemLayout[]): TechnologyItemLayout[] {
+  const groups = new Map<string, TechnologyItemLayout[]>();
+  for (const layout of values) {
+    const key = `${layout.folderId}\0${layout.layoutSize}`;
+    const group = groups.get(key) ?? [];
+    group.push(layout);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(
+      (group) =>
+        group.sort(
+          (left, right) =>
+            right.loadOrder - left.loadOrder ||
+            compareCodeUnits(left.sourcePath, right.sourcePath) ||
+            left.location.start.offset - right.location.start.offset,
+        )[0]!,
+    )
+    .sort(
+      (left, right) =>
+        compareCodeUnits(left.folderId, right.folderId) ||
+        compareCodeUnits(left.layoutSize, right.layoutSize),
+    );
+}
+
+function activeYearMarkers(values: readonly TechnologyYearMarker[]): TechnologyYearMarker[] {
+  const groups = new Map<string, TechnologyYearMarker[]>();
+  for (const marker of values) {
+    const key = `${marker.folderId}\0${marker.name}`;
+    const group = groups.get(key) ?? [];
+    group.push(marker);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(
+      (group) =>
+        group.sort(
+          (left, right) =>
+            right.loadOrder - left.loadOrder ||
+            compareCodeUnits(left.sourcePath, right.sourcePath) ||
+            left.location.start.offset - right.location.start.offset,
+        )[0]!,
+    )
+    .sort(
+      (left, right) =>
+        compareCodeUnits(left.folderId, right.folderId) ||
+        left.year - right.year ||
+        compareCodeUnits(left.name, right.name),
+    );
+}
+
 function enrichPlacements(
   placements: readonly TechnologyPlacement[],
   edges: readonly TechnologyEdge[],
   gridboxes: readonly TechnologyGridbox[],
+  technologies: readonly TechnologyDefinition[],
+  unlocks: readonly TechnologyUnlock[],
+  itemLayouts: readonly TechnologyItemLayout[],
   signal?: AbortSignal,
 ): TechnologyPlacement[] {
+  const technologyById = new Map(technologies.map((technology) => [technology.id, technology]));
+  const unlockKindsByTechnology = new Map<string, Set<TechnologyUnlock['kind']>>();
+  for (const unlock of unlocks) {
+    const kinds = unlockKindsByTechnology.get(unlock.technologyId) ?? new Set();
+    kinds.add(unlock.kind);
+    unlockKindsByTechnology.set(unlock.technologyId, kinds);
+  }
+  const layoutsByFolder = new Map<string, Map<'small' | 'large', TechnologyItemLayout>>();
+  for (const layout of itemLayouts) {
+    const layouts =
+      layoutsByFolder.get(layout.folderId) ?? new Map<'small' | 'large', TechnologyItemLayout>();
+    layouts.set(layout.layoutSize, layout);
+    layoutsByFolder.set(layout.folderId, layouts);
+  }
   const placementsByTechnology = new Map<string, TechnologyPlacement[]>();
   for (const placement of placements) {
     const group = placementsByTechnology.get(placement.technologyId) ?? [];
@@ -313,6 +383,16 @@ function enrichPlacements(
               (folderId === undefined || folderId === placement.folderId),
           );
     const gridbox = candidates[0];
+    const technology = technologyById.get(placement.technologyId);
+    const folderLayouts = layoutsByFolder.get(placement.folderId);
+    const unlockKinds = unlockKindsByTechnology.get(placement.technologyId) ?? new Set();
+    const unlocksEquipment = unlockKinds.has('equipment') || unlockKinds.has('equipment_module');
+    const layoutSize: 'small' | 'large' =
+      technology?.layoutSize === 'small' ||
+      (folderLayouts?.has('small') === true && !unlocksEquipment)
+        ? 'small'
+        : 'large';
+    const itemLayout = folderLayouts?.get(layoutSize) ?? folderLayouts?.get('large');
     let pixelX: number | undefined;
     let pixelY: number | undefined;
     if (
@@ -339,6 +419,12 @@ function enrichPlacements(
       ...(gridbox === undefined ? {} : { gridboxId: gridbox.id }),
       ...(pixelX === undefined ? {} : { pixelX }),
       ...(pixelY === undefined ? {} : { pixelY }),
+      layoutSize,
+      ...(itemLayout === undefined ? {} : { itemLayoutId: itemLayout.id }),
+      ...(itemLayout?.size.width === undefined ? {} : { layoutWidth: itemLayout.size.width }),
+      ...(itemLayout?.size.height === undefined ? {} : { layoutHeight: itemLayout.size.height }),
+      ...(itemLayout?.position.x === undefined ? {} : { layoutOffsetX: itemLayout.position.x }),
+      ...(itemLayout?.position.y === undefined ? {} : { layoutOffsetY: itemLayout.position.y }),
       geometryStatus:
         pixelX !== undefined && pixelY !== undefined
           ? 'source_pixel'
@@ -1312,6 +1398,8 @@ export function buildTechnologyGraph(
   const selectedFolders = activeDefinitions(fragments.flatMap(({ folders }) => folders));
   const folders = localiseFolders(selectedFolders.active, snapshot.index);
   const gridboxes = activeGridboxes(fragments.flatMap(({ gridboxes }) => gridboxes));
+  const itemLayouts = activeItemLayouts(fragments.flatMap(({ itemLayouts }) => itemLayouts));
+  const yearMarkers = activeYearMarkers(fragments.flatMap(({ yearMarkers }) => yearMarkers));
   const categories = activeCategories(fragments.flatMap(({ categories }) => categories));
   const selectedDoctrines = activeDefinitions(
     fragments.flatMap(({ doctrineDefinitions }) => doctrineDefinitions),
@@ -1341,7 +1429,6 @@ export function buildTechnologyGraph(
     ({ location }) => location,
     technologyById,
   ).sort((left, right) => compareCodeUnits(left.id, right.id));
-  const placements = enrichPlacements(basePlacements, edges, gridboxes, options.signal);
   const unlocks = resolveUnlocks(
     selectOwnedRecords(
       fragments.flatMap(({ unlocks }) => unlocks),
@@ -1351,6 +1438,15 @@ export function buildTechnologyGraph(
     ).sort((left, right) => compareCodeUnits(left.id, right.id)),
     unlockTargets,
     snapshot.complete,
+  );
+  const placements = enrichPlacements(
+    basePlacements,
+    edges,
+    gridboxes,
+    technologies,
+    unlocks,
+    itemLayouts,
+    options.signal,
   );
   const unresolved = fragments.flatMap(({ unresolved }) => unresolved);
   const helperCalls = fragments.flatMap(({ helperCalls }) => helperCalls);
@@ -1438,6 +1534,8 @@ export function buildTechnologyGraph(
     folders,
     placements,
     gridboxes,
+    itemLayouts,
+    yearMarkers,
     edges,
     categories,
     doctrineDefinitions,
@@ -1454,6 +1552,8 @@ export function buildTechnologyGraph(
       folderCount: folders.length,
       placementCount: placements.length,
       gridboxCount: gridboxes.length,
+      itemLayoutCount: itemLayouts.length,
+      yearMarkerCount: yearMarkers.length,
       prerequisiteCount: edges.filter(({ kind }) => kind === 'prerequisite').length,
       exclusiveCount: edges.filter(({ kind }) => kind === 'exclusive').length,
       categoryCount: categories.length,
