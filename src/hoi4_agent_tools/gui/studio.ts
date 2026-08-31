@@ -356,7 +356,9 @@ function basenameFallbackPatterns(
   return [
     ...new Set(
       exactPaths
-        .filter((candidate) => !resolved.has(candidate.toLowerCase()))
+        .filter(
+          (candidate) => !/[*?[\]{}!]/u.test(candidate) && !resolved.has(candidate.toLowerCase()),
+        )
         .map((candidate) => `**/${path.posix.basename(candidate)}`),
     ),
   ].sort((left, right) => compareCodeUnits(left, right));
@@ -482,6 +484,22 @@ export function referencedAssetPatternsForWindow(
   for (const localisation of graph.localisation) {
     if (textValues.has(localisation.key)) textValues.add(localisation.value);
   }
+  const dynamicTextNames = new Set<string>();
+  for (const value of textValues) {
+    for (const match of value.matchAll(/\[(?:\?[^\]]*\.)?([A-Za-z_][A-Za-z0-9_.:-]*)[^\]]*\]/gu)) {
+      const token = match[1];
+      if (token === undefined) continue;
+      dynamicTextNames.add(token);
+      dynamicTextNames.add(token.slice(token.lastIndexOf('.') + 1));
+    }
+  }
+  const dynamicTextLocalisationKeys = new Set(
+    graph.scriptedLocalisation
+      .filter(({ name }) => dynamicTextNames.has(name))
+      .flatMap(({ localisationKeys }) => localisationKeys),
+  );
+  for (const localisation of graph.localisation)
+    if (dynamicTextLocalisationKeys.has(localisation.key)) textValues.add(localisation.value);
   for (const value of textValues) {
     for (const token of localisationIconTokens(value)) {
       for (const candidate of localisationIconSpriteCandidates(token)) spriteNames.add(candidate);
@@ -522,6 +540,17 @@ export function referencedAssetPatternsForWindow(
         return match?.[1] === undefined ? [] : [match[1]];
       }),
   );
+  const usesCountryFlags = graph.scriptedGuis
+    .filter(({ name }) => relatedScriptedGuiNames.has(name))
+    .flatMap(({ propertyDefinitions }) => propertyDefinitions)
+    .some(({ attributes }) =>
+      Object.entries(attributes).some(
+        ([key, value]) =>
+          key.toLocaleLowerCase('en-US') === 'image' &&
+          typeof value === 'string' &&
+          /(?:^|\.)GetFlag\]$/u.test(value),
+      ),
+    );
   for (const definition of graph.scriptedLocalisation) {
     if (!dynamicImageTokens.has(definition.name)) continue;
     for (const candidate of definition.localisationKeys) spriteNames.add(candidate);
@@ -574,26 +603,39 @@ export function referencedAssetPatternsForWindow(
       ...manifest.sourceFrames.map(({ path: framePath }) => framePath),
     ]),
   ];
-  return [...new Set(references.flatMap(referenceVariants))].sort((left, right) =>
-    compareCodeUnits(left, right),
-  );
+  return [
+    ...new Set([
+      ...references.flatMap(referenceVariants),
+      ...(usesCountryFlags
+        ? [
+            'gfx/flags/*.{bmp,dds,png,tga}',
+            'gfx/flags/medium/*.{bmp,dds,png,tga}',
+            'gfx/flags/small/*.{bmp,dds,png,tga}',
+          ]
+        : []),
+    ]),
+  ].sort((left, right) => compareCodeUnits(left, right));
 }
 
-function scenarioSpriteNames(scenarios: readonly GuiPreviewScenario[]): string[] {
-  return [
-    ...new Set(
-      scenarios.flatMap(({ values, scriptedGui }) =>
-        Object.entries({ ...scriptedGui, ...values })
-          .filter(
-            ([key, value]) =>
-              typeof value === 'string' &&
-              value.startsWith('GFX_') &&
-              (key.endsWith('.image') || !key.includes('.')),
-          )
-          .map(([, value]) => value as string),
-      ),
-    ),
-  ].sort((left, right) => compareCodeUnits(left, right));
+function scenarioSpriteNames(
+  scenarios: readonly GuiPreviewScenario[],
+  additionalText: readonly string[] = [],
+): string[] {
+  const sprites = new Set<string>();
+  const pending: unknown[] = [...scenarios, ...additionalText];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (/^GFX_[A-Za-z0-9_.:+-]+$/u.test(value)) sprites.add(value);
+      for (const token of localisationIconTokens(value))
+        for (const candidate of localisationIconSpriteCandidates(token)) sprites.add(candidate);
+      continue;
+    }
+    if (value === null || typeof value !== 'object') continue;
+    if (Array.isArray(value)) pending.push(...(value as unknown[]));
+    else pending.push(...Object.values(value as Record<string, unknown>));
+  }
+  return [...sprites].sort((left, right) => compareCodeUnits(left, right));
 }
 
 function bmFontPagePatterns(files: readonly ScannedFile[]): string[] {
@@ -827,6 +869,15 @@ function fullImage(render: GuiRenderResult): GuiRenderResult['images'][number] {
   return image;
 }
 
+function visualSceneKey(scene: GuiScene): string {
+  const { id: _id, description: _description, ...scenario } = scene.scenario;
+  return hashCanonical({
+    windowName: scene.windowName,
+    sourceRevision: scene.sourceRevision,
+    scenario,
+  });
+}
+
 export function guiArtifactProvenance(
   graph: GuiSourceGraph,
   kind: string,
@@ -942,12 +993,17 @@ export class ScriptedGuiStudio {
       graph: buildGuiSourceGraph(retainedFiles, this.engine.indexFiles(retainedFiles)),
     };
     this.#graphCache.set(key, scanned);
-    while (this.#graphCache.size > 8) {
+    while (this.#graphCache.size > 1) {
       const oldest = this.#graphCache.keys().next().value;
       if (oldest === undefined) break;
       this.#graphCache.delete(oldest);
     }
     return scanned;
+  }
+
+  /** Release parsed GUI graphs after a bounded batch job has finished using the studio. */
+  public clearCaches(): void {
+    this.#graphCache.clear();
   }
 
   public async scan(
@@ -1090,18 +1146,21 @@ export class ScriptedGuiStudio {
     input.signal?.throwIfAborted();
     const placeholderScenario = parsePreviewScenario(input.scenario);
     const explicitRelatedScenarios = (input.relatedScenarios ?? []).map(parsePreviewScenario);
+    const generatedOptions =
+      input.generatedScenarios === undefined
+        ? undefined
+        : parseGeneratedScenarioOptions(input.generatedScenarios);
     const scanned = await this.scanWindow(
       input.workspaceId,
       input.windowName,
       input.principal,
       input.signal,
       [placeholderScenario.language, ...explicitRelatedScenarios.map(({ language }) => language)],
-      scenarioSpriteNames([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioSpriteNames(
+        [placeholderScenario, ...explicitRelatedScenarios],
+        generatedOptions?.textSamples,
+      ),
     );
-    const generatedOptions =
-      input.generatedScenarios === undefined
-        ? undefined
-        : parseGeneratedScenarioOptions(input.generatedScenarios);
     const generatedScenarios =
       generatedOptions === undefined
         ? []
@@ -1226,6 +1285,10 @@ export class ScriptedGuiStudio {
       input.comparisonScenario === undefined
         ? undefined
         : parsePreviewScenario(input.comparisonScenario);
+    const generatedOptions =
+      input.generatedScenarios === undefined
+        ? undefined
+        : parseGeneratedScenarioOptions(input.generatedScenarios);
     const scanned = await this.scanWindow(
       input.workspaceId,
       input.windowName,
@@ -1236,16 +1299,15 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario.language]),
         ...explicitRelatedScenarios.map(({ language }) => language),
       ],
-      scenarioSpriteNames([
-        placeholderScenario,
-        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
-        ...explicitRelatedScenarios,
-      ]),
+      scenarioSpriteNames(
+        [
+          placeholderScenario,
+          ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+          ...explicitRelatedScenarios,
+        ],
+        generatedOptions?.textSamples,
+      ),
     );
-    const generatedOptions =
-      input.generatedScenarios === undefined
-        ? undefined
-        : parseGeneratedScenarioOptions(input.generatedScenarios);
     const generatedScenarios =
       generatedOptions === undefined
         ? []
@@ -1276,6 +1338,17 @@ export class ScriptedGuiStudio {
       catalog,
     );
     const render = await renderGuiScene(scene, undefined, input.signal, budget);
+    const fullRenderCache = new Map<string, GuiRenderResult['images'][number]>([
+      [visualSceneKey(scene), fullImage(render)],
+    ]);
+    const renderFull = async (target: GuiScene): Promise<GuiRenderResult['images'][number]> => {
+      const key = visualSceneKey(target);
+      const cached = fullRenderCache.get(key);
+      if (cached !== undefined) return cached;
+      const image = fullImage(await renderGuiScene(target, ['full'], input.signal, budget));
+      fullRenderCache.set(key, image);
+      return image;
+    };
     const scenarioScenes: GuiScene[] = [scene];
     const scenarioItems: GalleryItem[] = [];
     for (const variantScenario of [scenario, ...relatedScenarios]) {
@@ -1291,11 +1364,7 @@ export class ScriptedGuiStudio {
               catalog,
             );
       if (variantScene !== scene) scenarioScenes.push(variantScene);
-      const variantRender =
-        variantScene === scene
-          ? render
-          : await renderGuiScene(variantScene, ['full'], input.signal, new RenderBudget());
-      const image = fullImage(variantRender);
+      const image = variantScene === scene ? fullImage(render) : await renderFull(variantScene);
       scenarioItems.push({
         label: variantScenario.description ?? variantScenario.id,
         png: image.png,
@@ -1316,8 +1385,7 @@ export class ScriptedGuiStudio {
         catalog,
       );
       stateScenes.push(stateScene);
-      const stateRender = await renderGuiScene(stateScene, ['full'], input.signal, budget);
-      const image = fullImage(stateRender);
+      const image = await renderFull(stateScene);
       stateItems.push({ label: state, png: image.png, width: image.width, height: image.height });
     }
     const resolutionScenes: GuiScene[] = [];
@@ -1344,13 +1412,7 @@ export class ScriptedGuiStudio {
         catalog,
       );
       resolutionScenes.push(resolutionScene);
-      const resolutionRender = await renderGuiScene(
-        resolutionScene,
-        ['full'],
-        input.signal,
-        budget,
-      );
-      const image = fullImage(resolutionRender);
+      const image = await renderFull(resolutionScene);
       resolutionItems.push({
         label: `${resolution.width}×${resolution.height} · UI ${uiScale}`,
         png: image.png,
@@ -1365,9 +1427,9 @@ export class ScriptedGuiStudio {
       baselineScenario,
       catalog,
     );
-    const baselineRender = await renderGuiScene(baselineScene, ['full'], input.signal, budget);
+    const baselineImage = await renderFull(baselineScene);
     const comparison = await compareGuiImages(
-      fullImage(baselineRender).png,
+      baselineImage.png,
       fullImage(render).png,
       budget,
       input.signal,

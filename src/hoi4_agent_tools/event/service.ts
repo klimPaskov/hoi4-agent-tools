@@ -140,7 +140,7 @@ export interface EventCompareResult {
 
 interface CachedGraph {
   generation: number;
-  snapshot: ScanSnapshot;
+  files: readonly ScannedFile[];
   graph: EventGraphSnapshot;
 }
 
@@ -340,26 +340,24 @@ async function scanEventSources(
   workspaceId: string,
   workspace: ReturnType<CoreEngine['resolver']['get']>,
   focused = false,
-  principal?: string,
   signal?: AbortSignal,
 ): Promise<ScanSnapshot> {
   const patterns = eventScanPatterns(workspace, focused);
   const gamePatterns = eventScanPatterns(workspace, focused);
   const sourceKinds = ['mod', 'dependency', 'fixture'] as const;
-  const scans = await Promise.all([
-    engine.scan(workspaceId, { patterns, rootKinds: sourceKinds }, principal, signal),
-    ...(workspace.roots.some(({ kind }) => kind === 'game')
-      ? [
-          engine.scan(
-            workspaceId,
-            { patterns: gamePatterns, rootKinds: ['game'] },
-            principal,
-            signal,
-          ),
-        ]
-      : []),
-  ]);
-  const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));
+  const files = await engine.scanner.scan(workspace, {
+    patterns,
+    rootKinds: sourceKinds,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (workspace.roots.some(({ kind }) => kind === 'game'))
+    files.push(
+      ...(await engine.scanner.scan(workspace, {
+        patterns: gamePatterns,
+        rootKinds: ['game'],
+        ...(signal === undefined ? {} : { signal }),
+      })),
+    );
   recomputeShadowing(files);
   files.sort(
     (left, right) =>
@@ -371,10 +369,10 @@ async function scanEventSources(
     revision: snapshotRevision(files),
     files,
     index,
-    complete: scans.every(({ complete }) => complete) && index.complete,
+    complete: index.complete,
     skippedSourceCount: index.skippedSourceCount,
     skippedSources: index.skippedSources,
-    diagnostics: [...scans.flatMap(({ diagnostics }) => diagnostics), ...index.diagnostics],
+    diagnostics: index.diagnostics,
   };
 }
 
@@ -1067,31 +1065,23 @@ export class EventChainViewer {
     if (options.refresh !== true && cached?.generation === generation) {
       return cached.graph;
     }
-    const sibling =
-      this.#state.current.get(
-        eventGraphCacheKey(workspaceId, !cacheProjectHelpers, cacheAnalysisMode),
-      ) ??
-      this.#state.current.get(
-        eventGraphCacheKey(workspaceId, requestedProjectHelpers, requestedAnalysisMode),
-      ) ??
-      this.#state.current.get(eventGraphCacheKey(workspaceId, !requestedProjectHelpers)) ??
-      this.#state.current.get(eventGraphCacheKey(workspaceId, requestedProjectHelpers));
-    const scanFocused = requestedAnalysisMode === 'focused';
-    const snapshot =
-      options.refresh !== true && sibling?.generation === generation
-        ? sibling.snapshot
-        : await scanEventSources(
-            this.engine,
-            workspaceId,
-            workspace,
-            scanFocused,
-            options.principal,
-            options.signal,
-          );
-    options.signal?.throwIfAborted();
-    if (cached?.snapshot.revision === snapshot.revision && cached.generation === generation) {
-      return cached.graph;
+    if (options.refresh !== true && requestedAnalysisMode === 'focused') {
+      const fullSibling =
+        this.#state.current.get(eventGraphCacheKey(workspaceId, cacheProjectHelpers, 'full')) ??
+        this.#state.current.get(eventGraphCacheKey(workspaceId, !cacheProjectHelpers, 'full'));
+      if (fullSibling?.generation === generation) return fullSibling.graph;
     }
+    const scanFocused = requestedAnalysisMode === 'focused';
+    const snapshot = await scanEventSources(
+      this.engine,
+      workspaceId,
+      workspace,
+      scanFocused,
+      options.signal,
+    );
+    options.signal?.throwIfAborted();
+    if (cached?.graph.revision === snapshot.revision && cached.generation === generation)
+      return cached.graph;
     const buildAnalysisMode = requestedAnalysisMode;
     const projectHelpers = buildAnalysisMode === 'focused' ? false : requestedProjectHelpers;
     const graph = buildEventGraph(snapshot, {
@@ -1101,13 +1091,18 @@ export class EventChainViewer {
       projectHelpers,
       analysisMode: buildAnalysisMode,
     });
-    this.#state.current.set(cacheKey, { generation, snapshot, graph });
+    this.#state.current.set(cacheKey, { generation, files: snapshot.files, graph });
     if (buildAnalysisMode === 'full') rememberGraph(this.#state, workspaceId, graph);
     return graph;
   }
 
   public async inspect(input: EventInspectInput): Promise<EventInspectResult> {
     input.signal?.throwIfAborted();
+    const focused =
+      input.mode === 'trace' ||
+      input.mode === 'explain_path' ||
+      (input.selector !== undefined &&
+        (input.mode === 'scan' || input.mode === 'roots' || input.mode === 'lint'));
     const scannedGraph = await this.scan(input.workspaceId, {
       refresh: input.refresh ?? input.mode === 'scan',
       // Focused routes traverse helper nodes directly and collapse only the
@@ -1117,6 +1112,7 @@ export class EventChainViewer {
         input.mode !== 'roots' &&
         input.mode !== 'trace' &&
         input.mode !== 'explain_path',
+      analysisMode: focused ? 'focused' : 'full',
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
@@ -1333,6 +1329,7 @@ export class EventChainViewer {
     const graph = await this.scan(input.workspaceId, {
       ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
       projectHelpers: true,
+      analysisMode: input.selector === undefined ? 'full' : 'focused',
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
@@ -1584,7 +1581,7 @@ export class EventChainViewer {
         'Proposed source paths must be unique',
       );
     }
-    const files = cached.snapshot.files.map((file) => ({
+    const files = cached.files.map((file) => ({
       ...file,
       bytes: Buffer.from(file.bytes),
     }));

@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SCAN_MAX_BYTES,
+  DEFAULT_SCAN_MAX_FILE_BYTES,
+  DEFAULT_SCAN_MAX_FILES,
   HTTP_MAX_AGGREGATE_BODY_BYTES,
   HTTP_MAX_BODY_BYTES,
   loadConfiguration,
@@ -44,6 +47,13 @@ const workspace = {
 };
 
 describe('configuration loading and path selection', () => {
+  it('defaults to large-mod scan ceilings without per-project setup', () => {
+    const configuration = serverConfigurationSchema.parse({ version: 1 });
+    expect(configuration.scanMaxFiles).toBe(DEFAULT_SCAN_MAX_FILES);
+    expect(configuration.scanMaxBytes).toBe(DEFAULT_SCAN_MAX_BYTES);
+    expect(configuration.scanMaxFileBytes).toBe(DEFAULT_SCAN_MAX_FILE_BYTES);
+  });
+
   it('builds an immediate local configuration from the MCP working directory', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-automatic-configuration-'));
     temporaryRoots.push(root);

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.8.11/schemas/probability-analysis-result.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.0.0/schemas/probability-analysis-result.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -40,6 +40,22 @@
         },
         "workspaceIdentity": {
           "type": "string"
+        },
+        "sourceScope": {
+          "type": "string",
+          "enum": [
+            "file",
+            "shared",
+            "domain",
+            "none"
+          ]
+        },
+        "sourcePaths": {
+          "maxItems": 100000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
         },
         "sourceRevision": {
           "type": "string"
@@ -89,7 +105,7 @@
           "additionalProperties": false
         },
         "adapterId": {
-          "$ref": "#/$defs/__schema0"
+          "$ref": "#/$defs/__schema1"
         },
         "adapterVersion": {
           "type": "string"
@@ -99,7 +115,7 @@
           "maxItems": 4,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema1"
+            "$ref": "#/$defs/__schema2"
           }
         },
         "seed": {
@@ -139,7 +155,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema0"
+          "$ref": "#/$defs/__schema1"
         },
         "version": {
           "type": "string"
@@ -364,7 +380,7 @@
                 "rawValue": {
                   "anyOf": [
                     {
-                      "$ref": "#/$defs/__schema2"
+                      "$ref": "#/$defs/__schema3"
                     },
                     {
                       "type": "null"
@@ -400,7 +416,7 @@
                   ]
                 },
                 "exactConditionalProbability": {
-                  "$ref": "#/$defs/__schema2"
+                  "$ref": "#/$defs/__schema3"
                 },
                 "pathProbability": {
                   "anyOf": [
@@ -415,7 +431,7 @@
                   ]
                 },
                 "exactPathProbability": {
-                  "$ref": "#/$defs/__schema2"
+                  "$ref": "#/$defs/__schema3"
                 },
                 "pathProbabilityInterval": {
                   "type": "object",
@@ -652,19 +668,19 @@
                 "trace": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema3"
+                    "$ref": "#/$defs/__schema4"
                   }
                 },
                 "provenance": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema4"
+                    "$ref": "#/$defs/__schema5"
                   }
                 },
                 "unresolved": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema7"
+                    "$ref": "#/$defs/__schema8"
                   }
                 }
               },
@@ -680,7 +696,7 @@
             }
           },
           "poolTotal": {
-            "$ref": "#/$defs/__schema2"
+            "$ref": "#/$defs/__schema3"
           },
           "horizonDays": {
             "type": "number",
@@ -794,7 +810,7 @@
                         ]
                       },
                       "weight": {
-                        "$ref": "#/$defs/__schema2"
+                        "$ref": "#/$defs/__schema3"
                       },
                       "conditionalProbability": {
                         "type": "number",
@@ -802,18 +818,18 @@
                         "maximum": 1
                       },
                       "exactConditionalProbability": {
-                        "$ref": "#/$defs/__schema2"
+                        "$ref": "#/$defs/__schema3"
                       },
                       "trace": {
                         "type": "array",
                         "items": {
-                          "$ref": "#/$defs/__schema3"
+                          "$ref": "#/$defs/__schema4"
                         }
                       },
                       "unresolved": {
                         "type": "array",
                         "items": {
-                          "$ref": "#/$defs/__schema7"
+                          "$ref": "#/$defs/__schema8"
                         }
                       }
                     },
@@ -839,12 +855,12 @@
                   }
                 },
                 "poolTotal": {
-                  "$ref": "#/$defs/__schema2"
+                  "$ref": "#/$defs/__schema3"
                 },
                 "unresolved": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/__schema7"
+                    "$ref": "#/$defs/__schema8"
                   }
                 }
               },
@@ -940,7 +956,7 @@
           "unresolved": {
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema7"
+              "$ref": "#/$defs/__schema8"
             }
           }
         },
@@ -1033,13 +1049,13 @@
             "maxLength": 4096
           },
           "location": {
-            "$ref": "#/$defs/__schema5"
+            "$ref": "#/$defs/__schema6"
           },
           "related": {
             "maxItems": 100,
             "type": "array",
             "items": {
-              "$ref": "#/$defs/__schema5"
+              "$ref": "#/$defs/__schema6"
             }
           },
           "operationId": {
@@ -1067,7 +1083,7 @@
     "unresolved": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema7"
+        "$ref": "#/$defs/__schema8"
       }
     },
     "sweep": {
@@ -1076,7 +1092,7 @@
         "points": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema8"
+            "$ref": "#/$defs/__schema9"
           }
         },
         "rankReversals": {
@@ -1121,7 +1137,7 @@
         "breakpoints": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema8"
+            "$ref": "#/$defs/__schema9"
           }
         },
         "localElasticities": {
@@ -2031,6 +2047,9 @@
   "additionalProperties": false,
   "$defs": {
     "__schema0": {
+      "type": "string"
+    },
+    "__schema1": {
       "type": "string",
       "enum": [
         "event_mean_time_to_happen",
@@ -2046,7 +2065,7 @@
         "custom_weighted_pool"
       ]
     },
-    "__schema1": {
+    "__schema2": {
       "type": "string",
       "enum": [
         "conditional_probability",
@@ -2055,7 +2074,7 @@
         "effective_mtth_days"
       ]
     },
-    "__schema2": {
+    "__schema3": {
       "type": "object",
       "properties": {
         "numerator": {
@@ -2081,7 +2100,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema3": {
+    "__schema4": {
       "type": "object",
       "properties": {
         "operation": {
@@ -2107,16 +2126,16 @@
           ]
         },
         "value": {
-          "$ref": "#/$defs/__schema2"
+          "$ref": "#/$defs/__schema3"
         },
         "before": {
-          "$ref": "#/$defs/__schema2"
+          "$ref": "#/$defs/__schema3"
         },
         "after": {
-          "$ref": "#/$defs/__schema2"
+          "$ref": "#/$defs/__schema3"
         },
         "provenance": {
-          "$ref": "#/$defs/__schema4"
+          "$ref": "#/$defs/__schema5"
         },
         "conditionExpression": {
           "type": "string"
@@ -2132,7 +2151,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema4": {
+    "__schema5": {
       "type": "object",
       "properties": {
         "path": {
@@ -2150,7 +2169,7 @@
           "type": "string"
         },
         "location": {
-          "$ref": "#/$defs/__schema5"
+          "$ref": "#/$defs/__schema6"
         },
         "astPath": {
           "type": "array",
@@ -2176,7 +2195,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema5": {
+    "__schema6": {
       "type": "object",
       "properties": {
         "path": {
@@ -2185,10 +2204,10 @@
           "maxLength": 4096
         },
         "start": {
-          "$ref": "#/$defs/__schema6"
+          "$ref": "#/$defs/__schema7"
         },
         "end": {
-          "$ref": "#/$defs/__schema6"
+          "$ref": "#/$defs/__schema7"
         },
         "symbol": {
           "type": "string",
@@ -2202,7 +2221,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema6": {
+    "__schema7": {
       "type": "object",
       "properties": {
         "line": {
@@ -2228,7 +2247,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema7": {
+    "__schema8": {
       "type": "object",
       "properties": {
         "code": {
@@ -2244,7 +2263,7 @@
           "type": "string"
         },
         "provenance": {
-          "$ref": "#/$defs/__schema4"
+          "$ref": "#/$defs/__schema5"
         },
         "details": {
           "type": "object",
@@ -2260,7 +2279,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema8": {
+    "__schema9": {
       "type": "object",
       "properties": {
         "scenarioId": {

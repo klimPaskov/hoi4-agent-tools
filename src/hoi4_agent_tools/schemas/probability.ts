@@ -806,6 +806,8 @@ const probabilityMetadataSchema = z
   .object({
     workspaceId: z.string(),
     workspaceIdentity: z.string(),
+    sourceScope: z.enum(['file', 'shared', 'domain', 'none']).optional(),
+    sourcePaths: z.array(z.string()).max(100_000).optional(),
     sourceRevision: z.string(),
     sourceHash: z.string(),
     scenarioHash: z.string(),

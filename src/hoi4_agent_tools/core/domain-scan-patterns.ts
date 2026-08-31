@@ -13,6 +13,15 @@ function englishLocalisationPatterns(roots: readonly string[]): string[] {
   return [...under(roots, 'english/**/*.{yml,yaml}'), ...under(roots, '*.{yml,yaml}')];
 }
 
+export function probabilitySharedDefinitionPatterns(): string[] {
+  return uniquePatterns([
+    'common/scripted_effects/**/*.txt',
+    'common/scripted_triggers/**/*.txt',
+    'common/script_constants/**/*.txt',
+    'common/mtth/**/*.txt',
+  ]);
+}
+
 /** Sources required to import, link, lint, render, and rewrite focus content. */
 export function focusDomainScanPatterns(workspace: ResolvedWorkspace): string[] {
   const roots = workspace.registration.roots;
@@ -43,8 +52,9 @@ export function probabilityDomainScanPatterns(
   const normalizedSourcePaths = sourcePaths.map((sourcePath) =>
     sourcePath.replace(/^.*?:/u, '').replaceAll('\\', '/').replace(/^\.\//u, ''),
   );
+  if (normalizedSourcePaths.length > 0)
+    return uniquePatterns([...normalizedSourcePaths, ...probabilitySharedDefinitionPatterns()]);
   return uniquePatterns([
-    ...normalizedSourcePaths,
     ...under(roots.focus, '**/*.txt'),
     'common/decisions/**/*.txt',
     'common/technologies/**/*.txt',
@@ -58,19 +68,6 @@ export function probabilityDomainScanPatterns(
     'common/script_constants/**/*.txt',
     'common/mtth/**/*.txt',
     'events/**/*.txt',
-  ]);
-}
-
-/** Text sources needed to discover country flags and leader portraits. */
-export function countryAssetDiscoveryPatterns(workspace: ResolvedWorkspace): string[] {
-  const roots = workspace.registration.roots;
-  return uniquePatterns([
-    'history/countries/**/*.txt',
-    'common/characters/**/*.txt',
-    'common/scripted_effects/**/*.txt',
-    'events/**/*.txt',
-    ...under(roots.interface, '**/*.gfx'),
-    ...under(roots.gfx, '**/*.gfx'),
   ]);
 }
 

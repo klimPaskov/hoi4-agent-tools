@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { compareCodeUnits } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import { focusDomainScanPatterns } from '../../src/hoi4_agent_tools/core/domain-scan-patterns.js';
 import { CoreEngine, type ScanSnapshot } from '../../src/hoi4_agent_tools/core/engine.js';
 import { parseClausewitz } from '../../src/hoi4_agent_tools/core/source/index.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
@@ -130,7 +131,9 @@ local('local installed-game and external-mod integration', () => {
     const core = await engine();
     expect(core.resolver.get('external').artifactRoot).toBe(path.join(runtimeRoot, 'artifacts'));
     expect(core.resolver.get('external').cacheRoot).toBe(path.join(runtimeRoot, 'cache'));
-    const snapshot = await core.scan('external');
+    const snapshot = await core.scan('external', {
+      patterns: focusDomainScanPatterns(core.resolver.get('external')),
+    });
     expect(snapshot.files.some(({ rootKind }) => rootKind === 'game')).toBe(true);
     expect(core.resolver.get('external').modRoot).toBe(path.resolve(modRoot!));
     const plan = representativeFocusPlan(snapshot, 'game', 100);
@@ -149,7 +152,7 @@ local('local installed-game and external-mod integration', () => {
     }
   }, 600_000);
 
-  it('builds and deterministically renders an offline GUI scene without launching HOI4', async () => {
+  it('builds and deterministically renders a GUI scene without launching HOI4', async () => {
     const core = await engine();
     const studio = new ScriptedGuiStudio(
       core.resolver,

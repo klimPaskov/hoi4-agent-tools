@@ -352,6 +352,8 @@ export interface ScopePoolAnalysis {
 export interface ProbabilityMetadata {
   workspaceId: string;
   workspaceIdentity: string;
+  sourceScope?: 'file' | 'shared' | 'domain' | 'none';
+  sourcePaths?: string[];
   sourceRevision: string;
   sourceHash: string;
   scenarioHash: string;

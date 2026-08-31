@@ -166,6 +166,7 @@ describe('offline package and Registry metadata', () => {
       'docs/map.md',
       'docs/http.md',
       'docs/development.md',
+      'docs/images/readme/',
       'examples/clients/',
       'examples/probability/',
       'schemas/',

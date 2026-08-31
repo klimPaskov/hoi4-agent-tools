@@ -11,6 +11,9 @@ export const HTTP_DEFAULT_SESSION_EVENT_BYTES = 2_097_152;
 export const WORKSPACE_MAX_REGISTRATIONS = 1_000;
 const WORKSPACE_MAX_SOURCE_ROOTS = 16;
 const WORKSPACE_MAX_PATHS = 1_000;
+export const DEFAULT_SCAN_MAX_FILES = 100_000;
+export const DEFAULT_SCAN_MAX_BYTES = 268_435_456;
+export const DEFAULT_SCAN_MAX_FILE_BYTES = 67_108_864;
 
 const allowedOriginSchema = z.url().refine(
   (value) => {
@@ -144,9 +147,19 @@ export const serverConfigurationSchema = z
         message: 'Server state root must be an absolute private path',
       })
       .optional(),
-    scanMaxFiles: z.number().int().min(1).max(1_000_000).default(20_000),
-    scanMaxBytes: z.number().int().min(1_048_576).max(Number.MAX_SAFE_INTEGER).default(134_217_728),
-    scanMaxFileBytes: z.number().int().min(65_536).max(Number.MAX_SAFE_INTEGER).default(67_108_864),
+    scanMaxFiles: z.number().int().min(1).max(1_000_000).default(DEFAULT_SCAN_MAX_FILES),
+    scanMaxBytes: z
+      .number()
+      .int()
+      .min(1_048_576)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_SCAN_MAX_BYTES),
+    scanMaxFileBytes: z
+      .number()
+      .int()
+      .min(65_536)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_SCAN_MAX_FILE_BYTES),
     artifactMaxBytes: z
       .number()
       .int()

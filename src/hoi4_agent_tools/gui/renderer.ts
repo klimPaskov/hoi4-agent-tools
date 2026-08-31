@@ -121,10 +121,16 @@ function actualGlyphMarkup(
     return glyphLine.glyphs
       .filter((glyph) => glyph.kind === 'bitmap')
       .filter((glyph) => bitmapLayer === 'face' || glyph.borderDataUri !== undefined)
-      .map(
-        (glyph) =>
-          `<use href="#${bitmapDefinitionId(glyph.key, bitmapLayer)}" transform="translate(${finite(originX + glyph.x * horizontalScale)} ${finite(baseline + glyph.y - glyphLine.baseline)}) scale(${finite(horizontalScale)} 1)"/>`,
-      )
+      .map((glyph) => {
+        const nativePixelGrid =
+          Math.abs(horizontalScale - 1) < 0.000_001 &&
+          [glyph.x, glyph.y, glyph.width, glyph.height, glyphLine.baseline].every(
+            (value) => Math.abs(value - Math.round(value)) < 0.000_001,
+          );
+        const x = originX + glyph.x * horizontalScale;
+        const y = baseline + glyph.y - glyphLine.baseline;
+        return `<use href="#${bitmapDefinitionId(glyph.key, bitmapLayer)}" transform="translate(${finite(nativePixelGrid ? Math.round(x) : x)} ${finite(nativePixelGrid ? Math.round(y) : y)}) scale(${finite(horizontalScale)} 1)"/>`;
+      })
       .join('');
   return '';
 }
@@ -499,15 +505,27 @@ function viewFor(
     };
   }
   const padding = 16;
-  const x = Math.max(0, scene.bounds.x - padding);
-  const y = Math.max(0, scene.bounds.y - padding);
-  const right = Math.min(scene.resolution.width, scene.bounds.x + scene.bounds.width + padding);
-  const bottom = Math.min(scene.resolution.height, scene.bounds.y + scene.bounds.height + padding);
+  const x = Math.floor(Math.max(0, scene.bounds.x - padding));
+  const y = Math.floor(Math.max(0, scene.bounds.y - padding));
+  const right = Math.ceil(
+    Math.min(scene.resolution.width, scene.bounds.x + scene.bounds.width + padding),
+  );
+  const bottom = Math.ceil(
+    Math.min(scene.resolution.height, scene.bounds.y + scene.bounds.height + padding),
+  );
   return {
     viewBox: { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) },
     width: Math.max(1, Math.ceil(right - x)),
     height: Math.max(1, Math.ceil(bottom - y)),
   };
+}
+
+function overlayToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
+  const toolText = new DeterministicSvgTextRenderer();
+  const overlays = scene.elements
+    .map((element) => renderOverlay(element, variant, toolText))
+    .join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.resolution.width}" height="${scene.resolution.height}" viewBox="0 0 ${scene.resolution.width} ${scene.resolution.height}"><defs>${toolText.definitions()}</defs>${overlays}</svg>`;
 }
 
 export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
@@ -701,7 +719,11 @@ export async function renderGuiScene(
       { elements: scene.elements.length, maximumElements: GUI_SCENE_MAX_ELEMENTS },
     );
   }
-  const images: GuiRenderedImage[] = [];
+  const prepared: Array<{
+    variant: GuiRenderVariant;
+    view: ReturnType<typeof viewFor>;
+    svg: string;
+  }> = [];
   for (const variant of variants) {
     signal?.throwIfAborted();
     const view = viewFor(scene, variant);
@@ -710,16 +732,80 @@ export async function renderGuiScene(
       signal === undefined
         ? sceneToSvg(scene, variant)
         : await sceneToSvgCooperative(scene, variant, signal);
-    assertRenderDimensions(view.width, view.height, `GUI ${variant} Sharp raster`);
+    prepared.push({ variant, view, svg });
+  }
+  const full = prepared.find(({ variant }) => variant === 'full');
+  let images: GuiRenderedImage[];
+  if (full === undefined) {
+    images = [];
+    for (const item of prepared) {
+      assertRenderDimensions(item.view.width, item.view.height, `GUI ${item.variant} Sharp raster`);
+      budget.reserveRasterOperation(
+        `gui-variant:${sha256Bytes(item.svg)}`,
+        `GUI ${item.variant} SVG rasterization`,
+      );
+      const png = await sharp(Buffer.from(item.svg), { limitInputPixels: RENDER_MAX_PIXELS })
+        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+        .toBuffer();
+      signal?.throwIfAborted();
+      images.push({
+        variant: item.variant,
+        svg: item.svg,
+        png,
+        width: item.view.width,
+        height: item.view.height,
+      });
+    }
+  } else {
+    assertRenderDimensions(full.view.width, full.view.height, 'GUI full Sharp raster');
     budget.reserveRasterOperation(
-      `gui-variant:${sha256Bytes(svg)}`,
-      `GUI ${variant} SVG rasterization`,
+      `gui-variant:${sha256Bytes(full.svg)}`,
+      'GUI full SVG rasterization',
     );
-    const png = await sharp(Buffer.from(svg), { limitInputPixels: RENDER_MAX_PIXELS })
+    const basePng = await sharp(Buffer.from(full.svg), { limitInputPixels: RENDER_MAX_PIXELS })
       .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
       .toBuffer();
-    signal?.throwIfAborted();
-    images.push({ variant, svg, png, width: view.width, height: view.height });
+    const rendered = await Promise.all(
+      prepared.map(async (item): Promise<GuiRenderedImage> => {
+        if (item.variant === 'full')
+          return {
+            variant: item.variant,
+            svg: item.svg,
+            png: basePng,
+            width: item.view.width,
+            height: item.view.height,
+          };
+        signal?.throwIfAborted();
+        budget.reserveRasterOperation(
+          `gui-derived-variant:${sha256Bytes(item.svg)}`,
+          `GUI ${item.variant} derived rasterization`,
+        );
+        const png =
+          item.variant === 'cropped'
+            ? await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
+                .extract({
+                  left: item.view.viewBox.x,
+                  top: item.view.viewBox.y,
+                  width: item.view.width,
+                  height: item.view.height,
+                })
+                .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+                .toBuffer()
+            : await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
+                .composite([{ input: Buffer.from(overlayToSvg(scene, item.variant)) }])
+                .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+                .toBuffer();
+        signal?.throwIfAborted();
+        return {
+          variant: item.variant,
+          svg: item.svg,
+          png,
+          width: item.view.width,
+          height: item.view.height,
+        };
+      }),
+    );
+    images = rendered;
   }
   return {
     scene,

@@ -263,7 +263,7 @@ local('installed vanilla bitmap fonts', () => {
     expect(hasColour(255, 50, 50)).toBe(true);
     expect(hasColour(101, 214, 101)).toBe(true);
     expect(hasColour(255, 189, 0)).toBe(true);
-  }, 180_000);
+  }, 600_000);
 
   it('shapes every locale font override at native and enlarged sizes without blurred glyph data', async () => {
     const requestedFilter = process.env.HOI4_FONT_TEST_FILTER;

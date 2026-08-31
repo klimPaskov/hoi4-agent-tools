@@ -35,6 +35,7 @@ describe('domain-bounded MCP scans', () => {
     await Promise.all([
       mkdir(path.join(focusMod, 'common', 'national_focus'), { recursive: true }),
       mkdir(path.join(focusMod, 'interface'), { recursive: true }),
+      mkdir(path.join(focusMod, 'common', 'technologies'), { recursive: true }),
       cp(path.join(fixtureRoots, 'game'), mapGame, { recursive: true }),
       cp(path.join(fixtureRoots, 'dependency'), mapDependency, { recursive: true }),
       cp(path.join(fixtureRoots, 'mod'), mapMod, { recursive: true }),
@@ -57,6 +58,10 @@ describe('domain-bounded MCP scans', () => {
         ].join('\n'),
       ),
       writeFile(path.join(focusMod, 'interface', 'unrelated.gui'), Buffer.alloc(1_048_577, 32)),
+      writeFile(
+        path.join(focusMod, 'common', 'technologies', 'unrelated.txt'),
+        Buffer.alloc(1_048_577, 32),
+      ),
       writeFile(path.join(mapMod, 'interface', 'unrelated.gui'), Buffer.alloc(1_048_577, 32)),
     ]);
 
@@ -120,7 +125,10 @@ describe('domain-bounded MCP scans', () => {
         arguments: {
           workspaceId: 'bounded-focus',
           adapter: 'national_focus_ai_will_do',
-          source: { identifier: 'bounded_focus' },
+          source: {
+            path: 'common/national_focus/bounded.txt',
+            identifier: 'bounded_focus',
+          },
         },
       }),
     );

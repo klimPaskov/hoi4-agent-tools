@@ -4,6 +4,16 @@
 
 No unreleased changes.
 
+## 3.0.0 - 2026-08-31
+
+- Promote the complete focus, GUI, map, event, technology, and probability MCP surface to the stable 3.0 release line after full synthetic, installed-game, external-workspace, transport, package, Inspector, and Registry qualification.
+- Render installed HOI4 bitmap fonts and language overrides from their native atlases with deterministic metrics, borders, crisp scaling, and localisation colours; keep the exhaustive installed-font audit as a release regression gate.
+- Resolve scenario and dynamic-list country scopes into real ideology-aware flags using each masked-shield definition's own asset dimensions, and render inline HOI4 text icons that appear only after dynamic text substitution.
+- Keep large legitimate event and technology workspaces complete and support scenario-resolved dynamic weighted pools without automatic partial-analysis fallbacks.
+- Keep explicit-file probability inspection narrow, bound retained source and immutable-game scan caches, and avoid full-workspace rescans when rendering inline or declared custom-pool analyses.
+- Build event graphs from one merged source index, retain raw comparison sources instead of parsed scan snapshots, and route selector-scoped inspection and rendering through the focused event graph.
+- Keep the public repository focused on the supported release by using one maintained branch and manually reviewed dependency updates.
+
 ## 2.8.11 - 2026-08-30
 
 - Render vanilla HOI4 bitmap fonts with their native atlas masks, legacy page fallbacks, inverted-mask handling, declared glyph channels, crisp scaled sampling, borders, and localisation colours; qualify every shipped descriptor and base font family.

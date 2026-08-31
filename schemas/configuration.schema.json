@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v2.8.11/schemas/configuration.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.0.0/schemas/configuration.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -60,13 +60,13 @@
       "minLength": 1
     },
     "__schema2": {
-      "default": 20000,
+      "default": 100000,
       "type": "integer",
       "minimum": 1,
       "maximum": 1000000
     },
     "__schema3": {
-      "default": 134217728,
+      "default": 268435456,
       "type": "integer",
       "minimum": 1048576,
       "maximum": 9007199254740991

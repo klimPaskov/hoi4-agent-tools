@@ -735,6 +735,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
 		name = "country_entry"
 		position = { x = 3 y = 2 }
 		size = { width = 180 height = 20 }
+		iconType = { name = "country_flag" quadTextureSprite = "GFX_flag_small2" }
 		instantTextBoxType = { name = "country_label" text = "[label]" }
 	}
 }`,
@@ -745,14 +746,71 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
 	external_list_gui = {
 		context_type = country
 		window_name = external_list_window
-		dynamic_lists = {
+			dynamic_lists = {
 			external_list = {
 				entry_container = "generic_entry"
 				country_scope_entry_container = "country_entry"
 			}
+			}
+			properties = { country_flag = { image = "[?global.entries^entry_index.GetFlag]" } }
 		}
-	}
 }`,
+      ),
+      scanned(
+        'interface/flags.gfx',
+        'spriteTypes = { maskedShieldType = { name = "GFX_flag_small2" textureFile1 = "gfx/interface/flag_overlay.png" textureFile2 = "gfx/interface/flag_mask.png" effectFile = "gfx/FX/maskedflag.lua" } }',
+      ),
+      scanned(
+        'gfx/interface/flag_overlay.png',
+        await sharp({
+          create: {
+            width: 37,
+            height: 22,
+            channels: 4,
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
+          },
+        })
+          .png()
+          .toBuffer(),
+      ),
+      scanned(
+        'gfx/interface/flag_mask.png',
+        await sharp({
+          create: {
+            width: 37,
+            height: 22,
+            channels: 4,
+            background: { r: 255, g: 255, b: 255, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+      ),
+      scanned(
+        'gfx/flags/medium/FRA_democratic.png',
+        await sharp({
+          create: {
+            width: 37,
+            height: 22,
+            channels: 4,
+            background: { r: 25, g: 80, b: 220, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+      ),
+      scanned(
+        'gfx/flags/FRA_democratic.png',
+        await sharp({
+          create: {
+            width: 82,
+            height: 52,
+            channels: 4,
+            background: { r: 220, g: 40, b: 40, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
       ),
     ];
     const graph = sourceGraph(files);
@@ -775,8 +833,17 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       parsePreviewScenario({
         id: 'external-list',
         resolution: { width: 1920, height: 1080 },
+        values: { 'global.entries^entry_index.GetFlag': 'FRA' },
         lists: {
-          external_list: [{ GetName: 'Generic row' }, { label: 'Country row', countryScope: true }],
+          external_list: [
+            { GetName: 'Generic row' },
+            {
+              label: 'Country row',
+              countryScope: true,
+              countryTag: 'FRA',
+              ideology: 'democratic',
+            },
+          ],
         },
       }),
     );
@@ -788,6 +855,30 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     );
     expect(scene.elements.find(({ name }) => name === 'generic_entry')?.unclippedRect.y).toBe(30);
     expect(scene.elements.find(({ name }) => name === 'country_entry')?.unclippedRect.y).toBe(54);
+    const renderedFlag = scene.elements.find(
+      ({ name, rowIndex }) => name === 'country_flag' && rowIndex === 1,
+    )?.sprite;
+    expect(renderedFlag).toMatchObject({
+      spriteName: 'GFX_flag_FRA',
+      texturePath: 'gfx/flags/medium/FRA_democratic.png',
+      width: 37,
+      height: 22,
+      supported: true,
+    });
+    expect(renderedFlag?.dataUri).toMatch(/^data:image\/png;base64,/u);
+    await expect(
+      new GuiAssetCatalog(graph, files).loadCountryFlag(
+        'FRA',
+        undefined,
+        'democratic',
+        'GFX_flag_small2',
+      ),
+    ).resolves.toMatchObject({
+      texturePath: 'gfx/flags/medium/FRA_democratic.png',
+      width: 37,
+      height: 22,
+      supported: true,
+    });
     expect(scene.fidelity.modelled).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: 'scripted_gui_dynamic_list' })]),
     );
@@ -839,11 +930,11 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     const files = [
       scanned(
         'interface/generated-scenario.gui',
-        'guiTypes = { containerWindowType = { name = "generated_window" size = { width = 400 height = 180 } instantTextBoxType = { name = "generated_text" text = "GENERATED_TEXT" } iconType = { name = "threat_icon" } progressbarType = { name = "threat_meter" size = { width = 100 height = 10 } minValue = 10 maxValue = 20 startValue = threat_value } buttonType = { name = "status_tab_button_idle" } buttonType = { name = "status_tab_button_active" } buttonType = { name = "history_tab_button_idle" } buttonType = { name = "history_tab_button_active" } } containerWindowType = { name = "status_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "history_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "target_row" size = { width = 200 height = 20 } } }',
+        'guiTypes = { containerWindowType = { name = "generated_window" size = { width = 400 height = 180 } instantTextBoxType = { name = "generated_text" text = "GENERATED_TEXT" } iconType = { name = "threat_icon" } iconType = { name = "country_flag" quadTextureSprite = "GFX_flag_small2" } progressbarType = { name = "threat_meter" size = { width = 100 height = 10 } minValue = 10 maxValue = 20 startValue = threat_value } buttonType = { name = "status_tab_button_idle" } buttonType = { name = "status_tab_button_active" } buttonType = { name = "history_tab_button_idle" } buttonType = { name = "history_tab_button_active" } } containerWindowType = { name = "status_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "history_pane" position = { x = 20 y = 40 } size = { width = 300 height = 100 } } containerWindowType = { name = "target_row" size = { width = 200 height = 20 } } }',
       ),
       scanned(
         'common/scripted_guis/generated-scenario.txt',
-        'scripted_gui = { generated_gui = { context_type = country window_name = generated_window visible = { always = yes } dynamic_lists = { target_list = { entry_container = "target_row" } } properties = { threat_icon = { image = "[GetThreatSprite]" } } triggers = { status_tab_button_idle_visible = { always = yes } status_tab_button_active_visible = { always = yes } history_tab_button_idle_visible = { always = yes } history_tab_button_active_visible = { always = yes } } } status_gui = { context_type = country parent_scripted_gui = generated_gui window_name = status_pane visible = { has_country_flag = show_status } } history_gui = { context_type = country parent_scripted_gui = generated_gui window_name = history_pane visible = { has_country_flag = show_history } } }',
+        'scripted_gui = { generated_gui = { context_type = country window_name = generated_window visible = { always = yes } dynamic_lists = { target_list = { entry_container = "target_row" } } properties = { threat_icon = { image = "[GetThreatSprite]" } country_flag = { image = "[ROOT.GetFlag]" } } triggers = { status_tab_button_idle_visible = { always = yes } status_tab_button_active_visible = { always = yes } history_tab_button_idle_visible = { always = yes } history_tab_button_active_visible = { always = yes } } } status_gui = { context_type = country parent_scripted_gui = generated_gui window_name = status_pane visible = { has_country_flag = show_status } } history_gui = { context_type = country parent_scripted_gui = generated_gui window_name = history_pane visible = { has_country_flag = show_history } } }',
       ),
       scanned(
         'common/scripted_localisation/generated-scenario.txt',
@@ -886,10 +977,16 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
         'FROM.GetName': expect.any(String),
         GetThreatStatus: '§REscalating§!',
         GetThreatSprite: 'GFX_threat_high',
+        'ROOT.GetFlag': expect.stringMatching(/^[A-Z]{3}$/u),
         threat_meter: expect.any(Number),
         threat_value: expect.any(Number),
       },
       lists: { target_list: [expect.any(Object), expect.any(Object)] },
+      country: {
+        countryTag: expect.stringMatching(/^[A-Z]{3}$/u),
+        ideology: expect.stringMatching(/^(?:communism|democratic|fascism|neutrality)$/u),
+        countryIdeology: expect.stringMatching(/^(?:communism|democratic|fascism|neutrality)$/u),
+      },
     });
     expect(first[0]?.values.GetDynamicLeader).not.toBe('[dynamic_loc]');
     expect(first[0]?.values['ROOT.GetName']).not.toBe('[dynamic_loc]');
@@ -999,7 +1096,7 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
       ),
       scanned(
         'common/scripted_guis/referenced-assets.txt',
-        'scripted_gui = { asset_gui = { context_type = country window_name = asset_window properties = { dynamic_icon = { image = "[GetDynamicSprite]" } } } }',
+        'scripted_gui = { asset_gui = { context_type = country window_name = asset_window properties = { dynamic_icon = { image = "[GetDynamicSprite]" } country_flag = { image = "[ROOT.GetFlag]" } } } }',
       ),
       scanned(
         'common/scripted_localisation/referenced-assets.txt',
@@ -1027,6 +1124,9 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
         'gfx/interface/dynamic_high.dds',
         'fonts/hoi_font.fnt',
         'fonts/hoi_font_english.fnt',
+        'gfx/flags/*.{bmp,dds,png,tga}',
+        'gfx/flags/medium/*.{bmp,dds,png,tga}',
+        'gfx/flags/small/*.{bmp,dds,png,tga}',
       ]),
     );
     expect(patterns).not.toContain('fonts/hoi_font_chinese.fnt');
@@ -1408,9 +1508,10 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
 \t\tinstantTextBoxType = {
 \t\t\tname = "native_text"
 \t\t\tposition = { x = 10 y = 10 }
-\t\t\tsize = { width = 80 height = 36 }
+\t\t\tsize = { width = 79 height = 36 }
 \t\t\ttext = "NATIVE_FONT_PROBE"
 \t\t\tfont = "native_font"
+\t\t\tformat = center
 \t\t}
 \t}
 }`;
@@ -1462,10 +1563,10 @@ kernings count=0
     const rendered = await renderGuiScene(scene, ['full']);
     const full = rendered.images[0];
     expect(full?.svg).toContain('<image id="gui-font-bitmap-');
-    expect(full?.svg).toContain('translate(10 13) scale(1 1)');
+    expect(full?.svg).toContain('translate(41 13) scale(1 1)');
     expect(full?.svg).not.toMatch(/<text\b|font-family=/u);
     expect(sha256Bytes(full?.png ?? Buffer.alloc(0))).toBe(
-      'd938e087766de4ebeaafa775d19fb5a46da32e14eb26a5ef208c85e605d8d75a',
+      'efd1eb086846506c4b2fa7532fe6b4fa2fbc93fb3a26de30ca0d06d15ae1dd80',
     );
   });
 
@@ -1678,6 +1779,50 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
         ({ red, green, blue, alpha }) => red < 70 && green < 70 && blue < 70 && alpha > 100,
       ),
     ).toBe(true);
+  });
+
+  it('separates a shipped-style RGB face from an alpha outline when channel declarations lie', async () => {
+    const pixels = Buffer.alloc(8 * 8 * 4);
+    for (let y = 1; y <= 6; y += 1)
+      for (let x = 1; x <= 5; x += 1) pixels[(y * 8 + x) * 4 + 3] = 255;
+    for (let y = 2; y <= 5; y += 1)
+      for (let x = 2; x <= 4; x += 1) {
+        const offset = (y * 8 + x) * 4;
+        pixels[offset] = 255;
+        pixels[offset + 1] = 255;
+        pixels[offset + 2] = 255;
+      }
+    const atlas = await sharp(pixels, { raw: { width: 8, height: 8, channels: 4 } })
+      .png()
+      .toBuffer();
+    const files = [
+      scanned(
+        'interface/lying-font.gfx',
+        'bitmapfonts = { bitmapfont = { name = "lying_font" path = "fonts/lying.fnt" } }',
+      ),
+      scanned(
+        'fonts/lying.fnt',
+        'info size=8\ncommon lineHeight=8 base=7 scaleW=8 scaleH=8 pages=1 packed=0 alphaChnl=0 redChnl=4 greenChnl=4 blueChnl=4\npage id=0 file="lying.png"\nchar id=65 x=0 y=0 width=8 height=8 xadvance=8 page=0 chnl=15\n',
+      ),
+      scanned('fonts/lying.png', atlas),
+    ];
+    const catalog = new GuiAssetCatalog(sourceGraph(files), files);
+    const shaped = await catalog.shapeText('lying_font', 'A', 8);
+    const glyph = shaped.glyphs[0];
+    expect(glyph?.kind).toBe('bitmap');
+    if (glyph?.kind !== 'bitmap' || glyph.borderDataUri === undefined) return;
+    const alphaPixels = async (dataUri: string): Promise<number> => {
+      const decoded = await sharp(Buffer.from(dataUri.slice(dataUri.indexOf(',') + 1), 'base64'))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      return Array.from(
+        { length: decoded.info.width * decoded.info.height },
+        (_unused, index) => decoded.data[index * 4 + 3] ?? 0,
+      ).filter((value) => value > 0).length;
+    };
+    expect(await alphaPixels(glyph.dataUri)).toBe(12);
+    expect(await alphaPixels(glyph.borderDataUri)).toBe(30);
   });
 
   it('bounds BMFont bytes, records, fields, pages, character maps, and kerning maps', () => {

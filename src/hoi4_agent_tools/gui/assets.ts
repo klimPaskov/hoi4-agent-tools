@@ -261,6 +261,7 @@ export class GuiAssetCatalog {
   private readonly basenames = new Map<string, ScannedFile[]>();
   private readonly rasters = new Map<string, Promise<LoadedRaster>>();
   private readonly frames = new Map<string, Promise<GuiTextureFrame | undefined>>();
+  private readonly countryFlags = new Map<string, Promise<GuiTextureFrame>>();
   private readonly glyphRasters = new Map<
     string,
     Promise<{ dataUri: string; borderDataUri?: string; width: number; height: number } | undefined>
@@ -423,6 +424,211 @@ export class GuiAssetCatalog {
     requestedFrame: number,
   ): Promise<GuiTextureFrame | undefined> {
     return this.loadSpriteTextureFrame(sprite, sprite.texturePath2, requestedFrame, 'secondary');
+  }
+
+  public loadCountryFlag(
+    tag: string,
+    sprite?: GuiSpriteDefinition,
+    ideology?: string,
+    slotName?: string,
+  ): Promise<GuiTextureFrame> {
+    const normalizedTag = tag
+      .trim()
+      .replace(/[^A-Za-z0-9_]/gu, '')
+      .toUpperCase();
+    const normalizedIdeology = ideology
+      ?.trim()
+      .replace(/[^A-Za-z0-9_]/gu, '')
+      .toLowerCase();
+    const spriteKey = (sprite?.name ?? slotName)?.toLocaleLowerCase('en-US') ?? 'plain';
+    const key = `${normalizedTag}:${normalizedIdeology ?? ''}:${spriteKey}`;
+    let promise = this.countryFlags.get(key);
+    if (promise !== undefined) return promise;
+    promise = this.decodeCountryFlag(normalizedTag, sprite, normalizedIdeology, slotName);
+    this.countryFlags.set(key, promise);
+    return promise;
+  }
+
+  private async decodeCountryFlag(
+    tag: string,
+    sprite: GuiSpriteDefinition | undefined,
+    ideology: string | undefined,
+    slotName: string | undefined,
+  ): Promise<GuiTextureFrame> {
+    if (!/^[A-Z0-9_]{2,64}$/u.test(tag))
+      return {
+        spriteName: `GFX_flag_${tag || 'invalid'}`,
+        texturePath: '',
+        frame: 0,
+        frameCount: 1,
+        width: 0,
+        height: 0,
+        format: 'unknown',
+        supported: false,
+        reason: `Invalid country tag: ${tag || '<empty>'}`,
+      };
+    const normalizedSlotName = (sprite?.name ?? slotName)?.toLocaleLowerCase('en-US') ?? '';
+    const preferredDirectories = normalizedSlotName.includes('smallest')
+      ? ['small', 'medium', '']
+      : normalizedSlotName.includes('small')
+        ? ['medium', '', 'small']
+        : normalizedSlotName.includes('medium')
+          ? ['medium', '', 'small']
+          : ['', 'medium', 'small'];
+    const directories = [...new Set([...preferredDirectories, '', 'medium', 'small'])];
+    const ideologyCandidates =
+      ideology === undefined ? ['democratic', 'neutrality', 'fascism', 'communism'] : [ideology];
+    const stems = [...ideologyCandidates.map((candidate) => `${tag}_${candidate}`), tag];
+    const maskedShield = sprite?.spriteType.toLocaleLowerCase('en-US') === 'maskedshieldtype';
+    const [overlay, mask] = maskedShield
+      ? await Promise.all([
+          sprite.texturePath === undefined
+            ? undefined
+            : this.loadRaster(sprite.texturePath, sprite.sourcePath),
+          sprite.texturePath2 === undefined
+            ? undefined
+            : this.loadRaster(sprite.texturePath2, sprite.sourcePath),
+        ])
+      : [undefined, undefined];
+    const targetRaster =
+      mask?.supported === true ? mask : overlay?.supported === true ? overlay : undefined;
+    const candidates: ScannedFile[] = [];
+    for (const directory of directories) {
+      for (const stem of stems) {
+        for (const extension of ['tga', 'png', 'dds', 'bmp']) {
+          const candidate = this.resolveFile(
+            `gfx/flags/${directory.length === 0 ? '' : `${directory}/`}${stem}.${extension}`,
+          );
+          if (candidate !== undefined && !candidates.includes(candidate))
+            candidates.push(candidate);
+        }
+      }
+    }
+    if (candidates.length === 0)
+      return {
+        spriteName: `GFX_flag_${tag}`,
+        texturePath: `gfx/flags/${tag}.tga`,
+        frame: 0,
+        frameCount: 1,
+        width: 0,
+        height: 0,
+        format: 'unknown',
+        supported: false,
+        reason: `Country flag texture not found for ${tag}.`,
+      };
+    let firstDecoded: { file: ScannedFile; raster: LoadedRaster } | undefined;
+    let selected: { file: ScannedFile; raster: LoadedRaster } | undefined;
+    for (const file of candidates) {
+      const raster = await this.loadRaster(file.relativePath);
+      firstDecoded ??= { file, raster };
+      if (!raster.supported) continue;
+      selected ??= { file, raster };
+      if (raster.width === targetRaster?.width && raster.height === targetRaster.height) {
+        selected = { file, raster };
+        break;
+      }
+      if (targetRaster === undefined) break;
+    }
+    const decoded = selected ?? firstDecoded!;
+    const flagFile = decoded.file;
+    const flag = decoded.raster;
+    if (!flag.supported)
+      return {
+        spriteName: `GFX_flag_${tag}`,
+        texturePath: flagFile.relativePath,
+        frame: 0,
+        frameCount: 1,
+        width: flag.width,
+        height: flag.height,
+        format: flag.format,
+        supported: false,
+        ...(flag.reason === undefined ? {} : { reason: flag.reason }),
+      };
+    const width = targetRaster?.width ?? flag.width;
+    const height = targetRaster?.height ?? flag.height;
+    this.budget.reserveRasterOperation(
+      `gui-country-flag:${flagFile.displayPath}:${sprite?.name ?? slotName ?? 'plain'}`,
+      `GUI country flag rasterization ${tag}`,
+    );
+    this.budget.reserve(width, height, `GUI country flag ${tag}`, {
+      maximumPixels: RENDER_MAX_DECODED_PIXELS,
+    });
+    const flagPng = await sharp(flag.data, {
+      raw: { width: flag.width, height: flag.height, channels: 4 },
+      limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+    })
+      .resize(width, height, { fit: 'fill', kernel: 'nearest' })
+      .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+      .toBuffer();
+    const composites: { input: Buffer; blend: 'dest-in' | 'over' }[] = [];
+    if (mask?.supported === true) {
+      const maskPixels = await sharp(mask.data, {
+        raw: { width: mask.width, height: mask.height, channels: 4 },
+        limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+      })
+        .resize(width, height, { fit: 'fill', kernel: 'nearest' })
+        .raw()
+        .toBuffer();
+      let alphaVaries = false;
+      const firstAlpha = maskPixels[3] ?? 255;
+      for (let offset = 7; offset < maskPixels.length; offset += 4) {
+        if (maskPixels[offset] !== firstAlpha) {
+          alphaVaries = true;
+          break;
+        }
+      }
+      const alphaMask = Buffer.alloc(maskPixels.length);
+      for (let offset = 0; offset < maskPixels.length; offset += 4) {
+        alphaMask[offset] = 255;
+        alphaMask[offset + 1] = 255;
+        alphaMask[offset + 2] = 255;
+        alphaMask[offset + 3] = alphaVaries
+          ? maskPixels[offset + 3]!
+          : Math.round(
+              maskPixels[offset]! * 0.2126 +
+                maskPixels[offset + 1]! * 0.7152 +
+                maskPixels[offset + 2]! * 0.0722,
+            );
+      }
+      composites.push({
+        input: await sharp(alphaMask, {
+          raw: { width, height, channels: 4 },
+          limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+        })
+          .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+          .toBuffer(),
+        blend: 'dest-in',
+      });
+    }
+    if (overlay?.supported === true)
+      composites.push({
+        input: await sharp(overlay.data, {
+          raw: { width: overlay.width, height: overlay.height, channels: 4 },
+          limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+        })
+          .resize(width, height, { fit: 'fill', kernel: 'nearest' })
+          .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+          .toBuffer(),
+        blend: 'over',
+      });
+    const png =
+      composites.length === 0
+        ? flagPng
+        : await sharp(flagPng, { limitInputPixels: RENDER_MAX_DECODED_PIXELS })
+            .composite(composites)
+            .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+            .toBuffer();
+    return {
+      spriteName: `GFX_flag_${tag}`,
+      texturePath: flagFile.relativePath,
+      frame: 0,
+      frameCount: 1,
+      width,
+      height,
+      dataUri: `data:image/png;base64,${png.toString('base64')}`,
+      format: flag.format,
+      supported: true,
+    };
   }
 
   private loadSpriteTextureFrame(
@@ -824,6 +1030,12 @@ export class GuiAssetCatalog {
           }
           return maximum - minimum;
         });
+        const channelActivePixels = [0, 1, 2, 3].map((channel) => {
+          let active = 0;
+          for (let offset = channel; offset < extracted.data.length; offset += 4)
+            if ((extracted.data[offset] ?? 0) > 0) active += 1;
+          return active;
+        });
         const channelSelected = (channel: number): boolean => {
           if (metric.channelMask === 15) return true;
           const maskForChannel = [4, 2, 1, 8][channel] ?? 0;
@@ -844,6 +1056,42 @@ export class GuiAssetCatalog {
         const alphaIsInformative = (channelRanges[3] ?? 0) > 0;
         let faceChannels = informativeChannels(0);
         let borderChannels = informativeChannels(1);
+        const undeclaredRgbFaceChannels =
+          channelRoles === undefined
+            ? []
+            : [0, 1, 2].filter(
+                (channel) =>
+                  channelRoles[channel] === 4 &&
+                  (channelRanges[channel] ?? 0) > 0 &&
+                  (channelActivePixels[channel] ?? 0) > 0,
+              );
+        const undeclaredRgbChannelsAgree = undeclaredRgbFaceChannels.every(
+          (channel) =>
+            channel === undeclaredRgbFaceChannels[0] ||
+            extracted.data.every(
+              (sample, offset) =>
+                offset % 4 !== channel ||
+                sample ===
+                  extracted.data[offset - channel + (undeclaredRgbFaceChannels[0] ?? channel)],
+            ),
+        );
+        if (
+          faceChannels.includes(3) &&
+          borderChannels.length === 0 &&
+          undeclaredRgbFaceChannels.length > 0 &&
+          undeclaredRgbChannelsAgree
+        ) {
+          const rgbFace = undeclaredRgbFaceChannels[0]!;
+          const rgbPixels = channelActivePixels[rgbFace] ?? 0;
+          const alphaPixels = channelActivePixels[3] ?? 0;
+          if (rgbPixels * 1.15 < alphaPixels) {
+            // Some shipped HOI4 descriptors label RGB as constant even though RGB stores the
+            // thin face and alpha stores the wider face-plus-outline mask. Trusting the declared
+            // alpha role paints the outline in the face colour and visibly fattens the font.
+            faceChannels = [rgbFace];
+            borderChannels = [3];
+          }
+        }
         if (faceChannels.length === 0) {
           if (borderChannels.length > 0) {
             // Some vanilla fonts declare their only useful alpha bitmap as the outline

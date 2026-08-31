@@ -11,6 +11,16 @@ import type {
 } from './types.js';
 
 const countryNames = ['Germany', 'France', 'Poland', 'Italy', 'Brazil', 'India', 'Canada'];
+const countryTags = ['GER', 'FRA', 'POL', 'ITA', 'BRA', 'RAJ', 'CAN'];
+const countryIdeologies = [
+  'fascism',
+  'democratic',
+  'democratic',
+  'fascism',
+  'democratic',
+  'neutrality',
+  'democratic',
+];
 const countryAdjectives = [
   'German',
   'French',
@@ -602,6 +612,8 @@ function generatedRows(
   return Array.from({ length: count }, (_unused, index) => {
     const countryIndex = (countryOffset + index) % countryNames.length;
     const name = countryNames[countryIndex]!;
+    const tag = countryTags[countryIndex]!;
+    const ideology = countryIdeologies[countryIndex]!;
     const value = generatedNumber(options, random);
     return {
       index: index + 1,
@@ -610,6 +622,12 @@ function generatedRows(
       name,
       GetName: name,
       GetAdjective: countryAdjectives[countryIndex]!,
+      GetTag: tag,
+      tag,
+      countryTag: tag,
+      ideology,
+      countryIdeology: ideology,
+      countryScope: true,
       value,
       amount: value,
       percentage: Math.max(0, Math.min(100, value)),
@@ -698,6 +716,8 @@ export function generateGuiPreviewScenarios(
     const visibility = generatedVisibility(graph, scripted, options, random, base.visibility);
     const elementStates = { ...base.elementStates };
     const scopedCountries = new Map<string, string>();
+    const generatedCountryIndex = random.integer(0, countryNames.length - 1);
+    const generatedCountryTag = countryTags[generatedCountryIndex]!;
     for (const key of tokens.numeric)
       setIfMissing(
         values,
@@ -758,6 +778,10 @@ export function generateGuiPreviewScenarios(
       for (const [key, template] of scriptedTextTemplates)
         values[key] = materializeDynamicText(template, values);
     for (const key of imageTokens) {
+      if (/(?:^|\.)GetFlag$/u.test(key)) {
+        setIfMissing(values, key, generatedCountryTag);
+        continue;
+      }
       const sprite = scriptedLocalisationValue(graph, key, base.language, random, 'image', values);
       if (sprite !== undefined) setIfMissing(values, key, sprite);
     }
@@ -778,6 +802,18 @@ export function generateGuiPreviewScenarios(
       id: `${base.id}-${options.idPrefix}-${scenarioIndex + 1}`,
       description: `Generated source-aware scenario ${scenarioIndex + 1} (seed ${sourceSeed})`,
       values,
+      country: [...imageTokens].some((key) => /(?:^|\.)GetFlag$/u.test(key))
+        ? {
+            GetName: countryNames[generatedCountryIndex]!,
+            GetAdjective: countryAdjectives[generatedCountryIndex]!,
+            GetTag: generatedCountryTag,
+            tag: generatedCountryTag,
+            countryTag: generatedCountryTag,
+            ideology: countryIdeologies[generatedCountryIndex]!,
+            countryIdeology: countryIdeologies[generatedCountryIndex]!,
+            ...base.country,
+          }
+        : base.country,
       lists,
       visibility,
       elementStates,

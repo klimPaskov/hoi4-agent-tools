@@ -31,13 +31,13 @@ Rewrite once, then inspect and render the result.
 
 Inspection checks missing assets and localisation, invalid sizes, overlap, clipping, overflow, button-label centering, content crossing a background boundary, conflicting click regions, invisible blockers, broken parents or contexts, list-row cuts, state conflicts, trigger/effect gaps, and resolution drift. `hoi4.gui_render` returns a scripted-scenario gallery and JSON delta report alongside the generic state and resolution galleries.
 
-The renderer resolves sprites and fonts through the complete mod, dependency, and installed-game load order. Mod windows therefore render ordinary vanilla sprites, tiled vanilla panels, progress bars, masked shields, button frames, and localisation icons such as `£command_power` without copying game assets into the mod. Case differences in GFX and font identifiers do not prevent a valid asset from resolving.
+The renderer resolves sprites and fonts through the complete mod, dependency, and installed-game load order. Mod windows therefore render ordinary vanilla sprites, tiled vanilla panels, progress bars, masked shields, button frames, country flags, and localisation icons such as `£command_power` without copying game assets into the mod. Case differences in GFX and font identifiers do not prevent a valid asset from resolving.
 
 Bitmap text uses the language-appropriate HOI4 font definition and its real glyph atlas. Header, serif, compact, typewriter, black, inverted, and other declared faces keep their own glyph shapes, native metrics, face colour, border colour, language override, and font-specific `textcolors` palette. The renderer reads BMFont channel roles, separates face and outline coverage, and recognizes both vanilla black-on-white masks and conventional white-on-transparent custom masks. HOI4 localisation colour runs such as `§Y` and `§R` therefore colour the glyph face while retaining its sharp antialiasing and declared border instead of flattening the glyph into a blurred monochrome mask or switching to the tool font. The default language uses the base font rather than an unrelated language override, and the renderer recognizes installed-game atlases whose filename omits a page suffix declared by the matching `.fnt` file.
 
 Layout follows Clausewitz orientation and element-origin anchors, including `CENTER_LEFT`, `CENTER_RIGHT`, `CENTER_UP`, `CENTER_DOWN`, `origo`, `centerposition`, inherited container coordinate origins, local scale, and both `%` and `%%` relative dimensions. Text boxes use native font metrics together with `maxWidth`, `maxHeight`, alignment, wrapping, and `fixedsize` clipping. Cornered tile sprites use fixed nine-slice borders and optional center tiling; progress bars composite their filled and background textures; masked shields composite their background and mask textures.
 
-Scripted-GUI composition follows `parent_scripted_gui` chains even when the linked child window is a top-level sibling in the `.gui` file. Literal `always = yes` and `always = no` visibility and click-enabled blocks are applied automatically. A scenario's `values` object supplies concrete runtime values in one place: variable names resolve numeric text, scripted-localisation names resolve dynamic labels, a progress-bar element name sets its fill value, and element keys ending in `.image`, `.frame`, `.x`, `.y`, `.visible`, or `.enabled` update that visual property. Scripted-GUI property expressions such as `image = "[GetMeterSprite]"` or `x = meter_fill_width` consume matching scenario values automatically. Dynamic lists instantiate their declared `entry_container` or `country_scope_entry_container`; each scenario row can select the country template with `countryScope`, choose an explicit `entryContainer`, and provide row-scoped text, image, frame, position, visibility, and enabled values.
+Scripted-GUI composition follows `parent_scripted_gui` chains even when the linked child window is a top-level sibling in the `.gui` file. Literal `always = yes` and `always = no` visibility and click-enabled blocks are applied automatically. A scenario's `values` object supplies concrete runtime values in one place: variable names resolve numeric text, scripted-localisation names resolve dynamic labels, a progress-bar element name sets its fill value, and element keys ending in `.image`, `.frame`, `.x`, `.y`, `.visible`, or `.enabled` update that visual property. Scripted-GUI property expressions such as `image = "[GetMeterSprite]"` or `x = meter_fill_width` consume matching scenario values automatically. Dynamic text is parsed after scenario and scripted-localisation substitution, so a runtime string containing `£command_power` or `£[GetResourceIcon]` renders the resolved inline HOI4 text icon instead of literal marker text. Dynamic lists instantiate their declared `entry_container` or `country_scope_entry_container`; each scenario row can select the country template with `countryScope`, choose an explicit `entryContainer`, provide `countryTag` and `ideology` for `GetFlag`, and supply row-scoped text, image, frame, position, visibility, and enabled values. Masked country sprites use the actual mask and overlay dimensions, so custom flag sizes are discovered from GFX assets rather than assumed by the renderer.
 
 `hoi4.gui_inspect` and `hoi4.gui_render` generate a plausible seeded runtime scenario by default. The generator follows the complete `parent_scripted_gui` surface, discovers numeric and text tokens in GUI localisation and scripted-GUI properties, chooses real scripted-localisation text and sprite candidates, applies simple source thresholds, fills meters within their declared ranges, populates dynamic lists with coherent rows, selects one overlapping tab pane, keeps active and idle controls mutually exclusive, and leaves values explicitly supplied by the caller unchanged. Normal controls and animation frames remain stable unless variation is explicitly requested. Every explicit `relatedScenarios` entry is rendered beside the generated view.
 
@@ -66,11 +66,22 @@ Preview scenarios can include exact layout expectations:
   "values": {
     "threat": 73,
     "GetThreatLabel": "High",
+    "GetCostLine": "Cost £command_power 20",
     "threat_meter": 73,
     "confirm_button.enabled": true
   },
   "flags": { "panel_open": true },
-  "lists": { "target_list": [{ "id": 1, "label": "First target" }] },
+  "lists": {
+    "target_list": [
+      {
+        "id": 1,
+        "label": "France",
+        "countryScope": true,
+        "countryTag": "FRA",
+        "ideology": "democratic"
+      }
+    ]
+  },
   "visibility": { "target_list": true, "confirm_button": true },
   "expectations": {
     "visible": ["target_list", "confirm_button"],

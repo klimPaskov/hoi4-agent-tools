@@ -82,13 +82,6 @@ async function waitForMessage(
   });
 }
 
-function listedToolNames(message: Record<string, unknown>): string[] {
-  const result = message.result as { tools?: Array<{ name?: unknown }> } | undefined;
-  return (result?.tools ?? [])
-    .map(({ name }) => name)
-    .filter((name): name is string => typeof name === 'string');
-}
-
 async function stop(child: ChildProcessWithoutNullStreams): Promise<void> {
   child.stdin.end();
   await new Promise<void>((resolve) => {
@@ -242,8 +235,6 @@ describe('local stdio transport', () => {
     );
     const listed = await waitForMessage(child, 2, stdoutLines);
     expect(listed).toMatchObject({ jsonrpc: '2.0', result: { tools: expect.any(Array) } });
-    expect(listedToolNames(listed)).not.toContain('chaosx.focus_country_assets');
-    expect(listedToolNames(listed)).not.toContain('chaosx.visual_revision');
     child.stdin.write(
       `${JSON.stringify({
         jsonrpc: '2.0',
@@ -262,39 +253,6 @@ describe('local stdio transport', () => {
     expect(stderr).not.toContain('"jsonrpc"');
     await stop(child);
   }, 20_000);
-
-  it('exposes private ChaosX tools only when the process flag is enabled', async () => {
-    const config = await overflowConfig('hoi4-agent-stdio-chaosx-');
-    const child = launch(config, { HOI4_AGENT_TOOLS_CHAOSX: '1' });
-    let stderr = '';
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
-    const stdoutLines: string[] = [];
-    child.stdin.write(
-      `${JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-11-25',
-          capabilities: {},
-          clientInfo: { name: 'chaosx-stdio-test', version: '1.0.0' },
-        },
-      })}\n`,
-    );
-    await waitForMessage(child, 1, stdoutLines);
-    child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
-    );
-    child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
-    );
-
-    const tools = listedToolNames(await waitForMessage(child, 2, stdoutLines));
-    expect(tools).toContain('chaosx.focus_country_assets');
-    expect(tools).toContain('chaosx.visual_revision');
-    await stop(child);
-    expect(stderr).not.toContain('"event":"startup_failed"');
-  }, 30_000);
 
   it('writes startup failures only to stderr', async () => {
     const child = launch(path.join(tmpdir(), `missing-${Date.now()}.json`));

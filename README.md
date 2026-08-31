@@ -1,17 +1,45 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains, technology systems, AI weights, and MTTH timing and to inspect, create, or clean up focus trees, scripted GUIs, and maps. Start it in a mod folder and it works there immediately, with offline renders for review.
+HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains, technology systems, AI weights, and MTTH timing and to inspect, create, or clean up focus trees, scripted GUIs, and maps. It produces source-linked structural and visual evidence that agents can use inside a larger modding workflow.
 
 ## What it does
 
 - Focus trees: inspect structure and references, render layouts, create trees, and reorganize existing branches.
-- Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render value-driven variants, states, resolutions, hierarchy, and click regions; diagnose alignment, visibility, clipping, panel containment, and button-label centering; create or repair interface source.
+- Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render value-driven variants, dynamic country flags, inline text icons, states, resolutions, hierarchy, and click regions; diagnose alignment, visibility, clipping, panel containment, and button-label centering; create or repair interface source.
 - Maps: navigate the complete rendered map by ID or localised name; inspect provinces, states, regions, adjacency, supply, railways, and positions; create states and provinces; change IDs; and repair connected map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
 - AI and MTTH: evaluate weighted choices and timing across explicit scenarios, bind special scope chains, enumerate dynamic target pools, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
 
-## Setup
+## Real results
+
+The GUI renderer resolves the mod and installed-game sources, fonts, localisation colours, sprites, scripted visibility, dynamic values, lists, controls, and panel composition. These pairs show the in-game surface beside the MCP result.
+
+| Communist Insurgency in game                                                        | Communist Insurgency from MCP                                                                |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![Communist Insurgency in game](docs/images/readme/communist-insurgency-ingame.png) | ![Communist Insurgency rendered by the MCP](docs/images/readme/communist-insurgency-mcp.png) |
+
+| Chaos Meter in game                                               | Chaos Meter from MCP                                                       |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| ![Chaos Meter in game](docs/images/readme/chaos-meter-ingame.png) | ![Chaos Meter rendered by the MCP](docs/images/readme/chaos-meter-mcp.png) |
+
+The same scenario-aware renderer can select mutually exclusive settings panes and populate plausible runtime values.
+
+| Trigger Events settings                                                                    | Advanced settings                                                                      |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| ![Trigger Events settings rendered by the MCP](docs/images/readme/settings-events-mcp.png) | ![Advanced settings rendered by the MCP](docs/images/readme/settings-advanced-mcp.png) |
+
+The other workbenches return complete source-linked layouts and catalogs rather than prose-only summaries.
+
+| Focus tree                                                                     | Technology tree                                                                    |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| ![Large focus tree rendered by the MCP](docs/images/readme/focus-tree-mcp.png) | ![Technology tree rendered by the MCP](docs/images/readme/technology-tree-mcp.png) |
+
+| Map                                                             | Event chain                                                                | Probability ranking                                                                |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| ![Full map rendered by the MCP](docs/images/readme/map-mcp.png) | ![Event chain rendered by the MCP](docs/images/readme/event-chain-mcp.png) | ![Probability ranking rendered by the MCP](docs/images/readme/probability-mcp.png) |
+
+## Use from a coding agent
 
 Requires Node.js 22.19 or later in the Node 22 line, or Node.js 24.
 
@@ -19,15 +47,12 @@ Requires Node.js 22.19 or later in the Node 22 line, or Node.js 24.
 npm install --global hoi4-agent-tools@latest
 ```
 
-Start the MCP with its working directory set to the mod you are editing. No config or per-mod registration is required: the server finds that mod automatically. Run `hoi4-agent-tools-setup --init` only when you want persistent discovery for several mod roots, a custom game path, or a remote deployment; see [Setup](docs/setup.md).
-
-## Connect your agent
-
-```bash
-hoi4-agent-tools-setup --print-client-config
+```toml
+[mcp_servers.hoi4_agent_tools]
+command = "hoi4-agent-tools.cmd"
 ```
 
-Paste the printed Codex or generic global-install entry into your MCP client, then restart it. The utility prints the correct command for the current operating system.
+On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repositories can include these steps in their agent template so the coding agent installs and registers the server itself; manual installation is not required in that workflow. Once connected, the server follows the active mod supplied by the client and the agent can call its HOI4 tools directly.
 
 ## Tools
 

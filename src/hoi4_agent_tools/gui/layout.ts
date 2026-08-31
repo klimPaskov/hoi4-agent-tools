@@ -807,6 +807,7 @@ interface LayoutContext {
   elementsById: Map<string, GuiElementDefinition>;
   elementsByName: Map<string, GuiElementDefinition>;
   dynamicListsByName: Map<string, ScriptedGuiDynamicListDefinition>;
+  countryFlagProperties: Map<string, GuiPropertyValue>;
   constantElementEnabled: Readonly<Record<string, boolean>>;
   spritesByName: Map<string, GuiSourceGraph['sprites'][number]>;
   localisation: Map<string, string>;
@@ -814,6 +815,51 @@ interface LayoutContext {
   instancesById: Map<string, GuiSceneElement>;
   work: GuiSceneWorkBudget;
   baseScale: number;
+}
+
+function dynamicCountryFlag(
+  elementName: string,
+  expression: GuiPropertyValue | undefined,
+  scenario: GuiPreviewScenario,
+  rowValues?: Readonly<Record<string, string | number | boolean>>,
+): { tag: string; ideology?: string } | undefined {
+  if (typeof expression !== 'string') return undefined;
+  const match = /^\[\?([^\]|]+)(?:\|[^\]]+)?\]$|^\[([^\]]+)\]$/u.exec(expression);
+  const token = match?.[1] ?? match?.[2];
+  const shortToken = token?.slice(token.lastIndexOf('.') + 1);
+  const tagCandidates = [
+    rowValues?.[`${elementName}.countryTag`],
+    rowValues?.countryTag,
+    rowValues?.GetTag,
+    rowValues?.tag,
+    scenario.values[`${elementName}.countryTag`],
+    scenario.values[`${elementName}.tag`],
+    token === undefined ? undefined : scenario.values[token],
+    shortToken === undefined ? undefined : scenario.values[shortToken],
+    scenario.scriptedGui[`${elementName}.countryTag`],
+    scenario.country?.countryTag,
+    scenario.country?.GetTag,
+    scenario.country?.tag,
+  ];
+  const rawTag = tagCandidates.find(
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && /^[A-Za-z0-9_]{2,64}$/u.test(candidate),
+  );
+  if (rawTag === undefined) return undefined;
+  const ideologyCandidates = [
+    rowValues?.[`${elementName}.ideology`],
+    rowValues?.ideology,
+    rowValues?.countryIdeology,
+    scenario.values[`${elementName}.ideology`],
+    scenario.values[`${elementName}.countryIdeology`],
+    scenario.country?.ideology,
+    scenario.country?.countryIdeology,
+  ];
+  const ideology = ideologyCandidates.find(
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && /^[A-Za-z0-9_]{2,64}$/u.test(candidate),
+  );
+  return { tag: rawTag, ...(ideology === undefined ? {} : { ideology }) };
 }
 
 class GuiSceneWorkBudget {
@@ -952,6 +998,15 @@ async function layoutElement(
       parentRect.height,
       scale,
     ) ?? 0;
+  const scriptedVisible =
+    rowValues?.[`${definition.name}.visible`] ??
+    scenario.values[`${definition.name}.visible`] ??
+    scenario.scriptedGui[`${definition.name}.visible`];
+  const explicitlyVisible =
+    scenario.visibility[definition.name] ??
+    scenario.visibility[definition.id] ??
+    (typeof scriptedVisible === 'boolean' ? scriptedVisible : undefined);
+  const resolveVisibleAppearance = inheritedVisible && explicitlyVisible !== false;
   const background = objectProperty(property(definition.attributes, 'background'));
   const scriptedImage =
     rowValues?.[`${definition.name}.image`] ??
@@ -973,7 +1028,48 @@ async function layoutElement(
   let sprite: GuiSceneElement['sprite'];
   let secondarySprite: GuiSceneElement['secondarySprite'];
   let spriteRenderMode: GuiSceneElement['spriteRenderMode'];
-  if (spriteName !== undefined && spriteDefinition === undefined) {
+  const countryFlag = dynamicCountryFlag(
+    definition.name,
+    context.countryFlagProperties.get(definition.name),
+    scenario,
+    rowValues,
+  );
+  if (countryFlag !== undefined && resolveVisibleAppearance) {
+    sprite = await catalog.loadCountryFlag(
+      countryFlag.tag,
+      spriteDefinition,
+      countryFlag.ideology,
+      spriteName,
+    );
+    spriteRenderMode = 'stretch';
+    if (sprite.supported) {
+      if (width === 0) width = sprite.width * scale;
+      if (height === 0) height = sprite.height * scale;
+      addFidelity(
+        fidelity,
+        'modelled',
+        'dynamic_country_flag',
+        `${definition.name} resolved the ${countryFlag.tag} flag from scenario country context.`,
+        definition,
+      );
+    } else {
+      addFidelity(
+        fidelity,
+        'missing',
+        'dynamic_country_flag',
+        sprite.reason ?? `Country flag ${countryFlag.tag} could not be rendered.`,
+        definition,
+      );
+      diagnostics.push(
+        diagnostic(
+          'GUI_COUNTRY_FLAG_MISSING',
+          'warning',
+          sprite.reason ?? `Country flag ${countryFlag.tag} could not be rendered.`,
+          definition,
+        ),
+      );
+    }
+  } else if (spriteName !== undefined && spriteDefinition === undefined) {
     const partialInventory = context.graph.edges.some(
       (edge) =>
         edge.kind === 'uses_sprite' &&
@@ -998,7 +1094,7 @@ async function layoutElement(
         definition,
       ),
     );
-  } else if (spriteDefinition !== undefined) {
+  } else if (spriteDefinition !== undefined && resolveVisibleAppearance) {
     const partialAppearance: string[] = [];
     const spriteType = spriteDefinition.spriteType.toLowerCase();
     spriteRenderMode =
@@ -1138,7 +1234,7 @@ async function layoutElement(
     rawText !== undefined &&
     (rawButtonText !== undefined || definition.elementType.toLowerCase().includes('button'));
   let text: GuiTextLayout | undefined;
-  if (rawText !== undefined) {
+  if (rawText !== undefined && resolveVisibleAppearance) {
     const resolved = resolveTokenText(rawText, scenario, context.localisation, rowValues);
     let displayText = resolved.text;
     const state = scenario.elementStates[definition.name] ?? scenario.state;
@@ -1389,14 +1485,6 @@ async function layoutElement(
   const clipped =
     clipRect !== undefined &&
     (availableClip === undefined || !equalRect(unclippedRect, availableClip));
-  const scriptedVisible =
-    rowValues?.[`${definition.name}.visible`] ??
-    scenario.values[`${definition.name}.visible`] ??
-    scenario.scriptedGui[`${definition.name}.visible`];
-  const explicitlyVisible =
-    scenario.visibility[definition.name] ??
-    scenario.visibility[definition.id] ??
-    (typeof scriptedVisible === 'boolean' ? scriptedVisible : undefined);
   const visible =
     inheritedVisible &&
     (explicitlyVisible ?? (availableClip !== undefined || inheritedClip === undefined));
@@ -1792,6 +1880,7 @@ export async function buildGuiScene(
   const constantElementEnabled: Record<string, boolean> = {};
   const resolvedScriptedProperties: Record<string, string | number | boolean> = {};
   const dynamicListsByName = new Map<string, ScriptedGuiDynamicListDefinition>();
+  const countryFlagProperties = new Map<string, GuiPropertyValue>();
   for (const scripted of graph.scriptedGuis.filter(({ name }) =>
     relevantScriptedGuiNames.has(name),
   )) {
@@ -1801,6 +1890,13 @@ export async function buildGuiScene(
       for (const [attribute, expression] of Object.entries(propertyDefinition.attributes)) {
         const suffix = attribute.toLowerCase();
         if (!['image', 'frame', 'x', 'y', 'visible', 'enabled'].includes(suffix)) continue;
+        const countryFlagExpression =
+          suffix === 'image' &&
+          typeof expression === 'string' &&
+          /(?:^|\.)GetFlag\]$/u.test(expression);
+        if (countryFlagExpression)
+          countryFlagProperties.set(propertyDefinition.elementName, expression);
+        if (countryFlagExpression) continue;
         const resolved = scenarioExpressionValue(expression, scenario.values);
         if (resolved === undefined) continue;
         const key = `${propertyDefinition.elementName}.${suffix}`;
@@ -1885,6 +1981,7 @@ export async function buildGuiScene(
     elementsById,
     elementsByName,
     dynamicListsByName,
+    countryFlagProperties,
     constantElementEnabled,
     spritesByName: new Map(graph.sprites.map((sprite) => [sprite.name.toLowerCase(), sprite])),
     localisation,

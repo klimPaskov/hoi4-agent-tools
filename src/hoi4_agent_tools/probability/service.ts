@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { canonicalJson, compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
-import { probabilityDomainScanPatterns } from '../core/domain-scan-patterns.js';
+import {
+  probabilityDomainScanPatterns,
+  probabilitySharedDefinitionPatterns,
+} from '../core/domain-scan-patterns.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import type { ArtifactLink } from '../core/result.js';
@@ -913,16 +916,24 @@ export class ProbabilityAnalyzer {
   private async scan(
     context: ProbabilityServiceContext,
     sourcePaths: readonly (string | undefined)[] = [],
+    emptyScope: 'domain' | 'shared' | 'none' = 'domain',
   ): Promise<ScanSnapshot> {
     if (context.refresh === true) this.engine.invalidate(context.workspaceId);
     const workspace = this.engine.resolver.get(context.workspaceId, context.principal);
+    const selectedSourcePaths = sourcePaths.filter(
+      (sourcePath): sourcePath is string => sourcePath !== undefined,
+    );
     return this.engine.scan(
       context.workspaceId,
       {
-        patterns: probabilityDomainScanPatterns(
-          workspace,
-          sourcePaths.filter((sourcePath): sourcePath is string => sourcePath !== undefined),
-        ),
+        patterns:
+          selectedSourcePaths.length > 0
+            ? probabilityDomainScanPatterns(workspace, selectedSourcePaths)
+            : emptyScope === 'domain'
+              ? probabilityDomainScanPatterns(workspace)
+              : emptyScope === 'shared'
+                ? probabilitySharedDefinitionPatterns()
+                : [],
       },
       context.principal,
       context.signal,
@@ -1018,6 +1029,16 @@ export class ProbabilityAnalyzer {
     return {
       workspaceId: context.workspaceId,
       workspaceIdentity: workspace.workspaceIdentity,
+      ...(typeof extra.sourceScope === 'string'
+        ? {
+            sourceScope: extra.sourceScope as NonNullable<
+              ProbabilityAnalysisResult['metadata']['sourceScope']
+            >,
+          }
+        : {}),
+      ...(Array.isArray(extra.sourcePaths) && extra.sourcePaths.length > 0
+        ? { sourcePaths: extra.sourcePaths as string[] }
+        : {}),
       sourceRevision: snapshot.revision,
       sourceHash: surface.sourceHash,
       scenarioHash,
@@ -1210,7 +1231,11 @@ export class ProbabilityAnalyzer {
         'PROBABILITY_ADAPTER_MISMATCH',
         'customPoolManifest inspection requires adapter custom_weighted_pool',
       );
-    const snapshot = await this.scan(context, [source?.path]);
+    const snapshot = await this.scan(
+      context,
+      [source?.path],
+      source === undefined ? 'none' : source.inlineClausewitz === undefined ? 'domain' : 'shared',
+    );
     if (customPoolManifest !== undefined) {
       const surface = customSurface(customPoolManifest, snapshot.revision);
       const gameVersionVerification = await this.verifyGameVersion(context, 'custom_weighted_pool');
@@ -1484,7 +1509,11 @@ export class ProbabilityAnalyzer {
         'custom_weighted_pool requires customPoolManifest',
       );
     const gameVersionVerification = await this.verifyGameVersion(request, request.adapter);
-    const snapshot = await this.scan(request, [request.source?.path]);
+    const snapshot = await this.scan(
+      request,
+      [request.source?.path],
+      usingManifest ? 'none' : request.source?.inlineClausewitz === undefined ? 'domain' : 'shared',
+    );
     const surface = usingManifest
       ? customSurface(request.customPoolManifest!, snapshot.revision)
       : discoverWeightedSurface(
@@ -1505,6 +1534,15 @@ export class ProbabilityAnalyzer {
       gameVersionVerification,
       {
         operation,
+        sourceScope:
+          request.source?.path !== undefined
+            ? 'file'
+            : request.source?.inlineClausewitz !== undefined
+              ? 'shared'
+              : request.source !== undefined
+                ? 'domain'
+                : 'none',
+        sourcePaths: request.source?.path === undefined ? [] : [request.source.path],
         horizonDays: request.horizonDays,
         requestedMetrics: request.metrics,
         acceptanceBands: request.acceptanceBands,
@@ -1704,7 +1742,7 @@ export class ProbabilityAnalyzer {
 
   public async sequence(request: ProbabilitySequenceRequest): Promise<ProbabilityAnalysisResult> {
     request.signal?.throwIfAborted();
-    const snapshot = await this.scan(request);
+    const snapshot = await this.scan(request, [], 'none');
     const surface = customSurface(request.customPoolManifest, snapshot.revision);
     const gameVersionVerification = await this.verifyGameVersion(request, 'custom_weighted_pool');
     const metadata = this.metadata(
@@ -1938,8 +1976,15 @@ export class ProbabilityAnalyzer {
       return this.store(stale, ['json'], false, request.signal, request.principal);
     }
     await this.verifyGameVersion(request, result.adapter.id);
-    const snapshot = await this.scan(request);
-    if (snapshot.revision !== result.metadata.sourceRevision) {
+    const snapshot =
+      result.metadata.sourceScope === undefined || result.metadata.sourceScope === 'none'
+        ? undefined
+        : await this.scan(
+            request,
+            result.metadata.sourcePaths ?? [],
+            result.metadata.sourceScope === 'shared' ? 'shared' : 'domain',
+          );
+    if (snapshot !== undefined && snapshot.revision !== result.metadata.sourceRevision) {
       const stale: ProbabilityAnalysisResult = {
         ...result,
         status: 'stale',

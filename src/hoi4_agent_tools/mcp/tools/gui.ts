@@ -546,7 +546,7 @@ export function registerGuiTools(
     {
       title: 'Render scripted GUI artifacts',
       description:
-        'Render GUI states, resolutions, generated or explicit scenarios, hierarchy, comparisons, and diagnostics.',
+        'Render GUI states, resolutions, generated or explicit scenarios, dynamic flags and text icons, hierarchy, comparisons, and diagnostics.',
       inputSchema: renderInput,
       outputSchema: guiRenderOutputSchema,
       annotations: artifactProducing,

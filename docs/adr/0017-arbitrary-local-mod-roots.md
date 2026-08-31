@@ -2,7 +2,7 @@
 
 ## Decision
 
-Local startup must recognize ordinary HOI4 mod roots without requiring a Chaos Redux layout or a descriptor file in every case. Automatic discovery accepts a `descriptor.mod`, a recognized HOI4 `common` content directory, or populated standard mod content directories while walking upward from the MCP working directory. The resolver stops at recognizable installed-game markers so a game installation is never selected as a writable mod.
+Local startup must recognize ordinary HOI4 mod roots without requiring a repository-specific layout or a descriptor file in every case. Automatic discovery accepts a `descriptor.mod`, a recognized HOI4 `common` content directory, or populated standard mod content directories while walking upward from the MCP working directory. The resolver stops at recognizable installed-game markers so a game installation is never selected as a writable mod.
 
 Explicit configuration remains available for empty roots, nonstandard source layouts, multiple mods, dependency load order, and remote deployments. Domain-specific source roots continue to come from the shared workspace configuration rather than from mod names or repository-specific conventions.
 

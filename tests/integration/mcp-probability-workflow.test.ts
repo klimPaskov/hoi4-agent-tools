@@ -604,10 +604,10 @@ describe('probability MCP workflow', () => {
       code: 'PROBABILITY_SCENARIO_STALE',
       data: { operation: 'render', analysisStatus: 'stale', visualResources: 0 },
     });
-    await mkdir(path.join(mod, 'events'), { recursive: true });
+    await mkdir(path.join(mod, 'common', 'scripted_triggers'), { recursive: true });
     await writeFile(
-      path.join(mod, 'events', 'changed.txt'),
-      'country_event = { id = changed.1 }\n',
+      path.join(mod, 'common', 'scripted_triggers', 'changed.txt'),
+      'changed_probability_trigger = { always = yes }\n',
     );
     const rendered = await client.callTool({
       name: 'hoi4.probability_render',

@@ -223,6 +223,9 @@ export class CoreEngine {
     })}`;
     let flight = this.#scanFlights.get(requestKey);
     if (flight === undefined) {
+      for (const key of this.#scanCache.keys())
+        if (key.startsWith(`${workspaceId}:`) && !key.startsWith(`${requestKey}:`))
+          this.#scanCache.delete(key);
       const controller = new AbortController();
       const promise = (async (): Promise<ScanSnapshot> => {
         return this.withScanAdmission(controller.signal, async () => {

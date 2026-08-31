@@ -41,6 +41,7 @@ beforeAll(async () => {
       `\tSpriteType = { name = GFX_vanilla_focus_shared texturefile = "${texturePath}" }`,
       '\tSpriteType = { name = GFX_vanilla_gui_shared texturefile = "gfx//interface//layered//vanilla_shared.png" }',
       `\tSpriteType = { name = GFX_command_power texturefile = "${texturePath}" }`,
+      `\tSpriteType = { name = GFX_dynamic_resource texturefile = "${texturePath}" }`,
       '}',
       '',
     ].join('\n'),
@@ -91,6 +92,12 @@ beforeAll(async () => {
       '\t\t\tposition = { x = 10 y = 92 }',
       '\t\t\tsize = { width = 140 height = 20 }',
       '\t\t\ttext = LAYERED_COST',
+      '\t\t}',
+      '\t\tinstantTextBoxType = {',
+      '\t\t\tname = dynamic_cost',
+      '\t\t\tposition = { x = 10 y = 70 }',
+      '\t\t\tsize = { width = 140 height = 20 }',
+      '\t\t\ttext = "[GetDynamicCost]"',
       '\t\t}',
       '\t}',
       '}',
@@ -153,7 +160,10 @@ describe('layered icon rendering', () => {
     const rendered = await studio.renderAndStore({
       workspaceId,
       windowName: 'layered_window',
-      scenario: defaultPreviewScenario('layered-window'),
+      scenario: {
+        ...defaultPreviewScenario('layered-window'),
+        values: { GetDynamicCost: 'Dynamic £dynamic_resource 7' },
+      },
       states: ['normal'],
       resolutions: [{ width: 1280, height: 720, uiScale: 1 }],
     });
@@ -178,6 +188,15 @@ describe('layered icon rendering', () => {
       },
     });
     expect(rendered.render.images[0]?.svg).toContain('data-inline-icon="command_power"');
+    const dynamicInlineIcon = rendered.render.scene.elements.find(
+      ({ name }) => name === 'dynamic_cost',
+    )?.text?.inlineIcons?.[0];
+    expect(dynamicInlineIcon).toMatchObject({
+      token: 'dynamic_resource',
+      spriteName: 'GFX_dynamic_resource',
+      sprite: { supported: true },
+    });
+    expect(rendered.render.images[0]?.svg).toContain('data-inline-icon="dynamic_resource"');
     expect(rendered.render.scene.diagnostics.map(({ code }) => code)).not.toContain(
       'GUI_TEXT_ICON_MISSING',
     );

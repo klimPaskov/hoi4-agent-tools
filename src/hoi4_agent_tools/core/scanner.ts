@@ -1,7 +1,12 @@
 import { open, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import { compareCodeUnits, sha256Bytes } from './canonical.js';
+import { compareCodeUnits, hashCanonical, sha256Bytes } from './canonical.js';
+import {
+  DEFAULT_SCAN_MAX_BYTES,
+  DEFAULT_SCAN_MAX_FILE_BYTES,
+  DEFAULT_SCAN_MAX_FILES,
+} from './configuration.js';
 import { ServiceError } from './result.js';
 import type { ResolvedRoot, ResolvedWorkspace, RootKind } from './workspace.js';
 
@@ -68,18 +73,16 @@ function hiddenByReplacePath(
 
 export class WorkspaceScanner {
   readonly #sourceCache = new Map<string, CachedSourceBytes>();
+  readonly #gameScanCache = new Map<string, ScannedFile[]>();
   #sourceCacheBytes = 0;
   readonly #sourceCacheMaxBytes: number;
 
   public constructor(
-    private readonly serverMaxFiles = 20_000,
-    private readonly serverMaxBytes = 134_217_728,
-    private readonly serverMaxFileBytes = 67_108_864,
+    private readonly serverMaxFiles = DEFAULT_SCAN_MAX_FILES,
+    private readonly serverMaxBytes = DEFAULT_SCAN_MAX_BYTES,
+    private readonly serverMaxFileBytes = DEFAULT_SCAN_MAX_FILE_BYTES,
   ) {
-    this.#sourceCacheMaxBytes = Math.max(
-      serverMaxFileBytes,
-      Math.min(536_870_912, serverMaxBytes * 2),
-    );
+    this.#sourceCacheMaxBytes = Math.max(serverMaxFileBytes, Math.min(134_217_728, serverMaxBytes));
   }
 
   private cacheKey(absolutePath: string): string {
@@ -98,6 +101,32 @@ export class WorkspaceScanner {
       if (oldest === undefined) break;
       this.#sourceCache.delete(oldest[0]);
       this.#sourceCacheBytes -= oldest[1].bytes.length;
+    }
+  }
+
+  private gameScanKey(
+    workspace: ResolvedWorkspace,
+    root: ResolvedRoot,
+    options: ScanOptions,
+  ): string {
+    return hashCanonical({
+      workspaceId: workspace.id,
+      root: root.path,
+      patterns: [...options.patterns].sort(compareCodeUnits),
+      ignore: [...(options.ignore ?? ['**/.hoi4-agent/**'])].sort(compareCodeUnits),
+    });
+  }
+
+  private retainGameScan(key: string, files: readonly ScannedFile[]): void {
+    this.#gameScanCache.delete(key);
+    this.#gameScanCache.set(
+      key,
+      files.map((file) => ({ ...file })),
+    );
+    while (this.#gameScanCache.size > 8) {
+      const oldest = this.#gameScanCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.#gameScanCache.delete(oldest);
     }
   }
 
@@ -133,6 +162,31 @@ export class WorkspaceScanner {
     let enumeratedFiles = 0;
     for (const root of roots) {
       options.signal?.throwIfAborted();
+      const gameScanKey =
+        root.kind === 'game' ? this.gameScanKey(workspace, root, options) : undefined;
+      const cachedGameFiles =
+        gameScanKey === undefined ? undefined : this.#gameScanCache.get(gameScanKey);
+      if (cachedGameFiles !== undefined && gameScanKey !== undefined) {
+        this.#gameScanCache.delete(gameScanKey);
+        this.#gameScanCache.set(gameScanKey, cachedGameFiles);
+        enumeratedFiles += cachedGameFiles.length;
+        if (enumeratedFiles > maxFiles)
+          throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit', {
+            files: enumeratedFiles,
+            limit: maxFiles,
+          });
+        for (const file of cachedGameFiles) {
+          totalBytes += file.size;
+          if (totalBytes > maxBytes)
+            throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit', {
+              bytes: totalBytes,
+              limit: maxBytes,
+            });
+          result.push({ ...file });
+        }
+        continue;
+      }
+      const rootFiles: ScannedFile[] = [];
       const matches = fg.stream(options.patterns, {
         cwd: root.path,
         onlyFiles: true,
@@ -145,7 +199,10 @@ export class WorkspaceScanner {
         options.signal?.throwIfAborted();
         enumeratedFiles += 1;
         if (enumeratedFiles > maxFiles) {
-          throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit');
+          throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit', {
+            files: enumeratedFiles,
+            limit: maxFiles,
+          });
         }
         const relativePath = normalizeRelative(String(match));
         if (hiddenByReplacePath(workspace, root, relativePath)) continue;
@@ -157,7 +214,13 @@ export class WorkspaceScanner {
           if (!metadata.isFile()) continue;
           const remaining = maxBytes - totalBytes;
           if (metadata.size > remaining || metadata.size > this.serverMaxFileBytes) {
-            throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit');
+            throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit', {
+              file: relativePath,
+              fileBytes: metadata.size,
+              bytes: totalBytes,
+              limit: maxBytes,
+              perFileLimit: this.serverMaxFileBytes,
+            });
           }
           const cached = this.#sourceCache.get(cacheKey);
           const retained =
@@ -184,7 +247,7 @@ export class WorkspaceScanner {
             bytes,
           });
           totalBytes += bytes.length;
-          result.push({
+          const scanned = {
             absolutePath,
             displayPath: `${rootLabel(root)}:${relativePath}`,
             relativePath,
@@ -194,11 +257,14 @@ export class WorkspaceScanner {
             modifiedMs: metadata.mtimeMs,
             sha256,
             bytes,
-          });
+          } satisfies ScannedFile;
+          result.push(scanned);
+          rootFiles.push(scanned);
         } finally {
           await handle.close();
         }
       }
+      if (gameScanKey !== undefined) this.retainGameScan(gameScanKey, rootFiles);
     }
     result.sort(
       (left, right) =>

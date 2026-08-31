@@ -35,4 +35,6 @@ npm run test:local
 
 Add `HOI4_DEPENDENCY_ROOTS` as the platform path-delimited list when the external mod has dependencies. Local tests remain read-only.
 
+The installed-game qualification also parses every shipped bitmap-font descriptor, resolves every atlas page, shapes native and enlarged glyphs, verifies deterministic raster output, and checks HOI4 localisation colours across base fonts and language overrides.
+
 See the package [Security Policy](../SECURITY.md) for private vulnerability reporting.
