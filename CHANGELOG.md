@@ -4,6 +4,10 @@
 
 No unreleased changes.
 
+## 3.0.3 - 2026-08-31
+
+- Authenticate the final read-only GitHub API provenance check with the workflow token so shared-runner anonymous rate limits cannot leave a valid public release red.
+
 ## 3.0.2 - 2026-08-31
 
 - Render enlarged HOI4 bitmap glyphs as pre-scaled atlas masks so VPS and Linux output stays crisp instead of depending on platform SVG interpolation.

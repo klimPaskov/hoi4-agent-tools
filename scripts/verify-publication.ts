@@ -155,6 +155,8 @@ async function fetchResponse(url: string, accept: string): Promise<Response> {
   };
   if (new URL(url).hostname === 'api.github.com') {
     headers['x-github-api-version'] = '2026-03-10';
+    const token = process.env.GITHUB_TOKEN;
+    if (token !== undefined && token.length > 0) headers.authorization = `Bearer ${token}`;
   }
   const response = await fetch(url, { headers });
   if (!response.ok) throw new Error(`${url} returned ${response.status}`);

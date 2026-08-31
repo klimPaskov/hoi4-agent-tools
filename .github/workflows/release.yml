@@ -815,6 +815,7 @@ jobs:
       - name: Verify exact npm, GitHub, GHCR, and MCP Registry publication
         run: npm run publication:verify
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLICATION_VERIFY_SCOPE: all
           PUBLICATION_VERIFY_ATTEMPTS: 12
           PUBLICATION_VERIFY_DELAY_MS: 5000

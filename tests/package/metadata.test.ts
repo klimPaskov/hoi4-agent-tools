@@ -719,9 +719,15 @@ describe('offline package and Registry metadata', () => {
     expect(verifier).toContain('certificateIdentity');
     expect(verifier).toContain('verifyGhcrPublication');
     expect(verifier).toContain('verifyPlatformAttestations');
+    expect(verifier).toContain('process.env.GITHUB_TOKEN');
     expect(verifier).toContain('isDeepStrictEqual(published, serverJson)');
     expect(verifier).toContain("official.status !== 'active'");
     expect(verifier).toContain('official.isLatest !== true');
+    const releaseWorkflow = await readFile(
+      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
+      'utf8',
+    );
+    expect(releaseWorkflow).toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
   });
 
   it('pins the current audited major of every automation action', async () => {
