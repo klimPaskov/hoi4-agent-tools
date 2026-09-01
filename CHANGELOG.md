@@ -4,6 +4,11 @@
 
 No unreleased changes.
 
+## 3.0.7 - 2026-09-01
+
+- Reclaim detached parser, graph, and render memory after the idle cache window so parallel coding-agent tasks do not retain large V8 heaps and trigger `Transport closed` through host memory exhaustion. Idle cleanup is coordinated across every MCP domain and never compacts during an active tool call.
+- Give packed-package build, pack, and isolated-install qualification enough time on loaded Windows runners while retaining bounded subprocess timeouts.
+
 ## 3.0.6 - 2026-09-01
 
 - Prevent long-lived coding-agent tasks from exhausting the host and closing MCP transports. Stdio disconnects now abort in-flight requests, vanilla scan caches are byte-bounded, event and technology histories are reduced, probability results are bounded, and heavy domain caches are released after a concurrent-safe idle window.

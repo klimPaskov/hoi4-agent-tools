@@ -120,7 +120,7 @@ async function stop(child: ChildProcessWithoutNullStreams): Promise<void> {
 beforeAll(async () => {
   temporaryRoot = await mkdtemp(path.join(tmpdir(), 'hoi4-package-install-'));
   fixture = await buildPackAndInstall(projectRoot, temporaryRoot);
-}, 180_000);
+}, 600_000);
 
 afterAll(async () => {
   if (temporaryRoot !== '') await rm(temporaryRoot, { recursive: true, force: true });

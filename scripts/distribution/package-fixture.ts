@@ -97,6 +97,8 @@ interface NpmPackResult {
   version: string;
 }
 
+const PACKAGE_LIFECYCLE_TIMEOUT_MS = 300_000;
+
 export interface InstalledPackageFixture {
   binEntries: Readonly<Record<keyof typeof PACKAGE_BIN_TARGETS, string>>;
   consumerRoot: string;
@@ -276,6 +278,7 @@ export async function buildPackAndInstall(
   await runCommand(buildExecutable, buildArguments, {
     cwd: absoluteProjectRoot,
     env: cleanEnvironment(),
+    timeoutMs: PACKAGE_LIFECYCLE_TIMEOUT_MS,
   });
   const [packExecutable, packArguments] = npmInvocation([
     'pack',
@@ -287,6 +290,7 @@ export async function buildPackAndInstall(
   const packed = await runCommand(packExecutable, packArguments, {
     cwd: absoluteProjectRoot,
     env: cleanEnvironment(),
+    timeoutMs: PACKAGE_LIFECYCLE_TIMEOUT_MS,
   });
   const pack = parsePackOutput(packed.stdout);
   const tarballPath = path.join(packRoot, pack.filename);
@@ -317,6 +321,7 @@ export async function buildPackAndInstall(
   await runCommand(installExecutable, installArguments, {
     cwd: consumerRoot,
     env: installEnvironment,
+    timeoutMs: PACKAGE_LIFECYCLE_TIMEOUT_MS,
   });
 
   const installedPackageRoot = await realpath(path.join(consumerRoot, 'node_modules', pack.name));
