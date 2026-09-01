@@ -421,7 +421,7 @@ local('installed vanilla bitmap fonts', () => {
       expect(codePoints.length, descriptorRelativePath).toBeGreaterThan(0);
       const sample = String.fromCodePoint(...codePoints);
       const nativeSize = catalog.resolvedFontMetrics(fontName).nativeSize!;
-      for (const scale of [1, 2]) {
+      for (const scale of [1, 2, 4]) {
         const shaped = await catalog.shapeText(fontName, sample, nativeSize * scale);
         expect(shaped.source, descriptorRelativePath).toBe('bmfont-atlas');
         expect(shaped.missingGlyphs, descriptorRelativePath).toEqual([]);

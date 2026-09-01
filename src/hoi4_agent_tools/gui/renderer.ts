@@ -115,11 +115,7 @@ function actualGlyphMarkup(
       .filter((glyph) => glyph.kind === 'bitmap')
       .filter((glyph) => bitmapLayer === 'face' || glyph.borderDataUri !== undefined)
       .map((glyph) => {
-        const nativePixelGrid =
-          Math.abs(horizontalScale - 1) < 0.000_001 &&
-          [glyph.x, glyph.y, glyph.width, glyph.height, glyphLine.baseline].every(
-            (value) => Math.abs(value - Math.round(value)) < 0.000_001,
-          );
+        const nativePixelGrid = Math.abs(horizontalScale - 1) < 0.000_001;
         const x = originX + glyph.x * horizontalScale;
         const y = baseline + glyph.y - glyphLine.baseline;
         return `<use href="#${bitmapDefinitionId(glyph.key, bitmapLayer)}" transform="translate(${finite(nativePixelGrid ? Math.round(x) : x)} ${finite(nativePixelGrid ? Math.round(y) : y)}) scale(${finite(horizontalScale)} 1)" image-rendering="optimizeSpeed" style="image-rendering:pixelated"/>`;

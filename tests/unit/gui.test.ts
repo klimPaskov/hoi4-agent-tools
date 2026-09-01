@@ -1807,10 +1807,40 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
         (_unused, index) => enlargedMask.data[index * 4 + 3],
       ),
     );
-    expect(enlargedAlphaValues).toEqual(new Set([0, 255]));
+    expect(enlargedAlphaValues.has(0)).toBe(true);
+    expect(enlargedAlphaValues.has(255)).toBe(true);
+    const transitionPixels = Array.from(
+      { length: enlargedMask.data.length / 4 },
+      (_unused, index) => enlargedMask.data[index * 4 + 3] ?? 0,
+    ).filter((alpha) => alpha > 0 && alpha < 255).length;
+    expect(transitionPixels).toBeGreaterThan(0);
+    const enlargedHeight = enlargedMask.data.length / (enlargedMask.width * 4);
+    expect(transitionPixels).toBeLessThan(enlargedMask.width * enlargedHeight * 0.125);
     const enlargedRender = await renderGuiScene(enlargedScene, ['cropped']);
     expect(enlargedRender.images[0]?.svg).toContain('style="mask-type:alpha"');
     expect(enlargedRender.images[0]?.svg).not.toContain('<feColorMatrix');
+
+    const fractionalScene = await buildGuiScene(
+      graph,
+      files,
+      'font_faces',
+      parsePreviewScenario({
+        id: 'font-faces-fractional',
+        resolution: { width: 1920, height: 1080 },
+        uiScale: 1.25,
+      }),
+    );
+    const fractionalSvg = (await renderGuiScene(fractionalScene, ['cropped'])).images[0]?.svg ?? '';
+    const bitmapPlacements = [
+      ...fractionalSvg.matchAll(
+        /<use href="#gui-font-bitmap-(?:border-)?[^"]+" transform="translate\(([^ ]+) ([^)]+)\) scale\(1 1\)"/gu,
+      ),
+    ];
+    expect(bitmapPlacements.length).toBeGreaterThan(0);
+    for (const placement of bitmapPlacements) {
+      expect(Number(placement[1])).toBe(Math.round(Number(placement[1])));
+      expect(Number(placement[2])).toBe(Math.round(Number(placement[2])));
+    }
   });
 
   it('separates a shipped-style RGB face from an alpha outline when channel declarations lie', async () => {

@@ -1146,18 +1146,67 @@ export class GuiAssetCatalog {
             }
           }
         }
-        const encodeMask = (pixels: Buffer): Promise<Buffer> => {
-          let pipeline = sharp(pixels, {
+        const normalizeCoverage = (pixels: Buffer | undefined): void => {
+          if (pixels === undefined) return;
+          let maximum = 0;
+          for (let offset = 3; offset < pixels.length; offset += 4)
+            maximum = Math.max(maximum, pixels[offset] ?? 0);
+          if (maximum <= 0 || maximum >= 255) return;
+          for (let offset = 3; offset < pixels.length; offset += 4)
+            pixels[offset] = Math.round(((pixels[offset] ?? 0) * 255) / maximum);
+        };
+        // Font coverage masks describe opaque glyph faces. Block compression in several large
+        // language atlases lowers the maximum stored sample, which otherwise makes localisation
+        // colours look grey or translucent even when the font definition is fully opaque.
+        normalizeCoverage(facePixels);
+        normalizeCoverage(borderPixels);
+        const encodeMask = async (pixels: Buffer): Promise<Buffer> => {
+          const source = sharp(pixels, {
             raw: { width: extracted.info.width, height: extracted.info.height, channels: 4 },
             limitInputPixels: RENDER_MAX_DECODED_PIXELS,
           });
           if (targetWidth !== extracted.info.width || targetHeight !== extracted.info.height) {
-            pipeline = pipeline.resize(targetWidth, targetHeight, {
-              fit: 'fill',
-              kernel: scale >= 1 ? sharp.kernel.nearest : sharp.kernel.lanczos3,
-            });
+            const resized = await source
+              .resize(targetWidth, targetHeight, {
+                fit: 'fill',
+                kernel: scale > 1 ? sharp.kernel.lanczos3 : sharp.kernel.nearest,
+              })
+              .ensureAlpha()
+              .raw()
+              .toBuffer({ resolveWithObject: true });
+            if (scale > 1) {
+              // BMFont antialiasing is authored for the descriptor's native point size. A plain
+              // enlargement makes that one-pixel edge band several pixels wide, which is why a
+              // high-DPI preview looks blurry and why differently-antialiased faces appear to
+              // change size. Reconstruct the edge at the target pixel density, then retain a
+              // one-pixel coverage transition just as the native atlas does.
+              const edgeGain = Math.max(1, scale);
+              let maximumCoverage = 0;
+              for (let offset = 3; offset < resized.data.length; offset += 4)
+                maximumCoverage = Math.max(maximumCoverage, resized.data[offset] ?? 0);
+              // Several compressed CJK atlases intentionally use a coverage range below 128.
+              // Centre the reconstruction inside the glyph's real range so a faint but valid
+              // face cannot be sharpened into complete transparency.
+              const edgeCentre = Math.min(127.5, maximumCoverage / 2);
+              for (let offset = 3; offset < resized.data.length; offset += 4) {
+                const coverage = resized.data[offset] ?? 0;
+                resized.data[offset] = Math.round(
+                  Math.max(0, Math.min(255, (coverage - edgeCentre) * edgeGain + edgeCentre)),
+                );
+              }
+            }
+            return sharp(resized.data, {
+              raw: {
+                width: resized.info.width,
+                height: resized.info.height,
+                channels: 4,
+              },
+              limitInputPixels: RENDER_MAX_DECODED_PIXELS,
+            })
+              .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+              .toBuffer();
           }
-          return pipeline
+          return source
             .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
             .toBuffer();
         };

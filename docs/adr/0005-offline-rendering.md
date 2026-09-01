@@ -7,6 +7,8 @@
 
 Focus, GUI, and map renderers create deterministic scene data, canonical SVG/HTML/JSON, and PNG rasterizations through Sharp. Render profiles include source, asset, and font hashes; resolution; UI scale; scenario/state; schema and renderer versions; and deterministic layout inputs.
 
+HOI4 bitmap fonts are composed from their declared BMFont metrics and atlas channels. Native metrics and glyph contours are preserved through layout; compressed coverage is normalized to the font definition's declared opacity. Enlarged masks reconstruct the native one-pixel antialias transition at the target density, and bitmap placements snap to the output pixel grid; enlarging an atlas must not enlarge its antialias fringe or introduce fractional compositor blur.
+
 Every raster path uses the shared fixed render budget before Sharp, Buffer, or typed-array pixel allocation. Axes are limited to 16,384 pixels; generated artifacts to 50,331,648 pixels; decoded source textures to 16,777,216 pixels; and all charged variants in one request to 67,108,864 pixel units. The ceilings are deliberately not operator-tunable: public schemas reject products known at admission time, while source-derived and codec-derived violations return deterministic `RENDER_*_BLOCKED` service blockers. GUI decoded rasters and extracted frames share the request budget and are cached once per source/frame. Focus raster icons are metadata-validated once per distinct URI but charged once per rendered occurrence; distinct icon URIs also share a 67,108,864-character encoded ceiling and a 33,554,432-byte decoded-input ceiling.
 
 ## Rationale

@@ -161,28 +161,24 @@ local('local installed-game and external-mod integration', () => {
       core.scanner,
       core.artifacts,
     );
-    const scannedGui = await studio.scan('external');
-    const candidates = scannedGui.graph.elements
-      .filter(
-        ({ parentId, elementType }) =>
-          parentId === undefined && /(?:containerWindowType|windowType)/u.test(elementType),
-      )
-      .sort(
-        (left, right) =>
-          right.childIds.length - left.childIds.length || compareCodeUnits(left.name, right.name),
-      );
-    expect(candidates.length).toBeGreaterThan(0);
-    const selectedWindow =
-      guiFidelityWindow === undefined
-        ? candidates[0]
-        : candidates.find(({ name }) => name === guiFidelityWindow);
+    const selectedWindowName =
+      guiFidelityWindow ??
+      (await studio.scan('external')).graph.elements
+        .filter(
+          ({ parentId, elementType }) =>
+            parentId === undefined && /(?:containerWindowType|windowType)/u.test(elementType),
+        )
+        .sort(
+          (left, right) =>
+            right.childIds.length - left.childIds.length || compareCodeUnits(left.name, right.name),
+        )[0]?.name;
     expect(
-      selectedWindow,
+      selectedWindowName,
       `GUI fidelity window ${guiFidelityWindow ?? '<automatic>'} was not found`,
     ).toBeDefined();
     const renderInput = {
       workspaceId: 'external',
-      windowName: selectedWindow!.name,
+      windowName: selectedWindowName!,
       scenario: defaultPreviewScenario('local-integration'),
       states: ['normal' as const],
       resolutions: [{ width: 1920, height: 1080, uiScale: 1 }],
@@ -202,26 +198,17 @@ local('local installed-game and external-mod integration', () => {
         ({ sprite }) => sprite?.supported === true && sprite.dataUri !== undefined,
       ),
     ).toBe(true);
-    const vanillaSpriteNames = new Set(
-      scannedGui.graph.sprites
-        .filter(({ sourcePath }) => sourcePath.startsWith('game:'))
-        .map(({ name }) => name.toLocaleLowerCase('en-US')),
-    );
-    const unavailableVanillaSprites = first.render.scene.elements
+    const unavailableSprites = first.render.scene.elements
       .filter(
-        ({ sprite }) =>
-          sprite !== undefined &&
-          vanillaSpriteNames.has(sprite.spriteName.toLocaleLowerCase('en-US')) &&
-          (!sprite.supported || sprite.dataUri === undefined),
+        ({ sprite }) => sprite !== undefined && (!sprite.supported || sprite.dataUri === undefined),
       )
       .map(({ name, sprite }) => ({ name, sprite: sprite?.spriteName, reason: sprite?.reason }));
-    expect(unavailableVanillaSprites).toEqual([]);
-    const unavailableVanillaSecondarySprites = first.render.scene.elements
+    expect(unavailableSprites).toEqual([]);
+    const unavailableSecondarySprites = first.render.scene.elements
       .filter(
         ({ sprite, secondarySprite }) =>
           secondarySprite !== undefined &&
           sprite !== undefined &&
-          vanillaSpriteNames.has(sprite.spriteName.toLocaleLowerCase('en-US')) &&
           (!secondarySprite.supported || secondarySprite.dataUri === undefined),
       )
       .map(({ name, sprite, secondarySprite }) => ({
@@ -229,14 +216,10 @@ local('local installed-game and external-mod integration', () => {
         sprite: sprite?.spriteName,
         reason: secondarySprite?.reason,
       }));
-    expect(unavailableVanillaSecondarySprites).toEqual([]);
-    const unavailableVanillaInlineIcons = first.render.scene.elements.flatMap(({ name, text }) =>
+    expect(unavailableSecondarySprites).toEqual([]);
+    const unavailableInlineIcons = first.render.scene.elements.flatMap(({ name, text }) =>
       (text?.inlineIcons ?? [])
-        .filter(
-          ({ spriteName, sprite }) =>
-            vanillaSpriteNames.has(spriteName.toLocaleLowerCase('en-US')) &&
-            (sprite?.supported !== true || sprite.dataUri === undefined),
-        )
+        .filter(({ sprite }) => sprite?.supported !== true || sprite.dataUri === undefined)
         .map(({ token, spriteName, sprite }) => ({
           name,
           token,
@@ -244,7 +227,7 @@ local('local installed-game and external-mod integration', () => {
           reason: sprite?.reason,
         })),
     );
-    expect(unavailableVanillaInlineIcons).toEqual([]);
+    expect(unavailableInlineIcons).toEqual([]);
     const glyphSources = first.render.scene.elements.flatMap(
       ({ text }) => text?.glyphLines.map(({ source }) => source) ?? [],
     );

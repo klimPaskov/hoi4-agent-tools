@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 3.0.4 - 2026-09-01
+
+- Reconstruct enlarged HOI4 bitmap-font antialias edges at the target pixel density and snap bitmap glyphs to the output grid so fractional and high-scale renders remain crisp without changing the declared font face or metrics.
+- Normalize opaque coverage in compressed language atlases before applying localisation colours, preventing faint glyph masks from turning coloured text grey, translucent, or empty on local and VPS renders.
+- Extend the installed-game font audit to shape every language-override descriptor at 4× in addition to its native and 2× sizes while retaining complete mixed-colour base-font renders.
+
 ## 3.0.3 - 2026-08-31
 
 - Authenticate the final read-only GitHub API provenance check with the workflow token so shared-runner anonymous rate limits cannot leave a valid public release red.
