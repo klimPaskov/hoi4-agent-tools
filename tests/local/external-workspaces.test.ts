@@ -41,6 +41,12 @@ const guiFidelityWindow = process.env.HOI4_GUI_FIDELITY_WINDOW;
 const local = gameRoot === undefined || modRoot === undefined ? describe.skip : describe;
 let runtimeRoot = '';
 
+function layoutWithoutLiveSourceRevision(serialized: string): unknown {
+  const parsed = JSON.parse(serialized) as { scene?: { sourceRevision?: unknown } };
+  if (parsed.scene !== undefined) parsed.scene.sourceRevision = '<live-source-revision>';
+  return parsed;
+}
+
 function representativeFocusPlan(
   snapshot: ScanSnapshot,
   rootKind: 'game' | 'mod',
@@ -187,7 +193,9 @@ local('local installed-game and external-mod integration', () => {
     const second = await studio.renderAndStore(renderInput);
     expect(first.render.images).toEqual(second.render.images);
     expect(first.render.hierarchySvg).toBe(second.render.hierarchySvg);
-    expect(first.render.layoutJson).toBe(second.render.layoutJson);
+    expect(layoutWithoutLiveSourceRevision(first.render.layoutJson)).toEqual(
+      layoutWithoutLiveSourceRevision(second.render.layoutJson),
+    );
     expect(first.render.scenarioJson).toBe(second.render.scenarioJson);
     expect(first.render.images).toHaveLength(5);
     expect(

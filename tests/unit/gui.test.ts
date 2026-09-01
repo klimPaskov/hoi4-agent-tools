@@ -1807,15 +1807,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
         (_unused, index) => enlargedMask.data[index * 4 + 3],
       ),
     );
-    expect(enlargedAlphaValues.has(0)).toBe(true);
-    expect(enlargedAlphaValues.has(255)).toBe(true);
-    const transitionPixels = Array.from(
-      { length: enlargedMask.data.length / 4 },
-      (_unused, index) => enlargedMask.data[index * 4 + 3] ?? 0,
-    ).filter((alpha) => alpha > 0 && alpha < 255).length;
-    expect(transitionPixels).toBeGreaterThan(0);
-    const enlargedHeight = enlargedMask.data.length / (enlargedMask.width * 4);
-    expect(transitionPixels).toBeLessThan(enlargedMask.width * enlargedHeight * 0.125);
+    expect(enlargedAlphaValues).toEqual(new Set([0, 255]));
     const enlargedRender = await renderGuiScene(enlargedScene, ['cropped']);
     expect(enlargedRender.images[0]?.svg).toContain('style="mask-type:alpha"');
     expect(enlargedRender.images[0]?.svg).not.toContain('<feColorMatrix');

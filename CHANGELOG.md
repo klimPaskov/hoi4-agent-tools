@@ -4,6 +4,10 @@
 
 No unreleased changes.
 
+## 3.0.5 - 2026-09-01
+
+- Remove enlarged-font edge reconstruction and per-glyph coverage normalization. HOI4 bitmap glyphs now use their decoded atlas samples with nearest-neighbour scaling and integer output placement, without synthetic sharpening, thresholding, gain adjustment, or invented edge pixels.
+
 ## 3.0.4 - 2026-09-01
 
 - Reconstruct enlarged HOI4 bitmap-font antialias edges at the target pixel density and snap bitmap glyphs to the output grid so fractional and high-scale renders remain crisp without changing the declared font face or metrics.
