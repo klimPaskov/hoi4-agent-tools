@@ -1004,6 +1004,7 @@ export class ScriptedGuiStudio {
   /** Release parsed GUI graphs after a bounded batch job has finished using the studio. */
   public clearCaches(): void {
     this.#graphCache.clear();
+    this.engine.releaseScanCaches();
   }
 
   public async scan(

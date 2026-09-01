@@ -52,7 +52,7 @@ const PROPOSED_SOURCE_FILES = 128;
 const PROPOSED_SOURCE_BYTES = 67_108_864;
 const GRAPH_ARTIFACT_BYTES = 134_217_728;
 const GRAPH_ARTIFACT_CHUNKS = 2_048;
-const HISTORY_ENTRIES = 12;
+const HISTORY_ENTRIES = 2;
 const FOCUSED_RENDER_LIMIT = 32;
 
 export type TechnologyAnalysisMode =
@@ -177,6 +177,11 @@ class BoundedTechnologyFragmentCache implements TechnologySourceFragmentCacheLik
       this.#values.delete(oldest[0]);
       this.#bytes -= oldest[1].bytes;
     }
+  }
+
+  public clear(): void {
+    this.#values.clear();
+    this.#bytes = 0;
   }
 }
 
@@ -706,6 +711,14 @@ export class TechnologyTreeViewer {
 
   public constructor(private readonly engine: CoreEngine) {
     this.#state = sharedState(engine);
+  }
+
+  /** Release full source graphs retained between adjacent MCP calls. */
+  public clearCaches(): void {
+    this.#state.current.clear();
+    this.#state.history.clear();
+    this.#state.fragments.clear();
+    this.engine.releaseScanCaches();
   }
 
   public async scan(

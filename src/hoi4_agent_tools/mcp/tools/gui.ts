@@ -3,6 +3,7 @@ import { z } from 'zod/v4';
 import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifacts.js';
 import { canonicalJson, compareCodeUnits, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import {
   renderDimensionViolation,
   RenderBudget,
@@ -232,6 +233,7 @@ export function registerGuiTools(
   context: ServerContext,
 ): void {
   const studio = new ScriptedGuiStudio(engine);
+  const cacheLifetime = new IdleCacheLifetime(() => studio.clearCaches());
 
   server.registerTool(
     'hoi4.gui_inspect',
@@ -258,6 +260,7 @@ export function registerGuiTools(
         requestedWorkspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building GUI source graph');
@@ -385,6 +388,8 @@ export function registerGuiTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -411,6 +416,7 @@ export function registerGuiTools(
       extra.signal,
     );
     const { windowName } = input;
+    const releaseCaches = cacheLifetime.begin();
     try {
       const progress = progressReporter(extra);
       await progress.report(0, 4, 'Building GUI source graph');
@@ -479,6 +485,8 @@ export function registerGuiTools(
       return toolResult(result);
     } catch (error) {
       return errorResult(error, workspaceId);
+    } finally {
+      releaseCaches();
     }
   };
 
@@ -667,6 +675,7 @@ export function registerGuiTools(
         extra.signal,
       );
       const { relativePath, windowName, scenario } = input;
+      const releaseCaches = cacheLifetime.begin();
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
@@ -766,6 +775,8 @@ export function registerGuiTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId, autonomousFailureContext(error));
+      } finally {
+        releaseCaches();
       }
     },
   );

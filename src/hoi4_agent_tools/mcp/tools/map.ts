@@ -7,6 +7,7 @@ import {
 } from '../../core/artifacts.js';
 import { canonicalJson, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import { emptyServiceResult } from '../../core/result.js';
 import {
   AgentNudger,
@@ -455,6 +456,7 @@ export function registerMapTools(
   context: ServerContext,
 ): void {
   const nudger = new AgentNudger(engine);
+  const cacheLifetime = new IdleCacheLifetime(() => engine.releaseScanCaches());
 
   server.registerTool(
     'hoi4.map_inspect',
@@ -523,6 +525,7 @@ export function registerMapTools(
         requestedWorkspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Inspecting and validating the map');
@@ -739,6 +742,8 @@ export function registerMapTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -766,6 +771,7 @@ export function registerMapTools(
         requestedWorkspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Rendering offline map layer');
@@ -790,6 +796,8 @@ export function registerMapTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -821,6 +829,7 @@ export function registerMapTools(
         requestedWorkspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
@@ -899,6 +908,8 @@ export function registerMapTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId, autonomousFailureContext(error));
+      } finally {
+        releaseCaches();
       }
     },
   );

@@ -297,6 +297,12 @@ export class CoreEngine {
     }
   }
 
+  /** Drop completed scan buffers without invalidating revisions or interrupting active scans. */
+  releaseScanCaches(): void {
+    this.#scanCache.clear();
+    this.scanner.clearCaches();
+  }
+
   /** Monotonic cache generation used by domain services to invalidate derived snapshots. */
   generation(workspaceId: string): number {
     return this.#scanGenerations.get(workspaceId) ?? 0;

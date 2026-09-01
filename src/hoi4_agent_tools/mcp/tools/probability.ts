@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import { emptyServiceResult } from '../../core/result.js';
 import {
   ProbabilityAnalyzer,
@@ -388,6 +389,7 @@ export function registerProbabilityTools(
   context: ServerContext,
 ): void {
   const analyzer = new ProbabilityAnalyzer(engine);
+  const cacheLifetime = new IdleCacheLifetime(() => analyzer.clearCaches());
 
   server.registerTool(
     'hoi4.probability_inspect',
@@ -407,6 +409,7 @@ export function registerProbabilityTools(
         input.refresh,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, 2, 'Inspecting weighted source');
         const inspected = await analyzer.inspect(
@@ -468,6 +471,8 @@ export function registerProbabilityTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -490,6 +495,7 @@ export function registerProbabilityTools(
         input.refresh,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, 3, 'Scanning and evaluating weighted source');
         const request = {
@@ -502,6 +508,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -524,6 +532,7 @@ export function registerProbabilityTools(
         input.refresh,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, 3, 'Evaluating parameter sweep');
         const request = {
@@ -536,6 +545,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -558,6 +569,7 @@ export function registerProbabilityTools(
         input.refresh,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, input.samples, 'Sampling uncertain scenarios');
         const request = {
@@ -570,6 +582,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -592,6 +606,7 @@ export function registerProbabilityTools(
         undefined,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, input.maxSteps, 'Analyzing declared sequence');
         const request = {
@@ -604,6 +619,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -626,6 +643,7 @@ export function registerProbabilityTools(
         input.refresh,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, 4, 'Comparing weighted source');
         const request = {
@@ -638,6 +656,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -660,6 +680,7 @@ export function registerProbabilityTools(
         undefined,
         progress.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         await progress.report(0, input.outputs.length, 'Rendering analysis resources');
         const request = {
@@ -679,6 +700,8 @@ export function registerProbabilityTools(
         return toolResult(analysisServiceResult(base.workspaceId, analyzed));
       } catch (error) {
         return errorResult(error, base.workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );

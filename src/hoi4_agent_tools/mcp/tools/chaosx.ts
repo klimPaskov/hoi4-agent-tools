@@ -6,6 +6,7 @@ import { type ArtifactWrite, publicArtifactLink } from '../../core/artifacts.js'
 import { compareCodeUnits, hashCanonical } from '../../core/canonical.js';
 import { countryAssetDiscoveryPatterns } from '../../core/domain-scan-patterns.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import type { ScannedFile } from '../../core/scanner.js';
 import { emptyServiceResult } from '../../core/result.js';
 import { RenderBudget } from '../../core/render-budget.js';
@@ -466,6 +467,10 @@ export function registerChaosxTools(
 ): void {
   const guiStudio = new ScriptedGuiStudio(engine);
   const guiRevisionCache = new Map<string, CachedGuiRevision>();
+  const guiCacheLifetime = new IdleCacheLifetime(() => {
+    guiStudio.clearCaches();
+    guiRevisionCache.clear();
+  });
   server.registerTool(
     'chaosx.visual_revision',
     {
@@ -483,6 +488,7 @@ export function registerChaosxTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = guiCacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 2, 'Checking ChaosX scripted-GUI sources');
@@ -524,6 +530,8 @@ export function registerChaosxTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );

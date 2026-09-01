@@ -3,6 +3,7 @@ import { z } from 'zod/v4';
 import { publicArtifactLink } from '../../core/artifacts.js';
 import { compareCodeUnits } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import { emptyServiceResult } from '../../core/result.js';
 import {
   EventChainViewer,
@@ -386,6 +387,7 @@ export function registerEventTools(
   context: ServerContext,
 ): void {
   const viewer = new EventChainViewer(engine);
+  const cacheLifetime = new IdleCacheLifetime(() => viewer.clearCaches());
 
   server.registerTool(
     'hoi4.event_inspect',
@@ -404,6 +406,7 @@ export function registerEventTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Analyzing event chain');
@@ -434,6 +437,8 @@ export function registerEventTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -455,6 +460,7 @@ export function registerEventTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Rendering event-chain view');
@@ -492,6 +498,8 @@ export function registerEventTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -513,6 +521,7 @@ export function registerEventTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Comparing event-chain graphs');
@@ -583,6 +592,8 @@ export function registerEventTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );

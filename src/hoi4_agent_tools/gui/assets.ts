@@ -1152,11 +1152,12 @@ export class GuiAssetCatalog {
             limitInputPixels: RENDER_MAX_DECODED_PIXELS,
           });
           if (targetWidth !== extracted.info.width || targetHeight !== extracted.info.height) {
-            // BMFont pages are the font. Resize their coverage without interpolation so the
-            // renderer never invents edge pixels or applies synthetic sharpening.
+            // BMFont pages are the font. A restrained two-lobe resample keeps enlarged text from
+            // becoming blocky without applying sharpening, thresholding, gain, or reconstructed
+            // contours. Native-size coverage remains byte-for-byte unchanged.
             pipeline = pipeline.resize(targetWidth, targetHeight, {
               fit: 'fill',
-              kernel: sharp.kernel.nearest,
+              kernel: scale > 1 ? sharp.kernel.lanczos2 : sharp.kernel.nearest,
             });
           }
           return pipeline

@@ -122,6 +122,23 @@ export class BoundedStdioServerTransport implements Transport {
     this.onerror(error);
   };
 
+  private readonly handleInputEnd = (): void => {
+    this.finish();
+  };
+
+  private readonly handleInputClose = (): void => {
+    this.finish();
+  };
+
+  private readonly handleOutputError = (error: Error): void => {
+    this.onerror(error);
+    this.finish(true);
+  };
+
+  private readonly handleOutputClose = (): void => {
+    this.finish(true);
+  };
+
   private processCompleteFrame(): boolean {
     let line: string;
     try {
@@ -157,6 +174,10 @@ export class BoundedStdioServerTransport implements Transport {
     this.closed = true;
     this.input.off('data', this.handleData);
     this.input.off('error', this.handleInputError);
+    this.input.off('end', this.handleInputEnd);
+    this.input.off('close', this.handleInputClose);
+    this.output.off('error', this.handleOutputError);
+    this.output.off('close', this.handleOutputClose);
     if (destroyInput) this.input.destroy();
     else if (this.input.listenerCount('data') === 0) this.input.pause();
     this.onclose();
@@ -171,6 +192,10 @@ export class BoundedStdioServerTransport implements Transport {
     this.started = true;
     this.input.on('data', this.handleData);
     this.input.on('error', this.handleInputError);
+    this.input.once('end', this.handleInputEnd);
+    this.input.once('close', this.handleInputClose);
+    this.output.on('error', this.handleOutputError);
+    this.output.once('close', this.handleOutputClose);
     return Promise.resolve();
   }
 

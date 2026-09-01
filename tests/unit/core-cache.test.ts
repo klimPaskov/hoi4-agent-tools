@@ -73,6 +73,8 @@ describe('CoreEngine scan cache', () => {
       const bounded = await engine.scan('cache_test', boundedOptions);
       engine.invalidate('other-workspace');
       expect(await engine.scan('cache_test', boundedOptions)).toBe(bounded);
+      engine.releaseScanCaches();
+      expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);
       engine.invalidate('cache_test');
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);
     } finally {

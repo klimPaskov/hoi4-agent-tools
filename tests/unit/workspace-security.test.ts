@@ -558,6 +558,29 @@ describe('workspace path policy', () => {
     expect(files[0]).toMatchObject({ rootKind: 'mod', relativePath: 'inside.txt' });
   });
 
+  it('bounds retained vanilla scan buffers by bytes and releases them on demand', async () => {
+    const { resolver, game } = await fixture();
+    await Promise.all([
+      writeFile(path.join(game, 'first.txt'), '123456'),
+      writeFile(path.join(game, 'second.txt'), 'abcdef'),
+    ]);
+    const scanner = new WorkspaceScanner(10, 10);
+    const workspace = resolver.get('test');
+
+    await scanner.scan(workspace, { patterns: ['first.txt'], rootKinds: ['game'] });
+    expect(scanner.cacheUsage().gameScanBytes).toBe(6);
+    await scanner.scan(workspace, { patterns: ['second.txt'], rootKinds: ['game'] });
+    expect(scanner.cacheUsage()).toMatchObject({ gameScanBytes: 6, gameScanEntries: 1 });
+
+    scanner.clearCaches();
+    expect(scanner.cacheUsage()).toEqual({
+      sourceBytes: 0,
+      sourceEntries: 0,
+      gameScanBytes: 0,
+      gameScanEntries: 0,
+    });
+  });
+
   it('admits a vanilla-sized 5632 by 2048 24-bit province bitmap below the file ceiling', async () => {
     const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-vanilla-bmp-scan-'));
     const mod = path.join(base, 'mod');

@@ -4,6 +4,7 @@ import { boundedSourceHashEvidence, publicArtifactLink } from '../../core/artifa
 import { compareCodeUnits, canonicalJson, hashCanonical } from '../../core/canonical.js';
 import { focusDomainScanPatterns } from '../../core/domain-scan-patterns.js';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import type { ScannedFile } from '../../core/scanner.js';
 import { RenderBudget } from '../../core/render-budget.js';
 import { emptyServiceResult, ServiceError } from '../../core/result.js';
@@ -822,6 +823,7 @@ export function registerFocusTools(
   context: ServerContext,
 ): void {
   const workbench = new FocusWorkbench(engine.resolver, engine.transactions, engine.artifacts);
+  const cacheLifetime = new IdleCacheLifetime(() => engine.releaseScanCaches());
 
   server.registerTool(
     'hoi4.focus_inspect',
@@ -842,6 +844,7 @@ export function registerFocusTools(
         relativePath,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 3, 'Building shared workspace index');
@@ -1114,6 +1117,8 @@ export function registerFocusTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -1128,7 +1133,10 @@ export function registerFocusTools(
       outputSchema: focusRenderOutputSchema,
       annotations: artifactProducing,
     },
-    (input, extra) => executeFocusVisualTool(engine, workbench, context, input, extra, false),
+    (input, extra) =>
+      cacheLifetime.run(() =>
+        executeFocusVisualTool(engine, workbench, context, input, extra, false),
+      ),
   );
 
   server.registerTool(
@@ -1141,7 +1149,10 @@ export function registerFocusTools(
       outputSchema: focusRenderOutputSchema,
       annotations: artifactProducing,
     },
-    (input, extra) => executeFocusVisualTool(engine, workbench, context, input, extra, true),
+    (input, extra) =>
+      cacheLifetime.run(() =>
+        executeFocusVisualTool(engine, workbench, context, input, extra, true),
+      ),
   );
 
   server.registerTool(
@@ -1176,6 +1187,7 @@ export function registerFocusTools(
         relativePath,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         requireServerScope(context, 'hoi4:write');
         const progress = progressReporter(extra);
@@ -1553,6 +1565,8 @@ export function registerFocusTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId, autonomousFailureContext(error));
+      } finally {
+        releaseCaches();
       }
     },
   );

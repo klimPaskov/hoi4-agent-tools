@@ -24,3 +24,4 @@
 22. [Complete map catalog, navigation, and compact edits](0022-map-catalog-navigation-and-compact-edits.md)
 23. [Vanilla GUI composition and layout fidelity](0023-vanilla-gui-composition-and-layout-fidelity.md)
 24. [Probability scope bindings and dynamic pools](0024-probability-scope-bindings-and-dynamic-pools.md)
+25. [Bounded cache lifetimes](0025-bounded-cache-lifetimes.md)

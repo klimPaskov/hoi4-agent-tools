@@ -4,6 +4,12 @@
 
 No unreleased changes.
 
+## 3.0.6 - 2026-09-01
+
+- Prevent long-lived coding-agent tasks from exhausting the host and closing MCP transports. Stdio disconnects now abort in-flight requests, vanilla scan caches are byte-bounded, event and technology histories are reduced, probability results are bounded, and heavy domain caches are released after a concurrent-safe idle window.
+- Improve enlarged HOI4 bitmap text with restrained Lanczos2 interpolation while leaving native atlas coverage unchanged. The renderer still applies no sharpening, thresholding, opacity gain, or reconstructed edges.
+- Refresh the source-backed Chaos Meter, Communist Insurgency, and settings-window render examples with the production GUI route.
+
 ## 3.0.5 - 2026-09-01
 
 - Remove enlarged-font edge reconstruction and per-glyph coverage normalization. HOI4 bitmap glyphs now use their decoded atlas samples with nearest-neighbour scaling and integer output placement, without synthetic sharpening, thresholding, gain adjustment, or invented edge pixels.

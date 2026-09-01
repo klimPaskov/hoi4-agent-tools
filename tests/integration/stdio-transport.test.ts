@@ -139,6 +139,53 @@ async function overflowConfig(prefix: string): Promise<string> {
 }
 
 describe('local stdio transport', () => {
+  it('exits cleanly when the coding-agent client closes stdin', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-close-'));
+    const workspace = path.join(temporary, 'mod');
+    await mkdir(workspace);
+    const config = path.join(temporary, 'config.json');
+    await writeFile(
+      config,
+      `${JSON.stringify({
+        version: 1,
+        serverStateRoot: path.join(temporary, 'server-state'),
+        workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
+      })}\n`,
+    );
+    const child = launch(config);
+    try {
+      const stdoutLines: string[] = [];
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: {},
+            clientInfo: { name: 'close-test', version: '1.0.0' },
+          },
+        })}\n`,
+      );
+      await waitForMessage(child, 1, stdoutLines);
+      const exited = new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill();
+          reject(new Error('stdio server remained alive after its client closed stdin'));
+        }, 5_000);
+        child.once('exit', (code) => {
+          clearTimeout(timeout);
+          resolve(code);
+        });
+      });
+      child.stdin.end();
+      await expect(exited).resolves.toBe(0);
+    } finally {
+      if (child.exitCode === null) child.kill();
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('starts from a sparse descriptor-less mod and resolves the current workspace', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-any-mod-'));
     const workspace = path.join(temporary, 'sparse-mod');

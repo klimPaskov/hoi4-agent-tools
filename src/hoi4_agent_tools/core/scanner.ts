@@ -73,16 +73,19 @@ function hiddenByReplacePath(
 
 export class WorkspaceScanner {
   readonly #sourceCache = new Map<string, CachedSourceBytes>();
-  readonly #gameScanCache = new Map<string, ScannedFile[]>();
+  readonly #gameScanCache = new Map<string, { files: ScannedFile[]; bytes: number }>();
   #sourceCacheBytes = 0;
+  #gameScanCacheBytes = 0;
   readonly #sourceCacheMaxBytes: number;
+  readonly #gameScanCacheMaxBytes: number;
 
   public constructor(
     private readonly serverMaxFiles = DEFAULT_SCAN_MAX_FILES,
     private readonly serverMaxBytes = DEFAULT_SCAN_MAX_BYTES,
     private readonly serverMaxFileBytes = DEFAULT_SCAN_MAX_FILE_BYTES,
   ) {
-    this.#sourceCacheMaxBytes = Math.max(serverMaxFileBytes, Math.min(134_217_728, serverMaxBytes));
+    this.#sourceCacheMaxBytes = Math.max(1, Math.min(134_217_728, serverMaxBytes));
+    this.#gameScanCacheMaxBytes = Math.min(134_217_728, serverMaxBytes);
   }
 
   private cacheKey(absolutePath: string): string {
@@ -118,16 +121,42 @@ export class WorkspaceScanner {
   }
 
   private retainGameScan(key: string, files: readonly ScannedFile[]): void {
+    const bytes = files.reduce((total, file) => total + file.size, 0);
+    const previous = this.#gameScanCache.get(key);
+    if (previous !== undefined) this.#gameScanCacheBytes -= previous.bytes;
     this.#gameScanCache.delete(key);
-    this.#gameScanCache.set(
-      key,
-      files.map((file) => ({ ...file })),
-    );
-    while (this.#gameScanCache.size > 8) {
-      const oldest = this.#gameScanCache.keys().next().value;
+    if (bytes > this.#gameScanCacheMaxBytes) return;
+    this.#gameScanCache.set(key, { files: files.map((file) => ({ ...file })), bytes });
+    this.#gameScanCacheBytes += bytes;
+    while (this.#gameScanCache.size > 8 || this.#gameScanCacheBytes > this.#gameScanCacheMaxBytes) {
+      const oldest = this.#gameScanCache.entries().next().value;
       if (oldest === undefined) break;
-      this.#gameScanCache.delete(oldest);
+      this.#gameScanCache.delete(oldest[0]);
+      this.#gameScanCacheBytes -= oldest[1].bytes;
     }
+  }
+
+  /** Release retained source buffers after an idle MCP analysis batch. */
+  public clearCaches(): void {
+    this.#sourceCache.clear();
+    this.#sourceCacheBytes = 0;
+    this.#gameScanCache.clear();
+    this.#gameScanCacheBytes = 0;
+  }
+
+  /** Cache accounting used by lifecycle and regression tests. */
+  public cacheUsage(): {
+    sourceBytes: number;
+    sourceEntries: number;
+    gameScanBytes: number;
+    gameScanEntries: number;
+  } {
+    return {
+      sourceBytes: this.#sourceCacheBytes,
+      sourceEntries: this.#sourceCache.size,
+      gameScanBytes: this.#gameScanCacheBytes,
+      gameScanEntries: this.#gameScanCache.size,
+    };
   }
 
   async scan(workspace: ResolvedWorkspace, options: ScanOptions): Promise<ScannedFile[]> {
@@ -169,13 +198,13 @@ export class WorkspaceScanner {
       if (cachedGameFiles !== undefined && gameScanKey !== undefined) {
         this.#gameScanCache.delete(gameScanKey);
         this.#gameScanCache.set(gameScanKey, cachedGameFiles);
-        enumeratedFiles += cachedGameFiles.length;
+        enumeratedFiles += cachedGameFiles.files.length;
         if (enumeratedFiles > maxFiles)
           throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit', {
             files: enumeratedFiles,
             limit: maxFiles,
           });
-        for (const file of cachedGameFiles) {
+        for (const file of cachedGameFiles.files) {
           totalBytes += file.size;
           if (totalBytes > maxBytes)
             throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit', {

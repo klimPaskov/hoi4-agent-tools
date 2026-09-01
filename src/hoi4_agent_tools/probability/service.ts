@@ -172,6 +172,7 @@ interface AnalyzerState {
 }
 
 const states = new WeakMap<CoreEngine, AnalyzerState>();
+const ANALYSIS_CACHE_ENTRIES = 16;
 
 function resolveSourceBackedAdapter(
   snapshot: ScanSnapshot,
@@ -233,6 +234,22 @@ function analyzerState(engine: CoreEngine): AnalyzerState {
     states.set(engine, state);
   }
   return state;
+}
+
+function rememberAnalysis(state: AnalyzerState, result: ProbabilityAnalysisResult): void {
+  const replacedByCacheKey = state.byCacheKey.get(result.metadata.cacheKey);
+  if (replacedByCacheKey !== undefined) state.byId.delete(replacedByCacheKey.analysisId);
+  state.byId.delete(result.analysisId);
+  state.byCacheKey.delete(result.metadata.cacheKey);
+  state.byId.set(result.analysisId, result);
+  state.byCacheKey.set(result.metadata.cacheKey, result);
+  while (state.byId.size > ANALYSIS_CACHE_ENTRIES) {
+    const oldest = state.byId.entries().next().value;
+    if (oldest === undefined) break;
+    state.byId.delete(oldest[0]);
+    if (state.byCacheKey.get(oldest[1].metadata.cacheKey) === oldest[1])
+      state.byCacheKey.delete(oldest[1].metadata.cacheKey);
+  }
 }
 
 const DEFAULT_DIAGNOSTIC_THRESHOLDS: Required<ProbabilityDiagnosticThresholds> = {
@@ -966,6 +983,13 @@ export class ProbabilityAnalyzer {
     this.state = analyzerState(engine);
   }
 
+  /** Release source snapshots and analysis results after an idle MCP batch. */
+  public clearCaches(): void {
+    this.state.byId.clear();
+    this.state.byCacheKey.clear();
+    this.engine.releaseScanCaches();
+  }
+
   private async scan(
     context: ProbabilityServiceContext,
     sourcePaths: readonly (string | undefined)[] = [],
@@ -1259,8 +1283,7 @@ export class ProbabilityAnalyzer {
     );
     const complete = { ...result, resources: stored.map(publicArtifactLink) };
     if (complete.operation !== 'render') {
-      this.state.byId.set(complete.analysisId, complete);
-      this.state.byCacheKey.set(complete.metadata.cacheKey, complete);
+      rememberAnalysis(this.state, complete);
     }
     return complete;
   }

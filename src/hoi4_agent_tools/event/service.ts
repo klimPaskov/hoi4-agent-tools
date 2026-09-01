@@ -175,6 +175,11 @@ class BoundedEventFragmentCache implements EventSemanticFragmentCacheLike {
       this.#sourceBytes -= oldest[1].sourceBytes;
     }
   }
+
+  public clear(): void {
+    this.#entries.clear();
+    this.#sourceBytes = 0;
+  }
 }
 
 interface SharedEventServiceState {
@@ -384,7 +389,7 @@ function rememberGraph(
   const history = state.history.get(workspaceId) ?? new Map<string, EventGraphSnapshot>();
   history.delete(graph.revision);
   history.set(graph.revision, graph);
-  while (history.size > 8) {
+  while (history.size > 2) {
     const oldest = history.keys().next().value;
     if (oldest === undefined) break;
     history.delete(oldest);
@@ -1039,6 +1044,14 @@ export class EventChainViewer {
 
   public constructor(private readonly engine: CoreEngine) {
     this.#state = sharedState(engine);
+  }
+
+  /** Release full source graphs retained between adjacent MCP calls. */
+  public clearCaches(): void {
+    this.#state.current.clear();
+    this.#state.history.clear();
+    this.#state.fragments.clear();
+    this.engine.releaseScanCaches();
   }
 
   public async scan(

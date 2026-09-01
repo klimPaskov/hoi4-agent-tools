@@ -3,6 +3,7 @@ import { z } from 'zod/v4';
 import { publicArtifactLink } from '../../core/artifacts.js';
 import { compareCodeUnits, hashCanonical } from '../../core/canonical.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
 import { emptyServiceResult } from '../../core/result.js';
 import { workspaceIdSchema } from '../../schemas/common.js';
 import {
@@ -304,6 +305,7 @@ export function registerTechnologyTools(
   context: ServerContext,
 ): void {
   const viewer = new TechnologyTreeViewer(engine);
+  const cacheLifetime = new IdleCacheLifetime(() => viewer.clearCaches());
   server.registerTool(
     'hoi4.tech_inspect',
     {
@@ -321,6 +323,7 @@ export function registerTechnologyTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         await progress.report(0, 2, 'Analyzing technologies');
@@ -341,6 +344,8 @@ export function registerTechnologyTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -361,6 +366,7 @@ export function registerTechnologyTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         const request: TechnologyRenderServiceInput = {
@@ -394,6 +400,8 @@ export function registerTechnologyTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
@@ -415,6 +423,7 @@ export function registerTechnologyTools(
         input.workspaceId,
         extra.signal,
       );
+      const releaseCaches = cacheLifetime.begin();
       try {
         const progress = progressReporter(extra);
         const request: TechnologyCompareInput = {
@@ -469,6 +478,8 @@ export function registerTechnologyTools(
         return toolResult(result);
       } catch (error) {
         return errorResult(error, workspaceId);
+      } finally {
+        releaseCaches();
       }
     },
   );
