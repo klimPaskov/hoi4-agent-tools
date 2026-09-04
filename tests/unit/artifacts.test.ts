@@ -1,17 +1,21 @@
 import {
   access,
+  link,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   stat,
   symlink,
+  unlink,
   utimes,
   writeFile,
+  type FileHandle,
 } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ArtifactStore,
   boundedSourceHashEvidence,
@@ -297,6 +301,56 @@ describe('content-addressed artifacts', () => {
     await expect(
       store.read(workspace, artifact.uri, { offset: 0, length: 4 }),
     ).rejects.toMatchObject({ code: 'ARTIFACT_INTEGRITY_FAILED' });
+  });
+
+  it('reverifies content when publication link cleanup changes file identity during a read', async () => {
+    const { store, workspace } = await fixture();
+    const bytes = Buffer.alloc(1_000_000, 0x61);
+    const artifact = await store.put(
+      workspace,
+      'link-race.bin',
+      'application/octet-stream',
+      bytes,
+      {
+        kind: 'link-race',
+        toolVersion: '1',
+        schemaVersion: '1',
+        sourceHashes: {},
+      },
+    );
+    const alias = `${artifact.path}.publication-link`;
+    await link(artifact.path, alias);
+    const probe = await open(artifact.path, 'r');
+    const prototype = Object.getPrototypeOf(probe) as FileHandle;
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- Forwarded with the actual FileHandle receiver below.
+    const originalStat = prototype.stat;
+    let changed = false;
+    let observations = 0;
+    const observation = vi.spyOn(prototype, 'stat').mockImplementation(async function (
+      this: FileHandle,
+      options,
+    ) {
+      const before = await originalStat.call(this, options);
+      observations += 1;
+      if (!changed) {
+        changed = true;
+        await unlink(alias);
+        // Force distinct timestamps even on filesystems with coarse metadata precision.
+        await utimes(artifact.path, new Date(), new Date(Date.now() + 2_000));
+      }
+      return before;
+    });
+    try {
+      await expect(store.read(workspace, artifact.uri)).resolves.toMatchObject({ bytes });
+      expect(observations).toBeGreaterThanOrEqual(4);
+    } finally {
+      observation.mockRestore();
+      await probe.close();
+    }
+    await writeFile(artifact.path, Buffer.alloc(bytes.length, 0x62));
+    await expect(store.read(workspace, artifact.uri)).rejects.toMatchObject({
+      code: 'ARTIFACT_INTEGRITY_FAILED',
+    });
   });
 
   it('enforces per-artifact and aggregate-byte budgets while expiring old entries atomically', async () => {
@@ -886,81 +940,118 @@ describe('content-addressed artifacts', () => {
     });
   });
 
-  it('publishes one complete immutable manifest across independent processes', async () => {
-    const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-artifact-processes-'));
-    const mod = path.join(base, 'mod');
-    const runtime = path.join(base, 'runtime');
-    const gatePath = path.join(base, 'start');
-    const configurationPath = path.join(base, 'config.json');
-    await Promise.all([mkdir(mod), mkdir(runtime)]);
-    await writeFile(
-      configurationPath,
-      `${JSON.stringify({
-        version: 1,
-        serverStateRoot: path.join(base, 'state'),
-        storageRoots: [runtime],
-        workspaces: [
-          {
-            id: 'process-test',
-            name: 'Process test',
-            root: mod,
-            artifactRoot: path.join(runtime, 'artifacts'),
-            cacheRoot: path.join(runtime, 'cache'),
-          },
-        ],
-      })}\n`,
-    );
-    const helper = path.resolve(import.meta.dirname, '..', 'helpers', 'artifact-process-writer.ts');
-    const children = Array.from({ length: 3 }, () =>
-      spawn(
-        process.execPath,
-        ['--import', 'tsx', helper, configurationPath, 'process-test', gatePath],
-        {
-          cwd: path.resolve(import.meta.dirname, '..', '..'),
-          stdio: ['ignore', 'pipe', 'pipe'],
-          windowsHide: true,
-        },
-      ),
-    );
-    const processes = children.map((child) => {
-      let ready!: () => void;
-      const readyPromise = new Promise<void>((resolve) => (ready = resolve));
-      let stdout = '';
-      let stderr = '';
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString('utf8');
-        if (stdout.includes('READY')) ready();
-      });
-      child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
-      const outcome = new Promise<{ code: number; stderr: string; stdout: string }>(
-        (resolve, reject) => {
-          child.once('error', reject);
-          child.once('exit', (code) => resolve({ code: code ?? 1, stderr, stdout }));
-        },
+  it.each(['publish', 'rollback'])(
+    'coordinates %s across independent artifact processes',
+    async (mode) => {
+      const base = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-artifact-processes-'));
+      const mod = path.join(base, 'mod');
+      const runtime = path.join(base, 'runtime');
+      const gatePath = path.join(base, 'start');
+      const configurationPath = path.join(base, 'config.json');
+      await Promise.all([mkdir(mod), mkdir(runtime)]);
+      await writeFile(
+        configurationPath,
+        `${JSON.stringify({
+          version: 1,
+          serverStateRoot: path.join(base, 'state'),
+          storageRoots: [runtime],
+          workspaces: [
+            {
+              id: 'process-test',
+              name: 'Process test',
+              root: mod,
+              artifactRoot: path.join(runtime, 'artifacts'),
+              cacheRoot: path.join(runtime, 'cache'),
+            },
+          ],
+        })}\n`,
       );
-      return { ready: readyPromise, outcome };
-    });
-    await Promise.all(processes.map(({ ready }) => ready));
-    await writeFile(gatePath, 'start\n');
-    const completed = await Promise.all(processes.map(({ outcome }) => outcome));
-    for (const result of completed) {
-      expect(result).toMatchObject({
-        code: 0,
-        stderr: '',
-        stdout: expect.stringMatching(/^READY\nDONE hoi4-agent:\/\//u),
+      const helper = path.resolve(
+        import.meta.dirname,
+        '..',
+        'helpers',
+        'artifact-process-writer.ts',
+      );
+      const children = Array.from({ length: 3 }, (_, index) =>
+        spawn(
+          process.execPath,
+          [
+            '--import',
+            'tsx',
+            helper,
+            configurationPath,
+            'process-test',
+            mode === 'rollback' && index === 0 ? `${gatePath}.first` : gatePath,
+            mode === 'rollback' && index === 0 ? 'rollback' : 'publish',
+          ],
+          {
+            cwd: path.resolve(import.meta.dirname, '..', '..'),
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
+          },
+        ),
+      );
+      const processes = children.map((child) => {
+        let ready!: () => void;
+        let committing!: () => void;
+        const readyPromise = new Promise<void>((resolve) => (ready = resolve));
+        const committingPromise = new Promise<void>((resolve) => (committing = resolve));
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf8');
+          if (stdout.includes('READY')) ready();
+          if (stdout.includes('COMMITTING')) committing();
+        });
+        child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+        const outcome = new Promise<{ code: number; stderr: string; stdout: string }>(
+          (resolve, reject) => {
+            child.once('error', reject);
+            child.once('exit', (code) => resolve({ code: code ?? 1, stderr, stdout }));
+          },
+        );
+        return { ready: readyPromise, committing: committingPromise, outcome };
       });
-    }
+      await Promise.all(processes.map(({ ready }) => ready));
+      if (mode === 'rollback') {
+        await writeFile(`${gatePath}.first`, 'start\n');
+        await processes[0]!.committing;
+      }
+      await writeFile(gatePath, 'start\n');
+      if (mode === 'rollback') {
+        let anotherCommitted = false;
+        void processes[1]!.outcome.then(() => {
+          anotherCommitted = true;
+        });
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        const committedBeforeRelease = anotherCommitted;
+        await writeFile(`${gatePath}.first.rollback`, 'rollback\n');
+        expect(committedBeforeRelease).toBe(false);
+      }
+      const completed = await Promise.all(processes.map(({ outcome }) => outcome));
+      for (const [index, result] of completed.entries()) {
+        expect(result).toMatchObject({
+          code: 0,
+          stderr: '',
+          stdout:
+            mode === 'rollback' && index === 0
+              ? 'READY\nCOMMITTING\nROLLED_BACK\n'
+              : expect.stringMatching(/^READY\nDONE hoi4-agent:\/\//u),
+        });
+      }
 
-    const resolver = await WorkspaceResolver.create(
-      serverConfigurationSchema.parse(JSON.parse(await readFile(configurationPath, 'utf8'))),
-    );
-    const workspace = resolver.get('process-test');
-    const listed = await new ArtifactStore().list(workspace);
-    expect(listed).toHaveLength(1);
-    await expect(new ArtifactStore().read(workspace, listed[0]!.uri)).resolves.toMatchObject({
-      bytes: Buffer.alloc(1_000_000, 0x61),
-    });
-  }, 120_000);
+      const resolver = await WorkspaceResolver.create(
+        serverConfigurationSchema.parse(JSON.parse(await readFile(configurationPath, 'utf8'))),
+      );
+      const workspace = resolver.get('process-test');
+      const listed = await new ArtifactStore().list(workspace);
+      expect(listed).toHaveLength(1);
+      await expect(new ArtifactStore().read(workspace, listed[0]!.uri)).resolves.toMatchObject({
+        bytes: Buffer.alloc(1_000_000, 0x61),
+      });
+    },
+    120_000,
+  );
 
   it('streams stable artifact pages without retaining the complete inventory', async () => {
     const { store, workspace } = await fixture();

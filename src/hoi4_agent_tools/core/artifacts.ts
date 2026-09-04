@@ -5,6 +5,7 @@ import { z } from 'zod/v4';
 import { canonicalJson, compareCodeUnits, sha256Bytes } from './canonical.js';
 import type { ArtifactLink } from './result.js';
 import { ServiceError } from './result.js';
+import { SharedRequestCapacity } from './shared-request-capacity.js';
 import type { ResolvedWorkspace } from './workspace.js';
 import { containedGeneratedPath, isPortablePathSegment } from './workspace.js';
 
@@ -545,7 +546,12 @@ async function withArtifactQueue<T>(
   artifactQueues.set(root, tail);
   try {
     await waitForArtifactTurn(previous, signal);
-    return await action();
+    // Admission, publication, and rollback must be one critical section across
+    // processes too: another writer may reuse the same immutable address.
+    return await new SharedRequestCapacity(root, 1).run(
+      signal ?? new AbortController().signal,
+      action,
+    );
   } finally {
     release();
     void tail.then(() => {
@@ -843,6 +849,37 @@ async function publishExclusiveFile(
 }
 
 async function readVerifiedArtifactRange(
+  filePath: string,
+  expectedSha256: string,
+  range?: { offset: number; length: number },
+  verifiedIdentity?: ArtifactFileIdentity,
+  signal?: AbortSignal,
+): Promise<{ bytes: Buffer; totalSize: number; identity: ArtifactFileIdentity }> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await readArtifactRangeOnce(
+        filePath,
+        expectedSha256,
+        range,
+        attempt === 0 ? verifiedIdentity : undefined,
+        signal,
+      );
+    } catch (error) {
+      if (
+        attempt >= 2 ||
+        !(error instanceof ServiceError) ||
+        error.code !== 'ARTIFACT_READ_INCOMPLETE'
+      )
+        throw error;
+      // Removing the temporary hard link after atomic publication changes ctime
+      // without changing content. Retry from a fresh handle and hash all bytes;
+      // never reuse cached verification after an identity change.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+}
+
+async function readArtifactRangeOnce(
   filePath: string,
   expectedSha256: string,
   range?: { offset: number; length: number },

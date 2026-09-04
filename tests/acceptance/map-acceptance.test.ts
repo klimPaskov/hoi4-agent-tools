@@ -1263,8 +1263,9 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     }
   }, 120_000);
 
-  it('stores deterministic map layers plus pixel and semantic diffs through the shared artifact store', async () => {
-    for (const layer of mapLayers) {
+  it.each(mapLayers)(
+    'stores deterministic %s map layers through the shared artifact store',
+    async (layer) => {
       const first = await baseline.nudger.renderAndStore(baseline.workspaceId, {
         layer,
         overlays: mapOverlays,
@@ -1328,8 +1329,11 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
         );
         expect(sha256Bytes(stored.bytes)).toBe(artifact.sha256);
       }
-    }
+    },
+    120_000,
+  );
 
+  it('stores deterministic pixel and semantic map diffs through the shared artifact store', async () => {
     const diffOperations: MapOperation[] = [
       {
         id: 'diff-state-values',

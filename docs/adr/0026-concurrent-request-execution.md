@@ -16,6 +16,8 @@ Shared indexing yields between source files to service protocol traffic. Stdio o
 
 GUI source graphs share an engine-scoped cache across sessions. Workspace authorization still precedes access, cache keys retain workspace and source identity, and the existing retention bound remains unchanged.
 
+Artifact mutation holds an exclusive host lease rooted in the artifact store as well as its in-process queue. Admission, immutable publication, the commit callback, and failed-batch cleanup therefore cannot race a writer in another task process. Readers retry an unstable file identity with a fresh handle and full hash verification, at most three times; actual hash mismatches remain errors.
+
 ## Validation
 
 The concurrent workload tests use project-owned fixtures across every domain, including 1,040 technologies. They submit 30 simultaneous domain requests over six HTTP sessions and four separate stdio processes, retrieve artifact resources, and check progress ordering and continued discovery. Focus and GUI rewrites, map geometry, probability evaluation and comparison, isolation, stale source rejection, and recovery remain covered by their end-to-end suites.

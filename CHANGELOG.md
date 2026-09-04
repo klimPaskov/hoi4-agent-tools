@@ -11,7 +11,10 @@ No unreleased changes.
 - Separate HTTP request admission and body-byte reservations from expensive execution capacity, replacing the two-request ceiling with defaults suitable for parallel agents.
 - Keep active HTTP sessions alive, yield during shared source indexing, and serialize backpressured stdio output without leaking listeners or leaving sends pending after a disconnect.
 - Share cached GUI source graphs across sessions using the same engine instead of retaining a separate graph per client.
+- Reverify artifacts after metadata changes caused by concurrent publication-link cleanup, avoiding false hash collisions while still rejecting altered bytes.
+- Serialize artifact admission, publication, and failed-batch cleanup across processes so one writer cannot remove evidence committed by another.
 - Add concurrent production workflows spanning focus, GUI, map, event, technology, and probability tools over both transports, including shared artifacts, session expiry, cancelled queue entries, and abandoned process recovery.
+- Qualify each map layer separately from semantic and pixel diffs so failures and deadlines identify the affected operation rather than an aggregate rendering loop.
 - Update `fast-uri` and `qs` to patched releases identified by the dependency audit.
 
 ## 3.0.7 - 2026-09-01
