@@ -5,6 +5,8 @@ import { WorkspaceScanner, type ScanOptions, type ScannedFile } from './scanner.
 import { ArtifactStore } from './artifacts.js';
 import { TransactionManager } from './transactions.js';
 import type { WorkspaceResolver } from './workspace.js';
+import { RequestScheduler } from './request-scheduler.js';
+import { SharedRequestCapacity } from './shared-request-capacity.js';
 
 const RECOVERY_TTL_SECONDS = 3_600;
 const RECOVERY_MAX_BYTES = 536_870_912;
@@ -126,6 +128,8 @@ function defaultPatterns(workspace: ReturnType<WorkspaceResolver['get']>): strin
 }
 
 export class CoreEngine {
+  readonly requests: RequestScheduler;
+  readonly sharedRequests: SharedRequestCapacity;
   readonly scanner: WorkspaceScanner;
   readonly artifacts: ArtifactStore;
   readonly transactions: TransactionManager;
@@ -139,6 +143,11 @@ export class CoreEngine {
     public readonly resolver: WorkspaceResolver,
     services: CoreEngineServices = {},
   ) {
+    this.requests = new RequestScheduler(resolver.config().maxConcurrentTools);
+    this.sharedRequests = new SharedRequestCapacity(
+      resolver.serverState()?.root,
+      resolver.config().maxSharedTools,
+    );
     this.scanner =
       services.scanner ??
       new WorkspaceScanner(
@@ -244,7 +253,7 @@ export class CoreEngine {
           const cacheKey = `${requestKey}:${revision}`;
           const cached = this.#scanCache.get(cacheKey);
           if (cached !== undefined) return cached;
-          const index = SymbolIndex.build(files);
+          const index = await SymbolIndex.buildAsync(files, controller.signal);
           const snapshot = {
             workspaceId,
             revision,

@@ -30,7 +30,7 @@ describe('MCP progress reporting', () => {
     expect(notifications).toEqual([0, 2, 3]);
   });
 
-  it('sends repeated pulse notifications without changing progress ordering', async () => {
+  it('sends strictly increasing pulses and shares ordering across lifecycle and domain reporters', async () => {
     const notifications: Array<{ progress: number; total: number; message?: string }> = [];
     const extra = {
       _meta: { progressToken: 'fixture-progress' },
@@ -50,14 +50,15 @@ describe('MCP progress reporting', () => {
     const reporter = progressReporter(extra);
 
     await reporter.report(1, 4, 'scanning');
-    await reporter.pulse('still scanning');
+    await progressReporter(extra).pulse('still scanning');
     await reporter.pulse('still scanning');
 
-    expect(notifications).toEqual([
-      { progress: 1, total: 4, message: 'scanning' },
-      { progress: 1, total: 4, message: 'still scanning' },
-      { progress: 1, total: 4, message: 'still scanning' },
-    ]);
+    expect(notifications).toHaveLength(3);
+    expect(notifications[0]).toEqual({ progress: 1, total: 4, message: 'scanning' });
+    expect(notifications[1]!.progress).toBeGreaterThan(notifications[0]!.progress);
+    expect(notifications[2]!.progress).toBeGreaterThan(notifications[1]!.progress);
+    await reporter.report(2, 4, 'next stage');
+    expect(notifications.at(-1)!.progress).toBe(2);
   });
 
   it('keeps a long operation alive with heartbeats and clears the timer on completion', async () => {

@@ -13,6 +13,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { CoreEngine } from '../../core/engine.js';
 import type { ServerConfiguration } from '../../core/configuration.js';
+import { HTTP_MAX_AGGREGATE_BODY_BYTES } from '../../core/configuration.js';
 import { canonicalJson } from '../../core/canonical.js';
 import {
   authenticate,
@@ -36,6 +37,8 @@ interface Session {
   scopes: string[];
   authorizationContext: ServerContext;
   expiresAt: number;
+  credentialExpiresAt: number;
+  activeRequests: number;
   expiryTimer?: NodeJS.Timeout;
 }
 
@@ -465,21 +468,43 @@ export async function startHttpServer(
   const rates = new Map<string, { minute: number; count: number }>();
   let lastRatePruneMinute = -1;
   let concurrent = 0;
+  let reservedBodyBytes = 0;
   const admissionMiddleware = (
     request: AuthenticatedRequest,
     response: Response,
     next: NextFunction,
   ): void => {
-    if (concurrent >= http.maxConcurrentRequests) {
+    // Reserve a few small envelopes for cancellation, roots replies, and discovery,
+    // even when all long request slots are occupied.
+    const declaredLength = request.headers['content-length'];
+    const bodyBytes =
+      request.method === 'POST'
+        ? declaredLength === undefined
+          ? http.maxBodyBytes
+          : Number(declaredLength)
+        : 0;
+    if (!Number.isSafeInteger(bodyBytes) || bodyBytes < 0 || bodyBytes > http.maxBodyBytes) {
+      jsonRpcError(response, 413, 'Payload too large');
+      return;
+    }
+    const overflow = concurrent >= http.maxConcurrentRequests;
+    if (overflow && (concurrent >= http.maxConcurrentRequests + 16 || bodyBytes > 65_536)) {
       response.status(429).setHeader('Retry-After', '1').json({ error: 'concurrency_limit' });
       return;
     }
+    if (bodyBytes > HTTP_MAX_AGGREGATE_BODY_BYTES - reservedBodyBytes) {
+      response.status(429).setHeader('Retry-After', '1').json({ error: 'body_capacity_limit' });
+      return;
+    }
     concurrent += 1;
+    reservedBodyBytes += bodyBytes;
+    response.locals.admissionOverflow = overflow;
     let released = false;
     const release = (): void => {
       if (released) return;
       released = true;
       concurrent = Math.max(0, concurrent - 1);
+      reservedBodyBytes -= bodyBytes;
     };
     response.once('finish', release);
     response.once('close', release);
@@ -509,6 +534,8 @@ export async function startHttpServer(
     }
     next();
   };
+  app.post('/mcp', requireMcpJsonContentType);
+  app.post('/mcp', requireIdentityContentEncoding);
   app.use(admissionMiddleware);
 
   const authenticateMiddleware = async (
@@ -565,8 +592,6 @@ export async function startHttpServer(
   // Supplying a defined parsed body to handleRequest prevents the SDK from falling back to
   // an unbounded Request.json() parse for alternate media types or empty established-session
   // requests. GET and DELETE deliberately remain bodyless.
-  app.post('/mcp', requireMcpJsonContentType);
-  app.post('/mcp', requireIdentityContentEncoding);
   app.post(
     '/mcp',
     express.json({
@@ -578,6 +603,25 @@ export async function startHttpServer(
     }),
   );
   app.post('/mcp', requireParsedMcpJsonBody);
+  app.post('/mcp', (request, response, next) => {
+    const method: unknown = isRecord(request.body) ? request.body.method : undefined;
+    const control =
+      method === undefined ||
+      (typeof method === 'string' &&
+        (method.startsWith('notifications/') ||
+          [
+            'ping',
+            'tools/list',
+            'resources/list',
+            'resources/templates/list',
+            'prompts/list',
+          ].includes(method)));
+    if (response.locals.admissionOverflow === true && !control) {
+      response.status(429).setHeader('Retry-After', '1').json({ error: 'concurrency_limit' });
+      return;
+    }
+    next();
+  });
 
   if (http.oauth !== undefined && http.publicUrl !== undefined) {
     const metadata = protectedResourceMetadata(configuration);
@@ -596,6 +640,9 @@ export async function startHttpServer(
   let eventStreams = 0;
   const eventStreamsByPrincipal = new Map<string, number>();
   const sessionTtlMs = http.sessionTtlSeconds * 1000;
+  const sessionExpired = (session: Session): boolean =>
+    session.credentialExpiresAt <= Date.now() ||
+    (session.activeRequests === 0 && session.expiresAt <= Date.now());
   const removeSession = async (sessionId: string): Promise<void> => {
     const session = sessions.get(sessionId);
     if (session === undefined) return;
@@ -608,7 +655,13 @@ export async function startHttpServer(
   const scheduleSessionExpiry = (sessionId: string, session: Session): void => {
     if (session.expiryTimer !== undefined) clearTimeout(session.expiryTimer);
     session.expiryTimer = setTimeout(
-      () => void removeSession(sessionId),
+      () => {
+        if (sessionExpired(session)) void removeSession(sessionId);
+        else {
+          session.expiresAt = Math.min(Date.now() + sessionTtlMs, session.credentialExpiresAt);
+          scheduleSessionExpiry(sessionId, session);
+        }
+      },
       Math.max(0, session.expiresAt - Date.now()),
     );
     session.expiryTimer.unref();
@@ -617,7 +670,11 @@ export async function startHttpServer(
     const now = Date.now();
     await Promise.all(
       [...sessions]
-        .filter(([, session]) => session.expiresAt <= now)
+        .filter(
+          ([, session]) =>
+            session.credentialExpiresAt <= now ||
+            (session.activeRequests === 0 && session.expiresAt <= now),
+        )
         .map(([sessionId]) => removeSession(sessionId)),
     );
   };
@@ -632,7 +689,7 @@ export async function startHttpServer(
       return undefined;
     }
     const session = sessions.get(id);
-    if (session === undefined || session.expiresAt <= Date.now()) {
+    if (session === undefined || sessionExpired(session)) {
       if (session !== undefined) await removeSession(id);
       jsonRpcError(response, 404, 'Unknown or expired MCP session');
       return undefined;
@@ -670,6 +727,20 @@ export async function startHttpServer(
     session.scopes = expandedScopes;
     session.authorizationContext.scopes = expandedScopes;
     session.expiresAt = boundedSessionExpiration(principal, Date.now(), sessionTtlMs);
+    session.credentialExpiresAt =
+      principal.expiresAt === undefined ? Infinity : principal.expiresAt * 1000;
+    session.activeRequests += 1;
+    let requestFinished = false;
+    const finishRequest = (): void => {
+      if (requestFinished) return;
+      requestFinished = true;
+      session.activeRequests -= 1;
+      if (sessions.get(id) !== session) return;
+      session.expiresAt = Math.min(Date.now() + sessionTtlMs, session.credentialExpiresAt);
+      scheduleSessionExpiry(id, session);
+    };
+    response.once('finish', finishRequest);
+    response.once('close', finishRequest);
     scheduleSessionExpiry(id, session);
     return session;
   };
@@ -754,6 +825,9 @@ export async function startHttpServer(
               credentialId: principal.credentialId,
               scopes: [...principal.scopes],
               authorizationContext,
+              activeRequests: 0,
+              credentialExpiresAt:
+                principal.expiresAt === undefined ? Infinity : principal.expiresAt * 1000,
               expiresAt: Math.min(
                 initialExpiration,
                 boundedSessionExpiration(principal, Date.now(), sessionTtlMs),
@@ -907,7 +981,7 @@ export async function startHttpServer(
   const cleanup = setInterval(
     () => {
       for (const [sessionId, session] of sessions) {
-        if (session.expiresAt <= Date.now()) void removeSession(sessionId);
+        if (sessionExpired(session)) void removeSession(sessionId);
       }
     },
     Math.min(60_000, sessionTtlMs),

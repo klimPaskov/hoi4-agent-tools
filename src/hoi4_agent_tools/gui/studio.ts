@@ -938,13 +938,15 @@ export function guiArtifactProvenance(
   };
 }
 
+const sharedGuiGraphs = new WeakMap<CoreEngine, Map<string, GuiStudioScanResult>>();
+
 export class ScriptedGuiStudio {
   private readonly engine: CoreEngine;
   private readonly resolver: WorkspaceResolver;
   private readonly transactions: TransactionManager;
   private readonly scanner: WorkspaceScanner;
   private readonly artifacts: ArtifactStore;
-  readonly #graphCache = new Map<string, GuiStudioScanResult>();
+  readonly #graphCache: Map<string, GuiStudioScanResult>;
 
   public constructor(engine: CoreEngine);
   public constructor(
@@ -968,6 +970,8 @@ export class ScriptedGuiStudio {
             ...(transactions === undefined ? {} : { transactions }),
           });
     this.resolver = this.engine.resolver;
+    this.#graphCache = sharedGuiGraphs.get(this.engine) ?? new Map<string, GuiStudioScanResult>();
+    sharedGuiGraphs.set(this.engine, this.#graphCache);
     this.transactions = this.engine.transactions;
     this.scanner = this.engine.scanner;
     this.artifacts = this.engine.artifacts;

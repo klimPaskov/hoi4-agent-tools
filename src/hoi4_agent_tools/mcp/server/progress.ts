@@ -4,7 +4,7 @@ import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sd
 export interface ProgressReporter {
   report(progress: number, total: number, message: string): Promise<void>;
   /**
-   * Send a keep-alive progress notification without advancing the reported work value.
+   * Send a strictly increasing keep-alive notification during a long stage.
    * MCP clients can use these notifications to reset their per-request idle timeout while a
    * large operation is still running.
    */
@@ -17,14 +17,18 @@ export interface ProgressReporter {
  * common MCP clients, while still keeping notification traffic negligible for ordinary calls.
  */
 export const PROGRESS_HEARTBEAT_INTERVAL_MS = 10_000;
+const reporters = new WeakMap<object, ProgressReporter>();
+const heartbeatOwners = new WeakSet<ProgressReporter>();
 
 export function progressReporter(
   extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ): ProgressReporter {
+  const existing = reporters.get(extra);
+  if (existing !== undefined) return existing;
   let latest = Number.NEGATIVE_INFINITY;
   let latestTotal = 1;
-  let latestMessage = '';
-  return {
+  let latestMessage = 'Waiting for server execution capacity';
+  const reporter: ProgressReporter = {
     signal: extra.signal,
     async report(progress: number, total: number, message: string): Promise<void> {
       extra.signal.throwIfAborted();
@@ -35,26 +39,37 @@ export function progressReporter(
       if (progressToken === undefined) return;
       if (normalized <= latest) return;
       latest = normalized;
-      await extra.sendNotification({
-        method: 'notifications/progress',
-        params: { progressToken, progress: normalized, total, message },
-      });
+      await extra
+        .sendNotification({
+          method: 'notifications/progress',
+          params: { progressToken, progress: normalized, total, message },
+        })
+        .catch(() => undefined);
     },
     async pulse(message = latestMessage): Promise<void> {
       extra.signal.throwIfAborted();
       const progressToken = extra._meta?.progressToken;
       if (progressToken === undefined) return;
-      await extra.sendNotification({
-        method: 'notifications/progress',
-        params: {
-          progressToken,
-          progress: Number.isFinite(latest) ? latest : 0,
-          total: latestTotal,
-          message,
-        },
-      });
+      // Use the next representably larger value rather than repeating a value, which
+      // violates MCP progress ordering. These pulses do not invent completed work.
+      latest = Number.isFinite(latest)
+        ? latest + Math.max(1, Math.abs(latest)) * Number.EPSILON * 2
+        : 0;
+      await extra
+        .sendNotification({
+          method: 'notifications/progress',
+          params: {
+            progressToken,
+            progress: latest,
+            ...(latest <= latestTotal ? { total: latestTotal } : {}),
+            message,
+          },
+        })
+        .catch(() => undefined);
     },
   };
+  reporters.set(extra, reporter);
+  return reporter;
 }
 
 /**
@@ -65,13 +80,17 @@ export function progressReporter(
 export async function withProgressHeartbeat<T>(
   operation: Promise<T> | (() => Promise<T>),
   reporter: ProgressReporter,
-  message: string,
+  message?: string,
   intervalMs = PROGRESS_HEARTBEAT_INTERVAL_MS,
 ): Promise<T> {
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new RangeError('Progress heartbeat interval must be a positive finite number');
   }
   reporter.signal.throwIfAborted();
+  if (heartbeatOwners.has(reporter)) {
+    return typeof operation === 'function' ? operation() : operation;
+  }
+  heartbeatOwners.add(reporter);
   let active = true;
   let inFlight = false;
   const tick = (): void => {
@@ -94,5 +113,6 @@ export async function withProgressHeartbeat<T>(
   } finally {
     active = false;
     clearInterval(timer);
+    heartbeatOwners.delete(reporter);
   }
 }

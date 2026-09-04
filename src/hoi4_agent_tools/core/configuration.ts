@@ -4,7 +4,8 @@ import { z } from 'zod/v4';
 import { CONFIG_VERSION } from '../version.js';
 import { ServiceError } from './result.js';
 
-export const HTTP_MAX_SAFE_CONCURRENT_REQUESTS = 2;
+export const HTTP_MAX_SAFE_CONCURRENT_REQUESTS = 1024;
+export const HTTP_DEFAULT_CONCURRENT_REQUESTS = 128;
 export const HTTP_MAX_BODY_BYTES = 67_108_864;
 export const HTTP_MAX_AGGREGATE_BODY_BYTES = 134_217_728;
 export const HTTP_DEFAULT_SESSION_EVENT_BYTES = 2_097_152;
@@ -148,6 +149,8 @@ export const serverConfigurationSchema = z
       })
       .optional(),
     scanMaxFiles: z.number().int().min(1).max(1_000_000).default(DEFAULT_SCAN_MAX_FILES),
+    maxConcurrentTools: z.number().int().min(1).max(32).default(2),
+    maxSharedTools: z.number().int().min(1).max(128).default(4),
     scanMaxBytes: z
       .number()
       .int()
@@ -209,18 +212,18 @@ export const serverConfigurationSchema = z
         headersTimeoutMs: z.number().int().min(1_000).max(120_000).default(10_000),
         requestTimeoutMs: z.number().int().min(1_000).max(300_000).default(30_000),
         keepAliveTimeoutMs: z.number().int().min(1_000).max(120_000).default(5_000),
-        maxConnections: z.number().int().min(1).max(100_000).default(64),
+        maxConnections: z.number().int().min(1).max(100_000).default(512),
         maxRequestsPerSocket: z.number().int().min(1).max(100_000).default(100),
         maxConcurrentRequests: z
           .number()
           .int()
           .min(1)
           .max(HTTP_MAX_SAFE_CONCURRENT_REQUESTS)
-          .default(HTTP_MAX_SAFE_CONCURRENT_REQUESTS),
+          .default(HTTP_DEFAULT_CONCURRENT_REQUESTS),
         maxSessions: z.number().int().min(1).max(10_000).default(128),
         maxSessionsPerPrincipal: z.number().int().min(1).max(10_000).default(32),
-        maxEventStreams: z.number().int().min(1).max(10_000).default(32),
-        maxEventStreamsPerPrincipal: z.number().int().min(1).max(10_000).default(4),
+        maxEventStreams: z.number().int().min(1).max(10_000).default(128),
+        maxEventStreamsPerPrincipal: z.number().int().min(1).max(10_000).default(32),
         maxSessionEventBytes: z
           .number()
           .int()
@@ -228,7 +231,7 @@ export const serverConfigurationSchema = z
           .max(67_108_864)
           .default(HTTP_DEFAULT_SESSION_EVENT_BYTES),
         maxEventStoreBytes: z.number().int().min(65_536).max(268_435_456).default(16_777_216),
-        requestsPerMinute: z.number().int().min(1).max(100_000).default(120),
+        requestsPerMinute: z.number().int().min(1).max(100_000).default(6_000),
         sessionTtlSeconds: z.number().int().min(60).max(86_400).default(3600),
       })
       .strict()
@@ -291,16 +294,16 @@ export const serverConfigurationSchema = z
         headersTimeoutMs: 10_000,
         requestTimeoutMs: 30_000,
         keepAliveTimeoutMs: 5_000,
-        maxConnections: 64,
+        maxConnections: 512,
         maxRequestsPerSocket: 100,
-        maxConcurrentRequests: HTTP_MAX_SAFE_CONCURRENT_REQUESTS,
+        maxConcurrentRequests: HTTP_DEFAULT_CONCURRENT_REQUESTS,
         maxSessions: 128,
         maxSessionsPerPrincipal: 32,
-        maxEventStreams: 32,
-        maxEventStreamsPerPrincipal: 4,
+        maxEventStreams: 128,
+        maxEventStreamsPerPrincipal: 32,
         maxSessionEventBytes: HTTP_DEFAULT_SESSION_EVENT_BYTES,
         maxEventStoreBytes: 16_777_216,
-        requestsPerMinute: 120,
+        requestsPerMinute: 6_000,
         sessionTtlSeconds: 3600,
       }),
   })
@@ -347,25 +350,6 @@ export const serverConfigurationSchema = z
         code: 'custom',
         path: ['http', 'keepAliveTimeoutMs'],
         message: 'HTTP keep-alive timeout must be shorter than the header timeout',
-      });
-    }
-    const concurrentScanBytes = value.scanMaxBytes * value.http.maxConcurrentRequests;
-    if (!Number.isSafeInteger(concurrentScanBytes) || concurrentScanBytes > 536_870_912) {
-      context.addIssue({
-        code: 'custom',
-        path: ['scanMaxBytes'],
-        message: 'Scan-byte ceiling multiplied by HTTP concurrency must not exceed 512 MiB',
-      });
-    }
-    const concurrentBodyBytes = value.http.maxBodyBytes * value.http.maxConcurrentRequests;
-    if (
-      !Number.isSafeInteger(concurrentBodyBytes) ||
-      concurrentBodyBytes > HTTP_MAX_AGGREGATE_BODY_BYTES
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['http', 'maxBodyBytes'],
-        message: 'HTTP body-byte ceiling multiplied by concurrency must not exceed 128 MiB',
       });
     }
   });

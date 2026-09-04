@@ -149,6 +149,57 @@ async function readSseUntil(response: Response, pattern: RegExp): Promise<string
 }
 
 describe('Streamable HTTP progress, cancellation, and resumption', () => {
+  it('does not expire a session while a long request is active', async () => {
+    const started = deferred<undefined>();
+    const released = deferred<undefined>();
+    const handle = await instrumentedServer(() => {
+      const server = new McpServer({ name: 'http-active-lifetime', version: '1' });
+      server.registerTool('fixture.long', { inputSchema: z.object({}) }, async () => {
+        started.resolve(undefined);
+        await released.promise;
+        return { content: [{ type: 'text', text: 'complete' }] };
+      });
+      return server;
+    });
+    const sessionId = await initialize(handle.url);
+    const running = fetch(handle.url, {
+      method: 'POST',
+      headers: headers(sessionId),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: { name: 'fixture.long', arguments: {} },
+      }),
+    }).then((response) => response.text());
+    const originalNow = Date.now;
+    try {
+      await started.promise;
+      const later = originalNow() + 3_601_000;
+      Date.now = () => later;
+      const ping = await fetch(handle.url, {
+        method: 'POST',
+        headers: headers(sessionId),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 8, method: 'ping' }),
+      });
+      expect(ping.status).toBe(200);
+      await ping.text();
+      released.resolve(undefined);
+      expect(await running).toContain('complete');
+      Date.now = () => later + 3_601_000;
+      const expired = await fetch(handle.url, {
+        method: 'POST',
+        headers: headers(sessionId),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }),
+      });
+      expect(expired.status).toBe(404);
+      await expired.text();
+    } finally {
+      Date.now = originalNow;
+      released.resolve(undefined);
+      await running;
+    }
+  });
   it('closes failed pre-session initialization servers instead of leaking them', async () => {
     const closed = vi.fn(() => Promise.resolve());
     const handle = await instrumentedServer(() => {

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createConnection } from 'node:net';
+import { createConnection, type Socket } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -462,6 +462,7 @@ describe('Streamable HTTP deployment limits', () => {
     expect(handle.server.keepAliveTimeout).toBe(1_000);
     expect(handle.server.maxConnections).toBe(8);
     expect(handle.server.maxRequestsPerSocket).toBe(5);
+    const session = await initializeSession(handle);
     const address = handle.server.address();
     if (typeof address !== 'object' || address === null) throw new Error('server not bound');
     const socket = createConnection({ host: '127.0.0.1', port: address.port });
@@ -482,6 +483,25 @@ describe('Streamable HTTP deployment limits', () => {
       ].join('\r\n'),
     );
     try {
+      for (const method of ['ping', 'tools/list', 'resources/templates/list']) {
+        const control = await fetch(handle.url, {
+          method: 'POST',
+          headers: headers({ 'mcp-session-id': session }),
+          body: JSON.stringify({ jsonrpc: '2.0', id: 3, method, params: {} }),
+        });
+        expect(control.status, method).toBe(200);
+        await control.text();
+      }
+      const cancellation = await fetch(handle.url, {
+        method: 'POST',
+        headers: headers({ 'mcp-session-id': session }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'notifications/cancelled',
+          params: { requestId: 9 },
+        }),
+      });
+      expect(cancellation.status).toBe(202);
       const rejected = await fetch(handle.url, {
         method: 'POST',
         headers: headers(),
@@ -491,6 +511,54 @@ describe('Streamable HTTP deployment limits', () => {
       expect(rejected.headers.get('retry-after')).toBe('1');
     } finally {
       socket.destroy();
+    }
+  });
+
+  it('bounds aggregate body reservations and releases them after interrupted uploads', async () => {
+    const handle = await limitedServer({ maxConcurrentRequests: 8 });
+    const session = await initializeSession(handle);
+    const address = handle.server.address();
+    if (typeof address !== 'object' || address === null) throw new Error('server not bound');
+    const sockets: Socket[] = [];
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        const socket = createConnection({ host: '127.0.0.1', port: address.port });
+        sockets.push(socket);
+        await new Promise<void>((resolve, reject) => {
+          socket.once('connect', resolve);
+          socket.once('error', reject);
+        });
+        socket.write(
+          [
+            'POST /mcp HTTP/1.1',
+            `Host: 127.0.0.1:${address.port}`,
+            `Origin: ${origin}`,
+            'Content-Type: application/json',
+            `Content-Length: ${HTTP_MAX_BODY_BYTES}`,
+            '',
+            '{',
+          ].join('\r\n'),
+        );
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      const rejected = await fetch(handle.url, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(initialize),
+      });
+      expect(rejected.status).toBe(429);
+      expect(await rejected.json()).toMatchObject({ error: 'body_capacity_limit' });
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      const recovered = await fetch(handle.url, {
+        method: 'POST',
+        headers: headers({ 'mcp-session-id': session }),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' }),
+      });
+      expect(recovered.status).toBe(200);
+      await recovered.text();
+    } finally {
+      for (const socket of sockets) socket.destroy();
     }
   });
 

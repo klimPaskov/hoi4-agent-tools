@@ -388,6 +388,36 @@ export class SymbolIndex {
     return index;
   }
 
+  /** Yield between source files so protocol cancellation and progress remain responsive. */
+  static async buildAsync(
+    files: readonly ScannedFile[],
+    signal?: AbortSignal,
+  ): Promise<SymbolIndex> {
+    signal?.throwIfAborted();
+    const index = new SymbolIndex();
+    const definitionSelection = selectedDefinitionFiles(files);
+    for (const displayPath of definitionSelection.selected) index.#definitionFiles.add(displayPath);
+    for (const skipped of definitionSelection.skipped) {
+      index.recordSkippedSource(skipped.file, skipped.diagnostics);
+    }
+    let yieldedAt = performance.now();
+    for (const file of [...files].sort(
+      (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
+    )) {
+      signal?.throwIfAborted();
+      index.files.set(file.displayPath, file);
+      index.indexFile(file);
+      if (performance.now() - yieldedAt >= 20) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        signal?.throwIfAborted();
+        yieldedAt = performance.now();
+      }
+    }
+    index.finalize();
+    signal?.throwIfAborted();
+    return index;
+  }
+
   get complete(): boolean {
     return this.#complete;
   }

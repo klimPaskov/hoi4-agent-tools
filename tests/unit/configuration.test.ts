@@ -6,7 +6,6 @@ import {
   DEFAULT_SCAN_MAX_BYTES,
   DEFAULT_SCAN_MAX_FILE_BYTES,
   DEFAULT_SCAN_MAX_FILES,
-  HTTP_MAX_AGGREGATE_BODY_BYTES,
   HTTP_MAX_BODY_BYTES,
   loadConfiguration,
   serverConfigurationSchema,
@@ -172,11 +171,11 @@ describe('configuration loading and path selection', () => {
     ).toBe(true);
   });
 
-  it('keeps HTTP concurrency and JSON body budgets within the fixed memory envelope', () => {
+  it('separates accepted HTTP requests from expensive tool execution capacity', () => {
     expect(
       serverConfigurationSchema.safeParse({
         version: 1,
-        http: { maxConcurrentRequests: 3 },
+        http: { maxConcurrentRequests: 1025 },
       }).success,
     ).toBe(false);
     expect(
@@ -187,13 +186,15 @@ describe('configuration loading and path selection', () => {
     ).toBe(false);
     const maximum = serverConfigurationSchema.safeParse({
       version: 1,
-      http: { maxConcurrentRequests: 2, maxBodyBytes: HTTP_MAX_BODY_BYTES },
+      http: { maxConcurrentRequests: 128, maxBodyBytes: HTTP_MAX_BODY_BYTES },
     });
     expect(maximum.success).toBe(true);
     if (maximum.success) {
       expect(maximum.data.http.maxBodyBytes).toBe(HTTP_MAX_BODY_BYTES);
-      expect(maximum.data.http.maxBodyBytes * maximum.data.http.maxConcurrentRequests).toBe(
-        HTTP_MAX_AGGREGATE_BODY_BYTES,
+      expect(maximum.data.maxConcurrentTools).toBe(2);
+      expect(maximum.data.http.maxConcurrentRequests).toBe(128);
+      expect(maximum.data.http.maxConnections).toBeGreaterThan(
+        maximum.data.http.maxConcurrentRequests + maximum.data.http.maxEventStreams + 16,
       );
     }
   });

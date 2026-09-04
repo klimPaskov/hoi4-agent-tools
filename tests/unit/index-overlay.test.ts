@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
@@ -26,6 +26,37 @@ function scannedSourceFile(relativePath: string, content: string): ScannedFile {
 }
 
 describe('load-order scanner and shared index', () => {
+  it('preserves index results while yielding and handles cancellation between source files', async () => {
+    const files = Array.from({ length: 6 }, (_, id) =>
+      scannedSourceFile(
+        `common/national_focus/async_${id}.txt`,
+        `focus_tree = { id = tree_${id} focus = { id = focus_${id} x = ${id} y = 0 prerequisite = { focus = missing } } }`,
+      ),
+    );
+    const expected = SymbolIndex.build(files);
+    let elapsed = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => (elapsed += 25));
+    try {
+      let yielded = false;
+      setImmediate(() => {
+        yielded = true;
+      });
+      const actual = await SymbolIndex.buildAsync([...files].reverse());
+      expect(yielded).toBe(true);
+      expect(actual.symbols).toEqual(expected.symbols);
+      expect(actual.references).toEqual(expected.references);
+      expect(actual.diagnostics).toEqual(expected.diagnostics);
+      expect(actual.unresolvedReferences()).toEqual(expected.unresolvedReferences());
+      const controller = new AbortController();
+      setImmediate(() => controller.abort());
+      await expect(SymbolIndex.buildAsync(files, controller.signal)).rejects.toMatchObject({
+        name: 'AbortError',
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('indexes the definition database selected by default.map', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-selected-definitions-'));
     const game = path.join(root, 'game');

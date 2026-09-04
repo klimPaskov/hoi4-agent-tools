@@ -4,6 +4,16 @@
 
 No unreleased changes.
 
+## 3.0.8 - 2026-09-05
+
+- Queue simultaneous tool calls fairly across HTTP sessions and coordinate expensive operations across local task processes sharing private server state.
+- Keep every tool call responsive with strictly increasing MCP progress notifications during execution and queue waits; allow cancellation and discovery while tool capacity is occupied.
+- Separate HTTP request admission and body-byte reservations from expensive execution capacity, replacing the two-request ceiling with defaults suitable for parallel agents.
+- Keep active HTTP sessions alive, yield during shared source indexing, and serialize backpressured stdio output without leaking listeners or leaving sends pending after a disconnect.
+- Share cached GUI source graphs across sessions using the same engine instead of retaining a separate graph per client.
+- Add concurrent production workflows spanning focus, GUI, map, event, technology, and probability tools over both transports, including shared artifacts, session expiry, cancelled queue entries, and abandoned process recovery.
+- Update `fast-uri` and `qs` to patched releases identified by the dependency audit.
+
 ## 3.0.7 - 2026-09-01
 
 - Reclaim detached parser, graph, and render memory after the idle cache window so parallel coding-agent tasks do not retain large V8 heaps and trigger `Transport closed` through host memory exhaustion. Idle cleanup is coordinated across every MCP domain and never compacts during an active tool call.

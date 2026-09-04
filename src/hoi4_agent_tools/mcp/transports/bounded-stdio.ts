@@ -65,6 +65,14 @@ export class BoundedStdioServerTransport implements Transport {
   private frameBytes = 0;
   private started = false;
   private closed = false;
+  private writing = false;
+  private queuedBytes = 0;
+  private readonly writes: Array<{
+    data: string;
+    bytes: number;
+    resolve(): void;
+    reject(error: Error): void;
+  }> = [];
 
   public constructor(options: BoundedStdioTransportOptions = {}) {
     this.input = options.stdin ?? process.stdin;
@@ -176,8 +184,11 @@ export class BoundedStdioServerTransport implements Transport {
     this.input.off('error', this.handleInputError);
     this.input.off('end', this.handleInputEnd);
     this.input.off('close', this.handleInputClose);
-    this.output.off('error', this.handleOutputError);
+    if (!this.writing) this.output.off('error', this.handleOutputError);
     this.output.off('close', this.handleOutputClose);
+    const error = new Error('Stdio transport is closed');
+    for (const write of this.writes.splice(0)) write.reject(error);
+    this.queuedBytes = 0;
     if (destroyInput) this.input.destroy();
     else if (this.input.listenerCount('data') === 0) this.input.pause();
     this.onclose();
@@ -208,21 +219,42 @@ export class BoundedStdioServerTransport implements Transport {
 
   send(message: JSONRPCMessage): Promise<void> {
     if (this.closed) return Promise.reject(new Error('Stdio transport is closed'));
+    const data = serializeMessage(message);
+    const bytes = Buffer.byteLength(data);
+    if (bytes > 134_217_728 - this.queuedBytes) {
+      return Promise.reject(new Error('Stdio output queue is full'));
+    }
     return new Promise((resolve, reject) => {
-      const onError = (error: Error): void => {
-        this.output.off('error', onError);
-        reject(error);
-      };
-      this.output.once('error', onError);
-      const written = this.output.write(serializeMessage(message));
-      if (written) {
-        this.output.off('error', onError);
-        resolve();
+      this.queuedBytes += bytes;
+      this.writes.push({ data, bytes, resolve, reject });
+      this.flushWrites();
+    });
+  }
+
+  private flushWrites(): void {
+    if (this.writing || this.closed) return;
+    const write = this.writes[0];
+    if (write === undefined) return;
+    this.writing = true;
+    this.output.write(write.data, (error) => {
+      this.writing = false;
+      if (this.closed) {
+        // A stream error is emitted after its write callback. Keep the listener through
+        // that turn so closing an output with buffered writes cannot crash the process.
+        setImmediate(() => this.output.off('error', this.handleOutputError));
+        return;
+      }
+      this.writes.shift();
+      this.queuedBytes -= write.bytes;
+      if (error != null) {
+        write.reject(error);
+        this.writing = true;
+        this.finish(true);
+        this.writing = false;
+        setImmediate(() => this.output.off('error', this.handleOutputError));
       } else {
-        this.output.once('drain', () => {
-          this.output.off('error', onError);
-          resolve();
-        });
+        write.resolve();
+        this.flushWrites();
       }
     });
   }

@@ -4,7 +4,11 @@ Local MCP clients should use the default stdio registration. Use `hoi4-agent-too
 
 The HTTP server exposes the MCP endpoint at `/mcp`.
 
-JSON request bodies default to and are capped at 64 MiB. This leaves transport-envelope headroom for the bounded 16 MiB GUI text package and a maximum canonical map mask while the two-request concurrency ceiling keeps aggregate body bytes at or below 128 MiB.
+The server accepts up to 128 simultaneous HTTP requests by default and queues expensive tool work automatically. Cancellation, discovery, and protocol replies retain separate admission headroom. Active requests keep their sessions alive; credential expiry still applies.
+
+JSON request bodies default to and are capped at 64 MiB, with a shared 128 MiB budget based on declared request sizes. Chunked bodies reserve their configured maximum. These byte reservations are independent of the number of accepted requests.
+
+`maxConcurrentTools` controls expensive operations per server engine (default 2), and `maxSharedTools` controls operations across local processes sharing the same `serverStateRoot` (default 4). Calls waiting for capacity remain cancellable and emit progress when requested. Increase execution capacity only when the host has enough memory for the corresponding scans and renders. HTTP admission, connection, session, and rate limits remain separately configurable.
 
 Resumable event history defaults to 2 MiB per session within the 16 MiB global store, enough to retain one framed 1 MiB artifact-resource chunk.
 
