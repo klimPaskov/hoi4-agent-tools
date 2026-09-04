@@ -68,4 +68,29 @@ describe('shared request scheduler', () => {
       2,
     );
   });
+
+  it('rotates across every waiting session instead of alternating only the first two', async () => {
+    const scheduler = new RequestScheduler(1);
+    const owners = [{}, {}, {}, {}];
+    const order: number[] = [];
+    let release!: () => void;
+    const first = scheduler.run(owners[0]!, 1, new AbortController().signal, async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    await Promise.resolve();
+    const queued = owners.flatMap((owner, id) =>
+      Array.from({ length: 12 }, () =>
+        scheduler.run(owner, 1, new AbortController().signal, async () => {
+          order.push(id);
+        }),
+      ),
+    );
+    release();
+    await Promise.all([first, ...queued]);
+    for (let index = 0; index < order.length; index += owners.length) {
+      expect(new Set(order.slice(index, index + owners.length)).size).toBe(owners.length);
+    }
+  });
 });

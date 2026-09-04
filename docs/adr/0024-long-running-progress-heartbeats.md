@@ -1,5 +1,7 @@
 # ADR 0024: Keep long MCP operations alive with progress heartbeats
 
+Superseded by [concurrent request execution](0026-concurrent-request-execution.md): heartbeats cover every tool and use strictly increasing values, including during queue waits.
+
 ## Decision
 
 Long GUI inspection, rendering, and rewrite stages run behind a shared progress-heartbeat helper. The helper sends a repeated `notifications/progress` message every ten seconds without changing the reported work value, then clears its timer when the stage completes or fails. Existing monotonic progress reports remain unchanged.

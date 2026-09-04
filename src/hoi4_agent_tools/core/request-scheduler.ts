@@ -85,6 +85,14 @@ export class RequestScheduler {
     while (this.active < this.capacity && this.pending.length > 0) {
       const other = this.pending.findIndex(({ owner }) => owner !== this.lastOwner);
       const entry = this.pending.splice(Math.max(0, other), 1)[0]!;
+      // Move this session's remaining work behind every other waiting session.
+      // Merely avoiding the last owner can alternate two busy sessions forever.
+      const sameOwner: PendingRequest[] = [];
+      const otherOwners: PendingRequest[] = [];
+      for (const pending of this.pending) {
+        (pending.owner === entry.owner ? sameOwner : otherOwners).push(pending);
+      }
+      this.pending.splice(0, this.pending.length, ...otherOwners, ...sameOwner);
       this.pendingBytes -= entry.bytes;
       entry.start();
     }

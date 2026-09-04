@@ -7,6 +7,7 @@ No unreleased changes.
 ## 3.0.8 - 2026-09-05
 
 - Queue simultaneous tool calls fairly across HTTP sessions and coordinate expensive operations across local task processes sharing private server state.
+- Rotate across every waiting session and canonicalize configured storage aliases, including Windows short-name paths, before acquiring shared execution capacity.
 - Keep every tool call responsive with strictly increasing MCP progress notifications during execution and queue waits; allow cancellation and discovery while tool capacity is occupied.
 - Separate HTTP request admission and body-byte reservations from expensive execution capacity, replacing the two-request ceiling with defaults suitable for parallel agents.
 - Keep active HTTP sessions alive, yield during shared source indexing, and serialize backpressured stdio output without leaking listeners or leaving sends pending after a disconnect.

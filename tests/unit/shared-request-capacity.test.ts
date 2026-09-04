@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,7 +35,7 @@ describe('shared task-process execution capacity', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-shared-capacity-'));
     const first = new SharedRequestCapacity(root, 1);
     const second = new SharedRequestCapacity(root, 1);
-    let release!: () => void;
+    let release: () => void = () => undefined;
     let started!: () => void;
     const ready = new Promise<void>((resolve) => {
       started = resolve;
@@ -47,7 +47,7 @@ describe('shared task-process execution capacity', () => {
       });
     });
     try {
-      await ready;
+      await Promise.race([ready, running]);
       const controller = new AbortController();
       const cancelled = second.run(controller.signal, async () => {
         throw new Error('Must not start');
@@ -72,8 +72,46 @@ describe('shared task-process execution capacity', () => {
       expect(await readdir(slots)).toEqual([]);
     } finally {
       release();
-      await running;
+      await running.catch(() => undefined);
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('shares capacity through a configured filesystem alias without permitting descendant escape', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-alias-'));
+    const root = path.join(temporary, 'state');
+    const alias = path.join(temporary, 'alias');
+    const outside = path.join(temporary, 'outside');
+    await mkdir(root);
+    await mkdir(outside);
+    await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    let active = 0;
+    let peak = 0;
+    try {
+      await Promise.all(
+        Array.from({ length: 8 }, async (_, index) => {
+          const capacity = new SharedRequestCapacity(index % 2 === 0 ? root : alias, 1);
+          return capacity.run(new AbortController().signal, async () => {
+            active += 1;
+            peak = Math.max(peak, active);
+            await new Promise<void>((resolve) => setTimeout(resolve, 2));
+            active -= 1;
+          });
+        }),
+      );
+      expect(peak).toBe(1);
+      await rm(path.join(root, 'request-capacity'), { recursive: true });
+      await symlink(
+        outside,
+        path.join(root, 'request-capacity'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+      await expect(
+        new SharedRequestCapacity(alias).run(new AbortController().signal, async () => 'escaped'),
+      ).rejects.toMatchObject({ code: 'PATH_GENERATED_ROOT_ESCAPE' });
+      expect(await readdir(outside)).toEqual([]);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
     }
   });
 

@@ -3,7 +3,7 @@ import { mkdir, readdir, rmdir, stat, unlink, writeFile } from 'node:fs/promises
 import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { sha256Bytes } from './canonical.js';
-import { containedGeneratedPath } from './workspace.js';
+import { canonicalPath, containedGeneratedPath } from './workspace.js';
 
 function processAlive(pid: number): boolean {
   try {
@@ -25,7 +25,7 @@ export class SharedRequestCapacity {
     signal.throwIfAborted();
     if (this.stateRoot === undefined) return action();
     const root = await containedGeneratedPath(
-      this.stateRoot,
+      await canonicalPath(this.stateRoot, signal),
       'request-capacity',
       sha256Bytes(hostname().toLowerCase()).slice(0, 16),
     );

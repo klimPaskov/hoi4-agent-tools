@@ -6,7 +6,7 @@ Every MCP tool handler uses one shared request lifecycle. A bounded, fair queue 
 
 The public SDK request-handler registration boundary supplies this lifecycle to all domains and optional tools without introducing domain logic into transports. Domain services retain their typed interfaces. The lifecycle uses the request's cancellation signal and the same progress reporter as the domain handler.
 
-Local capacity leases identify their owning PID and unique lease name. An active owner is never removed. Dead owners and abandoned empty slots can be reclaimed. Concurrent cleanup only removes the exact abandoned owner name and an empty directory, so it cannot delete a replacement owner's lease. Client cancellation releases a waiting request without stopping another task.
+Local capacity leases identify their owning PID and unique lease name. An active owner is never removed. Dead owners and abandoned empty slots can be reclaimed. Concurrent cleanup only removes the exact abandoned owner name and an empty directory, so it cannot delete a replacement owner's lease. Client cancellation releases a waiting request without stopping another task. Configured root aliases are canonicalized before descendant checks, including Windows short-name paths; descendant links still cannot escape that root.
 
 Progress pulses use strictly increasing floating-point values as required by the negotiated MCP protocol. They cover queue waits and execution for every tool, stop at completion, and are best-effort if the client disconnects. They require a client-provided progress token; clients must opt into resetting idle timeouts on progress and choose an appropriate maximum duration.
 
@@ -22,7 +22,7 @@ Artifact mutation holds an exclusive host lease rooted in the artifact store as 
 
 The concurrent workload tests use project-owned fixtures across every domain, including 1,040 technologies. They submit 30 simultaneous domain requests over six HTTP sessions and four separate stdio processes, retrieve artifact resources, and check progress ordering and continued discovery. Focus and GUI rewrites, map geometry, probability evaluation and comparison, isolation, stale source rejection, and recovery remain covered by their end-to-end suites.
 
-Targeted regressions cover queued cancellation, fairness, slow or disconnected stdout, session activity across the inactivity deadline, and shared lease contention and crash recovery.
+Targeted regressions cover queued cancellation, rotation across four continuously busy sessions, slow or disconnected stdout, session activity across the inactivity deadline, and shared lease contention, filesystem aliases, descendant escape rejection, and crash recovery.
 
 ## Limits
 
