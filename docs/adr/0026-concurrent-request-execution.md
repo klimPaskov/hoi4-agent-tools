@@ -25,6 +25,11 @@ Artifact mutation holds an exclusive host lease rooted in the artifact store as 
 
 ## Validation
 
+On Windows, deleting a capacity directory can leave a pending kernel handle after `rmdir` returns.
+Slot creation treats `EPERM` and `EBUSY` as retryable admission failures, verifies the existing slot before cleanup, and never runs the action without successful ownership publication.
+Fifty consecutive failures for a slot surface the original error rather than hiding a persistent permission problem behind an indefinite retry.
+Deterministic fault-injection tests verify recovery without duplicate execution and the persistent-error boundary.
+
 The concurrent workload tests use project-owned fixtures across every domain, including 1,040 technologies. They submit 30 simultaneous domain requests over six HTTP sessions and four separate stdio processes, retrieve artifact resources, and check progress ordering and continued discovery. Focus and GUI rewrites, map geometry, probability evaluation and comparison, isolation, stale source rejection, and recovery remain covered by their end-to-end suites.
 
 Targeted regressions cover queued cancellation, rotation across four continuously busy sessions, slow or disconnected stdout, session activity across the inactivity deadline, and shared lease contention, filesystem aliases, descendant escape rejection, and crash recovery.

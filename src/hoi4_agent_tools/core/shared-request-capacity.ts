@@ -33,6 +33,7 @@ export class SharedRequestCapacity {
     );
     await mkdir(root, { recursive: true });
     const lease = `${process.pid}-${randomUUID()}.lease`;
+    const pendingDeletionFailures = new Map<number, number>();
     for (;;) {
       signal.throwIfAborted();
       for (let index = 0; index < this.capacity; index += 1) {
@@ -42,8 +43,21 @@ export class SharedRequestCapacity {
         const slot = path.join(root, String(index));
         try {
           await mkdir(slot);
+          pendingDeletionFailures.delete(index);
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+          const code = (error as NodeJS.ErrnoException).code;
+          // Windows can retain a delete-pending directory handle after rmdir
+          // returns. Recreating that slot reports EPERM/EBUSY, not EEXIST.
+          // No work is admitted until a later mkdir actually succeeds.
+          if (process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code ?? '')) {
+            const failures = (pendingDeletionFailures.get(index) ?? 0) + 1;
+            pendingDeletionFailures.set(index, failures);
+            if (failures >= 50) throw error;
+            await this.reap(slot);
+            continue;
+          }
+          if (code !== 'EEXIST') throw error;
+          pendingDeletionFailures.delete(index);
           await this.reap(slot);
           continue;
         }
