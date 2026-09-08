@@ -19,6 +19,7 @@ import { DiagnosticCollector } from '../core/diagnostic-collector.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { CoreEngine } from '../core/engine.js';
+import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
 import { ServiceError, type ArtifactLink } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -70,6 +71,8 @@ import type {
 import { validateGuiScene, validateResolutionDrift, validateStateMatrix } from './validators.js';
 
 const staticGuiDefinitionPatterns = [
+  'common/scripted_triggers/**/*.txt',
+  'common/script_constants/**/*.txt',
   'common/scripted_localisation/**/*.txt',
   'common/decisions/**/*.txt',
   'common/decision_categories/**/*.txt',
@@ -1174,6 +1177,7 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
+            ClausewitzEvaluationDefinitions.build(scanned),
           );
     const scenario = generatedScenarios[0] ?? placeholderScenario;
     const relatedScenarios = [
@@ -1321,6 +1325,7 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
+            ClausewitzEvaluationDefinitions.build(scanned),
           );
     const scenario = generatedScenarios[0] ?? placeholderScenario;
     const relatedScenarios = [

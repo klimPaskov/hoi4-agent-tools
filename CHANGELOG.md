@@ -4,6 +4,16 @@
 
 No unreleased changes.
 
+## 3.0.9 - 2026-09-08
+
+- Evaluate GUI scripted-localisation branches through the shared structured condition evaluator instead of regex threshold guesses.
+- Correct inclusive boundaries, compound conditions, negation, variable operands, constants, and named scopes; retain the existing probability API through core compatibility exports.
+- Resolve source-backed scripted-trigger calls, including declared scalar parameters, and retain helper provenance and unresolved conditions.
+- Keep an unknown earlier localisation branch unresolved instead of selecting a ranked candidate or an unproven fallback.
+- Preserve explicit values and seeded exploratory previews, expose optional named GUI scope bindings, and include per-choice condition evidence in scenario artifacts.
+- Add independent condition truth-table tests and generated-scenario-to-render regressions for the reported failures, colours, scoped helpers, placeholders, and repeatable SVG/PNG output.
+- Align the sparse-mod stdio test's overall budget with its RPC waits and honor matching progress notifications without removing the finite test deadline.
+
 ## 3.0.8 - 2026-09-05
 
 - Queue simultaneous tool calls fairly across HTTP sessions and coordinate expensive operations across local task processes sharing private server state.

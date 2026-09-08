@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ConditionScopeBindingSchema, ConditionResultSchema } from '../core/condition-schema.js';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { GuiGeneratedScenarioOptions, GuiPreviewScenario } from './types.js';
@@ -151,6 +152,8 @@ const GuiPreviewScenarioBodySchema = z
     visibleTimeSeconds: z.number().min(0).max(86_400).optional(),
     country: objectSchema.optional(),
     stateValues: objectSchema.optional(),
+    scopes: z.record(z.string().max(256), ConditionScopeBindingSchema).optional(),
+    conditionResults: z.array(ConditionResultSchema).max(10_000).optional(),
     variables: z.record(z.string(), z.number()).default({}),
     flags: z.record(z.string(), z.boolean()).default({}),
     lists: z.record(z.string(), z.array(objectSchema).max(10_000)).default({}),

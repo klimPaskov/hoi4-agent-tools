@@ -25,3 +25,5 @@
 23. [Vanilla GUI composition and layout fidelity](0023-vanilla-gui-composition-and-layout-fidelity.md)
 24. [Probability scope bindings and dynamic pools](0024-probability-scope-bindings-and-dynamic-pools.md)
 25. [Bounded cache lifetimes](0025-bounded-cache-lifetimes.md)
+26. [Concurrent request execution](0026-concurrent-request-execution.md)
+27. [Shared scenario condition evaluation](0027-shared-condition-evaluation.md)

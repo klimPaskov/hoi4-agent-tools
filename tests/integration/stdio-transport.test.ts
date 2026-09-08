@@ -40,6 +40,7 @@ async function waitForMessage(
   child: ChildProcessWithoutNullStreams,
   id: number,
   lines: string[],
+  progressToken?: string,
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
@@ -65,6 +66,13 @@ async function waitForMessage(
           reject(error);
           return;
         }
+        if (
+          progressToken !== undefined &&
+          parsed.method === 'notifications/progress' &&
+          (parsed.params as { progressToken?: unknown } | undefined)?.progressToken ===
+            progressToken
+        )
+          timeout.refresh();
         if (parsed.id === id) {
           clearTimeout(timeout);
           child.stdout.off('data', consume);
@@ -230,11 +238,12 @@ describe('local stdio transport', () => {
           method: 'tools/call',
           params: {
             name: 'hoi4.focus_inspect',
+            _meta: { progressToken: 'sparse-focus-inspect' },
             arguments: { relativePath: 'common/national_focus/sparse.txt' },
           },
         })}\n`,
       );
-      const inspected = await waitForMessage(child, 2, stdoutLines);
+      const inspected = await waitForMessage(child, 2, stdoutLines, 'sparse-focus-inspect');
       expect(inspected).toMatchObject({
         jsonrpc: '2.0',
         result: { structuredContent: { status: 'ok', code: 'FOCUS_INSPECTED' } },
@@ -244,7 +253,9 @@ describe('local stdio transport', () => {
       await stop(child);
       await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
-  }, 45_000);
+    // Two RPC waits plus process teardown must fit inside the outer test budget.
+    // Matching progress keeps the tool's idle wait alive; this overall deadline stays finite.
+  }, 150_000);
 
   it('uses newline-delimited JSON-RPC on stdout with no log contamination', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-'));

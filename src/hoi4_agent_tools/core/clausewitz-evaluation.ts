@@ -9,7 +9,8 @@ import {
   type SourceDocument,
 } from './source/index.js';
 
-const definitionCache = new WeakMap<ScanSnapshot, ClausewitzEvaluationDefinitions>();
+type DefinitionSources = Pick<ScanSnapshot, 'files'>;
+const definitionCache = new WeakMap<DefinitionSources, ClausewitzEvaluationDefinitions>();
 
 export interface ClausewitzDefinition<T> {
   id: string;
@@ -19,7 +20,7 @@ export interface ClausewitzDefinition<T> {
   document: SourceDocument;
 }
 
-function activeTextFiles(snapshot: ScanSnapshot, prefix: string): ScannedFile[] {
+function activeTextFiles(snapshot: DefinitionSources, prefix: string): ScannedFile[] {
   return snapshot.files
     .filter(
       ({ relativePath, shadowedBy }) =>
@@ -62,7 +63,7 @@ export class ClausewitzEvaluationDefinitions {
   public readonly scriptedTriggers = new Map<string, ClausewitzDefinition<BlockNode>>();
   public readonly localConstants = new Map<string, Map<string, ClausewitzDefinition<string>>>();
 
-  public static build(snapshot: ScanSnapshot): ClausewitzEvaluationDefinitions {
+  public static build(snapshot: DefinitionSources): ClausewitzEvaluationDefinitions {
     const cached = definitionCache.get(snapshot);
     if (cached !== undefined) return cached;
     const result = new ClausewitzEvaluationDefinitions();

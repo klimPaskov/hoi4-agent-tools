@@ -1,4 +1,5 @@
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
+import type { ConditionScopeBinding, TriState } from '../core/condition-model.js';
 import type { StoredArtifact } from '../core/artifacts.js';
 import type { IndexSkippedSource, SymbolKind } from '../core/index.js';
 import type { GuiAnimationSourceManifestDocument } from './animation-manifest.js';
@@ -281,6 +282,14 @@ export interface GuiPreviewScenario {
   visibleTimeSeconds?: number;
   country?: Record<string, string | number | boolean>;
   stateValues?: Record<string, string | number | boolean>;
+  scopes?: Record<string, ConditionScopeBinding>;
+  conditionResults?: {
+    token: string;
+    sourcePath: string;
+    state: TriState;
+    localisationKey?: string;
+    unresolved: string[];
+  }[];
   variables: Record<string, number>;
   flags: Record<string, boolean>;
   lists: Record<string, Record<string, string | number | boolean>[]>;

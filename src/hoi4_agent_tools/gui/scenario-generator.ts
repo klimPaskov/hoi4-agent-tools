@@ -1,4 +1,11 @@
 import { sha256Bytes } from '../core/canonical.js';
+import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
+import {
+  evaluateGuiCondition,
+  guiConditionScenario,
+  guiConditionVariables,
+  guiExplicitConditionValues,
+} from './scenario-conditions.js';
 import { parsePreviewScenario } from './scenario.js';
 import type {
   GuiElementDefinition,
@@ -354,89 +361,54 @@ function scriptedLocalisationValue(
   graph: GuiSourceGraph,
   token: string,
   language: string,
-  random: ScenarioRandom,
   kind: 'image' | 'text',
   values: Readonly<Record<string, string | number | boolean>>,
+  base: GuiPreviewScenario,
+  definitions: ClausewitzEvaluationDefinitions,
+  results: NonNullable<GuiPreviewScenario['conditionResults']>,
 ): string | undefined {
   const shortToken = token.slice(token.lastIndexOf('.') + 1);
-  const definitions = graph.scriptedLocalisation.filter(
-    ({ name }) => name === token || name === shortToken,
-  );
-  if (definitions.length === 0) return undefined;
-  const sprites = new Set(graph.sprites.map(({ name }) => name.toLocaleLowerCase('en-US')));
-  const choices = definitions.flatMap(({ choices }) => choices);
-  const eligible = choices.filter(({ localisationKey }) =>
-    kind === 'image'
-      ? sprites.has(localisationKey.toLocaleLowerCase('en-US'))
-      : localisationText(graph, language, localisationKey) !== undefined,
-  );
-  if (eligible.length === 0) return undefined;
-  const evaluated = eligible.map((choice) => ({
-    choice,
-    result: evaluateSimpleTrigger(choice.triggerExpression, values),
-  }));
-  const matched = evaluated.find(({ result }) => result === true)?.choice;
-  const firstThreshold = evaluated
-    .map(({ choice }) => simpleThreshold(choice.triggerExpression))
-    .find((threshold) => threshold !== undefined && typeof values[threshold.variable] === 'number');
-  const unknownExists = evaluated.some(({ result }) => result === undefined);
-  const ranked =
-    matched === undefined && unknownExists && firstThreshold !== undefined
-      ? eligible[
-          Math.min(
-            eligible.length - 1,
-            Math.max(
-              0,
-              Math.round(
-                (1 - Math.max(0, Math.min(100, Number(values[firstThreshold.variable]))) / 100) *
-                  (eligible.length - 1),
-              ),
-            ),
-          )
-        ]
-      : undefined;
-  const fallback = evaluated.find(({ result }) => result === 'fallback')?.choice;
-  const selected = matched ?? ranked ?? fallback ?? random.pick(eligible);
-  if (kind === 'image') return selected.localisationKey;
-  return localisationText(graph, language, selected.localisationKey);
-}
-
-function simpleThreshold(
-  triggerExpression: string | undefined,
-): { variable: string; operator: '>' | '<'; threshold: number } | undefined {
-  if (triggerExpression === undefined) return undefined;
-  const direct = /([A-Za-z_][A-Za-z0-9_.:^]*)\s*([<>])\s*(-?(?:\d+\.?\d*|\.\d+))/u.exec(
-    triggerExpression,
-  );
-  if (direct !== null)
-    return {
-      variable: direct[1]!,
-      operator: direct[2] as '>' | '<',
-      threshold: Number(direct[3]),
-    };
-  const variable = /\bvar\s*=\s*([A-Za-z_][A-Za-z0-9_.:^]*)/u.exec(triggerExpression)?.[1];
-  const threshold = /\bvalue\s*=\s*(-?(?:\d+\.?\d*|\.\d+))/u.exec(triggerExpression)?.[1];
-  const compare = /\bcompare\s*=\s*(greater_than|less_than)/u.exec(triggerExpression)?.[1];
-  if (variable === undefined || threshold === undefined || compare === undefined) return undefined;
-  return {
-    variable,
-    operator: compare === 'greater_than' ? '>' : '<',
-    threshold: Number(threshold),
+  const definition = graph.scriptedLocalisation
+    .filter(({ name }) => name === token || name === shortToken)
+    .at(-1);
+  if (definition === undefined) return undefined;
+  const scenario = guiConditionScenario(base, values);
+  const subject = {
+    id: token,
+    provenance: [
+      {
+        path: definition.sourcePath,
+        rootKind: 'source',
+        loadOrder: 0,
+        sourceHash: graph.sourceHashes[definition.sourcePath] ?? '',
+        ...(definition.location === undefined ? {} : { location: definition.location }),
+      },
+    ],
   };
-}
-
-function evaluateSimpleTrigger(
-  triggerExpression: string | undefined,
-  values: Readonly<Record<string, string | number | boolean>>,
-): boolean | 'fallback' | undefined {
-  if (triggerExpression === undefined || /\balways\s*=\s*yes\b/u.test(triggerExpression))
-    return 'fallback';
-  if (/\balways\s*=\s*no\b/u.test(triggerExpression)) return false;
-  const threshold = simpleThreshold(triggerExpression);
-  if (threshold === undefined) return undefined;
-  const value = values[threshold.variable];
-  if (typeof value !== 'number') return undefined;
-  return threshold.operator === '>' ? value > threshold.threshold : value < threshold.threshold;
+  const prefix = token.includes('.') ? token.slice(0, token.lastIndexOf('.')) : 'ROOT';
+  for (const choice of definition.choices) {
+    const result = evaluateGuiCondition(
+      choice.triggerExpression,
+      scenario,
+      subject,
+      definitions,
+      prefix,
+    );
+    results.push({
+      token,
+      sourcePath: definition.sourcePath,
+      state: result.state,
+      localisationKey: choice.localisationKey,
+      unresolved: result.unresolved.map(({ message }) => message),
+    });
+    // An earlier unknown branch may be selected by the game; a later fallback cannot prove it false.
+    if (result.state === 'unresolved') return undefined;
+    if (result.state === 'false') continue;
+    return kind === 'image'
+      ? choice.localisationKey
+      : localisationText(graph, language, choice.localisationKey);
+  }
+  return undefined;
 }
 
 function materializeDynamicText(
@@ -642,6 +614,7 @@ export function generateGuiPreviewScenarios(
   windowName: string,
   base: GuiPreviewScenario,
   options: GuiGeneratedScenarioOptions,
+  definitions = new ClausewitzEvaluationDefinitions(),
 ): GuiPreviewScenario[] {
   if (!options.enabled) return [];
   const scripted = relatedScriptedGuis(graph, windowName);
@@ -678,8 +651,8 @@ export function generateGuiPreviewScenarios(
     )
       continue;
     for (const choice of definition.choices) {
-      const threshold = simpleThreshold(choice.triggerExpression);
-      if (threshold !== undefined) tokens.numeric.add(threshold.variable);
+      for (const variable of guiConditionVariables(choice.triggerExpression, definitions))
+        tokens.numeric.add(variable);
     }
   }
   const progressRanges = new Map<string, { minimum: number; maximum: number }>();
@@ -709,7 +682,14 @@ export function generateGuiPreviewScenarios(
     options.seed === 'auto' ? `${windowName}:${base.id}:${hashSourceGraph(graph)}` : options.seed;
   return Array.from({ length: options.count }, (_unused, scenarioIndex) => {
     const random = new ScenarioRandom(`${sourceSeed}:${scenarioIndex}`);
-    const values = { ...base.values };
+    const explicitValues = guiExplicitConditionValues(base);
+    const values = { ...explicitValues };
+    const conditionResults: NonNullable<GuiPreviewScenario['conditionResults']> = [];
+    const scriptedTokens = new Set(
+      [...tokens.textual].filter((token) =>
+        graph.scriptedLocalisation.some(({ name }) => name === token || token.endsWith(`.${name}`)),
+      ),
+    );
     const lists = Object.fromEntries(
       Object.entries(base.lists).map(([key, rows]) => [key, rows.map((row) => ({ ...row }))]),
     );
@@ -743,13 +723,13 @@ export function generateGuiPreviewScenarios(
       if (startValueToken !== undefined) setIfMissing(values, startValueToken, value);
     }
     for (const key of tokens.numeric) {
-      if (!key.endsWith('_bar') || base.values[key] !== undefined) continue;
+      if (!key.endsWith('_bar') || explicitValues[key] !== undefined) continue;
       const sourceKey = key.slice(0, -'_bar'.length);
       const sourceValue = values[sourceKey];
       if (typeof sourceValue === 'number') values[key] = sourceValue;
     }
     for (const { value: valueKey, limit: limitKey } of numericConstraints.relationships) {
-      if (base.values[valueKey] !== undefined) continue;
+      if (explicitValues[valueKey] !== undefined) continue;
       const value = values[valueKey];
       const limit = values[limitKey];
       if (typeof value !== 'number' || typeof limit !== 'number') continue;
@@ -760,29 +740,42 @@ export function generateGuiPreviewScenarios(
       values[valueKey] = Math.max(minimum, Math.min(value, limit));
     }
     for (const key of tokens.textual)
-      setIfMissing(values, key, plausibleText(key, random, options.textSamples, scopedCountries));
+      if (!scriptedTokens.has(key))
+        setIfMissing(values, key, plausibleText(key, random, options.textSamples, scopedCountries));
     const scriptedTextTemplates = new Map<string, string>();
     for (const key of tokens.textual) {
+      if (explicitValues[key] !== undefined) continue;
       const scriptedValue = scriptedLocalisationValue(
         graph,
         key,
         base.language,
-        random,
         'text',
         values,
+        base,
+        definitions,
+        conditionResults,
       );
-      if (scriptedValue !== undefined && base.values[key] === undefined)
-        scriptedTextTemplates.set(key, scriptedValue);
+      if (scriptedValue !== undefined) scriptedTextTemplates.set(key, scriptedValue);
     }
     for (let pass = 0; pass < 3; pass += 1)
       for (const [key, template] of scriptedTextTemplates)
         values[key] = materializeDynamicText(template, values);
     for (const key of imageTokens) {
+      if (explicitValues[key] !== undefined) continue;
       if (/(?:^|\.)GetFlag$/u.test(key)) {
         setIfMissing(values, key, generatedCountryTag);
         continue;
       }
-      const sprite = scriptedLocalisationValue(graph, key, base.language, random, 'image', values);
+      const sprite = scriptedLocalisationValue(
+        graph,
+        key,
+        base.language,
+        'image',
+        values,
+        base,
+        definitions,
+        conditionResults,
+      );
       if (sprite !== undefined) setIfMissing(values, key, sprite);
     }
     for (const key of booleanTokens)
@@ -800,7 +793,8 @@ export function generateGuiPreviewScenarios(
     return parsePreviewScenario({
       ...base,
       id: `${base.id}-${options.idPrefix}-${scenarioIndex + 1}`,
-      description: `Generated source-aware scenario ${scenarioIndex + 1} (seed ${sourceSeed})`,
+      description: `Generated exploratory preview ${scenarioIndex + 1} (seed ${sourceSeed}; not verified campaign state)`,
+      conditionResults,
       values,
       country: [...imageTokens].some((key) => /(?:^|\.)GetFlag$/u.test(key))
         ? {
