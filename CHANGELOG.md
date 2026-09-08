@@ -13,6 +13,7 @@ No unreleased changes.
 - Preserve explicit values and seeded exploratory previews, expose optional named GUI scope bindings, and include per-choice condition evidence in scenario artifacts.
 - Add independent condition truth-table tests and generated-scenario-to-render regressions for the reported failures, colours, scoped helpers, placeholders, and repeatable SVG/PNG output.
 - Align the sparse-mod stdio test's overall budget with its RPC waits and honor matching progress notifications without removing the finite test deadline.
+- Avoid Windows path-resolution races while concurrent stdio processes release capacity slots, retaining private-root validation and explicit linked-slot rejection.
 
 ## 3.0.8 - 2026-09-05
 

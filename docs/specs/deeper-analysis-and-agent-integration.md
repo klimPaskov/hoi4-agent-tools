@@ -100,5 +100,7 @@ The first full release run passed 552 tests across five shards and failed the sp
 An instrumented rerun completed initialization and source-backed focus inspection in about 61 seconds with progress notifications and the correct workspace.
 The stdio regression now gives both RPC waits and teardown an explicit overall budget and refreshes only a matching tool-progress idle timeout.
 The corrected test passed in 108.8 seconds on this host; that is functional evidence, not a responsiveness pass, and the latency remains a Stage 2 finding.
-The remaining shards and clean full-matrix release qualification are pending.
+All eight shards are covered in aggregate after the corrected stdio test and an npm-environment rerun of the package-path regression: 840 passing tests and one platform-specific skip.
+CI on commit `7e3ac02` passed Ubuntu/Node 24 but found a Windows/Node 22 capacity-slot canonicalization race under independent stdio processes; release qualification remains blocked until the correction passes a fresh complete matrix.
+The correction passed nine local capacity and mixed-transport tests, including 128 competing instances and rejection of a linked slot without modifying its outside owner.
 See [the shared-condition decision](../adr/0027-shared-condition-evaluation.md) for the architecture and remaining interpreter boundaries.

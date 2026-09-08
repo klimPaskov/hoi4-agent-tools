@@ -14,7 +14,7 @@ describe('shared task-process execution capacity', () => {
     let peak = 0;
     try {
       const results = await Promise.allSettled(
-        Array.from({ length: 32 }, async (_, id) => {
+        Array.from({ length: 128 }, async (_, id) => {
           const capacity = new SharedRequestCapacity(root, 2);
           return capacity.run(new AbortController().signal, async () => {
             active += 1;
@@ -29,6 +29,34 @@ describe('shared task-process execution capacity', () => {
       expect(peak).toBeLessThanOrEqual(2);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an existing linked slot without reading or deleting an outside owner', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-slot-link-'));
+    const root = path.join(temporary, 'state');
+    const outside = path.join(temporary, 'outside');
+    const slots = path.join(
+      root,
+      'request-capacity',
+      sha256Bytes(hostname().toLowerCase()).slice(0, 16),
+    );
+    await mkdir(slots, { recursive: true });
+    await mkdir(outside);
+    const sentinel = `${process.pid}-${randomUUID()}.lease`;
+    await writeFile(path.join(outside, sentinel), 'outside');
+    await symlink(
+      outside,
+      path.join(slots, '0'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    try {
+      await expect(
+        new SharedRequestCapacity(root, 1).run(new AbortController().signal, async () => 'escaped'),
+      ).rejects.toMatchObject({ code: 'PATH_GENERATED_ROOT_ESCAPE' });
+      expect(await readdir(outside)).toEqual([sentinel]);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
     }
   });
   it('coordinates independent instances and cancels waits without disturbing the owner', async () => {

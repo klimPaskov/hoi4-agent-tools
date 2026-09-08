@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
+import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { sha256Bytes } from './canonical.js';
 import { canonicalPath, containedGeneratedPath } from './workspace.js';
+import { ServiceError } from './result.js';
 
 function processAlive(pid: number): boolean {
   try {
@@ -34,14 +36,10 @@ export class SharedRequestCapacity {
     for (;;) {
       signal.throwIfAborted();
       for (let index = 0; index < this.capacity; index += 1) {
-        let slot: string;
-        try {
-          slot = await containedGeneratedPath(root, String(index));
-        } catch (error) {
-          // Another process can finish a slot while canonical containment is checked.
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-          throw error;
-        }
+        // Only the stable private parent is canonicalized. A slot can disappear during
+        // another owner's release; realpath on that ephemeral directory races on Windows.
+        // The numeric component cannot escape, and mkdir atomically proves new ownership.
+        const slot = path.join(root, String(index));
         try {
           await mkdir(slot);
         } catch (error) {
@@ -51,7 +49,7 @@ export class SharedRequestCapacity {
         }
         let owner: string;
         try {
-          owner = await containedGeneratedPath(slot, lease);
+          owner = path.join(slot, lease);
           await writeFile(owner, '', { flag: 'wx', mode: 0o600 });
         } catch (error) {
           // A competing stale-owner cleanup can remove an empty slot before our
@@ -67,7 +65,11 @@ export class SharedRequestCapacity {
           await unlink(owner);
           await rmdir(slot).catch((error: unknown) => {
             const code = (error as NodeJS.ErrnoException).code;
-            if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw error;
+            if (
+              !['ENOENT', 'ENOTEMPTY'].includes(code ?? '') &&
+              !(process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code ?? ''))
+            )
+              throw error;
           });
         }
       }
@@ -77,22 +79,32 @@ export class SharedRequestCapacity {
 
   private async reap(slot: string): Promise<void> {
     try {
+      const metadata = await lstat(slot);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory())
+        throw new ServiceError(
+          'PATH_GENERATED_ROOT_ESCAPE',
+          'Execution capacity slot must be a real directory beneath its private root',
+        );
       const owners = await readdir(slot);
       if (owners.length === 0) {
-        if (Date.now() - (await stat(slot)).mtimeMs < 30_000) return;
+        if (Date.now() - metadata.mtimeMs < 30_000) return;
       } else {
         for (const name of owners) {
           const match = /^([1-9][0-9]*)-[0-9a-f-]{36}\.lease$/u.exec(name);
           if (match === null || processAlive(Number(match[1]))) return;
           // Unique owner names prevent a concurrent reaper from deleting a new lease.
-          await unlink(await containedGeneratedPath(slot, name)).catch((error: unknown) => {
+          await unlink(path.join(slot, name)).catch((error: unknown) => {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
           });
         }
       }
       await rmdir(slot);
     } catch (error) {
-      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? ''))
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (
+        !['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(code) &&
+        !(process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code))
+      )
         throw error;
     }
   }

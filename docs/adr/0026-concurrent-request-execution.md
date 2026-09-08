@@ -8,6 +8,11 @@ The public SDK request-handler registration boundary supplies this lifecycle to 
 
 Local capacity leases identify their owning PID and unique lease name. An active owner is never removed. Dead owners and abandoned empty slots can be reclaimed. Concurrent cleanup only removes the exact abandoned owner name and an empty directory, so it cannot delete a replacement owner's lease. Client cancellation releases a waiting request without stopping another task. Configured root aliases are canonicalized before descendant checks, including Windows short-name paths; descendant links still cannot escape that root.
 
+Only the stable private capacity parent is canonicalized during admission.
+Numeric slot names and validated unique owner names are joined beneath it; atomic directory creation establishes ownership, and existing slots must pass a non-link directory check before reclamation.
+This avoids resolving a directory while another process deletes it, which produced Windows `realpath` failures and false containment errors under simultaneous stdio workloads.
+Windows busy-directory errors during empty-slot cleanup do not replace a completed operation's result; abandoned empty slots remain reclaimable.
+
 Progress pulses use strictly increasing floating-point values as required by the negotiated MCP protocol. They cover queue waits and execution for every tool, stop at completion, and are best-effort if the client disconnects. They require a client-provided progress token; clients must opt into resetting idle timeouts on progress and choose an appropriate maximum duration.
 
 HTTP defaults allow 128 concurrent requests, 512 connections, and 6,000 requests per minute. The connection budget leaves room for control requests even when all request and event-stream slots are occupied. Actual body reservations retain the 128 MiB aggregate budget rather than multiplying the maximum individual body size by the connection count. Small control envelopes have additional request slots. Session inactivity expiration excludes active requests, while OAuth credential expiration remains authoritative.
@@ -23,6 +28,7 @@ Artifact mutation holds an exclusive host lease rooted in the artifact store as 
 The concurrent workload tests use project-owned fixtures across every domain, including 1,040 technologies. They submit 30 simultaneous domain requests over six HTTP sessions and four separate stdio processes, retrieve artifact resources, and check progress ordering and continued discovery. Focus and GUI rewrites, map geometry, probability evaluation and comparison, isolation, stale source rejection, and recovery remain covered by their end-to-end suites.
 
 Targeted regressions cover queued cancellation, rotation across four continuously busy sessions, slow or disconnected stdout, session activity across the inactivity deadline, and shared lease contention, filesystem aliases, descendant escape rejection, and crash recovery.
+Slot contention includes 128 competing instances, and an existing linked slot must be rejected without reading or deleting an outside owner.
 
 ## Limits
 
