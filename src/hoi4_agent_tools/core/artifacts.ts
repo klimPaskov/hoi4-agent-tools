@@ -75,6 +75,12 @@ export interface ArtifactPage {
   hasMore: boolean;
 }
 
+export interface LogicalArtifactReadOptions {
+  mimeType: string;
+  maxBytes: number;
+  maxChunks: number;
+}
+
 interface ArtifactManifest {
   version: 2;
   workspaceIdentity: string;
@@ -1985,6 +1991,114 @@ export class ArtifactStore {
     this.#verifiedContent.set(verificationKey, identity);
     await refreshArtifactManifest(manifestPath);
     return { bytes, mimeType: manifest.mimeType, name, totalSize };
+  }
+
+  /** Read either one stored object or an authenticated chunk index as exact logical bytes. */
+  async readLogical(
+    workspace: ResolvedWorkspace,
+    uri: string,
+    options: LogicalArtifactReadOptions,
+    signal?: AbortSignal,
+  ): Promise<{ bytes: Buffer; mimeType: string; name: string; totalSize: number }> {
+    const initial = await this.read(workspace, uri, undefined, signal);
+    if (initial.mimeType !== options.mimeType)
+      throw new ServiceError(
+        'ARTIFACT_LOGICAL_TYPE_MISMATCH',
+        `Logical artifact must use ${options.mimeType}`,
+      );
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(initial.bytes.toString('utf8')) as unknown;
+    } catch {
+      if (initial.totalSize > options.maxBytes)
+        throw new ServiceError(
+          'ARTIFACT_LOGICAL_LIMIT',
+          'Logical artifact exceeds its fixed byte ceiling',
+        );
+      return initial;
+    }
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      (parsed as { type?: unknown }).type !== 'hoi4-agent.chunked-artifact'
+    ) {
+      if (initial.totalSize > options.maxBytes)
+        throw new ServiceError(
+          'ARTIFACT_LOGICAL_LIMIT',
+          'Logical artifact exceeds its fixed byte ceiling',
+        );
+      return initial;
+    }
+    const index = parsed as Partial<ChunkedArtifactIndex>;
+    if (
+      index.schemaVersion !== 1 ||
+      index.original === undefined ||
+      !Array.isArray(index.chunks) ||
+      index.chunks.length < 1 ||
+      index.chunks.length > options.maxChunks ||
+      index.original.mimeType !== options.mimeType ||
+      !Number.isSafeInteger(index.original.size) ||
+      index.original.size < 0 ||
+      index.original.size > options.maxBytes ||
+      !/^[a-f0-9]{64}$/u.test(index.original.sha256)
+    )
+      throw new ServiceError(
+        'ARTIFACT_LOGICAL_INVALID',
+        'Chunked logical artifact index is malformed or exceeds its fixed limits',
+      );
+    const buffers: Buffer[] = [];
+    const chunkUris = new Set<string>();
+    let offset = 0;
+    for (const [chunkIndex, candidate] of index.chunks.entries()) {
+      signal?.throwIfAborted();
+      if (
+        candidate.index !== chunkIndex ||
+        candidate.offset !== offset ||
+        !Number.isSafeInteger(candidate.length) ||
+        candidate.length <= 0 ||
+        candidate.size !== candidate.length ||
+        (candidate as unknown as { mimeType?: unknown }).mimeType !== 'application/octet-stream' ||
+        typeof candidate.uri !== 'string' ||
+        chunkUris.has(candidate.uri) ||
+        !/^[a-f0-9]{64}$/u.test(candidate.sha256) ||
+        offset + candidate.length > index.original.size
+      )
+        throw new ServiceError(
+          'ARTIFACT_LOGICAL_INVALID',
+          'Chunked logical artifact entry is malformed',
+        );
+      chunkUris.add(candidate.uri);
+      const chunk = await this.read(workspace, candidate.uri, undefined, signal);
+      if (
+        chunk.mimeType !== 'application/octet-stream' ||
+        chunk.totalSize !== candidate.length ||
+        chunk.bytes.length !== candidate.length ||
+        sha256Bytes(chunk.bytes) !== candidate.sha256
+      )
+        throw new ServiceError(
+          'ARTIFACT_LOGICAL_INVALID',
+          'Chunked logical artifact content does not match its authenticated index',
+        );
+      buffers.push(chunk.bytes);
+      offset += chunk.bytes.length;
+    }
+    const bytes = Buffer.concat(buffers, index.original.size);
+    if (
+      offset !== index.original.size ||
+      bytes.length !== index.original.size ||
+      sha256Bytes(bytes) !== index.original.sha256
+    )
+      throw new ServiceError(
+        'ARTIFACT_LOGICAL_INVALID',
+        'Chunked logical artifact does not reconstruct its declared content',
+      );
+    return {
+      bytes,
+      mimeType: index.original.mimeType,
+      name: index.original.name,
+      totalSize: index.original.size,
+    };
   }
 
   uri(workspaceId: string, sha256: string, provenanceHash: string, name: string): string {

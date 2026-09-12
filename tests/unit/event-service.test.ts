@@ -110,16 +110,31 @@ describe('Event Chain Viewer service', () => {
     });
     expect(trace.graph).toBe(scanned.graph);
     expect(trace.graph).toStrictEqual(scanned.graph);
-    expect(scan).toHaveBeenCalledTimes(1);
+    expect(scan).toHaveBeenCalledTimes(2);
 
     expect(await second.scan('event-service', { refresh: true, projectHelpers: false })).toBe(
       scanned.graph,
     );
-    expect(scan).toHaveBeenCalledTimes(2);
+    expect(scan).toHaveBeenCalledTimes(3);
 
     engine.invalidate('event-service');
     expect(await second.scan('event-service', { projectHelpers: false })).not.toBe(scanned.graph);
-    expect(scan).toHaveBeenCalledTimes(3);
+    expect(scan).toHaveBeenCalledTimes(4);
+  });
+
+  it('observes external event edits without a refresh flag or engine invalidation', async () => {
+    const { engine, sourcePath } = await fixture();
+    const viewer = new EventChainViewer(engine);
+    const first = await viewer.scan('event-service');
+    expect(await viewer.scan('event-service')).toBe(first);
+    await writeFile(
+      sourcePath,
+      `${source}\ncountry_event = { id = service.3 is_triggered_only = yes option = { name = service.3.a } }\n`,
+    );
+    const changed = await viewer.scan('event-service');
+    expect(changed.revision).not.toBe(first.revision);
+    expect(changed.statistics.eventCount).toBe(3);
+    expect(await viewer.scan('event-service')).toBe(changed);
   });
 
   it('keeps full workspace-wide event analysis for large workspaces', async () => {

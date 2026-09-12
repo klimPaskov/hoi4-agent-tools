@@ -1,9 +1,15 @@
 import { compareCodeUnits, hashCanonical } from './canonical.js';
 import type { Diagnostic } from './diagnostics.js';
 import { SymbolIndex, type IndexSkippedSource } from './index.js';
+import { IndexSegmentCache } from './index-segments.js';
+import {
+  PersistentAnalysisCache,
+  type PersistentAnalysisCacheStatistics,
+} from './persistent-analysis-cache.js';
+import { sourceDocuments } from './source/cache.js';
 import { WorkspaceScanner, type ScanOptions, type ScannedFile } from './scanner.js';
 import { ArtifactStore } from './artifacts.js';
-import { TransactionManager } from './transactions.js';
+import { TransactionManager, transactionRootFingerprint } from './transactions.js';
 import type { WorkspaceResolver } from './workspace.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
@@ -36,6 +42,8 @@ export interface WorkspaceStatus {
 }
 
 export interface CoreEngineServices {
+  indexSegments?: IndexSegmentCache;
+  persistentAnalysisCache?: PersistentAnalysisCache | null;
   scanner?: WorkspaceScanner;
   artifacts?: ArtifactStore;
   transactions?: TransactionManager;
@@ -133,6 +141,8 @@ export class CoreEngine {
   readonly scanner: WorkspaceScanner;
   readonly artifacts: ArtifactStore;
   readonly transactions: TransactionManager;
+  readonly indexSegments: IndexSegmentCache;
+  readonly persistentAnalysisCache: Promise<PersistentAnalysisCache> | undefined;
   readonly #scanCache = new Map<string, ScanSnapshot>();
   readonly #scanFlights = new Map<string, ScanFlight>();
   readonly #scanGenerations = new Map<string, number>();
@@ -143,6 +153,14 @@ export class CoreEngine {
     public readonly resolver: WorkspaceResolver,
     services: CoreEngineServices = {},
   ) {
+    this.indexSegments = services.indexSegments ?? new IndexSegmentCache();
+    const state = resolver.serverState();
+    this.persistentAnalysisCache =
+      services.persistentAnalysisCache === null || state === undefined
+        ? undefined
+        : Promise.resolve(
+            services.persistentAnalysisCache ?? PersistentAnalysisCache.create(state),
+          );
     this.requests = new RequestScheduler(resolver.config().maxConcurrentTools);
     this.sharedRequests = new SharedRequestCapacity(
       resolver.serverState()?.root,
@@ -247,13 +265,51 @@ export class CoreEngine {
             signal: controller.signal,
           });
           controller.signal.throwIfAborted();
+          const persistentAnalysisCache = await this.persistentAnalysisCache;
+          const analysisScope = {
+            workspaceIdentity: workspace.workspaceIdentity,
+            rootFingerprint: transactionRootFingerprint(workspace),
+            principal: principal ?? null,
+          };
+          await persistentAnalysisCache?.hydrate(
+            analysisScope,
+            files,
+            sourceDocuments,
+            this.indexSegments,
+            controller.signal,
+          );
           const revision = hashCanonical(
-            files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
+            files.map(
+              ({
+                absolutePath,
+                displayPath,
+                relativePath,
+                rootKind,
+                loadOrder,
+                shadowedBy,
+                sha256,
+              }) => ({
+                absolutePath,
+                displayPath,
+                relativePath,
+                rootKind,
+                loadOrder,
+                shadowedBy: shadowedBy ?? null,
+                sha256,
+              }),
+            ),
           );
           const cacheKey = `${requestKey}:${revision}`;
           const cached = this.#scanCache.get(cacheKey);
           if (cached !== undefined) return cached;
-          const index = await SymbolIndex.buildAsync(files, controller.signal);
+          const index = await SymbolIndex.buildAsync(files, controller.signal, this.indexSegments);
+          await persistentAnalysisCache?.persist(
+            analysisScope,
+            files,
+            sourceDocuments,
+            this.indexSegments,
+            controller.signal,
+          );
           const snapshot = {
             workspaceId,
             revision,
@@ -309,12 +365,20 @@ export class CoreEngine {
   /** Drop completed scan buffers without invalidating revisions or interrupting active scans. */
   releaseScanCaches(): void {
     this.#scanCache.clear();
+    this.indexSegments.clear();
+    sourceDocuments.clear();
     this.scanner.clearCaches();
   }
 
   /** Monotonic cache generation used by domain services to invalidate derived snapshots. */
   generation(workspaceId: string): number {
     return this.#scanGenerations.get(workspaceId) ?? 0;
+  }
+
+  async persistentAnalysisCacheStatistics(): Promise<
+    PersistentAnalysisCacheStatistics | undefined
+  > {
+    return (await this.persistentAnalysisCache)?.statistics();
   }
 
   private awaitScanFlight(
@@ -441,6 +505,6 @@ export class CoreEngine {
   }
 
   indexFiles(files: readonly ScannedFile[]): SymbolIndex {
-    return SymbolIndex.build(files);
+    return SymbolIndex.build(files, this.indexSegments);
   }
 }

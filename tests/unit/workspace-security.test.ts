@@ -1,4 +1,14 @@
-import { lstat, mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  rename,
+  stat,
+  symlink,
+  unlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -568,9 +578,14 @@ describe('workspace path policy', () => {
     const workspace = resolver.get('test');
 
     await scanner.scan(workspace, { patterns: ['first.txt'], rootKinds: ['game'] });
-    expect(scanner.cacheUsage().gameScanBytes).toBe(6);
+    expect(scanner.cacheUsage().sourceBytes).toBe(6);
     await scanner.scan(workspace, { patterns: ['second.txt'], rootKinds: ['game'] });
-    expect(scanner.cacheUsage()).toMatchObject({ gameScanBytes: 6, gameScanEntries: 1 });
+    expect(scanner.cacheUsage()).toMatchObject({
+      sourceBytes: 6,
+      sourceEntries: 1,
+      gameScanBytes: 0,
+      gameScanEntries: 0,
+    });
 
     scanner.clearCaches();
     expect(scanner.cacheUsage()).toEqual({
@@ -579,6 +594,33 @@ describe('workspace path policy', () => {
       gameScanBytes: 0,
       gameScanEntries: 0,
     });
+  });
+
+  it('refreshes cached game inventories after same-size edits, additions, renames and removals', async () => {
+    const { resolver, game } = await fixture();
+    const original = path.join(game, 'original.txt');
+    await writeFile(original, 'old = 1');
+    const scanner = new WorkspaceScanner();
+    const workspace = resolver.get('test');
+    const options = { patterns: ['*.txt'], rootKinds: ['game'] as const };
+    const first = await scanner.scan(workspace, options);
+    const before = await stat(original);
+    await writeFile(original, 'new = 2');
+    await utimes(original, before.atime, before.mtime);
+    const edited = await scanner.scan(workspace, options);
+    expect(edited[0]!.sha256).not.toBe(first[0]!.sha256);
+    expect(edited[0]!.bytes.toString()).toBe('new = 2');
+    await writeFile(path.join(game, 'added.txt'), 'added = yes');
+    expect(await scanner.scan(workspace, options)).toHaveLength(2);
+    await rename(original, path.join(game, 'renamed.txt'));
+    expect(
+      (await scanner.scan(workspace, options)).map(({ relativePath }) => relativePath),
+    ).toEqual(['added.txt', 'renamed.txt']);
+    await unlink(path.join(game, 'added.txt'));
+    const remaining = await scanner.scan(workspace, options);
+    expect(remaining.map(({ relativePath }) => relativePath)).toEqual(['renamed.txt']);
+    remaining[0]!.bytes.fill(0);
+    expect((await scanner.scan(workspace, options))[0]!.bytes.toString()).toBe('new = 2');
   });
 
   it('admits a vanilla-sized 5632 by 2048 24-bit province bitmap below the file ceiling', async () => {

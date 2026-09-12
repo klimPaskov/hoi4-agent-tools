@@ -4,6 +4,18 @@
 
 No unreleased changes.
 
+## 3.1.0 - 2026-09-12
+
+- Reuse authenticated content-addressed parsed documents and file-local index segments across authorized local processes while revalidating current source bytes, load order, shadowing, workspace topology, and principal scope.
+- Rebuild exact indexes from immutable segments, retain typed reverse source dependencies, and heal malformed or tampered persistent cache entries without trusting timestamps or file sizes.
+- Run event, technology, probability, map, GUI, and focus analysis in fixed-entry isolated workers backed by durable authenticated jobs, revision-fenced ownership, bounded retention, and source-revision result checkpoints.
+- Advertise optional negotiated MCP tasks for all long-running domain calls while preserving exact ordinary-call results, progress, cancellation, linked resources, tool errors, and both stdio and HTTP compatibility.
+- Add `hoi4.job_inspect` and `hoi4.job_cancel` as responsive compatibility controls that remain available while every domain execution slot is occupied.
+- Require caller-stable request keys for native background focus, GUI, and map rewrites; deduplicate exact retries independently of polling hints and reject conflicting reuse.
+- Bind rewrite transactions and domain completion recipes before source application, reconcile stopped workers without replanning, and retain post-write validation artifacts without changing immutable plan hashes.
+- Retain revision-addressed event and technology graphs for comparisons after process restart, and preserve explicit helper, source, candidate, node, edge, and render coverage boundaries.
+- Harden Windows atomic job publication, shared worker-slot transfer, disconnect recovery, principal isolation, task expiry, and mutation-receipt retention under concurrent clients.
+
 ## 3.0.9 - 2026-09-08
 
 - Evaluate GUI scripted-localisation branches through the shared structured condition evaluator instead of regex threshold guesses.

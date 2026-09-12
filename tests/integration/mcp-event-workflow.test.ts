@@ -161,7 +161,7 @@ agent.2.a: "Finish"
     );
     expect(traced).toMatchObject({
       status: 'ok',
-      code: 'EVENT_INSPECTED',
+      code: 'EVENT_INSPECTED_PARTIAL',
       changedFiles: [],
       data: { mode: 'trace', boundary: { direction: 'downstream', maxDepth: 4 } },
     });
@@ -219,7 +219,7 @@ country_event = {
     expect(await readFile(eventPath, 'utf8')).toBe(initialEvents);
 
     await writeFile(eventPath, proposedEvents, 'utf8');
-    const intentionallyCachedComparison = resultOf(
+    const comparisonWithoutForcedRefresh = resultOf(
       await client.callTool({
         name: 'hoi4.event_compare',
         arguments: {
@@ -230,11 +230,14 @@ country_event = {
         },
       }),
     );
-    expect(intentionallyCachedComparison).toMatchObject({
+    expect(comparisonWithoutForcedRefresh).toMatchObject({
       status: 'ok',
       code: 'EVENT_COMPARED',
-      data: { counts: { changes: 0 }, boundary: { refresh: false } },
+      data: { counts: { changes: expect.any(Number) }, boundary: { refresh: false } },
     });
+    expect(
+      (comparisonWithoutForcedRefresh.data.counts as { changes: number }).changes,
+    ).toBeGreaterThan(0);
 
     const comparedAfterAgentEdit = resultOf(
       await client.callTool({
@@ -258,6 +261,10 @@ country_event = {
       (comparedAfterAgentEdit.data.counts as { addedNodes: number }).addedNodes,
     ).toBeGreaterThan(0);
     expect((comparedAfterAgentEdit.data.counts as { changes: number }).changes).toBeGreaterThan(0);
+    expect(comparedAfterAgentEdit.data.counts).toEqual(comparisonWithoutForcedRefresh.data.counts);
+    expect(comparedAfterAgentEdit.data.afterGraphHash).toBe(
+      comparisonWithoutForcedRefresh.data.afterGraphHash,
+    );
 
     const manyBranchEvents = `add_namespace = branch\n\n${Array.from(
       { length: 12 },

@@ -1075,14 +1075,18 @@ export class EventChainViewer {
     const cacheProjectHelpers = cacheAnalysisMode === 'focused' ? false : requestedProjectHelpers;
     const cacheKey = eventGraphCacheKey(workspaceId, cacheProjectHelpers, cacheAnalysisMode);
     const cached = this.#state.current.get(cacheKey);
-    if (options.refresh !== true && cached?.generation === generation) {
-      return cached.graph;
-    }
+    // An engine generation observes server-owned edits, not changes made by
+    // another agent or process. Verify source identity before reusing a graph.
     if (options.refresh !== true && requestedAnalysisMode === 'focused') {
-      const fullSibling =
-        this.#state.current.get(eventGraphCacheKey(workspaceId, cacheProjectHelpers, 'full')) ??
-        this.#state.current.get(eventGraphCacheKey(workspaceId, !cacheProjectHelpers, 'full'));
-      if (fullSibling?.generation === generation) return fullSibling.graph;
+      for (const expanded of [cacheProjectHelpers, !cacheProjectHelpers]) {
+        const sibling = this.#state.current.get(eventGraphCacheKey(workspaceId, expanded, 'full'));
+        if (sibling?.generation === generation)
+          return this.scan(workspaceId, {
+            ...options,
+            analysisMode: 'full',
+            projectHelpers: expanded,
+          });
+      }
     }
     const scanFocused = requestedAnalysisMode === 'focused';
     const snapshot = await scanEventSources(
@@ -1271,6 +1275,7 @@ export class EventChainViewer {
     }
     const graphHash = cachedEventGraphHash(graph, input.signal);
     const name = `${safeSlug(`event-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`;
+    const graphSnapshotName = `event-graph-${graph.revision}.json`;
     const projectedScan =
       input.mode === 'scan' &&
       typeof report === 'object' &&
@@ -1307,7 +1312,12 @@ export class EventChainViewer {
             },
           }
         : {}),
-      resources: [{ name, mimeType: 'application/json' }],
+      resources: [
+        { name, mimeType: 'application/json' },
+        ...(input.mode === 'scan'
+          ? [{ name: graphSnapshotName, mimeType: 'application/json' }]
+          : []),
+      ],
       report,
     })}\n`;
     const workspace = this.engine.resolver.get(input.workspaceId, input.principal);
@@ -1328,13 +1338,30 @@ export class EventChainViewer {
       `Authoritative Event Chain Viewer ${input.mode.replaceAll('_', ' ')} report`,
       input.signal,
     );
+    const graphArtifact =
+      input.mode === 'scan'
+        ? await this.engine.artifacts.putChunked(
+            workspace,
+            graphSnapshotName,
+            'application/json',
+            `${canonicalJson({ schemaVersion: 'event-graph-snapshot.v1', graph })}\n`,
+            eventProvenance(
+              graph,
+              'event-graph-snapshot',
+              { revision: graph.revision, graphHash },
+              input.signal,
+            ),
+            'Revision-addressed Event Chain Viewer graph snapshot',
+            input.signal,
+          )
+        : undefined;
     return {
       graph,
       graphHash,
       mode: input.mode,
       report,
       reportJson,
-      artifacts: [artifact],
+      artifacts: [artifact, ...(graphArtifact === undefined ? [] : [graphArtifact])],
     };
   }
 
@@ -1729,13 +1756,39 @@ export class EventChainViewer {
       return selected;
     }
     if (reference?.revision !== undefined) {
-      const selected = this.#state.history.get(workspaceId)?.get(reference.revision);
-      if (selected === undefined)
+      const cached = this.#state.history.get(workspaceId)?.get(reference.revision);
+      if (cached !== undefined) return cached;
+      const workspace = this.engine.resolver.get(workspaceId, principal);
+      const names = new Set([
+        `event-graph-${reference.revision}.json`,
+        `event-scan-${reference.revision.slice(0, 12)}.json`,
+      ]);
+      const candidates = (await this.engine.artifacts.list(workspace, signal)).filter(({ name }) =>
+        names.has(name),
+      );
+      for (const artifact of candidates) {
+        const selected = parseGraphArtifact(
+          await readLogicalArtifact(this.engine, workspaceId, artifact.uri, principal, signal),
+          signal,
+        );
+        if (
+          selected.revision === reference.revision &&
+          selected.workspaceId === workspaceId &&
+          selected.workspaceIdentity === current.workspaceIdentity
+        ) {
+          rememberGraph(this.#state, workspaceId, selected);
+          return selected;
+        }
+      }
+      if (candidates.length === 0)
         throw new ServiceError(
           'EVENT_REVISION_NOT_CACHED',
-          'Requested event graph revision is not cached',
+          'Requested event graph revision is not cached or retained as a graph artifact',
         );
-      return selected;
+      throw new ServiceError(
+        'EVENT_GRAPH_WORKSPACE_MISMATCH',
+        'Retained event graph evidence does not match the requested revision and workspace topology',
+      );
     }
     return current;
   }

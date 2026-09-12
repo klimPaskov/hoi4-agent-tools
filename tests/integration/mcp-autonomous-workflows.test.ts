@@ -16,6 +16,7 @@ import {
   executePlannedTransaction,
 } from '../../src/hoi4_agent_tools/mcp/server/transaction-execution.js';
 import type { AutonomousRewriteError } from '../../src/hoi4_agent_tools/mcp/server/transaction-execution.js';
+import { executePlannedTransaction as executeCoreTransaction } from '../../src/hoi4_agent_tools/core/transaction-execution.js';
 
 interface OperationResult {
   status: 'ok' | 'blocked' | 'error';
@@ -46,6 +47,9 @@ async function readJsonArtifact(client: Client, uri: string): Promise<Record<str
 }
 
 describe('autonomous MCP rewrite workflows', () => {
+  it('uses the core executor directly through the compatibility import', () => {
+    expect(executePlannedTransaction).toBe(executeCoreTransaction);
+  });
   it('discovers one-call writers and applies focus, GUI, and map changes without transaction calls', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-autonomous-'));
     const fixtureRoots = path.join(repositoryRoot, 'fixtures', 'map', 'roots');
@@ -148,6 +152,8 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.probability_sequence',
       'hoi4.probability_compare',
       'hoi4.probability_render',
+      'hoi4.job_inspect',
+      'hoi4.job_cancel',
     ]);
     for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
@@ -438,12 +444,33 @@ describe('autonomous MCP rewrite workflows', () => {
         }),
     });
 
+    const bindingFailure = new Error('Simulated durable job binding failure');
+    await expect(
+      executeCoreTransaction(engine, planned, undefined, undefined, {
+        beforeApply: async () => {
+          throw bindingFailure;
+        },
+      }),
+    ).rejects.toBe(bindingFailure);
+    expect(await readFile(sourcePath)).toEqual(original);
+    expect((await engine.transactions.status('recovery', planned.transactionId)).state).toBe(
+      'planned',
+    );
+
+    let recordedBinding = false;
     let failure: unknown;
     try {
-      await executePlannedTransaction(engine, planned);
+      await executePlannedTransaction(engine, planned, undefined, undefined, {
+        beforeApply: async (transaction) => {
+          expect(transaction.transactionId).toBe(planned.transactionId);
+          expect(await readFile(sourcePath)).toEqual(original);
+          recordedBinding = true;
+        },
+      });
     } catch (error) {
       failure = error;
     }
+    expect(recordedBinding).toBe(true);
     expect(failure).toMatchObject({
       code: 'REWRITE_POST_VALIDATION_FAILED',
       details: {

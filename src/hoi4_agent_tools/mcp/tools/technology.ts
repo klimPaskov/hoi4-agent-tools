@@ -1,110 +1,47 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type {
+  CreateTaskRequestHandlerExtra,
+  TaskRequestHandlerExtra,
+  ToolTaskHandler,
+} from '@modelcontextprotocol/sdk/experimental/tasks';
+import {
+  CallToolResultSchema,
+  CreateTaskResultSchema,
+  GetTaskResultSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod/v4';
-import { publicArtifactLink } from '../../core/artifacts.js';
-import { compareCodeUnits, hashCanonical } from '../../core/canonical.js';
-import type { CoreEngine } from '../../core/engine.js';
-import { IdleCacheLifetime } from '../../core/idle-cache-lifetime.js';
-import { emptyServiceResult } from '../../core/result.js';
-import { workspaceIdSchema } from '../../schemas/common.js';
 import {
-  technologyDefectClassSchema,
-  technologyDirectionSchema,
+  technologyAnalysisModeSchema,
+  technologyCompareRequestSchema,
   technologyGraphReferenceSchema,
-  technologyIdSchema,
   technologyImpactSchema,
+  technologyInspectRequestSchema,
   technologyProposedSourceSchema,
+  technologyRenderRequestSchema,
   technologyRenderViewSchema,
-  technologyUnlockKindSchema,
+  validateTechnologyCompareRequest,
+  validateTechnologyInspectRequest,
 } from '../../schemas/technology.js';
-import type { TechnologyGraphSnapshot } from '../../technology/model.js';
-import {
-  TechnologyTreeViewer,
-  technologyDiagnostics,
-  type TechnologyAnalysisInput,
-  type TechnologyCompareInput,
-  type TechnologyRenderServiceInput,
-} from '../../technology/service.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
-import { progressReporter } from '../server/progress.js';
-import {
-  errorResult,
-  setInlineFilesScanned,
-  strictOperationResultSchema,
-  toolResult,
-} from '../server/result.js';
-import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
+import { strictOperationResultSchema } from '../server/result.js';
 
-const technologyMode = z.enum([
-  'scan',
-  'folders',
-  'trace',
-  'explain',
-  'unlocks',
-  'bonus_coverage',
-  'lint',
-  'impact',
-]);
-const inspectInput = z
+const inspectInputSchema = z
   .object({
-    workspaceId: workspaceIdSchema,
-    mode: technologyMode,
-    folderId: technologyIdSchema.optional(),
-    technologyId: technologyIdSchema.optional(),
-    categoryId: technologyIdSchema.optional(),
-    targetKind: technologyUnlockKindSchema.optional(),
-    targetId: technologyIdSchema.optional(),
-    direction: technologyDirectionSchema.optional(),
-    maxDepth: z.number().int().min(1).max(256).optional(),
-    maxNodes: z.number().int().min(1).max(25_000).optional(),
-    includeSubTechnologies: z.boolean().optional(),
-    classifications: z.array(technologyDefectClassSchema).max(4).optional(),
-    codes: z.array(z.string().min(1).max(256)).max(100).optional(),
+    ...technologyInspectRequestSchema.shape,
     impact: compactValidatedInputSchema(
       technologyImpactSchema,
       'Rename or removal subject.',
     ).optional(),
-    refresh: z.boolean().optional(),
   })
   .strict()
-  .superRefine((value, context) => {
-    if ((value.mode === 'trace' || value.mode === 'explain') && value.technologyId === undefined)
-      context.addIssue({
-        code: 'custom',
-        path: ['technologyId'],
-        message: `${value.mode} requires technologyId`,
-      });
-    if (value.mode === 'impact' && value.impact === undefined)
-      context.addIssue({
-        code: 'custom',
-        path: ['impact'],
-        message: 'Impact mode requires impact',
-      });
-  });
-const renderInput = z
+  .superRefine(validateTechnologyInspectRequest);
+
+const renderInputSchema = z.object({ ...technologyRenderRequestSchema.shape }).strict();
+
+const compareInputSchema = z
   .object({
-    workspaceId: workspaceIdSchema,
-    view: technologyRenderViewSchema.exclude(['comparison']),
-    folderId: technologyIdSchema.optional(),
-    technologyId: technologyIdSchema.optional(),
-    categoryId: technologyIdSchema.optional(),
-    targetId: technologyIdSchema.optional(),
-    maxNodes: z.number().int().min(1).max(2_000).optional(),
-    includeHtml: z.boolean().optional(),
-    refresh: z.boolean().optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.view === 'folder' && value.folderId === undefined)
-      context.addIssue({
-        code: 'custom',
-        path: ['folderId'],
-        message: 'Folder view requires folderId',
-      });
-  });
-const compareInput = z
-  .object({
-    workspaceId: workspaceIdSchema,
+    ...technologyCompareRequestSchema.shape,
     before: compactValidatedInputSchema(
       technologyGraphReferenceSchema,
       'Revision or graph resource.',
@@ -120,19 +57,9 @@ const compareInput = z
       .min(1)
       .max(128)
       .optional(),
-    render: z.boolean().optional(),
-    maxRenderNodes: z.number().int().min(1).max(2_000).optional(),
-    refresh: z.boolean().optional(),
   })
   .strict()
-  .superRefine((value, context) => {
-    if (value.after !== undefined && value.proposedSources !== undefined)
-      context.addIssue({
-        code: 'custom',
-        path: ['after'],
-        message: 'after conflicts with proposedSources',
-      });
-  });
+  .superRefine(validateTechnologyCompareRequest);
 
 const countsSchema = z
   .object({
@@ -148,17 +75,19 @@ const countsSchema = z
     artifacts: nonNegativeIntegerSchema,
   })
   .strict();
-const analysisOutput = strictOperationResultSchema(
+
+const analysisOutputSchema = strictOperationResultSchema(
   z
     .object({
-      mode: technologyMode,
+      mode: technologyAnalysisModeSchema,
       revision: sha256Schema,
       graphHash: sha256Schema,
       counts: countsSchema,
     })
     .strict(),
 );
-const renderOutput = strictOperationResultSchema(
+
+const renderOutputSchema = strictOperationResultSchema(
   z
     .object({
       view: technologyRenderViewSchema,
@@ -179,7 +108,8 @@ const renderOutput = strictOperationResultSchema(
     })
     .strict(),
 );
-const compareOutput = strictOperationResultSchema(
+
+const compareOutputSchema = strictOperationResultSchema(
   z
     .object({
       beforeRevision: sha256Schema,
@@ -197,290 +127,77 @@ const compareOutput = strictOperationResultSchema(
     })
     .strict(),
 );
-const readOnly = {
+
+const readOnlyTechnologyTool = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,
   openWorldHint: false,
 } as const;
 
-function graphHash(graph: TechnologyGraphSnapshot): string {
-  return hashCanonical({
-    schemaVersion: graph.schemaVersion,
-    analysisMode: graph.analysisMode ?? 'full',
-    workspaceIdentity: graph.workspaceIdentity,
-    revision: graph.revision,
-    statistics: graph.statistics,
-    sourceHashes: graph.sourceHashes,
-  });
-}
-
-function counts(graph: TechnologyGraphSnapshot, artifacts: number) {
+function technologyTaskHandler(schema: z.ZodType) {
   return {
-    technologies: graph.statistics.technologyCount,
-    legacyDoctrines: graph.statistics.legacyDoctrineCount,
-    folders: graph.statistics.folderCount,
-    placements: graph.statistics.placementCount,
-    edges: graph.edges.length,
-    unlocks: graph.statistics.unlockCount,
-    references: graph.statistics.externalReferenceCount,
-    issues: graph.statistics.issueCount,
-    unresolved: graph.statistics.unresolvedCount,
-    artifacts,
+    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
+      schema.parse(input);
+      return CreateTaskResultSchema.parse({
+        task: await extra.taskStore.createTask({
+          ttl: extra.taskRequestedTtl ?? null,
+          pollInterval: 250,
+        }),
+      });
+    },
+    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
+      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
+    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
+      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
   };
 }
 
-function validation(graph: TechnologyGraphSnapshot) {
-  const blocking = technologyDiagnostics(graph).filter(
-    ({ severity }) => severity === 'error' || severity === 'blocker',
-  ).length;
-  return {
-    passed: graph.complete && blocking === 0,
-    checks: [
-      {
-        id: 'technology-analysis',
-        passed: graph.complete && blocking === 0,
-        message: graph.complete
-          ? `${blocking} blocking technology diagnostics; full evidence is linked`
-          : graph.analysisMode === 'focused'
-            ? 'Helper projections were deferred for this large workspace; direct evidence is linked'
-            : `${graph.skippedSourceCount} source(s) were skipped; full evidence is linked`,
-      },
-    ],
-  };
-}
-
-type AnalysisValues = {
-  [Key in keyof Omit<TechnologyAnalysisInput, 'workspaceId' | 'mode' | 'principal' | 'signal'>]?:
-    Omit<TechnologyAnalysisInput, 'workspaceId' | 'mode' | 'principal' | 'signal'>[Key] | undefined;
-};
-
-function analysisRequest(
-  input: z.infer<typeof inspectInput>,
-  workspaceId: string,
-  context: ServerContext,
-  signal: AbortSignal,
-): TechnologyAnalysisInput {
-  const impact =
-    input.impact === undefined
-      ? undefined
-      : {
-          kind: input.impact.kind,
-          id: input.impact.id,
-          operation: input.impact.operation,
-          ...(input.impact.replacementId === undefined
-            ? {}
-            : { replacementId: input.impact.replacementId }),
-        };
-  const values: AnalysisValues = {
-    folderId: input.folderId,
-    technologyId: input.technologyId,
-    categoryId: input.categoryId,
-    targetKind: input.targetKind,
-    targetId: input.targetId,
-    direction: input.direction,
-    maxDepth: input.maxDepth,
-    maxNodes: input.maxNodes,
-    includeSubTechnologies: input.includeSubTechnologies,
-    classifications: input.classifications,
-    codes: input.codes,
-    impact,
-    refresh: input.refresh,
-  };
-  const compact = Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== undefined),
-  ) as Omit<TechnologyAnalysisInput, 'workspaceId' | 'mode' | 'principal' | 'signal'>;
-  return {
-    workspaceId,
-    mode: input.mode,
-    ...compact,
-    ...(context.principal === undefined ? {} : { principal: context.principal }),
-    signal,
-  };
-}
-
-export function registerTechnologyTools(
-  server: McpServer,
-  engine: CoreEngine,
-  context: ServerContext,
-): void {
-  const viewer = new TechnologyTreeViewer(engine);
-  const cacheLifetime = new IdleCacheLifetime(() => viewer.clearCaches());
-  server.registerTool(
+export function registerTechnologyTools(server: McpServer): void {
+  server.experimental.tasks.registerToolTask(
     'hoi4.tech_inspect',
     {
       title: 'Inspect technology trees',
       description:
         'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, and assess impact.',
-      inputSchema: inspectInput,
-      outputSchema: analysisOutput,
-      annotations: readOnly,
+      inputSchema: inspectInputSchema,
+      outputSchema: analysisOutputSchema,
+      annotations: readOnlyTechnologyTool,
+      execution: { taskSupport: 'optional' },
     },
-    async (input, extra) => {
-      const workspaceId = await resolveServerWorkspaceId(
-        engine,
-        context,
-        input.workspaceId,
-        extra.signal,
-      );
-      const releaseCaches = cacheLifetime.begin();
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 2, 'Analyzing technologies');
-        const output = await viewer.analyze(
-          analysisRequest(input, workspaceId, context, progress.signal),
-        );
-        const result = emptyServiceResult(workspaceId, {
-          mode: input.mode,
-          revision: output.graph.revision,
-          graphHash: graphHash(output.graph),
-          counts: counts(output.graph, output.artifacts.length),
-        });
-        result.code = output.graph.complete ? 'TECH_INSPECTED' : 'TECH_INSPECTED_PARTIAL';
-        setInlineFilesScanned(result, output.graph.filesScanned);
-        result.artifacts = output.artifacts.map(publicArtifactLink);
-        result.validation = validation(output.graph);
-        await progress.report(2, 2, 'Technology analysis complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      } finally {
-        releaseCaches();
-      }
-    },
+    technologyTaskHandler(inspectInputSchema) as unknown as ToolTaskHandler<
+      typeof inspectInputSchema
+    >,
   );
 
-  server.registerTool(
+  server.experimental.tasks.registerToolTask(
     'hoi4.tech_render',
     {
       title: 'Render technology trees',
       description: 'Render source-linked JSON, SVG, PNG, and optional HTML technology views.',
-      inputSchema: renderInput,
-      outputSchema: renderOutput,
-      annotations: readOnly,
+      inputSchema: renderInputSchema,
+      outputSchema: renderOutputSchema,
+      annotations: readOnlyTechnologyTool,
+      execution: { taskSupport: 'optional' },
     },
-    async (input, extra) => {
-      const workspaceId = await resolveServerWorkspaceId(
-        engine,
-        context,
-        input.workspaceId,
-        extra.signal,
-      );
-      const releaseCaches = cacheLifetime.begin();
-      try {
-        const progress = progressReporter(extra);
-        const request: TechnologyRenderServiceInput = {
-          workspaceId,
-          view: input.view,
-          ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
-          ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
-          ...(input.categoryId === undefined ? {} : { categoryId: input.categoryId }),
-          ...(input.targetId === undefined ? {} : { targetId: input.targetId }),
-          ...(input.maxNodes === undefined ? {} : { maxNodes: input.maxNodes }),
-          ...(input.includeHtml === undefined ? {} : { includeHtml: input.includeHtml }),
-          ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          signal: progress.signal,
-        };
-        const output = await viewer.renderAndStore(request);
-        const result = emptyServiceResult(workspaceId, {
-          view: output.render.view,
-          revision: output.graph.revision,
-          graphHash: graphHash(output.graph),
-          hashes: output.render.hashes,
-          selectedNodes: output.render.selectedIds.length,
-          omittedNodes: output.render.omittedNodeCount,
-          focusedRenders: output.focused.length,
-          sourceAccurate: output.render.sourceAccurate,
-        });
-        result.code = output.graph.complete ? 'TECH_RENDERED' : 'TECH_RENDERED_PARTIAL';
-        setInlineFilesScanned(result, output.graph.filesScanned);
-        result.artifacts = output.artifacts.map(publicArtifactLink);
-        result.validation = validation(output.graph);
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      } finally {
-        releaseCaches();
-      }
-    },
+    technologyTaskHandler(renderInputSchema) as unknown as ToolTaskHandler<
+      typeof renderInputSchema
+    >,
   );
 
-  server.registerTool(
+  server.experimental.tasks.registerToolTask(
     'hoi4.tech_compare',
     {
       title: 'Compare technology trees',
       description:
         'Compare cached, resource-backed, current, or proposed source graphs without writes.',
-      inputSchema: compareInput,
-      outputSchema: compareOutput,
-      annotations: readOnly,
+      inputSchema: compareInputSchema,
+      outputSchema: compareOutputSchema,
+      annotations: readOnlyTechnologyTool,
+      execution: { taskSupport: 'optional' },
     },
-    async (input, extra) => {
-      const workspaceId = await resolveServerWorkspaceId(
-        engine,
-        context,
-        input.workspaceId,
-        extra.signal,
-      );
-      const releaseCaches = cacheLifetime.begin();
-      try {
-        const progress = progressReporter(extra);
-        const request: TechnologyCompareInput = {
-          workspaceId,
-          ...(input.before === undefined
-            ? {}
-            : { before: input.before as NonNullable<TechnologyCompareInput['before']> }),
-          ...(input.after === undefined
-            ? {}
-            : { after: input.after as NonNullable<TechnologyCompareInput['after']> }),
-          ...(input.proposedSources === undefined
-            ? {}
-            : {
-                proposedSources: input.proposedSources as NonNullable<
-                  TechnologyCompareInput['proposedSources']
-                >,
-              }),
-          ...(input.render === undefined ? {} : { render: input.render }),
-          ...(input.maxRenderNodes === undefined ? {} : { maxRenderNodes: input.maxRenderNodes }),
-          ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
-          ...(context.principal === undefined ? {} : { principal: context.principal }),
-          signal: progress.signal,
-        };
-        const output = await viewer.compareAndStore(request);
-        const comparison = output.comparison;
-        const result = emptyServiceResult(workspaceId, {
-          beforeRevision: comparison.beforeRevision,
-          afterRevision: comparison.afterRevision,
-          added: comparison.technologies.added.length,
-          removed: comparison.technologies.removed.length,
-          renamed: comparison.technologies.renamed.length,
-          moved: comparison.technologies.moved.length,
-          regressions: comparison.regressions.length,
-          artifacts: output.artifacts.length,
-          ...(output.render === undefined ? {} : { renderHashes: output.render.hashes }),
-        });
-        result.code =
-          output.before.complete && output.after.complete
-            ? 'TECH_COMPARED'
-            : 'TECH_COMPARED_PARTIAL';
-        setInlineFilesScanned(
-          result,
-          [...new Set([...output.before.filesScanned, ...output.after.filesScanned])].sort(
-            compareCodeUnits,
-          ),
-        );
-        result.artifacts = output.artifacts.map(publicArtifactLink);
-        result.validation = {
-          passed: validation(output.before).passed && validation(output.after).passed,
-          checks: [...validation(output.before).checks, ...validation(output.after).checks],
-        };
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      } finally {
-        releaseCaches();
-      }
-    },
+    technologyTaskHandler(compareInputSchema) as unknown as ToolTaskHandler<
+      typeof compareInputSchema
+    >,
   );
 }

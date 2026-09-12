@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,15 +17,33 @@ function processAlive(pid: number): boolean {
 }
 
 /** Bounds heavy work across task processes sharing the same private server state. */
+export interface SharedCapacityLease {
+  /** Transfer a worker slot before admitting work in a newly started child process. */
+  handoffToProcess(pid: number): Promise<void>;
+}
+
 export class SharedRequestCapacity {
   constructor(
     private readonly stateRoot: string | undefined,
     private readonly capacity = 4,
   ) {}
 
-  async run<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> {
+  async run<T>(
+    signal: AbortSignal,
+    action: (lease: SharedCapacityLease) => Promise<T>,
+  ): Promise<T> {
     signal.throwIfAborted();
-    if (this.stateRoot === undefined) return action();
+    if (this.stateRoot === undefined)
+      return action({
+        handoffToProcess: () => {
+          return Promise.reject(
+            new ServiceError(
+              'REQUEST_LEASE_STORAGE_REQUIRED',
+              'Worker ownership transfer requires persistent capacity storage',
+            ),
+          );
+        },
+      });
     const root = await containedGeneratedPath(
       await canonicalPath(this.stateRoot, signal),
       'request-capacity',
@@ -72,19 +90,48 @@ export class SharedRequestCapacity {
           await rmdir(slot).catch(() => undefined);
           throw error;
         }
+        let transferredPid: number | undefined;
         try {
           signal.throwIfAborted();
-          return await action();
-        } finally {
-          await unlink(owner);
-          await rmdir(slot).catch((error: unknown) => {
-            const code = (error as NodeJS.ErrnoException).code;
-            if (
-              !['ENOENT', 'ENOTEMPTY'].includes(code ?? '') &&
-              !(process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code ?? ''))
-            )
-              throw error;
+          return await action({
+            handoffToProcess: async (pid) => {
+              if (transferredPid !== undefined)
+                throw new ServiceError(
+                  'REQUEST_LEASE_ALREADY_TRANSFERRED',
+                  'The capacity lease already belongs to a child process',
+                );
+              if (
+                !Number.isSafeInteger(pid) ||
+                pid <= 0 ||
+                pid === process.pid ||
+                !processAlive(pid)
+              )
+                throw new ServiceError(
+                  'REQUEST_LEASE_OWNER_INVALID',
+                  'Capacity can only transfer to another live process',
+                );
+              const next = path.join(slot, `${pid}-${randomUUID()}.lease`);
+              await rename(owner, next);
+              owner = next;
+              transferredPid = pid;
+            },
           });
+        } finally {
+          // A launcher can fail while its admitted child still runs. Keep that child's
+          // lease until process-exit evidence permits a later reaper to reclaim it.
+          if (transferredPid === undefined || !processAlive(transferredPid)) {
+            await unlink(owner).catch((error: unknown) => {
+              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            });
+            await rmdir(slot).catch((error: unknown) => {
+              const code = (error as NodeJS.ErrnoException).code;
+              if (
+                !['ENOENT', 'ENOTEMPTY'].includes(code ?? '') &&
+                !(process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code ?? ''))
+              )
+                throw error;
+            });
+          }
         }
       }
       await delay(100, undefined, { signal });

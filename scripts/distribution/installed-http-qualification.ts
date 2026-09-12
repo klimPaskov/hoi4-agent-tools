@@ -30,6 +30,8 @@ const publicToolNames = [
   'hoi4.probability_sequence',
   'hoi4.probability_compare',
   'hoi4.probability_render',
+  'hoi4.job_inspect',
+  'hoi4.job_cancel',
 ] as const;
 
 interface ObservedRequest {

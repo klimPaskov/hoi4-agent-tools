@@ -114,6 +114,7 @@ export const transactionManifestSchema = z
     diagnostics: z.array(diagnosticSchema).max(TRANSACTION_MAX_DIAGNOSTICS),
     validation: validationSummarySchema,
     artifacts: z.array(artifactLinkSchema).max(TRANSACTION_MAX_ARTIFACTS),
+    executionArtifacts: z.array(artifactLinkSchema).max(TRANSACTION_MAX_ARTIFACTS).optional(),
     appliedFiles: z.array(workspaceRelativePathSchema).max(TRANSACTION_MAX_APPLIED_FILES),
     rollbackStatus: z.enum(['available', 'applied', 'failed']),
     failure: z.object({ code: identifierSchema, message: summarySchema }).strict().optional(),

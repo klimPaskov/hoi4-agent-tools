@@ -107,6 +107,8 @@ export interface TransactionManifest {
   diagnostics: Diagnostic[];
   validation: ValidationSummary;
   artifacts: ArtifactLink[];
+  /** Post-write evidence, excluded from the immutable pre-write plan hash. */
+  executionArtifacts?: ArtifactLink[];
   appliedFiles: string[];
   rollbackStatus: 'available' | 'applied' | 'failed';
   failure?: { code: string; message: string };
@@ -181,6 +183,8 @@ function sameTransactionManifestIdentity(
 export interface TransactionValidation {
   diagnostics: Diagnostic[];
   checks: ValidationSummary['checks'];
+  /** Post-write evidence retained in the authenticated journal for result recovery. */
+  artifacts?: ArtifactLink[];
 }
 
 export interface PlanTransactionInput {
@@ -558,6 +562,7 @@ export class TransactionManager {
           diagnostics,
           validation: { passed, checks: validation.checks },
           artifacts,
+          executionArtifacts: [],
           appliedFiles: [],
           rollbackStatus: 'available',
         };
@@ -686,15 +691,21 @@ export class TransactionManager {
         if (
           manifest.diagnostics.length + result.diagnostics.length > TRANSACTION_MAX_DIAGNOSTICS ||
           manifest.validation.checks.length + result.checks.length >
-            TRANSACTION_MAX_VALIDATION_CHECKS
+            TRANSACTION_MAX_VALIDATION_CHECKS ||
+          (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0) >
+            TRANSACTION_MAX_ARTIFACTS
         ) {
           throw new ServiceError(
             'TRANSACTION_STRUCTURE_LIMIT',
-            'Post-write validation exceeds the supported transaction review structure limits',
+            'Post-write validation exceeds the supported transaction review or artifact limits',
           );
         }
         manifest.diagnostics.push(...result.diagnostics);
         manifest.validation.checks.push(...result.checks);
+        manifest.executionArtifacts ??= [];
+        for (const artifact of result.artifacts ?? [])
+          if (!manifest.executionArtifacts.some(({ uri }) => uri === artifact.uri))
+            manifest.executionArtifacts.push(artifact);
         manifest.validation.passed =
           manifest.validation.passed &&
           result.checks.every(({ passed }) => passed) &&
@@ -855,6 +866,81 @@ export class TransactionManager {
     };
   }
 
+  /** Reconcile one interrupted job's journal without sweeping unrelated transactions. */
+  async recoverTransaction(
+    workspaceId: string,
+    transactionId: string,
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<TransactionManifest> {
+    signal?.throwIfAborted();
+    const workspace = this.resolver.get(workspaceId, principal);
+    // Authenticate the selected journal and authorize its owner before changing protected state.
+    const initial = await this.load(workspace, transactionId, {
+      headMode: 'none',
+      ...(signal === undefined ? {} : { signal }),
+    });
+    this.assertRecoveryPrincipal(initial, principal);
+    return this.withWorkspaceLock(workspace, transactionId, async () => {
+      signal?.throwIfAborted();
+      // Never restore a pre-lock snapshot: a writer may have committed since the first read.
+      const current = await this.load(workspace, transactionId, {
+        headMode: 'none',
+        ...(signal === undefined ? {} : { signal }),
+      });
+      this.assertRecoveryPrincipal(current, principal);
+      const manifest = await this.load(workspace, transactionId, {
+        headMode: 'reconcile',
+        ...(signal === undefined ? {} : { signal }),
+      });
+      signal?.throwIfAborted();
+      if (manifest.state === 'applying' || manifest.state === 'rolling_back') {
+        await this.restoreInterruptedTransaction(workspace, manifest, principal);
+      }
+      return manifest;
+    });
+  }
+
+  private assertRecoveryPrincipal(manifest: TransactionManifest, principal?: string): void {
+    if (principal !== undefined && (manifest.principal ?? null) !== principal) {
+      throw new ServiceError(
+        'TRANSACTION_PRINCIPAL_MISMATCH',
+        'Transaction recovery belongs to another principal',
+      );
+    }
+  }
+
+  private async restoreInterruptedTransaction(
+    workspace: ResolvedWorkspace,
+    manifest: TransactionManifest,
+    principal?: string,
+  ): Promise<void> {
+    // Restoration and authenticated journal advancement are a non-cancellable critical phase.
+    try {
+      await this.restoreBeforeState(workspace, manifest, principal);
+      manifest.state = 'rolled_back';
+      manifest.failure = {
+        code: 'TRANSACTION_RECOVERED',
+        message: 'Incomplete transaction was rolled back during recovery',
+      };
+      await this.writeManifest(workspace, manifest);
+    } catch (error) {
+      manifest.rollbackStatus = 'failed';
+      manifest.state = 'failed';
+      manifest.failure = this.safeFailure(
+        error,
+        'TRANSACTION_RECOVERY_FAILED',
+        'Interrupted transaction could not be recovered safely',
+      );
+      await this.writeManifest(workspace, manifest);
+      if (error instanceof ServiceError) throw error;
+      throw new ServiceError(
+        'TRANSACTION_RECOVERY_FAILED',
+        'Interrupted transaction could not be recovered safely',
+      );
+    }
+  }
+
   async recover(
     workspaceId: string,
     principal?: string,
@@ -883,45 +969,30 @@ export class TransactionManager {
       signal?.throwIfAborted();
       if (!transactionIdPattern.test(entry.name)) continue;
       const manifest = await this.load(workspace, entry.name, {
-        headMode: 'reconcile',
+        headMode: 'none',
         ...(signal === undefined ? {} : { signal }),
       });
-      if (principal !== undefined && (manifest.principal ?? null) !== principal) {
-        throw new ServiceError(
-          'TRANSACTION_PRINCIPAL_MISMATCH',
-          'Transaction recovery belongs to another principal',
-        );
-      }
-      if (manifest.state !== 'applying' && manifest.state !== 'rolling_back') continue;
-      await this.withWorkspaceLock(workspace, manifest.transactionId, async () => {
-        signal?.throwIfAborted();
-        // Once source restoration starts, recovery and authenticated journal
-        // advancement form a non-cancellable critical phase.
+      this.assertRecoveryPrincipal(manifest, principal);
+      const interrupted = manifest.state === 'applying' || manifest.state === 'rolling_back';
+      if (!interrupted) {
         try {
-          await this.restoreBeforeState(workspace, manifest, principal);
-          manifest.state = 'rolled_back';
-          manifest.failure = {
-            code: 'TRANSACTION_RECOVERED',
-            message: 'Incomplete transaction was rolled back during recovery',
-          };
-          await this.writeManifest(workspace, manifest);
+          // Ordinary startup must not contend with a live writer just to read terminal journals.
+          await this.load(workspace, entry.name, {
+            ...(signal === undefined ? {} : { signal }),
+          });
+          continue;
         } catch (error) {
-          manifest.rollbackStatus = 'failed';
-          manifest.state = 'failed';
-          manifest.failure = this.safeFailure(
-            error,
-            'TRANSACTION_RECOVERY_FAILED',
-            'Interrupted transaction could not be recovered safely',
-          );
-          await this.writeManifest(workspace, manifest);
-          if (error instanceof ServiceError) throw error;
-          throw new ServiceError(
-            'TRANSACTION_RECOVERY_FAILED',
-            'Interrupted transaction could not be recovered safely',
-          );
+          if (
+            !(error instanceof ServiceError) ||
+            error.code !== 'TRANSACTION_HEAD_RECONCILIATION_REQUIRED'
+          )
+            throw error;
         }
-      });
-      recovered.push(manifest);
+      }
+      const reconciled = await this.recoverTransaction(workspaceId, entry.name, principal, signal);
+      if (interrupted) {
+        recovered.push(reconciled);
+      }
     }
     return recovered;
   }

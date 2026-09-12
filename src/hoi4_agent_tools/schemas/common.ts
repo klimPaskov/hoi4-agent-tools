@@ -6,6 +6,9 @@ export const workspaceIdSchema = z
   .regex(/^[a-z][a-z0-9_-]{0,63}$/u)
   .default('current');
 
+/** Caller-stable deduplication key for resumable background mutations. */
+export const backgroundRequestKeySchema = z.string().min(1).max(256);
+
 const diagnosticCodeSchema = z.string().min(1).max(256);
 const diagnosticMessageSchema = z.string().max(4096);
 const sourceDisplayPathSchema = z.string().min(1).max(4096);

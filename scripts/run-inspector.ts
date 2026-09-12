@@ -35,6 +35,8 @@ const publicToolNames = [
   'hoi4.probability_sequence',
   'hoi4.probability_compare',
   'hoi4.probability_render',
+  'hoi4.job_inspect',
+  'hoi4.job_cancel',
 ] as const;
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
@@ -385,7 +387,7 @@ try {
   }
 
   process.stderr.write(
-    'Official MCP Inspector verified 23 tools, one prompt, artifact resources, and event, technology, and probability workflows.\n',
+    'Official MCP Inspector verified 25 tools, one prompt, artifact resources, and event, technology, probability, and job workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

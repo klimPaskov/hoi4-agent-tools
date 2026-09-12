@@ -729,7 +729,6 @@ export class TechnologyTreeViewer {
     const workspace = this.engine.resolver.get(workspaceId, options.principal);
     const generation = this.engine.generation(workspaceId);
     const cached = this.#state.current.get(workspaceId);
-    if (options.refresh !== true && cached?.generation === generation) return cached.graph;
     const snapshot = await scanTechnologySources(
       this.engine,
       workspaceId,
@@ -738,12 +737,16 @@ export class TechnologyTreeViewer {
       options.signal,
     );
     const analysisMode = 'full' as const;
-    const preliminary = buildTechnologyGraph(snapshot, {
-      workspaceIdentity: workspace.workspaceIdentity,
-      cache: this.#state.fragments,
-      analysisMode,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    const unchangedSource =
+      cached?.generation === generation && cached.snapshot.revision === snapshot.revision;
+    const preliminary = unchangedSource
+      ? cached.graph
+      : buildTechnologyGraph(snapshot, {
+          workspaceIdentity: workspace.workspaceIdentity,
+          cache: this.#state.fragments,
+          analysisMode,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
     const patterns = technologyAssetPatterns(preliminary);
     const assetFiles =
       patterns.length === 0
@@ -752,6 +755,17 @@ export class TechnologyTreeViewer {
             patterns,
             ...(options.signal === undefined ? {} : { signal: options.signal }),
           });
+    const assetIdentity = (files: readonly ScannedFile[]): string =>
+      hashCanonical(
+        files.map(({ absolutePath, displayPath, loadOrder, sha256 }) => ({
+          absolutePath,
+          displayPath,
+          loadOrder,
+          sha256,
+        })),
+      );
+    if (unchangedSource && assetIdentity(assetFiles) === assetIdentity(cached.assetFiles))
+      return cached.graph;
     const graph = buildTechnologyGraph(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
@@ -839,9 +853,24 @@ export class TechnologyTreeViewer {
       complete: graph.complete,
       analysisBoundary: graph.analysisBoundary,
       mode: input.mode,
+      resources: [
+        {
+          name: `${safeSlug(`technology-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`,
+          mimeType: 'application/json',
+        },
+        ...(input.mode === 'scan'
+          ? [
+              {
+                name: `technology-graph-${graph.revision}.json`,
+                mimeType: 'application/json',
+              },
+            ]
+          : []),
+      ],
       report,
     })}\n`;
     const workspace = this.engine.resolver.get(input.workspaceId, input.principal);
+    const graphHashValue = graphHash(graph);
     const artifact = await this.engine.artifacts.putChunked(
       workspace,
       `${safeSlug(`technology-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`,
@@ -851,7 +880,27 @@ export class TechnologyTreeViewer {
       `Authoritative Technology Tree Viewer ${input.mode.replaceAll('_', ' ')} report`,
       input.signal,
     );
-    return { graph, report, reportJson, artifacts: [artifact] };
+    const graphArtifact =
+      input.mode === 'scan'
+        ? await this.engine.artifacts.putChunked(
+            workspace,
+            `technology-graph-${graph.revision}.json`,
+            'application/json',
+            `${canonicalJson({ schemaVersion: 'technology-graph-snapshot.v1', graph })}\n`,
+            technologyProvenance(graph, 'technology-graph-snapshot', {
+              revision: graph.revision,
+              graphHash: graphHashValue,
+            }),
+            'Revision-addressed Technology Tree Viewer graph snapshot',
+            input.signal,
+          )
+        : undefined;
+    return {
+      graph,
+      report,
+      reportJson,
+      artifacts: [artifact, ...(graphArtifact === undefined ? [] : [graphArtifact])],
+    };
   }
 
   public async renderAndStore(
@@ -1140,13 +1189,38 @@ export class TechnologyTreeViewer {
       return graph;
     }
     if (reference?.revision !== undefined) {
-      const graph = this.#state.history.get(workspaceId)?.get(reference.revision);
-      if (graph === undefined)
+      const cached = this.#state.history.get(workspaceId)?.get(reference.revision);
+      if (cached !== undefined) return cached;
+      const workspace = this.engine.resolver.get(workspaceId, principal);
+      const names = new Set([
+        `technology-graph-${reference.revision}.json`,
+        `technology-scan-${reference.revision.slice(0, 12)}.json`,
+      ]);
+      const candidates = (await this.engine.artifacts.list(workspace, signal)).filter(({ name }) =>
+        names.has(name),
+      );
+      for (const artifact of candidates) {
+        const selected = parseGraphArtifact(
+          await readLogicalArtifact(this.engine, workspaceId, artifact.uri, principal, signal),
+        );
+        if (
+          selected.revision === reference.revision &&
+          selected.workspaceId === workspaceId &&
+          selected.workspaceIdentity === current.workspaceIdentity
+        ) {
+          rememberGraph(this.#state, selected);
+          return selected;
+        }
+      }
+      if (candidates.length === 0)
         throw new ServiceError(
           'TECH_REVISION_NOT_CACHED',
-          'Requested technology revision is not cached',
+          'Requested technology revision is not cached or retained as a graph artifact',
         );
-      return graph;
+      throw new ServiceError(
+        'TECH_GRAPH_WORKSPACE_MISMATCH',
+        'Retained technology graph evidence does not match the requested revision and workspace topology',
+      );
     }
     return current;
   }

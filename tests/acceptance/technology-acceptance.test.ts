@@ -609,13 +609,17 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     const original = await readFile(absolutePath, 'utf8');
     const changed = original.replace('research_cost = 1.00', 'research_cost = 1.10');
     await writeFile(absolutePath, changed);
-    engine.invalidate(workspaceId);
-    const updated = await viewer.scan(workspaceId, { refresh: true });
-    expect(updated.revision).not.toBe(graph.revision);
-    expect(updated.technologies.find(({ id }) => id === 'synthetic_tech_0392')?.researchCost).toBe(
-      '1.10',
-    );
-    await writeFile(absolutePath, original);
+    try {
+      const updated = await viewer.scan(workspaceId);
+      expect(updated.revision).not.toBe(graph.revision);
+      expect(
+        updated.technologies.find(({ id }) => id === 'synthetic_tech_0392')?.researchCost,
+      ).toBe('1.10');
+      expect(await viewer.scan(workspaceId)).toBe(updated);
+    } finally {
+      await writeFile(absolutePath, original);
+    }
+    expect((await viewer.scan(workspaceId)).revision).toBe(graph.revision);
   });
 
   it('compares graph snapshots directly with stable semantic identities', () => {

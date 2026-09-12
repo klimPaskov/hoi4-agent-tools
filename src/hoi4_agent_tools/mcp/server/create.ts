@@ -9,13 +9,17 @@ import { registerMapTools } from '../tools/map.js';
 import { registerEventTools } from '../tools/event.js';
 import { registerTechnologyTools } from '../tools/technology.js';
 import { registerProbabilityTools } from '../tools/probability.js';
+import { registerJobTools } from '../tools/job.js';
 import { registerMcpResources } from '../resources/register.js';
 import { installRequestLifecycle } from './request-lifecycle.js';
+import { PersistentJobTaskStore } from './job-task-store.js';
 
 export const SERVER_INSTRUCTIONS =
-  'Use focus tools for focus trees, GUI tools for interfaces, and map tools for map data. Start unfamiliar event chains with hoi4.event_inspect. Event tools are read-only. Start technology and doctrine work with hoi4.tech_inspect. Technology tools are read-only. Start weighted AI, MTTH, random, and declared-pool analysis with hoi4.probability_inspect. Probability tools are read-only. Concurrent calls queue automatically and emit periodic progress when the client requests it. Large evidence is linked as resources.';
+  'Use focus tools for focus trees, GUI tools for interfaces, and map tools for map data. Start unfamiliar event chains with hoi4.event_inspect. Event tools are read-only. Start technology and doctrine work with hoi4.tech_inspect. Technology tools are read-only. Start weighted AI, MTTH, random, and declared-pool analysis with hoi4.probability_inspect. Probability tools are read-only. Concurrent calls queue automatically and emit periodic progress when the client requests it. Long operations support negotiated MCP tasks; native background rewrites require a stable requestKey. Large evidence is linked as resources.';
 
 export function createMcpServer(engine: CoreEngine, context: ServerContext = {}): McpServer {
+  let serverContext: ServerContext = context;
+  const taskStore = new PersistentJobTaskStore(engine, () => serverContext);
   const server = new McpServer(
     {
       name: PACKAGE_NAME,
@@ -23,12 +27,16 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
       websiteUrl: 'https://github.com/klimPaskov/hoi4-agent-tools',
     },
     {
-      capabilities: { logging: {} },
+      capabilities: {
+        logging: {},
+        tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
+      },
       instructions: SERVER_INSTRUCTIONS,
+      taskStore,
     },
   );
   installRequestLifecycle(server, engine);
-  const serverContext: ServerContext = {
+  serverContext = {
     ...context,
     resolveCurrentWorkspaceId: async (signal) => {
       const capabilities = server.server.getClientCapabilities();
@@ -53,9 +61,10 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerFocusTools(server, engine, serverContext);
   registerGuiTools(server, engine, serverContext);
   registerMapTools(server, engine, serverContext);
-  registerEventTools(server, engine, serverContext);
-  registerTechnologyTools(server, engine, serverContext);
-  registerProbabilityTools(server, engine, serverContext);
+  registerEventTools(server);
+  registerTechnologyTools(server);
+  registerProbabilityTools(server);
+  registerJobTools(server, engine, serverContext);
   registerMcpResources(server, engine, serverContext);
   return server;
 }

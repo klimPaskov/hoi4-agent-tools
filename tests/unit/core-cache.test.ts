@@ -52,6 +52,12 @@ describe('CoreEngine scan cache', () => {
       expect(metadataOnly).toBe(first);
       expect(metadataOnly.revision).toBe(first.revision);
 
+      engine.invalidate('cache_test');
+      const reconstructed = await engine.scan('cache_test');
+      expect(reconstructed).not.toBe(first);
+      expect(reconstructed.index.symbols).toEqual(first.index.symbols);
+      expect(engine.indexSegments.statistics()).toMatchObject({ hits: 1, misses: 1 });
+
       const metadataBefore = await stat(sourcePath);
       await writeFile(sourcePath, changed, 'utf8');
       await utimes(sourcePath, secondTime, secondTime);
@@ -74,6 +80,7 @@ describe('CoreEngine scan cache', () => {
       engine.invalidate('other-workspace');
       expect(await engine.scan('cache_test', boundedOptions)).toBe(bounded);
       engine.releaseScanCaches();
+      expect(engine.indexSegments.statistics().retainedBytes).toBe(0);
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);
       engine.invalidate('cache_test');
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);

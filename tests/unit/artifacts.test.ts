@@ -1148,6 +1148,25 @@ describe('content-addressed artifacts', () => {
     }
     expect(expectedOffset).toBe(bytes.length);
     expect(Buffer.concat(reconstructed)).toEqual(bytes);
+    await expect(
+      store.readLogical(workspace, first.uri, {
+        mimeType: 'application/json',
+        maxBytes: bytes.length,
+        maxChunks: index.chunks.length,
+      }),
+    ).resolves.toMatchObject({
+      bytes,
+      mimeType: 'application/json',
+      name: 'large-source-graph.json',
+      totalSize: bytes.length,
+    });
+    await expect(
+      store.readLogical(workspace, first.uri, {
+        mimeType: 'application/json',
+        maxBytes: bytes.length - 1,
+        maxChunks: index.chunks.length,
+      }),
+    ).rejects.toMatchObject({ code: 'ARTIFACT_LOGICAL_INVALID' });
 
     const repeated = await store.putChunked(
       workspace,

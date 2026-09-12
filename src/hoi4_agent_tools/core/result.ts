@@ -1,5 +1,7 @@
 import type { Diagnostic } from './diagnostics.js';
 
+export const MAX_INLINE_ARTIFACT_LINKS = 32;
+
 export type ServiceStatus = 'ok' | 'blocked' | 'error';
 
 export interface ArtifactLink {

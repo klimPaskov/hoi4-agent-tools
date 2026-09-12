@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
-import { workspaceRelativePathSchema } from './common.js';
+import { workspaceIdSchema, workspaceRelativePathSchema } from './common.js';
 
 const eventIdSchema = z.string().min(1).max(256);
 const eventSourcePathSchema = z.string().min(1).max(1024);
@@ -107,3 +107,87 @@ export const eventProposedSourceSchema = z
     expectedSourceHash: eventSha256Schema.optional(),
   })
   .strict();
+
+export function validateEventInspectRequest(
+  value: {
+    mode: string;
+    selector?: unknown;
+    from?: unknown;
+    to?: unknown;
+    impactSubject?: unknown;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (value.mode === 'trace' && value.selector === undefined)
+    context.addIssue({ code: 'custom', path: ['selector'], message: 'Trace requires selector' });
+  if (value.mode === 'explain_path' && (value.from === undefined || value.to === undefined))
+    context.addIssue({
+      code: 'custom',
+      path: value.from === undefined ? ['from'] : ['to'],
+      message: 'Path explanation requires from and to',
+    });
+  if (value.mode === 'impact' && value.impactSubject === undefined)
+    context.addIssue({
+      code: 'custom',
+      path: ['impactSubject'],
+      message: 'Impact analysis requires impactSubject',
+    });
+}
+
+export const eventInspectRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    mode: eventInspectModeSchema,
+    selector: eventSelectorSchema.optional(),
+    from: eventSelectorSchema.optional(),
+    to: eventSelectorSchema.optional(),
+    direction: eventDirectionSchema.optional(),
+    maxDepth: z.number().int().min(1).max(64).optional(),
+    maxNodes: z.number().int().min(1).max(5_000).optional(),
+    maxEdges: z.number().int().min(1).max(20_000).optional(),
+    expandHelpers: z.boolean().optional(),
+    stateSubject: eventStateSubjectSchema.optional(),
+    impactSubject: eventImpactSubjectSchema.optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine(validateEventInspectRequest);
+
+export const eventRenderRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    view: eventRenderViewSchema,
+    selector: eventSelectorSchema.optional(),
+    direction: eventDirectionSchema.optional(),
+    maxDepth: z.number().int().min(1).max(64).optional(),
+    maxNodes: z.number().int().min(1).max(240).optional(),
+    expandHelpers: z.boolean().optional(),
+    includeHtml: z.boolean().optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict();
+
+export function validateEventCompareRequest(
+  value: { after?: unknown; proposedSources?: unknown },
+  context: z.RefinementCtx,
+): void {
+  if (value.after !== undefined && value.proposedSources !== undefined)
+    context.addIssue({
+      code: 'custom',
+      path: ['after'],
+      message: 'after and proposedSources are mutually exclusive',
+    });
+}
+
+export const eventCompareRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    before: eventGraphReferenceSchema.optional(),
+    after: eventGraphReferenceSchema.optional(),
+    proposedSources: z.array(eventProposedSourceSchema).min(1).max(64).optional(),
+    render: z.boolean().optional(),
+    maxRenderNodes: z.number().int().min(1).max(240).optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine(validateEventCompareRequest);

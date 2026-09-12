@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 49_152;
+const toolsListByteBudget = 51_200;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
@@ -72,6 +72,8 @@ describe('MCP discovery', () => {
       'hoi4.probability_sequence',
       'hoi4.probability_compare',
       'hoi4.probability_render',
+      'hoi4.job_inspect',
+      'hoi4.job_cancel',
     ]);
 
     for (const name of [
@@ -104,6 +106,7 @@ describe('MCP discovery', () => {
       'hoi4.probability_sequence',
       'hoi4.probability_compare',
       'hoi4.probability_render',
+      'hoi4.job_inspect',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
@@ -138,7 +141,7 @@ describe('MCP discovery', () => {
     expect(JSON.stringify(eventInspect?.inputSchema)).toContain('state_flow');
     expect(JSON.stringify(eventInspect?.inputSchema)).toContain('impactSubject');
 
-    for (const tool of tools.tools) {
+    for (const tool of tools.tools.filter(({ name }) => name !== 'hoi4.job_inspect')) {
       expect(tool.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });
       expect(tool.outputSchema).toMatchObject({
         type: 'object',
@@ -157,6 +160,9 @@ describe('MCP discovery', () => {
       expect(JSON.stringify(tool.outputSchema)).not.toContain('planHash');
       expect(JSON.stringify(tool.outputSchema)).not.toContain('rollbackStatus');
     }
+    expect(
+      tools.tools.find(({ name }) => name === 'hoi4.job_inspect')?.outputSchema,
+    ).toBeUndefined();
 
     for (const name of [
       'hoi4.focus_inspect',
@@ -222,7 +228,7 @@ describe('MCP discovery', () => {
         `${tool.name} input schema`,
       ).toBeLessThanOrEqual(toolInputSchemaByteBudget);
       expect(
-        Buffer.byteLength(JSON.stringify(tool.outputSchema), 'utf8'),
+        Buffer.byteLength(JSON.stringify(tool.outputSchema ?? {}), 'utf8'),
         `${tool.name} output schema`,
       ).toBeLessThanOrEqual(toolOutputSchemaByteBudget);
       expect(

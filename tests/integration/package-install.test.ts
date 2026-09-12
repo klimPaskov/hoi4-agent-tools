@@ -39,6 +39,8 @@ const expectedToolNames = [
   'hoi4.probability_sequence',
   'hoi4.probability_compare',
   'hoi4.probability_render',
+  'hoi4.job_inspect',
+  'hoi4.job_cancel',
 ];
 const httpOrigin = 'https://package-install.example.test';
 const httpToken = 'package-install-http-token-that-is-longer-than-thirty-two-characters';

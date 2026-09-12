@@ -1,7 +1,7 @@
 import { open, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import { compareCodeUnits, hashCanonical, sha256Bytes } from './canonical.js';
+import { compareCodeUnits, sha256Bytes } from './canonical.js';
 import {
   DEFAULT_SCAN_MAX_BYTES,
   DEFAULT_SCAN_MAX_FILE_BYTES,
@@ -33,10 +33,6 @@ export interface ScanOptions {
 }
 
 interface CachedSourceBytes {
-  size: number;
-  modifiedMs: number;
-  changedMs: number;
-  inode: number;
   sha256: string;
   bytes: Buffer;
 }
@@ -73,11 +69,8 @@ function hiddenByReplacePath(
 
 export class WorkspaceScanner {
   readonly #sourceCache = new Map<string, CachedSourceBytes>();
-  readonly #gameScanCache = new Map<string, { files: ScannedFile[]; bytes: number }>();
   #sourceCacheBytes = 0;
-  #gameScanCacheBytes = 0;
   readonly #sourceCacheMaxBytes: number;
-  readonly #gameScanCacheMaxBytes: number;
 
   public constructor(
     private readonly serverMaxFiles = DEFAULT_SCAN_MAX_FILES,
@@ -85,7 +78,6 @@ export class WorkspaceScanner {
     private readonly serverMaxFileBytes = DEFAULT_SCAN_MAX_FILE_BYTES,
   ) {
     this.#sourceCacheMaxBytes = Math.max(1, Math.min(134_217_728, serverMaxBytes));
-    this.#gameScanCacheMaxBytes = Math.min(134_217_728, serverMaxBytes);
   }
 
   private cacheKey(absolutePath: string): string {
@@ -97,9 +89,10 @@ export class WorkspaceScanner {
     const previous = this.#sourceCache.get(key);
     if (previous !== undefined) this.#sourceCacheBytes -= previous.bytes.length;
     this.#sourceCache.delete(key);
+    if (source.bytes.length > this.#sourceCacheMaxBytes) return;
     this.#sourceCache.set(key, source);
     this.#sourceCacheBytes += source.bytes.length;
-    while (this.#sourceCacheBytes > this.#sourceCacheMaxBytes && this.#sourceCache.size > 1) {
+    while (this.#sourceCacheBytes > this.#sourceCacheMaxBytes || this.#sourceCache.size > 16_384) {
       const oldest = this.#sourceCache.entries().next().value;
       if (oldest === undefined) break;
       this.#sourceCache.delete(oldest[0]);
@@ -107,41 +100,10 @@ export class WorkspaceScanner {
     }
   }
 
-  private gameScanKey(
-    workspace: ResolvedWorkspace,
-    root: ResolvedRoot,
-    options: ScanOptions,
-  ): string {
-    return hashCanonical({
-      workspaceId: workspace.id,
-      root: root.path,
-      patterns: [...options.patterns].sort(compareCodeUnits),
-      ignore: [...(options.ignore ?? ['**/.hoi4-agent/**'])].sort(compareCodeUnits),
-    });
-  }
-
-  private retainGameScan(key: string, files: readonly ScannedFile[]): void {
-    const bytes = files.reduce((total, file) => total + file.size, 0);
-    const previous = this.#gameScanCache.get(key);
-    if (previous !== undefined) this.#gameScanCacheBytes -= previous.bytes;
-    this.#gameScanCache.delete(key);
-    if (bytes > this.#gameScanCacheMaxBytes) return;
-    this.#gameScanCache.set(key, { files: files.map((file) => ({ ...file })), bytes });
-    this.#gameScanCacheBytes += bytes;
-    while (this.#gameScanCache.size > 8 || this.#gameScanCacheBytes > this.#gameScanCacheMaxBytes) {
-      const oldest = this.#gameScanCache.entries().next().value;
-      if (oldest === undefined) break;
-      this.#gameScanCache.delete(oldest[0]);
-      this.#gameScanCacheBytes -= oldest[1].bytes;
-    }
-  }
-
   /** Release retained source buffers after an idle MCP analysis batch. */
   public clearCaches(): void {
     this.#sourceCache.clear();
     this.#sourceCacheBytes = 0;
-    this.#gameScanCache.clear();
-    this.#gameScanCacheBytes = 0;
   }
 
   /** Cache accounting used by lifecycle and regression tests. */
@@ -154,8 +116,10 @@ export class WorkspaceScanner {
     return {
       sourceBytes: this.#sourceCacheBytes,
       sourceEntries: this.#sourceCache.size,
-      gameScanBytes: this.#gameScanCacheBytes,
-      gameScanEntries: this.#gameScanCache.size,
+      // Retained for callers of the existing accounting interface. Inventories
+      // are no longer cached independently of verified source bytes.
+      gameScanBytes: 0,
+      gameScanEntries: 0,
     };
   }
 
@@ -191,31 +155,8 @@ export class WorkspaceScanner {
     let enumeratedFiles = 0;
     for (const root of roots) {
       options.signal?.throwIfAborted();
-      const gameScanKey =
-        root.kind === 'game' ? this.gameScanKey(workspace, root, options) : undefined;
-      const cachedGameFiles =
-        gameScanKey === undefined ? undefined : this.#gameScanCache.get(gameScanKey);
-      if (cachedGameFiles !== undefined && gameScanKey !== undefined) {
-        this.#gameScanCache.delete(gameScanKey);
-        this.#gameScanCache.set(gameScanKey, cachedGameFiles);
-        enumeratedFiles += cachedGameFiles.files.length;
-        if (enumeratedFiles > maxFiles)
-          throw new ServiceError('SCAN_FILE_LIMIT', 'Scan exceeds the configured file limit', {
-            files: enumeratedFiles,
-            limit: maxFiles,
-          });
-        for (const file of cachedGameFiles.files) {
-          totalBytes += file.size;
-          if (totalBytes > maxBytes)
-            throw new ServiceError('SCAN_BYTE_LIMIT', 'Scan exceeds the configured byte limit', {
-              bytes: totalBytes,
-              limit: maxBytes,
-            });
-          result.push({ ...file });
-        }
-        continue;
-      }
-      const rootFiles: ScannedFile[] = [];
+      // Re-enumerate every root: installing content or changing load order can
+      // invalidate a vanilla inventory just as it can a mod inventory.
       const matches = fg.stream(options.patterns, {
         cwd: root.path,
         onlyFiles: true,
@@ -252,26 +193,17 @@ export class WorkspaceScanner {
             });
           }
           const cached = this.#sourceCache.get(cacheKey);
-          const retained =
-            cached?.size === metadata.size &&
-            cached.modifiedMs === metadata.mtimeMs &&
-            cached.changedMs === metadata.ctimeMs &&
-            cached.inode === metadata.ino
-              ? cached
-              : undefined;
+          // Metadata is not content identity (including on aliased/networked
+          // filesystems). Verify bytes before reusing parsed/indexed facts.
+          const observed = await readBoundedFile(
+            handle,
+            Math.min(remaining, this.serverMaxFileBytes),
+            options.signal,
+          );
+          const sha256 = sha256Bytes(observed);
           const bytes =
-            retained?.bytes ??
-            (await readBoundedFile(
-              handle,
-              Math.min(remaining, this.serverMaxFileBytes),
-              options.signal,
-            ));
-          const sha256 = retained?.sha256 ?? sha256Bytes(bytes);
+            cached?.sha256 === sha256 && cached.bytes.equals(observed) ? cached.bytes : observed;
           this.retainSource(cacheKey, {
-            size: metadata.size,
-            modifiedMs: metadata.mtimeMs,
-            changedMs: metadata.ctimeMs,
-            inode: metadata.ino,
             sha256,
             bytes,
           });
@@ -288,12 +220,10 @@ export class WorkspaceScanner {
             bytes,
           } satisfies ScannedFile;
           result.push(scanned);
-          rootFiles.push(scanned);
         } finally {
           await handle.close();
         }
       }
-      if (gameScanKey !== undefined) this.retainGameScan(gameScanKey, rootFiles);
     }
     result.sort(
       (left, right) =>

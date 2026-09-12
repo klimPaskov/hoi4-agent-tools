@@ -66,9 +66,9 @@ async function connected(): Promise<{ client: Client; mod: string }> {
   await server.connect(serverTransport as unknown as Transport);
   await client.connect(clientTransport as unknown as Transport);
   cleanup.push(
-    async () => client.close(),
+    async () => rm(temporary, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }),
     async () => server.close(),
-    async () => rm(temporary, { recursive: true, force: true }),
+    async () => client.close(),
   );
   return { client, mod };
 }

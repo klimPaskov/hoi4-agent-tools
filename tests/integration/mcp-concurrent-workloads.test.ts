@@ -123,11 +123,11 @@ async function mixedCalls() {
   ];
 }
 
-async function exercise(clients: Client[]) {
+async function exercise(clients: Client[], requestCount = 30) {
   const calls = await mixedCalls();
   const durations: number[] = [];
   const results = await Promise.allSettled(
-    Array.from({ length: 30 }, async (_, index) => {
+    Array.from({ length: requestCount }, async (_, index) => {
       const call = calls[index % calls.length]!;
       const client = clients[index % clients.length]!;
       const started = performance.now();
@@ -165,11 +165,11 @@ async function exercise(clients: Client[]) {
       failures.map((result) => result.reason),
       'Concurrent domain calls failed',
     );
-  expect(results).toHaveLength(30);
-  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(23);
+  expect(results).toHaveLength(requestCount);
+  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(25);
   console.info(
     JSON.stringify({
-      workload: '30 concurrent mixed domain calls',
+      workload: `${requestCount} concurrent mixed domain calls`,
       clients: clients.length,
       maxMs: Math.round(Math.max(...durations)),
     }),
@@ -177,7 +177,7 @@ async function exercise(clients: Client[]) {
 }
 
 describe('concurrent production MCP workloads', () => {
-  it('serves six HTTP sessions sharing one engine through a simultaneous mixed workload', async () => {
+  it('serves sixteen HTTP sessions sharing one engine through 64 simultaneous mixed requests', async () => {
     const setup = await fixture();
     process.env.HOI4_CONCURRENCY_TOKEN = token;
     const engine = new CoreEngine(await WorkspaceResolver.create(setup.config));
@@ -188,7 +188,7 @@ describe('concurrent production MCP workloads', () => {
     const clients: Client[] = [];
     try {
       await Promise.all(
-        Array.from({ length: 6 }, async (_, id) => {
+        Array.from({ length: 16 }, async (_, id) => {
           const client = new Client({ name: `http-load-${id}`, version: '1' });
           clients.push(client);
           await client.connect(
@@ -198,7 +198,7 @@ describe('concurrent production MCP workloads', () => {
           );
         }),
       );
-      await exercise(clients);
+      await exercise(clients, 64);
     } finally {
       await Promise.all(clients.map((client) => client.close()));
       await handle.close();
@@ -293,7 +293,7 @@ describe('concurrent production MCP workloads', () => {
       controller.abort();
       await expect(cancelled).rejects.toThrow();
       const discoveryStarted = performance.now();
-      expect((await client.listTools()).tools.length).toBe(24);
+      expect((await client.listTools()).tools.length).toBe(26);
       expect(performance.now() - discoveryStarted).toBeLessThan(2_000);
       await new Promise<void>((resolve) => setTimeout(resolve, 14_000));
       expect(started).toEqual([1]);

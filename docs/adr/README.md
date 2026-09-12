@@ -27,3 +27,5 @@
 25. [Bounded cache lifetimes](0025-bounded-cache-lifetimes.md)
 26. [Concurrent request execution](0026-concurrent-request-execution.md)
 27. [Shared scenario condition evaluation](0027-shared-condition-evaluation.md)
+28. [Incremental source segments](0028-incremental-source-segments.md)
+29. [Persistent jobs](0029-persistent-jobs.md)

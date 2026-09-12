@@ -198,6 +198,11 @@ describe('transaction manager', () => {
     await expect(manager.recover('test', 'bob')).rejects.toMatchObject({
       code: 'TRANSACTION_PRINCIPAL_MISMATCH',
     });
+    await expect(
+      manager.core.recoverTransaction('test', plan.transactionId, 'bob'),
+    ).rejects.toMatchObject({
+      code: 'TRANSACTION_PRINCIPAL_MISMATCH',
+    });
     expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('before\n');
     await expect(manager.recover('test', 'alice')).resolves.toMatchObject([
       { transactionId: plan.transactionId, state: 'rolled_back' },
@@ -713,6 +718,107 @@ describe('transaction manager', () => {
     });
   });
 
+  it.each(['planned', 'applied'] as const)(
+    'targeted recovery retains a %s journal without executing it again',
+    async (state) => {
+      const { mod, manager } = await setup();
+      const target = path.join(mod, 'common', 'one.txt');
+      const plan = await manager.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('committed once\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+      });
+      if (state === 'applied') await manager.apply('test', plan.transactionId, plan.planHash);
+      const before = await readFile(target);
+      const journal = await manager.status('test', plan.transactionId);
+      const recovered = await manager.core.recoverTransaction('test', plan.transactionId);
+      expect(recovered).toEqual(journal);
+      expect(await readFile(target)).toEqual(before);
+      expect(await manager.core.recoverTransaction('test', plan.transactionId)).toEqual(journal);
+    },
+  );
+
+  it('targeted recovery leaves unrelated journals and source files untouched', async () => {
+    const { mod, resolver, manager } = await setup();
+    const plans = [];
+    for (const name of ['one', 'two']) {
+      const relativePath = `common/${name}.txt`;
+      await writeFile(path.join(mod, relativePath), `${name} before\n`);
+      const plan = await manager.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          { relativePath, content: Buffer.from(`${name} after\n`), operationIds: ['op-1'] },
+        ],
+      });
+      plans.push(plan);
+    }
+    for (const [index, plan] of plans.entries()) {
+      const name = index === 0 ? 'one' : 'two';
+      await writeFile(path.join(mod, 'common', `${name}.txt`), `${name} after\n`);
+      await updateJournal(
+        resolver,
+        path.join(mod, '.hoi4-agent', 'cache', 'transactions', plan.transactionId, 'manifest.json'),
+        (manifest) => {
+          manifest.state = 'applying';
+          manifest.appliedFiles = [`common/${name}.txt`];
+        },
+      );
+    }
+    const first = plans[0]!;
+    const second = plans[1]!;
+    const unrelated = await manager.status('test', second.transactionId);
+    const recovered = await manager.core.recoverTransaction('test', first.transactionId);
+    expect(recovered).toMatchObject({ state: 'rolled_back', rollbackStatus: 'applied' });
+    expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('one before\n');
+    expect(await readFile(path.join(mod, 'common', 'two.txt'), 'utf8')).toBe('two after\n');
+    expect(await manager.status('test', second.transactionId)).toEqual(unrelated);
+    expect(await manager.core.recoverTransaction('test', first.transactionId)).toEqual(recovered);
+  });
+
+  it('startup does not acquire a write lock for an intact planned journal', async () => {
+    const { mod, manager } = await setup();
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('pending\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    const lock = path.join(mod, '.hoi4-agent', 'cache', 'locks', 'write.lock');
+    await mkdir(lock);
+    const owner = JSON.stringify({
+      transactionId: plan.transactionId,
+      pid: process.pid,
+      host: hostname().toLowerCase(),
+      instanceId: 'live-writer',
+      processStartedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+    });
+    await writeFile(path.join(lock, 'owner.json'), owner);
+    try {
+      await expect(manager.recover('test')).resolves.toEqual([]);
+      expect(await readFile(path.join(lock, 'owner.json'), 'utf8')).toBe(owner);
+      await expect(
+        manager.core.recoverTransaction('test', plan.transactionId),
+      ).rejects.toMatchObject({ code: 'TRANSACTION_LOCKED' });
+    } finally {
+      await rm(lock, { recursive: true, force: true });
+    }
+  });
+
   it('recovers an interrupted applying journal to the exact before state', async () => {
     const { mod, resolver, manager } = await setup();
     const original = await readFile(path.join(mod, 'common', 'one.txt'));
@@ -918,6 +1024,9 @@ describe('transaction manager', () => {
     );
 
     await expect(manager.recover('test')).rejects.toMatchObject({ code: 'TRANSACTION_LOCKED' });
+    await expect(manager.core.recoverTransaction('test', plan.transactionId)).rejects.toMatchObject(
+      { code: 'TRANSACTION_LOCKED' },
+    );
     expect(await readFile(target, 'utf8')).toBe('interrupted after bytes\n');
     await rm(lock, { recursive: true, force: true });
     await expect(manager.recover('test')).resolves.toHaveLength(1);

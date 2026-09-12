@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Diagnostic, SourceLocation } from './diagnostics.js';
 import { sortDiagnostics } from './diagnostics.js';
 import type { ScannedFile } from './scanner.js';
+import { type IndexSegmentCache, indexSegmentAddress } from './index-segments.js';
 import {
   parseClausewitz,
   parseLocalisation,
@@ -370,8 +371,9 @@ export class SymbolIndex {
   #symbolLimitReported = false;
   #referenceLimitReported = false;
   #diagnosticsTruncated = false;
+  readonly #indexTableBlocked = new Set<string>();
 
-  static build(files: readonly ScannedFile[]): SymbolIndex {
+  static build(files: readonly ScannedFile[], segments?: IndexSegmentCache): SymbolIndex {
     const index = new SymbolIndex();
     const definitionSelection = selectedDefinitionFiles(files);
     for (const displayPath of definitionSelection.selected) index.#definitionFiles.add(displayPath);
@@ -382,7 +384,7 @@ export class SymbolIndex {
       (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
     )) {
       index.files.set(file.displayPath, file);
-      index.indexFile(file);
+      index.indexFileWithSegments(file, segments);
     }
     index.finalize();
     return index;
@@ -392,6 +394,7 @@ export class SymbolIndex {
   static async buildAsync(
     files: readonly ScannedFile[],
     signal?: AbortSignal,
+    segments?: IndexSegmentCache,
   ): Promise<SymbolIndex> {
     signal?.throwIfAborted();
     const index = new SymbolIndex();
@@ -406,7 +409,7 @@ export class SymbolIndex {
     )) {
       signal?.throwIfAborted();
       index.files.set(file.displayPath, file);
-      index.indexFile(file);
+      index.indexFileWithSegments(file, segments);
       if (performance.now() - yieldedAt >= 20) {
         await new Promise<void>((resolve) => setImmediate(resolve));
         signal?.throwIfAborted();
@@ -558,6 +561,48 @@ export class SymbolIndex {
 
   private addDiagnostics(diagnostics: readonly Diagnostic[]): void {
     for (const diagnostic of diagnostics) this.addDiagnostic(diagnostic);
+  }
+
+  private indexFileWithSegments(file: ScannedFile, cache?: IndexSegmentCache): void {
+    if (cache === undefined) {
+      this.indexFile(file);
+      return;
+    }
+    const address = indexSegmentAddress(file, this.#definitionFiles.has(file.displayPath));
+    const cached = cache.get(address);
+    if (
+      cached?.complete === true &&
+      this.symbols.length + cached.symbols.length <= INDEX_RECORD_LIMIT &&
+      this.references.length + cached.references.length <= INDEX_RECORD_LIMIT &&
+      this.diagnostics.length + cached.diagnostics.length <= INDEX_DIAGNOSTIC_LIMIT
+    ) {
+      this.#currentFileShadowed = file.shadowedBy !== undefined;
+      for (const symbol of cached.symbols) this.addSymbol(symbol);
+      for (const reference of cached.references) this.addReference(reference);
+      this.addDiagnostics(cached.diagnostics);
+      return;
+    }
+    const symbols = this.symbols.length;
+    const references = this.references.length;
+    const diagnostics = this.diagnostics.length;
+    this.indexFile(file);
+    // Incomplete files and aggregate ceilings retain the full builder's exact diagnostic
+    // ordering and coverage bookkeeping. They are never cached as complete segments.
+    if (
+      this.#indexTableBlocked.has(file.displayPath) ||
+      this.#skippedSourcePaths.has(file.displayPath) ||
+      this.#indexNestingBlocked.has(file.displayPath) ||
+      this.#symbolLimitReported ||
+      this.#referenceLimitReported ||
+      this.#diagnosticsTruncated
+    )
+      return;
+    cache.put(address, {
+      symbols: this.symbols.slice(symbols),
+      references: this.references.slice(references),
+      diagnostics: this.diagnostics.slice(diagnostics),
+      complete: true,
+    });
   }
 
   private indexFile(file: ScannedFile): void {
@@ -1296,6 +1341,7 @@ export class SymbolIndex {
     let line = 1;
     while (start <= text.length) {
       if (line > INDEX_TABLE_RECORD_LIMIT) {
+        this.#indexTableBlocked.add(file.displayPath);
         this.#complete = false;
         this.addDiagnostic({
           code: 'INDEX_TABLE_RECORD_LIMIT',
@@ -1321,6 +1367,7 @@ export class SymbolIndex {
     let match: RegExpExecArray | null;
     while ((match = matcher.exec(value)) !== null) {
       if (fields.length >= INDEX_TABLE_FIELD_LIMIT) {
+        this.#indexTableBlocked.add(file.displayPath);
         this.#complete = false;
         this.addDiagnostic({
           code: 'INDEX_TABLE_FIELD_LIMIT',

@@ -10,6 +10,8 @@ JSON request bodies default to and are capped at 64 MiB, with a shared 128 MiB b
 
 `maxConcurrentTools` controls expensive operations per server engine (default 2), and `maxSharedTools` controls operations across local processes sharing the same `serverStateRoot` (default 4). Calls waiting for capacity remain cancellable and emit progress when requested. Increase execution capacity only when the host has enough memory for the corresponding scans and renders. HTTP admission, connection, session, and rate limits remain separately configurable.
 
+Optional MCP tasks are backed by authenticated state beneath `serverStateRoot`, not by one HTTP connection. A task therefore survives disconnect and reconnect for the same principal, while another principal cannot list, inspect, cancel, or retrieve it. Native rewrites additionally require `hoi4:write` and a stable `requestKey`. See [Persistent jobs and MCP tasks](jobs.md) for retry, cancellation, and retention semantics.
+
 Resumable event history defaults to 2 MiB per session within the 16 MiB global store, enough to retain one framed 1 MiB artifact-resource chunk.
 
 ## Loopback

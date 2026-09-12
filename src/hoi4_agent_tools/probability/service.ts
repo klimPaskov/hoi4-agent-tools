@@ -12,6 +12,7 @@ import type { ArtifactLink } from '../core/result.js';
 import { publicArtifactLink } from '../core/artifacts.js';
 import { ServiceError } from '../core/result.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { probabilityAnalysisResultSchema } from '../schemas/probability.js';
 import { probabilityAdapter, probabilityAdapters } from './adapters.js';
 import { compareProbabilityResults } from './compare.js';
 import { evaluateExactCandidates, evaluateSurfaceScenarios } from './evaluation.js';
@@ -988,6 +989,45 @@ export class ProbabilityAnalyzer {
     this.state.byId.clear();
     this.state.byCacheKey.clear();
     this.engine.releaseScanCaches();
+  }
+
+  private async retainedAnalysis(
+    request: ProbabilityRenderRequest,
+  ): Promise<ProbabilityAnalysisResult> {
+    const workspace = this.engine.resolver.get(request.workspaceId, request.principal);
+    const candidates = (await this.engine.artifacts.list(workspace, request.signal)).filter(
+      ({ name }) => name === `${request.analysisId}.json`,
+    );
+    for (const artifact of candidates) {
+      request.signal?.throwIfAborted();
+      try {
+        const logical = await this.engine.artifacts.readLogical(
+          workspace,
+          artifact.uri,
+          { mimeType: 'application/json', maxBytes: 134_217_728, maxChunks: 2_048 },
+          request.signal,
+        );
+        const result = probabilityAnalysisResultSchema.parse(
+          JSON.parse(logical.bytes.toString('utf8')) as unknown,
+        ) as unknown as ProbabilityAnalysisResult;
+        if (
+          result.analysisId !== request.analysisId ||
+          result.metadata.workspaceId !== request.workspaceId ||
+          result.operation === 'render'
+        )
+          continue;
+        rememberAnalysis(this.state, result);
+        return result;
+      } catch (error) {
+        if (error instanceof ServiceError && error.code === 'ARTIFACT_WORKSPACE_MISMATCH')
+          throw error;
+      }
+    }
+    throw new ServiceError(
+      'PROBABILITY_ANALYSIS_NOT_CACHED',
+      'Render requires a retained analysis ID from this authorized workspace',
+      { analysisId: request.analysisId },
+    );
   }
 
   private async scan(
@@ -2025,13 +2065,8 @@ export class ProbabilityAnalyzer {
   }
 
   public async render(request: ProbabilityRenderRequest): Promise<ProbabilityAnalysisResult> {
-    const result = this.state.byId.get(request.analysisId);
-    if (result === undefined)
-      throw new ServiceError(
-        'PROBABILITY_ANALYSIS_NOT_CACHED',
-        'Render requires an analysis ID produced by this server process',
-        { analysisId: request.analysisId },
-      );
+    const result =
+      this.state.byId.get(request.analysisId) ?? (await this.retainedAnalysis(request));
     if (result.metadata.workspaceId !== request.workspaceId)
       throw new ServiceError(
         'PROBABILITY_ANALYSIS_WORKSPACE_MISMATCH',

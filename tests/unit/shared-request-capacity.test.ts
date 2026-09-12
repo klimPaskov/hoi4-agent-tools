@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
@@ -8,6 +9,48 @@ import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { SharedRequestCapacity } from '../../src/hoi4_agent_tools/core/shared-request-capacity.js';
 
 describe('shared task-process execution capacity', () => {
+  it('retains a transferred child lease after launcher failure until the child exits', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-transfer-'));
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    await once(child, 'spawn');
+    try {
+      const capacity = new SharedRequestCapacity(root, 1);
+      await expect(
+        capacity.run(new AbortController().signal, async (lease) => {
+          await expect(lease.handoffToProcess(process.pid)).rejects.toMatchObject({
+            code: 'REQUEST_LEASE_OWNER_INVALID',
+          });
+          await lease.handoffToProcess(child.pid!);
+          await expect(lease.handoffToProcess(child.pid!)).rejects.toMatchObject({
+            code: 'REQUEST_LEASE_ALREADY_TRANSFERRED',
+          });
+          throw new Error('Synthetic launcher failure');
+        }),
+      ).rejects.toThrow('Synthetic launcher failure');
+      await expect(
+        new SharedRequestCapacity(root, 1).run(AbortSignal.timeout(250), async () => 'unexpected'),
+      ).rejects.toThrow();
+      const stopped = once(child, 'close');
+      child.kill();
+      await stopped;
+      expect(
+        await new SharedRequestCapacity(root, 1).run(
+          AbortSignal.timeout(5000),
+          async () => 'reclaimed',
+        ),
+      ).toBe('reclaimed');
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        const stopped = once(child, 'close');
+        child.kill();
+        await stopped;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it('handles repeated contention without exceeding capacity or losing a lease', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-contention-'));
     let active = 0;

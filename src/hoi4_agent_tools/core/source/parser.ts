@@ -2,6 +2,7 @@ import type { Diagnostic, SourceLocation } from '../diagnostics.js';
 import { hasBlockingDiagnostics } from '../diagnostics.js';
 import { ServiceError } from '../result.js';
 import { sha256Bytes } from '../canonical.js';
+import { sourceDocumentCacheKey, sourceDocuments, type SourceDocumentCache } from './cache.js';
 import { decodeSource, encodeSource, type DecodedSource } from './encoding.js';
 import {
   createSourceLineIndex,
@@ -273,7 +274,20 @@ class Parser {
   }
 }
 
-export function parseClausewitz(bytes: Uint8Array, sourcePath: string): SourceDocument {
+export function parseClausewitz(
+  bytes: Uint8Array,
+  sourcePath: string,
+  cache: SourceDocumentCache = sourceDocuments,
+): SourceDocument {
+  const key = sourceDocumentCacheKey(bytes, sourcePath);
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  const document = parseClausewitzUncached(bytes, sourcePath);
+  cache.put(key, document);
+  return document;
+}
+
+function parseClausewitzUncached(bytes: Uint8Array, sourcePath: string): SourceDocument {
   const decoded = decodeSource(bytes);
   const diagnostics = new SourceDiagnosticCollector();
   if (bytes.byteLength > SOURCE_MAX_BYTES) {
