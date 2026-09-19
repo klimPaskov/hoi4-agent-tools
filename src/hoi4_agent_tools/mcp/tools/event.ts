@@ -1,15 +1,12 @@
+import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
+import type { TaskToolDefinition } from '../server/task-tool-definition.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-  ToolTaskHandler,
-} from '@modelcontextprotocol/sdk/experimental/tasks';
-import {
-  CallToolResultSchema,
-  CreateTaskResultSchema,
-  GetTaskResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+
 import { z } from 'zod/v4';
+import {
+  helperExpansionRequestSchema,
+  helperExpansionSummarySchema,
+} from '../../schemas/helper-expansion.js';
 import {
   eventDirectionSchema,
   eventGraphReferenceSchema,
@@ -58,6 +55,10 @@ const eventInspectInputSchema = z
     to: nestedSelectorSchema.optional(),
     stateSubject: nestedStateSubjectSchema.optional(),
     impactSubject: nestedImpactSubjectSchema.optional(),
+    helperExpansion: compactValidatedInputSchema(
+      helperExpansionRequestSchema,
+      'Bounded helper paths; opaque continuationUri resumes the same source and roots. See docs/events.md.',
+    ).optional(),
   })
   .strict()
   .superRefine(validateEventInspectRequest);
@@ -126,6 +127,7 @@ const eventInspectOutputSchema = strictOperationResultSchema(
       revision: sha256Schema,
       graphHash: sha256Schema,
       counts: eventGraphCountsSchema,
+      helperExpansion: helperExpansionSummarySchema.optional(),
       boundary: inspectBoundarySchema,
     })
     .strict(),
@@ -213,70 +215,36 @@ const readOnlyEventTool = {
   openWorldHint: false,
 } as const;
 
-function eventTaskHandler(schema: z.ZodType) {
-  return {
-    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
-      schema.parse(input);
-      return CreateTaskResultSchema.parse({
-        task: await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
-          pollInterval: 250,
-        }),
-      });
-    },
-    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
-    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
-  };
-}
+export const eventTaskTools = [
+  {
+    name: 'hoi4.event_inspect',
+    title: 'Inspect event chains',
+    description:
+      'Scan, find roots, trace, explain paths, inspect state flow, lint, or assess impact. Full source-linked reports are resources.',
+    inputSchema: eventInspectInputSchema,
+    outputSchema: eventInspectOutputSchema,
+    annotations: readOnlyEventTool,
+  },
+  {
+    name: 'hoi4.event_render',
+    title: 'Render event chains',
+    description:
+      'Render deterministic JSON, SVG, PNG, and optional HTML for an event-chain view. Complete artifacts retain source links.',
+    inputSchema: eventRenderInputSchema,
+    outputSchema: eventRenderOutputSchema,
+    annotations: readOnlyEventTool,
+  },
+  {
+    name: 'hoi4.event_compare',
+    title: 'Compare event chains',
+    description:
+      'Compare cached, artifact-backed, current, or in-memory proposed event graphs without writing source. Full changes are resources.',
+    inputSchema: eventCompareInputSchema,
+    outputSchema: eventCompareOutputSchema,
+    annotations: readOnlyEventTool,
+  },
+] satisfies readonly TaskToolDefinition[];
 
 export function registerEventTools(server: McpServer): void {
-  server.experimental.tasks.registerToolTask(
-    'hoi4.event_inspect',
-    {
-      title: 'Inspect event chains',
-      description:
-        'Scan, find roots, trace, explain paths, inspect state flow, lint, or assess impact. Full source-linked reports are resources.',
-      inputSchema: eventInspectInputSchema,
-      outputSchema: eventInspectOutputSchema,
-      annotations: readOnlyEventTool,
-      execution: { taskSupport: 'optional' },
-    },
-    eventTaskHandler(eventInspectInputSchema) as unknown as ToolTaskHandler<
-      typeof eventInspectInputSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.event_render',
-    {
-      title: 'Render event chains',
-      description:
-        'Render deterministic JSON, SVG, PNG, and optional HTML for an event-chain view. Complete artifacts retain source links.',
-      inputSchema: eventRenderInputSchema,
-      outputSchema: eventRenderOutputSchema,
-      annotations: readOnlyEventTool,
-      execution: { taskSupport: 'optional' },
-    },
-    eventTaskHandler(eventRenderInputSchema) as unknown as ToolTaskHandler<
-      typeof eventRenderInputSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.event_compare',
-    {
-      title: 'Compare event chains',
-      description:
-        'Compare cached, artifact-backed, current, or in-memory proposed event graphs without writing source. Full changes are resources.',
-      inputSchema: eventCompareInputSchema,
-      outputSchema: eventCompareOutputSchema,
-      annotations: readOnlyEventTool,
-      execution: { taskSupport: 'optional' },
-    },
-    eventTaskHandler(eventCompareInputSchema) as unknown as ToolTaskHandler<
-      typeof eventCompareInputSchema
-    >,
-  );
+  registerLegacyTaskTools(server, eventTaskTools);
 }

@@ -81,6 +81,12 @@ export interface LogicalArtifactReadOptions {
   maxChunks: number;
 }
 
+/** Internal retention evidence, authenticated by the owning shared-core service. */
+export type ArtifactRetention = (
+  workspace: ResolvedWorkspace,
+  signal?: AbortSignal,
+) => Promise<ReadonlySet<string>>;
+
 interface ArtifactManifest {
   version: 2;
   workspaceIdentity: string;
@@ -990,6 +996,7 @@ export class ArtifactStore {
     private readonly maxBytes = 536_870_912,
     private readonly maxEntries = 5_000,
     private readonly maxSingleBytes = 134_217_728,
+    private readonly retention?: ArtifactRetention,
   ) {}
 
   private async pruneForAdmission(
@@ -997,8 +1004,8 @@ export class ArtifactStore {
     usage: { bytes: number; entries: number },
     additionalBytes: number,
     additionalEntries: number,
-    protectedManifests: ReadonlySet<string>,
-    protectedTargets: ReadonlySet<string>,
+    protectedManifests: Set<string>,
+    protectedTargets: Set<string>,
     signal?: AbortSignal,
   ): Promise<{ bytes: number; entries: number }> {
     if (
@@ -1006,6 +1013,24 @@ export class ArtifactStore {
       usage.bytes <= this.maxBytes - additionalBytes
     ) {
       return usage;
+    }
+
+    // Read durable pins while holding the same cross-process publication lock used by
+    // checkpoint commits. A committed frontier cannot disappear between save and resume.
+    for (const uri of (await this.retention?.(workspace, signal)) ?? []) {
+      signal?.throwIfAborted();
+      const { sha256, provenanceHash, name } = this.parseUri(workspace, uri);
+      protectedTargets.add(
+        await containedGeneratedPath(workspace.artifactRoot, sha256.slice(0, 2), sha256, name),
+      );
+      protectedManifests.add(
+        await containedGeneratedPath(
+          workspace.artifactRoot,
+          sha256.slice(0, 2),
+          sha256,
+          `${name}.${provenanceHash}.manifest.json`,
+        ),
+      );
     }
 
     // Reclaim to a low-water mark so a busy agent workflow does not rescan and evict one artifact
@@ -1487,7 +1512,10 @@ export class ArtifactStore {
   async withAtomicChunkedWrites<T>(
     workspace: ResolvedWorkspace,
     writes: readonly ArtifactWrite[],
-    commit: (artifacts: readonly StoredArtifact[]) => Promise<T>,
+    commit: (
+      artifacts: readonly StoredArtifact[],
+      physicalArtifacts: readonly StoredArtifact[],
+    ) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
     signal?.throwIfAborted();
@@ -1628,7 +1656,11 @@ export class ArtifactStore {
     return this.withAtomicWrites(
       workspace,
       physicalWrites,
-      (stored) => commit(logicalIndexes.map((index) => stored[index]!)),
+      (stored) =>
+        commit(
+          logicalIndexes.map((index) => stored[index]!),
+          stored,
+        ),
       signal,
     );
   }

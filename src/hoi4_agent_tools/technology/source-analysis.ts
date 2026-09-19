@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { semanticSourceIdentity } from '../core/semantic-dependencies.js';
 import { compareCodeUnits, deterministicId } from '../core/canonical.js';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -1261,7 +1262,7 @@ export function technologySourceFragmentCacheKey(
   file: ScannedFile,
   catalogFingerprint: string,
 ): string {
-  return `${file.sha256}:${catalogFingerprint}`;
+  return `${semanticSourceIdentity(file)}:${catalogFingerprint}`;
 }
 
 export interface TechnologySourceFragmentCacheLike {

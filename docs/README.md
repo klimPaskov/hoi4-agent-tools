@@ -3,6 +3,8 @@
 - [Setup](setup.md): install the server, configure HOI4 paths, and connect an MCP client.
 - [Event chains](events.md): inspect, trace, lint, render, and compare event chains.
 - [Technology trees](technology.md): inspect, trace, lint, render, and compare technologies and doctrines.
+- [Bounded helper expansion](helper-expansion.md): resume source-linked event and technology helper paths with exact coverage boundaries.
+- [Persistent jobs](jobs.md): run, inspect, cancel, and recover long operations.
 - [AI and MTTH analysis](probability.md): evaluate weighted logic, timing, uncertainty, sequences, and patches.
 - [Focus trees](focus.md): inspect, create, render, and clean national or continuous focus content.
 - [Scripted GUIs](gui.md): inspect linked UI source, render states, and create or repair GUIs.

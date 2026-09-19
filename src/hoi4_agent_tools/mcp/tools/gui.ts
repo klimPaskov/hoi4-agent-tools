@@ -1,14 +1,7 @@
+import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
+import type { TaskToolDefinition } from '../server/task-tool-definition.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-  ToolTaskHandler,
-} from '@modelcontextprotocol/sdk/experimental/tasks';
-import {
-  CallToolResultSchema,
-  CreateTaskResultSchema,
-  GetTaskResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
 import {
@@ -95,78 +88,44 @@ const artifactProducing = {
   openWorldHint: false,
 } as const;
 
-function guiTaskHandler(schema: z.ZodType) {
-  return {
-    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
-      schema.parse(input);
-      return CreateTaskResultSchema.parse({
-        task: await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
-          pollInterval: 250,
-        }),
-      });
+export const guiTaskTools = [
+  {
+    name: 'hoi4.gui_inspect',
+    title: 'Inspect scripted GUI',
+    description: 'Inspect GUI sources and scenarios.',
+    inputSchema: guiInspectRequestSchema,
+    outputSchema: guiScanOutputSchema,
+    annotations: artifactProducing,
+  },
+  {
+    name: 'hoi4.gui_render',
+    title: 'Render scripted GUI artifacts',
+    description:
+      'Render GUI states, resolutions, generated or explicit scenarios, dynamic flags and text icons, hierarchy, comparisons, and diagnostics.',
+    inputSchema: guiRenderRequestSchema,
+    outputSchema: guiRenderOutputSchema,
+    annotations: artifactProducing,
+  },
+  {
+    name: 'hoi4.gui_rewrite',
+    title: 'Create or clean up scripted GUI',
+    description:
+      'Apply one validated source, helper, or exact-patch GUI package. Text dependencies use additionalFiles; binary art stays workspace-referenced.',
+    inputSchema: guiRewriteRequestSchema,
+    outputSchema: guiPlanOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
     },
-    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
-    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
-  };
-}
+  },
+] satisfies readonly TaskToolDefinition[];
 
 export function registerGuiTools(
   server: McpServer,
   _engine: CoreEngine,
   _context: ServerContext,
 ): void {
-  server.experimental.tasks.registerToolTask(
-    'hoi4.gui_inspect',
-    {
-      title: 'Inspect scripted GUI',
-      description: 'Inspect GUI sources and scenarios.',
-      inputSchema: guiInspectRequestSchema,
-      outputSchema: guiScanOutputSchema,
-      annotations: artifactProducing,
-      execution: { taskSupport: 'optional' },
-    },
-    guiTaskHandler(guiInspectRequestSchema) as unknown as ToolTaskHandler<
-      typeof guiInspectRequestSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.gui_render',
-    {
-      title: 'Render scripted GUI artifacts',
-      description:
-        'Render GUI states, resolutions, generated or explicit scenarios, dynamic flags and text icons, hierarchy, comparisons, and diagnostics.',
-      inputSchema: guiRenderRequestSchema,
-      outputSchema: guiRenderOutputSchema,
-      annotations: artifactProducing,
-      execution: { taskSupport: 'optional' },
-    },
-    guiTaskHandler(guiRenderRequestSchema) as unknown as ToolTaskHandler<
-      typeof guiRenderRequestSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.gui_rewrite',
-    {
-      title: 'Create or clean up scripted GUI',
-      description:
-        'Apply one validated source, helper, or exact-patch GUI package. Text dependencies use additionalFiles; binary art stays workspace-referenced.',
-      inputSchema: guiRewriteRequestSchema,
-      outputSchema: guiPlanOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-      execution: { taskSupport: 'optional' },
-    },
-    guiTaskHandler(guiRewriteRequestSchema) as unknown as ToolTaskHandler<
-      typeof guiRewriteRequestSchema
-    >,
-  );
+  registerLegacyTaskTools(server, guiTaskTools);
 }

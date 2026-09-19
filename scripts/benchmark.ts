@@ -114,9 +114,9 @@ const guiStates: readonly GuiPreviewState[] = [
 ];
 
 const guiResolutions = [
-  { width: 640, height: 360, uiScale: 1 },
-  { width: 960, height: 540, uiScale: 1 },
-  { width: 1280, height: 720, uiScale: 0.9 },
+  { width: 960, height: 540, uiScale: 0.5 },
+  { width: 1280, height: 720, uiScale: 0.6 },
+  { width: 1920, height: 1080, uiScale: 1 },
 ];
 
 const mapLayerCoverage = {

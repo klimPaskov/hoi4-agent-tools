@@ -1,4 +1,11 @@
 import path from 'node:path';
+import { inspectHelperExpansion } from '../core/helper-expansion.js';
+import type {
+  HelperExpansionRequest,
+  HelperExpansionSummary,
+} from '../schemas/helper-expansion.js';
+import { eventHelperInventory } from './helper-expansion.js';
+import { clearSemanticDependencies } from '../core/semantic-dependencies.js';
 import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
@@ -15,7 +22,7 @@ import { RenderBudget } from '../core/render-budget.js';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { isPortablePathSegment } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
-import { buildEventGraph } from './graph.js';
+import { buildEventGraph, buildEventGraphAsync } from './graph.js';
 import {
   EVENT_FRAGMENT_CACHE_MAX_ENTRIES,
   EVENT_FRAGMENT_CACHE_MAX_SOURCE_BYTES,
@@ -53,7 +60,14 @@ import {
 } from './render.js';
 
 export type EventInspectMode =
-  'scan' | 'roots' | 'trace' | 'explain_path' | 'state_flow' | 'lint' | 'impact';
+  | 'scan'
+  | 'roots'
+  | 'trace'
+  | 'explain_path'
+  | 'state_flow'
+  | 'lint'
+  | 'impact'
+  | 'helper_expansion';
 
 export interface EventInspectInput {
   workspaceId: string;
@@ -68,6 +82,7 @@ export interface EventInspectInput {
   expandHelpers?: boolean;
   stateSubject?: { kind: EventStateAccess['kind']; name: string };
   impactSubject?: EventImpactSubject;
+  helperExpansion?: HelperExpansionRequest;
   refresh?: boolean;
   principal?: string;
   signal?: AbortSignal;
@@ -80,6 +95,7 @@ export interface EventInspectResult {
   report: unknown;
   reportJson: string;
   artifacts: StoredArtifact[];
+  helperExpansion?: HelperExpansionSummary;
 }
 
 export interface EventRenderServiceInput {
@@ -177,6 +193,7 @@ class BoundedEventFragmentCache implements EventSemanticFragmentCacheLike {
   }
 
   public clear(): void {
+    clearSemanticDependencies(this);
     this.#entries.clear();
     this.#sourceBytes = 0;
   }
@@ -1101,7 +1118,7 @@ export class EventChainViewer {
       return cached.graph;
     const buildAnalysisMode = requestedAnalysisMode;
     const projectHelpers = buildAnalysisMode === 'focused' ? false : requestedProjectHelpers;
-    const graph = buildEventGraph(snapshot, {
+    const graph = await buildEventGraphAsync(snapshot, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
@@ -1115,6 +1132,31 @@ export class EventChainViewer {
 
   public async inspect(input: EventInspectInput): Promise<EventInspectResult> {
     input.signal?.throwIfAborted();
+    if (input.mode === 'helper_expansion') {
+      const graph = await this.scan(input.workspaceId, {
+        projectHelpers: false,
+        analysisMode: 'full',
+        ...(input.principal === undefined ? {} : { principal: input.principal }),
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      });
+      const expansion = await inspectHelperExpansion(
+        this.engine,
+        input.workspaceId,
+        eventHelperInventory(graph),
+        input.helperExpansion,
+        input.principal,
+        input.signal,
+      );
+      return {
+        graph,
+        graphHash: cachedEventGraphHash(graph, input.signal),
+        mode: input.mode,
+        report: expansion.report,
+        reportJson: expansion.reportJson,
+        artifacts: expansion.artifacts,
+        helperExpansion: expansion.summary,
+      };
+    }
     const focused =
       input.mode === 'trace' ||
       input.mode === 'explain_path' ||

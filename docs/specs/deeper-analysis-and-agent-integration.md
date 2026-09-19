@@ -21,13 +21,13 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 
 ## Stage 2: Incremental analysis and persistent jobs — candidate 3.1.0
 
-- [x] Cache per-file parsed/indexed segments and reverse dependencies; invalidate additions, removals, renames, load-order changes, aliases, and same-size/same-timestamp edits.
+- [ ] Cache per-file parsed/indexed segments and reverse dependencies; invalidate additions, removals, renames, load-order changes, aliases, and same-size/same-timestamp edits.
 - [x] Reuse content-addressed analysis across authorized local processes without sharing private results across workspace/principal boundaries.
-- [x] Expand event/technology helper closure incrementally with source-revision-bound checkpoints and exact coverage boundaries.
+- [ ] Expand event/technology helper closure incrementally with source-revision-bound checkpoints and exact coverage boundaries.
 - [x] Add persistent jobs, bounded CPU workers, responsive control traffic, cancellation, and result retrieval.
-- [x] Recover read-only work from checkpoints and reconcile rewrite outcomes through transaction journals.
+- [ ] Recover interrupted read-only expansion work from checkpoints and reconcile rewrite outcomes through transaction journals.
 - [x] Deduplicate background rewrites using caller-reusable request keys; never blindly replay an uncertain write.
-- [x] Add native negotiated MCP task adapters and ordinary `hoi4.job_inspect` / `hoi4.job_cancel` compatibility tools.
+- [ ] Add native negotiated MCP task adapters and ordinary `hoi4.job_inspect` / `hoi4.job_cancel` compatibility tools.
 - [ ] Prove crash recovery, isolation, incremental/full-rebuild equivalence, and release/install qualification.
 
 ## Stage 3: Cross-system impact and decisions — planned 3.2.0
@@ -115,12 +115,68 @@ No active server or coding-agent process was restarted or replaced.
 GitHub has one latest public release entry, v3.0.9, and both v3.0.8 and v3.0.9 tags remain.
 See [the shared-condition decision](../adr/0027-shared-condition-evaluation.md) for the architecture and remaining interpreter boundaries.
 
-Stage 2 has a complete local 3.1.0 candidate implementation; release qualification remains pending.
+Stage 2 has an incomplete local 3.1.0 candidate implementation; release qualification remains pending.
+Review of candidate `041f586` found that reverse source dependencies were not consumed by product analysis and that job checkpoints retained completed results, not interrupted helper-expansion progress.
+The published production transport adapters support the SDK 1.x task extension; the local candidate additionally routes modern-protocol requests through the production stdio and HTTP entry points, but is not installed or release-qualified.
+Those requirements are reopened above; the candidate is not release-ready.
 Content-addressed parsed documents, file-local index segments, typed reverse source dependencies, and the authenticated cross-process cache preserve exact source identities and coverage boundaries while re-enumerating and verifying current bytes.
 Event and technology graphs revalidate external edits and retain revision-addressed helper and comparison evidence.
 Synthetic incremental/full-rebuild cases cover additions, removals, renames, aliases, shadowing, load-order changes, same-size/same-timestamp edits, partial limits, cycles, tampering, and principal isolation.
 The 1,024-, 4,096-, and 10,000-focus inventory fixtures reconstruct every definition; these Stage 2 indexing fixtures do not establish the Stage 5 layout gate.
 See [incremental source segments](../adr/0028-incremental-source-segments.md) for the cache, invalidation, and helper-coverage contract.
+
+Intermediate event and technology dependency frontiers bind their exact source graph, roots, ordering, visited policy, adjacency cursor, and work bounds to authenticated, eviction-pinned job resources.
+The worker host permits at most two replacement attempts after proven read-worker death, never repeats an unchanged checkpoint twice, and preserves cancellation without replaying writes.
+On 2026-09-13, four production-process recovery cases passed against synthetic 2,500-helper fixtures: event and technology analysis with unchanged and changed source files, each matching a clean execution's entire tool result.
+The ten-file artifact/job/event/technology/frontier subset passed 110 other tests, including retained-checkpoint eviction, malformed frontiers, per-transition resume equivalence, work/cancellation boundaries, and retry policy.
+The event/technology MCP-job and worker-policy/startup matrix passed 35 tests across four files, including ordinary/task result and artifact parity, launcher exit, fresh-server comparison recovery, and worker death before or immediately after the startup handshake.
+Shared semantic dependency observation now feeds the typed reverse consumer graph for event and technology fragment invalidation.
+Nine cases prove cached/clean graph equivalence and selective rebuilding across missing definitions, additions, edits, cycles, removals, renames, overlays, load-order changes, source-root isolation, interrupted rebuilds, and inventory eviction.
+The same regression reproduced and fixed technology cache-key collisions that attributed identical source bytes to the wrong file.
+The final twelve-file domain/index/cache/worker-recovery subset passed 114 tests on 2026-09-13, including both project-owned large acceptance fixtures and the interrupted-invalidation and inventory-eviction corrections.
+Both inspectors implement opt-in `helper_expansion` pages with compact source-revision- and principal-bound continuation resources.
+Distinct structural call paths, helper-owned state accesses and technology references are streamed under explicit page, work, depth, and cycle boundaries.
+Seventeen focused tests passed on 2026-09-13, including 786,431 compact traversal records, fresh-service resumption, same-length external source edits, principal/domain/query isolation, chunked cursor loading, tampered resources, exponential helper networks, depth recovery, and exact MCP/persisted-job result parity.
+The final frozen 22-file regression passed 190 tests in 232.21 seconds on this Windows host, covering the page API, large domain fixtures, complete event/technology MCP workflows, job parity, all four real-worker recovery cases, checkpoint retention, cache invalidation, and package metadata.
+The candidate includes generated helper request/summary schemas and packaged continuation documentation; no stage commit, publication, installation, or full release qualification was performed for this tranche.
+At that checkpoint, broader materialized-graph memory refinement and modern negotiated protocol adapters remained pending.
+These targeted passes do not qualify Stage 2 for release.
+
+The modern operation/task tranche extracts one protocol-independent execution and authorization service and one catalog for all 23 task-capable domain tools.
+The 2025 adapter retains its wire contract while the candidate 2026-07-28 adapter implements per-request extension negotiation, durable flat handles, inlined polling results, cancellation acknowledgements, ignored input updates, and pre-creation client-root exchange.
+The published SDK 2.0.0 task-routing gate is reproduced and handled at its public transport seam without exposing the private dispatch names or replacing envelope/era checks.
+The first modern suite passed 13 tests on 2026-09-13, including official SDK ordinary calls and both connection and Fetch-based HTTP serving; 28 legacy event/technology task regressions also passed after the execution extraction.
+The expanded matrix initially passed 56 of 57 tests and exposed the published SDK's failure to cancel request ID `0`.
+The public transport seam preserves exact zero/empty-string wire IDs while supplying truthy private IDs to the SDK, rejects active duplicates, validates cancellations before releasing mappings, and clears mappings on completion/cancellation/close.
+The corrected frozen 12-file matrix passed all 84 tests in 289.47 seconds on 2026-09-13.
+It includes 16 modern integration cases, two focused zero/empty-ID regressions, all six legacy domain job/task routes, legacy authenticated HTTP tasks, metadata/context/progress contracts, and package metadata.
+Modern and legacy rewrite retries return one bound receipt without replaying source edits, including an independent source change after the original commit.
+See [the modern adapter decision](../adr/0031-modern-mcp-task-adapter.md) for scope, SDK limitations, and remaining production integration.
+At that checkpoint, production entry points, linked resources, compatibility controls, progress, real transport/authentication gates, full qualification, and dependency-advisory updates remained incomplete.
+The identifier-hardening tranche replaces new plain scope/key IDs with a domain-separated, server-secret HMAC derivation and checks authenticated earlier receipts under the same publication lock.
+Earlier receipts are not moved or replayed, and conflicts, tampering, and ambiguous dual-generation records fail closed.
+Modern task handles carry a separate authenticated suffix so even an earlier receipt receives an unguessable modern reference; signature validation precedes execution admission and cancellation.
+The initial five-file hardening matrix passed 50 tests in 86.20 seconds on 2026-09-13, covering authenticated reference controls, concurrent/reopened receipt storage, modern transport paths, and both legacy native-task transports.
+The expanded frozen matrix passed all 113 tests across 13 files in 203.80 seconds on 2026-09-13 using the supported `npm test --` invocation.
+Its first direct-Node invocation omitted `npm_execpath`, so the package-install regression failed while the other 112 checks passed; the npm-driven rerun passed every check without changing source.
+The hardening tranche is verified locally, not release-qualified or installed.
+The expired-mutation retry regression reproduced unpollable retry handles on both modern transports.
+The implementation now renews only authenticated protocol-visibility metadata under the submission lock, preserving the original terminal execution, result, request identity, and transaction.
+Both ordinary and native retries in both protocol generations return that saved outcome without source replay; failed and cancelled rewrites remain terminal.
+The three-file expiry matrix passed 55 tests in 76.89 seconds on 2026-09-13, including authenticated HTTP retries, concurrent renewal, reopening, and invalid metadata rejection.
+The modern candidate delegates artifact-resource reads to a shared bounded core reader, including workspace grants, byte ranges, UTF-8 boundaries, manifest metadata, and continuation links.
+The frozen 15-file matrix passed all 133 tests in 327.02 seconds on 2026-09-13, including altered artifacts, ungranted workspaces, HTTP resource routing headers, and complete reconstruction of a 1,601-element real-worker GUI artifact.
+The candidate also shares compatibility job controls and the probability-analysis prompt with the legacy server.
+The two protocol factories share the same agent-facing server instructions.
+Seven focused tests passed in 9.67 seconds, proving control responsiveness with occupied execution slots, principal-private job results, cancellation scopes, prompt parity, and an identical 25-tool catalog.
+The final post-extraction 17-file regression passed all 153 tests in 425.13 seconds on 2026-09-13, including both modern serving paths, legacy discovery and workflows, resource reconstruction, and package metadata/install checks.
+The earlier 152-of-153 run exposed a stale 23-tool assertion in the official-client test; the corrected client test verifies the full 25-tool catalog and decoded prompt content, with wire-shape checks retained separately.
+The candidate factory also shares ordinary-call progress ordering and heartbeat lifecycle with the legacy adapter through the SDK's request-related notification API.
+Nineteen focused tests passed in 30.81 seconds, including progress before completion over SDK connection and Fetch-based HTTP serving, SSE cancellation before admission, silent JSON calls, missing/falsy tokens, and timer cleanup.
+The expanded nine-file progress and legacy-compatibility regression passed all 73 tests in 121.78 seconds on 2026-09-19.
+Pinned Sharp, Hono, Vitest, and coverage patch releases produced an installed graph with zero npm audit findings on 2026-09-19.
+The focused post-update GUI rendering, HTTP security and streaming, modern task, and package regression passed all 111 tests in 113.29 seconds.
+Local production stdio/HTTP routing and stdio-only opt-in private-tool parity are implemented; full platform, release, and installation qualification remain incomplete.
 
 Authenticated persistent jobs now back all event, technology, probability, map, GUI, and focus reads plus the three rewrite tools.
 Fixed-entry child workers, local and cross-process admission, fenced ownership, durable cooperative cancellation, bounded retention, result-ready checkpoints, transaction bindings, and completion recipes survive process and connection boundaries without accepting commands or module selectors from clients.
@@ -135,5 +191,13 @@ The fixture now uses the same bounded Windows deletion retry as the other worker
 Typechecking, linting, the production build, package dry run, and Registry validation passed during candidate development.
 These are development results rather than immutable release evidence.
 
-Remaining Stage 2 gates are a reviewed candidate commit, clean generated-file checks, the complete local test and coverage commands, official Inspector qualification, Windows/Linux and Node 22/24 CI, publication, exact public-install verification, and a side-by-side local installation.
-Stages 3–5 and external Chaos Redux integration have not started.
+The eight separately run test shards passed 1,135 tests with one skip on 2026-09-19.
+Two shard-1 safety deadlines were enlarged after their isolated scenarios passed and the loaded shard exceeded the earlier caps; the rerun passed all 134 tests.
+The shard-8 coexistence test was updated to assert returned scanned-source evidence instead of spying on an in-process scanner that cannot observe worker execution; its rerun passed all 139 tests.
+The production build, 267-file package dry run, Registry metadata validation, zero-finding npm audit, and official MCP Inspector's 25-tool workflow passed locally.
+The separate Stage 2 qualification checkout excludes the unfinished Stage 5 GUI renderer changes; its generated-fixture and schema cleanliness gates, typecheck, lint, formatting, build, package dry run, and Registry metadata validation passed on 2026-09-19.
+A mixed-shard HTTP stress failure exposed an `ENOENT` during worker-capacity lease handoff before IPC dispatch.
+The host now classifies that precise pre-dispatch loss and makes at most two additional admission attempts without replaying work; unit tests cover successful recovery and bounded persistent failure, and the full 134-test shard passed after the correction.
+Remaining Stage 2 gates are a reviewed candidate commit, the exact `npm run check` and coverage commands, Windows/Linux and Node 22/24 CI, publication, exact public-install verification, and a side-by-side local installation.
+Stages 3–4 and external Chaos Redux integration have not started.
+Stage 5 native-GUI fidelity work remains outside this Stage 2 release candidate.

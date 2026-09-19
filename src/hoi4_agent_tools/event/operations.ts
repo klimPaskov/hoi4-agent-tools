@@ -1,4 +1,5 @@
 import { compareCodeUnits } from '../core/canonical.js';
+import { helperExpansionValidation } from '../core/helper-expansion.js';
 import { publicArtifactLink } from '../core/artifacts.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
 import { emptyServiceResult } from '../core/result.js';
@@ -67,7 +68,14 @@ export function eventGraphValidation(graph: EventGraphSnapshot) {
             ? 'Large workspace analysis deferred workspace-wide helper projections and lifecycle passes; direct evidence is linked'
             : graph.complete
               ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
-              : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
+              : graph.issues.some(
+                    ({ code }) =>
+                      code === 'EVENT_HELPER_DEPTH_LIMIT' ||
+                      code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
+                      code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+                  )
+                ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
+                : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
       },
     ],
   };
@@ -82,19 +90,29 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
     revision: inspected.graph.revision,
     graphHash: inspected.graphHash,
     counts: eventGraphCounts(inspected.graph, inspected.artifacts.length),
+    ...(inspected.helperExpansion === undefined
+      ? {}
+      : { helperExpansion: inspected.helperExpansion }),
     boundary: {
       direction: input.direction ?? 'both',
-      maxDepth: input.maxDepth ?? 8,
-      maxNodes: input.maxNodes ?? 500,
-      maxEdges: input.maxEdges ?? 2_000,
-      expandHelpers: input.expandHelpers ?? input.mode === 'explain_path',
+      maxDepth: inspected.helperExpansion?.maxDepth ?? input.maxDepth ?? 8,
+      maxNodes: inspected.helperExpansion === undefined ? (input.maxNodes ?? 500) : 0,
+      maxEdges: inspected.helperExpansion === undefined ? (input.maxEdges ?? 2_000) : 0,
+      expandHelpers:
+        inspected.helperExpansion !== undefined ||
+        (input.expandHelpers ?? input.mode === 'explain_path'),
       refresh: input.refresh ?? input.mode === 'scan',
     },
   });
-  result.code = inspected.graph.complete ? 'EVENT_INSPECTED' : 'EVENT_INSPECTED_PARTIAL';
+  result.code =
+    (inspected.helperExpansion?.complete ?? inspected.graph.complete)
+      ? 'EVENT_INSPECTED'
+      : 'EVENT_INSPECTED_PARTIAL';
   setInlineFilesScanned(result, inspected.graph.filesScanned);
   result.artifacts = inspected.artifacts.map(publicArtifactLink);
   result.validation = eventGraphValidation(inspected.graph);
+  if (inspected.helperExpansion !== undefined)
+    result.validation = helperExpansionValidation(inspected.helperExpansion);
   return result;
 }
 

@@ -182,7 +182,13 @@ describe('MCP coding-agent coexistence', () => {
     };
     expect(result.status).toBe('ok');
     expect(result.changedFiles).toEqual([]);
-    expect(scan).toHaveBeenCalled();
+    // Domain work may scan in an isolated worker, beyond this process's scanner spy.
+    // The returned source inventory is the observable proof that the explicit call scanned it.
+    expect(
+      result.filesScanned.some((source) =>
+        source.replaceAll('\\', '/').endsWith('interface/coexistence.gui'),
+      ),
+    ).toBe(true);
     expect(JSON.stringify(result.filesScanned)).not.toMatch(
       /AGENTS\.md|SKILL\.md|active-plan|auditor\.md/iu,
     );

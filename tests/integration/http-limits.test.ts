@@ -407,6 +407,9 @@ describe('Streamable HTTP deployment limits', () => {
         ...common.slice(3),
       ],
       [...common, 'Content-Encoding: identity', 'Content-Encoding: gzip'],
+      [...common, 'Mcp-Method: tools/list', 'Mcp-Method: tools/call'],
+      [...common, 'Mcp-Name: hoi4.gui_inspect', 'Mcp-Name: hoi4.focus_inspect'],
+      [...common, 'Mcp-Param-Taskid: first', 'Mcp-Param-Taskid: second'],
     ];
 
     for (const headerLines of cases) {
@@ -446,6 +449,26 @@ describe('Streamable HTTP deployment limits', () => {
 
     const accepted = await rawHttpResponse(handle, headersFor(host), body, `http://${host}/mcp`);
     expect(accepted.status).toBe(200);
+
+    const modernBody = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'server/discover',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': { name: 'absolute-form-test', version: '1' },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    });
+    const modernAccepted = await rawHttpResponse(
+      handle,
+      [...headersFor(host), 'Mcp-Protocol-Version: 2026-07-28', 'Mcp-Method: server/discover'],
+      modernBody,
+      `http://${host}/mcp`,
+    );
+    expect(modernAccepted.status).toBe(200);
   });
 
   it('reserves concurrency before waiting for a request body', async () => {

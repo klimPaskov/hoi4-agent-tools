@@ -1,14 +1,7 @@
+import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
+import type { TaskToolDefinition } from '../server/task-tool-definition.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-  ToolTaskHandler,
-} from '@modelcontextprotocol/sdk/experimental/tasks';
-import {
-  CallToolResultSchema,
-  CreateTaskResultSchema,
-  GetTaskResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
 import {
@@ -142,75 +135,42 @@ const artifactProducing = {
   openWorldHint: false,
 } as const;
 
-function mapTaskHandler(schema: z.ZodType) {
-  return {
-    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
-      schema.parse(input);
-      return CreateTaskResultSchema.parse({
-        task: await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
-          pollInterval: 250,
-        }),
-      });
+export const mapTaskTools = [
+  {
+    name: 'hoi4.map_inspect',
+    title: 'Inspect HOI4 map',
+    description: 'Render, validate, search, and click the complete map.',
+    inputSchema: mapInspectRequestSchema,
+    outputSchema: mapWorkspaceInspectOutputSchema,
+    annotations: artifactProducing,
+  },
+  {
+    name: 'hoi4.map_render',
+    title: 'Render map inspection artifacts',
+    description: 'Render searchable full-map PNG, JSON, and HTML.',
+    inputSchema: mapRenderRequestSchema,
+    outputSchema: mapRenderOutputSchema,
+    annotations: artifactProducing,
+  },
+  {
+    name: 'hoi4.map_rewrite',
+    title: 'Create or clean up map content',
+    description: 'Apply map creation, edits, and ID swaps with visual and semantic evidence.',
+    inputSchema: mapRewriteRequestSchema,
+    outputSchema: mapPlanOutputSchema,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
     },
-    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
-    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
-  };
-}
+  },
+] satisfies readonly TaskToolDefinition[];
 
 export function registerMapTools(
   server: McpServer,
   _engine: CoreEngine,
   _context: ServerContext,
 ): void {
-  server.experimental.tasks.registerToolTask(
-    'hoi4.map_inspect',
-    {
-      title: 'Inspect HOI4 map',
-      description: 'Render, validate, search, and click the complete map.',
-      inputSchema: mapInspectRequestSchema,
-      outputSchema: mapWorkspaceInspectOutputSchema,
-      annotations: artifactProducing,
-      execution: { taskSupport: 'optional' },
-    },
-    mapTaskHandler(mapInspectRequestSchema) as unknown as ToolTaskHandler<
-      typeof mapInspectRequestSchema
-    >,
-  );
-  server.experimental.tasks.registerToolTask(
-    'hoi4.map_render',
-    {
-      title: 'Render map inspection artifacts',
-      description: 'Render searchable full-map PNG, JSON, and HTML.',
-      inputSchema: mapRenderRequestSchema,
-      outputSchema: mapRenderOutputSchema,
-      annotations: artifactProducing,
-      execution: { taskSupport: 'optional' },
-    },
-    mapTaskHandler(mapRenderRequestSchema) as unknown as ToolTaskHandler<
-      typeof mapRenderRequestSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.map_rewrite',
-    {
-      title: 'Create or clean up map content',
-      description: 'Apply map creation, edits, and ID swaps with visual and semantic evidence.',
-      inputSchema: mapRewriteRequestSchema,
-      outputSchema: mapPlanOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-      execution: { taskSupport: 'optional' },
-    },
-    mapTaskHandler(mapRewriteRequestSchema) as unknown as ToolTaskHandler<
-      typeof mapRewriteRequestSchema
-    >,
-  );
+  registerLegacyTaskTools(server, mapTaskTools);
 }

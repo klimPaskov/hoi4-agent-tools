@@ -3,6 +3,8 @@ import type { Server as HttpServer } from 'node:http';
 import { isIP } from 'node:net';
 import { TextDecoder } from 'node:util';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { toNodeHandler, toWebRequest } from '@modelcontextprotocol/node';
+import { createMcpHandler, isLegacyRequest } from '@modelcontextprotocol/server';
 import { hostHeaderValidation } from '@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -25,6 +27,7 @@ import {
 } from '../security/auth.js';
 import { BoundedEventStore, SharedEventStoreBudget } from './event-store.js';
 import type { ServerContext } from '../server/base-tools.js';
+import { createModernOperationServer } from '../server/create-modern-operations.js';
 import { FinalProtocolTransport } from './protocol-gate.js';
 
 interface Session {
@@ -62,6 +65,8 @@ const SINGLETON_SECURITY_HEADERS = new Set([
   'content-type',
   'host',
   'last-event-id',
+  'mcp-method',
+  'mcp-name',
   'mcp-protocol-version',
   'mcp-session-id',
   'origin',
@@ -266,7 +271,10 @@ function rejectAmbiguousSecurityHeaders(
   const counts = new Map<string, number>();
   for (let index = 0; index < request.rawHeaders.length; index += 2) {
     const name = request.rawHeaders[index]?.toLowerCase();
-    if (name !== undefined && SINGLETON_SECURITY_HEADERS.has(name)) {
+    if (
+      name !== undefined &&
+      (SINGLETON_SECURITY_HEADERS.has(name) || name.startsWith('mcp-param-'))
+    ) {
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
   }
@@ -578,6 +586,57 @@ export async function startHttpServer(
     }
   };
 
+  const routeModernRequest = async (
+    request: AuthenticatedRequest,
+    response: Response,
+  ): Promise<boolean> => {
+    // Preserve the legacy adapter's response contract for every claim-less request, including
+    // malformed JSON-RPC bodies. Explicit modern claims alone enter the SDK's strict ladder.
+    const body: unknown = request.body;
+    const params = isRecord(body) && isRecord(body.params) ? body.params : undefined;
+    const metadata = params !== undefined && isRecord(params._meta) ? params._meta : undefined;
+    const modernClaim =
+      (isRecord(body) && body.method === 'server/discover') ||
+      request.headers['mcp-protocol-version'] === '2026-07-28' ||
+      request.headers['mcp-method'] !== undefined ||
+      request.headers['mcp-name'] !== undefined ||
+      Object.keys(request.headers).some((name) => name.startsWith('mcp-param-')) ||
+      (metadata !== undefined &&
+        Object.keys(metadata).some((name) => name.startsWith('io.modelcontextprotocol/')));
+    if (!modernClaim) return false;
+    // An explicit malformed modern claim belongs to modern validation, never to a legacy session.
+    // The Node SDK helper concatenates Host and req.url. A validated absolute-form target
+    // must therefore be changed to origin-form only while this SDK adapter consumes it.
+    const originalUrl = request.url;
+    if (!originalUrl.startsWith('/')) {
+      const target = new URL(originalUrl);
+      request.url = `${target.pathname}${target.search}`;
+    }
+    try {
+      const probe = await toWebRequest(request, request.body);
+      if (await isLegacyRequest(probe, request.body)) return false;
+      const principal = request.authPrincipal;
+      if (principal === undefined) {
+        jsonRpcError(response, 401, 'Authentication context is missing');
+        return true;
+      }
+      // The only principal and scopes given to the modern core come from the authenticated
+      // middleware. No request envelope or caller-authored metadata can substitute for them.
+      const modern = createMcpHandler(
+        () =>
+          createModernOperationServer(engine, {
+            principal: principal.principal,
+            scopes: [...principal.scopes],
+          }),
+        { legacy: 'reject', responseMode: 'auto' },
+      );
+      await toNodeHandler(modern)(request, response, request.body);
+      return true;
+    } finally {
+      request.url = originalUrl;
+    }
+  };
+
   app.all('/mcp', async (request: AuthenticatedRequest, response, next) => {
     if (['GET', 'POST', 'DELETE'].includes(request.method)) {
       next();
@@ -747,6 +806,7 @@ export async function startHttpServer(
 
   app.post('/mcp', authenticateMiddleware, async (request: AuthenticatedRequest, response) => {
     try {
+      if (await routeModernRequest(request, response)) return;
       const sessionId = sessionHeader(request);
       if (rejectInvalidProtocolHeader(request, response, sessionId !== undefined)) return;
       if (Array.isArray(request.body)) {
@@ -888,6 +948,7 @@ export async function startHttpServer(
   });
 
   app.get('/mcp', authenticateMiddleware, async (request: AuthenticatedRequest, response) => {
+    if (await routeModernRequest(request, response)) return;
     if (rejectInvalidProtocolHeader(request, response, true)) return;
     const session = await findSession(request, response);
     if (session === undefined) return;
@@ -926,6 +987,7 @@ export async function startHttpServer(
     await session.transport.handleRequest(request, response);
   });
   app.delete('/mcp', authenticateMiddleware, async (request: AuthenticatedRequest, response) => {
+    if (await routeModernRequest(request, response)) return;
     if (rejectInvalidProtocolHeader(request, response, true)) return;
     const session = await findSession(request, response);
     if (session !== undefined) await session.transport.handleRequest(request, response);

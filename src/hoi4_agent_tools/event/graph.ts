@@ -2,6 +2,18 @@ import { compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { sortDiagnostics, type Diagnostic, type SourceLocation } from '../core/diagnostics.js';
 import type { ScanSnapshot } from '../core/engine.js';
 import { ServiceError } from '../core/result.js';
+import {
+  beginSemanticAnalysis,
+  semanticFragment,
+  SemanticCatalog,
+} from '../core/semantic-dependencies.js';
+import {
+  runDependencyAnalysis,
+  runDependencyAnalysisAsync,
+  type DependencyAnalysis,
+  type DependencyWalk,
+  type DependencyWalkInput,
+} from '../core/dependency-walk.js';
 import type { ScannedFile } from '../core/scanner.js';
 import {
   EVENT_GRAPH_MAX_EDGES,
@@ -14,6 +26,7 @@ import {
   EVENT_GRAPH_MAX_STATE_LINK_CANDIDATES,
   EVENT_GRAPH_MAX_STATE_LINKS,
   EVENT_GRAPH_MAX_UNRESOLVED,
+  EVENT_GRAPH_WORK_LIMIT,
   EventAnalysisBudget,
 } from './limits.js';
 import {
@@ -29,6 +42,7 @@ import {
   type EventSourceFragment,
   type EventStateAccess,
   type EventStateLink,
+  type EventScopeKind,
   type EventType,
   type EventUnresolvedAnalysis,
 } from './model.js';
@@ -448,190 +462,153 @@ function helperName(node: EventGraphNode): string {
   return node.label || node.id.replace(/^helper:/u, '');
 }
 
-function helperProjections(graph: MutableGraph, budget: EventAnalysisBudget): EventGraphEdge[] {
+function helperWalkInput(graph: MutableGraph, revision: string): DependencyWalkInput {
   const nodes = nodeById(graph.nodes);
-  const optionParent = optionParents(graph.edges);
-  const outgoing = new Map<string, EventGraphEdge[]>();
-  for (const edge of graph.edges) {
-    const values = outgoing.get(edge.from) ?? [];
-    values.push(edge);
-    outgoing.set(edge.from, values);
-  }
-  for (const values of outgoing.values()) {
-    values.sort((left, right) => compareCodeUnits(left.id, right.id));
-  }
-  const starts = graph.edges
-    .filter(
-      (edge) =>
-        !edge.derived &&
-        nodes.get(edge.to)?.kind === 'helper' &&
-        nodes.get(edge.from)?.kind !== 'helper',
-    )
+  const edges = graph.edges
+    .filter(({ derived }) => !derived)
     .sort((left, right) => compareCodeUnits(left.id, right.id));
+  return {
+    domain: 'event-helper-projections',
+    sourceRevision: revision,
+    edges: edges.map(({ id, from, to }) => ({ id, from, to })),
+    roots: edges
+      .filter(
+        (edge) => nodes.get(edge.to)?.kind === 'helper' && nodes.get(edge.from)?.kind !== 'helper',
+      )
+      .map(({ id }) => id),
+    branches: graph.nodes
+      .filter(({ kind }) => kind === 'helper')
+      .map(({ id }) => id)
+      .sort(compareCodeUnits),
+    maximumDepth: EVENT_GRAPH_MAX_HELPER_DEPTH,
+    maximumSteps: EVENT_GRAPH_WORK_LIMIT,
+    visitPolicy: 'node',
+    reverseEdges: true,
+  };
+}
+
+function helperCallerScope(
+  nodes: ReadonlyMap<string, EventGraphNode>,
+  parents: ReadonlyMap<string, string>,
+  start: EventGraphEdge,
+): EventScopeKind {
+  const caller = nodes.get(parents.get(start.from) ?? start.from);
+  const candidate = start.scope?.source ?? caller?.metadata.expectedScope ?? caller?.metadata.scope;
+  return candidate === 'country' ||
+    candidate === 'state' ||
+    candidate === 'unit_leader' ||
+    candidate === 'operative' ||
+    candidate === 'character' ||
+    candidate === 'global'
+    ? candidate
+    : 'unknown';
+}
+
+function helperProjections(
+  graph: MutableGraph,
+  budget: EventAnalysisBudget,
+  walk: DependencyWalk,
+): EventGraphEdge[] {
+  const edges = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  const nodes = nodeById(graph.nodes);
   const projected: EventGraphEdge[] = [];
+  const parents = optionParents(graph.edges);
   const projectedKeys = new Set<string>();
-  const reportedCycles = new Set<string>();
-  const reportedDepth = new Set<string>();
-
-  interface Frame {
-    currentId: string;
-    helperStack: string[];
-    edgeStack: EventGraphEdge[];
-    visited: Set<string>;
-  }
-
-  for (const start of starts) {
-    const first = nodes.get(start.to);
-    if (first === undefined) continue;
-    const caller = nodes.get(optionParent.get(start.from) ?? start.from);
-    const callerScopeCandidate =
-      start.scope?.source ?? caller?.metadata.expectedScope ?? caller?.metadata.scope;
-    const callerScope =
-      callerScopeCandidate === 'country' ||
-      callerScopeCandidate === 'state' ||
-      callerScopeCandidate === 'unit_leader' ||
-      callerScopeCandidate === 'operative' ||
-      callerScopeCandidate === 'character' ||
-      callerScopeCandidate === 'global'
-        ? callerScopeCandidate
-        : 'unknown';
-    const reachedHelpers = new Set([start.to]);
-    const stack: Frame[] = [
-      {
-        currentId: start.to,
-        helperStack: [helperName(first)],
-        edgeStack: [start],
-        visited: new Set([start.to]),
-      },
-    ];
-    while (stack.length > 0) {
-      budget.spend('helper_projection');
-      const frame = stack.pop()!;
-      const candidates = outgoing.get(frame.currentId) ?? [];
-      for (const edge of [...candidates].reverse()) {
-        if (edge.derived) continue;
-        const target = nodes.get(edge.to);
-        if (target?.kind === 'helper') {
-          if (frame.visited.has(target.id)) {
-            const cycleKey = `${start.id}:${target.id}`;
-            if (!reportedCycles.has(cycleKey)) {
-              reportedCycles.add(cycleKey);
-              addIssue(graph.issues, {
-                code: 'EVENT_HELPER_CYCLE',
-                classification: 'unresolved_analysis',
-                severity: 'warning',
-                message: 'A scripted-effect cycle prevents complete helper expansion.',
-                confidence: 'unresolved',
-                location: edge.location,
-                blockers: [
-                  {
-                    code: 'HELPER_CYCLE',
-                    message: 'Static expansion stopped at the repeated scripted effect.',
-                    location: edge.location,
-                  },
-                ],
-                subjectIds: [start.from, ...frame.visited, target.id],
-              });
-            }
-            continue;
-          }
-          if (frame.helperStack.length >= EVENT_GRAPH_MAX_HELPER_DEPTH) {
-            const depthKey = `${start.id}:${target.id}`;
-            if (!reportedDepth.has(depthKey)) {
-              reportedDepth.add(depthKey);
-              addIssue(graph.issues, {
-                code: 'EVENT_HELPER_DEPTH_LIMIT',
-                classification: 'unresolved_analysis',
-                severity: 'blocker',
-                message: 'Scripted-effect expansion reached the fixed nesting ceiling.',
-                confidence: 'unresolved',
-                location: edge.location,
-                blockers: [
-                  {
-                    code: 'HELPER_DEPTH_LIMIT',
-                    message: 'The helper chain is deeper than the supported static boundary.',
-                    location: edge.location,
-                    details: { maximumDepth: EVENT_GRAPH_MAX_HELPER_DEPTH },
-                  },
-                ],
-                subjectIds: [start.from, target.id],
-              });
-            }
-            continue;
-          }
-          // The expanded structural graph retains every alternate helper
-          // route. The collapsed projection needs one deterministic proof per
-          // call site and reachable helper, otherwise diamond-shaped helper
-          // graphs grow exponentially on real vanilla workspaces.
-          if (reachedHelpers.has(target.id)) continue;
-          reachedHelpers.add(target.id);
-          stack.push({
-            currentId: target.id,
-            helperStack: [...frame.helperStack, helperName(target)],
-            edgeStack: [...frame.edgeStack, edge],
-            visited: new Set([...frame.visited, target.id]),
-          });
-          continue;
-        }
-        const structural = [...frame.edgeStack, edge];
-        const final = structural.at(-1)!;
-        const projectionKey = `${start.id}\0${edge.to}`;
-        if (projectedKeys.has(projectionKey)) continue;
-        projectedKeys.add(projectionKey);
-        if (projected.length >= EVENT_GRAPH_MAX_HELPER_PROJECTIONS) {
-          addIssue(graph.issues, {
-            code: 'EVENT_HELPER_PROJECTION_LIMIT',
-            classification: 'unresolved_analysis',
-            severity: 'blocker',
-            message:
-              'Collapsed helper projection reached its materialization ceiling; structural helper calls remain available.',
-            confidence: 'unresolved',
-            location: start.location,
-            blockers: [
-              {
-                code: 'HELPER_PROJECTION_LIMIT',
-                message:
-                  'Use a bounded helper-expanded trace for paths omitted from the collapsed workspace graph.',
-                location: start.location,
-                details: { maximum: EVENT_GRAPH_MAX_HELPER_PROJECTIONS },
-              },
-            ],
-            subjectIds: [start.from, start.to],
-          });
-          return stableUnique(projected);
-        }
-        projected.push({
-          id: `edge:helper-projection:${hashCanonical({
-            from: start.from,
-            to: edge.to,
-            edges: structural.map(({ id }) => id),
-          }).slice(0, 32)}`,
-          from: start.from,
-          to: edge.to,
-          reason: 'scripted_effect_expansion',
-          conditions: structural.flatMap(({ conditions }) => conditions),
-          helperStack: frame.helperStack,
-          location: start.location,
-          provenance: structural.flatMap(({ provenance }) => provenance),
-          confidence: worstConfidence(...structural.map(({ confidence }) => confidence)),
-          derived: true,
-          ...(final.timing === undefined ? {} : { timing: final.timing }),
-          ...(final.weight === undefined ? {} : { weight: final.weight }),
-          ...(final.scope === undefined
-            ? {}
-            : {
-                scope:
-                  final.scope.source === 'unknown' && callerScope !== 'unknown'
-                    ? { ...final.scope, source: callerScope, confidence: 'high' as const }
-                    : final.scope,
-              }),
-          metadata: {
-            structuralEdgeIds: structural.map(({ id }) => id),
-            terminalDispatchLocation: locationKey(final.location),
+  const reported = new Set<string>();
+  const callerScopes = new Map<string, EventScopeKind>();
+  for (const record of walk.state.records) {
+    budget.spend('helper_projection');
+    if (record.kind === 'visit') continue;
+    const structural = walk.path(record.path).map(({ id }) => edges.get(id)!);
+    const start = structural[0]!;
+    const final = structural.at(-1)!;
+    const helpers = structural.slice(0, -1).map(({ to }) => nodes.get(to)!);
+    if (record.kind === 'cycle' || record.kind === 'depth') {
+      const key = `${record.kind}:${start.id}:${final.to}`;
+      if (reported.has(key)) continue;
+      reported.add(key);
+      const cycle = record.kind === 'cycle';
+      addIssue(graph.issues, {
+        code: cycle ? 'EVENT_HELPER_CYCLE' : 'EVENT_HELPER_DEPTH_LIMIT',
+        classification: 'unresolved_analysis',
+        severity: cycle ? 'warning' : 'blocker',
+        message: cycle
+          ? 'A scripted-effect cycle prevents complete helper expansion.'
+          : 'Scripted-effect expansion reached the fixed nesting ceiling.',
+        confidence: 'unresolved',
+        location: final.location,
+        blockers: [
+          {
+            code: cycle ? 'HELPER_CYCLE' : 'HELPER_DEPTH_LIMIT',
+            message: cycle
+              ? 'Static expansion stopped at the repeated scripted effect.'
+              : 'The helper chain is deeper than the supported static boundary.',
+            location: final.location,
+            ...(cycle ? {} : { details: { maximumDepth: EVENT_GRAPH_MAX_HELPER_DEPTH } }),
           },
-        });
-      }
+        ],
+        subjectIds: cycle
+          ? [start.from, ...helpers.map(({ id }) => id), final.to]
+          : [start.from, final.to],
+      });
+      continue;
     }
+    const projectionKey = `${start.id}\0${final.to}`;
+    if (projectedKeys.has(projectionKey)) continue;
+    projectedKeys.add(projectionKey);
+    if (projected.length >= EVENT_GRAPH_MAX_HELPER_PROJECTIONS) {
+      addIssue(graph.issues, {
+        code: 'EVENT_HELPER_PROJECTION_LIMIT',
+        classification: 'unresolved_analysis',
+        severity: 'blocker',
+        message:
+          'Collapsed helper projection reached its materialization ceiling; structural helper calls remain available.',
+        confidence: 'unresolved',
+        location: start.location,
+        blockers: [
+          {
+            code: 'HELPER_PROJECTION_LIMIT',
+            message:
+              'Use a bounded helper-expanded trace for paths omitted from the collapsed workspace graph.',
+            location: start.location,
+            details: { maximum: EVENT_GRAPH_MAX_HELPER_PROJECTIONS },
+          },
+        ],
+        subjectIds: [start.from, start.to],
+      });
+      break;
+    }
+    let callerScope = callerScopes.get(start.id);
+    if (callerScope === undefined) {
+      callerScope = helperCallerScope(nodes, parents, start);
+      callerScopes.set(start.id, callerScope);
+    }
+    projected.push({
+      id: `edge:helper-projection:${hashCanonical({ from: start.from, to: final.to, edges: structural.map(({ id }) => id) }).slice(0, 32)}`,
+      from: start.from,
+      to: final.to,
+      reason: 'scripted_effect_expansion',
+      conditions: structural.flatMap(({ conditions }) => conditions),
+      helperStack: helpers.map(helperName),
+      location: start.location,
+      provenance: structural.flatMap(({ provenance }) => provenance),
+      confidence: worstConfidence(...structural.map(({ confidence }) => confidence)),
+      derived: true,
+      ...(final.timing === undefined ? {} : { timing: final.timing }),
+      ...(final.weight === undefined ? {} : { weight: final.weight }),
+      ...(final.scope === undefined
+        ? {}
+        : {
+            scope:
+              final.scope.source === 'unknown' && callerScope !== 'unknown'
+                ? { ...final.scope, source: callerScope, confidence: 'high' as const }
+                : final.scope,
+          }),
+      metadata: {
+        structuralEdgeIds: structural.map(({ id }) => id),
+        terminalDispatchLocation: locationKey(final.location),
+      },
+    });
   }
   return stableUnique(projected);
 }
@@ -639,136 +616,77 @@ function helperProjections(graph: MutableGraph, budget: EventAnalysisBudget): Ev
 function projectHelperStateAccesses(
   graph: MutableGraph,
   budget: EventAnalysisBudget,
+  walk: DependencyWalk,
 ): EventStateAccess[] {
   const nodes = nodeById(graph.nodes);
-  const optionParent = optionParents(graph.edges);
+  const edges = new Map(graph.edges.map((edge) => [edge.id, edge]));
   const accesses = new Map<string, EventStateAccess[]>();
+  const parents = optionParents(graph.edges);
   for (const access of graph.stateAccesses) {
     const values = accesses.get(access.ownerId) ?? [];
     values.push(access);
     accesses.set(access.ownerId, values);
   }
-  const outgoing = new Map<string, EventGraphEdge[]>();
-  for (const edge of graph.edges) {
-    if (edge.derived) continue;
-    const values = outgoing.get(edge.from) ?? [];
-    values.push(edge);
-    outgoing.set(edge.from, values);
-  }
-  for (const values of outgoing.values()) values.sort((a, b) => compareCodeUnits(a.id, b.id));
-  const starts = graph.edges
-    .filter(
-      (edge) =>
-        !edge.derived &&
-        nodes.get(edge.to)?.kind === 'helper' &&
-        nodes.get(edge.from)?.kind !== 'helper',
-    )
-    .sort((left, right) => compareCodeUnits(left.id, right.id));
   const projected: EventStateAccess[] = [];
-  for (const start of starts) {
-    const first = nodes.get(start.to);
-    if (first === undefined) continue;
-    const caller = nodes.get(optionParent.get(start.from) ?? start.from);
-    const callerScopeCandidate =
-      start.scope?.source ?? caller?.metadata.expectedScope ?? caller?.metadata.scope;
-    const callerScope =
-      callerScopeCandidate === 'country' ||
-      callerScopeCandidate === 'state' ||
-      callerScopeCandidate === 'unit_leader' ||
-      callerScopeCandidate === 'operative' ||
-      callerScopeCandidate === 'character' ||
-      callerScopeCandidate === 'global'
-        ? callerScopeCandidate
-        : 'unknown';
-    const reachedHelpers = new Set([first.id]);
-    const projectedAccesses = new Set<string>();
-    const stack: Array<{
-      helperId: string;
-      helperStack: string[];
-      callEdges: EventGraphEdge[];
-      visited: Set<string>;
-    }> = [
-      {
-        helperId: first.id,
-        helperStack: [helperName(first)],
-        callEdges: [start],
-        visited: new Set([first.id]),
-      },
-    ];
-    while (stack.length > 0) {
-      budget.spend('helper_state_projection');
-      const frame = stack.pop()!;
-      for (const access of accesses.get(frame.helperId) ?? []) {
-        const projectionKey = `${start.id}\0${access.id}`;
-        if (projectedAccesses.has(projectionKey)) continue;
-        projectedAccesses.add(projectionKey);
-        if (
-          projected.length >= EVENT_GRAPH_MAX_HELPER_STATE_PROJECTIONS ||
-          graph.stateAccesses.length + projected.length >= EVENT_GRAPH_MAX_STATE_ACCESSES
-        ) {
-          addIssue(graph.issues, {
-            code: 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
-            classification: 'unresolved_analysis',
-            severity: 'blocker',
-            message:
-              'Helper state-flow projection reached its fixed materialization ceiling; structural helper evidence remains available.',
-            confidence: 'unresolved',
-            location: start.location,
-            blockers: [
-              {
-                code: 'HELPER_STATE_PROJECTION_LIMIT',
-                message:
-                  'Use an expanded bounded helper trace for state evidence omitted from the collapsed workspace graph.',
-                location: start.location,
-                details: { maximum: EVENT_GRAPH_MAX_HELPER_STATE_PROJECTIONS },
-              },
-            ],
-            subjectIds: [start.from, start.to],
-          });
-          return projected;
-        }
-        projected.push({
-          ...access,
-          id: `state:helper-projection:${hashCanonical({
-            caller: start.from,
-            access: access.id,
-            edges: frame.callEdges.map(({ id }) => id),
-          }).slice(0, 32)}`,
-          ownerId: start.from,
-          scope: access.scope === 'unknown' ? callerScope : access.scope,
-          confidence: worstConfidence(
-            access.confidence,
-            ...frame.callEdges.map(({ confidence }) => confidence),
-          ),
-          helperStack: frame.helperStack,
-          conditions: [
-            ...frame.callEdges.flatMap(({ conditions }) => conditions),
-            ...access.conditions,
+  const projectedKeys = new Set<string>();
+  const callerScopes = new Map<string, EventScopeKind>();
+  for (const record of walk.state.records) {
+    if (record.kind !== 'visit') continue;
+    budget.spend('helper_state_projection');
+    const calls = walk.path(record.path).map(({ id }) => edges.get(id)!);
+    const start = calls[0]!;
+    const target = calls.at(-1)!.to;
+    let callerScope = callerScopes.get(start.id);
+    if (callerScope === undefined) {
+      callerScope = helperCallerScope(nodes, parents, start);
+      callerScopes.set(start.id, callerScope);
+    }
+    for (const access of accesses.get(target) ?? []) {
+      const key = `${start.id}\0${access.id}`;
+      if (projectedKeys.has(key)) continue;
+      projectedKeys.add(key);
+      if (
+        projected.length >= EVENT_GRAPH_MAX_HELPER_STATE_PROJECTIONS ||
+        graph.stateAccesses.length + projected.length >= EVENT_GRAPH_MAX_STATE_ACCESSES
+      ) {
+        addIssue(graph.issues, {
+          code: 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+          classification: 'unresolved_analysis',
+          severity: 'blocker',
+          message:
+            'Helper state-flow projection reached its fixed materialization ceiling; structural helper evidence remains available.',
+          confidence: 'unresolved',
+          location: start.location,
+          blockers: [
+            {
+              code: 'HELPER_STATE_PROJECTION_LIMIT',
+              message:
+                'Use an expanded bounded helper trace for state evidence omitted from the collapsed workspace graph.',
+              location: start.location,
+              details: { maximum: EVENT_GRAPH_MAX_HELPER_STATE_PROJECTIONS },
+            },
           ],
-          metadata: {
-            ...access.metadata,
-            projectedFromAccessId: access.id,
-            structuralEdgeIds: frame.callEdges.map(({ id }) => id),
-          },
+          subjectIds: [start.from, start.to],
         });
+        return projected;
       }
-      if (frame.helperStack.length >= EVENT_GRAPH_MAX_HELPER_DEPTH) continue;
-      for (const edge of [...(outgoing.get(frame.helperId) ?? [])].reverse()) {
-        const target = nodes.get(edge.to);
-        if (
-          target?.kind !== 'helper' ||
-          frame.visited.has(target.id) ||
-          reachedHelpers.has(target.id)
-        )
-          continue;
-        reachedHelpers.add(target.id);
-        stack.push({
-          helperId: target.id,
-          helperStack: [...frame.helperStack, helperName(target)],
-          callEdges: [...frame.callEdges, edge],
-          visited: new Set([...frame.visited, target.id]),
-        });
-      }
+      projected.push({
+        ...access,
+        id: `state:helper-projection:${hashCanonical({ caller: start.from, access: access.id, edges: calls.map(({ id }) => id) }).slice(0, 32)}`,
+        ownerId: start.from,
+        scope: access.scope === 'unknown' ? callerScope : access.scope,
+        confidence: worstConfidence(
+          access.confidence,
+          ...calls.map(({ confidence }) => confidence),
+        ),
+        helperStack: calls.map(({ to }) => helperName(nodes.get(to)!)),
+        conditions: [...calls.flatMap(({ conditions }) => conditions), ...access.conditions],
+        metadata: {
+          ...access.metadata,
+          projectedFromAccessId: access.id,
+          structuralEdgeIds: calls.map(({ id }) => id),
+        },
+      });
     }
   }
   return stableUnique(projected);
@@ -1683,29 +1601,35 @@ function analyzeFragments(
   budget: EventAnalysisBudget,
 ): EventSourceFragment[] {
   const fragments: EventSourceFragment[] = [];
+  const dependencies = beginSemanticAnalysis(
+    options.cache,
+    snapshot,
+    'event',
+    options.workspaceIdentity,
+  );
+  const reads = new SemanticCatalog();
+  const context = {
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    budget,
+    knownEventIds: reads.bind('events', 'event', catalog.eventIds),
+    knownEventTypes: reads.bind('event-types', 'event', catalog.eventTypes),
+    knownHelperIds: reads.bind('helpers', 'scripted_effect', catalog.helperIds),
+    knownDecisionIds: reads.bind('decisions', 'decision', catalog.decisionIds),
+    activeEventPaths: reads.bind('active-events', 'event', catalog.activeEventPaths),
+    retainedEventPaths: reads.bind('retained-events', 'event', catalog.retainedEventPaths),
+    activeHelperPaths: reads.bind('active-helpers', 'scripted_effect', catalog.activeHelperPaths),
+    activeDecisionPaths: reads.bind('active-decisions', 'decision', catalog.activeDecisionPaths),
+    inventoryComplete: snapshot.complete,
+    catalogFingerprint: catalog.fingerprint,
+  };
   for (const file of files) {
     budget.spend('source_fragment');
     if (!shouldAnalyzeEventFile(file)) continue;
     if (snapshot.index.isSourceSkipped(file.displayPath)) continue;
     const cacheKey = eventSemanticFragmentCacheKey(file, catalog.fingerprint);
-    let fragment = options.cache?.get(cacheKey);
-    if (fragment === undefined) {
-      fragment = analyzeEventSource(file, {
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-        budget,
-        knownEventIds: catalog.eventIds,
-        knownEventTypes: catalog.eventTypes,
-        knownHelperIds: catalog.helperIds,
-        knownDecisionIds: catalog.decisionIds,
-        activeEventPaths: catalog.activeEventPaths,
-        retainedEventPaths: catalog.retainedEventPaths,
-        activeHelperPaths: catalog.activeHelperPaths,
-        activeDecisionPaths: catalog.activeDecisionPaths,
-        inventoryComplete: snapshot.complete,
-        catalogFingerprint: catalog.fingerprint,
-      });
-      options.cache?.set(cacheKey, fragment, file.bytes.length);
-    }
+    const fragment = semanticFragment(dependencies, options.cache, file, cacheKey, reads, () =>
+      analyzeEventSource(file, context),
+    );
     fragments.push(fragment);
   }
   return fragments.sort(
@@ -1795,6 +1719,20 @@ export function buildEventGraph(
   snapshot: ScanSnapshot,
   options: EventGraphBuildOptions = {},
 ): EventGraphSnapshot {
+  return runDependencyAnalysis(eventGraphAnalysis(snapshot, options), options.signal);
+}
+
+export function buildEventGraphAsync(
+  snapshot: ScanSnapshot,
+  options: EventGraphBuildOptions = {},
+): Promise<EventGraphSnapshot> {
+  return runDependencyAnalysisAsync(eventGraphAnalysis(snapshot, options), options.signal);
+}
+
+function* eventGraphAnalysis(
+  snapshot: ScanSnapshot,
+  options: EventGraphBuildOptions,
+): DependencyAnalysis<EventGraphSnapshot> {
   options.signal?.throwIfAborted();
   const budget = new EventAnalysisBudget(options.signal);
   const files = activeFiles(snapshot);
@@ -1823,8 +1761,9 @@ export function buildEventGraph(
   normalizeCrossFileEdges(graph);
   ensureReferencedNodes(graph);
   if (options.projectHelpers !== false) {
-    for (const edge of helperProjections(graph, budget)) graph.edges.push(edge);
-    for (const access of projectHelperStateAccesses(graph, budget))
+    const walk = yield helperWalkInput(graph, snapshot.revision);
+    for (const edge of helperProjections(graph, budget, walk)) graph.edges.push(edge);
+    for (const access of projectHelperStateAccesses(graph, budget, walk))
       graph.stateAccesses.push(access);
   }
   addTerminalNodes(graph);
@@ -1888,7 +1827,15 @@ export function buildEventGraph(
   const diagnostics = sortDiagnostics([...snapshot.diagnostics, ...partial.diagnostics]);
   // Coverage completeness is independent from defects discovered in the source. A full,
   // untruncated analysis remains complete when it correctly reports missing or dynamic links.
-  const complete = !focused && snapshot.complete;
+  const complete =
+    !focused &&
+    snapshot.complete &&
+    !graph.issues.some(
+      ({ code }) =>
+        code === 'EVENT_HELPER_DEPTH_LIMIT' ||
+        code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
+        code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+    );
   const nodes = sortNodes(graph.nodes);
   const edges = stableUnique(graph.edges);
   const stateAccesses = stableUnique(graph.stateAccesses);

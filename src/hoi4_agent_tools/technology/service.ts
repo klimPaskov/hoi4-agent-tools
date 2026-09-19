@@ -1,4 +1,11 @@
 import path from 'node:path';
+import { inspectHelperExpansion } from '../core/helper-expansion.js';
+import type {
+  HelperExpansionRequest,
+  HelperExpansionSummary,
+} from '../schemas/helper-expansion.js';
+import { technologyHelperInventory } from './helper-expansion.js';
+import { clearSemanticDependencies } from '../core/semantic-dependencies.js';
 import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
@@ -18,7 +25,11 @@ import { GuiAssetCatalog } from '../gui/assets.js';
 import { buildGuiSourceGraph } from '../gui/source-graph.js';
 import type { GuiSpriteDefinition } from '../gui/types.js';
 import { compareTechnologyGraphs, type TechnologyGraphComparison } from './compare.js';
-import { buildTechnologyGraph, technologyAssetPatterns } from './graph.js';
+import {
+  buildTechnologyGraph,
+  buildTechnologyGraphAsync,
+  technologyAssetPatterns,
+} from './graph.js';
 import { TECHNOLOGY_GRAPH_SCHEMA_VERSION } from './model.js';
 import type {
   TechnologyDefectClass,
@@ -56,7 +67,15 @@ const HISTORY_ENTRIES = 2;
 const FOCUSED_RENDER_LIMIT = 32;
 
 export type TechnologyAnalysisMode =
-  'scan' | 'folders' | 'trace' | 'explain' | 'unlocks' | 'bonus_coverage' | 'lint' | 'impact';
+  | 'scan'
+  | 'folders'
+  | 'trace'
+  | 'explain'
+  | 'unlocks'
+  | 'bonus_coverage'
+  | 'lint'
+  | 'impact'
+  | 'helper_expansion';
 
 export interface TechnologyAnalysisInput {
   workspaceId: string;
@@ -73,6 +92,7 @@ export interface TechnologyAnalysisInput {
   classifications?: TechnologyDefectClass[];
   codes?: string[];
   impact?: TechnologyImpactInput;
+  helperExpansion?: HelperExpansionRequest;
   refresh?: boolean;
   principal?: string;
   signal?: AbortSignal;
@@ -83,6 +103,7 @@ export interface TechnologyAnalysisResult {
   report: unknown;
   reportJson: string;
   artifacts: StoredArtifact[];
+  helperExpansion?: HelperExpansionSummary;
 }
 
 export interface TechnologyRenderServiceInput {
@@ -180,6 +201,7 @@ class BoundedTechnologyFragmentCache implements TechnologySourceFragmentCacheLik
   }
 
   public clear(): void {
+    clearSemanticDependencies(this);
     this.#values.clear();
     this.#bytes = 0;
   }
@@ -741,7 +763,7 @@ export class TechnologyTreeViewer {
       cached?.generation === generation && cached.snapshot.revision === snapshot.revision;
     const preliminary = unchangedSource
       ? cached.graph
-      : buildTechnologyGraph(snapshot, {
+      : await buildTechnologyGraphAsync(snapshot, {
           workspaceIdentity: workspace.workspaceIdentity,
           cache: this.#state.fragments,
           analysisMode,
@@ -766,7 +788,7 @@ export class TechnologyTreeViewer {
       );
     if (unchangedSource && assetIdentity(assetFiles) === assetIdentity(cached.assetFiles))
       return cached.graph;
-    const graph = buildTechnologyGraph(snapshot, {
+    const graph = await buildTechnologyGraphAsync(snapshot, {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
       assetFiles,
@@ -779,6 +801,40 @@ export class TechnologyTreeViewer {
   }
 
   public async analyze(input: TechnologyAnalysisInput): Promise<TechnologyAnalysisResult> {
+    if (input.mode === 'helper_expansion') {
+      const workspace = this.engine.resolver.get(input.workspaceId, input.principal);
+      const snapshot = await scanTechnologySources(
+        this.engine,
+        input.workspaceId,
+        workspace,
+        input.principal,
+        input.signal,
+      );
+      const graph = await buildTechnologyGraphAsync(snapshot, {
+        workspaceIdentity: workspace.workspaceIdentity,
+        cache: this.#state.fragments,
+        analysisMode: 'focused',
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      });
+      const expansion = await inspectHelperExpansion(
+        this.engine,
+        input.workspaceId,
+        technologyHelperInventory(
+          graph,
+          snapshot.complete && graph.unresolved.every(({ kind }) => kind !== 'partial_source'),
+        ),
+        input.helperExpansion,
+        input.principal,
+        input.signal,
+      );
+      return {
+        graph,
+        report: expansion.report,
+        reportJson: expansion.reportJson,
+        artifacts: expansion.artifacts,
+        helperExpansion: expansion.summary,
+      };
+    }
     const graph = await this.scan(input.workspaceId, {
       refresh: input.refresh ?? input.mode === 'scan',
       ...(input.principal === undefined ? {} : { principal: input.principal }),

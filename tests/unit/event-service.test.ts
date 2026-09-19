@@ -187,7 +187,13 @@ describe('Event Chain Viewer service', () => {
       workspaceId: 'event-service',
       graphRevision: baseline.graph.revision,
       filters: { maxDepth: 8, maxNodes: 500, maxEdges: 2_000, refresh: true },
-      resources: [{ name: expect.stringMatching(/\.json$/u), mimeType: 'application/json' }],
+      resources: [
+        {
+          name: `event-scan-${baseline.graph.revision.slice(0, 12)}.json`,
+          mimeType: 'application/json',
+        },
+        { name: `event-graph-${baseline.graph.revision}.json`, mimeType: 'application/json' },
+      ],
     });
     const proposed = `${source}\ncountry_event = {\n\tid = service.3\n\ttitle = service.3.t\n\tis_triggered_only = yes\n\toption = { name = service.3.a }\n}\n`;
 

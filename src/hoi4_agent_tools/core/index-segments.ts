@@ -133,7 +133,10 @@ export class ReverseSourceDependencies {
   readonly #consumers = new Map<string, Set<string>>();
   readonly #definitions = new Map<string, Set<string>>();
 
-  constructor(symbols: readonly SymbolRecord[], references: readonly ReferenceRecord[]) {
+  constructor(
+    symbols: readonly Pick<SymbolRecord, 'kind' | 'id' | 'path'>[],
+    references: readonly Pick<ReferenceRecord, 'toKind' | 'to' | 'path'>[],
+  ) {
     for (const symbol of symbols) {
       const definitions = this.#definitions.get(symbol.path) ?? new Set<string>();
       definitions.add(`${symbol.kind}:${symbol.id}`);

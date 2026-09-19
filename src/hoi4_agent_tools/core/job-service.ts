@@ -165,7 +165,7 @@ export class JobService {
           scope,
           id,
           owner.token,
-          { status: 'failed', failure },
+          claimed.record.cancelRequested ? { status: 'cancelled' } : { status: 'failed', failure },
           signal,
         );
       } catch (error) {

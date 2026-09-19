@@ -16,6 +16,10 @@ import {
 import { mapOperationSchema } from '../src/hoi4_agent_tools/schemas/map.js';
 import { eventFeatureManifestSchema } from '../src/hoi4_agent_tools/schemas/event.js';
 import {
+  helperExpansionRequestSchema,
+  helperExpansionSummarySchema,
+} from '../src/hoi4_agent_tools/schemas/helper-expansion.js';
+import {
   customWeightedPoolManifestSchema,
   probabilityAnalysisResultSchema,
   probabilityCompareInputSchema,
@@ -45,6 +49,8 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['gui-scenario.schema.json', GuiPreviewScenarioSchema],
   ['map-operation.schema.json', mapOperationSchema],
   ['event-feature-manifest.schema.json', eventFeatureManifestSchema],
+  ['helper-expansion-request.schema.json', helperExpansionRequestSchema],
+  ['helper-expansion-summary.schema.json', helperExpansionSummarySchema],
   ['probability-scenario-set.schema.json', probabilityScenarioSetSchema],
   ['custom-weighted-pool.schema.json', customWeightedPoolManifestSchema],
   ['probability-inspect-input.schema.json', probabilityInspectInputSchema],

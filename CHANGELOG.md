@@ -2,19 +2,31 @@
 
 ## Unreleased
 
-No unreleased changes.
+The 3.1.0 candidate is not release-qualified or published.
 
-## 3.1.0 - 2026-09-12
+## 3.1.0 - Unreleased candidate
 
 - Reuse authenticated content-addressed parsed documents and file-local index segments across authorized local processes while revalidating current source bytes, load order, shadowing, workspace topology, and principal scope.
 - Rebuild exact indexes from immutable segments, retain typed reverse source dependencies, and heal malformed or tampered persistent cache entries without trusting timestamps or file sizes.
 - Run event, technology, probability, map, GUI, and focus analysis in fixed-entry isolated workers backed by durable authenticated jobs, revision-fenced ownership, bounded retention, and source-revision result checkpoints.
 - Advertise optional negotiated MCP tasks for all long-running domain calls while preserving exact ordinary-call results, progress, cancellation, linked resources, tool errors, and both stdio and HTTP compatibility.
-- Add `hoi4.job_inspect` and `hoi4.job_cancel` as responsive compatibility controls that remain available while every domain execution slot is occupied.
+- Share task execution, authorization, and all 23 domain tool definitions with an MCP 2026-07-28 Tasks extension adapter, routed by the local production stdio and authenticated HTTP entry points; full qualification remains pending.
+- Share `hoi4.job_inspect` and `hoi4.job_cancel` between protocol adapters as responsive, principal-private compatibility controls that remain available while domain execution slots are occupied.
+- Share the bounded probability-analysis prompt metadata and body between protocol adapters without starting jobs or source analysis.
+- Advertise the same server instructions through legacy initialization and modern discovery.
+- Deliver opt-in modern request progress through the SDK's related-notification API, preserving ordered heartbeats and cancellation over connection and auto-streaming production HTTP serving.
+- Pin each bounded stdio connection to its opening protocol era and route authenticated modern HTTP claims through strict SDK validation without changing legacy stateful sessions or the existing request-security gates.
+- Share the two opt-in ChaosX private-tool implementations between stdio protocol generations while keeping them absent from ordinary and HTTP catalogs.
+- Pin patched Sharp, Hono, Vitest, and coverage packages while retaining the exact dependency graph in the lockfile.
 - Require caller-stable request keys for native background focus, GUI, and map rewrites; deduplicate exact retries independently of polling hints and reject conflicting reuse.
+- Derive new job IDs from private server state, preserve authenticated earlier retry receipts without replay, and authenticate modern task handles before execution admission or cancellation.
+- Renew only task-visibility metadata for exact retries of expired rewrite receipts, preserving terminal outcomes and source edits through native and ordinary calls in both protocol generations.
+- Share bounded artifact-resource reads between protocol generations, including exact byte ranges, continuation links, manifest projection, and workspace-grant checks.
 - Bind rewrite transactions and domain completion recipes before source application, reconcile stopped workers without replanning, and retain post-write validation artifacts without changing immutable plan hashes.
 - Retain revision-addressed event and technology graphs for comparisons after process restart, and preserve explicit helper, source, candidate, node, edge, and render coverage boundaries.
-- Harden Windows atomic job publication, shared worker-slot transfer, disconnect recovery, principal isolation, task expiry, and mutation-receipt retention under concurrent clients.
+- Add opt-in bounded `helper_expansion` pages for event and technology inspection, preserving distinct source call paths and resumable principal- and revision-bound cursors without retaining completed traversal history.
+- Mark depth- and projection-truncated materialized helper graphs incomplete, and retain explicit cycle, dynamic-reference, source-coverage, and page-retention boundaries.
+- Harden Windows atomic job publication, bounded pre-dispatch worker-lease transfer retries, disconnect recovery, principal isolation, task expiry, and mutation-receipt retention under concurrent clients.
 
 ## 3.0.9 - 2026-09-08
 

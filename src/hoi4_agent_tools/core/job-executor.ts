@@ -9,6 +9,7 @@ import type { TransactionManifest } from './transactions.js';
 import type { TransactionExecutionResult } from './transaction-execution.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { hashCanonical } from './canonical.js';
+import { jobAnalysisCheckpoints, withAnalysisCheckpoints } from './analysis-checkpoints.js';
 
 const jsonObject = z.record(z.string(), z.json());
 export type JobOutput = z.infer<typeof jsonObject>;
@@ -273,7 +274,9 @@ export class JobExecutor {
               );
             }
             const result = jsonObject.parse(
-              await operation.run(initial.request.arguments, context),
+              await withAnalysisCheckpoints(jobAnalysisCheckpoints(context), () =>
+                operation.run(initial.request.arguments, context),
+              ),
             );
             controller.signal.throwIfAborted();
             return this.jobs.store.updateOwned(scope, id, owner.token, {

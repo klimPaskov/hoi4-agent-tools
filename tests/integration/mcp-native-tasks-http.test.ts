@@ -8,6 +8,7 @@ import { CallToolResultSchema, CreateTaskResultSchema } from '@modelcontextproto
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { JobService } from '../../src/hoi4_agent_tools/core/job-service.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import {
@@ -20,6 +21,7 @@ const betaSecret = 'beta-native-task-secret-is-long-enough';
 const cleanup: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const action of cleanup.splice(0).reverse()) await action();
   delete process.env.HOI4_NATIVE_TASK_ALPHA_TOKEN;
   delete process.env.HOI4_NATIVE_TASK_BETA_TOKEN;
@@ -171,7 +173,7 @@ describe('authenticated native MCP tasks over Streamable HTTP', () => {
   });
 
   it('retains and deduplicates an authenticated rewrite across HTTP reconnects', async () => {
-    const { handle, guiSource } = await fixture();
+    const { engine, handle, guiSource } = await fixture();
     const alpha = await connect(handle.url, alphaSecret);
     const original = await readFile(guiSource, 'utf8');
     const rewritten = original.replace('x = 10', 'x = 24');
@@ -221,5 +223,38 @@ describe('authenticated native MCP tasks over Streamable HTTP', () => {
       { task: { ttl: 120_000 } },
     );
     expect(duplicate.task.taskId).toBe(created.task.taskId);
+    const jobs = await JobService.create(engine.resolver);
+    const jobId = created.task.taskId.split(':')[1]!;
+    const stored = await jobs.get('alpha', jobId, 'alpha-user');
+    const independent = `${rewritten}# independent source change\n`;
+    await writeFile(guiSource, independent);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(stored.updatedAt) + 60_001);
+    await expect(
+      reconnectedAlpha.experimental.tasks.getTask(created.task.taskId),
+    ).rejects.toMatchObject({ code: -32602 });
+    const renewed = await reconnectedAlpha.request(
+      { method: 'tools/call', params: { name: 'hoi4.gui_rewrite', arguments: arguments_ } },
+      CreateTaskResultSchema,
+      { task: { ttl: 120_000 } },
+    );
+    expect(renewed.task).toMatchObject({ taskId: created.task.taskId, status: 'completed' });
+    expect(renewed.task.ttl).toBeGreaterThan(120_000);
+    expect((await reconnectedAlpha.experimental.tasks.getTask(created.task.taskId)).status).toBe(
+      'completed',
+    );
+    expect(
+      (
+        await reconnectedAlpha.experimental.tasks.getTaskResult(
+          created.task.taskId,
+          CallToolResultSchema,
+        )
+      ).structuredContent,
+    ).toEqual(result.structuredContent);
+    expect(await readFile(guiSource, 'utf8')).toBe(independent);
+    const retained = await jobs.get('alpha', jobId, 'alpha-user');
+    expect(retained.result).toEqual(stored.result);
+    expect(retained.transaction).toEqual(stored.transaction);
+    expect(retained.requestHash).toBe(stored.requestHash);
+    expect(retained.revision).toBe(stored.revision + 1);
   });
 });

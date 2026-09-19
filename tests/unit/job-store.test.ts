@@ -3,20 +3,25 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { afterEach, describe, expect, it } from 'vitest';
-import { hashCanonical } from '../../src/hoi4_agent_tools/core/canonical.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { canonicalJson, hashCanonical } from '../../src/hoi4_agent_tools/core/canonical.js';
 import {
   JobStore,
   currentJobOwner,
+  jobRetentionExpired,
+  jobTaskTiming,
   publishJobRecord,
+  type JobRecord,
   type JobRequest,
   type JobScope,
   type JobUpdate,
 } from '../../src/hoi4_agent_tools/core/job-store.js';
 import { ServerState } from '../../src/hoi4_agent_tools/core/server-state.js';
+import { PACKAGE_VERSION } from '../../src/hoi4_agent_tools/version.js';
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 const scope: JobScope = {
@@ -36,6 +41,40 @@ async function fixture() {
   roots.push(root);
   const state = await ServerState.create(path.join(root, 'state'));
   return { root, state, store: await JobStore.create(state) };
+}
+
+async function writeAuthenticatedRecord(state: ServerState, record: JobRecord) {
+  const directory = path.join(state.root, 'jobs', hashCanonical(record.scope));
+  await mkdir(directory, { recursive: true });
+  const file = path.join(directory, `${record.id}.json`);
+  await writeFile(
+    file,
+    canonicalJson({
+      record,
+      authenticationTag: state.authenticateJournal({ kind: 'job-record.v1', record }),
+    }),
+  );
+  return file;
+}
+
+/** A committed pre-hardening receipt, without using the current ID derivation. */
+async function legacyReceipt(state: ServerState, toolVersion = PACKAGE_VERSION) {
+  const now = new Date().toISOString();
+  const record: JobRecord = {
+    version: 1,
+    id: `job_${hashCanonical({ scope, key: request.requestKey })}`,
+    revision: 3,
+    scope,
+    request,
+    requestHash: hashCanonical({ scope, request, toolVersion }),
+    toolVersion,
+    status: 'completed',
+    createdAt: now,
+    updatedAt: now,
+    cancelRequested: false,
+    result: { execution: 'applied', receipt: 'retained-original-result' },
+  };
+  return { record, file: await writeAuthenticatedRecord(state, record) };
 }
 
 describe('persistent job records', () => {
@@ -200,6 +239,122 @@ describe('persistent job records', () => {
     expect(await store.submit(scope, request)).toEqual({ record: first, created: false });
   });
 
+  it('derives keyed IDs from private server state and a separate cryptographic domain', async () => {
+    const first = await fixture();
+    const second = await fixture();
+    const { record } = await first.store.submit(scope, request);
+    expect(record.id).toBe(
+      `job_${first.state.authenticateJournal({
+        kind: 'job-id.v2',
+        scope,
+        key: request.requestKey,
+      })}`,
+    );
+    expect(record.id).not.toBe(`job_${hashCanonical({ scope, key: request.requestKey })}`);
+    expect(record.id).not.toBe(
+      `job_${first.state.authenticateJournal({ scope, key: request.requestKey })}`,
+    );
+    expect((await second.store.submit(scope, request)).record.id).not.toBe(record.id);
+    const reopened = await JobStore.create(await ServerState.create(first.state.root));
+    expect(await reopened.submit(scope, request)).toEqual({ record, created: false });
+  });
+
+  it('retains one pre-hardening committed receipt across concurrent retries and reopening', async () => {
+    const { state, store } = await fixture();
+    const { record, file } = await legacyReceipt(state);
+    const originalBytes = await readFile(file);
+    const stores = await Promise.all(
+      Array.from({ length: 16 }, async () => JobStore.create(await ServerState.create(state.root))),
+    );
+    const results = await Promise.all(stores.map((value) => value.submit(scope, request)));
+    for (const retry of results) expect(retry).toEqual({ record, created: false });
+    expect(
+      await store.submit(scope, {
+        ...request,
+        protocolTask: { ttl: 60_000, pollInterval: 250 },
+      }),
+    ).toEqual({ record, created: false });
+    expect(await readFile(file)).toEqual(originalBytes);
+    expect((await store.list(scope)).records).toEqual([record]);
+  });
+
+  it.each(['inputs', 'tool', 'version'] as const)(
+    'rejects conflicting %s when retrying a pre-hardening receipt',
+    async (changed) => {
+      const { state, store } = await fixture();
+      const { record, file } = await legacyReceipt(
+        state,
+        changed === 'version' ? '0.0.0-previous' : PACKAGE_VERSION,
+      );
+      const originalBytes = await readFile(file);
+      const conflicting = {
+        ...request,
+        ...(changed === 'inputs' ? { arguments: { relativePath: 'other.txt' } } : {}),
+        ...(changed === 'tool' ? { toolName: 'hoi4.gui_rewrite' } : {}),
+      };
+      await expect(store.submit(scope, conflicting)).rejects.toMatchObject({
+        code: 'JOB_REQUEST_KEY_CONFLICT',
+      });
+      expect(await readFile(file)).toEqual(originalBytes);
+      expect((await store.list(scope)).records).toEqual([record]);
+    },
+  );
+
+  it.each(['authentication', 'json', 'request-hash'] as const)(
+    'does not create a new execution when a legacy receipt has invalid %s',
+    async (damage) => {
+      const { state, store } = await fixture();
+      const { record, file } = await legacyReceipt(state);
+      if (damage === 'json') await writeFile(file, '{broken');
+      else if (damage === 'authentication')
+        await writeFile(file, canonicalJson({ record, authenticationTag: '0'.repeat(64) }));
+      else await writeAuthenticatedRecord(state, { ...record, requestHash: '0'.repeat(64) });
+      const damagedBytes = await readFile(file);
+      await expect(store.submit(scope, request)).rejects.toMatchObject({
+        code: 'JOB_RECORD_INVALID',
+      });
+      expect(await readFile(file)).toEqual(damagedBytes);
+      const newId = `job_${state.authenticateJournal({
+        kind: 'job-id.v2',
+        scope,
+        key: request.requestKey,
+      })}`;
+      await expect(store.get(scope, newId)).rejects.toMatchObject({ code: 'JOB_NOT_FOUND' });
+    },
+  );
+
+  it('refuses to select or merge two retained records for the same retry key', async () => {
+    const { state, store } = await fixture();
+    const { record: current } = await store.submit(scope, request);
+    const { record: legacy, file } = await legacyReceipt(state);
+    const originalBytes = await readFile(file);
+    await expect(store.submit(scope, request)).rejects.toMatchObject({
+      code: 'JOB_REQUEST_KEY_AMBIGUOUS',
+    });
+    expect(await store.get(scope, current.id)).toEqual(current);
+    expect(await store.get(scope, legacy.id)).toEqual(legacy);
+    expect(await readFile(file)).toEqual(originalBytes);
+  });
+
+  it.each(['current', 'legacy'] as const)(
+    'does not bypass a damaged %s record by selecting another generation',
+    async (generation) => {
+      const { state, store } = await fixture();
+      const { record: current } = await store.submit(scope, request);
+      const { record: legacy } = await legacyReceipt(state);
+      const damaged = generation === 'current' ? current : legacy;
+      const retained = generation === 'current' ? legacy : current;
+      const file = path.join(state.root, 'jobs', hashCanonical(scope), `${damaged.id}.json`);
+      await writeFile(file, canonicalJson({ record: damaged, authenticationTag: '0'.repeat(64) }));
+      const damagedBytes = await readFile(file);
+      await expect(store.submit(scope, request)).rejects.toMatchObject({
+        code: 'JOB_RECORD_INVALID',
+      });
+      expect(await store.get(scope, retained.id)).toEqual(retained);
+      expect(await readFile(file)).toEqual(damagedBytes);
+    },
+  );
+
   it('deduplicates a rewrite independently of protocol polling and retention hints', async () => {
     const { store } = await fixture();
     const keyed = { ...request, requestKey: 'transport-independent-rewrite' };
@@ -213,6 +368,123 @@ describe('persistent job records', () => {
     });
     expect(second).toEqual({ record: first.record, created: false });
   });
+
+  it.each(['completed', 'failed', 'cancelled'] as const)(
+    'renews only visibility for an expired %s rewrite on an exact concurrent retry',
+    async (status) => {
+      const { state, store } = await fixture();
+      const keyed = { ...request, protocolTask: { ttl: 1_000, pollInterval: 250 } };
+      const { record } = await store.submit(scope, keyed);
+      const running = await store.update(scope, record.id, record.revision, { status: 'running' });
+      const original = await store.update(scope, record.id, running.revision, {
+        status,
+        ...(status === 'completed' ? { result: { execution: 'applied' } } : {}),
+        ...(status === 'failed'
+          ? { failure: { code: 'TEST_FAILURE', message: 'Retained failure' } }
+          : {}),
+      });
+      const now = Date.parse(original.updatedAt) + 1_001;
+      expect(Date.parse(original.createdAt) + jobTaskTiming(original).ttl!).toBe(
+        Date.parse(original.updatedAt) + keyed.protocolTask.ttl,
+      );
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      expect(jobRetentionExpired(original)).toBe(true);
+      expect(await store.get(scope, original.id)).toEqual(original);
+      await expect(
+        store.submit(scope, { ...keyed, arguments: { changed: true } }),
+      ).rejects.toMatchObject({ code: 'JOB_REQUEST_KEY_CONFLICT' });
+      expect(await store.get(scope, original.id)).toEqual(original);
+      const stores = await Promise.all(Array.from({ length: 8 }, () => JobStore.create(state)));
+      const retried = await Promise.all(
+        stores.map((value) =>
+          value.submit(scope, {
+            ...keyed,
+            protocolTask: { ttl: 60_000, pollInterval: 500 },
+          }),
+        ),
+      );
+      const renewed = retried[0]!.record;
+      for (const retry of retried) expect(retry).toEqual({ record: renewed, created: false });
+      const { taskVisibility, revision, ...preserved } = renewed;
+      expect({ ...preserved, revision: original.revision }).toEqual(original);
+      expect(revision).toBe(original.revision + 1);
+      expect(taskVisibility).toEqual({
+        renewedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 60_000).toISOString(),
+      });
+      expect(jobTaskTiming(renewed)).toEqual({
+        lastUpdatedAt: new Date(now).toISOString(),
+        ttl: now + 60_000 - Date.parse(original.createdAt),
+      });
+      expect(jobRetentionExpired(renewed, now + 59_999)).toBe(false);
+      expect(jobRetentionExpired(renewed, now + 60_000)).toBe(true);
+      const reopened = await JobStore.create(await ServerState.create(state.root));
+      expect(await reopened.get(scope, original.id)).toEqual(renewed);
+      // Metadata reads and non-task receipts do not silently renew a task's visibility.
+      vi.mocked(Date.now).mockReturnValue(now + 60_001);
+      expect(await reopened.submit(scope, request)).toEqual({ record: renewed, created: false });
+      await expect(reopened.claim(scope, original.id, currentJobOwner())).rejects.toMatchObject({
+        code: 'JOB_TERMINAL',
+      });
+    },
+  );
+
+  it('does not renew expired read-only records or allow generic visibility updates', async () => {
+    const { store } = await fixture();
+    const keyed = {
+      toolName: 'hoi4.event_inspect',
+      arguments: {},
+      mutation: false,
+      requestKey: 'retained-read',
+      protocolTask: { ttl: 1_000, pollInterval: 250 },
+    };
+    const { record } = await store.submit(scope, keyed);
+    const running = await store.update(scope, record.id, record.revision, { status: 'running' });
+    const original = await store.update(scope, record.id, running.revision, {
+      status: 'completed',
+      result: { read: true },
+    });
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(original.updatedAt) + 1_001);
+    expect(await store.submit(scope, keyed)).toEqual({ record: original, created: false });
+    expect(jobRetentionExpired(original)).toBe(true);
+    await expect(
+      store.update(scope, original.id, original.revision, {
+        taskVisibility: { renewedAt: new Date().toISOString(), expiresAt: null },
+      } as unknown as JobUpdate),
+    ).rejects.toThrow();
+    expect(await store.get(scope, original.id)).toEqual(original);
+  });
+
+  it.each(['read-only', 'non-terminal', 'reversed-range', 'pre-execution'] as const)(
+    'rejects authenticated but structurally invalid %s task-visibility metadata',
+    async (invalid) => {
+      const { state, store } = await fixture();
+      const { record } = await store.submit(scope, {
+        ...request,
+        mutation: invalid !== 'read-only',
+        protocolTask: { ttl: 1_000, pollInterval: 250 },
+      });
+      const running = await store.update(scope, record.id, record.revision, { status: 'running' });
+      const original =
+        invalid === 'non-terminal'
+          ? running
+          : await store.update(scope, record.id, running.revision, {
+              status: 'completed',
+              result: { retained: true },
+            });
+      const now = Date.parse(original.updatedAt);
+      await writeAuthenticatedRecord(state, {
+        ...original,
+        taskVisibility: {
+          renewedAt: new Date(now + (invalid === 'pre-execution' ? -1 : 1)).toISOString(),
+          expiresAt: new Date(now + (invalid === 'reversed-range' ? 0 : 60_000)).toISOString(),
+        },
+      });
+      await expect(store.get(scope, record.id)).rejects.toMatchObject({
+        code: 'JOB_RECORD_INVALID',
+      });
+    },
+  );
 
   it('rejects changed inputs under the same request key and requires keys for writes', async () => {
     const { store } = await fixture();

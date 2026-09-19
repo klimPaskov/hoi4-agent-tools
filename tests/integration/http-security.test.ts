@@ -4,10 +4,15 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import {
+  Client as ModernClient,
+  StreamableHTTPClientTransport as ModernHttpTransport,
+} from '@modelcontextprotocol/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { TASKS_EXTENSION } from '../../src/hoi4_agent_tools/mcp/server/modern-tasks.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import {
   startHttpServer,
@@ -23,7 +28,10 @@ afterEach(async () => {
   delete process.env.HOI4_AGENT_BETA_TOKEN;
 });
 
-async function server(host = '127.0.0.1'): Promise<HttpServerHandle> {
+async function server(
+  host = '127.0.0.1',
+  onEngine?: (engine: CoreEngine) => void,
+): Promise<HttpServerHandle> {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-http-'));
   const mod = path.join(root, 'mod');
   const focusDirectory = path.join(mod, 'common', 'national_focus');
@@ -52,6 +60,7 @@ async function server(host = '127.0.0.1'): Promise<HttpServerHandle> {
     },
   });
   const engine = new CoreEngine(await WorkspaceResolver.create(config));
+  onEngine?.(engine);
   const handle = await startHttpServer(engine, config, createMcpServer);
   handles.push(handle);
   return handle;
@@ -129,7 +138,284 @@ async function httpClient(
   return { client, transport };
 }
 
+async function modernHttpClient(
+  url: string,
+  token: string,
+  exchanges?: Array<{ method: string | null; contentType: string | null }>,
+): Promise<ModernClient> {
+  const client = new ModernClient(
+    { name: 'http-modern-security-test', version: '1.0.0' },
+    { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+  );
+  const transport = new ModernHttpTransport(new URL(url), {
+    fetch: async (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set('authorization', `Bearer ${token}`);
+      headers.set('origin', 'https://agent.example.test');
+      const response = await fetch(input, { ...init, headers });
+      exchanges?.push({
+        method: headers.get('mcp-method'),
+        contentType: response.headers.get('content-type'),
+      });
+      return response;
+    },
+  });
+  await client.connect(transport);
+  return client;
+}
+
+function modernRequest(
+  method: string,
+  params: Record<string, unknown> = {},
+  capabilities: Record<string, unknown> = {},
+) {
+  return {
+    jsonrpc: '2.0',
+    id: 1,
+    method,
+    params: {
+      ...params,
+      _meta: {
+        'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+        'io.modelcontextprotocol/clientInfo': { name: 'http-modern-security-test', version: '1' },
+        'io.modelcontextprotocol/clientCapabilities': capabilities,
+      },
+    },
+  };
+}
+
+async function modernFetch(
+  url: string,
+  token: string,
+  body: unknown,
+  method: string,
+  name?: string,
+) {
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${token}`,
+      origin: 'https://agent.example.test',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': method,
+      ...(name === undefined ? {} : { 'mcp-name': name }),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('secured Streamable HTTP', () => {
+  it('serves the official modern client through the production authenticated endpoint', async () => {
+    const handle = await server();
+    const client = await modernHttpClient(handle.url, secret);
+    try {
+      expect(client.getProtocolEra()).toBe('modern');
+      expect((await client.listTools()).tools).toHaveLength(25);
+      expect(
+        await client.callTool({
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'test', treeId: 'http_test_tree' },
+        }),
+      ).toMatchObject({ structuredContent: { status: 'ok' } });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('streams progress through the production endpoint before completion and uses JSON for silent calls', async () => {
+    let engine!: CoreEngine;
+    const handle = await server('127.0.0.1', (created) => {
+      engine = created;
+    });
+    const exchanges: Array<{ method: string | null; contentType: string | null }> = [];
+    const client = await modernHttpClient(handle.url, secret, exchanges);
+    let admitted!: () => void;
+    let unblock!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      admitted = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+    const capacity = engine.sharedRequests.run(new AbortController().signal, () => {
+      admitted();
+      return held;
+    });
+    await ready;
+    const updates: number[] = [];
+    let settled = false;
+    const call = client
+      .callTool(
+        {
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'test', treeId: 'http_test_tree' },
+        },
+        { onprogress: ({ progress }) => updates.push(progress) },
+      )
+      .then(
+        (value) => {
+          settled = true;
+          return value;
+        },
+        (error: unknown) => {
+          settled = true;
+          throw error;
+        },
+      );
+    try {
+      await vi.waitFor(() => expect(updates).toContain(0), { timeout: 5_000 });
+      expect(settled).toBe(false);
+    } finally {
+      unblock();
+      await capacity;
+    }
+    try {
+      expect(await call).toMatchObject({ structuredContent: { status: 'ok' } });
+      expect(updates.at(-1)).toBe(3);
+      const count = updates.length;
+      expect(
+        await client.callTool({
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'test', treeId: 'http_test_tree' },
+        }),
+      ).toMatchObject({ structuredContent: { status: 'ok' } });
+      expect(updates).toHaveLength(count);
+      expect(
+        exchanges
+          .filter(({ method }) => method === 'tools/call')
+          .map(({ contentType }) => contentType),
+      ).toEqual([
+        expect.stringContaining('text/event-stream'),
+        expect.stringContaining('application/json'),
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('keeps authenticated modern requests out of legacy sessions and rejects mismatched claims', async () => {
+    const handle = await server();
+    const discover = await modernFetch(
+      handle.url,
+      secret,
+      modernRequest('server/discover'),
+      'server/discover',
+    );
+    expect(discover.status).toBe(200);
+    expect(discover.headers.get('mcp-session-id')).toBeNull();
+    expect(await discover.json()).toMatchObject({ result: { supportedVersions: ['2026-07-28'] } });
+
+    const mismatched = await modernFetch(
+      handle.url,
+      secret,
+      modernRequest('server/discover'),
+      'tools/list',
+    );
+    expect(mismatched.status).toBe(400);
+    expect(await mismatched.text()).not.toContain('No valid session ID or initialize request');
+
+    const missingEnvelope = await modernFetch(
+      handle.url,
+      secret,
+      { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+      'tools/list',
+    );
+    expect(missingEnvelope.status).toBe(400);
+    expect(await missingEnvelope.text()).not.toContain('No valid session ID or initialize request');
+  });
+
+  it('applies bearer and Origin gates to modern requests before protocol routing', async () => {
+    const handle = await server();
+    const body = JSON.stringify(modernRequest('server/discover'));
+    const headers = {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'server/discover',
+    };
+    const missingBearer = await fetch(handle.url, {
+      method: 'POST',
+      headers: { ...headers, origin: 'https://agent.example.test' },
+      body,
+    });
+    expect(missingBearer.status).toBe(401);
+    const forbiddenOrigin = await fetch(handle.url, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        origin: 'https://evil.example.test',
+        authorization: `Bearer ${secret}`,
+      },
+      body,
+    });
+    expect(forbiddenOrigin.status).toBe(403);
+  });
+
+  it('isolates modern tools and persistent tasks by authenticated principal across stateless requests', async () => {
+    const { handle, alphaSecret, betaSecret } = await isolatedServer();
+    const alpha = await modernHttpClient(handle.url, alphaSecret);
+    const beta = await modernHttpClient(handle.url, betaSecret);
+    try {
+      expect(
+        await alpha.callTool({ name: 'hoi4.gui_inspect', arguments: { workspaceId: 'alpha' } }),
+      ).toMatchObject({ structuredContent: { status: 'ok' } });
+      expect(
+        await alpha.callTool({ name: 'hoi4.gui_inspect', arguments: { workspaceId: 'beta' } }),
+      ).toMatchObject({ isError: true, structuredContent: { code: 'WORKSPACE_INACCESSIBLE' } });
+      expect(
+        await beta.callTool({ name: 'hoi4.gui_inspect', arguments: { workspaceId: 'beta' } }),
+      ).toMatchObject({ structuredContent: { status: 'ok' } });
+
+      const capabilities = { extensions: { [TASKS_EXTENSION]: {} } };
+      const createdResponse = await modernFetch(
+        handle.url,
+        alphaSecret,
+        modernRequest(
+          'tools/call',
+          { name: 'hoi4.event_inspect', arguments: { workspaceId: 'alpha', mode: 'roots' } },
+          capabilities,
+        ),
+        'tools/call',
+        'hoi4.event_inspect',
+      );
+      expect(createdResponse.status).toBe(200);
+      const created = (await createdResponse.json()) as { result: { taskId: string } };
+      expect(created.result).toMatchObject({ resultType: 'task', taskId: expect.any(String) });
+      let completed!: { result: { status: string; result?: unknown } };
+      await vi.waitFor(
+        async () => {
+          const response = await modernFetch(
+            handle.url,
+            alphaSecret,
+            modernRequest('tasks/get', { taskId: created.result.taskId }, capabilities),
+            'tasks/get',
+            created.result.taskId,
+          );
+          expect(response.status).toBe(200);
+          completed = (await response.json()) as typeof completed;
+          expect(completed.result.status).toBe('completed');
+        },
+        { timeout: 10_000, interval: 50 },
+      );
+      expect(completed.result.result).toMatchObject({
+        structuredContent: { workspaceId: 'alpha', status: 'ok' },
+      });
+
+      const foreign = await modernFetch(
+        handle.url,
+        betaSecret,
+        modernRequest('tasks/get', { taskId: created.result.taskId }, capabilities),
+        'tasks/get',
+        created.result.taskId,
+      );
+      expect(foreign.status).toBe(200);
+      expect(await foreign.json()).toMatchObject({ error: { code: -32602 } });
+    } finally {
+      await Promise.all([alpha.close(), beta.close()]);
+    }
+  });
   it('negotiates over an IPv6 loopback endpoint when the host supports it', async () => {
     let handle: HttpServerHandle;
     try {

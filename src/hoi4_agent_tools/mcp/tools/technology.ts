@@ -1,15 +1,12 @@
+import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
+import type { TaskToolDefinition } from '../server/task-tool-definition.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-  ToolTaskHandler,
-} from '@modelcontextprotocol/sdk/experimental/tasks';
-import {
-  CallToolResultSchema,
-  CreateTaskResultSchema,
-  GetTaskResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+
 import { z } from 'zod/v4';
+import {
+  helperExpansionRequestSchema,
+  helperExpansionSummarySchema,
+} from '../../schemas/helper-expansion.js';
 import {
   technologyAnalysisModeSchema,
   technologyCompareRequestSchema,
@@ -29,6 +26,10 @@ import { strictOperationResultSchema } from '../server/result.js';
 const inspectInputSchema = z
   .object({
     ...technologyInspectRequestSchema.shape,
+    helperExpansion: compactValidatedInputSchema(
+      helperExpansionRequestSchema,
+      'Bounded helper paths; opaque continuationUri resumes the same source and roots. See docs/technology.md.',
+    ).optional(),
     impact: compactValidatedInputSchema(
       technologyImpactSchema,
       'Rename or removal subject.',
@@ -83,6 +84,7 @@ const analysisOutputSchema = strictOperationResultSchema(
       revision: sha256Schema,
       graphHash: sha256Schema,
       counts: countsSchema,
+      helperExpansion: helperExpansionSummarySchema.optional(),
     })
     .strict(),
 );
@@ -135,69 +137,35 @@ const readOnlyTechnologyTool = {
   openWorldHint: false,
 } as const;
 
-function technologyTaskHandler(schema: z.ZodType) {
-  return {
-    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
-      schema.parse(input);
-      return CreateTaskResultSchema.parse({
-        task: await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
-          pollInterval: 250,
-        }),
-      });
-    },
-    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
-    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
-  };
-}
+export const technologyTaskTools = [
+  {
+    name: 'hoi4.tech_inspect',
+    title: 'Inspect technology trees',
+    description:
+      'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, and assess impact.',
+    inputSchema: inspectInputSchema,
+    outputSchema: analysisOutputSchema,
+    annotations: readOnlyTechnologyTool,
+  },
+  {
+    name: 'hoi4.tech_render',
+    title: 'Render technology trees',
+    description: 'Render source-linked JSON, SVG, PNG, and optional HTML technology views.',
+    inputSchema: renderInputSchema,
+    outputSchema: renderOutputSchema,
+    annotations: readOnlyTechnologyTool,
+  },
+  {
+    name: 'hoi4.tech_compare',
+    title: 'Compare technology trees',
+    description:
+      'Compare cached, resource-backed, current, or proposed source graphs without writes.',
+    inputSchema: compareInputSchema,
+    outputSchema: compareOutputSchema,
+    annotations: readOnlyTechnologyTool,
+  },
+] satisfies readonly TaskToolDefinition[];
 
 export function registerTechnologyTools(server: McpServer): void {
-  server.experimental.tasks.registerToolTask(
-    'hoi4.tech_inspect',
-    {
-      title: 'Inspect technology trees',
-      description:
-        'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, and assess impact.',
-      inputSchema: inspectInputSchema,
-      outputSchema: analysisOutputSchema,
-      annotations: readOnlyTechnologyTool,
-      execution: { taskSupport: 'optional' },
-    },
-    technologyTaskHandler(inspectInputSchema) as unknown as ToolTaskHandler<
-      typeof inspectInputSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.tech_render',
-    {
-      title: 'Render technology trees',
-      description: 'Render source-linked JSON, SVG, PNG, and optional HTML technology views.',
-      inputSchema: renderInputSchema,
-      outputSchema: renderOutputSchema,
-      annotations: readOnlyTechnologyTool,
-      execution: { taskSupport: 'optional' },
-    },
-    technologyTaskHandler(renderInputSchema) as unknown as ToolTaskHandler<
-      typeof renderInputSchema
-    >,
-  );
-
-  server.experimental.tasks.registerToolTask(
-    'hoi4.tech_compare',
-    {
-      title: 'Compare technology trees',
-      description:
-        'Compare cached, resource-backed, current, or proposed source graphs without writes.',
-      inputSchema: compareInputSchema,
-      outputSchema: compareOutputSchema,
-      annotations: readOnlyTechnologyTool,
-      execution: { taskSupport: 'optional' },
-    },
-    technologyTaskHandler(compareInputSchema) as unknown as ToolTaskHandler<
-      typeof compareInputSchema
-    >,
-  );
+  registerLegacyTaskTools(server, technologyTaskTools);
 }

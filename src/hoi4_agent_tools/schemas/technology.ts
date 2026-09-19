@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { workspaceIdSchema, workspaceRelativePathSchema } from './common.js';
+import { helperExpansionRequestSchema, validateHelperExpansionMode } from './helper-expansion.js';
 
 export const technologyIdSchema = z.string().min(1).max(512);
 export const technologyDirectionSchema = z.enum(['prerequisites', 'descendants', 'both']);
@@ -90,12 +91,14 @@ export const technologyAnalysisModeSchema = z.enum([
   'bonus_coverage',
   'lint',
   'impact',
+  'helper_expansion',
 ]);
 
 export function validateTechnologyInspectRequest(
   value: { mode: string; technologyId?: unknown; impact?: unknown },
   context: z.RefinementCtx,
 ): void {
+  validateHelperExpansionMode(value, context);
   if ((value.mode === 'trace' || value.mode === 'explain') && value.technologyId === undefined)
     context.addIssue({
       code: 'custom',
@@ -126,6 +129,7 @@ export const technologyInspectRequestSchema = z
     classifications: z.array(technologyDefectClassSchema).max(4).optional(),
     codes: z.array(z.string().min(1).max(256)).max(100).optional(),
     impact: technologyImpactSchema.optional(),
+    helperExpansion: helperExpansionRequestSchema.optional(),
     refresh: z.boolean().optional(),
   })
   .strict()

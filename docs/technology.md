@@ -6,7 +6,7 @@ Use the three technology tools directly from the target mod.
 
 ## Inspect
 
-`hoi4.tech_inspect` provides eight focused modes:
+`hoi4.tech_inspect` provides nine focused modes:
 
 - `scan`: build the technology graph and report its inventory, diagnostics, analysis limits, and revision. Small graphs include the complete graph in the report; large graphs return exact counts, grouped findings, samples, and the revision for focused follow-up queries.
 - `folders`: list folder roots and source placements, or inspect one `folderId`.
@@ -16,6 +16,7 @@ Use the three technology tools directly from the target mod.
 - `bonus_coverage`: show which technologies or categories are covered by discovered research bonuses.
 - `lint`: filter source-linked findings by classification, diagnostic code, folder, or technology.
 - `impact`: find the definitions, placements, edges, grants, bonuses, unlocks, localisation, sprites, and files affected by a proposed removal or rename.
+- `helper_expansion`: stream source-linked scripted-effect call paths and helper-owned technology references with bounded pages and revision-bound continuation.
 
 Example trace:
 
@@ -45,7 +46,10 @@ Impact mode takes a subject with `kind` set to `technology`, `category`, `folder
 
 Findings are separated into confirmed errors, probable defects, design warnings, and unresolved analysis. Roots, grant-only technologies, early dates, zero AI weights, repeated effects, and routing nodes are evaluated in context instead of being treated as automatic defects. The viewer keeps its authoritative graph in memory while the linked scan artifact remains a bounded summary; use its revision with the focused inspect modes or a render resource to inspect the relevant records.
 
-Game-backed and otherwise large workspaces automatically use focused analysis mode. It keeps direct grants, bonuses, unlocks, definitions, and the source-linked scripted-effect call index while deferring the full helper projection that can otherwise make a vanilla-plus-mod scan take minutes or exhaust the server process. The result is marked partial and names this boundary in `analysisBoundary`; no direct source evidence is discarded.
+Ordinary technology inspection uses the materialized graph and its explicit helper-depth and projection limits.
+A truncated helper expansion reports incomplete coverage.
+For a large helper closure, [bounded helper expansion](helper-expansion.md) uses the structural call inventory and streams source-linked paths without first materializing the full projection.
+It preserves separate conditional call sites and identifies source, cycle, and depth boundaries without simulating trigger outcomes.
 
 ## Render
 

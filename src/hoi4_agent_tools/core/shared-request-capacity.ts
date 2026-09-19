@@ -111,7 +111,16 @@ export class SharedRequestCapacity {
                   'Capacity can only transfer to another live process',
                 );
               const next = path.join(slot, `${pid}-${randomUUID()}.lease`);
-              await rename(owner, next);
+              try {
+                await rename(owner, next);
+              } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+                  throw new ServiceError(
+                    'REQUEST_LEASE_HANDOFF_LOST',
+                    'The capacity lease disappeared before worker dispatch',
+                  );
+                throw error;
+              }
               owner = next;
               transferredPid = pid;
             },

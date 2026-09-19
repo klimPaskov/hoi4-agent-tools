@@ -1,24 +1,20 @@
 #!/usr/bin/env node
 import { canonicalJson } from '../hoi4_agent_tools/core/canonical.js';
-import { createMcpServer } from '../hoi4_agent_tools/mcp/server/create.js';
 import {
-  BoundedStdioServerTransport,
   StdioFrameLimitError,
   StdioInvalidMessageError,
   StdioInvalidUtf8Error,
 } from '../hoi4_agent_tools/mcp/transports/bounded-stdio.js';
-import { FinalProtocolTransport } from '../hoi4_agent_tools/mcp/transports/protocol-gate.js';
+import { serveNegotiatedStdio } from '../hoi4_agent_tools/mcp/transports/negotiated-stdio.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
 
 async function main(): Promise<void> {
   const engine = await createEngine();
-  const context = {};
-  const server = createMcpServer(engine, context);
-  if (process.env.HOI4_AGENT_TOOLS_CHAOSX === '1') {
-    const { registerChaosxTools } = await import('../hoi4_agent_tools/mcp/tools/chaosx.js');
-    registerChaosxTools(server, engine, context);
-  }
-  server.server.onerror = (error): void => {
+  const chaosxTools =
+    process.env.HOI4_AGENT_TOOLS_CHAOSX === '1'
+      ? await import('../hoi4_agent_tools/mcp/tools/chaosx.js')
+      : undefined;
+  const onerror = (error: Error): void => {
     const fatalInputError =
       error instanceof StdioFrameLimitError || error instanceof StdioInvalidUtf8Error;
     const rejectedMessage = error instanceof StdioInvalidMessageError;
@@ -32,8 +28,26 @@ async function main(): Promise<void> {
       })}\n`,
     );
   };
-  const transport = new BoundedStdioServerTransport();
-  await server.connect(new FinalProtocolTransport(transport));
+  await serveNegotiatedStdio(engine, {
+    onerror,
+    onFailure: (error) => {
+      process.exitCode = 1;
+      process.stderr.write(
+        `${canonicalJson({
+          level: 'error',
+          event: 'transport_startup_failed',
+          message: error instanceof Error ? error.message : String(error),
+        })}\n`,
+      );
+    },
+    ...(chaosxTools === undefined
+      ? {}
+      : {
+          createModernPrivateTools: chaosxTools.createChaosxToolOperations,
+          registerLegacy: (server: Parameters<typeof chaosxTools.registerChaosxTools>[0]) =>
+            chaosxTools.registerChaosxTools(server, engine, {}),
+        }),
+  });
 }
 
 main().catch((error: unknown) => {

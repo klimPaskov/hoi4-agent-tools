@@ -1,0 +1,70 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.1.0/schemas/helper-expansion-summary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "complete": {
+      "type": "boolean"
+    },
+    "finished": {
+      "type": "boolean"
+    },
+    "sourceComplete": {
+      "type": "boolean"
+    },
+    "maxDepth": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "records": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "totalRecords": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "work": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "totalWork": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "completedRoots": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "totalRoots": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "cycles": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "depthStops": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "continuationUri": {
+      "type": "string",
+      "maxLength": 8192,
+      "pattern": "^hoi4-agent:\\/\\/"
+    }
+  },
+  "required": [
+    "complete",
+    "finished",
+    "sourceComplete",
+    "maxDepth",
+    "records",
+    "totalRecords",
+    "work",
+    "totalWork",
+    "completedRoots",
+    "totalRoots",
+    "cycles",
+    "depthStops"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  }
+}

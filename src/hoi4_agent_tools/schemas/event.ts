@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { workspaceIdSchema, workspaceRelativePathSchema } from './common.js';
+import { helperExpansionRequestSchema, validateHelperExpansionMode } from './helper-expansion.js';
 
 const eventIdSchema = z.string().min(1).max(256);
 const eventSourcePathSchema = z.string().min(1).max(1024);
@@ -15,6 +16,7 @@ export const eventInspectModeSchema = z.enum([
   'state_flow',
   'lint',
   'impact',
+  'helper_expansion',
 ]);
 
 export const eventDirectionSchema = z.enum(['upstream', 'downstream', 'both']);
@@ -118,6 +120,7 @@ export function validateEventInspectRequest(
   },
   context: z.RefinementCtx,
 ): void {
+  validateHelperExpansionMode(value, context);
   if (value.mode === 'trace' && value.selector === undefined)
     context.addIssue({ code: 'custom', path: ['selector'], message: 'Trace requires selector' });
   if (value.mode === 'explain_path' && (value.from === undefined || value.to === undefined))
@@ -148,6 +151,7 @@ export const eventInspectRequestSchema = z
     expandHelpers: z.boolean().optional(),
     stateSubject: eventStateSubjectSchema.optional(),
     impactSubject: eventImpactSubjectSchema.optional(),
+    helperExpansion: helperExpansionRequestSchema.optional(),
     refresh: z.boolean().optional(),
   })
   .strict()

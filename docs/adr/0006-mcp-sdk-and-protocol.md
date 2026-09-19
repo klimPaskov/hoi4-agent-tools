@@ -4,7 +4,7 @@
 
 - Status: accepted
 - Date: 2026-07-10
-- Last reviewed: 2026-09-12
+- Last reviewed: 2026-09-13
 
 ## Decision
 
@@ -24,4 +24,7 @@ Unknown initialization revisions fall back to the SDK's latest supported revisio
 The HTTP transport accepts supported revisions in the `MCP-Protocol-Version` header.
 The server advertises optional tool-call tasks through the SDK extension for registered domain operations and retains ordinary progress, cancellation, and synchronous calls for existing clients.
 Persistent jobs, reconnect behavior, retry identity, and task status mapping are owned by [ADR 0029](0029-persistent-jobs.md).
-A future migration to the split 2.x SDK and complete 2026 protocol remains a separate compatibility project rather than a prerequisite for these negotiated adapters.
+Migration to the split 2.x SDK and explicit 2026 protocol serving entries is implemented in the local Stage 2 candidate but remains unqualified for release.
+The legacy task extension alone does not satisfy that accepted migration.
+The [modern operation/task adapter](0031-modern-mcp-task-adapter.md) shares execution and tool definitions with this baseline and is routed through the production stdio and authenticated HTTP entry points in the working tree.
+The 2025-era path remains in place for existing clients, and the stdio-only opt-in private tools share implementations across both generations; full transport/platform qualification is still outstanding.

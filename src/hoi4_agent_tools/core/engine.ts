@@ -13,6 +13,7 @@ import { TransactionManager, transactionRootFingerprint } from './transactions.j
 import type { WorkspaceResolver } from './workspace.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
+import { JobStore } from './job-store.js';
 
 const RECOVERY_TTL_SECONDS = 3_600;
 const RECOVERY_MAX_BYTES = 536_870_912;
@@ -173,12 +174,26 @@ export class CoreEngine {
         resolver.config().scanMaxBytes,
         resolver.config().scanMaxFileBytes,
       );
+    let retentionJobs: Promise<JobStore> | undefined;
     this.artifacts =
       services.artifacts ??
       new ArtifactStore(
         resolver.config().artifactMaxBytes,
         resolver.config().artifactMaxEntries,
         resolver.config().artifactMaxSingleBytes,
+        state === undefined
+          ? undefined
+          : async (workspace, signal) => {
+              retentionJobs ??= JobStore.create(state);
+              return (await retentionJobs).checkpointResources(
+                {
+                  workspaceId: workspace.id,
+                  workspaceIdentity: workspace.workspaceIdentity,
+                  rootFingerprint: transactionRootFingerprint(workspace),
+                },
+                signal,
+              );
+            },
       );
     this.transactions =
       services.transactions ??

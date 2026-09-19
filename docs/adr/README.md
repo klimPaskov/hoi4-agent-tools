@@ -29,3 +29,4 @@
 27. [Shared scenario condition evaluation](0027-shared-condition-evaluation.md)
 28. [Incremental source segments](0028-incremental-source-segments.md)
 29. [Persistent jobs](0029-persistent-jobs.md)
+30. [Modern MCP task adapter](0031-modern-mcp-task-adapter.md)

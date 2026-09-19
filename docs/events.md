@@ -6,7 +6,7 @@ Use the three event tools directly from the target mod.
 
 ## Inspect
 
-`hoi4.event_inspect` provides seven focused modes:
+`hoi4.event_inspect` provides eight focused modes:
 
 - `scan`: inventory event definitions, namespaces, call sites, and unresolved references.
 - `roots`: find likely entry points and explain why they are roots.
@@ -15,8 +15,13 @@ Use the three event tools directly from the target mod.
 - `state_flow`: report flags, variables, targets, scopes, and other tracked state read or changed along a route.
 - `lint`: find missing targets, unreachable events, suspicious cycles, conflicting definitions, invalid timing, and unresolved dynamic calls.
 - `impact`: identify callers, descendants, state dependencies, and files affected by a proposed event change.
+- `helper_expansion`: stream bounded source-linked helper-call paths, dispatches, and state accesses with revision-bound continuation.
 
-Use narrow identifiers, direction, and depth limits when the task concerns one chain. Broad scans build the structural event graph without expanding every scripted helper into duplicate paths. Game-backed or other large workspaces automatically use a focused source profile containing event definitions and on-actions, then defer workspace-wide helper projections and lifecycle passes. The result is marked partial and records that boundary in the linked evidence instead of waiting until the MCP transport times out. Focused trace and path calls collapse only the selected bounded route.
+Use narrow identifiers, direction, and depth limits when the task concerns one chain.
+Broad scans build the structural event graph without expanding every scripted helper into duplicate paths.
+Focused trace, path, and selector-based inventory requests may defer workspace-wide helper projections and lifecycle passes; their linked evidence records the partial boundary.
+Focused trace and path calls collapse only the selected bounded route.
+For a large helper closure, use [bounded helper expansion](helper-expansion.md) to receive resumable pages without first materializing every projection.
 
 The compact response summarizes the result. Small scan resources contain the complete graph; large scan resources contain exact totals, grouped inventories, representative diagnostics, and the revision needed for focused follow-up queries. Large focused scans keep direct event and on-action evidence, call sites, state accesses, and source locations while leaving helper expansion and workspace-wide lifecycle analysis explicit as deferred boundaries. This keeps an agent's prompt and artifact storage bounded without allowing a broad scan to exhaust the MCP process.
 

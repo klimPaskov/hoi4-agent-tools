@@ -4,11 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { CoreEngine } from './engine.js';
 import { JobService } from './job-service.js';
-import { jobOwnerLiveness, type JobRecord } from './job-store.js';
+import { jobOwnerLiveness, readCheckpointIdentity, type JobRecord } from './job-store.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity, type SharedCapacityLease } from './shared-request-capacity.js';
 import { containedGeneratedPath } from './workspace.js';
 import { ServiceError } from './result.js';
+
+const maximumCheckpointRecoveries = 2;
+const maximumPreDispatchRecoveries = 2;
 
 /** Bounded, fixed-entry child execution; client cancellation/disconnection never kills a worker. */
 export class JobWorkerHost {
@@ -70,24 +73,55 @@ export class JobWorkerHost {
         'This domain has not yet been registered for worker execution',
       );
     const signal = new AbortController().signal;
-    try {
-      await this.scheduler.run(this.owner, 1024, signal, () =>
-        this.capacity.run(signal, (lease) => this.launch(workspaceId, id, lease, principal)),
-      );
-      return await this.jobs.get(workspaceId, id, principal);
-    } catch (error) {
-      return await this.jobs.failInterrupted(
-        workspaceId,
-        id,
-        {
-          code: error instanceof ServiceError ? error.code : 'JOB_WORKER_FAILED',
-          message:
-            error instanceof ServiceError
-              ? error.message
-              : 'The isolated worker stopped without publishing a result',
-        },
-        principal,
-      );
+    const recovered = new Set<string>();
+    let preDispatchRecoveries = 0;
+    for (;;) {
+      try {
+        await this.scheduler.run(this.owner, 1024, signal, () =>
+          this.capacity.run(signal, (lease) => this.launch(workspaceId, id, lease, principal)),
+        );
+        return await this.jobs.get(workspaceId, id, principal);
+      } catch (error) {
+        const current = await this.jobs.get(workspaceId, id, principal);
+        if (
+          error instanceof ServiceError &&
+          error.code === 'REQUEST_LEASE_HANDOFF_LOST' &&
+          (current.status === 'queued' ||
+            (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'dead')) &&
+          preDispatchRecoveries < maximumPreDispatchRecoveries
+        ) {
+          // No job request was sent to the child: another bounded admission attempt
+          // cannot replay a read or a rewrite.
+          preDispatchRecoveries += 1;
+          await delay(preDispatchRecoveries * 100);
+          continue;
+        }
+        const checkpoint = readCheckpointIdentity(current);
+        if (
+          checkpoint !== undefined &&
+          current.owner !== undefined &&
+          jobOwnerLiveness(current.owner) === 'dead' &&
+          recovered.size < maximumCheckpointRecoveries &&
+          !recovered.has(checkpoint)
+        ) {
+          // A replacement revalidates source identity and checkpoint bytes in the normal
+          // executor. Never replay writes, repeat a stalled frontier, or reclaim a live owner.
+          recovered.add(checkpoint);
+          continue;
+        }
+        return await this.jobs.failInterrupted(
+          workspaceId,
+          id,
+          {
+            code: error instanceof ServiceError ? error.code : 'JOB_WORKER_FAILED',
+            message:
+              error instanceof ServiceError
+                ? error.message
+                : 'The isolated worker stopped without publishing a result',
+          },
+          principal,
+        );
+      }
     }
   }
 
@@ -134,6 +168,14 @@ export class JobWorkerHost {
     );
     const initialized = new Promise<void>((resolve, reject) => {
       child.once('error', reject);
+      child.once('exit', () =>
+        reject(
+          new ServiceError(
+            'JOB_WORKER_STARTUP_EXIT',
+            'The worker exited before completing its readiness handshake',
+          ),
+        ),
+      );
       child.once('message', (value: unknown) => {
         void (async () => {
           if (
@@ -193,7 +235,8 @@ export class JobWorkerHost {
       if (['completed', 'failed', 'cancelled'].includes(record.status)) return;
       if (record.owner !== undefined && record.owner.pid !== child.pid) {
         if (jobOwnerLiveness(record.owner) === 'alive') return;
-      } else if (child.pid !== undefined) {
+      }
+      if (child.pid !== undefined) {
         try {
           process.kill(child.pid, 0);
         } catch (error) {

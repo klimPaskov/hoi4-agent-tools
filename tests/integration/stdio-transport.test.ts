@@ -3,10 +3,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import process from 'node:process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '@modelcontextprotocol/sdk/types.js';
 import { MCP_PROTOCOL_VERSION, PACKAGE_VERSION } from '../../src/hoi4_agent_tools/version.js';
 import { STDIO_MAX_FRAME_BYTES } from '../../src/hoi4_agent_tools/mcp/transports/bounded-stdio.js';
+import { TASKS_EXTENSION } from '../../src/hoi4_agent_tools/mcp/server/modern-tasks.js';
 
 const projectRoot = path.resolve(import.meta.dirname, '../..');
 const tsxCli = path.join(projectRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
@@ -43,10 +45,24 @@ async function waitForMessage(
   progressToken?: string,
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error(`Timed out waiting for JSON-RPC response ${id}`)),
-      60_000,
-    );
+    const cleanup = (): void => {
+      clearTimeout(timeout);
+      child.stdout.off('data', consume);
+      child.off('error', onError);
+      child.off('exit', onExit);
+    };
+    const onError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+    const onExit = (code: number | null): void => {
+      cleanup();
+      reject(new Error(`stdio server exited before response ${id}: ${code}`));
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for JSON-RPC response ${id}`));
+    }, 60_000);
     let pending = '';
     const consume = (chunk: Buffer): void => {
       pending += chunk.toString('utf8');
@@ -61,8 +77,7 @@ async function waitForMessage(
         try {
           parsed = JSON.parse(line) as Record<string, unknown>;
         } catch (error) {
-          clearTimeout(timeout);
-          child.stdout.off('data', consume);
+          cleanup();
           reject(error);
           return;
         }
@@ -74,19 +89,15 @@ async function waitForMessage(
         )
           timeout.refresh();
         if (parsed.id === id) {
-          clearTimeout(timeout);
-          child.stdout.off('data', consume);
+          cleanup();
           resolve(parsed);
           return;
         }
       }
     };
     child.stdout.on('data', consume);
-    child.once('error', reject);
-    child.once('exit', (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`stdio server exited before response ${id}: ${code}`));
-    });
+    child.once('error', onError);
+    child.once('exit', onExit);
   });
 }
 
@@ -147,6 +158,98 @@ async function overflowConfig(prefix: string): Promise<string> {
 }
 
 describe('local stdio transport', () => {
+  it('negotiates modern discovery and operations through the same bounded production entry', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-modern-'));
+    const workspace = path.join(temporary, 'mod');
+    const focusPath = path.join(workspace, 'common', 'national_focus', 'modern.txt');
+    await mkdir(path.dirname(focusPath), { recursive: true });
+    await writeFile(
+      focusPath,
+      'focus_tree = { id = modern focus = { id = modern_root x = 0 y = 0 cost = 1 } }\n',
+    );
+    const config = path.join(temporary, 'config.json');
+    await writeFile(
+      config,
+      `${JSON.stringify({
+        version: 1,
+        serverStateRoot: path.join(temporary, 'server-state'),
+        workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
+      })}\n`,
+    );
+    const child = launch(config);
+    const lines: string[] = [];
+    const meta = {
+      'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+      'io.modelcontextprotocol/clientInfo': { name: 'modern-stdio-test', version: '1' },
+      'io.modelcontextprotocol/clientCapabilities': {},
+    };
+    const request = (id: number, method: string, params: Record<string, unknown> = {}) =>
+      `${JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, _meta: meta } })}\n`;
+    try {
+      child.stdin.write(request(1, 'server/discover'));
+      expect(await waitForMessage(child, 1, lines)).toMatchObject({
+        result: { supportedVersions: ['2026-07-28'] },
+      });
+      child.stdin.write(request(2, 'tools/list'));
+      expect(listedToolNames(await waitForMessage(child, 2, lines))).toHaveLength(25);
+      child.stdin.write(
+        request(3, 'tools/call', {
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'fixture', treeId: 'modern' },
+        }),
+      );
+      expect(await waitForMessage(child, 3, lines)).toMatchObject({
+        result: { structuredContent: { status: 'ok' } },
+      });
+      const taskMeta = {
+        ...meta,
+        'io.modelcontextprotocol/clientCapabilities': {
+          extensions: { [TASKS_EXTENSION]: {} },
+        },
+      };
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'hoi4.focus_inspect',
+            arguments: { workspaceId: 'fixture', treeId: 'modern' },
+            _meta: taskMeta,
+          },
+        })}\n`,
+      );
+      const created = await waitForMessage(child, 4, lines);
+      expect(created).toMatchObject({ result: { resultType: 'task' } });
+      const taskId = (created.result as { taskId: string }).taskId;
+      let completed: Record<string, unknown> = {};
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const id = 5 + attempt;
+        child.stdin.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id,
+            method: 'tasks/get',
+            params: { taskId, _meta: taskMeta },
+          })}\n`,
+        );
+        completed = await waitForMessage(child, id, lines);
+        if ((completed.result as { status?: string } | undefined)?.status === 'completed') break;
+        await delay(150);
+      }
+      expect(completed).toMatchObject({
+        result: {
+          status: 'completed',
+          result: { structuredContent: { status: 'ok' } },
+        },
+      });
+      expect(lines.some((line) => line.includes('"method":"initialize"'))).toBe(false);
+    } finally {
+      await stop(child);
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('exits cleanly when the coding-agent client closes stdin', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-stdio-close-'));
     const workspace = path.join(temporary, 'mod');
@@ -355,6 +458,44 @@ describe('local stdio transport', () => {
     await stop(child);
     expect(stderr).not.toContain('"event":"startup_failed"');
   }, 30_000);
+
+  it('exposes and executes optional ChaosX tools on the modern stdio era only when enabled', async () => {
+    const config = await overflowConfig('hoi4-agent-stdio-modern-chaosx-');
+    const child = launch(config, { HOI4_AGENT_TOOLS_CHAOSX: '1' });
+    const lines: string[] = [];
+    const meta = {
+      'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+      'io.modelcontextprotocol/clientInfo': { name: 'chaosx-modern-test', version: '1' },
+      'io.modelcontextprotocol/clientCapabilities': {},
+    };
+    const request = (id: number, method: string, params: Record<string, unknown> = {}) =>
+      `${JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, _meta: meta } })}\n`;
+    try {
+      child.stdin.write(request(1, 'server/discover'));
+      expect(await waitForMessage(child, 1, lines)).toMatchObject({
+        result: { supportedVersions: ['2026-07-28'] },
+      });
+      child.stdin.write(request(2, 'tools/list'));
+      const names = listedToolNames(await waitForMessage(child, 2, lines));
+      expect(names).toHaveLength(27);
+      expect(names).toContain('chaosx.focus_country_assets');
+      expect(names).toContain('chaosx.visual_revision');
+      child.stdin.write(
+        request(3, 'tools/call', {
+          name: 'chaosx.focus_country_assets',
+          arguments: { workspaceId: 'fixture', countryTags: ['AAA'] },
+        }),
+      );
+      expect(await waitForMessage(child, 3, lines)).toMatchObject({
+        result: {
+          resultType: 'complete',
+          structuredContent: { status: 'ok', code: 'CHAOSX_COUNTRY_ASSETS_RENDERED' },
+        },
+      });
+    } finally {
+      await stop(child);
+    }
+  }, 60_000);
 
   it('writes startup failures only to stderr', async () => {
     const child = launch(path.join(tmpdir(), `missing-${Date.now()}.json`));

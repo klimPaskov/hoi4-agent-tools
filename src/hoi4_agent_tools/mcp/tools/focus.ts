@@ -1,14 +1,7 @@
+import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
+import type { TaskToolDefinition } from '../server/task-tool-definition.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-  ToolTaskHandler,
-} from '@modelcontextprotocol/sdk/experimental/tasks';
-import {
-  CallToolResultSchema,
-  CreateTaskResultSchema,
-  GetTaskResultSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+
 import { z } from 'zod/v4';
 import type { CoreEngine, ScanSnapshot } from '../../core/engine.js';
 import {
@@ -154,47 +147,6 @@ const artifactProducing = {
   openWorldHint: false,
 } as const;
 
-function focusTaskHandler(schema: z.ZodType) {
-  return {
-    createTask: async (input: unknown, extra: CreateTaskRequestHandlerExtra) => {
-      schema.parse(input);
-      return CreateTaskResultSchema.parse({
-        task: await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
-          pollInterval: 250,
-        }),
-      });
-    },
-    getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      GetTaskResultSchema.parse(await extra.taskStore.getTask(extra.taskId)),
-    getTaskResult: async (_input: unknown, extra: TaskRequestHandlerExtra) =>
-      CallToolResultSchema.parse(await extra.taskStore.getTaskResult(extra.taskId)),
-  };
-}
-
-function registerFocusTask(
-  server: McpServer,
-  name: string,
-  configuration: {
-    title: string;
-    description: string;
-    inputSchema: z.ZodType;
-    outputSchema: z.ZodType;
-    annotations: {
-      readOnlyHint: boolean;
-      destructiveHint: boolean;
-      idempotentHint: boolean;
-      openWorldHint: boolean;
-    };
-  },
-): void {
-  server.experimental.tasks.registerToolTask(
-    name,
-    { ...configuration, execution: { taskSupport: 'optional' } },
-    focusTaskHandler(configuration.inputSchema) as unknown as ToolTaskHandler<z.ZodType>,
-  );
-}
-
 export type { FocusVisualRevision, FocusVisualRevisionSelector };
 
 /** Compatibility wrapper retained for callers that supplied the signal separately. */
@@ -218,36 +170,36 @@ export function computeFocusVisualRevisions(
   );
 }
 
-export function registerFocusTools(
-  server: McpServer,
-  _engine: CoreEngine,
-  _context: ServerContext,
-): void {
-  registerFocusTask(server, 'hoi4.focus_inspect', {
+export const focusTaskTools = [
+  {
+    name: 'hoi4.focus_inspect',
     title: 'Inspect focus trees',
     description:
       'Inspect national trees or continuous palettes for creation and cleanup, including continuous-focus placement, complete plans, references, diagnostics, and stable layout decisions.',
     inputSchema: focusInspectRequestSchema,
     outputSchema: focusInspectOutputSchema,
     annotations: artifactProducing,
-  });
-  registerFocusTask(server, 'hoi4.focus_render', {
+  },
+  {
+    name: 'hoi4.focus_render',
     title: 'Render focus review artifacts',
     description:
       'Render a national tree or continuous palette as fast deterministic HTML, SVG, JSON, and source-map artifacts. Use hoi4.focus_raster when decoded icons and PNG output are needed.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
-  });
-  registerFocusTask(server, 'hoi4.focus_raster', {
+  },
+  {
+    name: 'hoi4.focus_raster',
     title: 'Rasterize focus review artifacts',
     description:
       'Produce the high-fidelity focus review with decoded source icons and deterministic PNG output. Use focus_render for the faster structural HTML, SVG, and JSON view.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
-  });
-  registerFocusTask(server, 'hoi4.focus_rewrite', {
+  },
+  {
+    name: 'hoi4.focus_rewrite',
     title: 'Create or clean up focus content',
     description:
       'Create or clean up a national tree or continuous palette, validate it, and apply it in one call. Supply a complete plan; set layoutMode compact for automatic arrangement. Existing national trees can omit the plan and use treeId plus layoutMode compact. Set createIfMissing for a new file.',
@@ -259,5 +211,13 @@ export function registerFocusTools(
       idempotentHint: false,
       openWorldHint: false,
     },
-  });
+  },
+] satisfies readonly TaskToolDefinition[];
+
+export function registerFocusTools(
+  server: McpServer,
+  _engine: CoreEngine,
+  _context: ServerContext,
+): void {
+  registerLegacyTaskTools(server, focusTaskTools);
 }

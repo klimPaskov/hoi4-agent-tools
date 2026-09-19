@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +9,39 @@ import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { SharedRequestCapacity } from '../../src/hoi4_agent_tools/core/shared-request-capacity.js';
 
 describe('shared task-process execution capacity', () => {
+  it('classifies a lease lost before handoff without dispatching the child', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-lost-handoff-'));
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    await once(child, 'spawn');
+    try {
+      const slot = path.join(
+        root,
+        'request-capacity',
+        sha256Bytes(hostname().toLowerCase()).slice(0, 16),
+        '0',
+      );
+      await expect(
+        new SharedRequestCapacity(root, 1).run(new AbortController().signal, async (lease) => {
+          const [owner] = await readdir(slot);
+          expect(owner).toBeDefined();
+          await unlink(path.join(slot, owner!));
+          await lease.handoffToProcess(child.pid!);
+        }),
+      ).rejects.toMatchObject({ code: 'REQUEST_LEASE_HANDOFF_LOST' });
+      expect(await readdir(slot).catch(() => [])).toEqual([]);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        const stopped = once(child, 'close');
+        child.kill();
+        await stopped;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('retains a transferred child lease after launcher failure until the child exits', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-transfer-'));
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {

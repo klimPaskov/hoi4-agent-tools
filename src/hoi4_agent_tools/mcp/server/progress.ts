@@ -1,5 +1,6 @@
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { ServerContext } from '@modelcontextprotocol/server';
 
 export interface ProgressReporter {
   report(progress: number, total: number, message: string): Promise<void>;
@@ -20,55 +21,70 @@ export const PROGRESS_HEARTBEAT_INTERVAL_MS = 10_000;
 const reporters = new WeakMap<object, ProgressReporter>();
 const heartbeatOwners = new WeakSet<ProgressReporter>();
 
+type ProgressNotification = Extract<ServerNotification, { method: 'notifications/progress' }>;
+
 export function progressReporter(
   extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ): ProgressReporter {
-  const existing = reporters.get(extra);
+  return reporterFor(extra, extra.signal, extra._meta?.progressToken, (notification) =>
+    extra.sendNotification(notification),
+  );
+}
+
+/** Use the SDK's request-related notification route, including HTTP response-stream association. */
+export function modernProgressReporter(context: ServerContext): ProgressReporter {
+  const request = context.mcpReq;
+  return reporterFor(request, request.signal, request._meta?.progressToken, (notification) =>
+    request.notify(notification),
+  );
+}
+
+function reporterFor(
+  owner: object,
+  signal: AbortSignal,
+  progressToken: string | number | undefined,
+  notify: (notification: ProgressNotification) => Promise<void>,
+): ProgressReporter {
+  const existing = reporters.get(owner);
   if (existing !== undefined) return existing;
   let latest = Number.NEGATIVE_INFINITY;
   let latestTotal = 1;
   let latestMessage = 'Waiting for server execution capacity';
   const reporter: ProgressReporter = {
-    signal: extra.signal,
+    signal,
     async report(progress: number, total: number, message: string): Promise<void> {
-      extra.signal.throwIfAborted();
+      signal.throwIfAborted();
       latestTotal = total;
       latestMessage = message;
       const normalized = Math.max(latest, Math.min(progress, total));
-      const progressToken = extra._meta?.progressToken;
       if (progressToken === undefined) return;
       if (normalized <= latest) return;
       latest = normalized;
-      await extra
-        .sendNotification({
-          method: 'notifications/progress',
-          params: { progressToken, progress: normalized, total, message },
-        })
-        .catch(() => undefined);
+      await notify({
+        method: 'notifications/progress',
+        params: { progressToken, progress: normalized, total, message },
+      }).catch(() => undefined);
     },
     async pulse(message = latestMessage): Promise<void> {
-      extra.signal.throwIfAborted();
-      const progressToken = extra._meta?.progressToken;
+      signal.throwIfAborted();
       if (progressToken === undefined) return;
       // Use the next representably larger value rather than repeating a value, which
       // violates MCP progress ordering. These pulses do not invent completed work.
       latest = Number.isFinite(latest)
         ? latest + Math.max(1, Math.abs(latest)) * Number.EPSILON * 2
         : 0;
-      await extra
-        .sendNotification({
-          method: 'notifications/progress',
-          params: {
-            progressToken,
-            progress: latest,
-            ...(latest <= latestTotal ? { total: latestTotal } : {}),
-            message,
-          },
-        })
-        .catch(() => undefined);
+      await notify({
+        method: 'notifications/progress',
+        params: {
+          progressToken,
+          progress: latest,
+          ...(latest <= latestTotal ? { total: latestTotal } : {}),
+          message,
+        },
+      }).catch(() => undefined);
     },
   };
-  reporters.set(extra, reporter);
+  reporters.set(owner, reporter);
   return reporter;
 }
 

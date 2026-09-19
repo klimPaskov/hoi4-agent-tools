@@ -1,4 +1,5 @@
 import { publicArtifactLink } from '../core/artifacts.js';
+import { helperExpansionValidation } from '../core/helper-expansion.js';
 import { compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { emptyServiceResult } from '../core/result.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
@@ -74,7 +75,15 @@ export function technologyValidation(graph: TechnologyGraphSnapshot) {
           ? `${blocking} blocking technology diagnostics; full evidence is linked`
           : graph.analysisMode === 'focused'
             ? 'Helper projections were deferred for this large workspace; direct evidence is linked'
-            : `${graph.skippedSourceCount} source(s) were skipped; full evidence is linked`,
+            : graph.unresolved.some(({ blockers }) =>
+                  blockers.some(
+                    ({ code }) =>
+                      code === 'TECH_HELPER_DEPTH_BLOCKED' ||
+                      code === 'TECH_HELPER_PROJECTION_LIMIT',
+                  ),
+                )
+              ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
+              : `${graph.skippedSourceCount} source(s) were skipped; full evidence is linked`,
       },
     ],
   };
@@ -90,11 +99,17 @@ export async function inspectTechnologies(
     revision: output.graph.revision,
     graphHash: technologyGraphHash(output.graph),
     counts: technologyCounts(output.graph, output.artifacts.length),
+    ...(output.helperExpansion === undefined ? {} : { helperExpansion: output.helperExpansion }),
   });
-  result.code = output.graph.complete ? 'TECH_INSPECTED' : 'TECH_INSPECTED_PARTIAL';
+  result.code =
+    (output.helperExpansion?.complete ?? output.graph.complete)
+      ? 'TECH_INSPECTED'
+      : 'TECH_INSPECTED_PARTIAL';
   setInlineFilesScanned(result, output.graph.filesScanned);
   result.artifacts = output.artifacts.map(publicArtifactLink);
   result.validation = technologyValidation(output.graph);
+  if (output.helperExpansion !== undefined)
+    result.validation = helperExpansionValidation(output.helperExpansion);
   return result;
 }
 

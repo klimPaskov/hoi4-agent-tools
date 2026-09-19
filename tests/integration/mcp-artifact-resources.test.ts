@@ -328,10 +328,12 @@ describe('MCP artifact resources', () => {
       mkdir(interfaceRoot, { recursive: true }),
       mkdir(artifactRoot, { recursive: true }),
     ]);
+    const nodeCount = 1_600;
+    const retainedMarker = 'synthetic detail '.repeat(12);
     const children = Array.from(
-      { length: 600 },
+      { length: nodeCount },
       (_, index) =>
-        `iconType = { name = "generated_icon_${index}" position = { x = ${index % 30} y = ${Math.floor(index / 30)} } size = { width = 8 height = 8 } tooltip = "GENERATED_TOOLTIP_${index}" unknown_${index} = { retained = yes } }`,
+        `iconType = { name = "generated_icon_${index}" position = { x = ${index % 30} y = ${Math.floor(index / 30)} } size = { width = 8 height = 8 } tooltip = "GENERATED_TOOLTIP_${index}" unknown_${index} = { retained = yes detail = "${retainedMarker}" } }`,
     ).join('\n');
     await writeFile(
       path.join(interfaceRoot, 'large.gui'),
@@ -342,11 +344,13 @@ describe('MCP artifact resources', () => {
       serverStateRoot: path.join(root, 'server-state'),
       storageRoots: [artifactRoot],
       workspaces: [{ id: 'gui-bundle', name: 'GUI bundle', root: mod, artifactRoot }],
+      artifactMaxBytes: 67_108_864,
+      artifactMaxEntries: 1_000,
+      artifactMaxSingleBytes: 1_048_576,
     });
-    const store = new ArtifactStore(10_000_000, 1_000, 65_536);
-    const engine = new CoreEngine(await WorkspaceResolver.create(configuration), {
-      artifacts: store,
-    });
+    // Use the real server policy: fixed-entry workers reconstruct configured limits,
+    // rather than inheriting an in-process test-only ArtifactStore instance.
+    const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
     const server = createMcpServer(engine);
     const client = new Client({ name: 'gui-graph-bundle-test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -365,8 +369,14 @@ describe('MCP artifact resources', () => {
     const output = scanned.structuredContent as {
       status: string;
       artifacts: Array<{ uri: string; name: string }>;
+      data: { complete: boolean; elements: number; skippedSourceCount: number };
     };
     expect(output.status).toBe('ok');
+    expect(output.data).toMatchObject({
+      complete: true,
+      elements: nodeCount + 1,
+      skippedSourceCount: 0,
+    });
     expect(output.artifacts).toHaveLength(1);
     expect(output.artifacts[0]?.name).toMatch(/\.chunks\.json$/u);
     const indexResource = await client.readResource({ uri: output.artifacts[0]!.uri });
@@ -374,8 +384,11 @@ describe('MCP artifact resources', () => {
     const index = JSON.parse(
       indexContent !== undefined && 'text' in indexContent ? indexContent.text : '',
     ) as ChunkedArtifactIndex;
+    expect(index.original.size).toBeGreaterThan(configuration.artifactMaxSingleBytes);
+    expect(index.chunks.length).toBeGreaterThan(1);
     const chunks: Buffer[] = [];
     for (const chunk of index.chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(configuration.artifactMaxSingleBytes);
       const resource = await client.readResource({ uri: chunk.uri });
       const content = resource.contents[0];
       chunks.push(
@@ -385,10 +398,13 @@ describe('MCP artifact resources', () => {
     const graphArtifact = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
       graph: { elements: Array<{ name: string; rawSource: string }> };
     };
-    expect(graphArtifact.graph.elements).toHaveLength(601);
+    expect(graphArtifact.graph.elements).toHaveLength(nodeCount + 1);
     expect(
       graphArtifact.graph.elements.some(
-        ({ name, rawSource }) => name === 'generated_icon_599' && rawSource.includes('unknown_599'),
+        ({ name, rawSource }) =>
+          name === `generated_icon_${nodeCount - 1}` &&
+          rawSource.includes(`unknown_${nodeCount - 1}`) &&
+          rawSource.includes(retainedMarker),
       ),
     ).toBe(true);
   });

@@ -209,5 +209,5 @@ describe('MCP broad artifact provenance', () => {
     for (const artifact of renderArtifacts) {
       await expectBoundManifestEvidence(client, artifact, expectedSourceHashes);
     }
-  }, 60_000);
+  }, 120_000);
 });

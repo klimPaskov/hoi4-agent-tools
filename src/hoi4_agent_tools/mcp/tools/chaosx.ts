@@ -19,7 +19,7 @@ import { PACKAGE_VERSION } from '../../version.js';
 import { resolveServerWorkspaceId, type ServerContext } from '../server/base-tools.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
-import { progressReporter } from '../server/progress.js';
+import { progressReporter, type ProgressReporter } from '../server/progress.js';
 import {
   errorResult,
   setInlineFilesScanned,
@@ -460,223 +460,243 @@ async function resolveGuiRevision(
   };
 }
 
-export function registerChaosxTools(
-  server: McpServer,
-  engine: CoreEngine,
-  context: ServerContext,
-): void {
+export function createChaosxToolOperations(engine: CoreEngine, context: ServerContext) {
   const guiStudio = new ScriptedGuiStudio(engine);
   const guiRevisionCache = new Map<string, CachedGuiRevision>();
   const guiCacheLifetime = new IdleCacheLifetime(() => {
     guiStudio.clearCaches();
     guiRevisionCache.clear();
   });
-  server.registerTool(
-    'chaosx.visual_revision',
-    {
-      title: 'Check ChaosX visual revisions',
-      description:
-        'Private ChaosX cache-coherency endpoint. Computes exact scripted-GUI source revisions without rendering PNG artifacts.',
-      inputSchema: chaosxVisualRevisionInput,
-      outputSchema: chaosxVisualRevisionOutput,
-      annotations: readOnly,
-    },
-    async (input, extra) => {
-      const workspaceId = await resolveServerWorkspaceId(
-        engine,
-        context,
-        input.workspaceId,
-        extra.signal,
-      );
-      const releaseCaches = guiCacheLifetime.begin();
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 2, 'Checking ChaosX scripted-GUI sources');
-        const resolvedGuiRevisions = [];
-        for (const selector of input.guiWindows)
-          resolvedGuiRevisions.push(
-            await resolveGuiRevision(
-              engine,
-              context,
-              guiStudio,
-              guiRevisionCache,
-              workspaceId,
-              selector,
-              progress.signal,
-            ),
-          );
-        const filesScanned = new Set<string>(
-          resolvedGuiRevisions.flatMap(({ filesScanned }) => filesScanned),
+  const visualCall = async (
+    input: z.infer<typeof chaosxVisualRevisionInput>,
+    progress: ProgressReporter,
+  ) => {
+    const workspaceId = await resolveServerWorkspaceId(
+      engine,
+      context,
+      input.workspaceId,
+      progress.signal,
+    );
+    const releaseCaches = guiCacheLifetime.begin();
+    try {
+      await progress.report(0, 2, 'Checking ChaosX scripted-GUI sources');
+      const resolvedGuiRevisions = [];
+      for (const selector of input.guiWindows)
+        resolvedGuiRevisions.push(
+          await resolveGuiRevision(
+            engine,
+            context,
+            guiStudio,
+            guiRevisionCache,
+            workspaceId,
+            selector,
+            progress.signal,
+          ),
         );
-        const guiRevisions = resolvedGuiRevisions.map(({ windowName, guiId, revision }) => ({
+      const filesScanned = new Set<string>(
+        resolvedGuiRevisions.flatMap(({ filesScanned }) => filesScanned),
+      );
+      const guiRevisions = resolvedGuiRevisions.map(({ windowName, guiId, revision }) => ({
+        windowName,
+        guiId,
+        revision,
+      }));
+      const workspaceRevision = hashCanonical(
+        resolvedGuiRevisions.map(({ windowName, workspaceRevision: revision }) => ({
           windowName,
-          guiId,
           revision,
-        }));
-        const workspaceRevision = hashCanonical(
-          resolvedGuiRevisions.map(({ windowName, workspaceRevision: revision }) => ({
-            windowName,
-            revision,
-          })),
-        );
-        const result = emptyServiceResult(workspaceId, {
-          workspaceRevision,
-          guiRevisions,
-          dependencyFileCount: filesScanned.size,
-        });
-        result.code = 'CHAOSX_VISUAL_REVISION_CHECKED';
-        setInlineFilesScanned(result, [...filesScanned].sort(compareCodeUnits));
-        await progress.report(2, 2, 'ChaosX scripted-GUI revisions complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
-      } finally {
-        releaseCaches();
-      }
-    },
-  );
-
-  server.registerTool(
-    'chaosx.focus_country_assets',
-    {
-      title: 'Render ChaosX focus country assets',
-      description:
-        'Private ChaosX Discord integration endpoint. Returns country flags and leader portraits to accompany a focus-tree raster; it is not intended for coding-agent workflows.',
-      inputSchema: chaosxCountryAssetsInput,
-      outputSchema: chaosxCountryAssetsOutput,
-      annotations: artifactProducing,
-    },
-    async (input, extra) => {
-      const workspaceId = await resolveServerWorkspaceId(
-        engine,
-        context,
-        input.workspaceId,
-        extra.signal,
+        })),
       );
-      try {
-        const progress = progressReporter(extra);
-        await progress.report(0, 3, 'Resolving ChaosX country assets');
-        const discoveryWorkspace = engine.resolver.get(workspaceId, context.principal);
-        const snapshot = await engine.scan(
-          workspaceId,
-          { patterns: countryAssetDiscoveryPatterns(discoveryWorkspace) },
-          context.principal,
-          progress.signal,
+      const result = emptyServiceResult(workspaceId, {
+        workspaceRevision,
+        guiRevisions,
+        dependencyFileCount: filesScanned.size,
+      });
+      result.code = 'CHAOSX_VISUAL_REVISION_CHECKED';
+      setInlineFilesScanned(result, [...filesScanned].sort(compareCodeUnits));
+      await progress.report(2, 2, 'ChaosX scripted-GUI revisions complete');
+      return toolResult(result);
+    } catch (error) {
+      return errorResult(error, workspaceId);
+    } finally {
+      releaseCaches();
+    }
+  };
+
+  const countryCall = async (
+    input: z.infer<typeof chaosxCountryAssetsInput>,
+    progress: ProgressReporter,
+  ) => {
+    const workspaceId = await resolveServerWorkspaceId(
+      engine,
+      context,
+      input.workspaceId,
+      progress.signal,
+    );
+    try {
+      await progress.report(0, 3, 'Resolving ChaosX country assets');
+      const discoveryWorkspace = engine.resolver.get(workspaceId, context.principal);
+      const snapshot = await engine.scan(
+        workspaceId,
+        { patterns: countryAssetDiscoveryPatterns(discoveryWorkspace) },
+        context.principal,
+        progress.signal,
+      );
+      const tags = [...new Set(input.countryTags)];
+      const { selections, catalog } = await selectCountryAssets(
+        engine,
+        snapshot,
+        workspaceId,
+        tags,
+        input.eventId,
+        context,
+        progress.signal,
+      );
+      await progress.report(1, 3, 'Rasterizing ChaosX country assets');
+      const writes: ArtifactWrite[] = [];
+      const countries: Array<{
+        tag: string;
+        flagArtifactName?: string;
+        leaderPortraitArtifactName?: string;
+        leaderSprite?: string;
+      }> = [];
+      const filesScanned = new Set<string>();
+
+      for (const selection of selections) {
+        const country: (typeof countries)[number] = { tag: selection.tag };
+        const sourcePaths = [selection.discoverySourcePath, selection.spriteSourcePath].filter(
+          (value): value is string => value !== undefined,
         );
-        const tags = [...new Set(input.countryTags)];
-        const { selections, catalog } = await selectCountryAssets(
-          engine,
-          snapshot,
-          workspaceId,
-          tags,
-          input.eventId,
-          context,
-          progress.signal,
-        );
-        await progress.report(1, 3, 'Rasterizing ChaosX country assets');
-        const writes: ArtifactWrite[] = [];
-        const countries: Array<{
-          tag: string;
-          flagArtifactName?: string;
-          leaderPortraitArtifactName?: string;
-          leaderSprite?: string;
-        }> = [];
-        const filesScanned = new Set<string>();
+        for (const sourcePath of sourcePaths) filesScanned.add(sourcePath);
 
-        for (const selection of selections) {
-          const country: (typeof countries)[number] = { tag: selection.tag };
-          const sourcePaths = [selection.discoverySourcePath, selection.spriteSourcePath].filter(
-            (value): value is string => value !== undefined,
-          );
-          for (const sourcePath of sourcePaths) filesScanned.add(sourcePath);
-
-          if (selection.flagPath !== undefined) {
-            const png = await rasterPng(catalog, selection.flagPath);
-            const source = catalog.resolveFile(selection.flagPath);
-            if (png !== undefined && source !== undefined) {
-              filesScanned.add(source.displayPath);
-              const name = `chaosx-${selection.tag}-flag.png`;
-              country.flagArtifactName = name;
-              writes.push({
-                name,
-                mimeType: 'image/png',
-                content: png,
-                provenance: {
-                  kind: 'chaosx-country-flag',
-                  toolVersion: PACKAGE_VERSION,
-                  schemaVersion: 'chaosx-country-assets.v1',
-                  sourceHashes: { [source.displayPath]: source.sha256 },
-                  metadata: {
-                    tag: selection.tag,
-                    eventId: input.eventId ?? null,
-                    treeId: input.treeId ?? null,
-                  },
+        if (selection.flagPath !== undefined) {
+          const png = await rasterPng(catalog, selection.flagPath);
+          const source = catalog.resolveFile(selection.flagPath);
+          if (png !== undefined && source !== undefined) {
+            filesScanned.add(source.displayPath);
+            const name = `chaosx-${selection.tag}-flag.png`;
+            country.flagArtifactName = name;
+            writes.push({
+              name,
+              mimeType: 'image/png',
+              content: png,
+              provenance: {
+                kind: 'chaosx-country-flag',
+                toolVersion: PACKAGE_VERSION,
+                schemaVersion: 'chaosx-country-assets.v1',
+                sourceHashes: { [source.displayPath]: source.sha256 },
+                metadata: {
+                  tag: selection.tag,
+                  eventId: input.eventId ?? null,
+                  treeId: input.treeId ?? null,
                 },
-                description: `ChaosX country flag for ${selection.tag}`,
-              });
-            }
+              },
+              description: `ChaosX country flag for ${selection.tag}`,
+            });
           }
-
-          if (selection.leaderTexturePath !== undefined) {
-            const png = await rasterPng(catalog, selection.leaderTexturePath);
-            const source = catalog.resolveFile(selection.leaderTexturePath);
-            if (png !== undefined && source !== undefined) {
-              filesScanned.add(source.displayPath);
-              const name = `chaosx-${selection.tag}-leader.png`;
-              country.leaderPortraitArtifactName = name;
-              const leaderSprite = selection.leaderSprite;
-              if (leaderSprite !== undefined) country.leaderSprite = leaderSprite;
-              const sourceHashes: Record<string, string> = { [source.displayPath]: source.sha256 };
-              for (const sourcePath of sourcePaths) {
-                const file = snapshot.files.find(({ displayPath }) => displayPath === sourcePath);
-                if (file !== undefined) sourceHashes[sourcePath] = file.sha256;
-              }
-              writes.push({
-                name,
-                mimeType: 'image/png',
-                content: png,
-                provenance: {
-                  kind: 'chaosx-leader-portrait',
-                  toolVersion: PACKAGE_VERSION,
-                  schemaVersion: 'chaosx-country-assets.v1',
-                  sourceHashes,
-                  metadata: {
-                    tag: selection.tag,
-                    leaderSprite: selection.leaderSprite ?? null,
-                    eventId: input.eventId ?? null,
-                    treeId: input.treeId ?? null,
-                  },
-                },
-                description: `ChaosX leader portrait for ${selection.tag}`,
-              });
-            }
-          }
-          countries.push(country);
         }
 
-        const workspace = engine.resolver.get(workspaceId, context.principal);
-        const artifacts =
-          writes.length === 0
-            ? []
-            : await engine.artifacts.withAtomicChunkedWrites(
-                workspace,
-                writes,
-                (stored) => Promise.resolve([...stored]),
-                progress.signal,
-              );
-        const result = emptyServiceResult(workspaceId, {
-          revision: snapshot.revision,
-          countries,
-          artifactCount: artifacts.length,
-        });
-        result.code = 'CHAOSX_COUNTRY_ASSETS_RENDERED';
-        setInlineFilesScanned(result, [...filesScanned].sort(compareCodeUnits));
-        result.artifacts = artifacts.map(publicArtifactLink);
-        await progress.report(3, 3, 'ChaosX country assets complete');
-        return toolResult(result);
-      } catch (error) {
-        return errorResult(error, workspaceId);
+        if (selection.leaderTexturePath !== undefined) {
+          const png = await rasterPng(catalog, selection.leaderTexturePath);
+          const source = catalog.resolveFile(selection.leaderTexturePath);
+          if (png !== undefined && source !== undefined) {
+            filesScanned.add(source.displayPath);
+            const name = `chaosx-${selection.tag}-leader.png`;
+            country.leaderPortraitArtifactName = name;
+            const leaderSprite = selection.leaderSprite;
+            if (leaderSprite !== undefined) country.leaderSprite = leaderSprite;
+            const sourceHashes: Record<string, string> = { [source.displayPath]: source.sha256 };
+            for (const sourcePath of sourcePaths) {
+              const file = snapshot.files.find(({ displayPath }) => displayPath === sourcePath);
+              if (file !== undefined) sourceHashes[sourcePath] = file.sha256;
+            }
+            writes.push({
+              name,
+              mimeType: 'image/png',
+              content: png,
+              provenance: {
+                kind: 'chaosx-leader-portrait',
+                toolVersion: PACKAGE_VERSION,
+                schemaVersion: 'chaosx-country-assets.v1',
+                sourceHashes,
+                metadata: {
+                  tag: selection.tag,
+                  leaderSprite: selection.leaderSprite ?? null,
+                  eventId: input.eventId ?? null,
+                  treeId: input.treeId ?? null,
+                },
+              },
+              description: `ChaosX leader portrait for ${selection.tag}`,
+            });
+          }
+        }
+        countries.push(country);
       }
+
+      const workspace = engine.resolver.get(workspaceId, context.principal);
+      const artifacts =
+        writes.length === 0
+          ? []
+          : await engine.artifacts.withAtomicChunkedWrites(
+              workspace,
+              writes,
+              (stored) => Promise.resolve([...stored]),
+              progress.signal,
+            );
+      const result = emptyServiceResult(workspaceId, {
+        revision: snapshot.revision,
+        countries,
+        artifactCount: artifacts.length,
+      });
+      result.code = 'CHAOSX_COUNTRY_ASSETS_RENDERED';
+      setInlineFilesScanned(result, [...filesScanned].sort(compareCodeUnits));
+      result.artifacts = artifacts.map(publicArtifactLink);
+      await progress.report(3, 3, 'ChaosX country assets complete');
+      return toolResult(result);
+    } catch (error) {
+      return errorResult(error, workspaceId);
+    }
+  };
+  return {
+    visual: {
+      definition: {
+        name: 'chaosx.visual_revision',
+        title: 'Check ChaosX visual revisions',
+        description:
+          'Private ChaosX cache-coherency endpoint. Computes exact scripted-GUI source revisions without rendering PNG artifacts.',
+        inputSchema: chaosxVisualRevisionInput,
+        outputSchema: chaosxVisualRevisionOutput,
+        annotations: readOnly,
+      },
+      call: visualCall,
     },
+    country: {
+      definition: {
+        name: 'chaosx.focus_country_assets',
+        title: 'Render ChaosX focus country assets',
+        description:
+          'Private ChaosX Discord integration endpoint. Returns country flags and leader portraits to accompany a focus-tree raster; it is not intended for coding-agent workflows.',
+        inputSchema: chaosxCountryAssetsInput,
+        outputSchema: chaosxCountryAssetsOutput,
+        annotations: artifactProducing,
+      },
+      call: countryCall,
+    },
+  } as const;
+}
+
+export function registerChaosxTools(
+  server: McpServer,
+  engine: CoreEngine,
+  context: ServerContext,
+): void {
+  const operations = createChaosxToolOperations(engine, context);
+  const { name: visualName, ...visualDefinition } = operations.visual.definition;
+  const { name: countryName, ...countryDefinition } = operations.country.definition;
+  server.registerTool(visualName, visualDefinition, (input, extra) =>
+    operations.visual.call(input, progressReporter(extra)),
+  );
+  server.registerTool(countryName, countryDefinition, (input, extra) =>
+    operations.country.call(input, progressReporter(extra)),
   );
 }

@@ -1,4 +1,5 @@
 import { compareCodeUnits, deterministicId } from '../core/canonical.js';
+import { semanticSourceIdentity } from '../core/semantic-dependencies.js';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import type { ScannedFile } from '../core/scanner.js';
 import {
@@ -405,8 +406,7 @@ function issueFromDiagnostic(diagnostic: Diagnostic): EventIssue {
 export function eventSemanticFragmentCacheKey(file: ScannedFile, catalogFingerprint = ''): string {
   return deterministicId('event_fragment', {
     parser: 'clausewitz-cst.v1',
-    sourcePath: file.displayPath,
-    sourceHash: file.sha256,
+    source: semanticSourceIdentity(file),
     catalogFingerprint,
   });
 }
@@ -772,7 +772,11 @@ class FragmentAnalyzer {
   private analyzeHelpers(): void {
     for (const assignment of assignments(this.document.root)) {
       if (assignment.value.type !== 'block') continue;
-      if (this.#knownHelpers.size > 0 && !this.#knownHelpers.has(assignment.key.value)) continue;
+      if (
+        this.context.knownHelperIds !== undefined &&
+        !this.#knownHelpers.has(assignment.key.value)
+      )
+        continue;
       const name = assignment.key.value;
       if (
         this.context.activeHelperPaths !== undefined &&
@@ -1254,7 +1258,7 @@ class FragmentAnalyzer {
       this.recordDynamicEvent(id, node, context.ownerId, context.semanticPath);
       return;
     }
-    const known = this.#knownEvents.size === 0 || this.#knownEvents.has(id);
+    const known = this.context.knownEventIds === undefined || this.#knownEvents.has(id);
     const target = known
       ? this.eventNodeId(id)
       : this.unresolvedNode(

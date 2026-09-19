@@ -8,6 +8,18 @@ import { sortDiagnostics, type Diagnostic, type SourceLocation } from '../core/d
 import type { ScanSnapshot } from '../core/engine.js';
 import type { SymbolIndex } from '../core/index.js';
 import { ServiceError } from '../core/result.js';
+import {
+  beginSemanticAnalysis,
+  semanticFragment,
+  SemanticCatalog,
+} from '../core/semantic-dependencies.js';
+import {
+  runDependencyAnalysis,
+  runDependencyAnalysisAsync,
+  type DependencyAnalysis,
+  type DependencyWalk,
+  type DependencyWalkInput,
+} from '../core/dependency-walk.js';
 import type { ScannedFile } from '../core/scanner.js';
 import type { RootKind } from '../core/workspace.js';
 import {
@@ -529,11 +541,35 @@ function stronglyConnectedComponents(
   return components.sort((left, right) => compareCodeUnits(left[0] ?? '', right[0] ?? ''));
 }
 
+function technologyHelperWalk(
+  calls: readonly TechnologyHelperCall[],
+  sourceRevision: string,
+): DependencyWalkInput {
+  return {
+    domain: 'technology-helper-references',
+    sourceRevision,
+    edges: calls.map(({ id, sourceKind, sourceId, helperId }) => ({
+      id,
+      from: `${sourceKind}:${sourceId}`,
+      to: `scripted_effect:${helperId}`,
+    })),
+    roots: calls.filter(({ sourceKind }) => sourceKind !== 'scripted_effect').map(({ id }) => id),
+    branches: [...new Set(calls.map(({ helperId }) => `scripted_effect:${helperId}`))].sort(
+      compareCodeUnits,
+    ),
+    maximumDepth: MAX_HELPER_DEPTH,
+    maximumSteps: 10_000_000,
+    visitPolicy: 'path',
+    reverseEdges: false,
+  };
+}
+
 function expandHelperReferences(
   references: readonly TechnologyExternalReference[],
   calls: readonly TechnologyHelperCall[],
   unresolved: TechnologyUnresolvedAnalysis[],
   analysisMode: 'full' | 'focused',
+  walk: DependencyWalk | undefined,
   signal?: AbortSignal,
 ): TechnologyExternalReference[] {
   const direct = references.filter(({ sourceKind }) => sourceKind === 'scripted_effect');
@@ -565,82 +601,60 @@ function expandHelperReferences(
     group.push(reference);
     refsByHelper.set(reference.sourceId, group);
   }
-  const callsBySource = new Map<string, TechnologyHelperCall[]>();
-  for (const call of calls) {
-    const key = `${call.sourceKind}:${call.sourceId}`;
-    const group = callsBySource.get(key) ?? [];
-    group.push(call);
-    callsBySource.set(key, group);
-  }
   const projected: TechnologyExternalReference[] = [...publicReferences, ...direct];
   let projectionCount = 0;
-  for (const rootCall of calls.filter(({ sourceKind }) => sourceKind !== 'scripted_effect')) {
-    const stack: Array<{
-      helperId: string;
-      helperStack: string[];
-      confidence: TechnologyConfidence;
-    }> = [
-      {
-        helperId: rootCall.helperId,
-        helperStack: [rootCall.helperId],
-        confidence: rootCall.confidence,
-      },
-    ];
-    const visited = new Set<string>();
-    while (stack.length > 0) {
-      signal?.throwIfAborted();
-      const current = stack.pop()!;
-      const visitKey = current.helperStack.join('\0');
-      if (visited.has(visitKey)) continue;
-      visited.add(visitKey);
-      if (current.helperStack.length > MAX_HELPER_DEPTH) {
-        unresolved.push({
-          id: deterministicId('tech-unresolved', { rootCall, helperStack: current.helperStack }),
-          kind: 'unsupported_construct',
-          expression: current.helperStack.join(' -> '),
-          ownerId: rootCall.sourceId,
-          location: rootCall.location,
-          confidence: 'unresolved',
-          blockers: [
-            {
-              code: 'TECH_HELPER_DEPTH_BLOCKED',
-              message: `Scripted-effect expansion exceeds depth ${MAX_HELPER_DEPTH}`,
-              location: rootCall.location,
-            },
-          ],
-        });
-        continue;
-      }
-      for (const reference of refsByHelper.get(current.helperId) ?? []) {
-        projectionCount += 1;
-        if (projectionCount > MAX_HELPER_PROJECTIONS) break;
-        projected.push({
-          ...reference,
-          id: deterministicId('tech-external-projection', {
-            root: rootCall.id,
-            reference: reference.id,
-            helperStack: current.helperStack,
-          }),
-          sourceKind: rootCall.sourceKind,
-          sourceId: rootCall.sourceId,
-          helperStack: [...current.helperStack],
-          confidence: worseConfidence(current.confidence, reference.confidence),
-          metadata: {
-            ...reference.metadata,
-            projectedFromScriptedEffect: reference.sourceId,
-            callLocation: canonicalJson(rootCall.location),
+  if (walk === undefined)
+    throw new Error('Full technology helper analysis requires a dependency traversal');
+  const roots = calls.filter(({ sourceKind }) => sourceKind !== 'scripted_effect');
+  const callById = new Map(calls.map((call) => [call.id, call]));
+  for (const record of walk.state.records) {
+    signal?.throwIfAborted();
+    if (record.kind !== 'visit' && record.kind !== 'depth') continue;
+    const rootCall = roots[record.root]!;
+    const path = walk.path(record.path).map(({ id }) => callById.get(id)!);
+    const helperStack = path.map(({ helperId }) => helperId);
+    if (record.kind === 'depth') {
+      unresolved.push({
+        id: deterministicId('tech-unresolved', { rootCall, helperStack }),
+        kind: 'unsupported_construct',
+        expression: helperStack.join(' -> '),
+        ownerId: rootCall.sourceId,
+        location: rootCall.location,
+        confidence: 'unresolved',
+        blockers: [
+          {
+            code: 'TECH_HELPER_DEPTH_BLOCKED',
+            message: `Scripted-effect expansion exceeds depth ${MAX_HELPER_DEPTH}`,
+            location: rootCall.location,
           },
-        });
-      }
+        ],
+      });
+      continue;
+    }
+    const confidence = path.reduce(
+      (value, call) => worseConfidence(value, call.confidence),
+      rootCall.confidence,
+    );
+    for (const reference of refsByHelper.get(path.at(-1)!.helperId) ?? []) {
+      projectionCount++;
       if (projectionCount > MAX_HELPER_PROJECTIONS) break;
-      for (const call of callsBySource.get(`scripted_effect:${current.helperId}`) ?? []) {
-        if (current.helperStack.includes(call.helperId)) continue;
-        stack.push({
-          helperId: call.helperId,
-          helperStack: [...current.helperStack, call.helperId],
-          confidence: worseConfidence(current.confidence, call.confidence),
-        });
-      }
+      projected.push({
+        ...reference,
+        id: deterministicId('tech-external-projection', {
+          root: rootCall.id,
+          reference: reference.id,
+          helperStack,
+        }),
+        sourceKind: rootCall.sourceKind,
+        sourceId: rootCall.sourceId,
+        helperStack,
+        confidence: worseConfidence(confidence, reference.confidence),
+        metadata: {
+          ...reference.metadata,
+          projectedFromScriptedEffect: reference.sourceId,
+          callLocation: canonicalJson(rootCall.location),
+        },
+      });
     }
     if (projectionCount > MAX_HELPER_PROJECTIONS) break;
   }
@@ -1358,14 +1372,20 @@ function fragmentsFor(
   };
   const fingerprint = helperCatalogFingerprint(snapshot);
   const fragments: TechnologySourceFragment[] = [];
+  const dependencies = beginSemanticAnalysis(
+    options.cache,
+    snapshot,
+    'technology',
+    options.workspaceIdentity,
+  );
+  const reads = new SemanticCatalog();
+  context.helperIds = reads.bind('helpers', 'scripted_effect', helperIds);
   for (const file of technologySourceFiles(snapshot.files)) {
     options.signal?.throwIfAborted();
     const key = technologySourceFragmentCacheKey(file, fingerprint);
-    let fragment = options.cache?.get(key);
-    if (fragment === undefined) {
-      fragment = analyzeTechnologySource(file, context);
-      options.cache?.set(key, fragment, file.bytes.length);
-    }
+    const fragment = semanticFragment(dependencies, options.cache, file, key, reads, () =>
+      analyzeTechnologySource(file, context),
+    );
     fragments.push(fragment);
   }
   return fragments;
@@ -1387,6 +1407,20 @@ export function buildTechnologyGraph(
   snapshot: ScanSnapshot,
   options: TechnologyGraphBuildOptions,
 ): TechnologyGraphSnapshot {
+  return runDependencyAnalysis(technologyGraphAnalysis(snapshot, options), options.signal);
+}
+
+export function buildTechnologyGraphAsync(
+  snapshot: ScanSnapshot,
+  options: TechnologyGraphBuildOptions,
+): Promise<TechnologyGraphSnapshot> {
+  return runDependencyAnalysisAsync(technologyGraphAnalysis(snapshot, options), options.signal);
+}
+
+function* technologyGraphAnalysis(
+  snapshot: ScanSnapshot,
+  options: TechnologyGraphBuildOptions,
+): DependencyAnalysis<TechnologyGraphSnapshot> {
   options.signal?.throwIfAborted();
   const fragments = fragmentsFor(snapshot, options);
   const assets = assetMap(options.assetFiles ?? []);
@@ -1450,11 +1484,16 @@ export function buildTechnologyGraph(
   );
   const unresolved = fragments.flatMap(({ unresolved }) => unresolved);
   const helperCalls = fragments.flatMap(({ helperCalls }) => helperCalls);
+  const walk =
+    options.analysisMode === 'focused'
+      ? undefined
+      : yield technologyHelperWalk(helperCalls, snapshot.revision);
   const externalReferences = expandHelperReferences(
     fragments.flatMap(({ externalReferences }) => externalReferences),
     helperCalls,
     unresolved,
     options.analysisMode ?? 'full',
+    walk,
     options.signal,
   );
   const issues = diagnose(
@@ -1504,6 +1543,12 @@ export function buildTechnologyGraph(
     complete:
       snapshot.complete &&
       unresolved.every(({ kind }) => kind !== 'partial_source') &&
+      !unresolved.some(({ blockers }) =>
+        blockers.some(
+          ({ code }) =>
+            code === 'TECH_HELPER_DEPTH_BLOCKED' || code === 'TECH_HELPER_PROJECTION_LIMIT',
+        ),
+      ) &&
       !(options.analysisMode === 'focused' && helperCalls.length > 0),
     analysisBoundary: {
       staticAnalysis: true,

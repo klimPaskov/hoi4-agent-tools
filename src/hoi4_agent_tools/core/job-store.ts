@@ -72,6 +72,10 @@ const recordBaseSchema = z
     status: statusSchema,
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
+    taskVisibility: z
+      .object({ renewedAt: z.iso.datetime(), expiresAt: z.iso.datetime().nullable() })
+      .strict()
+      .optional(),
     cancelRequested: z.boolean(),
     owner: ownerSchema.optional(),
     progress: z
@@ -90,6 +94,8 @@ const recordBaseSchema = z
         resourceUri: z.string().min(1).optional(),
         cursor: z.string().min(1),
         resultHash: digest.optional(),
+        stateHash: digest.optional(),
+        resources: z.array(z.string().min(1)).max(257).optional(),
       })
       .strict()
       .optional(),
@@ -124,6 +130,19 @@ const recordSchema = recordBaseSchema.superRefine((value, context) => {
   if (value.progress?.total !== undefined && value.progress.completed > value.progress.total)
     context.addIssue({ code: 'custom', message: 'Completed progress exceeds total work' });
   if (
+    value.taskVisibility !== undefined &&
+    (!value.request.mutation ||
+      value.request.protocolTask === undefined ||
+      !['completed', 'failed', 'cancelled'].includes(value.status) ||
+      Date.parse(value.taskVisibility.renewedAt) < Date.parse(value.updatedAt) ||
+      (value.taskVisibility.expiresAt !== null &&
+        Date.parse(value.taskVisibility.expiresAt) <= Date.parse(value.taskVisibility.renewedAt)))
+  )
+    context.addIssue({
+      code: 'custom',
+      message: 'Renewed task visibility requires a terminal mutation receipt and a valid lifetime',
+    });
+  if (
     value.result !== undefined &&
     value.status !== 'completed' &&
     (value.request.mutation ||
@@ -154,6 +173,31 @@ export type JobScope = z.infer<typeof scopeSchema>;
 export type JobOwner = z.infer<typeof ownerSchema>;
 export type JobRequest = z.infer<typeof requestSchema>;
 export type JobRecord = z.infer<typeof recordSchema>;
+
+/** Only authenticated read-result/frontier commitments authorize automatic worker recovery. */
+export function readCheckpointIdentity(record: JobRecord): string | undefined {
+  if (
+    record.request.mutation ||
+    record.cancelRequested ||
+    ['completed', 'failed', 'cancelled'].includes(record.status)
+  )
+    return undefined;
+  const checkpoint = record.checkpoint;
+  if (
+    checkpoint?.cursor === 'result-ready' &&
+    record.result !== undefined &&
+    checkpoint.resultHash === hashCanonical(record.result)
+  )
+    return `result:${checkpoint.resultHash}`;
+  if (
+    checkpoint !== undefined &&
+    /^analysis:[a-f0-9]{64}$/u.test(checkpoint.cursor) &&
+    checkpoint.stateHash !== undefined &&
+    checkpoint.resourceUri !== undefined
+  )
+    return `${checkpoint.cursor}:${checkpoint.sourceRevision}:${checkpoint.stateHash}`;
+  return undefined;
+}
 export type JobUpdate = Partial<
   Pick<
     JobRecord,
@@ -202,6 +246,10 @@ const transitions: Record<JobRecord['status'], ReadonlySet<JobRecord['status']>>
 };
 
 export function jobRetentionExpired(record: JobRecord, now = Date.now()): boolean {
+  if (record.taskVisibility !== undefined)
+    return (
+      record.taskVisibility.expiresAt !== null && Date.parse(record.taskVisibility.expiresAt) <= now
+    );
   const ttl = record.request.protocolTask?.ttl;
   return (
     ttl !== undefined &&
@@ -209,6 +257,26 @@ export function jobRetentionExpired(record: JobRecord, now = Date.now()): boolea
     ['completed', 'cancelled', 'failed'].includes(record.status) &&
     Date.parse(record.updatedAt) + ttl <= now
   );
+}
+
+/** Wire task timing is distinct from the immutable execution timestamps after an exact retry. */
+export function jobTaskTiming(record: JobRecord): { lastUpdatedAt: string; ttl: number | null } {
+  const visibility = record.taskVisibility;
+  const ttl = record.request.protocolTask?.ttl ?? null;
+  const completedLifetime = ['completed', 'failed', 'cancelled'].includes(record.status)
+    ? Math.max(0, Date.parse(record.updatedAt) - Date.parse(record.createdAt))
+    : 0;
+  return {
+    lastUpdatedAt: visibility?.renewedAt ?? record.updatedAt,
+    ttl:
+      visibility === undefined
+        ? ttl === null
+          ? null
+          : ttl + completedLifetime
+        : visibility.expiresAt === null
+          ? null
+          : Date.parse(visibility.expiresAt) - Date.parse(record.createdAt),
+  };
 }
 
 async function assertUnlinked(file: string): Promise<void> {
@@ -287,15 +355,57 @@ export class JobStore {
     const scope = scopeSchema.parse(scopeInput);
     const request = requestSchema.parse(requestInput);
     const requestHash = jobRequestHash(scope, request, PACKAGE_VERSION);
-    const id = `job_${hashCanonical({ scope, key: request.requestKey ?? secureId('request') })}`;
+    // A caller-chosen retry key is not entropy. Keep the namespace stable across restarts
+    // while separating public job IDs from journal authentication and other HMAC uses.
+    const id = `job_${this.state.authenticateJournal({
+      kind: 'job-id.v2',
+      scope,
+      key: request.requestKey ?? secureId('request'),
+    })}`;
+    const legacyId =
+      request.requestKey === undefined
+        ? undefined
+        : `job_${hashCanonical({ scope, key: request.requestKey })}`;
     return this.lock.run(signal, async () => {
-      const existing = await this.read(scope, id);
+      const current = await this.read(scope, id);
+      // Never lose an authenticated retry receipt merely because its identifier predates
+      // secret-derived IDs. Read both under the publication lock and fail closed on damage.
+      const legacy = legacyId === undefined ? undefined : await this.read(scope, legacyId);
+      if (current !== undefined && legacy !== undefined)
+        throw new ServiceError(
+          'JOB_REQUEST_KEY_AMBIGUOUS',
+          'The request key has multiple retained execution records; neither can be replayed',
+        );
+      const existing = current ?? legacy;
       if (existing !== undefined) {
         if (existing.requestHash !== requestHash)
           throw new ServiceError(
             'JOB_REQUEST_KEY_CONFLICT',
             'The request key is already bound to different inputs or a different tool version',
           );
+        const now = Date.now();
+        if (
+          request.protocolTask !== undefined &&
+          existing.request.mutation &&
+          jobRetentionExpired(existing, now)
+        ) {
+          // Renew only the protocol view on an exact authorized retry. Execution identity,
+          // timestamps, result, transaction, and write recipe stay bound to the original work.
+          const renewed = recordSchema.parse({
+            ...existing,
+            revision: existing.revision + 1,
+            taskVisibility: {
+              renewedAt: new Date(now).toISOString(),
+              expiresAt:
+                request.protocolTask.ttl === null
+                  ? null
+                  : new Date(now + request.protocolTask.ttl).toISOString(),
+            },
+          });
+          signal.throwIfAborted();
+          await this.write(renewed);
+          return { record: renewed, created: false };
+        }
         return { record: existing, created: false };
       }
       const now = new Date().toISOString();
@@ -537,6 +647,61 @@ export class JobStore {
     });
   }
 
+  /** Operator-internal eviction guard; never returns another principal's job data. */
+  async checkpointResources(
+    workspace: Pick<JobScope, 'workspaceId' | 'workspaceIdentity' | 'rootFingerprint'>,
+    signal?: AbortSignal,
+  ): Promise<ReadonlySet<string>> {
+    const resources = new Set<string>();
+    let inspected = 0;
+    const spend = () => {
+      signal?.throwIfAborted();
+      if (++inspected > 100_000 || resources.size > 100_000)
+        throw new ServiceError(
+          'JOB_RETENTION_LIMIT',
+          'Checkpoint retention enumeration exceeded its fixed work ceiling',
+        );
+    };
+    await assertUnlinked(this.root);
+    for await (const directory of await opendir(this.root)) {
+      spend();
+      if (directory.name === 'request-capacity') continue;
+      if (
+        directory.isSymbolicLink() ||
+        !directory.isDirectory() ||
+        !digest.safeParse(directory.name).success
+      )
+        throw new ServiceError('JOB_RECORD_UNSAFE', 'Job storage contains an invalid scope entry');
+      const scopeRoot = await containedGeneratedPath(this.root, directory.name);
+      for await (const entry of await opendir(scopeRoot)) {
+        spend();
+        if (entry.isFile() && entry.name.startsWith('.') && entry.name.endsWith('.tmp')) continue;
+        const id = entry.name.replace(/\.json$/u, '');
+        if (
+          !entry.name.endsWith('.json') ||
+          !entry.isFile() ||
+          entry.isSymbolicLink() ||
+          !jobId.safeParse(id).success
+        )
+          throw new ServiceError('JOB_RECORD_UNSAFE', 'Job scope contains an invalid record entry');
+        const file = await containedGeneratedPath(scopeRoot, entry.name);
+        const record = await this.readEnvelope(file, id, directory.name);
+        if (
+          record?.scope.workspaceId !== workspace.workspaceId ||
+          record.scope.workspaceIdentity !== workspace.workspaceIdentity ||
+          record.scope.rootFingerprint !== workspace.rootFingerprint ||
+          ['completed', 'cancelled', 'failed'].includes(record.status)
+        )
+          continue;
+        if (record.checkpoint?.resourceUri !== undefined)
+          resources.add(record.checkpoint.resourceUri);
+        for (const uri of record.checkpoint?.resources ?? []) resources.add(uri);
+      }
+    }
+    spend();
+    return resources;
+  }
+
   private async recordPath(scope: JobScope, id: string): Promise<string> {
     await assertUnlinked(this.root);
     await assertUnlinked(path.join(this.root, hashCanonical(scope)));
@@ -546,6 +711,14 @@ export class JobStore {
 
   private async read(scope: JobScope, id: string): Promise<JobRecord | undefined> {
     const file = await this.recordPath(scope, id);
+    return this.readEnvelope(file, id, hashCanonical(scope));
+  }
+
+  private async readEnvelope(
+    file: string,
+    id: string,
+    scopeHash: string,
+  ): Promise<JobRecord | undefined> {
     let handle;
     try {
       handle = await open(file, 'r');
@@ -559,7 +732,7 @@ export class JobStore {
       if (
         !parsed.success ||
         parsed.data.record.id !== id ||
-        canonicalJson(parsed.data.record.scope) !== canonicalJson(scope) ||
+        hashCanonical(parsed.data.record.scope) !== scopeHash ||
         !this.state.verifyJournal(
           { kind: 'job-record.v1', record: parsed.data.record },
           parsed.data.authenticationTag,
