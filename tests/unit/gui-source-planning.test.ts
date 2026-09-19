@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ArtifactStore, type StoredArtifact } from '../../src/hoi4_agent_tools/core/artifacts.js';
 import { hashCanonical, sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceScanner } from '../../src/hoi4_agent_tools/core/scanner.js';
 import {
   TransactionManager,
@@ -71,7 +72,14 @@ async function createHarness(
   const resolver = await WorkspaceResolver.create(configuration);
   const artifacts = new ArtifactStore();
   const transactions = new TransactionManager(resolver, artifacts);
-  const studio = new ScriptedGuiStudio(resolver, transactions, new WorkspaceScanner(), artifacts);
+  const engine = new CoreEngine(resolver, {
+    transactions,
+    scanner: new WorkspaceScanner(),
+    artifacts,
+  });
+  // Rejected requests may never scan; finish asynchronous cache setup before fixture teardown.
+  await engine.persistentAnalysisCache;
+  const studio = new ScriptedGuiStudio(engine);
   return {
     absolutePath,
     artifacts,

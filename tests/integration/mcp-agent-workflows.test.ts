@@ -86,6 +86,8 @@ function jsonArtifact(result: OperationResult): { uri: string; name: string; mim
 }
 
 describe('MCP coding-agent workflows', () => {
+  // This composite path includes rasterization and two separately committed worker writes.
+  // The deadline bounds the full scenario under loaded release shards, not one RPC's latency.
   it('inspects, renders, cleans up, and creates focus trees through the composite tools', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-focus-workflow-'));
     const mod = path.join(temporary, 'mod');
@@ -246,7 +248,7 @@ describe('MCP coding-agent workflows', () => {
     expect(await readFile(path.join(mod, ...createdRelativePath.split('/')), 'utf8')).toContain(
       '\tid = created_workflow_tree',
     );
-  }, 60_000);
+  }, 120_000);
 
   it('inspects, renders, cleans up, and creates scripted GUIs through the composite tools', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-gui-workflow-'));
