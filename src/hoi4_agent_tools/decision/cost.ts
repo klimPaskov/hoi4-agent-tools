@@ -93,10 +93,16 @@ function directPayments(
                 definitions,
                 source.path,
               );
+        const normalizedOperation =
+          amount !== undefined && amount < 0
+            ? operation === 'add'
+              ? 'subtract'
+              : 'add'
+            : operation;
         paymentEffects.push({
           resource,
-          amount: amount ?? null,
-          operation,
+          amount: amount === undefined ? null : Math.abs(amount),
+          operation: normalizedOperation,
           scope: 'ROOT',
           location: nodeLocation(source.document, entry, key),
         });
@@ -132,6 +138,13 @@ export function inspectDecisionCost(
   const cost = source.fields.cost;
   const custom = source.fields.custom_cost_trigger;
   const findings: ConditionUnresolved[] = [];
+  const deductions = base.paymentEffects.filter(({ operation }) => operation === 'subtract');
+  const seenDeductions = new Set<string>();
+  for (const deduction of deductions) {
+    if (seenDeductions.has(deduction.resource))
+      findings.push(unresolved(source, `Multiple direct payments deduct ${deduction.resource}`));
+    seenDeductions.add(deduction.resource);
+  }
   if (cost.length > 1 || custom.length > 1 || (cost.length > 0 && custom.length > 0)) {
     findings.push(unresolved(source, 'Conflicting or repeated decision cost declarations'));
     return {
@@ -144,6 +157,13 @@ export function inspectDecisionCost(
     };
   }
   if (cost.length === 1) {
+    if (deductions.some(({ resource }) => resource === 'political_power'))
+      findings.push(
+        unresolved(
+          source,
+          'Engine political-power cost also has an explicit political-power deduction',
+        ),
+      );
     const expression = scalar(cost[0]);
     const amount =
       expression === undefined

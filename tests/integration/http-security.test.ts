@@ -212,7 +212,7 @@ describe('secured Streamable HTTP', () => {
     const client = await modernHttpClient(handle.url, secret);
     try {
       expect(client.getProtocolEra()).toBe('modern');
-      expect((await client.listTools()).tools).toHaveLength(25);
+      expect((await client.listTools()).tools).toHaveLength(27);
       expect(
         await client.callTool({
           name: 'hoi4.focus_inspect',

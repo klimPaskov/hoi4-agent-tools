@@ -33,6 +33,8 @@ const publicToolNames = [
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
+  'hoi4.impact_inspect',
+  'hoi4.decision_inspect',
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
@@ -205,7 +207,7 @@ try {
             message.result?.tools?.flatMap(({ name }) => (name === undefined ? [] : [name])) ?? [];
           if (!sameNames(names, publicToolNames)) {
             clearTimeout(timeout);
-            reject(new Error(`Published stdio tools do not match the 25-tool public surface`));
+            reject(new Error(`Published stdio tools do not match the 27-tool public surface`));
             return;
           }
           child.stdin.write(

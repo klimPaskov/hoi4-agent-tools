@@ -1,10 +1,12 @@
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { resolveConditionNumber } from '../core/condition-evaluator.js';
-import type { ConditionScenario } from '../core/condition-model.js';
+import type { TriggerEvaluation } from '../core/condition-evaluator.js';
+import type { ConditionScenario, TriState } from '../core/condition-model.js';
 import type { ScanSnapshot } from '../core/engine.js';
 import { rootScopeContext } from '../core/scenario-state.js';
 import type { AssignmentNode } from '../core/source/index.js';
 import type { DecisionSource } from './source-inventory.js';
+import { evaluateDecisionField } from './evaluation.js';
 
 export interface DecisionDuration {
   expression: string | null;
@@ -26,6 +28,11 @@ export interface DecisionLifecycleInspection {
   hasCancellationEffect: boolean;
   hasTimeoutEffect: boolean;
   ignoredMissionVisible: boolean;
+  removalTrigger: TriggerEvaluation | null;
+  cancellationTrigger: TriggerEvaluation | null;
+  cancelIfNotVisible: boolean | null;
+  visibilityCancellation: TriState | null;
+  cancellationTriggerState: TriState;
   unresolved: string[];
 }
 
@@ -92,6 +99,52 @@ export function inspectDecisionLifecycle(
     unresolved.push('Mission classification has no timeout');
   if (source.kind !== 'mission' && source.fields.timeout_effect.length > 0)
     unresolved.push('A non-mission declares timeout_effect');
+  const guardedScenario: ConditionScenario = {
+    ...scenario,
+    closedFlags: scenario.closedFlags ?? false,
+  };
+  const removalTrigger =
+    source.fields.remove_trigger.length === 0
+      ? null
+      : evaluateDecisionField(source, 'remove_trigger', guardedScenario, definitions);
+  const cancellationTrigger =
+    source.fields.cancel_trigger.length === 0
+      ? null
+      : evaluateDecisionField(source, 'cancel_trigger', guardedScenario, definitions);
+  for (const result of [removalTrigger, cancellationTrigger])
+    if (result !== null) unresolved.push(...result.unresolved.map(({ message }) => message));
+  const cancelIfNotVisibleExpression = scalar(source.fields.cancel_if_not_visible[0]);
+  const cancelIfNotVisible =
+    cancelIfNotVisibleExpression === undefined ? false : boolean(cancelIfNotVisibleExpression);
+  if (
+    source.fields.cancel_if_not_visible.length > 1 ||
+    (cancelIfNotVisibleExpression !== undefined && cancelIfNotVisible === null)
+  )
+    unresolved.push('cancel_if_not_visible is repeated or not a recognized Boolean');
+  if (cancelIfNotVisible && source.kind === 'mission')
+    unresolved.push('cancel_if_not_visible on a mission has unsupported visibility semantics');
+  const visible =
+    cancelIfNotVisible && source.kind !== 'mission'
+      ? evaluateDecisionField(source, 'visible', guardedScenario, definitions)
+      : null;
+  if (visible !== null) unresolved.push(...visible.unresolved.map(({ message }) => message));
+  const visibilityCancellation: TriState | null =
+    visible === null
+      ? null
+      : visible.state === 'true'
+        ? 'false'
+        : visible.state === 'false'
+          ? 'true'
+          : 'unresolved';
+  const cancellationStates = [
+    cancellationTrigger?.state ?? 'false',
+    visibilityCancellation ?? 'false',
+  ];
+  const cancellationTriggerState: TriState = cancellationStates.includes('true')
+    ? 'true'
+    : cancellationStates.includes('unresolved')
+      ? 'unresolved'
+      : 'false';
   return {
     kind: source.kind,
     fireOnlyOnce,
@@ -107,6 +160,11 @@ export function inspectDecisionLifecycle(
     hasCancellationEffect: source.fields.cancel_effect.length > 0,
     hasTimeoutEffect: source.fields.timeout_effect.length > 0,
     ignoredMissionVisible: source.kind === 'mission' && source.fields.visible.length > 0,
+    removalTrigger,
+    cancellationTrigger,
+    cancelIfNotVisible,
+    visibilityCancellation,
+    cancellationTriggerState,
     unresolved,
   };
 }

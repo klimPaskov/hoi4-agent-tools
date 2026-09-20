@@ -1,3 +1,4 @@
+import { analysisTaskTools } from '../tools/analysis.js';
 import { eventTaskTools } from '../tools/event.js';
 import { focusTaskTools } from '../tools/focus.js';
 import { guiTaskTools } from '../tools/gui.js';
@@ -11,6 +12,7 @@ export const taskToolCatalog: readonly TaskToolDefinition[] = [
   ...guiTaskTools,
   ...mapTaskTools,
   ...eventTaskTools,
+  ...analysisTaskTools,
   ...technologyTaskTools,
   ...probabilityTaskTools,
 ];

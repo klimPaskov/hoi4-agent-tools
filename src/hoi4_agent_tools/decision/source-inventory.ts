@@ -30,6 +30,7 @@ export const decisionFieldNames = [
   'remove_trigger',
   'remove_effect',
   'cancel_trigger',
+  'cancel_if_not_visible',
   'cancel_effect',
   'days_mission_timeout',
   'timeout_effect',
@@ -67,12 +68,63 @@ export interface DecisionCategorySource {
   fields: DecisionFields;
 }
 
+export interface DecisionTargetCatalog {
+  targeted: boolean;
+  explicitTargets: string[];
+  targetArrays: string[];
+  stateFilters: string[];
+  hasTargetRootTrigger: boolean;
+  hasTargetTrigger: boolean;
+}
+
+/** Static targeting declarations; scenario evaluation determines whether a target qualifies. */
+export function decisionTargetCatalog(source: DecisionSource): DecisionTargetCatalog {
+  const explicitTargets = source.fields.targets.flatMap((assignment) => {
+    if (assignment.value.type !== 'block') return [];
+    return [
+      ...assignment.value.entries
+        .filter((entry) => entry.type === 'scalar')
+        .map((entry) => entry.value),
+      ...assignments(assignment.value, 'state')
+        .filter((entry) => entry.value.type === 'scalar')
+        .map((entry) => (entry.value as { value: string }).value),
+    ];
+  });
+  const targetArrays = source.fields.target_array.flatMap((assignment) =>
+    assignment.value.type === 'scalar' ? [assignment.value.value] : [],
+  );
+  const stateFilters = source.fields.state_trigger.flatMap((assignment) =>
+    assignment.value.type === 'scalar' ? [assignment.value.value] : [],
+  );
+  const hasTargetRootTrigger = source.fields.target_root_trigger.length > 0;
+  const hasTargetTrigger = source.fields.target_trigger.length > 0;
+  return {
+    targeted:
+      explicitTargets.length > 0 ||
+      targetArrays.length > 0 ||
+      stateFilters.some((filter) => filter !== 'no') ||
+      hasTargetRootTrigger ||
+      hasTargetTrigger,
+    explicitTargets,
+    targetArrays,
+    stateFilters,
+    hasTargetRootTrigger,
+    hasTargetTrigger,
+  };
+}
+
 export interface DecisionSourceInventory {
   sourceRevision: string;
   complete: boolean;
   skippedSourceCount: number;
   decisions: DecisionSource[];
   categories: DecisionCategorySource[];
+  overrides: Array<
+    Pick<
+      SymbolRecord,
+      'kind' | 'id' | 'path' | 'rootKind' | 'loadOrder' | 'location' | 'sourceShadowed'
+    >
+  >;
   unresolvedDefinitions: Array<{
     kind: 'decision' | 'decision_category';
     id: string;
@@ -124,6 +176,21 @@ export function decisionSourceInventory(
   const unresolvedDefinitions: DecisionSourceInventory['unresolvedDefinitions'] = [];
   const categories: DecisionCategorySource[] = [];
   const decisions: DecisionSource[] = [];
+  const overrides = [
+    ...snapshot.index.findAll('decision_category'),
+    ...snapshot.index.findAll('decision'),
+  ]
+    .filter(({ overridden }) => overridden)
+    .sort(sourceOrder)
+    .map(({ kind, id, path, rootKind, loadOrder, location, sourceShadowed }) => ({
+      kind,
+      id,
+      path,
+      rootKind,
+      loadOrder,
+      ...(location === undefined ? {} : { location }),
+      sourceShadowed,
+    }));
 
   for (const symbol of snapshot.index
     .findAll('decision_category')
@@ -208,6 +275,7 @@ export function decisionSourceInventory(
     skippedSourceCount: snapshot.skippedSourceCount,
     decisions,
     categories,
+    overrides,
     unresolvedDefinitions,
   };
 }

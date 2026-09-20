@@ -1,6 +1,6 @@
 # 32. Cross-system impact and decision inspection
 
-Status: Stage 3 implementation is in progress in an isolated worktree; public tools, complete cross-system edges, comparison, qualification, publication, and installation remain open.
+Status: Stage 3 implementation is in progress in an isolated worktree; the public tools and focused regressions are implemented, while full qualification, publication, installation, and external integration remain open.
 
 ## Source and authority
 
@@ -12,8 +12,8 @@ All responses expose the exact revision, source coverage, omitted-count bounds, 
 
 ## Impact graph
 
-`hoi4.impact_inspect` accepts a bounded selection of symbol identifiers, changed workspace-relative files, or proposed source overlays.
-It reports definition locations, active and overridden variants, typed direct consumers, transitive affected files, and declared scenario-suite paths.
+`hoi4.impact_inspect` accepts a bounded selection of symbol identifiers, scanned display paths for changed files, or proposed source overlays.
+It reports definition locations, active and overridden variants, typed direct consumers, transitive affected files, and declared scenario-suite cases from bounded workspace-owned JSON references.
 Edges retain source and target kind, access role, source location, root kind, and static or unresolved status.
 Symbol and file identities include root and load order so a same-named vanilla or dependency definition is not confused with the mod's active definition.
 Traversal is bounded by explicit node, edge, depth, and result limits; cycles and truncated frontiers are reported rather than omitted silently.
@@ -54,10 +54,14 @@ Complete Stage 3 qualification additionally requires the repository's Windows/Li
 
 ## Implementation checkpoint
 
-The first internal tranche inventories active decisions and category fragments through the shared symbol index, evaluates declared category/decision/mission gates with separate `ROOT` actor and `FROM` target bindings, reports engine and custom cost evidence, and inventories cooldown and mission outcome paths.
+The decision service inventories active decisions, category fragments, overridden definitions, and target declarations through the shared symbol index, evaluates declared category/decision/mission gates with separate `ROOT` actor and `FROM` target bindings, reports engine and custom cost evidence, identifies missing or multiple direct payments, and evaluates removal, cancellation, visibility cancellation, cooldown, and mission outcome paths under each scenario.
 The shared condition evaluator resolves a declared `ROOT`, `THIS`, `PREV`, or `FROM` operand as a scope identity and leaves an unbound operand unresolved.
-The first impact graph walks typed references already present in the shared index plus static script edges, retains active and overridden definitions, and reports direct/transitive consumers with explicit node, edge, depth, and source boundaries.
+The impact graph walks typed references already present in the shared index plus static script edges, retains active and overridden definitions, and reports direct/transitive consumers and cycles with explicit node, edge, depth, and source boundaries.
 It records observed variable, flag, and event-target reads and writes as state-key references without inventing one active definition.
+Explicit event text and art references connect to localisation, sprites, and textures; decision categories connect through scripted GUIs to GUI containers and through membership to decisions.
 An in-memory proposed-source overlay can add, replace, or remove bounded text sources under the resolved mod root and rebuild active source precedence without touching the workspace.
-These internal functions have focused synthetic tests; they are not public MCP tools yet and do not satisfy Stage 3's full cross-system or decision-inspection contract.
-Localisation and asset edges, overlay service authorization and comparisons, scenario suites, decision AI reuse, public schemas, both transports, and release gates remain to be implemented and verified.
+Comparison functions report changed impact consumers and per-scenario decision gates, affordability, lifecycle, and probability-adapter AI scores between revision-pinned snapshots.
+State target selection evaluates documented all, owned, controlled, and continent filters only from declared target scope facts; missing actor, target type, owner, controller, or continent remains unresolved.
+The public tools share the existing ordinary-call and persistent-job paths across legacy and modern MCP transports; linked artifacts retain source hashes and full analysis.
+Focused synthetic tests cover overlay authorization, decision actor and target gates, active and overridden definitions, cost and lifecycle comparisons, AI score changes, cycle detection, suite references, both protocol routes, cancellation, principal isolation, and read-only source preservation.
+The full repository check, public Windows/Linux and Node matrix, Inspector, package publication, side-by-side installation, and external profile integration remain open.

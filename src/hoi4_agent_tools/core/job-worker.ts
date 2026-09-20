@@ -10,6 +10,7 @@ import { registerGuiJobs } from '../gui/job-operations.js';
 import { registerMapJobs } from '../map/job-operations.js';
 import { registerProbabilityJobs } from '../probability/job-operations.js';
 import { registerTechnologyJobs } from '../technology/job-operations.js';
+import { registerAnalysisJobs } from './analysis-job-operations.js';
 
 // Fixed internal process entry point. It accepts only a trusted host's structured IPC
 // message, never a script path, module name, callback, command, or transport request.
@@ -42,6 +43,7 @@ process.once('message', (value: unknown) => {
     const jobs = await JobService.create(resolver);
     const operations = new JobOperations();
     registerEventJobs(operations, engine);
+    registerAnalysisJobs(operations, engine);
     registerTechnologyJobs(operations, engine);
     registerProbabilityJobs(operations, engine);
     registerMapJobs(operations, engine);

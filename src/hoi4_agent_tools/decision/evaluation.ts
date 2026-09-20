@@ -81,7 +81,7 @@ function subject(source: DecisionSource | DecisionCategorySource): ConditionSubj
   };
 }
 
-function evaluateField(
+export function evaluateDecisionField(
   source: DecisionSource | DecisionCategorySource,
   name: DecisionFieldName,
   scenario: ConditionScenario,
@@ -112,17 +112,18 @@ function evaluateCategoryField(
   const source = definitionsWithField[0];
   return source === undefined
     ? { state: 'true', unresolved: [] }
-    : evaluateField(source, name, scenario, definitions);
+    : evaluateDecisionField(source, name, scenario, definitions);
 }
 
 function explicitTargets(source: DecisionSource, scenario: ConditionScenario): TriggerEvaluation {
   const targets = source.fields.targets;
   const arrays = source.fields.target_array;
   const stateFilters = source.fields.state_trigger;
+  const activeStateFilters = stateFilters.filter((assignment) => scalar(assignment) !== 'no');
   const targeted =
     targets.length +
     arrays.length +
-    stateFilters.length +
+    activeStateFilters.length +
     source.fields.target_root_trigger.length +
     source.fields.target_trigger.length;
   if (targeted === 0) return { state: 'true', unresolved: [] };
@@ -164,15 +165,53 @@ function explicitTargets(source: DecisionSource, scenario: ConditionScenario): T
       candidateChecks.push('unresolved');
     } else candidateChecks.push(value.includes(targetId) ? 'true' : 'false');
   }
-  for (const assignment of stateFilters) {
+  for (const assignment of activeStateFilters) {
     const filter = scalar(assignment);
+    if (target.type === undefined || target.type === 'unknown') {
+      findings.push({
+        code: 'DECISION_UNRESOLVED',
+        message: 'Scenario does not declare the target scope type',
+        candidateId: source.id,
+      });
+      stateChecks.push('unresolved');
+      continue;
+    }
+    if (target.type !== 'state') {
+      stateChecks.push('false');
+      continue;
+    }
     if (filter === 'yes' || filter === 'any') {
-      stateChecks.push(target.type === 'state' ? 'true' : 'false');
+      stateChecks.push('true');
+      continue;
+    }
+    if (filter === 'any_owned_state' || filter === 'any_controlled_state') {
+      const key = filter === 'any_owned_state' ? 'owner' : 'controller';
+      const declared = target.state[key];
+      if (typeof declared !== 'string' || scenario.actor === undefined) {
+        findings.push({
+          code: 'DECISION_UNRESOLVED',
+          message: `State target needs declared ${key} and actor for ${filter}`,
+          candidateId: source.id,
+        });
+        stateChecks.push('unresolved');
+      } else stateChecks.push(declared === scenario.actor ? 'true' : 'false');
+      continue;
+    }
+    if (filter !== undefined && /^[a-z][a-z0-9_]*$/u.test(filter)) {
+      const continent = target.state.continent;
+      if (typeof continent !== 'string') {
+        findings.push({
+          code: 'DECISION_UNRESOLVED',
+          message: `State target needs a declared continent for ${filter}`,
+          candidateId: source.id,
+        });
+        stateChecks.push('unresolved');
+      } else stateChecks.push(continent === filter ? 'true' : 'false');
       continue;
     }
     findings.push({
       code: 'DECISION_UNRESOLVED',
-      message: `State target filter ${filter ?? '<dynamic>'} needs a declared state catalog`,
+      message: `State target filter ${filter ?? '<dynamic>'} is unsupported`,
       candidateId: source.id,
     });
     stateChecks.push('unresolved');
@@ -200,13 +239,19 @@ export function evaluateDecisionGates(
     ...scenario,
     closedFlags: scenario.closedFlags ?? false,
   };
+  const actorOnlyScenario: ConditionScenario = {
+    ...guardedScenario,
+    scopes: Object.fromEntries(
+      Object.entries(guardedScenario.scopes ?? {}).filter(([scope]) => scope !== 'FROM'),
+    ),
+  };
   const categories = inventory.categories.filter(
     ({ id: category }) => category === source.category,
   );
   const categoryAllowed = evaluateCategoryField(
     categories,
     'allowed',
-    guardedScenario,
+    actorOnlyScenario,
     definitions,
     id,
   );
@@ -224,18 +269,33 @@ export function evaluateDecisionGates(
     definitions,
     id,
   );
-  const decisionAllowed = evaluateField(source, 'allowed', guardedScenario, definitions);
-  const decisionAvailable = evaluateField(source, 'available', guardedScenario, definitions);
+  const decisionAllowed = evaluateDecisionField(source, 'allowed', actorOnlyScenario, definitions);
+  const decisionAvailable = evaluateDecisionField(
+    source,
+    'available',
+    guardedScenario,
+    definitions,
+  );
   const decisionVisible =
     source.kind === 'mission'
       ? null
-      : evaluateField(source, 'visible', guardedScenario, definitions);
-  const targetRoot = evaluateField(source, 'target_root_trigger', guardedScenario, definitions);
+      : evaluateDecisionField(source, 'visible', guardedScenario, definitions);
+  const targetRoot = evaluateDecisionField(
+    source,
+    'target_root_trigger',
+    actorOnlyScenario,
+    definitions,
+  );
   const targetSelection = explicitTargets(source, guardedScenario);
-  const targetTrigger = evaluateField(source, 'target_trigger', guardedScenario, definitions);
+  const targetTrigger = evaluateDecisionField(
+    source,
+    'target_trigger',
+    guardedScenario,
+    definitions,
+  );
   const activation =
     source.kind === 'mission'
-      ? evaluateField(source, 'activation', guardedScenario, definitions)
+      ? evaluateDecisionField(source, 'activation', guardedScenario, definitions)
       : null;
   const eligible = combine([
     categoryAllowed.state,

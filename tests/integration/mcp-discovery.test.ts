@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 51_200;
+const toolsListByteBudget = 61_440;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
@@ -62,6 +62,8 @@ describe('MCP discovery', () => {
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',
@@ -93,6 +95,8 @@ describe('MCP discovery', () => {
       });
     }
     for (const name of [
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',

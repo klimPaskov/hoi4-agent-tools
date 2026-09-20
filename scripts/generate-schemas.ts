@@ -4,6 +4,10 @@ import { z } from 'zod/v4';
 import { serverConfigurationSchema } from '../src/hoi4_agent_tools/core/configuration.js';
 import { operationResultSchema } from '../src/hoi4_agent_tools/mcp/server/result.js';
 import {
+  decisionInspectRequestSchema,
+  impactInspectRequestSchema,
+} from '../src/hoi4_agent_tools/schemas/analysis.js';
+import {
   GuiAnimationSourceManifestSchema,
   GuiHelperDocumentSchema,
   GuiPreviewScenarioSchema,
@@ -41,6 +45,8 @@ await mkdir(output, { recursive: true });
 
 const schemas: (readonly [string, z.ZodType])[] = [
   ['configuration.schema.json', serverConfigurationSchema],
+  ['impact-inspect-input.schema.json', impactInspectRequestSchema],
+  ['decision-inspect-input.schema.json', decisionInspectRequestSchema],
   ['focus-plan.schema.json', focusTreePlanSchema],
   ['focus-planning-sidecar.schema.json', focusPlanningSidecarSchema],
   ['continuous-focus-palette.schema.json', continuousFocusPaletteSchema],

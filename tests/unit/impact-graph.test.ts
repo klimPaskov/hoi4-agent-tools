@@ -187,4 +187,171 @@ describe('revision-pinned impact graph', () => {
         .directConsumers.length,
     ).toBe(3);
   });
+
+  it('links explicit event text and art plus a decision category to its GUI container', () => {
+    const files = [
+      file(
+        'events/story.txt',
+        'country_event = { id = story.1 title = story.title desc = story.desc picture = GFX_story option = { name = story.option } }',
+      ),
+      file(
+        'localisation/english/story_l_english.yml',
+        '\uFEFFl_english:\nstory.title: "Story"\nstory.desc: "Description"\nstory.option: "Continue"\n',
+      ),
+      file(
+        'interface/story.gfx',
+        'spriteTypes = { spriteType = { name = GFX_story texturefile = "gfx/interface/story.dds" } }',
+      ),
+      file('common/decisions/categories/story.txt', 'story = { scripted_gui = story_ui }'),
+      file('common/decisions/story.txt', 'story = { remember = { cost = 10 } }'),
+      file(
+        'common/scripted_guis/story.txt',
+        'scripted_gui = { story_ui = { window_name = story_window } }',
+      ),
+      file(
+        'interface/story.gui',
+        'guiTypes = { containerWindowType = { name = story_window size = { width = 100 height = 100 } } }',
+      ),
+    ];
+    const index = SymbolIndex.build(files);
+    const scan: ScanSnapshot = {
+      workspaceId: 'fixture',
+      revision: 'cross-system-revision',
+      files,
+      index,
+      complete: index.complete,
+      skippedSourceCount: index.skippedSourceCount,
+      skippedSources: index.skippedSources,
+      diagnostics: index.diagnostics,
+    };
+    expect(
+      inspectImpactGraph(scan, {
+        symbols: [{ kind: 'localisation', id: 'story.title' }],
+      }).directConsumers.map(({ source }) => source.id),
+    ).toEqual(['story.1']);
+    expect(
+      inspectImpactGraph(scan, {
+        symbols: [{ kind: 'sprite', id: 'GFX_story' }],
+      }).directConsumers.map(({ source }) => source.id),
+    ).toEqual(['story.1']);
+    const texture = inspectImpactGraph(scan, {
+      symbols: [{ kind: 'texture', id: 'gfx/interface/story.dds' }],
+    });
+    expect(texture.directConsumers.map(({ source }) => source.id)).toEqual(['GFX_story']);
+    expect(texture.transitiveConsumers.map(({ source }) => source.id)).toEqual(['story.1']);
+    const gui = inspectImpactGraph(scan, {
+      symbols: [{ kind: 'gui_element', id: 'story_window' }],
+    });
+    expect(gui.directConsumers.map(({ source }) => source.id)).toEqual(['story_ui']);
+    expect(gui.transitiveConsumers.map(({ source }) => source.id)).toEqual(['remember', 'story']);
+  });
+
+  it('connects vanilla-form focus technology grants and explicit variable operands', () => {
+    const files = [
+      file('common/technologies/grants.txt', 'technologies = { radio = { start_year = 1936 } }'),
+      file(
+        'common/national_focus/grants.txt',
+        'focus_tree = { id = grants focus = { id = funded x = 0 y = 0 available = { check_variable = { var = reserve value = 2 compare = greater_than_or_equals } } completion_reward = { set_technology = { radio = 1 popup = no } } } }',
+      ),
+    ];
+    const index = SymbolIndex.build(files);
+    const scan: ScanSnapshot = {
+      workspaceId: 'fixture',
+      revision: 'technology-grant-revision',
+      files,
+      index,
+      complete: index.complete,
+      skippedSourceCount: index.skippedSourceCount,
+      skippedSources: index.skippedSources,
+      diagnostics: index.diagnostics,
+    };
+    expect(
+      inspectImpactGraph(scan, {
+        symbols: [{ kind: 'technology', id: 'radio' }],
+      }).directConsumers.map(({ source, referenceKind }) => [source.id, referenceKind]),
+    ).toEqual([['funded', 'set_technology']]);
+    expect(
+      inspectImpactGraph(scan, {
+        symbols: [{ kind: 'variable', id: 'reserve' }],
+      }).directConsumers.map(({ source, accessRole }) => [source.id, accessRole]),
+    ).toEqual([['funded', 'read']]);
+  });
+
+  it('reports a source cycle without losing its bounded consumer walk', () => {
+    const files = [
+      file(
+        'common/national_focus/cycle.txt',
+        'focus_tree = { id = cycle focus = { id = alpha prerequisite = { focus = bravo } x = 0 y = 0 } focus = { id = bravo prerequisite = { focus = alpha } x = 1 y = 0 } }',
+      ),
+    ];
+    const index = SymbolIndex.build(files);
+    const scan: ScanSnapshot = {
+      workspaceId: 'fixture',
+      revision: 'cycle-revision',
+      files,
+      index,
+      complete: index.complete,
+      skippedSourceCount: index.skippedSourceCount,
+      skippedSources: index.skippedSources,
+      diagnostics: index.diagnostics,
+    };
+    const impact = inspectImpactGraph(scan, { symbols: [{ kind: 'focus', id: 'alpha' }] });
+    expect(impact.directConsumers.map(({ source }) => source.id)).toEqual(['bravo']);
+    expect(impact.cycles).toEqual([
+      {
+        from: { kind: 'focus', id: 'alpha' },
+        to: { kind: 'focus', id: 'bravo' },
+        path: 'mod:common/national_focus/cycle.txt',
+      },
+      {
+        from: { kind: 'focus', id: 'bravo' },
+        to: { kind: 'focus', id: 'alpha' },
+        path: 'mod:common/national_focus/cycle.txt',
+      },
+    ]);
+    expect(impact.coverage.omittedCycles).toBe(0);
+  });
+
+  it('finds a cycle between sibling consumers that does not follow the traversal parent tree', () => {
+    const files = [
+      file(
+        'common/national_focus/sibling_cycle.txt',
+        'focus_tree = { id = sibling_cycle focus = { id = alpha x = 0 y = 0 } focus = { id = bravo prerequisite = { focus = alpha } prerequisite = { focus = charlie } x = 1 y = 0 } focus = { id = charlie prerequisite = { focus = alpha } prerequisite = { focus = bravo } x = 2 y = 0 } }',
+      ),
+    ];
+    const index = SymbolIndex.build(files);
+    const scan: ScanSnapshot = {
+      workspaceId: 'fixture',
+      revision: 'sibling-cycle-revision',
+      files,
+      index,
+      complete: index.complete,
+      skippedSourceCount: index.skippedSourceCount,
+      skippedSources: index.skippedSources,
+      diagnostics: index.diagnostics,
+    };
+    const impact = inspectImpactGraph(scan, { symbols: [{ kind: 'focus', id: 'alpha' }] });
+    expect(impact.directConsumers.map(({ source }) => source.id)).toEqual(['bravo', 'charlie']);
+    expect(impact.cycles).toEqual([
+      expect.objectContaining({
+        from: { kind: 'focus', id: 'bravo' },
+        to: { kind: 'focus', id: 'charlie' },
+      }),
+      expect.objectContaining({
+        from: { kind: 'focus', id: 'charlie' },
+        to: { kind: 'focus', id: 'bravo' },
+      }),
+    ]);
+    expect(impact.complete).toBe(true);
+    const bounded = inspectImpactGraph(scan, {
+      symbols: [
+        { kind: 'focus', id: 'alpha' },
+        { kind: 'focus', id: 'bravo' },
+      ],
+      maxNodes: 1,
+    });
+    expect(bounded.coverage.reachedNodes).toBe(1);
+    expect(bounded.coverage.omittedNodes).toBeGreaterThan(0);
+    expect(bounded.complete).toBe(false);
+  });
 });

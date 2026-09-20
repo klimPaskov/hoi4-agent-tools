@@ -9,6 +9,8 @@ import { withTaskRequestSignal } from './task-request-context.js';
 const controlTools = new Set(['hoi4.job_inspect', 'hoi4.job_cancel']);
 
 const backgroundTools = new Set([
+  'hoi4.impact_inspect',
+  'hoi4.decision_inspect',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',

@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains, technology systems, AI weights, and MTTH timing and to inspect, create, or clean up focus trees, scripted GUIs, and maps. It produces source-linked structural and visual evidence that agents can use inside a larger modding workflow.
+HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron IV event chains, decisions, cross-system dependencies, technology systems, AI weights, and MTTH timing and to inspect, create, or clean up focus trees, scripted GUIs, and maps. It produces source-linked structural and visual evidence that agents can use inside a larger modding workflow.
 
 ## What it does
 
@@ -8,6 +8,7 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 - Scripted GUIs: trace GUI, GFX, scripted-GUI, and localisation links; render value-driven variants, dynamic country flags, inline text icons, states, resolutions, hierarchy, and click regions; diagnose alignment, visibility, clipping, panel containment, and button-label centering; create or repair interface source.
 - Maps: navigate the complete rendered map by ID or localised name; inspect provinces, states, regions, adjacency, supply, railways, and positions; create states and provinces; change IDs; and repair connected map data.
 - Event chains: scan definitions and call sites, trace routes and state flow, lint references, render graphs, and compare revisions without editing event source.
+- Cross-system impact and decisions: trace definitions and consumers across source systems, evaluate declared actor and target scenarios, inspect costs and mission paths, and compare in-memory proposals.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
 - AI and MTTH: evaluate weighted choices and timing across explicit scenarios, bind special scope chains, enumerate dynamic target pools, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
 
@@ -71,6 +72,8 @@ On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repo
 | `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                  |
 | `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.   |
 | `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                           |
+| `hoi4.impact_inspect`       | Trace symbol and changed-file consumers across source systems and compare proposals.      |
+| `hoi4.decision_inspect`     | Inventory and evaluate decisions or missions under declared scenarios and source changes. |
 | `hoi4.job_inspect`          | Inspect durable background work or retrieve its completed tool result.                    |
 | `hoi4.job_cancel`           | Durably request cancellation of authorized background work.                               |
 | `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                   |
@@ -94,7 +97,7 @@ Long-running domain calls advertise optional MCP task support. A task survives c
 
 HOI4 Agent Tools provides HOI4 domain operations without replacing repository instructions such as `AGENTS.md`, skills, plans, or subagents. Its optional weighted-logic prompt helps an agent scope one probability analysis and then returns control to the normal workflow.
 
-Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Event, technology, and probability tools analyze source without editing it; only `hoi4.*_rewrite` calls edit mod source.
+Connecting and listing tools does not scan mod source. Compact tool schemas and linked resources keep large diagnostics, renders, and diffs out of the agent's working context until needed. Event, impact, decision, technology, and probability tools analyze source without editing it; only `hoi4.*_rewrite` calls edit mod source.
 
 ## Create or clean content
 
@@ -104,6 +107,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 - Scripted GUIs: "Create a scripted GUI for this mechanic," or "Render every value-driven version of this window and fix hidden controls, off-center button text, background alignment, clipping, and click-region conflicts." See [Scripted GUIs](docs/gui.md).
 - Maps: "Render the whole map and find this state by name," "Create a state from these provinces," "Create a province inside this exact rectangle," or "Swap these state IDs and update connected references." See [Maps](docs/map.md).
 - Event chains: "Trace every route from this event and explain where its flags and variables change," or "Compare the workspace event graph with its previous revision and render the affected routes." See [Event chains](docs/events.md).
+- Cross-system impact and decisions: "Find every direct and transitive consumer of this idea," or "Compare who can take this decision, what they pay, and its mission end paths for these actor and target scenarios." See [Cross-system impact and decisions](docs/analysis.md).
 - Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).
 - AI and MTTH: "Compare these focus weights across peace, defensive-war, and low-stability scenarios," or "Show when this MTTH event becomes likely and which unknown inputs control the result." See [AI and MTTH analysis](docs/probability.md).
 

@@ -142,6 +142,8 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
       'hoi4.tech_inspect',
       'hoi4.tech_render',
       'hoi4.tech_compare',

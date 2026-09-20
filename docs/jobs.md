@@ -14,9 +14,10 @@ A modern native task handoff ends that request's heartbeat without declaring the
 
 ## Supported tools
 
-Optional tasks are available for every read-only event, technology, probability, map, GUI, and focus operation, and for the three rewrite tools:
+Optional tasks are available for every read-only event, impact, decision, technology, probability, map, GUI, and focus operation, and for the three rewrite tools:
 
 - `hoi4.event_inspect`, `hoi4.event_render`, and `hoi4.event_compare`
+- `hoi4.impact_inspect` and `hoi4.decision_inspect`
 - `hoi4.tech_inspect`, `hoi4.tech_render`, and `hoi4.tech_compare`
 - `hoi4.probability_inspect`, `hoi4.probability_evaluate`, `hoi4.probability_sweep`, `hoi4.probability_simulate`, `hoi4.probability_sequence`, `hoi4.probability_compare`, and `hoi4.probability_render`
 - `hoi4.map_inspect`, `hoi4.map_render`, and `hoi4.map_rewrite`

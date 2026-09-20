@@ -7,6 +7,7 @@ import { registerFocusTools } from '../tools/focus.js';
 import { registerGuiTools } from '../tools/gui.js';
 import { registerMapTools } from '../tools/map.js';
 import { registerEventTools } from '../tools/event.js';
+import { registerAnalysisTools } from '../tools/analysis.js';
 import { registerTechnologyTools } from '../tools/technology.js';
 import { registerProbabilityTools } from '../tools/probability.js';
 import { registerJobTools } from '../tools/job.js';
@@ -62,6 +63,7 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerGuiTools(server, engine, serverContext);
   registerMapTools(server, engine, serverContext);
   registerEventTools(server);
+  registerAnalysisTools(server);
   registerTechnologyTools(server);
   registerProbabilityTools(server);
   registerJobTools(server, engine, serverContext);

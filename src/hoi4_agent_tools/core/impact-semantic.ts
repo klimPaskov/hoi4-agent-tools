@@ -77,6 +77,8 @@ const stateKeyOperations = new Map<
 function stateKeyTarget(assignment: AssignmentNode, kind: SymbolKind): string | undefined {
   if (assignment.value.type === 'scalar') return assignment.value.value;
   if (kind !== 'variable') return undefined;
+  const explicit = firstScalar(assignment.value, 'var');
+  if (explicit !== undefined) return explicit.value;
   return assignments(assignment.value).find(
     ({ key }) => !['compare', 'value', 'tooltip', 'var', 'value_name'].includes(key.value),
   )?.key.value;
@@ -112,6 +114,8 @@ function ownerFor(
     ancestors.length === 1
   ) {
     owner = { kind: 'decision', id: key };
+  } else if (sourcePath.startsWith('common/decisions/categories/') && ancestors.length === 0) {
+    owner = { kind: 'decision_category', id: key };
   } else if (
     sourcePath.startsWith('common/ideas/') &&
     ancestors.length === 2 &&
@@ -128,6 +132,12 @@ function ownerFor(
     owner = { kind: 'scripted_effect', id: key };
   } else if (sourcePath.startsWith('common/scripted_triggers/') && ancestors.length === 0) {
     owner = { kind: 'scripted_trigger', id: key };
+  } else if (
+    sourcePath.startsWith('common/scripted_guis/') &&
+    ancestors.length === 1 &&
+    ancestors[0] === 'scripted_gui'
+  ) {
+    owner = { kind: 'scripted_gui', id: key };
   }
   return owner === undefined || snapshot.index.find(owner.kind, owner.id)?.path !== file.displayPath
     ? undefined
@@ -195,8 +205,50 @@ export function scanImpactSemanticReferences(
     for (const assignment of assignments(block)) {
       const identified = ownerFor(snapshot, file, assignment, ancestors);
       const current = identified ?? owner;
+      if (identified?.kind === 'decision' && ancestors.length === 1)
+        emit(
+          file,
+          document,
+          assignment,
+          identified,
+          'decision_category',
+          ancestors[0]!,
+          'decision_category_membership',
+        );
       if (current !== undefined && identified === undefined) {
         const key = assignment.key.value;
+        if (assignment.value.type === 'scalar') {
+          const value = assignment.value.value;
+          const localisation =
+            (current.kind === 'event' &&
+              (key === 'title' ||
+                key === 'desc' ||
+                (key === 'name' && ancestors.includes('option')) ||
+                (key === 'text' && ancestors.includes('desc')))) ||
+            key === 'custom_effect_tooltip';
+          if (localisation)
+            emit(file, document, assignment, current, 'localisation', value, 'localisation_key');
+          if (
+            (key === 'picture' ||
+              (key === 'icon' && ['decision', 'decision_category'].includes(current.kind))) &&
+            value.startsWith('GFX_')
+          )
+            emit(file, document, assignment, current, 'sprite', value, 'display_sprite');
+          if (key === 'scripted_gui' && ['decision', 'decision_category'].includes(current.kind))
+            emit(
+              file,
+              document,
+              assignment,
+              current,
+              'scripted_gui',
+              value,
+              'scripted_gui_binding',
+            );
+          if (current.kind === 'scripted_gui' && key === 'parent_window_window')
+            emit(file, document, assignment, current, 'gui_element', value, key);
+          if (current.kind === 'scripted_gui' && key === 'parent_scripted_gui')
+            emit(file, document, assignment, current, 'scripted_gui', value, key);
+        }
         if (key.startsWith('event_target:'))
           emit(
             file,
@@ -230,6 +282,18 @@ export function scanImpactSemanticReferences(
             );
         }
         const targetKind = scalarTargets.get(key);
+        if (key === 'set_technology' && assignment.value.type === 'block')
+          for (const technology of assignments(assignment.value))
+            if (technology.key.value !== 'popup')
+              emit(
+                file,
+                document,
+                technology,
+                current,
+                'technology',
+                technology.key.value,
+                'set_technology',
+              );
         if (targetKind !== undefined) {
           if (assignment.value.type === 'scalar') {
             emit(file, document, assignment, current, targetKind, assignment.value.value, key);
@@ -270,7 +334,8 @@ export function scanImpactSemanticReferences(
         path.startsWith('common/ideas/') ||
         path.startsWith('common/technologies/') ||
         path.startsWith('common/scripted_effects/') ||
-        path.startsWith('common/scripted_triggers/')
+        path.startsWith('common/scripted_triggers/') ||
+        path.startsWith('common/scripted_guis/')
       )
     )
       continue;

@@ -18,8 +18,13 @@ export interface ImpactQuery {
 }
 
 export interface ImpactEdge {
-  source: ImpactSymbolSelector & { path: string };
+  source: ImpactSymbolSelector & {
+    path: string;
+    rootKind: SymbolRecord['rootKind'];
+    loadOrder: number;
+  };
   target: ImpactSymbolSelector;
+  targetDefinition?: Pick<SymbolRecord, 'path' | 'rootKind' | 'loadOrder' | 'location'>;
   referenceKind: string;
   accessRole: 'read' | 'write' | 'reference';
   path: string;
@@ -37,6 +42,7 @@ export interface ImpactGraphResult {
   affectedFiles: string[];
   unresolved: Array<{ reference: ReferenceRecord; reason: string }>;
   dynamicReferences: ReturnType<typeof scanImpactSemanticReferences>['unresolved'];
+  cycles: Array<{ from: ImpactSymbolSelector; to: ImpactSymbolSelector; path: string }>;
   coverage: {
     scannedSymbols: number;
     scannedReferences: number;
@@ -44,6 +50,7 @@ export interface ImpactGraphResult {
     reachedEdges: number;
     omittedNodes: number;
     omittedEdges: number;
+    omittedCycles: number;
     stoppedAtDepth: boolean;
     sourceComplete: boolean;
     skippedSourceCount: number;
@@ -76,6 +83,91 @@ function bounded(value: number | undefined, fallback: number, maximum: number): 
   return value;
 }
 
+/** Finds every reached edge inside a strongly connected component without recursive call stacks. */
+function reachedCycleEdges(
+  reached: ReadonlySet<string>,
+  edges: readonly ImpactEdge[],
+): { cycles: ImpactGraphResult['cycles']; omittedCycles: number } {
+  const outgoing = new Map<string, string[]>();
+  const incoming = new Map<string, string[]>();
+  for (const edge of edges) {
+    const from = symbolKey(edge.target.kind, edge.target.id);
+    const to = symbolKey(edge.source.kind, edge.source.id);
+    if (!reached.has(from) || !reached.has(to)) continue;
+    const targets = outgoing.get(from) ?? [];
+    targets.push(to);
+    outgoing.set(from, targets);
+    const sources = incoming.get(to) ?? [];
+    sources.push(from);
+    incoming.set(to, sources);
+  }
+  const visited = new Set<string>();
+  const order: string[] = [];
+  for (const root of [...reached].sort(compareCodeUnits)) {
+    if (visited.has(root)) continue;
+    visited.add(root);
+    const stack: Array<{ key: string; cursor: number }> = [{ key: root, cursor: 0 }];
+    while (stack.length > 0) {
+      const frame = stack.at(-1)!;
+      const next = outgoing.get(frame.key)?.[frame.cursor];
+      if (next === undefined) {
+        order.push(frame.key);
+        stack.pop();
+        continue;
+      }
+      frame.cursor += 1;
+      if (!visited.has(next)) {
+        visited.add(next);
+        stack.push({ key: next, cursor: 0 });
+      }
+    }
+  }
+  const componentByKey = new Map<string, number>();
+  const componentSizes: number[] = [];
+  for (const root of order.reverse()) {
+    if (componentByKey.has(root)) continue;
+    const component = componentSizes.length;
+    let size = 0;
+    const stack = [root];
+    componentByKey.set(root, component);
+    while (stack.length > 0) {
+      const key = stack.pop()!;
+      size += 1;
+      for (const previous of incoming.get(key) ?? []) {
+        if (componentByKey.has(previous)) continue;
+        componentByKey.set(previous, component);
+        stack.push(previous);
+      }
+    }
+    componentSizes.push(size);
+  }
+  const cycles: ImpactGraphResult['cycles'] = [];
+  const recorded = new Set<string>();
+  let omittedCycles = 0;
+  for (const edge of [...edges].sort(edgeOrder)) {
+    const from = symbolKey(edge.target.kind, edge.target.id);
+    const to = symbolKey(edge.source.kind, edge.source.id);
+    const component = componentByKey.get(from);
+    if (
+      component === undefined ||
+      component !== componentByKey.get(to) ||
+      (componentSizes[component] === 1 && from !== to)
+    )
+      continue;
+    const identity = `${from}\0${to}\0${edge.source.path}`;
+    if (recorded.has(identity)) continue;
+    recorded.add(identity);
+    if (cycles.length < 1_000)
+      cycles.push({
+        from: edge.target,
+        to: { kind: edge.source.kind, id: edge.source.id },
+        path: edge.source.path,
+      });
+    else omittedCycles += 1;
+  }
+  return { cycles, omittedCycles };
+}
+
 /** Revision-pinned reverse consumer walk over the shared typed symbol index. */
 export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): ImpactGraphResult {
   const maxNodes = bounded(query.maxNodes, 5_000, 50_000);
@@ -98,7 +190,25 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
   }
   const reverse = new Map<string, ImpactEdge[]>();
   const unresolvedByTarget = new Map<string, ImpactGraphResult['unresolved']>();
-  for (const reference of [...snapshot.index.references, ...semantic.references]) {
+  const assetReferences: ReferenceRecord[] = snapshot.index.symbols.flatMap((symbol) =>
+    symbol.kind === 'sprite' && !symbol.overridden && typeof symbol.metadata.texture === 'string'
+      ? [
+          {
+            kind: 'sprite_texture',
+            from: symbol.id,
+            toKind: 'texture' as const,
+            to: symbol.metadata.texture,
+            path: symbol.path,
+            ...(symbol.location === undefined ? {} : { location: symbol.location }),
+          },
+        ]
+      : [],
+  );
+  for (const reference of [
+    ...snapshot.index.references,
+    ...semantic.references,
+    ...assetReferences,
+  ]) {
     const sources = activeBySource.get(sourceKey(reference.path, reference.from)) ?? [];
     const targetKey = symbolKey(reference.toKind, reference.to);
     if (sources.length !== 1) {
@@ -115,8 +225,24 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
     }
     const target = activeByKey.get(symbolKey(reference.toKind, reference.to));
     const edge: ImpactEdge = {
-      source: { kind: sources[0]!.kind, id: sources[0]!.id, path: sources[0]!.path },
+      source: {
+        kind: sources[0]!.kind,
+        id: sources[0]!.id,
+        path: sources[0]!.path,
+        rootKind: sources[0]!.rootKind,
+        loadOrder: sources[0]!.loadOrder,
+      },
       target: { kind: reference.toKind, id: reference.to },
+      ...(target === undefined
+        ? {}
+        : {
+            targetDefinition: {
+              path: target.path,
+              rootKind: target.rootKind,
+              loadOrder: target.loadOrder,
+              ...(target.location === undefined ? {} : { location: target.location }),
+            },
+          }),
       referenceKind: reference.kind,
       accessRole: reference.kind.endsWith('_read')
         ? 'read'
@@ -159,8 +285,9 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
       !activeByKey.has(symbolKey(kind, id)) &&
       !(['variable', 'flag', 'event_target'].includes(kind) && reverse.has(symbolKey(kind, id))),
   );
-  const visited = new Set(seeds);
-  const queue = [...seeds].sort(compareCodeUnits).map((key) => ({ key, depth: 0 }));
+  const seedKeys = [...seeds].sort(compareCodeUnits);
+  const visited = new Set(seedKeys.slice(0, maxNodes));
+  const queue = [...visited].map((key) => ({ key, depth: 0 }));
   const directConsumers: ImpactEdge[] = [];
   const transitiveConsumers: ImpactEdge[] = [];
   const affectedFiles = new Set(changedFiles);
@@ -171,7 +298,7 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
   const unresolved: ImpactGraphResult['unresolved'] = [];
   let reachedEdges = 0;
   let omittedEdges = 0;
-  let omittedNodes = 0;
+  let omittedNodes = seedKeys.length - visited.size;
   let stoppedAtDepth = false;
   for (const { key, depth } of queue) {
     unresolved.push(...(unresolvedByTarget.get(key) ?? []));
@@ -200,6 +327,10 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
       queue.push({ key: consumerKey, depth: depth + 1 });
     }
   }
+  const { cycles, omittedCycles } = reachedCycleEdges(visited, [
+    ...directConsumers,
+    ...transitiveConsumers,
+  ]);
   return {
     sourceRevision: snapshot.revision,
     complete:
@@ -207,6 +338,7 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
       semantic.complete &&
       omittedNodes === 0 &&
       omittedEdges === 0 &&
+      omittedCycles === 0 &&
       !stoppedAtDepth &&
       unresolved.length === 0 &&
       semantic.unresolved.length === 0,
@@ -217,13 +349,16 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
     affectedFiles: [...affectedFiles].sort(compareCodeUnits),
     unresolved,
     dynamicReferences: semantic.unresolved,
+    cycles,
     coverage: {
       scannedSymbols: snapshot.index.symbols.length,
-      scannedReferences: snapshot.index.references.length + semantic.references.length,
+      scannedReferences:
+        snapshot.index.references.length + semantic.references.length + assetReferences.length,
       reachedNodes: visited.size,
       reachedEdges,
       omittedNodes,
       omittedEdges,
+      omittedCycles,
       stoppedAtDepth,
       sourceComplete: snapshot.complete,
       skippedSourceCount: snapshot.skippedSourceCount,

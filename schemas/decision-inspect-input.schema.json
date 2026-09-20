@@ -1,0 +1,290 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.2.0/schemas/decision-inspect-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "mode": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "id": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "scenarios": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "proposedSources": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "expectedRevision": {
+      "$ref": "#/$defs/__schema15"
+    },
+    "refresh": {
+      "$ref": "#/$defs/__schema16"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "__schema1": {
+      "default": "inventory",
+      "type": "string",
+      "enum": [
+        "inventory",
+        "inspect",
+        "compare"
+      ]
+    },
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema3": {
+      "default": [],
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema4"
+      }
+    },
+    "__schema4": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "actor": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "state": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "flags": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema9"
+          }
+        },
+        "eventTargets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "scopes": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/__schema10"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema11"
+          }
+        },
+        "candidateOverrides": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "closedFlags": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "__schema5": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/__schema6"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema7"
+      }
+    },
+    "__schema6": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "__schema7": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema8"
+        },
+        {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema8"
+          }
+        }
+      ]
+    },
+    "__schema8": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 4096
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema9": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema10": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "__schema11": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "country",
+            "state",
+            "character",
+            "unit_leader",
+            "operative",
+            "strategic_region",
+            "province",
+            "unknown"
+          ]
+        },
+        "actor": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "state": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "flags": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema12"
+          }
+        },
+        "eventTargets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 1024
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "__schema12": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "__schema13": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema14"
+      }
+    },
+    "__schema14": {
+      "type": "object",
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 8388608
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "relativePath",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "__schema15": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "__schema16": {
+      "default": false,
+      "type": "boolean"
+    }
+  }
+}

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { SymbolIndex } from '../../src/hoi4_agent_tools/core/index.js';
 import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
-import { decisionSourceInventory } from '../../src/hoi4_agent_tools/decision/source-inventory.js';
+import {
+  decisionSourceInventory,
+  decisionTargetCatalog,
+} from '../../src/hoi4_agent_tools/decision/source-inventory.js';
 
 function source(
   relativePath: string,
@@ -80,6 +83,14 @@ describe('decision source inventory', () => {
     expect(target.fields.complete_effect).toHaveLength(1);
     expect(target.fields.ai_will_do).toHaveLength(1);
     expect(target.fields.days_mission_timeout).toHaveLength(0);
+    expect(decisionTargetCatalog(target)).toMatchObject({
+      targeted: true,
+      explicitTargets: ['FRA', 'BEL'],
+      targetArrays: [],
+      stateFilters: [],
+      hasTargetRootTrigger: true,
+      hasTargetTrigger: true,
+    });
     expect(result.decisions[0]!.fields.timeout_effect).toHaveLength(1);
     expect(result.categories.some(({ fields }) => fields.allowed.length === 1)).toBe(true);
   });
@@ -103,5 +114,8 @@ describe('decision source inventory', () => {
       sourceHash: mod.sha256,
     });
     expect(result.decisions[0]!.fields.cost[0]!.value).toMatchObject({ value: '20' });
+    expect(result.overrides).toEqual([
+      expect.objectContaining({ kind: 'decision', id: 'shared', path: vanilla.displayPath }),
+    ]);
   });
 });

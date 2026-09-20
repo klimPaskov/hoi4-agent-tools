@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { decisionInspectRequestSchema, impactInspectRequestSchema } from '../schemas/analysis.js';
 import {
   eventCompareRequestSchema,
   eventInspectRequestSchema,
@@ -66,6 +67,8 @@ const authenticatedTaskIdSchema = z
 export const operationTaskCallSchema = z
   .object({
     name: z.enum([
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
@@ -95,6 +98,8 @@ export const operationTaskCallSchema = z
   .strict();
 export type OperationTaskCall = z.infer<typeof operationTaskCallSchema>;
 const taskArgumentSchemas: Record<OperationTaskCall['name'], z.ZodType<Record<string, unknown>>> = {
+  'hoi4.impact_inspect': impactInspectRequestSchema,
+  'hoi4.decision_inspect': decisionInspectRequestSchema,
   'hoi4.event_inspect': eventInspectRequestSchema,
   'hoi4.event_render': eventRenderRequestSchema,
   'hoi4.event_compare': eventCompareRequestSchema,

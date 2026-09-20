@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 3.2.0 - 2026-09-20
+
+- Add read-only `hoi4.impact_inspect` with active and overridden definitions, direct and transitive source consumers, state-key access roles, cycle and coverage evidence, and in-memory source comparisons.
+- Connect event, focus, decision, idea, technology, scripted-helper, localisation, scripted-GUI, GUI, sprite, and texture references where typed static source evidence supports an edge; leave dynamic and unsupported references unresolved.
+- Identify affected declared scenario-suite cases from bounded workspace-owned JSON references without executing them.
+- Add read-only `hoi4.decision_inspect` for decision and mission inventory, declared actor and target gates, costs and direct payments, lifecycle paths, and scenario-by-scenario source comparisons.
+- Reuse the probability adapters for decision and mission AI scores and score comparisons, retaining linked traces and explicit proposal limits.
+- Serve both tools through ordinary and persistent native MCP tasks over legacy and modern stdio and HTTP routes, with revision-bound linked reports and source-preserving overlays.
+
 ## 3.1.0 - 2026-09-20
 
 - Reuse authenticated content-addressed parsed documents and file-local index segments across authorized local processes while revalidating current source bytes, load order, shadowing, workspace topology, and principal scope.

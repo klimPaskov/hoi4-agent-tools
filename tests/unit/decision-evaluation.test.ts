@@ -43,6 +43,11 @@ function snapshot(): ScanSnapshot {
           state_trigger = any
           target_trigger = { FROM = { is_owned_by = ROOT } }
         }
+        owned_state_action = { state_trigger = any_owned_state }
+        controlled_state_action = { state_trigger = any_controlled_state }
+        european_state_action = { state_trigger = europe }
+        untargeted_action = { state_trigger = no }
+        invalid_allowed = { allowed = { FROM = { has_idea = ready } } }
         fund_plan = {
           cost = constant:economy.decision_cost
           days_remove = -1
@@ -58,6 +63,25 @@ function snapshot(): ScanSnapshot {
           custom_cost_trigger = { check_variable = { treasury = 10 compare = greater_than_or_equals } }
           custom_cost_text = treasury_cost
           complete_effect = { set_country_flag = plan_funded }
+        }
+        fund_twice = {
+          custom_cost_trigger = { check_variable = { treasury = 10 } }
+          complete_effect = {
+            subtract_from_variable = { treasury = 10 }
+            subtract_from_variable = { treasury = 10 }
+          }
+        }
+        fund_engine_twice = {
+          cost = 10
+          complete_effect = { add_political_power = -10 }
+        }
+        timed_action = {
+          visible = { has_country_flag = action_visible }
+          cancel_if_not_visible = yes
+          cancel_trigger = { has_country_flag = action_cancelled }
+          remove_trigger = { has_country_flag = action_removed }
+          days_remove = 30
+          remove_effect = { set_country_flag = action_expired }
         }
         clock = {
           activation = { has_country_flag = mission_ready }
@@ -86,6 +110,50 @@ function snapshot(): ScanSnapshot {
 }
 
 describe('decision gate evaluation', () => {
+  it('uses declared owner, controller, and continent for state target selection', () => {
+    const scan = snapshot();
+    const actor = {
+      id: 'state_target',
+      actor: 'GER',
+      state: {},
+      scopes: {
+        FROM: {
+          id: '123',
+          type: 'state' as const,
+          state: { owner: 'GER', controller: 'FRA', continent: 'europe' },
+        },
+      },
+    };
+    expect(evaluateDecisionGates(scan, 'owned_state_action', actor).eligible).toBe('true');
+    expect(evaluateDecisionGates(scan, 'controlled_state_action', actor).eligible).toBe('false');
+    expect(evaluateDecisionGates(scan, 'european_state_action', actor).eligible).toBe('true');
+    expect(
+      evaluateDecisionGates(scan, 'untargeted_action', {
+        id: 'untargeted',
+        actor: 'GER',
+        state: {},
+      }).eligible,
+    ).toBe('true');
+    expect(
+      evaluateDecisionGates(scan, 'owned_state_action', {
+        ...actor,
+        scopes: { FROM: { id: '123', type: 'state', state: {} } },
+      }).eligible,
+    ).toBe('unresolved');
+    expect(
+      evaluateDecisionGates(scan, 'owned_state_action', {
+        ...actor,
+        scopes: { FROM: { id: '123', state: { owner: 'GER' } } },
+      }).eligible,
+    ).toBe('unresolved');
+    expect(
+      evaluateDecisionGates(scan, 'invalid_allowed', {
+        ...actor,
+        scopes: { FROM: { id: 'FRA', type: 'country', state: { has_idea: 'ready' } } },
+      }).decisionAllowed.state,
+    ).toBe('unresolved');
+  });
+
   it('keeps ROOT actor and FROM target separate and fails closed on missing target state', () => {
     const scan = snapshot();
     const base = {
@@ -201,13 +269,25 @@ describe('decision gate evaluation', () => {
         ({ code }) => code,
       ),
     ).toContain('DECISION_COST_UNRESOLVED');
+    const duplicate = inspectDecisionCost(scan, source('fund_twice'), scenario);
+    expect(duplicate.paymentEffects).toHaveLength(2);
+    expect(
+      duplicate.unresolved.some(({ message }) => message.includes('Multiple direct payments')),
+    ).toBe(true);
+    const engineDuplicate = inspectDecisionCost(scan, source('fund_engine_twice'), scenario);
+    expect(engineDuplicate.paymentEffects).toMatchObject([
+      { resource: 'political_power', amount: 10, operation: 'subtract' },
+    ]);
+    expect(engineDuplicate.unresolved.some(({ message }) => message.includes('also has'))).toBe(
+      true,
+    );
   });
 
   it('reports cooldown, indefinite removal, and each mission outcome path without executing them', () => {
     const scan = snapshot();
     const decisions = decisionSourceInventory(scan).decisions;
     const source = (id: string) => decisions.find((decision) => decision.id === id)!;
-    const scenario = { id: 'lifecycle', actor: 'GER', state: {} };
+    const scenario = { id: 'lifecycle', actor: 'GER', state: {}, closedFlags: true };
     expect(inspectDecisionLifecycle(scan, source('fund_plan'), scenario)).toMatchObject({
       kind: 'decision',
       fireOnlyOnce: false,
@@ -223,9 +303,30 @@ describe('decision gate evaluation', () => {
       hasActivation: true,
       hasCancellationTrigger: true,
       hasCancellationEffect: true,
+      cancellationTrigger: { state: 'false', unresolved: [] },
+      cancellationTriggerState: 'false',
       hasTimeoutEffect: true,
       ignoredMissionVisible: true,
       unresolved: [],
+    });
+    expect(inspectDecisionLifecycle(scan, source('timed_action'), scenario)).toMatchObject({
+      removalTrigger: { state: 'false' },
+      cancellationTrigger: { state: 'false' },
+      cancelIfNotVisible: true,
+      visibilityCancellation: 'true',
+      cancellationTriggerState: 'true',
+      unresolved: [],
+    });
+    expect(
+      inspectDecisionLifecycle(scan, source('timed_action'), {
+        ...scenario,
+        flags: ['action_visible', 'action_removed'],
+      }),
+    ).toMatchObject({
+      removalTrigger: { state: 'true' },
+      cancellationTrigger: { state: 'false' },
+      visibilityCancellation: 'false',
+      cancellationTriggerState: 'false',
     });
   });
 });

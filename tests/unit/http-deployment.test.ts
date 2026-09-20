@@ -241,6 +241,8 @@ describe('Streamable HTTP deployment policy', () => {
       ).toEqual(['hoi4:read', 'hoi4:write']);
     }
     for (const name of [
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',

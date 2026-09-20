@@ -25,6 +25,8 @@ const publicToolNames = [
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
+  'hoi4.impact_inspect',
+  'hoi4.decision_inspect',
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.tech_compare',
@@ -387,7 +389,7 @@ try {
   }
 
   process.stderr.write(
-    'Official MCP Inspector verified 25 tools, one prompt, artifact resources, and event, technology, probability, and job workflows.\n',
+    'Official MCP Inspector verified 27 tools, one prompt, artifact resources, and event, technology, probability, and job workflows.\n',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

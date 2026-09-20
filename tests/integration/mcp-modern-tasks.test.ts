@@ -284,6 +284,66 @@ async function holdExecutionCapacity(engine: CoreEngine): Promise<() => Promise<
 }
 
 describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode) => {
+  it('serves impact and decision analysis through ordinary and native task calls', async () => {
+    const { connect } = await fixture();
+    const wire = await connect(mode);
+    const listed = result(await wire.request('tools/list'));
+    const tools = z.array(z.object({ name: z.string() }).loose()).parse(listed.tools);
+    expect(tools.map(({ name }) => name)).toContain('hoi4.impact_inspect');
+    expect(tools.map(({ name }) => name)).toContain('hoi4.decision_inspect');
+    const impact = result(
+      await wire.request(
+        'tools/call',
+        {
+          name: 'hoi4.impact_inspect',
+          arguments: { workspaceId: 'alpha', symbols: [{ kind: 'event', id: 'modern.1' }] },
+        },
+        {},
+      ),
+    );
+    expect(impact).toMatchObject({
+      resultType: 'complete',
+      structuredContent: { code: 'IMPACT_ANALYZED' },
+    });
+    const created = result(
+      await wire.request(
+        'tools/call',
+        { name: 'hoi4.decision_inspect', arguments: { workspaceId: 'alpha' } },
+        capabilities,
+      ),
+    );
+    expect(created.resultType).toBe('task');
+    expect((await terminal(wire, z.string().parse(created.taskId))).result).toMatchObject({
+      structuredContent: { code: 'DECISION_ANALYZED', data: { mode: 'inventory' } },
+    });
+  });
+
+  it('keeps new analysis tools within the authenticated workspace', async () => {
+    const { connect } = await fixture();
+    const wire = await connect(mode, 'alpha-user');
+    for (const name of ['hoi4.impact_inspect', 'hoi4.decision_inspect']) {
+      const denied = result(
+        await wire.request(
+          'tools/call',
+          {
+            name,
+            arguments: {
+              workspaceId: 'beta',
+              ...(name === 'hoi4.impact_inspect'
+                ? { symbols: [{ kind: 'event', id: 'modern.1' }] }
+                : {}),
+            },
+          },
+          {},
+        ),
+      );
+      expect(denied).toMatchObject({
+        isError: true,
+        structuredContent: { code: 'WORKSPACE_INACCESSIBLE' },
+      });
+    }
+  });
+
   it('delivers requested progress before work finishes and leaves silent calls unstreamed', async () => {
     const { engine } = await fixture();
     const { client, exchanges } = await officialClient(engine, mode);
@@ -1238,7 +1298,7 @@ it('retains all shared tool names, descriptions, annotations, and schemas across
   expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   const listed = await client.listTools();
   const operations = listed.tools.map(({ execution: _execution, ...definition }) => definition);
-  expect(operations).toHaveLength(25);
+  expect(operations).toHaveLength(27);
   expect(modern.tools).toEqual(operations);
 });
 
@@ -1259,7 +1319,7 @@ it('supports the official SDK v2 ordinary-call client without requiring the Task
   });
   await client.connect(clientTransport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools).toHaveLength(25);
+  expect((await client.listTools()).tools).toHaveLength(27);
   expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
     'hoi4.probability_analysis',
   ]);
@@ -1338,7 +1398,10 @@ it('cancels a non-task modern tool call without leaving its durable job running'
   await client.connect(clientTransport);
   const controller = new AbortController();
   const call = client.callTool(
-    { name: 'hoi4.event_inspect', arguments: { workspaceId: 'alpha', mode: 'roots' } },
+    {
+      name: 'hoi4.impact_inspect',
+      arguments: { workspaceId: 'alpha', symbols: [{ kind: 'event', id: 'modern.1' }] },
+    },
     { signal: controller.signal },
   );
   const outcome = call.then(

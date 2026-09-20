@@ -127,7 +127,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'Analyze HOI4 events, tech trees, AI weights, and MTTH; build focus trees, GUIs, and maps.',
+        'Analyze HOI4 events, decisions, impact, tech, AI, and MTTH; build focus trees, GUIs, and maps.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -158,6 +158,7 @@ describe('offline package and Registry metadata', () => {
       'docs/README.md',
       'docs/setup.md',
       'docs/events.md',
+      'docs/analysis.md',
       'docs/technology.md',
       'docs/probability.md',
       'docs/research/probability-adapter-evidence.md',

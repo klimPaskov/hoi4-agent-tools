@@ -43,6 +43,8 @@ export class JobWorkerHost {
     if (['completed', 'cancelled', 'failed'].includes(initial.status)) return initial;
     if (
       ![
+        'hoi4.impact_inspect',
+        'hoi4.decision_inspect',
         'hoi4.event_inspect',
         'hoi4.event_render',
         'hoi4.event_compare',
