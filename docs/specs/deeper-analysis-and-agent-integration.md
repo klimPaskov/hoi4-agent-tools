@@ -39,17 +39,17 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Reuse the probability service for AI scores and retain exact unresolved dynamic-reference evidence.
 - [x] Test broken multi-system connections and actor/target scope distinctions; qualify release and installation.
 
-## Stage 4: Mechanic tests, packages, and suites — planned 3.3.0
+## Stage 4: Mechanic tests, packages, and suites — released 3.3.0
 
-- [ ] Introduce one shared scenario model with adapters for existing GUI/probability inputs.
-- [ ] Add `hoi4.mechanic_test` as bounded source execution on isolated scenario state, not campaign simulation.
-- [ ] Support variables/arithmetic, flags, targets, arrays, conditionals, finite declared scope iteration, scripted helpers, documented balance operations, and supported dynamic substitutions.
-- [ ] Execute explicit steps/time advances; unsupported operations make dependent assertions unresolved.
-- [ ] Test conservation, array alignment, affordability/payment, repeated setup, single payments, exclusivity, cleanup, and end states.
-- [ ] Add `hoi4.package_check` for declarative definitions, calls, registrations, localisation, assets, and required tests; prohibit embedded code and arbitrary commands.
-- [ ] Add `hoi4.scenario_test` for inline/workspace-relative suites using typed domain services, named cases, source selectors, assertions, and views.
-- [ ] Batch/resume large suites without silently dropping cases.
-- [ ] Prove intentional failures, unknown-input handling, deterministic traces, and release/install qualification.
+- [x] Introduce one shared scenario model with adapters for existing GUI/probability inputs.
+- [x] Add `hoi4.mechanic_test` as bounded source execution on isolated scenario state, not campaign simulation.
+- [x] Support variables/arithmetic, flags, targets, arrays, conditionals, finite declared scope iteration, scripted helpers, documented balance operations, and supported dynamic substitutions.
+- [x] Execute explicit steps/time advances; unsupported operations make dependent assertions unresolved.
+- [x] Test conservation, array alignment, affordability/payment, repeated setup, single payments, exclusivity, cleanup, and end states.
+- [x] Add `hoi4.package_check` for declarative definitions, calls, registrations, localisation, assets, and required tests; prohibit embedded code and arbitrary commands.
+- [x] Add `hoi4.scenario_test` for inline/workspace-relative suites using typed domain services, named cases, source selectors, assertions, and views.
+- [x] Batch/resume large suites without silently dropping cases.
+- [x] Prove intentional failures, unknown-input handling, deterministic traces, and release/install qualification.
 
 ## Stage 5: Domain refinement and visual regression — planned 3.4.0
 
@@ -216,4 +216,11 @@ The first attempt published the signed npm tarball, but its immediate verificati
 An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.2.0` reports version 3.2.0 and verified 135 dependency signatures and 23 attestations.
 A separate clean public-install check verified the published 27-tool package over stdio and authenticated HTTP.
 The active older installation and coding-agent processes were not restarted or replaced.
-Stage 4, Stage 5, and the wider external test-profile integration remain open.
+Stage 4 release commit `183a1364e8a6e29d2226305cf804a20e4365a42f` passed CI run `35512553434` on Windows and Linux with Node 22 and 24, including coverage, the official MCP Inspector, and container checks.
+Tag `v3.3.0` peels to that commit on main.
+Release workflow `35512562595` completed on attempt 2 through npm, GHCR, immutable GitHub release, MCP Registry, exact public verification, and clean installation.
+The first attempt published the signed npm tarball, but its immediate verification read the prior `latest` dist-tag; only the failed verification chain was rerun after the registry exposed 3.3.0 as latest.
+An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.3.0` reports version 3.3.0 and verified 135 dependency signatures and 23 attestations.
+A separate clean public-install check verified the published package over stdio and authenticated HTTP.
+The active older installation and coding-agent processes were not restarted or replaced.
+Stage 5 and the wider external test-profile integration remain open.
