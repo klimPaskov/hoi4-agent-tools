@@ -487,6 +487,26 @@ function evaluateAssignmentCore(
       state: compare(leftNumber, rightNumber, assignment.operator.text) ? 'true' : 'false',
       unresolved: [],
     };
+  if (/^(?:ROOT|THIS|PREV|FROM)$/iu.test(right)) {
+    const comparisonScope = resolveScopeContext(scenario, right, scopeContext);
+    if (
+      comparisonScope === undefined ||
+      (comparisonScope.expression === 'ROOT' && scenario.actor === undefined)
+    )
+      return unresolved(assignment, candidate, `Scenario does not bind scope ${right}`);
+    if (typeof declared !== 'string')
+      return unresolved(
+        assignment,
+        candidate,
+        `Trigger ${key} cannot compare its declared value with scope ${right}`,
+      );
+    return {
+      state: compare(declared, scopeIdentity(comparisonScope), assignment.operator.text)
+        ? 'true'
+        : 'false',
+      unresolved: [],
+    };
+  }
   if (typeof declared === 'string')
     return {
       state: compare(declared, right, assignment.operator.text) ? 'true' : 'false',
@@ -568,3 +588,6 @@ export function evaluateTriggerBlock(
     trace: children.flatMap(({ trace }) => trace ?? []),
   };
 }
+
+/** Resolve a declared numeric expression with the same constants and scope rules as triggers. */
+export { numberValue as resolveConditionNumber };

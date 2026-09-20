@@ -1,6 +1,6 @@
 # 32. Cross-system impact and decision inspection
 
-Status: Stage 3 design accepted within the user's five-stage implementation request; implementation and qualification remain open.
+Status: Stage 3 implementation is in progress in an isolated worktree; public tools, complete cross-system edges, comparison, qualification, publication, and installation remain open.
 
 ## Source and authority
 
@@ -51,3 +51,13 @@ Synthetic tests must cover a broken event-to-decision-to-idea chain, a focus-to-
 Decision cases must include two actors with distinct targets, country and state `FROM`, category gates, engine and custom costs, missing and duplicate payment, repeatability/cooldowns, each mission end path, and before/after comparisons.
 The public wire tests must cover both transports, ordinary results, native tasks, cancellation, principal isolation, bounded resources, and package metadata.
 Complete Stage 3 qualification additionally requires the repository's Windows/Linux and Node 22/24 matrix, coverage, official Inspector, exact published-package verification, and side-by-side installation.
+
+## Implementation checkpoint
+
+The first internal tranche inventories active decisions and category fragments through the shared symbol index, evaluates declared category/decision/mission gates with separate `ROOT` actor and `FROM` target bindings, reports engine and custom cost evidence, and inventories cooldown and mission outcome paths.
+The shared condition evaluator resolves a declared `ROOT`, `THIS`, `PREV`, or `FROM` operand as a scope identity and leaves an unbound operand unresolved.
+The first impact graph walks typed references already present in the shared index plus static script edges, retains active and overridden definitions, and reports direct/transitive consumers with explicit node, edge, depth, and source boundaries.
+It records observed variable, flag, and event-target reads and writes as state-key references without inventing one active definition.
+An in-memory proposed-source overlay can add, replace, or remove bounded text sources under the resolved mod root and rebuild active source precedence without touching the workspace.
+These internal functions have focused synthetic tests; they are not public MCP tools yet and do not satisfy Stage 3's full cross-system or decision-inspection contract.
+Localisation and asset edges, overlay service authorization and comparisons, scenario suites, decision AI reuse, public schemas, both transports, and release gates remain to be implemented and verified.
