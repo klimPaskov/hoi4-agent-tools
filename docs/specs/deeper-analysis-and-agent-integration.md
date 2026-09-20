@@ -92,7 +92,7 @@ No stage is complete until its code, tests, public package, installation, and ap
 ## Evidence ledger
 
 Stage 1 is release-qualified, published, and installed side-by-side.
-Stages 3–5 remain incomplete.
+Stage 5 remains incomplete until its final release and external profile checks are recorded below.
 The implementation began from commit `d8a8117b18649eee622f9acb44c11462a1ee9950` (3.0.8).
 
 Stage 1 implementation and targeted regressions are complete; release evidence follows.

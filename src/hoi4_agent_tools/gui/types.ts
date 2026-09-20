@@ -77,6 +77,8 @@ export interface GuiSpriteDefinition {
   spriteType: string;
   texturePath?: string;
   texturePath2?: string;
+  primaryColour?: string;
+  secondaryColour?: string;
   frameCount: number;
   frameAnimated: boolean;
   animationRateFps?: number;
@@ -84,6 +86,7 @@ export interface GuiSpriteDefinition {
   playOnShow?: boolean;
   pauseOnLoop?: number;
   effectFile?: string;
+  shaderFeatures?: string[];
   staticFallback?: string;
   declaredSize?: GuiSize;
   borderSize?: GuiSize;
@@ -130,6 +133,8 @@ export interface GuiInsets {
 
 export interface GuiElementDefinition {
   id: string;
+  /** Source owner for renderer-instantiated native background/control parts. */
+  sourceOwnerId?: string;
   name: string;
   elementType: string;
   sourcePath: string;
@@ -164,6 +169,13 @@ export interface ScriptedGuiDefinition {
   aiWeights: string[];
   aiEnabled: boolean;
   rawSource: string;
+  interfaceKind?: 'focus-inlay';
+  internal?: boolean;
+  imageDefinitions?: {
+    elementName: string;
+    choices: { spriteName: string; conditionExpression: string; location?: SourceLocation }[];
+    location?: SourceLocation;
+  }[];
 }
 
 export interface ScriptedGuiPropertyDefinition {
@@ -194,6 +206,7 @@ export interface ScriptedGuiTriggerDefinition {
   elementName: string;
   constantResult?: boolean;
   rawSource: string;
+  conditionExpression?: string;
   location?: SourceLocation;
 }
 
@@ -414,6 +427,25 @@ export interface GuiTextureFrame {
 
 export type GuiSpriteRenderMode = 'stretch' | 'cornered-tile' | 'progressbar' | 'masked-shield';
 
+export interface GuiSpriteShader {
+  sourcePath: string;
+  sourceHash: string;
+  effect: 'Up' | 'Over' | 'Down' | 'Disable';
+  entryPoint: string;
+  textureFiltering: { magnification: 'linear' | 'nearest'; minification: 'linear' | 'nearest' };
+  /** Four row-major affine RGBA rows, each with a fifth constant coefficient. */
+  colourMatrix: number[];
+}
+
+export interface GuiProgressShader {
+  sourcePath: string;
+  sourceHash: string;
+  effect: 'Color' | 'Texture';
+  entryPoint: string;
+  composition: 'threshold';
+  textureFiltering?: GuiSpriteShader['textureFiltering'];
+}
+
 export interface GuiSceneElement {
   id: string;
   sourceId: string;
@@ -434,9 +466,21 @@ export interface GuiSceneElement {
   scale: number;
   state: GuiPreviewState;
   progressRatio?: number;
+  scroll?: {
+    viewport: GuiRect;
+    contentWidth: number;
+    contentHeight: number;
+    offsetX: number;
+    offsetY: number;
+    maximumX: number;
+    maximumY: number;
+  };
   sprite?: GuiTextureFrame;
   secondarySprite?: GuiTextureFrame;
   spriteRenderMode?: GuiSpriteRenderMode;
+  spriteShader?: GuiSpriteShader;
+  progressShader?: GuiProgressShader;
+  progressColours?: { first: string; second: string };
   spriteBorderSize?: GuiSize;
   spriteTilingCenter?: boolean;
   progressHorizontal?: boolean;

@@ -40,30 +40,32 @@ import type {
   ScriptedGuiTriggerDefinition,
 } from './types.js';
 
-const explicitGuiElementTypes = new Set([
-  'containerWindowType',
-  'windowType',
-  'eu3dialogtype',
-  'iconType',
-  'buttonType',
-  'guiButtonType',
-  'instantTextBoxType',
-  'textBoxType',
-  'gridBoxType',
-  'dynamicGridBoxType',
-  'listboxType',
-  'smoothListboxType',
-  'scrollbarType',
-  'extendedScrollbarType',
-  'checkboxType',
-  'editBoxType',
-  'OverlappingElementsBoxType',
-  'shieldtype',
-  'progressbarType',
-  'scrollableTextBoxType',
-  'browserType',
-  'mapIconType',
-]);
+const explicitGuiElementTypes = new Set(
+  [
+    'containerWindowType',
+    'windowType',
+    'eu3dialogtype',
+    'iconType',
+    'buttonType',
+    'guiButtonType',
+    'instantTextBoxType',
+    'textBoxType',
+    'gridBoxType',
+    'dynamicGridBoxType',
+    'listboxType',
+    'smoothListboxType',
+    'scrollbarType',
+    'extendedScrollbarType',
+    'checkboxType',
+    'editBoxType',
+    'OverlappingElementsBoxType',
+    'shieldtype',
+    'progressbarType',
+    'scrollableTextBoxType',
+    'browserType',
+    'mapIconType',
+  ].map((type) => type.toLowerCase()),
+);
 
 const spriteTypes = new Set([
   'spritetype',
@@ -101,11 +103,18 @@ const modelledElementAttributes = new Set([
   'spacing',
   'slotsize',
   'max_slots_horizontal',
+  'max_slots_vertical',
   'priority',
   'minValue',
   'maxValue',
   'startValue',
   'centerposition',
+  'vertical_alignment',
+  'hide',
+  'hidden',
+  'visible',
+  'enabled',
+  'context_aware_text',
 ]);
 
 const ignoredElementAttributes = new Set([
@@ -145,7 +154,31 @@ const ignoredElementAttributes = new Set([
 
 export type GuiElementAttributeFidelity = 'modelled' | 'ignored' | 'unsupported' | 'structural';
 
-export function guiElementAttributeFidelity(key: string): GuiElementAttributeFidelity {
+export function guiElementAttributeFidelity(
+  key: string,
+  elementType?: string,
+): GuiElementAttributeFidelity {
+  if (
+    elementType?.toLowerCase() === 'extendedscrollbartype' &&
+    ['horizontal', 'slider', 'track', 'decreaseButton', 'increaseButton'].some(
+      (candidate) => candidate.toLowerCase() === key.toLowerCase(),
+    )
+  )
+    return 'modelled';
+  if (
+    /^(?:containerwindowtype|windowtype)$/iu.test(elementType ?? '') &&
+    ['verticalScrollbar', 'horizontalScrollbar', 'autohide_scrollbars', 'margin'].some(
+      (candidate) => candidate.toLowerCase() === key.toLowerCase(),
+    )
+  )
+    return 'structural';
+  if (
+    elementType?.toLowerCase() === 'scrollbartype' &&
+    ['horizontal', 'slider', 'track', 'leftbutton', 'rightbutton', 'borderSize'].some(
+      (candidate) => candidate.toLowerCase() === key.toLowerCase(),
+    )
+  )
+    return 'modelled';
   const modelled = [...modelledElementAttributes].find(
     (candidate) => candidate.toLowerCase() === key.toLowerCase(),
   );
@@ -323,9 +356,9 @@ function raw(document: SourceDocument, node: { start: number; end: number }): st
 
 function isGuiElement(assignment: AssignmentNode): boolean {
   if (assignment.value.type !== 'block') return false;
-  if (explicitGuiElementTypes.has(assignment.key.value)) return true;
+  if (explicitGuiElementTypes.has(assignment.key.value.toLowerCase())) return true;
   return (
-    assignment.key.value.endsWith('Type') && firstScalar(assignment.value, 'name') !== undefined
+    /type$/iu.test(assignment.key.value) && firstScalar(assignment.value, 'name') !== undefined
   );
 }
 
@@ -336,6 +369,8 @@ function fileKind(file: ScannedFile): GuiSourceKind | undefined {
   if (lower.endsWith('.gui')) return 'gui_file';
   if (lower.endsWith('.gfx')) return 'gfx_file';
   if (lower.includes('common/scripted_guis/') && lower.endsWith('.txt')) return 'scripted_gui_file';
+  if (lower.includes('common/focus_inlay_windows/') && lower.endsWith('.txt'))
+    return 'scripted_gui_file';
   if (lower.includes('common/scripted_localisation/') && lower.endsWith('.txt'))
     return 'scripted_localisation_file';
   if (lower.endsWith('.txt')) {
@@ -440,7 +475,9 @@ function indexGuiElements(
           unsupportedAttributes: assignments(assignment.value)
             .filter((child) => !isGuiElement(child))
             .map(({ key }) => key.value)
-            .filter((key) => guiElementAttributeFidelity(key) === 'unsupported')
+            .filter(
+              (key) => guiElementAttributeFidelity(key, assignment.key.value) === 'unsupported',
+            )
             .sort((a, b) => compareCodeUnits(a, b)),
           rawSource: raw(document, assignment),
           definitionOrder: order,
@@ -505,12 +542,21 @@ function indexSpritesAndFonts(
             'textureFile1',
           );
           const texturePath2 = firstScalarInsensitive(child, 'textureFile2');
+          const primaryColour = colourFrom(child, 'color', 'colour');
+          const secondaryColour = colourFrom(child, 'colortwo', 'colourtwo');
           const staticFallback = firstScalarInsensitive(child, 'static_fallback', 'staticFallback');
           const animationRateFps = numberScalar(child, 'animation_rate_fps');
           const looping = boolScalar(child, 'looping');
           const playOnShow = boolScalar(child, 'play_on_show');
           const pauseOnLoop = numberScalar(child, 'pause_on_loop');
           const effectFile = firstScalarInsensitive(child, 'effectFile');
+          const shaderFeatures = assignments(child)
+            .filter(
+              ({ key, value }) =>
+                /^(?:animation|masking_texture|maskingtexture|shader_defines)$/iu.test(key.value) &&
+                (value.type === 'block' || !/^(?:no|false|0)$/iu.test(value.value)),
+            )
+            .map(({ key }) => key.value);
           const declaredSize = sizeFrom(child);
           const borderSize = nestedSizeFrom(child, 'borderSize');
           const tilingCenter = boolScalar(child, 'tilingCenter');
@@ -524,6 +570,8 @@ function indexSpritesAndFonts(
             spriteType: assignment.key.value,
             ...(texturePath === undefined ? {} : { texturePath }),
             ...(texturePath2 === undefined ? {} : { texturePath2 }),
+            ...(primaryColour === undefined ? {} : { primaryColour }),
+            ...(secondaryColour === undefined ? {} : { secondaryColour }),
             frameCount: Math.trunc(numberScalar(child, 'noOfFrames', 'noofframes') ?? 1),
             frameAnimated: spriteType === 'frameanimatedspritetype',
             ...(animationRateFps === undefined ? {} : { animationRateFps }),
@@ -531,6 +579,7 @@ function indexSpritesAndFonts(
             ...(playOnShow === undefined ? {} : { playOnShow }),
             ...(pauseOnLoop === undefined ? {} : { pauseOnLoop }),
             ...(effectFile === undefined ? {} : { effectFile }),
+            ...(shaderFeatures.length === 0 ? {} : { shaderFeatures }),
             ...(staticFallback === undefined ? {} : { staticFallback }),
             ...(declaredSize === undefined ? {} : { declaredSize }),
             ...(borderSize === undefined ? {} : { borderSize }),
@@ -686,6 +735,144 @@ function constantTriggerResult(value: SourceValue): boolean | undefined {
   return undefined;
 }
 
+function indexFocusInlays(
+  document: SourceDocument,
+  file: ScannedFile,
+  fileNodeId: string,
+  nodes: GuiSourceNode[],
+  edges: GuiSourceEdge[],
+  scriptedGuis: ScriptedGuiDefinition[],
+): void {
+  for (const assignment of assignments(document.root)) {
+    if (assignment.value.type !== 'block') continue;
+    const block = assignment.value;
+    const windowName = firstScalarInsensitive(block, 'window_name');
+    if (windowName === undefined) continue;
+    const name = assignment.key.value;
+    const id = deterministicId('scripted_gui', { path: file.displayPath, name });
+    const location = nodeLocation(document, assignment, name);
+    const imageDefinitions: NonNullable<ScriptedGuiDefinition['imageDefinitions']> =
+      namedAssignments(block, 'scripted_images').flatMap((image) =>
+        image.value.type !== 'block'
+          ? []
+          : [
+              {
+                elementName: image.key.value,
+                location: nodeLocation(document, image, image.key.value),
+                choices: assignments(image.value).map((choice) => ({
+                  spriteName: choice.key.value,
+                  conditionExpression:
+                    choice.value.type === 'block'
+                      ? raw(document, choice.value)
+                      : `{ always = ${choice.value.value} }`,
+                  location: nodeLocation(document, choice, choice.key.value),
+                })),
+              },
+            ],
+      );
+    const triggerDefinitions: ScriptedGuiTriggerDefinition[] = [];
+    const effectDefinitions: ScriptedGuiDefinition['effectDefinitions'] = [];
+    for (const button of namedAssignments(block, 'scripted_buttons')) {
+      if (button.value.type !== 'block') continue;
+      const available = childBlocks(button.value, 'available')[0];
+      const effect = childBlocks(button.value, 'click_effect')[0];
+      if (available !== undefined) {
+        const triggerName = `${button.key.value}_click_enabled`;
+        const constantResult = constantTriggerResult(available);
+        triggerDefinitions.push({
+          name: triggerName,
+          elementName: button.key.value,
+          rawSource: `${triggerName} = ${raw(document, available)}`,
+          conditionExpression: raw(document, available),
+          location: nodeLocation(document, button, button.key.value),
+          ...(constantResult === undefined ? {} : { constantResult }),
+        });
+      }
+      if (effect !== undefined)
+        effectDefinitions.push({
+          name: `${button.key.value}_click`,
+          elementName: button.key.value,
+          costs: directEffectCosts(effect),
+          rawSource: raw(document, effect),
+          location: nodeLocation(document, button, button.key.value),
+        });
+    }
+    const propertyDefinitions: ScriptedGuiDefinition['propertyDefinitions'] = namedAssignments(
+      block,
+      'scripted_progressbars',
+    ).map((bar) => ({
+      elementName: bar.key.value,
+      attributes:
+        bar.value.type === 'block'
+          ? (sourceValueToProperty(bar.value, constantsFor(document)) as Record<
+              string,
+              GuiPropertyValue
+            >)
+          : {},
+      rawSource: raw(document, bar),
+      location: nodeLocation(document, bar, bar.key.value),
+    }));
+    const visible = childBlocks(block, 'visible')[0];
+    const definition: ScriptedGuiDefinition = {
+      id,
+      name,
+      sourcePath: file.displayPath,
+      location,
+      windowName,
+      contextType: 'country_context',
+      interfaceKind: 'focus-inlay',
+      internal: boolScalar(block, 'internal') ?? false,
+      ...(visible === undefined ? {} : { visibleExpression: raw(document, visible) }),
+      effects: effectDefinitions.map(({ name }) => name),
+      effectDefinitions,
+      triggers: triggerDefinitions.map(({ name }) => name),
+      triggerDefinitions,
+      properties: [
+        ...new Set([
+          ...imageDefinitions.map(({ elementName }) => elementName),
+          ...propertyDefinitions.map(({ elementName }) => elementName),
+        ]),
+      ],
+      propertyDefinitions,
+      dynamicLists: [],
+      dynamicListDefinitions: [],
+      aiWeights: [],
+      aiEnabled: false,
+      rawSource: raw(document, assignment),
+      imageDefinitions,
+    };
+    addDomainEntry(scriptedGuis, definition, 'focus inlay');
+    addNode(nodes, {
+      id,
+      name,
+      kind: 'scripted_gui',
+      path: file.displayPath,
+      location,
+      metadata: { interfaceKind: 'focus-inlay', internal: definition.internal!, windowName },
+    });
+    addEdge(edges, 'contains', fileNodeId, id, true, {}, location);
+    for (const [kind, actions] of [
+      ['scripted_effect', definition.effects],
+      ['scripted_trigger', definition.triggers],
+    ] as const) {
+      for (const action of actions) {
+        const childId = deterministicId(kind === 'scripted_effect' ? 'gui_effect' : 'gui_trigger', {
+          id,
+          [kind === 'scripted_effect' ? 'effect' : 'trigger']: action,
+        });
+        addNode(nodes, {
+          id: childId,
+          name: action,
+          kind,
+          path: file.displayPath,
+          metadata: { scriptedGui: name, element: actionElementName(action) },
+        });
+        addEdge(edges, 'contains', id, childId, true);
+      }
+    }
+  }
+}
+
 function indexScriptedGuis(
   document: SourceDocument,
   file: ScannedFile,
@@ -719,6 +906,7 @@ function indexScriptedGuis(
           elementName: actionElementName(trigger.key.value),
           ...(constantResult === undefined ? {} : { constantResult }),
           rawSource: raw(document, trigger),
+          conditionExpression: raw(document, trigger.value),
           location: nodeLocation(document, trigger, trigger.key.value),
         };
       });
@@ -1254,6 +1442,20 @@ function linkGraph(
   }
 
   for (const gui of scriptedGuis) {
+    for (const image of gui.imageDefinitions ?? []) {
+      for (const choice of image.choices) {
+        const sprite = spriteByName.get(choice.spriteName.toLocaleLowerCase('en-US'));
+        addEdge(
+          edges,
+          'uses_sprite',
+          gui.id,
+          sprite?.id ?? `sprite:${choice.spriteName}`,
+          sprite !== undefined,
+          { elementName: image.elementName, spriteName: choice.spriteName },
+          choice.location,
+        );
+      }
+    }
     if (gui.windowName !== undefined) {
       const window = elementByName.get(gui.windowName);
       addEdge(
@@ -1377,6 +1579,7 @@ function linkGraph(
 
 const localisationAttributeNames = [
   'text',
+  'context_aware_text',
   'buttonText',
   'pdx_tooltip',
   'pdx_tooltip_delayed',
@@ -1627,7 +1830,9 @@ export function buildGuiSourceGraph(
       indexSpritesAndFonts(document, file, fileNodeId, nodes, edges, sprites, fonts, textColours);
     }
     if (kind === 'scripted_gui_file') {
-      indexScriptedGuis(document, file, fileNodeId, nodes, edges, scriptedGuis);
+      if (normalized.startsWith('common/focus_inlay_windows/'))
+        indexFocusInlays(document, file, fileNodeId, nodes, edges, scriptedGuis);
+      else indexScriptedGuis(document, file, fileNodeId, nodes, edges, scriptedGuis);
     }
     if (kind === 'scripted_localisation_file') {
       indexScriptedLocalisation(document, file, fileNodeId, nodes, edges, scriptedLocalisation);

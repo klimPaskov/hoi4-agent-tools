@@ -14,6 +14,7 @@ import type {
   GuiScene,
   GuiSceneElement,
   GuiTextGlyphLine,
+  GuiTextureFrame,
 } from './types.js';
 
 const defaultVariants: readonly GuiRenderVariant[] = [
@@ -326,8 +327,8 @@ function renderCorneredTile(element: GuiSceneElement): string {
     sprite?.supported !== true ||
     sprite.dataUri === undefined ||
     border === undefined ||
-    border.width <= 0 ||
-    border.height <= 0
+    border.width < 0 ||
+    border.height < 0
   )
     return sprite === undefined ? '' : renderSpriteImage(sprite, rect);
   const sourceBorderX = Math.min(border.width, sprite.width / 2);
@@ -388,9 +389,6 @@ function renderProgressbar(element: GuiSceneElement): string {
   const sprite = element.sprite;
   const secondary = element.secondarySprite;
   const ratio = Math.max(0, Math.min(1, element.progressRatio ?? 1));
-  const background = secondary === undefined ? '' : renderSpriteImage(secondary, rect);
-  if (sprite?.supported !== true || sprite.dataUri === undefined) return background;
-  if (ratio <= 0) return background;
   const horizontal = element.progressHorizontal !== false;
   const filled = horizontal
     ? { x: rect.x, y: rect.y, width: rect.width * ratio, height: rect.height }
@@ -400,15 +398,43 @@ function renderProgressbar(element: GuiSceneElement): string {
         width: rect.width,
         height: rect.height * ratio,
       };
-  const source = horizontal
-    ? { x: 0, y: 0, width: sprite.width * ratio, height: sprite.height }
-    : {
-        x: 0,
-        y: sprite.height * (1 - ratio),
-        width: sprite.width,
-        height: sprite.height * ratio,
-      };
-  return `${background}${renderSpriteSlice(sprite, source, filled)}`;
+  const remainder = horizontal
+    ? { x: rect.x + filled.width, y: rect.y, width: rect.width - filled.width, height: rect.height }
+    : { x: rect.x, y: rect.y, width: rect.width, height: rect.height - filled.height };
+  // A threshold shader selects a texture once per pixel. Painting the filled region
+  // over a complete secondary layer would incorrectly blend both sources at partial alpha.
+  const layer = (
+    texture: GuiTextureFrame | undefined,
+    region: GuiRect,
+    colour: string | undefined,
+  ) => {
+    if (region.width <= 0 || region.height <= 0) return '';
+    if (colour !== undefined)
+      return `<rect ${rectAttributes(region)} fill="${escapeXml(colour)}"/>`;
+    if (
+      texture?.supported !== true ||
+      texture.dataUri === undefined ||
+      rect.width <= 0 ||
+      rect.height <= 0
+    )
+      return '';
+    const source = {
+      x: ((region.x - rect.x) / rect.width) * texture.width,
+      y: ((region.y - rect.y) / rect.height) * texture.height,
+      width: (region.width / rect.width) * texture.width,
+      height: (region.height / rect.height) * texture.height,
+    };
+    return renderSpriteSlice(texture, source, region);
+  };
+  const content = `${layer(secondary, remainder, element.progressColours?.second)}${layer(sprite, filled, element.progressColours?.first)}`;
+  const filtering = element.progressShader?.textureFiltering;
+  if (filtering === undefined) return content;
+  const shrinking = [sprite, secondary].some(
+    (texture) =>
+      texture !== undefined && (rect.width < texture.width || rect.height < texture.height),
+  );
+  const mode = filtering[shrinking ? 'minification' : 'magnification'];
+  return `<g image-rendering="${mode === 'nearest' ? 'optimizeSpeed' : 'optimizeQuality'}">${content}</g>`;
 }
 
 function renderMaskedShield(element: GuiSceneElement): string {
@@ -439,8 +465,23 @@ function renderBaseElement(
   const rect = element.unclippedRect;
   const clip = clipId === undefined ? '' : ` clip-path="url(#${clipId})"`;
   const content: string[] = [];
-  if (element.sprite?.supported === true && element.sprite.dataUri !== undefined) {
-    content.push(renderElementSprite(element));
+  if (element.spriteRenderMode === 'progressbar' && element.progressColours !== undefined) {
+    content.push(renderProgressbar(element));
+  } else if (element.sprite?.supported === true && element.sprite.dataUri !== undefined) {
+    const sprite = renderElementSprite(element);
+    if (element.spriteShader === undefined) content.push(sprite);
+    else {
+      const id = `gui-shader-${sha256Bytes(element.id).slice(0, 20)}`;
+      const matrix = element.spriteShader.colourMatrix
+        .map((coefficient) => Number(coefficient.toFixed(9)))
+        .join(' ');
+      const shrinking = rect.width < element.sprite.width || rect.height < element.sprite.height;
+      const sampling =
+        element.spriteShader.textureFiltering[shrinking ? 'minification' : 'magnification'];
+      content.push(
+        `<defs><filter id="${id}" filterUnits="userSpaceOnUse" ${rectAttributes(rect)} color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrix}"/></filter></defs><g filter="url(#${id})" image-rendering="${sampling === 'nearest' ? 'optimizeSpeed' : 'optimizeQuality'}">${sprite}</g>`,
+      );
+    }
   } else if (element.sprite !== undefined) {
     content.push(
       `<rect ${rectAttributes(rect)} fill="#331f3f" stroke="#ff42d0" stroke-width="1"/><path d="M ${finite(rect.x)} ${finite(rect.y)} L ${finite(rect.x + rect.width)} ${finite(rect.y + rect.height)} M ${finite(rect.x + rect.width)} ${finite(rect.y)} L ${finite(rect.x)} ${finite(rect.y + rect.height)}" stroke="#ff42d0"/>`,

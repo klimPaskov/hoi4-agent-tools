@@ -71,6 +71,7 @@ import type {
 import { validateGuiScene, validateResolutionDrift, validateStateMatrix } from './validators.js';
 
 const staticGuiDefinitionPatterns = [
+  'common/focus_inlay_windows/**/*.txt',
   'common/scripted_triggers/**/*.txt',
   'common/script_constants/**/*.txt',
   'common/scripted_localisation/**/*.txt',
@@ -367,8 +368,18 @@ function basenameFallbackPatterns(
   ].sort((left, right) => compareCodeUnits(left, right));
 }
 
-function selectedElements(graph: GuiSourceGraph, windowName: string): GuiSourceGraph['elements'] {
+function selectedElements(
+  graph: GuiSourceGraph,
+  windowName: string,
+  additionalTemplateNames: readonly string[] = [],
+): GuiSourceGraph['elements'] {
   const byId = new Map(graph.elements.map((element) => [element.id, element]));
+  const byName = new Map<string, GuiSourceGraph['elements']>();
+  for (const element of graph.elements) {
+    const definitions = byName.get(element.name) ?? [];
+    definitions.push(element);
+    byName.set(element.name, definitions);
+  }
   const relatedScriptedGuiNames = new Set(
     graph.scriptedGuis
       .filter(
@@ -391,7 +402,7 @@ function selectedElements(graph: GuiSourceGraph, windowName: string): GuiSourceG
       addedRelatedScriptedGui = true;
     }
   }
-  const selectedRootNames = new Set([windowName]);
+  const selectedRootNames = new Set([windowName, ...additionalTemplateNames]);
   for (const scripted of graph.scriptedGuis.filter(({ name }) =>
     relatedScriptedGuiNames.has(name),
   )) {
@@ -414,6 +425,14 @@ function selectedElements(graph: GuiSourceGraph, windowName: string): GuiSourceG
     if (element === undefined) continue;
     selected.set(id, element);
     pending.push(...element.childIds);
+    const referenced = new Set<string>();
+    collectNamedAttributes(
+      element.attributes,
+      new Set(['verticalScrollbar', 'horizontalScrollbar', 'scrollbarType', 'scrollbartype']),
+      referenced,
+    );
+    for (const name of referenced)
+      for (const candidate of byName.get(name) ?? []) pending.push(candidate.id);
   }
   return [...selected.values()];
 }
@@ -471,18 +490,23 @@ export function referencedAssetPatternsForWindow(
   windowName: string,
   additionalSpriteNames: readonly string[] = [],
   languages: readonly string[] = ['l_english'],
+  additionalTemplateNames: readonly string[] = [],
 ): string[] {
   const spriteNames = new Set<string>(additionalSpriteNames);
   const fontNames = new Set<string>();
   const textValues = new Set<string>();
-  for (const element of selectedElements(graph, windowName)) {
+  for (const element of selectedElements(graph, windowName, additionalTemplateNames)) {
     collectNamedAttributes(
       element.attributes,
       new Set(['spriteType', 'quadTextureSprite']),
       spriteNames,
     );
     collectNamedAttributes(element.attributes, new Set(['font', 'buttonFont']), fontNames);
-    collectNamedAttributes(element.attributes, new Set(['text', 'buttonText']), textValues);
+    collectNamedAttributes(
+      element.attributes,
+      new Set(['text', 'buttonText', 'context_aware_text']),
+      textValues,
+    );
   }
   for (const localisation of graph.localisation) {
     if (textValues.has(localisation.key)) textValues.add(localisation.value);
@@ -543,6 +567,9 @@ export function referencedAssetPatternsForWindow(
         return match?.[1] === undefined ? [] : [match[1]];
       }),
   );
+  for (const gui of graph.scriptedGuis.filter(({ name }) => relatedScriptedGuiNames.has(name)))
+    for (const image of gui.imageDefinitions ?? [])
+      for (const choice of image.choices) spriteNames.add(choice.spriteName);
   const usesCountryFlags = graph.scriptedGuis
     .filter(({ name }) => relatedScriptedGuiNames.has(name))
     .flatMap(({ propertyDefinitions }) => propertyDefinitions)
@@ -596,8 +623,10 @@ export function referencedAssetPatternsForWindow(
         })),
   );
   const references = [
-    ...[...selectedSprites.values()].flatMap(({ texturePath, texturePath2 }) =>
-      [texturePath, texturePath2].filter((value): value is string => value !== undefined),
+    ...[...selectedSprites.values()].flatMap(({ texturePath, texturePath2, effectFile }) =>
+      [texturePath, texturePath2, effectFile, effectFile?.replace(/\.lua$/iu, '.shader')].filter(
+        (value): value is string => value !== undefined,
+      ),
     ),
     ...selectedFonts.flatMap(({ assetPaths }) => assetPaths),
     ...selectedManifests.flatMap((manifest) => [
@@ -639,6 +668,49 @@ function scenarioSpriteNames(
     else pending.push(...Object.values(value as Record<string, unknown>));
   }
   return [...sprites].sort((left, right) => compareCodeUnits(left, right));
+}
+
+function scenarioTemplateNames(scenarios: readonly GuiPreviewScenario[]): string[] {
+  return [
+    ...new Set(
+      scenarios.flatMap(({ lists }) =>
+        Object.values(lists).flatMap((rows) =>
+          rows.flatMap(({ entryContainer }) =>
+            typeof entryContainer === 'string' && entryContainer.length > 0 ? [entryContainer] : [],
+          ),
+        ),
+      ),
+    ),
+  ].sort(compareCodeUnits);
+}
+
+/** Native row bindings admit only bounded country tokens, never caller-supplied paths or globs. */
+export function scenarioCountryFlagPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
+  const tags = new Set<string>();
+  for (const scenario of scenarios) {
+    for (const values of [
+      scenario.values,
+      scenario.scriptedGui,
+      ...Object.values(scenario.lists).flat(),
+    ]) {
+      for (const [key, value] of Object.entries(values)) {
+        if (
+          key.endsWith('.countryTag') &&
+          typeof value === 'string' &&
+          /^[A-Za-z0-9_]{2,64}$/u.test(value)
+        )
+          tags.add(value.toUpperCase());
+      }
+    }
+  }
+  return [...tags]
+    .sort(compareCodeUnits)
+    .flatMap((tag) =>
+      ['', 'medium/', 'small/'].flatMap((directory) => [
+        `gfx/flags/${directory}${tag}.{bmp,dds,png,tga}`,
+        `gfx/flags/${directory}${tag}_*.{bmp,dds,png,tga}`,
+      ]),
+    );
 }
 
 function bmFontPagePatterns(files: readonly ScannedFile[]): string[] {
@@ -1170,6 +1242,8 @@ export class ScriptedGuiStudio {
     signal?: AbortSignal,
     languages: readonly string[] = ['l_english'],
     additionalSpriteNames: readonly string[] = [],
+    additionalTemplateNames: readonly string[] = [],
+    additionalAssetPatterns: readonly string[] = [],
   ): Promise<GuiStudioScanResult> {
     const workspace = this.resolver.get(workspaceId, principal);
     const layoutPatterns = guiLayoutPatterns(workspace);
@@ -1184,7 +1258,20 @@ export class ScriptedGuiStudio {
     );
     let layoutFiles = overlayLayouts.files;
     let layoutGraph = this.graphForFiles(layoutFiles, `layout:${workspaceId}`).graph;
-    if (!layoutGraph.elements.some(({ name }) => name === windowName)) {
+    const selectedLayoutElements = selectedElements(
+      layoutGraph,
+      windowName,
+      additionalTemplateNames,
+    );
+    const requiredNames = new Set([windowName, ...additionalTemplateNames]);
+    for (const element of selectedLayoutElements)
+      collectNamedAttributes(
+        element.attributes,
+        new Set(['verticalScrollbar', 'horizontalScrollbar', 'scrollbarType', 'scrollbartype']),
+        requiredNames,
+      );
+    const availableNames = new Set(layoutGraph.elements.map(({ name }) => name));
+    if ([...requiredNames].some((name) => !availableNames.has(name))) {
       const gameLayouts = await this.engine.scan(
         workspaceId,
         { patterns: layoutPatterns, rootKinds: ['game'] },
@@ -1193,9 +1280,9 @@ export class ScriptedGuiStudio {
       );
       const gameGraph = this.graphForFiles(gameLayouts.files, `game-layout:${workspaceId}`).graph;
       const selectedPaths = new Set(
-        gameGraph.elements
-          .filter(({ name }) => name === windowName)
-          .map(({ sourcePath }) => sourcePath),
+        selectedElements(gameGraph, windowName, [...requiredNames]).map(
+          ({ sourcePath }) => sourcePath,
+        ),
       );
       layoutFiles = mergeScannedFiles(
         layoutFiles,
@@ -1226,12 +1313,16 @@ export class ScriptedGuiStudio {
     );
     const definitions = this.graphForFiles(definitionFiles, `definitions:${workspaceId}`);
     assertTargetWindowAvailable(definitions.graph, windowName);
-    const referencedPatterns = referencedAssetPatternsForWindow(
-      definitions.graph,
-      windowName,
-      additionalSpriteNames,
-      languages,
-    );
+    const referencedPatterns = [
+      ...referencedAssetPatternsForWindow(
+        definitions.graph,
+        windowName,
+        additionalSpriteNames,
+        languages,
+        additionalTemplateNames,
+      ),
+      ...additionalAssetPatterns,
+    ];
     const exactReferenced =
       referencedPatterns.length === 0
         ? []
@@ -1292,6 +1383,8 @@ export class ScriptedGuiStudio {
         [placeholderScenario, ...explicitRelatedScenarios],
         generatedOptions?.textSamples,
       ),
+      scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioCountryFlagPatterns([placeholderScenario, ...explicitRelatedScenarios]),
     );
     const generatedScenarios =
       generatedOptions === undefined
@@ -1351,6 +1444,8 @@ export class ScriptedGuiStudio {
       input.signal,
       [beforeScenario.language, afterScenario.language],
       scenarioSpriteNames([beforeScenario, afterScenario]),
+      scenarioTemplateNames([beforeScenario, afterScenario]),
+      scenarioCountryFlagPatterns([beforeScenario, afterScenario]),
     );
     const beforeCatalog = new GuiAssetCatalog(
       scanned.graph,
@@ -1440,6 +1535,16 @@ export class ScriptedGuiStudio {
         ],
         generatedOptions?.textSamples,
       ),
+      scenarioTemplateNames([
+        placeholderScenario,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+        ...explicitRelatedScenarios,
+      ]),
+      scenarioCountryFlagPatterns([
+        placeholderScenario,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+        ...explicitRelatedScenarios,
+      ]),
     );
     const generatedScenarios =
       generatedOptions === undefined
@@ -2070,6 +2175,8 @@ export class ScriptedGuiStudio {
             input.signal,
             [previewScenario!.language],
             scenarioSpriteNames([previewScenario!]),
+            scenarioTemplateNames([previewScenario!]),
+            scenarioCountryFlagPatterns([previewScenario!]),
           );
     const exactTargets = await this.scanner.scan(workspace, {
       patterns: prepared.map(({ relativePath }) => relativePath),
@@ -2090,12 +2197,16 @@ export class ScriptedGuiStudio {
       const scenario = parsePreviewScenario(input.scenario);
       const renderBudget = new RenderBudget();
       let proposedGraph = buildGuiSourceGraph(proposedFiles, this.engine.indexFiles(proposedFiles));
-      const proposedAssetPatterns = referencedAssetPatternsForWindow(
-        proposedGraph,
-        input.windowName,
-        [],
-        [scenario.language],
-      );
+      const proposedAssetPatterns = [
+        ...referencedAssetPatternsForWindow(
+          proposedGraph,
+          input.windowName,
+          [],
+          [scenario.language],
+          scenarioTemplateNames([scenario]),
+        ),
+        ...scenarioCountryFlagPatterns([scenario]),
+      ];
       const exactProposedAssets =
         proposedAssetPatterns.length === 0
           ? []

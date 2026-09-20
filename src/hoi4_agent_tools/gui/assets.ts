@@ -20,6 +20,17 @@ import {
   GUI_TEXT_MAX_MISSING_GLYPH_SAMPLES,
 } from './limits.js';
 import { decodeTga } from './tga.js';
+import {
+  compileGuiProgressEffect,
+  compileGuiShaderEffect,
+  GUI_SHADER_MAX_BYTES,
+} from './shader.js';
+import type {
+  GuiProgressShaderResult,
+  GuiShaderEffect,
+  GuiShaderResult,
+  GuiShaderUniforms,
+} from './shader.js';
 import type {
   GuiFontDefinition,
   GuiSourceGraph,
@@ -262,6 +273,8 @@ export class GuiAssetCatalog {
   private readonly rasters = new Map<string, Promise<LoadedRaster>>();
   private readonly frames = new Map<string, Promise<GuiTextureFrame | undefined>>();
   private readonly countryFlags = new Map<string, Promise<GuiTextureFrame>>();
+  private readonly shaders = new Map<string, GuiShaderResult>();
+  private readonly progressShaders = new Map<string, GuiProgressShaderResult>();
   private readonly glyphRasters = new Map<
     string,
     Promise<{ dataUri: string; borderDataUri?: string; width: number; height: number } | undefined>
@@ -426,16 +439,82 @@ export class GuiAssetCatalog {
     return this.loadSpriteTextureFrame(sprite, sprite.texturePath2, requestedFrame, 'secondary');
   }
 
+  private shaderSource(
+    sprite: GuiSpriteDefinition,
+  ): { supported: true; file: ScannedFile } | { supported: false; reason: string } {
+    if ((sprite.shaderFeatures?.length ?? 0) > 0)
+      return {
+        supported: false,
+        reason: `Shader features require additional composition: ${sprite.shaderFeatures!.join(', ')}.`,
+      };
+    const reference = sprite.effectFile;
+    if (reference === undefined)
+      return { supported: false, reason: 'Sprite has no effect source.' };
+    const file =
+      this.resolveFile(reference, sprite.sourcePath) ??
+      (/\.lua$/iu.test(reference)
+        ? this.resolveFile(reference.replace(/\.lua$/iu, '.shader'), sprite.sourcePath)
+        : undefined);
+    if (file === undefined)
+      return { supported: false, reason: `Shader source not found: ${reference}.` };
+    if (file.bytes.length > GUI_SHADER_MAX_BYTES)
+      return { supported: false, reason: 'Shader source exceeds its byte budget.' };
+    return { supported: true, file };
+  }
+
+  public progressShader(
+    sprite: GuiSpriteDefinition,
+    effect: 'Color' | 'Texture',
+  ): GuiProgressShaderResult {
+    const source = this.shaderSource(sprite);
+    if (!source.supported) return source;
+    const { file } = source;
+    const key = `${file.displayPath}:${file.sha256}:${effect}`;
+    let result = this.progressShaders.get(key);
+    if (result === undefined) {
+      result = compileGuiProgressEffect(
+        file.bytes.toString('utf8'),
+        { path: file.displayPath, sha256: file.sha256 },
+        effect,
+      );
+      if (this.progressShaders.size >= 1_024)
+        this.progressShaders.delete(this.progressShaders.keys().next().value!);
+      this.progressShaders.set(key, result);
+    }
+    return result;
+  }
+
+  public spriteShader(
+    sprite: GuiSpriteDefinition,
+    effect: GuiShaderEffect,
+    uniforms: GuiShaderUniforms,
+  ): GuiShaderResult {
+    const source = this.shaderSource(sprite);
+    if (!source.supported) return source;
+    const { file } = source;
+    const key = `${file.displayPath}:${file.sha256}:${effect}:${hashCanonical(uniforms)}`;
+    let result = this.shaders.get(key);
+    if (result === undefined) {
+      result = compileGuiShaderEffect(
+        file.bytes.toString('utf8'),
+        { path: file.displayPath, sha256: file.sha256 },
+        effect,
+        uniforms,
+      );
+      // Per-render caching is bounded even with a different clock or tint for every row.
+      if (this.shaders.size >= 1_024) this.shaders.delete(this.shaders.keys().next().value!);
+      this.shaders.set(key, result);
+    }
+    return result;
+  }
+
   public loadCountryFlag(
     tag: string,
     sprite?: GuiSpriteDefinition,
     ideology?: string,
     slotName?: string,
   ): Promise<GuiTextureFrame> {
-    const normalizedTag = tag
-      .trim()
-      .replace(/[^A-Za-z0-9_]/gu, '')
-      .toUpperCase();
+    const normalizedTag = tag.trim().toUpperCase();
     const normalizedIdeology = ideology
       ?.trim()
       .replace(/[^A-Za-z0-9_]/gu, '')

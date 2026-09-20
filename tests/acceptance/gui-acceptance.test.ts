@@ -423,7 +423,7 @@ describe('Scripted GUI Studio project-owned acceptance fixture', () => {
 
     expect(Object.keys(scene.fidelity).sort()).toEqual([...fidelityCategories].sort());
     expect(scene.fidelity.modelled.length).toBeGreaterThan(0);
-    expect(scene.fidelity.approximated.length).toBeGreaterThan(0);
+    expect(scene.fidelity.approximated).toEqual([]);
     expect(scene.fidelity.ignored).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: 'pdx_tooltip' })]),
     );
