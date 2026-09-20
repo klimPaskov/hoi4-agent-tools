@@ -301,7 +301,9 @@ describe('Stage 4 source-backed services', () => {
           workspaceId: 'fixture',
           suite,
           maxCases: 1,
-          continuation: first.data.continuation!.slice(0, -1) + '0',
+          continuation:
+            first.data.continuation!.slice(0, -1) +
+            (first.data.continuation!.endsWith('0') ? '1' : '0'),
         }),
       ),
     ).rejects.toMatchObject({ code: 'SCENARIO_CONTINUATION_INVALID' });
