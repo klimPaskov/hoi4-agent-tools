@@ -950,6 +950,21 @@ function parseTechnologyGridboxes(
             iconPosition === undefined ? undefined : numericLiteral(firstValue(iconPosition, 'x'));
           const iconY =
             iconPosition === undefined ? undefined : numericLiteral(firstValue(iconPosition, 'y'));
+          const designTeam = childBlocks(block, 'iconType').find(
+            (candidate) => firstValue(candidate, 'name') === 'can_assign_design_team_icon',
+          );
+          const designTeamPosition =
+            designTeam === undefined ? undefined : childBlocks(designTeam, 'position')[0];
+          const designTeamX =
+            designTeamPosition === undefined
+              ? undefined
+              : numericLiteral(firstValue(designTeamPosition, 'x'));
+          const designTeamY =
+            designTeamPosition === undefined
+              ? undefined
+              : numericLiteral(firstValue(designTeamPosition, 'y'));
+          const designTeamSprite =
+            designTeam === undefined ? undefined : firstValue(designTeam, 'spriteType');
           const nameBox = childBlocks(block, 'instantTextBoxType').find(
             (candidate) => firstValue(candidate, 'name') === 'name',
           );
@@ -1004,6 +1019,11 @@ function parseTechnologyGridboxes(
                     centered: booleanValue(firstValue(icon!, 'centerposition')) === true,
                   },
                 }),
+            ...(designTeamX === undefined ||
+            designTeamY === undefined ||
+            designTeamSprite === undefined
+              ? {}
+              : { designTeamIcon: { sprite: designTeamSprite, x: designTeamX, y: designTeamY } }),
             ...(nameX === undefined || nameY === undefined
               ? {}
               : {

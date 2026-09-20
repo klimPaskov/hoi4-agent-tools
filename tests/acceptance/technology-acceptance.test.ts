@@ -396,6 +396,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       await writeFile(target, content);
     };
     const texturePath = 'gfx/interface/technologies/vanilla_shared.png';
+    const designTeamTexturePath = 'gfx/interface/technologies/design_team.png';
     await put(
       gameRoot,
       'interface/vanilla_technology_icons.gfx',
@@ -404,6 +405,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         `\tSpriteType = { name = GFX_layered_small_medium texturefile = "${texturePath}" }`,
         `\tSpriteType = { name = GFX_layered_large_medium texturefile = "${texturePath}" }`,
         `\tSpriteType = { name = GFX_layered_techtree_bg texturefile = "${texturePath}" }`,
+        `\tSpriteType = { name = GFX_design_team_icon texturefile = "${designTeamTexturePath}" }`,
         `\tcorneredTileSpriteType = { name = GFX_layered_panel texturefile = "${texturePath}" borderSize = { x = 16 y = 16 } tilingCenter = yes }`,
         ...['small', 'large'].flatMap((size) =>
           ['unavailable', 'available', 'researched'].map(
@@ -419,6 +421,13 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       gameRoot,
       texturePath,
       await sharp({ create: { width: 64, height: 64, channels: 4, background: '#d89a43' } })
+        .png()
+        .toBuffer(),
+    );
+    await put(
+      gameRoot,
+      designTeamTexturePath,
+      await sharp({ create: { width: 20, height: 20, channels: 4, background: '#8b62bc' } })
         .png()
         .toBuffer(),
     );
@@ -462,7 +471,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         '\t\t\tformat = LEFT',
         '\t\t}',
         '\t}',
-        '\tcontainerWindowType = { name = techtree_layered_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } background = { quadTextureSprite = GFX_layered_small_unavailable_item_bg } iconType = { name = Icon position = { x = 36 y = 36 } centerposition = yes } }',
+        '\tcontainerWindowType = { name = techtree_layered_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } background = { quadTextureSprite = GFX_layered_small_unavailable_item_bg } iconType = { name = Icon position = { x = 36 y = 36 } centerposition = yes } iconType = { name = can_assign_design_team_icon position = { x = 0 y = 42 } spriteType = GFX_design_team_icon } }',
         '\tcontainerWindowType = { name = techtree_layered_folder_item position = { x = -56 y = -7 } size = { width = 183 height = 84 } background = { quadTextureSprite = GFX_layered_large_unavailable_item_bg } iconType = { name = Icon position = { x = 91 y = 46 } centerposition = yes } instantTextBoxType = { name = name position = { x = 3 y = -3 } maxWidth = 160 } }',
         '}',
         '',
@@ -513,6 +522,11 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         { technologyId: 'layered_small', layoutSize: 'small', layoutWidth: 72, layoutHeight: 72 },
       ]),
     );
+    expect(layeredGraph.itemLayouts.find(({ layoutSize }) => layoutSize === 'small')).toMatchObject(
+      {
+        designTeamIcon: { sprite: 'GFX_design_team_icon', x: 0, y: 42 },
+      },
+    );
     expect(
       layeredGraph.technologies.map(({ icon }) => ({
         sprite: icon.sprite,
@@ -539,9 +553,12 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       view: 'folder',
       folderId: 'layered_folder',
     });
-    expect(rendered.render.renderedIconCount).toBe(10);
     expect(rendered.render.unresolvedIconSprites).toEqual([]);
-    expect(rendered.render.svg.match(/<image /gu)).toHaveLength(6);
+    expect(rendered.render.renderedIconCount).toBe(11);
+    expect(rendered.render.svg.match(/<image /gu)).toHaveLength(7);
+    expect(rendered.render.svg).toMatch(
+      /data-design-team-icon="GFX_design_team_icon"[^>]+width="20" height="20"/u,
+    );
     expect(rendered.render.svg).toContain('pattern id="tech-folder-panel"');
     expect(rendered.render.svg).toContain('data-tech-background="layered_techtree_bg"');
     expect(rendered.render.svg).toContain(

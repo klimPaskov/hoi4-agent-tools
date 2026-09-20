@@ -808,6 +808,9 @@ export class TechnologyTreeViewer {
           ...(options.signal === undefined ? {} : { signal: options.signal }),
         });
     const guiSprites = [
+      ...preliminary.itemLayouts.flatMap(({ designTeamIcon }) =>
+        designTeamIcon === undefined ? [] : [designTeamIcon.sprite],
+      ),
       ...preliminary.itemLayouts.flatMap(({ backgroundSprite }) =>
         backgroundSprite === undefined
           ? []

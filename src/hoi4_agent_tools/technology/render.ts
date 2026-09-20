@@ -94,6 +94,7 @@ interface RenderNode {
   iconSprite?: string;
   itemBackgroundSprite?: string;
   iconPosition?: { x: number; y: number; centered: boolean };
+  designTeamIcon?: { sprite: string; x: number; y: number };
   namePosition?: { x: number; y: number; maxWidth?: number };
   subTechnologies?: Array<{
     id: string;
@@ -194,6 +195,9 @@ function technologyNode(
       ? {}
       : { itemBackgroundSprite: itemLayout.backgroundSprite }),
     ...(itemLayout?.iconPosition === undefined ? {} : { iconPosition: itemLayout.iconPosition }),
+    ...(itemLayout?.designTeamIcon === undefined
+      ? {}
+      : { designTeamIcon: itemLayout.designTeamIcon }),
     ...(itemLayout?.namePosition === undefined ? {} : { namePosition: itemLayout.namePosition }),
     ...(placement === undefined || technology.subTechnologies.length === 0
       ? {}
@@ -1019,6 +1023,15 @@ function svgFor(
         icon === undefined
           ? ''
           : `<image href="${escapeXml(icon)}" x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet"/>`;
+      const designTeamSprite = node.designTeamIcon?.sprite;
+      const designTeamImage =
+        designTeamSprite === undefined ? undefined : iconDataUris[designTeamSprite];
+      const designTeamSize =
+        designTeamSprite === undefined ? undefined : spriteDimensions[designTeamSprite];
+      const designTeamSvg =
+        designTeamImage === undefined || node.designTeamIcon === undefined
+          ? ''
+          : `<image data-design-team-icon="${escapeXml(designTeamSprite!)}" href="${escapeXml(designTeamImage)}" x="${node.x + node.designTeamIcon.x}" y="${node.y + node.designTeamIcon.y}" width="${designTeamSize?.width ?? 20}" height="${designTeamSize?.height ?? 20}" preserveAspectRatio="xMinYMin meet"/>`;
       const subTechnologySvg = (node.subTechnologies ?? []).flatMap(({ id, iconSprite, slot }) => {
         if (slot === undefined) return [];
         const x = node.x + slot.position.x;
@@ -1028,7 +1041,7 @@ function svgFor(
           `<g data-subtechnology-id="${escapeXml(id)}" data-slot-index="${slot.index}" data-icon-sprite="${escapeXml(iconSprite ?? '')}"><rect x="${x}" y="${y}" width="${slot.size.width}" height="${slot.size.height}" rx="3" fill="#3a3936" stroke="#8b8b86" stroke-width="1"/>${subIcon === undefined ? '' : `<image href="${escapeXml(subIcon)}" x="${x + 2}" y="${y + 2}" width="${Math.max(1, slot.size.width - 4)}" height="${Math.max(1, slot.size.height - 4)}" preserveAspectRatio="xMidYMid meet"/>`}<title>${escapeXml(id)}</title></g>`,
         ];
       });
-      return `<g data-node-id="${escapeXml(node.id)}"${node.scenarioStatus === undefined ? '' : ` data-scenario-status="${node.scenarioStatus}"`} data-layout-size="${node.layoutSize ?? 'unknown'}" data-icon-sprite="${escapeXml(node.iconSprite ?? '')}"${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}>${skin}${iconSvg}${label}${subTechnologySvg.join('')}<title>${escapeXml(node.id)}</title></g>`;
+      return `<g data-node-id="${escapeXml(node.id)}"${node.scenarioStatus === undefined ? '' : ` data-scenario-status="${node.scenarioStatus}"`} data-layout-size="${node.layoutSize ?? 'unknown'}" data-icon-sprite="${escapeXml(node.iconSprite ?? '')}"${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}>${skin}${iconSvg}${label}${subTechnologySvg.join('')}${designTeamSvg}<title>${escapeXml(node.id)}</title></g>`;
     }
     const colour =
       node.scenarioStatus === 'researched'
@@ -1168,13 +1181,18 @@ export async function renderTechnologyGraph(
         }));
   const requestedIconSprites = [
     ...new Set([
-      ...retained.flatMap(({ iconSprite, itemBackgroundSprite, subTechnologies }) => [
-        ...(iconSprite === undefined ? [] : [iconSprite]),
-        ...(itemBackgroundSprite === undefined ? [] : itemBackgroundSprites(itemBackgroundSprite)),
-        ...(subTechnologies ?? []).flatMap((sub) =>
-          sub.iconSprite === undefined ? [] : [sub.iconSprite],
-        ),
-      ]),
+      ...retained.flatMap(
+        ({ iconSprite, itemBackgroundSprite, designTeamIcon, subTechnologies }) => [
+          ...(iconSprite === undefined ? [] : [iconSprite]),
+          ...(designTeamIcon === undefined ? [] : [designTeamIcon.sprite]),
+          ...(itemBackgroundSprite === undefined
+            ? []
+            : itemBackgroundSprites(itemBackgroundSprite)),
+          ...(subTechnologies ?? []).flatMap((sub) =>
+            sub.iconSprite === undefined ? [] : [sub.iconSprite],
+          ),
+        ],
+      ),
       ...selection.backgrounds.map(({ sprite }) => sprite),
     ]),
   ].sort(compareCodeUnits);
@@ -1289,8 +1307,9 @@ export function technologyRenderIconSprites(
     ...new Set([
       ...selection.nodes
         .slice(0, maximum)
-        .flatMap(({ iconSprite, itemBackgroundSprite, subTechnologies }) => [
+        .flatMap(({ iconSprite, itemBackgroundSprite, designTeamIcon, subTechnologies }) => [
           ...(iconSprite === undefined ? [] : [iconSprite]),
+          ...(designTeamIcon === undefined ? [] : [designTeamIcon.sprite]),
           ...(itemBackgroundSprite === undefined
             ? []
             : itemBackgroundSprites(itemBackgroundSprite)),

@@ -119,6 +119,7 @@ export interface TechnologyItemLayout {
   };
   backgroundSprite?: string;
   iconPosition?: { x: number; y: number; centered: boolean };
+  designTeamIcon?: { sprite: string; x: number; y: number };
   namePosition?: { x: number; y: number; maxWidth?: number };
   subTechnologySlots?: Array<{
     index: number;
