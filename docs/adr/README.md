@@ -30,3 +30,4 @@
 28. [Incremental source segments](0028-incremental-source-segments.md)
 29. [Persistent jobs](0029-persistent-jobs.md)
 30. [Modern MCP task adapter](0031-modern-mcp-task-adapter.md)
+31. [Cross-system impact and decision inspection](0032-cross-system-impact-and-decisions.md)
