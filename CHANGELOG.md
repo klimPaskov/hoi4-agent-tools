@@ -9,6 +9,9 @@
 - Expose complete source-backed probability catalogs, actionable missing scenario inputs, and eligible, excluded, and unresolved inventories.
 - Add selected event-chain comparisons and revision-bound bounded helper expansion while retaining explicit lifecycle coverage limits.
 - Compose technology folders from source pixel placements, native item skins, icon and subtechnology positions, panel and background artwork, year labels, and supplied research scenarios; report unresolved placement and asset coverage honestly.
+- Resolve source `GFX_*_medium` artwork and design-team overlays at native item size for chemical and biological warfare folders.
+- Compose installed GUI backgrounds, focus inlays, container scrolling, native button and progress shaders, and scenario-driven rows from source assets and control states.
+- Bound focus connector and overlap diagnostics on anchored trees with thousands of nodes.
 - Add focused map lookups, reusable render tiles, affected-area output, and typed external script-reference updates for map renumbering.
 
 ## 3.3.0 - 2026-09-20

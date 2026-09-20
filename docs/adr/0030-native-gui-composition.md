@@ -53,7 +53,7 @@ It does not launch the game or change its files.
 
 The inlay render demonstrates correct panel dimensions, selected/unselected overlays, description wrapping, and tier text using installed sources.
 This is not proof of universal native-interface parity.
-Matched native scrollbar and margin measurements, portrait and native runtime bindings, compound control states, comprehensive screenshot measurements, full regression qualification, publication, and side-by-side installation remain open.
+Portrait and native runtime bindings, comprehensive screenshot measurements, full platform qualification, publication, and side-by-side installation remain open.
 The two-interface installed-source fixture passed on 2026-09-13 in 107.6 seconds, and the settings and inlay outputs were visually compared with the supplied captures.
 The targeted GUI suite passed 71 assertions across four files after the native-layout changes.
 These are local development results, not immutable release evidence or a universal pixel-parity gate.
@@ -125,4 +125,7 @@ The synthetic output was visually reviewed before accepting the two metadata-dep
 The fresh combined run passed all 179 GUI tests plus five checkpoint tests across 15 files in 191.1 seconds.
 The concurrent opt-in war check passed in 149.6 seconds, including both installed `Color`/`Texture` threshold entry points and the scene's selected warscore shader.
 The slower wall times include concurrently running installed-source scans and are not comparable performance benchmarks.
-Full product, platform, transport, publication and side-by-side installation qualification remain outstanding.
+The combined local product check passed 1,215 tests with one skip across eight shards, then generated fixture and schema checks, build, package dry run, and Registry metadata validation on 2026-09-20.
+After anchoring attached scrollbars to the outer container while keeping margins on the content viewport, the isolated installed-template test passed at both scroll endpoints in 109.3 seconds.
+Both private endpoint images were visually reviewed; the native rail, thumb, and end buttons remain separated at the corner.
+Platform, transport, publication and side-by-side installation qualification remain outstanding.
