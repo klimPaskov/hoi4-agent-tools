@@ -19,7 +19,7 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Reproduce the three observed helper failures and test the complete generation-to-render path.
 - [x] Complete release qualification, publication verification, and side-by-side local installation.
 
-## Stage 2: Incremental analysis and persistent jobs — 3.1.0 release candidate
+## Stage 2: Incremental analysis and persistent jobs — released 3.1.0
 
 - [x] Cache per-file parsed/indexed segments and reverse dependencies; invalidate additions, removals, renames, load-order changes, aliases, and same-size/same-timestamp edits.
 - [x] Reuse content-addressed analysis across authorized local processes without sharing private results across workspace/principal boundaries.
@@ -29,7 +29,7 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Deduplicate background rewrites using caller-reusable request keys; never blindly replay an uncertain write.
 - [x] Add native negotiated MCP task adapters and ordinary `hoi4.job_inspect` / `hoi4.job_cancel` compatibility tools.
 - [x] Prove crash recovery, isolation, incremental/full-rebuild equivalence, and the Windows/Linux, Node 22/24 qualification matrix.
-- [ ] Verify publication, exact public installation, and side-by-side local installation.
+- [x] Verify publication, exact public installation, and side-by-side local installation.
 
 ## Stage 3: Cross-system impact and decisions — planned 3.2.0
 
@@ -92,7 +92,7 @@ No stage is complete until its code, tests, public package, installation, and ap
 ## Evidence ledger
 
 Stage 1 is release-qualified, published, and installed side-by-side.
-Stages 2–5 remain incomplete.
+Stages 3–5 remain incomplete.
 The implementation began from commit `d8a8117b18649eee622f9acb44c11462a1ee9950` (3.0.8).
 
 Stage 1 implementation and targeted regressions are complete; release evidence follows.
@@ -202,6 +202,12 @@ The host now classifies that precise pre-dispatch loss and makes at most two add
 At the 2026-09-19 local checkpoint, a reviewed candidate commit, the exact `npm run check` and coverage commands, Windows/Linux and Node 22/24 CI, publication, exact public-install verification, and a side-by-side local installation remained.
 Commit `b34f0420c631ac6eb8a0805214d4132ca4a57803` passed CI run `35467092544` on Windows and Linux with Node 22 and 24.
 Every matrix job passed `npm run check`; the Ubuntu Node 22 job also passed `npm run test:coverage` and the official MCP Inspector.
-The exact source qualified by that run is on branch `codex/stage2-3.1.0`; publication and installed-package verification remain open.
-Stages 3–4 and external Chaos Redux integration have not started.
-Stage 5 native-GUI fidelity work remains outside this Stage 2 release candidate.
+The exact source qualified by that run is on branch `codex/stage2-3.1.0`; it was a pre-release qualification checkpoint.
+The final Stage 2 release commit `8b0dc93abf63951704006810c7b4fc5f0ded4a3c` passed CI run `35494152486` on Windows and Linux with Node 22 and 24, including coverage, the official MCP Inspector, and container checks.
+Tag `v3.1.0` peels to that commit on main.
+Release workflow `35496091503` completed on attempt 2 through npm, GHCR, immutable GitHub release, MCP Registry, exact public verification, and clean installation.
+The first attempt published the signed npm tarball, but its immediate verification saw the preceding `latest` dist-tag during registry propagation; the failed verification and dependent jobs were rerun after the public registry showed 3.1.0 as latest, without repeating npm publication.
+An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.1.0` reports version 3.1.0 and verified 135 dependency signatures and 23 attestations.
+The active older installation and coding-agent processes were not restarted or replaced.
+Stage 3 internal analysis work has begun in an isolated branch and remains unpublished; Stage 4 and the wider external test-profile integration remain open.
+Stage 5 native-GUI fidelity work remains outside the Stage 2 release.
