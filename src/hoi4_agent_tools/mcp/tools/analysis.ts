@@ -4,6 +4,15 @@ import {
   decisionInspectRequestSchema,
   impactInspectRequestSchema,
 } from '../../schemas/analysis.js';
+import {
+  mechanicCaseSchema,
+  mechanicTestRequestSchema,
+  packageManifestSchema,
+  packageCheckRequestSchema,
+  scenarioSuiteSchema,
+  scenarioTestRequestSchema,
+} from '../../schemas/scenarios.js';
+import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
 import { strictOperationResultSchema } from '../server/result.js';
 import { registerLegacyTaskTools } from '../server/legacy-task-tools.js';
@@ -48,6 +57,91 @@ const decisionOutputSchema = strictOperationResultSchema(
     .strict(),
 );
 
+const mechanicOutputSchema = strictOperationResultSchema(
+  z
+    .object({
+      sourceRevision: sha256Schema,
+      reportHash: sha256Schema,
+      status: z.enum(['passed', 'failed', 'unresolved']),
+      assertions: nonNegativeIntegerSchema,
+      passed: nonNegativeIntegerSchema,
+      failed: nonNegativeIntegerSchema,
+      unresolved: nonNegativeIntegerSchema,
+      steps: nonNegativeIntegerSchema,
+    })
+    .strict(),
+);
+
+const packageOutputSchema = strictOperationResultSchema(
+  z
+    .object({
+      sourceRevision: sha256Schema,
+      reportHash: sha256Schema,
+      complete: z.boolean(),
+      items: nonNegativeIntegerSchema,
+      present: nonNegativeIntegerSchema,
+      absent: nonNegativeIntegerSchema,
+      shadowed: nonNegativeIntegerSchema,
+      unresolved: nonNegativeIntegerSchema,
+    })
+    .strict(),
+);
+
+const scenarioOutputSchema = strictOperationResultSchema(
+  z
+    .object({
+      sourceRevision: sha256Schema,
+      suiteHash: sha256Schema,
+      reportHash: sha256Schema,
+      start: nonNegativeIntegerSchema,
+      end: nonNegativeIntegerSchema,
+      total: nonNegativeIntegerSchema,
+      completed: nonNegativeIntegerSchema,
+      failed: nonNegativeIntegerSchema,
+      unresolved: nonNegativeIntegerSchema,
+      pending: nonNegativeIntegerSchema,
+      continuation: z.string().optional(),
+    })
+    .strict(),
+);
+
+const mechanicInputSchema = z
+  .object({
+    ...mechanicTestRequestSchema.shape,
+    test: compactValidatedInputSchema(
+      mechanicCaseSchema,
+      'Versioned declared scenario, explicit effect steps, and typed assertions. See docs/mechanics.md.',
+    ),
+  })
+  .strict();
+
+const packageInputSchema = z
+  .object({
+    ...packageCheckRequestSchema.shape,
+    manifest: compactValidatedInputSchema(
+      packageManifestSchema,
+      'Declarative definitions, calls, registrations, localisation, assets, and required cases. See docs/mechanics.md.',
+    ),
+  })
+  .strict();
+
+const scenarioInputSchema = z
+  .object({
+    ...scenarioTestRequestSchema.shape,
+    suite: compactValidatedInputSchema(
+      scenarioSuiteSchema,
+      'Named mechanic, package, or fixed read-only tool cases. See docs/mechanics.md.',
+    ).optional(),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if ((input.suite === undefined) === (input.suitePath === undefined))
+      context.addIssue({
+        code: 'custom',
+        message: 'Specify exactly one inline suite or suitePath',
+      });
+  });
+
 const readOnlyAnalysisTool = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -72,6 +166,33 @@ export const analysisTaskTools = [
       'Inventory decisions or evaluate declared actor and target scenarios for gates, payment, lifecycle, and proposed-source differences. Full evidence is linked.',
     inputSchema: decisionInspectRequestSchema,
     outputSchema: decisionOutputSchema,
+    annotations: readOnlyAnalysisTool,
+  },
+  {
+    name: 'hoi4.mechanic_test',
+    title: 'Test declared mechanic steps',
+    description:
+      'Interpret bounded, source-backed effect steps on isolated declared state and check typed invariants. Unsupported effects remain unresolved; no game or mod source is changed.',
+    inputSchema: mechanicInputSchema,
+    outputSchema: mechanicOutputSchema,
+    annotations: readOnlyAnalysisTool,
+  },
+  {
+    name: 'hoi4.package_check',
+    title: 'Check package connections',
+    description:
+      'Check a declarative package manifest against active definitions, references, registrations, localisation, assets, and required suite cases.',
+    inputSchema: packageInputSchema,
+    outputSchema: packageOutputSchema,
+    annotations: readOnlyAnalysisTool,
+  },
+  {
+    name: 'hoi4.scenario_test',
+    title: 'Run scenario suite',
+    description:
+      'Run named inline or workspace-relative cases through bounded typed read-only domain services. Large suites return an authenticated continuation.',
+    inputSchema: scenarioInputSchema,
+    outputSchema: scenarioOutputSchema,
     annotations: readOnlyAnalysisTool,
   },
 ] satisfies readonly TaskToolDefinition[];

@@ -1,6 +1,11 @@
 import { z } from 'zod/v4';
 import { decisionInspectRequestSchema, impactInspectRequestSchema } from '../schemas/analysis.js';
 import {
+  mechanicTestRequestSchema,
+  packageCheckRequestSchema,
+  scenarioTestRequestSchema,
+} from '../schemas/scenarios.js';
+import {
   eventCompareRequestSchema,
   eventInspectRequestSchema,
   eventRenderRequestSchema,
@@ -69,6 +74,9 @@ export const operationTaskCallSchema = z
     name: z.enum([
       'hoi4.impact_inspect',
       'hoi4.decision_inspect',
+      'hoi4.mechanic_test',
+      'hoi4.package_check',
+      'hoi4.scenario_test',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
@@ -100,6 +108,9 @@ export type OperationTaskCall = z.infer<typeof operationTaskCallSchema>;
 const taskArgumentSchemas: Record<OperationTaskCall['name'], z.ZodType<Record<string, unknown>>> = {
   'hoi4.impact_inspect': impactInspectRequestSchema,
   'hoi4.decision_inspect': decisionInspectRequestSchema,
+  'hoi4.mechanic_test': mechanicTestRequestSchema,
+  'hoi4.package_check': packageCheckRequestSchema,
+  'hoi4.scenario_test': scenarioTestRequestSchema,
   'hoi4.event_inspect': eventInspectRequestSchema,
   'hoi4.event_render': eventRenderRequestSchema,
   'hoi4.event_compare': eventCompareRequestSchema,

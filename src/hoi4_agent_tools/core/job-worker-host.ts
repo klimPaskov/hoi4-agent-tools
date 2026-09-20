@@ -45,6 +45,9 @@ export class JobWorkerHost {
       ![
         'hoi4.impact_inspect',
         'hoi4.decision_inspect',
+        'hoi4.mechanic_test',
+        'hoi4.package_check',
+        'hoi4.scenario_test',
         'hoi4.event_inspect',
         'hoi4.event_render',
         'hoi4.event_compare',

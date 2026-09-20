@@ -212,13 +212,44 @@ describe('secured Streamable HTTP', () => {
     const client = await modernHttpClient(handle.url, secret);
     try {
       expect(client.getProtocolEra()).toBe('modern');
-      expect((await client.listTools()).tools).toHaveLength(27);
+      expect((await client.listTools()).tools).toHaveLength(30);
       expect(
         await client.callTool({
           name: 'hoi4.focus_inspect',
           arguments: { workspaceId: 'test', treeId: 'http_test_tree' },
         }),
       ).toMatchObject({ structuredContent: { status: 'ok' } });
+      const manifest = {
+        schemaVersion: '1.0',
+        id: 'http-focus',
+        definitions: [{ kind: 'focus_tree', id: 'http_test_tree' }],
+      };
+      expect(
+        await client.callTool({
+          name: 'hoi4.package_check',
+          arguments: { workspaceId: 'test', manifest },
+        }),
+      ).toMatchObject({
+        structuredContent: { code: 'PACKAGE_CHECK_PASSED', data: { complete: true } },
+      });
+      expect(
+        await client.callTool({
+          name: 'hoi4.scenario_test',
+          arguments: {
+            workspaceId: 'test',
+            suite: {
+              schemaVersion: '1.0',
+              id: 'http-suite',
+              cases: [{ id: 'focus-package', domain: 'package', manifest }],
+            },
+          },
+        }),
+      ).toMatchObject({
+        structuredContent: {
+          code: 'SCENARIO_SUITE_PASSED',
+          data: { completed: 1, pending: 0 },
+        },
+      });
     } finally {
       await client.close();
     }

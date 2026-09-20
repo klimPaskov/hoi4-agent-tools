@@ -30,6 +30,7 @@ export interface ConditionScenario {
   date?: string;
   state: Record<string, ScenarioValue>;
   flags?: string[];
+  globalFlags?: string[];
   eventTargets?: Record<string, string>;
   scopes?: Record<string, ConditionScopeBinding>;
   candidateOverrides?: Record<string, boolean>;

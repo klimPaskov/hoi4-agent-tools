@@ -1,0 +1,164 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.3.0/schemas/package-check-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "definitions": {
+          "default": [],
+          "maxItems": 2048,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          }
+        },
+        "calls": {
+          "default": [],
+          "maxItems": 2048,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema2"
+          }
+        },
+        "registrations": {
+          "default": [],
+          "maxItems": 2048,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema3"
+          }
+        },
+        "localisation": {
+          "default": [],
+          "maxItems": 2048,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        "assets": {
+          "default": [],
+          "maxItems": 2048,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "requiredCases": {
+          "default": [],
+          "maxItems": 512,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema5"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "expectedRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "refresh": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "manifest"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,512}$"
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "to": {
+          "$ref": "#/$defs/__schema1"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "token": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": [
+        "path",
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "suite": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "caseId": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": [
+        "suite",
+        "caseId"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

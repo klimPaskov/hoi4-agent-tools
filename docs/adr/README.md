@@ -31,3 +31,4 @@
 29. [Persistent jobs](0029-persistent-jobs.md)
 30. [Modern MCP task adapter](0031-modern-mcp-task-adapter.md)
 31. [Cross-system impact and decision inspection](0032-cross-system-impact-and-decisions.md)
+32. [Mechanic scenarios, package checks, and scenario suites](0033-mechanic-scenarios-and-package-suites.md)

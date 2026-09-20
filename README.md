@@ -74,6 +74,9 @@ On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repo
 | `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                           |
 | `hoi4.impact_inspect`       | Trace symbol and changed-file consumers across source systems and compare proposals.      |
 | `hoi4.decision_inspect`     | Inventory and evaluate decisions or missions under declared scenarios and source changes. |
+| `hoi4.mechanic_test`        | Execute bounded source effects on a copied declared scenario and check assertions.        |
+| `hoi4.package_check`        | Check declarative package definitions, calls, registrations, assets, and case links.      |
+| `hoi4.scenario_test`        | Run named source and domain cases in resumable, revision-bound batches.                   |
 | `hoi4.job_inspect`          | Inspect durable background work or retrieve its completed tool result.                    |
 | `hoi4.job_cancel`           | Durably request cancellation of authorized background work.                               |
 | `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                   |
@@ -108,6 +111,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 - Maps: "Render the whole map and find this state by name," "Create a state from these provinces," "Create a province inside this exact rectangle," or "Swap these state IDs and update connected references." See [Maps](docs/map.md).
 - Event chains: "Trace every route from this event and explain where its flags and variables change," or "Compare the workspace event graph with its previous revision and render the affected routes." See [Event chains](docs/events.md).
 - Cross-system impact and decisions: "Find every direct and transitive consumer of this idea," or "Compare who can take this decision, what they pay, and its mission end paths for these actor and target scenarios." See [Cross-system impact and decisions](docs/analysis.md).
+- Mechanics and packages: "Test this transfer's conservation and payment," or "Check every declared package link and resume its named scenario suite." See [Mechanic tests and scenario suites](docs/mechanics.md).
 - Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).
 - AI and MTTH: "Compare these focus weights across peace, defensive-war, and low-stability scenarios," or "Show when this MTTH event becomes likely and which unknown inputs control the result." See [AI and MTTH analysis](docs/probability.md).
 

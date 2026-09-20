@@ -1,7 +1,15 @@
 import { z } from 'zod/v4';
 import { DecisionAnalyzer } from '../decision/service.js';
 import { ImpactAnalyzer } from '../impact/service.js';
+import { MechanicAnalyzer } from '../mechanic/service.js';
+import { PackageAnalyzer } from '../package-check/service.js';
+import { ScenarioAnalyzer } from '../scenario-suite/service.js';
 import { decisionInspectRequestSchema, impactInspectRequestSchema } from '../schemas/analysis.js';
+import {
+  mechanicTestRequestSchema,
+  packageCheckRequestSchema,
+  scenarioTestRequestSchema,
+} from '../schemas/scenarios.js';
 import type { CoreEngine } from './engine.js';
 import type { JobOperations } from './job-executor.js';
 import { errorResult, toolResult } from './operation-result.js';
@@ -9,10 +17,13 @@ import { ServiceError } from './result.js';
 
 const wireResult = z.record(z.string(), z.json());
 
-/** Registers the two read-only analysis services for durable ordinary and native tasks. */
+/** Registers read-only analysis services for durable ordinary and native tasks. */
 export function registerAnalysisJobs(operations: JobOperations, engine: CoreEngine): void {
   const impact = new ImpactAnalyzer(engine);
   const decision = new DecisionAnalyzer(engine);
+  const mechanic = new MechanicAnalyzer(engine);
+  const packages = new PackageAnalyzer(engine);
+  const scenarios = new ScenarioAnalyzer(engine);
   const register = <Input extends { workspaceId: string }>(
     name: string,
     schema: z.ZodType<Input>,
@@ -60,5 +71,23 @@ export function registerAnalysisJobs(operations: JobOperations, engine: CoreEngi
     decisionInspectRequestSchema,
     (input) => decision.inspect(input),
     'Analyzing decisions and missions',
+  );
+  register(
+    'hoi4.mechanic_test',
+    mechanicTestRequestSchema,
+    (input) => mechanic.test(input),
+    'Testing declared mechanic steps',
+  );
+  register(
+    'hoi4.package_check',
+    packageCheckRequestSchema,
+    (input) => packages.check(input),
+    'Checking package connections',
+  );
+  register(
+    'hoi4.scenario_test',
+    scenarioTestRequestSchema,
+    (input) => scenarios.test(input),
+    'Running a bounded scenario suite',
   );
 }

@@ -3,6 +3,7 @@
 - [Setup](setup.md): install the server, configure HOI4 paths, and connect an MCP client.
 - [Event chains](events.md): inspect, trace, lint, render, and compare event chains.
 - [Cross-system impact and decisions](analysis.md): trace source consumers and evaluate decision or mission scenarios.
+- [Mechanic tests and scenario suites](mechanics.md): interpret declared effect steps, check package links, and run resumable cases.
 - [Technology trees](technology.md): inspect, trace, lint, render, and compare technologies and doctrines.
 - [Bounded helper expansion](helper-expansion.md): resume source-linked event and technology helper paths with exact coverage boundaries.
 - [Persistent jobs](jobs.md): run, inspect, cancel, and recover long operations.

@@ -1,5 +1,6 @@
 import { compareCodeUnits } from '../core/canonical.js';
 import type { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
+import { scenarioFromProbability } from '../core/scenario-model.js';
 import { assignments, type BlockNode } from '../core/source/index.js';
 import type {
   CandidateAnalysis,
@@ -127,10 +128,11 @@ export function evaluateExactCandidates(
   scenario: ProbabilityScenario,
   definitions: ClausewitzEvaluationDefinitions,
 ): ExactCandidateEvaluation[] {
+  const declaredConditions = scenarioFromProbability(scenario);
   const candidates = surface.candidates.map((candidate): ExactCandidateEvaluation => {
     const eligibility = evaluateTriggerBlock(
       candidate.eligibilityBlock,
-      scenario,
+      declaredConditions,
       candidate,
       definitions,
     );

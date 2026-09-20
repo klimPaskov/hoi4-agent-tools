@@ -386,7 +386,12 @@ function evaluateAssignmentCore(
   if (key === 'has_country_flag' || key === 'has_global_flag' || key === 'has_state_flag') {
     const explicit = bool(scopeStateValue(scenario, `flag.${right}`, scopeContext));
     if (explicit !== undefined) return { state: explicit ? 'true' : 'false', unresolved: [] };
-    const flags = scopeContext.expression === 'ROOT' ? scenario.flags : scopeContext.binding.flags;
+    const flags =
+      key === 'has_global_flag' && scenario.globalFlags !== undefined
+        ? scenario.globalFlags
+        : scopeContext.expression === 'ROOT'
+          ? scenario.flags
+          : scopeContext.binding.flags;
     if (scenario.closedFlags === false && flags?.includes(right) !== true)
       return unresolved(assignment, candidate, `Scenario does not declare flag ${right}`);
     return { state: flags?.includes(right) === true ? 'true' : 'false', unresolved: [] };

@@ -18,6 +18,14 @@ import {
   focusTreePlanSchema,
 } from '../src/hoi4_agent_tools/schemas/focus.js';
 import { mapOperationSchema } from '../src/hoi4_agent_tools/schemas/map.js';
+import {
+  mechanicTestRequestSchema,
+  packageCheckRequestSchema,
+  packageManifestSchema,
+  scenarioSuiteSchema,
+  scenarioTestRequestSchema,
+  sharedScenarioSchema,
+} from '../src/hoi4_agent_tools/schemas/scenarios.js';
 import { eventFeatureManifestSchema } from '../src/hoi4_agent_tools/schemas/event.js';
 import {
   helperExpansionRequestSchema,
@@ -47,6 +55,12 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['configuration.schema.json', serverConfigurationSchema],
   ['impact-inspect-input.schema.json', impactInspectRequestSchema],
   ['decision-inspect-input.schema.json', decisionInspectRequestSchema],
+  ['shared-scenario.schema.json', sharedScenarioSchema],
+  ['mechanic-test-input.schema.json', mechanicTestRequestSchema],
+  ['package-manifest.schema.json', packageManifestSchema],
+  ['package-check-input.schema.json', packageCheckRequestSchema],
+  ['scenario-suite.schema.json', scenarioSuiteSchema],
+  ['scenario-test-input.schema.json', scenarioTestRequestSchema],
   ['focus-plan.schema.json', focusTreePlanSchema],
   ['focus-planning-sidecar.schema.json', focusPlanningSidecarSchema],
   ['continuous-focus-palette.schema.json', continuousFocusPaletteSchema],

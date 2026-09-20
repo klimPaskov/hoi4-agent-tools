@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 3.3.0 - 2026-09-20
+
+- Add `hoi4.mechanic_test` with copied versioned scenario state, bounded source effects, explicit time advancement, traces, and typed gameplay assertions.
+- Add `hoi4.package_check` for declarative package definitions, calls, registrations, localisation, assets, and required suite-case references.
+- Add `hoi4.scenario_test` for named inline or workspace-owned suites through fixed read-only operations, case artifacts, and authenticated revision-bound continuation.
+- Share declared condition state across GUI and probability adapters while preserving their public inputs and specialized evaluation semantics.
+
 ## 3.2.0 - 2026-09-20
 
 - Add read-only `hoi4.impact_inspect` with active and overridden definitions, direct and transitive source consumers, state-key access roles, cycle and coverage evidence, and in-memory source comparisons.

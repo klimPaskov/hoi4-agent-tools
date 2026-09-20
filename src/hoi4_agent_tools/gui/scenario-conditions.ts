@@ -2,6 +2,7 @@ import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.j
 import { hasBlockingDiagnostics } from '../core/diagnostics.js';
 import { evaluateTriggerBlock, type TriggerEvaluation } from '../core/condition-evaluator.js';
 import type { ConditionScenario, ConditionSubject } from '../core/condition-model.js';
+import { scenarioFromGui } from '../core/scenario-model.js';
 import { resolveScopeContext, rootScopeContext } from '../core/scenario-state.js';
 import { assignments, firstScalar, parseClausewitz, type BlockNode } from '../core/source/index.js';
 import type { GuiPreviewScenario } from './types.js';
@@ -42,26 +43,7 @@ export function guiConditionScenario(
   base: GuiPreviewScenario,
   values = base.values,
 ): ConditionScenario {
-  const state = { ...base.stateValues, ...base.variables, ...values };
-  for (const [key, value] of Object.entries(base.flags)) state[`flag.${key}`] = value;
-  const scopes = structuredClone(base.scopes ?? {});
-  for (const [key, value] of Object.entries(state)) {
-    const match = /^(ROOT|THIS|FROM(?:\.FROM)*|PREV)\.(.+)$/u.exec(key);
-    if (match === null) continue;
-    if (match[1] === 'ROOT' || match[1] === 'THIS') state[match[2]!] ??= value;
-    else {
-      const scope = (scopes[match[1]!] ??= { id: match[1]!, state: {} });
-      scope.state[match[2]!] ??= value;
-    }
-  }
-  const actor = base.country?.tag ?? base.country?.countryTag ?? base.country?.GetTag;
-  return {
-    id: base.id,
-    state,
-    scopes,
-    closedFlags: false,
-    ...(typeof actor === 'string' ? { actor } : {}),
-  };
+  return scenarioFromGui(base, values);
 }
 
 export function evaluateGuiCondition(

@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Analyze HOI4 events, decisions, impact, tech, AI, and MTTH; build focus trees, GUIs, and maps.",
   "type": "module",
   "license": "Apache-2.0",
@@ -42,6 +42,7 @@
     "docs/setup.md",
     "docs/events.md",
     "docs/analysis.md",
+    "docs/mechanics.md",
     "docs/technology.md",
     "docs/probability.md",
     "docs/research/probability-adapter-evidence.md",

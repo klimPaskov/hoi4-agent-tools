@@ -159,6 +159,7 @@ describe('offline package and Registry metadata', () => {
       'docs/setup.md',
       'docs/events.md',
       'docs/analysis.md',
+      'docs/mechanics.md',
       'docs/technology.md',
       'docs/probability.md',
       'docs/research/probability-adapter-evidence.md',

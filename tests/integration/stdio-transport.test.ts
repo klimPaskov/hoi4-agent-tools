@@ -191,7 +191,7 @@ describe('local stdio transport', () => {
         result: { supportedVersions: ['2026-07-28'] },
       });
       child.stdin.write(request(2, 'tools/list'));
-      expect(listedToolNames(await waitForMessage(child, 2, lines))).toHaveLength(27);
+      expect(listedToolNames(await waitForMessage(child, 2, lines))).toHaveLength(30);
       child.stdin.write(
         request(3, 'tools/call', {
           name: 'hoi4.focus_inspect',
@@ -477,7 +477,7 @@ describe('local stdio transport', () => {
       });
       child.stdin.write(request(2, 'tools/list'));
       const names = listedToolNames(await waitForMessage(child, 2, lines));
-      expect(names).toHaveLength(29);
+      expect(names).toHaveLength(32);
       expect(names).toContain('chaosx.focus_country_assets');
       expect(names).toContain('chaosx.visual_revision');
       child.stdin.write(

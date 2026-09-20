@@ -58,7 +58,13 @@ describe('public analysis tools', () => {
   it('returns ordinary impact evidence and a durable native decision task', async () => {
     const { client, decisionFile, decisionSource } = await connected();
     const listed = await client.listTools();
-    for (const name of ['hoi4.impact_inspect', 'hoi4.decision_inspect'])
+    for (const name of [
+      'hoi4.impact_inspect',
+      'hoi4.decision_inspect',
+      'hoi4.mechanic_test',
+      'hoi4.package_check',
+      'hoi4.scenario_test',
+    ])
       expect(listed.tools.find((tool) => tool.name === name)).toMatchObject({
         execution: { taskSupport: 'optional' },
         annotations: { readOnlyHint: true },
@@ -105,5 +111,66 @@ describe('public analysis tools', () => {
       structuredContent: { code: 'DECISION_ANALYZED', data: { mode: 'inspect', scenarios: 1 } },
     });
     expect(await readFile(decisionFile, 'utf8')).toBe(decisionSource);
+  });
+
+  it('runs mechanic, package, and suite tools through the ordinary MCP contract', async () => {
+    const { client } = await connected();
+    const mechanicCase = {
+      id: 'fund-payment',
+      scenario: { schemaVersion: '1.0', id: 'fund-payment', state: { political_power: 15 } },
+      steps: [{ kind: 'effect', source: { kind: 'decision', id: 'fund' } }],
+      assertions: [
+        { id: 'paid-once', kind: 'single_payment', balance: { key: 'political_power' }, cost: 10 },
+      ],
+    };
+    const mechanic = await client.callTool({
+      name: 'hoi4.mechanic_test',
+      arguments: { workspaceId: 'test', test: mechanicCase },
+    });
+    expect(mechanic).toMatchObject({
+      structuredContent: {
+        code: 'MECHANIC_TEST_PASSED',
+        data: { status: 'passed', passed: 1 },
+      },
+    });
+    const manifest = {
+      schemaVersion: '1.0',
+      id: 'policy',
+      definitions: [
+        { kind: 'decision', id: 'fund' },
+        { kind: 'idea', id: 'rationing' },
+      ],
+    };
+    const packageResult = await client.callTool({
+      name: 'hoi4.package_check',
+      arguments: { workspaceId: 'test', manifest },
+    });
+    expect(packageResult).toMatchObject({
+      structuredContent: {
+        code: 'PACKAGE_CHECK_PASSED',
+        data: { complete: true, present: 2 },
+      },
+    });
+    const suite = await client.callTool({
+      name: 'hoi4.scenario_test',
+      arguments: {
+        workspaceId: 'test',
+        suite: {
+          schemaVersion: '1.0',
+          id: 'policy-suite',
+          cases: [
+            { id: 'payment', domain: 'mechanic', test: mechanicCase },
+            { id: 'connections', domain: 'package', manifest },
+          ],
+        },
+        maxCases: 2,
+      },
+    });
+    expect(suite).toMatchObject({
+      structuredContent: {
+        code: 'SCENARIO_SUITE_PASSED',
+        data: { completed: 2, pending: 0, failed: 0, unresolved: 0 },
+      },
+    });
   });
 });
