@@ -10,6 +10,10 @@ import {
   focusConnectorPolylineIntersectsRectangle,
   focusNodeRectangle,
   focusNodesVisiblyOverlap,
+  FOCUS_HORIZONTAL_GRID_PIXELS,
+  FOCUS_NODE_HEIGHT_PIXELS,
+  FOCUS_NODE_WIDTH_PIXELS,
+  FOCUS_VERTICAL_GRID_PIXELS,
 } from './geometry.js';
 import {
   FOCUS_GRAPH_MAX_DEPTH,
@@ -422,13 +426,58 @@ function* connectorCrossings(
     edge,
     points: flattenFocusConnectorCurve(focusConnectorCurve(edge.parent, edge.child)),
   }));
+  // Most focus connectors span one or two grid rows. Index those rows so
+  // unrelated branches do not consume the fixed work budget as an E² scan.
+  const maximumBucketSpan = 64;
+  const byRow = new Map<number, number[]>();
+  const longEdges: number[] = [];
+  const intervals = edges.map(({ parent, child }) => ({
+    minimum: Math.min(parent.y, child.y),
+    maximum: Math.max(parent.y, child.y),
+  }));
+  for (const [index, interval] of intervals.entries()) {
+    const span = interval.maximum - interval.minimum;
+    if (span <= 0) continue;
+    if (
+      !Number.isSafeInteger(interval.minimum) ||
+      !Number.isSafeInteger(span) ||
+      span > maximumBucketSpan
+    ) {
+      longEdges.push(index);
+      continue;
+    }
+    for (let row = interval.minimum; row < interval.maximum; row += 1) {
+      context.work.spend('connector row index');
+      const bucket = byRow.get(row) ?? [];
+      bucket.push(index);
+      byRow.set(row, bucket);
+    }
+  }
   let crossingCount = 0;
   for (let leftIndex = 0; leftIndex < flattened.length; leftIndex += 1) {
     yield* cancellationCheckpoint(context.signal, leftIndex, 16);
     const left = flattened[leftIndex];
     if (left === undefined) continue;
-    for (let rightIndex = leftIndex + 1; rightIndex < flattened.length; rightIndex += 1) {
-      yield* cancellationCheckpoint(context.signal, rightIndex - leftIndex, 64);
+    const interval = intervals[leftIndex]!;
+    const span = interval.maximum - interval.minimum;
+    if (span <= 0) continue;
+    const candidates = new Set<number>();
+    if (
+      span > maximumBucketSpan ||
+      !Number.isSafeInteger(interval.minimum) ||
+      !Number.isSafeInteger(span)
+    ) {
+      for (let index = leftIndex + 1; index < edges.length; index += 1) candidates.add(index);
+    } else {
+      for (let row = interval.minimum; row < interval.maximum; row += 1)
+        for (const index of byRow.get(row) ?? []) if (index > leftIndex) candidates.add(index);
+      for (const index of longEdges) if (index > leftIndex) candidates.add(index);
+    }
+    const orderedCandidates = [...candidates].sort(
+      (leftIndex, rightIndex) => leftIndex - rightIndex,
+    );
+    for (const [candidateIndex, rightIndex] of orderedCandidates.entries()) {
+      yield* cancellationCheckpoint(context.signal, candidateIndex, 64);
       const right = edges[rightIndex];
       const rightFlattened = flattened[rightIndex];
       if (right === undefined || rightFlattened === undefined) continue;
@@ -1349,14 +1398,31 @@ function* visibleOverlapDiagnostics(context: LayoutContext): LayoutSteps<void> {
   const nodes = [...context.placed.values()].sort((left, right) =>
     compareCodeUnits(left.id, right.id),
   );
+  const cells = new Map<string, FocusLayoutNode[]>();
+  for (const node of nodes) {
+    const key = `${Math.floor(node.x)},${Math.floor(node.y)}`;
+    const cell = cells.get(key) ?? [];
+    cell.push(node);
+    cells.set(key, cell);
+  }
   for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
     yield* cancellationCheckpoint(context.signal, leftIndex, 16);
     const left = nodes[leftIndex];
     if (left === undefined) continue;
-    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+    const candidates: FocusLayoutNode[] = [];
+    const cellX = Math.floor(left.x);
+    const cellY = Math.floor(left.y);
+    for (let y = cellY - 1; y <= cellY + 1; y += 1) {
+      for (let x = cellX - 1; x <= cellX + 1; x += 1) {
+        for (const candidate of cells.get(`${x},${y}`) ?? []) {
+          if (compareCodeUnits(candidate.id, left.id) > 0) candidates.push(candidate);
+        }
+      }
+    }
+    candidates.sort((first, second) => compareCodeUnits(first.id, second.id));
+    for (const right of candidates) {
       context.work.spend('final visible-overlap comparison');
-      const right = nodes[rightIndex];
-      if (right === undefined || !focusNodesVisiblyOverlap(left, right)) continue;
+      if (!focusNodesVisiblyOverlap(left, right)) continue;
       const focus = context.focuses.get(right.id);
       context.diagnostics.push({
         code: 'FOCUS_LAYOUT_VISIBLE_OVERLAP',
@@ -1490,14 +1556,42 @@ function* connectorNodeIntersectionDiagnostics(
   context: LayoutContext,
   edges: readonly LayoutConnector[],
 ): LayoutSteps<number> {
-  const nodes = [...context.placed.values()].sort((left, right) =>
-    compareCodeUnits(left.id, right.id),
+  const nodesByY = [...context.placed.values()].sort(
+    (left, right) => left.y - right.y || compareCodeUnits(left.id, right.id),
   );
   let comparisonIndex = 0;
   let intersectionCount = 0;
   for (const edge of edges) {
     const flattened = flattenFocusConnectorCurve(focusConnectorCurve(edge.parent, edge.child));
-    for (const node of nodes) {
+    let minimumX = Infinity;
+    let maximumX = -Infinity;
+    let minimumY = Infinity;
+    let maximumY = -Infinity;
+    for (const point of flattened) {
+      minimumX = Math.min(minimumX, point.x);
+      maximumX = Math.max(maximumX, point.x);
+      minimumY = Math.min(minimumY, point.y);
+      maximumY = Math.max(maximumY, point.y);
+    }
+    const minimumNodeY = (minimumY - FOCUS_NODE_HEIGHT_PIXELS) / FOCUS_VERTICAL_GRID_PIXELS;
+    const maximumNodeY = maximumY / FOCUS_VERTICAL_GRID_PIXELS;
+    const minimumNodeX = (minimumX - FOCUS_NODE_WIDTH_PIXELS) / FOCUS_HORIZONTAL_GRID_PIXELS;
+    const maximumNodeX = maximumX / FOCUS_HORIZONTAL_GRID_PIXELS;
+    let low = 0;
+    let high = nodesByY.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (nodesByY[middle]!.y < minimumNodeY) low = middle + 1;
+      else high = middle;
+    }
+    const candidates: FocusLayoutNode[] = [];
+    for (let index = low; index < nodesByY.length; index += 1) {
+      const node = nodesByY[index]!;
+      if (node.y > maximumNodeY) break;
+      if (node.x >= minimumNodeX && node.x <= maximumNodeX) candidates.push(node);
+    }
+    candidates.sort((left, right) => compareCodeUnits(left.id, right.id));
+    for (const node of candidates) {
       yield* cancellationCheckpoint(context.signal, comparisonIndex, 32);
       comparisonIndex += 1;
       if (node.id === edge.parentId || node.id === edge.childId) continue;

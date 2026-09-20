@@ -96,6 +96,62 @@ function straightSegmentsProperlyCross(
 }
 
 describe('focus rendered connector geometry', () => {
+  it('layouts four thousand pinned branch and convergence nodes within the work ceiling', () => {
+    const laneCount = 32;
+    const focuses = Array.from({ length: 4_096 }, (_, index) => {
+      const lane = index % laneCount;
+      const row = Math.floor(index / laneCount);
+      const node = focusNode(
+        `focus_${index}`,
+        lane * 2,
+        row,
+        row === 0 ? undefined : `focus_${index - laneCount}`,
+      );
+      if (row === 0 || row % 16 !== 0 || lane === 0) return node;
+      return {
+        ...node,
+        convergence: true,
+        prerequisites: {
+          operator: 'and' as const,
+          groups: [
+            ...node.prerequisites.groups,
+            {
+              operator: 'or' as const,
+              focusIds: [`focus_${index - laneCount - 1}`],
+              rawPassthrough: [],
+            },
+          ],
+        },
+      };
+    });
+    const layout = layoutFocusTree(focusPlan(focuses));
+
+    expect(layout.nodes).toHaveLength(4_096);
+    expect(layout.metrics?.connectors.count).toBeGreaterThan(4_096 - laneCount);
+    expect(layout.diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
+  }, 30_000);
+
+  it('layouts ten thousand pinned focuses without exhausting spatial diagnostics', () => {
+    const laneCount = 64;
+    const focuses = Array.from({ length: 10_000 }, (_, index) => {
+      const lane = index % laneCount;
+      const row = Math.floor(index / laneCount);
+      return focusNode(
+        `focus_${index}`,
+        lane * 2,
+        row,
+        row === 0 ? undefined : `focus_${index - laneCount}`,
+      );
+    });
+    const layout = layoutFocusTree(focusPlan(focuses));
+
+    expect(layout.nodes).toHaveLength(10_000);
+    expect(layout.metrics?.connectors.count).toBe(10_000 - laneCount);
+    expect(layout.metrics?.connectors.crossingCount).toBe(0);
+    expect(layout.metrics?.connectors.nodeIntersectionCount).toBe(0);
+    expect(layout.diagnostics).toEqual([]);
+  }, 30_000);
+
   it('wraps long focus titles instead of truncating their final words', async () => {
     const focus = {
       ...focusNode('country_island', 0, 0),
