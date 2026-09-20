@@ -5,7 +5,7 @@
 
 ## Decision
 
-Technology scans automatically choose a focused graph for workspaces with a game root or more than 1,000 scanned files. Focused graphs retain technology definitions, placements, paths, direct external references, scripted-effect calls, diagnostics, and source locations, but do not materialise the workspace-wide projection of every scripted-effect call into every grant or bonus reference.
+Technology scans automatically choose a focused graph for workspaces with a game root, more than 1,000 scanned files, or more than 4,096 helper calls. Focused graphs retain technology definitions, placements, paths, direct external references, scripted-effect calls, diagnostics, and source locations, but do not materialise the workspace-wide projection of every scripted-effect call into every grant or bonus reference.
 
 The graph records `analysisMode: "focused"`, marks the result partial when helper calls are present, and adds the `TECH_HELPER_EXPANSION_DEFERRED` unresolved boundary. Small synthetic workspaces and explicit internal full builds keep the existing complete helper projection.
 

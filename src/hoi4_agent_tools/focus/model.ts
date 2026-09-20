@@ -325,6 +325,15 @@ export interface FocusLayoutResult {
   diagnostics: Diagnostic[];
   /** Present on layouts produced by this version; optional for prior-layout compatibility. */
   metrics?: FocusLayoutMetrics;
+  /** One grid-space measurement for each rendered prerequisite edge. */
+  connectorMeasurements?: Array<{
+    parentId: string;
+    childId: string;
+    horizontalSpan: number;
+    verticalSpan: number;
+    manhattanSpan: number;
+    long: boolean;
+  }>;
   layoutHash: string;
 }
 

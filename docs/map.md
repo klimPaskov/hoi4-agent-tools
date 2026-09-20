@@ -10,7 +10,13 @@ The linked JSON catalog contains every active province definition, state, and st
 
 Use `query` for a compact name or ID result list and `coordinates` for exact pixel or map-coordinate lookup. Use `provinceIds`, `stateIds`, and `regionIds` for focused records. Up to 32 selected provinces can also produce exact geometry as maximal `[y, startX, endXExclusive]` row runs.
 
+Set `lookupOnly: true` for coordinate, query, and selected-ID lookups without full validation, the complete catalog artifact, overview rendering, or province geometry export. The lookup artifact contains only the requested matches and source revision. Use full inspection for allocation previews or province row runs.
+
 `hoi4.map_render` creates the same complete catalog and navigator with a chosen base layer and overlays. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, and building, unit, and weather positions.
+
+Pass `tile: { x, y, width, height }` to `hoi4.map_render` for a reusable bounded PNG, JSON, and HTML view of one top-left bitmap area. The tile preserves the selected base layer and overlays, and its JSON records raster dimensions and province IDs in the area. Identical source revisions and render settings produce identical artifact hashes.
+
+Pass `area: { provinceIds, stateIds, regionIds, padding }` to render the exact bounding area of those map entities with optional pixel padding. The result reports the resolved tile coordinates. An unknown ID or an area larger than 2,048 pixels in either direction is explicit, so a narrower selection can be requested.
 
 ## Create states
 
@@ -66,6 +72,8 @@ Use `renumber_map_entity` for `province`, `state`, or `strategic-region` IDs:
 ```
 
 If the destination exists, the default behavior swaps the two IDs. Province swaps update definitions, state and region membership, victory points, province buildings, adjacency, supply nodes, railways, unit positions, building sea references, and standard province and victory-point localisation keys. State swaps update state records, standard state localisation keys, and building-position state references. Strategic-region swaps update region records, standard localisation keys, and weather-position references. Province and strategic-region operations preserve their required contiguous ID sets.
+
+Renumbering also inspects active event, focus, decision, scripted helper, on-action, idea, character, and country-history source for typed scalar map fields. It rewrites only parsed values in `province`, `province_id`, `start_province`, `target_province`, `state`, `state_id`, `start_state`, `target_state`, `owns_state`, `controls_state`, `transfer_state`, `transfer_state_to`, `strategic_region`, and `strategic_region_id`. Other numbers, comments, and identifiers remain untouched. A matching reference in a read-only game or dependency source blocks the operation with its path and field. A script that cannot be safely parsed also blocks the operation.
 
 Set `collision` to `reject` to require an unused destination. Set `renameLocalisation` to `false` only when custom localisation-key handling is intentional.
 

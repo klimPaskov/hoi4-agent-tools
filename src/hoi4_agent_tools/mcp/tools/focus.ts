@@ -50,6 +50,16 @@ const focusInspectOutputSchema = strictOperationResultSchema(
               layoutDecisionCount: nonNegativeIntegerSchema,
               layoutMetrics: focusLayoutMetricsSchema,
               diagnosticCount: nonNegativeIntegerSchema,
+              scenarioSummary: z
+                .object({
+                  completed: nonNegativeIntegerSchema,
+                  blocked: nonNegativeIntegerSchema,
+                  unresolved: nonNegativeIntegerSchema,
+                  structuralCandidates: nonNegativeIntegerSchema,
+                  choiceConflictCount: nonNegativeIntegerSchema,
+                })
+                .strict()
+                .optional(),
             })
             .strict(),
         )
@@ -175,7 +185,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_inspect',
     title: 'Inspect focus trees',
     description:
-      'Inspect national trees or continuous palettes for creation and cleanup, including continuous-focus placement, complete plans, references, diagnostics, and stable layout decisions.',
+      'Inspect focus trees and continuous palettes, including source references, diagnostics, and layout.',
     inputSchema: focusInspectRequestSchema,
     outputSchema: focusInspectOutputSchema,
     annotations: artifactProducing,
@@ -184,7 +194,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_render',
     title: 'Render focus review artifacts',
     description:
-      'Render a national tree or continuous palette as fast deterministic HTML, SVG, JSON, and source-map artifacts. Use hoi4.focus_raster when decoded icons and PNG output are needed.',
+      'Render focus HTML, SVG, JSON, and source maps. Use hoi4.focus_raster for decoded icons and PNG.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
@@ -192,8 +202,7 @@ export const focusTaskTools = [
   {
     name: 'hoi4.focus_raster',
     title: 'Rasterize focus review artifacts',
-    description:
-      'Produce the high-fidelity focus review with decoded source icons and deterministic PNG output. Use focus_render for the faster structural HTML, SVG, and JSON view.',
+    description: 'Render focus PNG with decoded source icons; also returns HTML, SVG, and JSON.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
@@ -202,7 +211,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_rewrite',
     title: 'Create or clean up focus content',
     description:
-      'Create or clean up a national tree or continuous palette, validate it, and apply it in one call. Supply a complete plan; set layoutMode compact for automatic arrangement. Existing national trees can omit the plan and use treeId plus layoutMode compact. Set createIfMissing for a new file.',
+      'Create or compact a focus tree or palette from a complete plan. Use treeId for existing trees and createIfMissing for new files.',
     inputSchema: focusRewriteRequestSchema,
     outputSchema: focusPlanOutputSchema,
     annotations: {

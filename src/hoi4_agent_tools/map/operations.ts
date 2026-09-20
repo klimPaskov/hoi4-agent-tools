@@ -9,8 +9,10 @@ import {
   assignments,
   encodeSource,
   parseLocalisation,
+  parseClausewitz,
   type AssignmentNode,
   type BlockNode,
+  type SourceEntry,
   type LocalisationDocument,
   type LocalisationEntry,
   type SourceReplacement,
@@ -4606,6 +4608,94 @@ function renumberMapping(
   ]);
 }
 
+const EXTERNAL_SCRIPT_REFERENCE_KEYS: Record<
+  RenumberMapEntityOperation['entity'],
+  ReadonlySet<string>
+> = {
+  province: new Set(['province', 'province_id', 'start_province', 'target_province']),
+  state: new Set([
+    'state',
+    'state_id',
+    'start_state',
+    'target_state',
+    'owns_state',
+    'controls_state',
+    'transfer_state',
+    'transfer_state_to',
+  ]),
+  'strategic-region': new Set(['strategic_region', 'strategic_region_id']),
+};
+
+function externalScriptFile(relativePath: string): boolean {
+  return /^(?:events|common\/(?:national_focus|decisions|scripted_effects|scripted_triggers|on_actions|ideas|characters)|history\/countries)\/.+\.txt$/u.test(
+    relativePath,
+  );
+}
+
+function remapExternalScriptReferences(
+  index: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  mapping: ReadonlyMap<number, number>,
+  entity: RenumberMapEntityOperation['entity'],
+  operationId: string,
+): void {
+  const keys = EXTERNAL_SCRIPT_REFERENCE_KEYS[entity];
+  for (const file of index.sourceFiles) {
+    if (file.shadowedBy !== undefined || !externalScriptFile(file.relativePath)) continue;
+    const document = parseClausewitz(file.bytes, file.displayPath);
+    if (document.diagnostics.some(({ severity }) => severity === 'error' || severity === 'blocker'))
+      throw new ServiceError(
+        'MAP_EXTERNAL_SCRIPT_PARSE_BLOCKED',
+        'A selected external script cannot be safely inspected for typed map references',
+        {
+          relativePath: file.relativePath,
+          diagnosticCodes: document.diagnostics.map(({ code }) => code),
+        },
+      );
+    const replacements: SourceReplacement[] = [];
+    const visit = (entry: SourceEntry): void => {
+      if (entry.type === 'block') {
+        for (const child of entry.entries) visit(child);
+        return;
+      }
+      if (entry.type !== 'assignment') return;
+      if (entry.value.type === 'block') {
+        for (const child of entry.value.entries) visit(child);
+        return;
+      }
+      if (!keys.has(entry.key.value) || !/^\d+$/u.test(entry.value.value)) return;
+      const replacement = mapping.get(Number(entry.value.value));
+      if (replacement === undefined) return;
+      if (file.rootKind !== 'mod' && file.rootKind !== 'fixture')
+        throw new ServiceError(
+          'MAP_EXTERNAL_REFERENCE_READ_ONLY',
+          'A typed external map reference is owned by a read-only source',
+          {
+            relativePath: file.relativePath,
+            rootKind: file.rootKind,
+            key: entry.key.value,
+            id: entry.value.value,
+          },
+        );
+      replacements.push({
+        start: entry.value.start,
+        end: entry.value.end,
+        text: String(replacement),
+        description: `Renumber typed ${entity} reference in ${entry.key.value}`,
+      });
+    };
+    visit(document.root);
+    if (replacements.length > 0)
+      addChange(
+        changes,
+        file.relativePath,
+        applyReplacements(document, replacements),
+        operationId,
+        'text/plain',
+      );
+  }
+}
+
 function renameLocalisationKeys(
   index: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -4801,6 +4891,7 @@ function applyRenumberMapEntity(
       );
     }
     remapReferenceFiles(index, changes, mapping, operation.id);
+    remapExternalScriptReferences(index, changes, mapping, operation.entity, operation.id);
     if (operation.renameLocalisation ?? true) {
       const keys = new Map<string, string>();
       for (const [fromId, toId] of mapping) {
@@ -4839,6 +4930,7 @@ function applyRenumberMapEntity(
       );
     }
     remapBuildingPositionStateIds(index, changes, mapping, operation.id);
+    remapExternalScriptReferences(index, changes, mapping, operation.entity, operation.id);
     if (operation.renameLocalisation ?? true)
       renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
     return;
@@ -4873,6 +4965,7 @@ function applyRenumberMapEntity(
     );
   }
   remapWeatherPositionRegionIds(index, changes, mapping, operation.id);
+  remapExternalScriptReferences(index, changes, mapping, operation.entity, operation.id);
   if (operation.renameLocalisation ?? true)
     renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
 }

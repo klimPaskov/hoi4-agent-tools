@@ -19,6 +19,7 @@ import {
 import type {
   DoctrineDefinition,
   TechnologyAiMetadata,
+  TechnologyBackground,
   TechnologyExternalReference,
   TechnologyExternalSourceKind,
   TechnologyGridbox,
@@ -171,6 +172,15 @@ function resolvedNumber(
   return undefined;
 }
 
+function resolvedNumericScalar(
+  value: string | undefined,
+  constants: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!value?.startsWith('@')) return value;
+  const resolved = resolvedNumber(value, constants);
+  return resolved === undefined ? value : String(resolved);
+}
+
 function aiMetadata(block: BlockNode): TechnologyAiMetadata {
   const ai = childBlocks(block, 'ai_will_do')[0];
   const weights = childBlocks(block, 'ai_research_weights')[0];
@@ -273,7 +283,7 @@ function parseTechnologyDefinitions(
   fragment: TechnologySourceFragment,
 ): void {
   for (const wrapper of childBlocks(document.root, 'technologies')) {
-    const constants = constantsIn(wrapper);
+    const constants = new Map([...constantsIn(document.root), ...constantsIn(wrapper)]);
     for (const definition of assignments(wrapper)) {
       if (definition.key.value.startsWith('@') || definition.value.type !== 'block') continue;
       const block = definition.value;
@@ -516,10 +526,12 @@ function parseTechnologyDefinitions(
         rawSource: document.text.slice(definition.start, definition.end),
         ...(firstValue(block, 'start_year') === undefined
           ? {}
-          : { startYear: firstValue(block, 'start_year')! }),
+          : { startYear: resolvedNumericScalar(firstValue(block, 'start_year'), constants)! }),
         ...(firstValue(block, 'research_cost') === undefined
           ? {}
-          : { researchCost: firstValue(block, 'research_cost')! }),
+          : {
+              researchCost: resolvedNumericScalar(firstValue(block, 'research_cost'), constants)!,
+            }),
         ...(firstValue(block, 'doctrine_name') === undefined
           ? {}
           : { doctrineName: firstValue(block, 'doctrine_name')! }),
@@ -772,6 +784,61 @@ function parseTechnologyGridboxes(
       const absoluteX = current.offsetX + (localX ?? 0);
       const absoluteY = current.offsetY + (localY ?? 0);
       const folderId = technologyFolderContainer(current.namedContainers);
+      const backgroundSprite = firstValue(block, 'spriteType');
+      if (elementType === 'containerwindowtype' && name?.value.endsWith('_folder') === true) {
+        const panel = childBlocks(block, 'background')[0];
+        const panelSprite =
+          panel === undefined ? undefined : firstValue(panel, 'quadTextureSprite');
+        if (panelSprite !== undefined)
+          (fragment.backgrounds ??= []).push({
+            id: deterministicId('tech-panel', {
+              name: name.value,
+              path: file.displayPath,
+              offset: assignment.start,
+            }),
+            name: 'folder_panel',
+            folderId: name.value,
+            sprite: panelSprite,
+            position: { x: 0, y: 0 },
+            size: {},
+            location: nodeLocation(document, assignment, name.value),
+            sourcePath: file.displayPath,
+            loadOrder: file.loadOrder,
+          });
+      }
+      if (
+        elementType === 'icontype' &&
+        name !== undefined &&
+        folderId !== undefined &&
+        backgroundSprite !== undefined &&
+        (name.value.endsWith('_techtree_bg') || backgroundSprite.endsWith('_techtree_bg')) &&
+        localX !== undefined &&
+        localY !== undefined
+      ) {
+        const parentSize = childBlocks(current.block, 'size')[0];
+        const size = childBlocks(block, 'size')[0] ?? parentSize;
+        const width = numericLiteral(size === undefined ? undefined : firstValue(size, 'width'));
+        const height = numericLiteral(size === undefined ? undefined : firstValue(size, 'height'));
+        const background: TechnologyBackground = {
+          id: deterministicId('tech-background', {
+            name: name.value,
+            path: file.displayPath,
+            offset: assignment.start,
+          }),
+          name: name.value,
+          folderId,
+          sprite: backgroundSprite,
+          position: { x: absoluteX, y: absoluteY },
+          size: {
+            ...(width === undefined ? {} : { width }),
+            ...(height === undefined ? {} : { height }),
+          },
+          location: nodeLocation(document, assignment, name.value),
+          sourcePath: file.displayPath,
+          loadOrder: file.loadOrder,
+        };
+        (fragment.backgrounds ??= []).push(background);
+      }
       if (elementType === 'gridboxtype' && name?.value.endsWith('_tree') === true) {
         const slotSize = childBlocks(block, 'slotsize')[0];
         const width = numericLiteral(
@@ -825,6 +892,79 @@ function parseTechnologyGridboxes(
           const height = numericLiteral(
             size === undefined ? undefined : firstValue(size, 'height'),
           );
+          const subTechnologySlots = assignments(block)
+            .flatMap((child) => {
+              if (
+                child.value.type !== 'block' ||
+                child.key.value.toLowerCase() !== 'containerwindowtype'
+              )
+                return [];
+              const slotName = firstValue(child.value, 'name');
+              const match = /^sub_technology_slot_(\d+)$/u.exec(slotName ?? '');
+              if (match === null) return [];
+              const slotPosition = childBlocks(child.value, 'position')[0];
+              const slotSize = childBlocks(child.value, 'size')[0];
+              const x = numericLiteral(
+                slotPosition === undefined ? undefined : firstValue(slotPosition, 'x'),
+              );
+              const y = numericLiteral(
+                slotPosition === undefined ? undefined : firstValue(slotPosition, 'y'),
+              );
+              const slotWidth = numericLiteral(
+                slotSize === undefined ? undefined : firstValue(slotSize, 'width'),
+              );
+              const slotHeight = numericLiteral(
+                slotSize === undefined ? undefined : firstValue(slotSize, 'height'),
+              );
+              if (
+                x === undefined ||
+                y === undefined ||
+                slotWidth === undefined ||
+                slotHeight === undefined
+              )
+                return [];
+              const picture = childBlocks(child.value, 'iconType').find(
+                (icon) => firstValue(icon, 'name') === 'picture',
+              );
+              const sprite = picture === undefined ? undefined : firstValue(picture, 'spriteType');
+              return [
+                {
+                  index: Number(match[1]),
+                  position: { x, y },
+                  size: { width: slotWidth, height: slotHeight },
+                  ...(sprite === undefined ? {} : { sprite }),
+                },
+              ];
+            })
+            .sort((left, right) => left.index - right.index);
+          const itemBackground = childBlocks(block, 'background')[0];
+          const backgroundSprite =
+            itemBackground === undefined
+              ? undefined
+              : firstValue(itemBackground, 'quadTextureSprite');
+          const icon = childBlocks(block, 'iconType').find(
+            (candidate) => firstValue(candidate, 'name') === 'Icon',
+          );
+          const iconPosition = icon === undefined ? undefined : childBlocks(icon, 'position')[0];
+          const iconX =
+            iconPosition === undefined ? undefined : numericLiteral(firstValue(iconPosition, 'x'));
+          const iconY =
+            iconPosition === undefined ? undefined : numericLiteral(firstValue(iconPosition, 'y'));
+          const nameBox = childBlocks(block, 'instantTextBoxType').find(
+            (candidate) => firstValue(candidate, 'name') === 'name',
+          );
+          const nameBoxPosition =
+            nameBox === undefined ? undefined : childBlocks(nameBox, 'position')[0];
+          const nameX =
+            nameBoxPosition === undefined
+              ? undefined
+              : numericLiteral(firstValue(nameBoxPosition, 'x'));
+          const nameY =
+            nameBoxPosition === undefined
+              ? undefined
+              : numericLiteral(firstValue(nameBoxPosition, 'y'));
+          const nameMaxWidth =
+            nameBox === undefined ? undefined : numericLiteral(firstValue(nameBox, 'maxWidth'));
           const layout: TechnologyItemLayout = {
             id: deterministicId('tech-item-layout', {
               name: name.value,
@@ -854,6 +994,26 @@ function parseTechnologyGridboxes(
                 ? {}
                 : { heightExpression: firstValue(size, 'height') ?? '<missing>' }),
             },
+            ...(backgroundSprite === undefined ? {} : { backgroundSprite }),
+            ...(iconX === undefined || iconY === undefined
+              ? {}
+              : {
+                  iconPosition: {
+                    x: iconX,
+                    y: iconY,
+                    centered: booleanValue(firstValue(icon!, 'centerposition')) === true,
+                  },
+                }),
+            ...(nameX === undefined || nameY === undefined
+              ? {}
+              : {
+                  namePosition: {
+                    x: nameX,
+                    y: nameY,
+                    ...(nameMaxWidth === undefined ? {} : { maxWidth: nameMaxWidth }),
+                  },
+                }),
+            ...(subTechnologySlots.length === 0 ? {} : { subTechnologySlots }),
             location: nodeLocation(document, assignment, name.value),
             sourcePath: file.displayPath,
             loadOrder: file.loadOrder,
@@ -881,6 +1041,26 @@ function parseTechnologyGridboxes(
             folderId,
             year,
             position: { x: absoluteX, y: absoluteY },
+            style: {
+              ...(firstValue(block, 'font') === undefined
+                ? {}
+                : { fontName: firstValue(block, 'font')! }),
+              ...(firstValue(block, 'textColor') === undefined
+                ? {}
+                : { colour: firstValue(block, 'textColor')! }),
+              ...(numericLiteral(firstValue(block, 'maxWidth')) === undefined
+                ? {}
+                : { maxWidth: numericLiteral(firstValue(block, 'maxWidth'))! }),
+              ...(numericLiteral(firstValue(block, 'maxHeight')) === undefined
+                ? {}
+                : { maxHeight: numericLiteral(firstValue(block, 'maxHeight'))! }),
+              ...(firstValue(block, 'format') === undefined
+                ? {}
+                : { format: firstValue(block, 'format')! }),
+              ...(firstValue(block, 'Orientation') === undefined
+                ? {}
+                : { orientation: firstValue(block, 'Orientation')! }),
+            },
             location: nodeLocation(document, assignment, name.value),
             sourcePath: file.displayPath,
             loadOrder: file.loadOrder,

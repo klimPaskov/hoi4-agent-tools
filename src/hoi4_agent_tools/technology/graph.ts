@@ -35,6 +35,7 @@ import {
   TECHNOLOGY_PARSER_VERSION,
   type DoctrineDefinition,
   type TechnologyCategory,
+  type TechnologyBackground,
   type TechnologyConfidence,
   type TechnologyDefinition,
   type TechnologyEdge,
@@ -69,6 +70,7 @@ const MAX_EXTERNAL_REFERENCES = 1_000_000;
 const MAX_ISSUES = 100_000;
 const MAX_HELPER_DEPTH = 64;
 const MAX_HELPER_PROJECTIONS = 500_000;
+const MAX_FULL_HELPER_CALLS = 4_096;
 
 const confidenceRank: Record<TechnologyConfidence, number> = {
   confirmed: 0,
@@ -321,6 +323,30 @@ function activeYearMarkers(values: readonly TechnologyYearMarker[]): TechnologyY
     );
 }
 
+function activeBackgrounds(values: readonly TechnologyBackground[]): TechnologyBackground[] {
+  const groups = new Map<string, TechnologyBackground[]>();
+  for (const background of values) {
+    const key = `${background.folderId}\0${background.name}`;
+    const group = groups.get(key) ?? [];
+    group.push(background);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map(
+      (group) =>
+        group.sort(
+          (left, right) =>
+            right.loadOrder - left.loadOrder ||
+            compareCodeUnits(left.sourcePath, right.sourcePath) ||
+            left.location.start.offset - right.location.start.offset,
+        )[0]!,
+    )
+    .sort(
+      (left, right) =>
+        compareCodeUnits(left.folderId, right.folderId) || compareCodeUnits(left.name, right.name),
+    );
+}
+
 function enrichPlacements(
   placements: readonly TechnologyPlacement[],
   edges: readonly TechnologyEdge[],
@@ -385,15 +411,11 @@ function enrichPlacements(
   return placements.map((placement) => {
     const roots = rootsFor(placement.technologyId, placement.folderId);
     const branchRootId = roots.length === 1 ? roots[0] : undefined;
-    const expectedGridbox = branchRootId === undefined ? undefined : `${branchRootId}_tree`;
-    const candidates =
-      expectedGridbox === undefined
-        ? []
-        : gridboxes.filter(
-            ({ name, folderId }) =>
-              name === expectedGridbox &&
-              (folderId === undefined || folderId === placement.folderId),
-          );
+    const expectedGridbox = `${branchRootId ?? placement.technologyId}_tree`;
+    const candidates = gridboxes.filter(
+      ({ name, folderId }) =>
+        name === expectedGridbox && (folderId === undefined || folderId === placement.folderId),
+    );
     const gridbox = candidates[0];
     const technology = technologyById.get(placement.technologyId);
     const folderLayouts = layoutsByFolder.get(placement.folderId);
@@ -1434,6 +1456,7 @@ function* technologyGraphAnalysis(
   const gridboxes = activeGridboxes(fragments.flatMap(({ gridboxes }) => gridboxes));
   const itemLayouts = activeItemLayouts(fragments.flatMap(({ itemLayouts }) => itemLayouts));
   const yearMarkers = activeYearMarkers(fragments.flatMap(({ yearMarkers }) => yearMarkers));
+  const backgrounds = activeBackgrounds(fragments.flatMap(({ backgrounds }) => backgrounds ?? []));
   const categories = activeCategories(fragments.flatMap(({ categories }) => categories));
   const selectedDoctrines = activeDefinitions(
     fragments.flatMap(({ doctrineDefinitions }) => doctrineDefinitions),
@@ -1484,15 +1507,17 @@ function* technologyGraphAnalysis(
   );
   const unresolved = fragments.flatMap(({ unresolved }) => unresolved);
   const helperCalls = fragments.flatMap(({ helperCalls }) => helperCalls);
+  const analysisMode =
+    options.analysisMode ?? (helperCalls.length > MAX_FULL_HELPER_CALLS ? 'focused' : 'full');
   const walk =
-    options.analysisMode === 'focused'
+    analysisMode === 'focused'
       ? undefined
       : yield technologyHelperWalk(helperCalls, snapshot.revision);
   const externalReferences = expandHelperReferences(
     fragments.flatMap(({ externalReferences }) => externalReferences),
     helperCalls,
     unresolved,
-    options.analysisMode ?? 'full',
+    analysisMode,
     walk,
     options.signal,
   );
@@ -1536,7 +1561,7 @@ function* technologyGraphAnalysis(
   const graph: TechnologyGraphSnapshot = {
     schemaVersion: TECHNOLOGY_GRAPH_SCHEMA_VERSION,
     parserVersion: TECHNOLOGY_PARSER_VERSION,
-    analysisMode: options.analysisMode ?? 'full',
+    analysisMode,
     workspaceId: snapshot.workspaceId,
     workspaceIdentity: options.workspaceIdentity,
     revision,
@@ -1549,7 +1574,7 @@ function* technologyGraphAnalysis(
             code === 'TECH_HELPER_DEPTH_BLOCKED' || code === 'TECH_HELPER_PROJECTION_LIMIT',
         ),
       ) &&
-      !(options.analysisMode === 'focused' && helperCalls.length > 0),
+      !(analysisMode === 'focused' && helperCalls.length > 0),
     analysisBoundary: {
       staticAnalysis: true,
       language: 'l_english',
@@ -1561,7 +1586,7 @@ function* technologyGraphAnalysis(
         'meta-generated or variable technology identifiers',
         'exact AI research choice and runtime research time',
         'dynamic scripted localisation without supplied runtime values',
-        ...(options.analysisMode === 'focused' && helperCalls.length > 0
+        ...(analysisMode === 'focused' && helperCalls.length > 0
           ? ['large-workspace scripted-effect helper projections are deferred']
           : []),
       ],
@@ -1581,6 +1606,7 @@ function* technologyGraphAnalysis(
     gridboxes,
     itemLayouts,
     yearMarkers,
+    backgrounds,
     edges,
     categories,
     doctrineDefinitions,

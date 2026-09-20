@@ -80,7 +80,9 @@ Example `hoi4.event_render` arguments:
 
 ## Compare
 
-`hoi4.event_compare` compares whole workspace event graphs; it does not accept a chain selector. `before` and `after` each accept exactly one graph reference: `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. If no reference or overlay is supplied, the tool compares the previous cached revision with a fresh scan of the current source and reports an error when no prior revision is available. Comparisons refresh current source by default so normal agent file edits are detected; set `refresh: false` only when intentionally comparing cached graphs.
+`hoi4.event_compare` compares whole workspace event graphs. `before` and `after` each accept exactly one graph reference: `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. If no reference or overlay is supplied, the tool compares the previous cached revision with a fresh scan of the current source and reports an error when no prior revision is available. Comparisons refresh current source by default so normal agent file edits are detected; set `refresh: false` only when intentionally comparing cached graphs.
+
+Set `selector` to an event, namespace, file, source location, node, or manifest to view the downstream chain in both revisions. `maxChainNodes` bounds each traversal, defaults to 1,000, and reports `selectionTruncated` when the chain exceeds the boundary. The artifact retains the full comparison and graph hashes, and its `selection` reports selected, omitted, and unattributed changes explicitly. Diagnostics without a chain owner remain unattributed. The rendered view uses the selected changed nodes.
 
 Alternatively, compare the current graph with `proposedSources`, an in-memory list of `{ relativePath, source, expectedSourceHash? }` overlays. Set `source` to a string to add or replace source, or to `null` to delete an existing mod source. `after` and `proposedSources` are mutually exclusive. Proposed sources are analyzed without being written. The result reports added, removed, and changed definitions, edges, options, state operations, diagnostics, and route reachability.
 

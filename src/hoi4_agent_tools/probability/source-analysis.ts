@@ -40,6 +40,10 @@ export interface WeightedSurfaceInventoryEntry {
   identifierMatchCount: number;
   candidatePoolMatchCount: number;
   exampleCandidateIds: string[];
+  candidateCatalog: Array<{
+    id: string;
+    provenance: ProbabilitySourceProvenance[];
+  }>;
   sourcePaths: string[];
 }
 
@@ -590,6 +594,7 @@ export function inventoryWeightedSurfaces(
             ? candidates.length
             : candidates.filter(({ id }) => wanted.has(id)).length,
         exampleCandidateIds: [...new Set(candidates.map(({ id }) => id))].slice(0, 10),
+        candidateCatalog: candidates.map(({ id, provenance }) => ({ id, provenance })),
         sourcePaths: [
           ...new Set(candidates.flatMap(({ provenance }) => provenance.map(({ path }) => path))),
         ].sort(compareCodeUnits),

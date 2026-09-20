@@ -117,6 +117,15 @@ export interface TechnologyItemLayout {
     widthExpression?: string;
     heightExpression?: string;
   };
+  backgroundSprite?: string;
+  iconPosition?: { x: number; y: number; centered: boolean };
+  namePosition?: { x: number; y: number; maxWidth?: number };
+  subTechnologySlots?: Array<{
+    index: number;
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    sprite?: string;
+  }>;
   location: SourceLocation;
   sourcePath: string;
   loadOrder: number;
@@ -128,6 +137,26 @@ export interface TechnologyYearMarker {
   folderId: string;
   year: number;
   position: { x: number; y: number };
+  style?: {
+    fontName?: string;
+    colour?: string;
+    maxWidth?: number;
+    maxHeight?: number;
+    format?: string;
+    orientation?: string;
+  };
+  location: SourceLocation;
+  sourcePath: string;
+  loadOrder: number;
+}
+
+export interface TechnologyBackground {
+  id: string;
+  name: string;
+  folderId: string;
+  sprite: string;
+  position: { x: number; y: number };
+  size: { width?: number; height?: number };
   location: SourceLocation;
   sourcePath: string;
   loadOrder: number;
@@ -333,6 +362,7 @@ export interface TechnologyGraphSnapshot {
   gridboxes: TechnologyGridbox[];
   itemLayouts: TechnologyItemLayout[];
   yearMarkers: TechnologyYearMarker[];
+  backgrounds?: TechnologyBackground[];
   edges: TechnologyEdge[];
   categories: TechnologyCategory[];
   doctrineDefinitions: DoctrineDefinition[];
@@ -360,6 +390,7 @@ export interface TechnologySourceFragment {
   gridboxes: TechnologyGridbox[];
   itemLayouts: TechnologyItemLayout[];
   yearMarkers: TechnologyYearMarker[];
+  backgrounds?: TechnologyBackground[];
   edges: TechnologyEdge[];
   categories: TechnologyCategory[];
   doctrineDefinitions: Array<Omit<DoctrineDefinition, 'icon'> & { iconSprite?: string }>;

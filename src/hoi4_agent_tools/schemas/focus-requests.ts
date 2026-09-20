@@ -30,6 +30,10 @@ export const focusInspectRequestSchema = z
     previous: compactFocusLayoutSchema.optional(),
     laneSpacing: z.number().int().min(1).max(100).optional(),
     nodeSpacing: z.number().int().min(1).max(100).optional(),
+    scenario: z
+      .object({ completedFocusIds: z.array(z.string().min(1).max(256)).max(10_000) })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -47,7 +51,7 @@ export const focusInspectRequestSchema = z
         message: 'treeId is only valid in national mode',
       });
     if (mode === 'continuous') {
-      for (const field of ['previous', 'laneSpacing', 'nodeSpacing'] as const) {
+      for (const field of ['previous', 'laneSpacing', 'nodeSpacing', 'scenario'] as const) {
         if (value[field] !== undefined)
           context.addIssue({
             code: 'custom',
@@ -61,6 +65,12 @@ export const focusInspectRequestSchema = z
         code: 'custom',
         path: ['previous'],
         message: 'previous requires treeId so it applies to exactly one tree',
+      });
+    if (value.scenario !== undefined && value.treeId === undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['scenario'],
+        message: 'scenario requires treeId so it applies to exactly one tree',
       });
   });
 
@@ -78,6 +88,7 @@ export const focusRenderRequestSchema = z
       .min(FOCUS_RENDER_MIN_OUTPUT_SCALE)
       .max(FOCUS_RENDER_MAX_OUTPUT_SCALE)
       .optional(),
+    cropFocusIds: z.array(z.string().min(1).max(256)).max(16).optional(),
     columns: z.number().int().min(1).max(12).optional(),
     padding: z.number().int().min(0).max(1000).optional(),
   })
@@ -95,6 +106,7 @@ export const focusRenderRequestSchema = z
             ['horizontalSpacing', value.horizontalSpacing],
             ['verticalSpacing', value.verticalSpacing],
             ['reviewScale', value.reviewScale],
+            ['cropFocusIds', value.cropFocusIds],
           ] as const);
     for (const [field, fieldValue] of invalid) {
       if (fieldValue !== undefined)
@@ -119,6 +131,29 @@ export const focusRewriteRequestSchema = z
     relativePath: workspaceRelativePathSchema,
     treeId: z.string().min(1).max(256).optional(),
     layoutMode: z.enum(['authored', 'compact']).default('authored'),
+    compactFocusIds: z.array(z.string().min(1).max(256)).min(1).max(10_000).optional(),
+    pinnedFocusIds: z.array(z.string().min(1).max(256)).max(10_000).optional(),
+    symmetryGroups: z
+      .array(
+        z
+          .object({
+            centerFocusId: z.string().min(1).max(256),
+            pairs: z
+              .array(
+                z
+                  .object({
+                    leftFocusId: z.string().min(1).max(256),
+                    rightFocusId: z.string().min(1).max(256),
+                  })
+                  .strict(),
+              )
+              .min(1)
+              .max(10_000),
+          })
+          .strict(),
+      )
+      .max(64)
+      .optional(),
     plan: compactFocusPlanSchema.optional(),
     createIfMissing: z.boolean().default(false),
     horizontalSpacing: z.number().int().min(80).max(1000).optional(),
@@ -133,6 +168,14 @@ export const focusRewriteRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (value.layoutMode !== 'compact')
+      for (const field of ['compactFocusIds', 'pinnedFocusIds', 'symmetryGroups'] as const)
+        if (value[field] !== undefined)
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} requires compact layout mode`,
+          });
     const mode = value.mode ?? 'national';
     const schema = mode === 'continuous' ? continuousFocusPaletteSchema : focusTreePlanSchema;
     if (value.plan !== undefined && !schema.safeParse(value.plan).success)

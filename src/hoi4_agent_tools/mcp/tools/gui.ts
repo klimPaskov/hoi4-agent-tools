@@ -62,6 +62,10 @@ const guiRenderOutputSchema = strictOperationResultSchema(
       comparison: z
         .object({ changedPixels: nonNegativeIntegerSchema, changedRatio: z.number().min(0).max(1) })
         .strict(),
+      sourceComparison: z
+        .object({ changedPixels: nonNegativeIntegerSchema, changedRatio: z.number().min(0).max(1) })
+        .strict()
+        .optional(),
       fidelityCounts: countRecordSchema,
       offlineRepresentation: z.literal(true),
     })
@@ -101,7 +105,7 @@ export const guiTaskTools = [
     name: 'hoi4.gui_render',
     title: 'Render scripted GUI artifacts',
     description:
-      'Render GUI states, resolutions, generated or explicit scenarios, dynamic flags and text icons, hierarchy, comparisons, and diagnostics.',
+      'Render GUI states, resolutions, scenarios, hierarchy, comparisons, and diagnostics.',
     inputSchema: guiRenderRequestSchema,
     outputSchema: guiRenderOutputSchema,
     annotations: artifactProducing,

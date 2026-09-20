@@ -101,6 +101,16 @@ export const guiRenderRequestSchema = z
     relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
     generatedScenarios: compactGeneratedScenarioOptionsSchema.optional(),
     comparisonScenario: compactGuiScenarioSchema.optional(),
+    sourceBaseline: z
+      .object({
+        relativePath: workspaceRelativePathSchema,
+        source: z.string().max(SOURCE_MAX_BYTES),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Previous mod-owned .gui source for a matched source comparison using the requested scenario.',
+      ),
   })
   .strict()
   .superRefine(

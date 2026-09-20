@@ -55,6 +55,21 @@ export function probabilityAnalysisData(
     cacheKey: result.metadata.cacheKey,
     scenarios: result.scenarios.length,
     candidates: result.scenarios.reduce((sum, scenario) => sum + scenario.candidates.length, 0),
+    eligibleCandidates: result.scenarios.reduce(
+      (sum, scenario) =>
+        sum + scenario.candidates.filter(({ eligibility }) => eligibility === 'true').length,
+      0,
+    ),
+    excludedCandidates: result.scenarios.reduce(
+      (sum, scenario) =>
+        sum + scenario.candidates.filter(({ eligibility }) => eligibility === 'false').length,
+      0,
+    ),
+    unresolvedCandidates: result.scenarios.reduce(
+      (sum, scenario) =>
+        sum + scenario.candidates.filter(({ eligibility }) => eligibility === 'unresolved').length,
+      0,
+    ),
     ...(result.scenarios.some(({ scopePools }) => (scopePools?.length ?? 0) > 0)
       ? {
           scopePools: result.scenarios.reduce(
@@ -159,6 +174,14 @@ export async function inspectProbabilities(
     input.candidatePool,
     input.customPoolManifest as ProbabilitySequenceRequest['customPoolManifest'] | undefined,
   );
+  const sourceRequiredInputPaths = (inspected.surface?.requiredInputs ?? []).filter(
+    (path) =>
+      path !== 'focus.external_factors_complete' && path !== 'technology.external_factors_complete',
+  );
+  const adapterRequiredInputPaths = (inspected.surface?.requiredInputs ?? []).filter(
+    (path) =>
+      path === 'focus.external_factors_complete' || path === 'technology.external_factors_complete',
+  );
   const result = emptyServiceResult(context.workspaceId, {
     adapters: inspected.adapters.length,
     ...(inspected.surface === undefined
@@ -197,6 +220,9 @@ export async function inspectProbabilities(
       })) ?? [],
     candidateExamples: inspected.discovery?.exampleCandidateIds ?? [],
     requiredInputs: inspected.surface?.requiredInputs.length ?? 0,
+    requiredInputPaths: sourceRequiredInputPaths.slice(0, 32),
+    requiredInputPathsTruncated: sourceRequiredInputPaths.length > 32,
+    adapterRequiredInputPaths,
     unresolved: inspected.surface?.unsupported.length ?? 0,
   });
   result.code =

@@ -70,6 +70,7 @@ export const mapInspectRequestSchema = z
       )
       .max(100)
       .default([]),
+    lookupOnly: z.boolean().default(false),
     includeOverview: z.boolean().default(true),
     allocationRequests: z.array(mapAllocationRequestSchema).max(100).default([]),
   })
@@ -81,8 +82,35 @@ export const mapRenderRequestSchema = z
     layer: mapLayerSchema.optional(),
     overlays: z.array(mapOverlaySchema).max(12).optional(),
     scale: z.number().int().min(1).max(16).optional(),
+    tile: z
+      .object({
+        x: z.number().int().min(0),
+        y: z.number().int().min(0),
+        width: z.number().int().min(1).max(2_048),
+        height: z.number().int().min(1).max(2_048),
+      })
+      .strict()
+      .optional(),
+    area: z
+      .object({
+        provinceIds: z.array(z.number().int().nonnegative()).max(256).optional(),
+        stateIds: z.array(z.number().int().nonnegative()).max(64).optional(),
+        regionIds: z.array(z.number().int().nonnegative()).max(64).optional(),
+        padding: z.number().int().min(0).max(256).optional(),
+      })
+      .strict()
+      .refine(
+        ({ provinceIds, stateIds, regionIds }) =>
+          (provinceIds?.length ?? 0) + (stateIds?.length ?? 0) + (regionIds?.length ?? 0) > 0,
+        'Map area requires at least one province, state, or region ID',
+      )
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ tile, area }) => tile === undefined || area === undefined,
+    'Choose tile or area, not both',
+  );
 
 export const mapRewriteRequestSchema = z
   .object({

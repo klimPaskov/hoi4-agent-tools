@@ -115,6 +115,8 @@ describe('probability MCP workflow', () => {
         adapterId: 'custom_weighted_pool',
         poolComplete: true,
         candidates: 3,
+        requiredInputPaths: [],
+        requiredInputPathsTruncated: false,
       },
     });
     const evaluated = await client.callTool({
@@ -131,6 +133,9 @@ describe('probability MCP workflow', () => {
         analysisStatus: 'complete',
         adapterId: 'custom_weighted_pool',
         candidates: 6,
+        eligibleCandidates: expect.any(Number),
+        excludedCandidates: expect.any(Number),
+        unresolvedCandidates: expect.any(Number),
       },
     });
     const artifact = (evaluated.structuredContent as { artifacts: Array<{ uri: string }> })
@@ -490,6 +495,17 @@ describe('probability MCP workflow', () => {
         discovery: {
           reason: 'requested_adapter_empty',
           suggestedAdapter: 'national_focus_ai_will_do',
+          availableAdapters: [
+            expect.objectContaining({
+              adapterId: 'national_focus_ai_will_do',
+              candidateCatalog: [
+                expect.objectContaining({
+                  id: 'weighted_focus',
+                  provenance: [expect.objectContaining({ path: expect.any(String) })],
+                }),
+              ],
+            }),
+          ],
         },
       });
 
@@ -504,6 +520,35 @@ describe('probability MCP workflow', () => {
         suggestedAdapter: 'national_focus_ai_will_do',
         discoveryReason: 'source_inventory',
       },
+    });
+    const missingDate = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: {
+          inlineClausewitz:
+            'focus_tree = { id = dated_tree focus = { id = dated_focus x = 0 y = 0 ai_will_do = { factor = 1 modifier = { factor = 2 date > 1937.1.1 } } } }',
+        },
+      },
+    });
+    expect(missingDate.structuredContent).toMatchObject({
+      data: {
+        requiredInputPaths: ['date'],
+        adapterRequiredInputPaths: ['focus.external_factors_complete'],
+      },
+    });
+    const irrelevantDate = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: {
+          inlineClausewitz:
+            'focus_tree = { id = known_tree focus = { id = known_focus x = 0 y = 0 available = { OR = { always = yes date > 1937.1.1 } } ai_will_do = { factor = 1 } } }',
+        },
+      },
+    });
+    expect(irrelevantDate.structuredContent).toMatchObject({
+      data: { requiredInputPaths: [] },
     });
 
     const missingIdentifier = await client.callTool({

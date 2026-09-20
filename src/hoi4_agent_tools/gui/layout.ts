@@ -1497,9 +1497,27 @@ async function layoutElement(
     scenario.values[`${definition.name}.enabled`] ??
     scenario.scriptedGui[`${definition.name}.enabled`] ??
     context.constantElementEnabled[definition.name];
-  const clickable =
-    clickableTypes.test(definition.elementType) && !clickThrough && scriptedEnabled !== false;
   const state: GuiPreviewState = scenario.elementStates[definition.name] ?? scenario.state;
+  const interactive = clickableTypes.test(definition.elementType);
+  const disabledReason = !interactive
+    ? undefined
+    : !visible
+      ? 'hidden'
+      : clickThrough
+        ? 'click_through'
+        : state === 'disabled' || state === 'locked'
+          ? 'scenario_state'
+          : scriptedEnabled === false
+            ? 'scripted_enabled_false'
+            : undefined;
+  const clickable = interactive && disabledReason === undefined;
+  const visibilityReason = visible
+    ? 'visible'
+    : !inheritedVisible
+      ? 'parent_hidden'
+      : explicitlyVisible === false
+        ? 'visibility_false'
+        : 'outside_clip';
   const zPriority = scalarNumber(property(definition.attributes, 'priority'), 0) ?? 0;
   let progressRatio: number | undefined;
   if (/progressbar/iu.test(definition.elementType)) {
@@ -1542,7 +1560,9 @@ async function layoutElement(
     depth,
     zIndex: Math.trunc(zPriority * 1_000_000 + definition.definitionOrder),
     visible,
+    visibilityReason,
     clickable,
+    ...(disabledReason === undefined ? {} : { disabledReason }),
     clickThrough,
     rect: availableClip ?? { x: unclippedRect.x, y: unclippedRect.y, width: 0, height: 0 },
     unclippedRect,

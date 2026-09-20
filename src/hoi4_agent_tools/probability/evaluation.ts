@@ -27,6 +27,9 @@ export interface ExactCandidateEvaluation {
   pathProbability?: Rational;
   trace: ValueTraceStep[];
   unresolved: ProbabilityUnresolved[];
+  eligibilityUnresolved: ProbabilityUnresolved[];
+  valueUnresolved: ProbabilityUnresolved[];
+  externalUnresolved: ProbabilityUnresolved[];
   provenance: WeightedCandidate['provenance'];
 }
 
@@ -163,6 +166,9 @@ export function evaluateExactCandidates(
         ...external.trace,
       ],
       unresolved: [...eligibility.unresolved, ...value.unresolved, ...external.unresolved],
+      eligibilityUnresolved: eligibility.unresolved,
+      valueUnresolved: value.unresolved,
+      externalUnresolved: external.unresolved,
       provenance: [
         ...candidate.provenance,
         ...(eligibility.helperProvenance ?? []),

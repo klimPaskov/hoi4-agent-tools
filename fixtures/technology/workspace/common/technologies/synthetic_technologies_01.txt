@@ -1,9 +1,12 @@
+@synthetic_zero = 0
+@synthetic_start_year = 1936
+@synthetic_research_cost = 1
 technologies = {
 	synthetic_tech_0000 = {
-		start_year = 1936
-		research_cost = 1.00
+		start_year = @synthetic_start_year
+		research_cost = @synthetic_research_cost
 		force_use_small_tech_layout = yes
-		folder = { name = synthetic_folder_00 position = { x = 0 y = 0 } }
+		folder = { name = synthetic_folder_00 position = { x = @synthetic_zero y = 0 } }
 		folder = { name = synthetic_folder_01 position = { x = 10 y = 0 } }
 		path = { leads_to_tech = synthetic_tech_0001 }
 		categories = { synthetic_category_00 }

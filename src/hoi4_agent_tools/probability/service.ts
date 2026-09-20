@@ -15,7 +15,11 @@ import { PACKAGE_VERSION } from '../version.js';
 import { probabilityAnalysisResultSchema } from '../schemas/probability.js';
 import { probabilityAdapter, probabilityAdapters } from './adapters.js';
 import { compareProbabilityResults } from './compare.js';
-import { evaluateExactCandidates, evaluateSurfaceScenarios } from './evaluation.js';
+import {
+  evaluateExactCandidates,
+  evaluateSurfaceScenarios,
+  type ExactCandidateEvaluation,
+} from './evaluation.js';
 import {
   VERIFIED_GAME_CHECKSUM,
   VERIFIED_GAME_RAW_VERSION,
@@ -144,7 +148,12 @@ export interface ProbabilityInspectResult {
       hasWeightBlock: boolean;
       requiredInputs: string[];
       referencedProvenance: WeightedSurface['candidates'][number]['provenance'];
-      analysisSupport: 'exact' | 'score_only' | 'requires_scenario' | 'requires_complete_pool';
+      analysisSupport:
+        | 'exact'
+        | 'score_only'
+        | 'requires_scenario'
+        | 'requires_complete_pool'
+        | 'unresolved_source';
     }>;
     requiredInputs: string[];
     unsupported: ProbabilityUnresolved[];
@@ -165,6 +174,34 @@ export interface ProbabilityInspectResult {
   };
   artifacts: ArtifactLink[];
   filesScanned: string[];
+}
+
+function missingScenarioInputs(unresolved: readonly ProbabilityUnresolved[]): string[] {
+  return [
+    ...new Set(
+      unresolved.flatMap(({ code, path, details }) => {
+        if (typeof details?.scenarioInput === 'string') return [details.scenarioInput];
+        if (code === 'VALUE_UNRESOLVED' && path !== undefined && !/^(?:@|constant:)/u.test(path))
+          return [path];
+        if (
+          path !== undefined &&
+          (code === 'FOCUS_EXTERNAL_FACTORS_UNDECLARED' ||
+            code === 'TECHNOLOGY_EXTERNAL_FACTORS_UNDECLARED')
+        )
+          return [path];
+        return [];
+      }),
+    ),
+  ].sort(compareCodeUnits);
+}
+
+function blockingInspectionUnresolved(
+  candidate: ExactCandidateEvaluation,
+): ProbabilityUnresolved[] {
+  if (candidate.eligibility === 'false') return [];
+  if (candidate.eligibility === 'unresolved')
+    return [...candidate.eligibilityUnresolved, ...candidate.externalUnresolved];
+  return [...candidate.valueUnresolved, ...candidate.externalUnresolved];
 }
 
 interface AnalyzerState {
@@ -1517,13 +1554,9 @@ export class ProbabilityAnalyzer {
       { id: 'inspection', state: {} },
       definitions,
     );
-    const requiredInputs = [
-      ...new Set(
-        inspectedCandidates.flatMap(({ unresolved }) =>
-          unresolved.flatMap(({ path }) => (path === undefined ? [] : [path])),
-        ),
-      ),
-    ].sort();
+    const requiredInputs = missingScenarioInputs(
+      inspectedCandidates.flatMap(blockingInspectionUnresolved),
+    );
     const report = {
       schemaVersion: 'probability-inspection.v2',
       workspaceId: context.workspaceId,
@@ -1537,11 +1570,8 @@ export class ProbabilityAnalyzer {
         candidateCount: surface.candidates.length,
         candidates: surface.candidates.map((candidate, index) => {
           const evaluated = inspectedCandidates[index]!;
-          const candidateRequiredInputs = [
-            ...new Set(
-              evaluated.unresolved.flatMap(({ path }) => (path === undefined ? [] : [path])),
-            ),
-          ].sort();
+          const blockingUnresolved = blockingInspectionUnresolved(evaluated);
+          const candidateRequiredInputs = missingScenarioInputs(blockingUnresolved);
           return {
             id: candidate.id,
             sourceKind: candidate.sourceKind,
@@ -1559,11 +1589,13 @@ export class ProbabilityAnalyzer {
             analysisSupport:
               candidateRequiredInputs.length > 0
                 ? ('requires_scenario' as const)
-                : surface.adapter.selectionRule === 'score_only'
-                  ? ('score_only' as const)
-                  : surface.adapter.completePoolRequired && !surface.poolComplete
-                    ? ('requires_complete_pool' as const)
-                    : ('exact' as const),
+                : blockingUnresolved.length > 0
+                  ? ('unresolved_source' as const)
+                  : surface.adapter.selectionRule === 'score_only'
+                    ? ('score_only' as const)
+                    : surface.adapter.completePoolRequired && !surface.poolComplete
+                      ? ('requires_complete_pool' as const)
+                      : ('exact' as const),
           };
         }),
         requiredInputs,

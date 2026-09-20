@@ -172,7 +172,12 @@ export const eventRenderRequestSchema = z
   .strict();
 
 export function validateEventCompareRequest(
-  value: { after?: unknown; proposedSources?: unknown },
+  value: {
+    after?: unknown;
+    proposedSources?: unknown;
+    selector?: unknown;
+    maxChainNodes?: unknown;
+  },
   context: z.RefinementCtx,
 ): void {
   if (value.after !== undefined && value.proposedSources !== undefined)
@@ -180,6 +185,12 @@ export function validateEventCompareRequest(
       code: 'custom',
       path: ['after'],
       message: 'after and proposedSources are mutually exclusive',
+    });
+  if (value.maxChainNodes !== undefined && value.selector === undefined)
+    context.addIssue({
+      code: 'custom',
+      path: ['maxChainNodes'],
+      message: 'maxChainNodes requires selector',
     });
 }
 
@@ -189,6 +200,8 @@ export const eventCompareRequestSchema = z
     before: eventGraphReferenceSchema.optional(),
     after: eventGraphReferenceSchema.optional(),
     proposedSources: z.array(eventProposedSourceSchema).min(1).max(64).optional(),
+    selector: eventSelectorSchema.optional(),
+    maxChainNodes: z.number().int().min(1).max(5_000).optional(),
     render: z.boolean().optional(),
     maxRenderNodes: z.number().int().min(1).max(240).optional(),
     refresh: z.boolean().optional(),

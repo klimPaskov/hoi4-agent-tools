@@ -94,6 +94,7 @@ const mapWorkspaceInspectOutputSchema = strictOperationResultSchema(
       provinceGeometryCount: nonNegativeIntegerSchema,
       provinceGeometryPixelCount: nonNegativeIntegerSchema,
       provinceGeometryRowRunCount: nonNegativeIntegerSchema,
+      lookupOnly: z.boolean().optional(),
       unknownProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
       missingGeometryProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
     })
@@ -107,6 +108,15 @@ const mapRenderOutputSchema = strictOperationResultSchema(
       height: nonNegativeIntegerSchema,
       hashes: bitmapRenderHashesSchema,
       offlineRepresentation: z.literal(true),
+      tile: z
+        .object({
+          x: nonNegativeIntegerSchema,
+          y: nonNegativeIntegerSchema,
+          width: nonNegativeIntegerSchema,
+          height: nonNegativeIntegerSchema,
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
 );
@@ -139,7 +149,8 @@ export const mapTaskTools = [
   {
     name: 'hoi4.map_inspect',
     title: 'Inspect HOI4 map',
-    description: 'Render, validate, search, and click the complete map.',
+    description:
+      'Validate and inspect the complete map, or use lookupOnly for bounded coordinate and entity lookups.',
     inputSchema: mapInspectRequestSchema,
     outputSchema: mapWorkspaceInspectOutputSchema,
     annotations: artifactProducing,
@@ -147,7 +158,8 @@ export const mapTaskTools = [
   {
     name: 'hoi4.map_render',
     title: 'Render map inspection artifacts',
-    description: 'Render searchable full-map PNG, JSON, and HTML.',
+    description:
+      'Render searchable full-map PNG, JSON, and HTML, or a reusable source-coordinate tile.',
     inputSchema: mapRenderRequestSchema,
     outputSchema: mapRenderOutputSchema,
     annotations: artifactProducing,

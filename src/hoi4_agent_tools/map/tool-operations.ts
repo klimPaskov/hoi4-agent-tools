@@ -9,7 +9,7 @@ import {
   autonomousResultArtifacts,
   type TransactionExecutionResult,
 } from '../core/transaction-execution.js';
-import { emptyServiceResult } from '../core/result.js';
+import { emptyServiceResult, ServiceError } from '../core/result.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
 import type { TransactionManifest } from '../core/transactions.js';
 import type {
@@ -387,6 +387,91 @@ export async function inspectMap(
   context: MapOperationContext,
 ) {
   await context.progress(0, 3, 'Inspecting and validating the map');
+  if (input.lookupOnly) {
+    if (input.allocationRequests.length > 0)
+      throw new ServiceError(
+        'MAP_LOOKUP_ALLOCATION_UNSUPPORTED',
+        'Use full map inspection for identifier allocation previews',
+      );
+    const snapshot = await nudger.scan(context.workspaceId, context.principal, context.signal);
+    const catalog = input.query === undefined ? undefined : buildMapCatalog(snapshot.index);
+    const queryMatches =
+      catalog === undefined ? [] : searchMapCatalog(catalog, input.query!, input.queryLimit);
+    const coordinateMatches = input.coordinates.map((coordinate) =>
+      lookupMapCoordinate(snapshot.index, coordinate),
+    );
+    const selected = selectedMapEntities(
+      snapshot,
+      input.provinceIds,
+      input.stateIds,
+      input.regionIds,
+    );
+    const workspace = engine.resolver.get(context.workspaceId, context.principal);
+    const sourceEvidence = mapArtifactSourceEvidence(snapshot.files);
+    const selectorHash = hashCanonical({
+      provinceIds: input.provinceIds,
+      stateIds: input.stateIds,
+      regionIds: input.regionIds,
+      query: input.query,
+      coordinates: input.coordinates,
+    }).slice(0, 16);
+    const artifact = await engine.artifacts.putChunked(
+      workspace,
+      `map-lookup.${snapshot.revision.slice(0, 16)}.${selectorHash}.json`,
+      'application/json',
+      `${canonicalJson({ schemaVersion: 1, revision: snapshot.revision, lookupOnly: true, queryMatches, coordinateMatches, selected, sourceHashes: sourceEvidence.complete })}\n`,
+      {
+        kind: 'map-lookup',
+        toolVersion: PACKAGE_VERSION,
+        schemaVersion: 'map-lookup.v1',
+        sourceHashes: sourceEvidence.bounded.sourceHashes,
+        metadata: { sourceHashInventory: sourceEvidence.bounded.inventory },
+      },
+      'Bounded map coordinate, catalog, and entity lookup without full validation or overview rendering',
+      context.signal,
+    );
+    const result = emptyServiceResult(context.workspaceId, {
+      revision: snapshot.revision,
+      sharedRevision: snapshot.revision,
+      width: snapshot.index.raster?.width ?? null,
+      height: snapshot.index.raster?.height ?? null,
+      definitions: snapshot.index.definitions.length,
+      states: snapshot.index.states.length,
+      regions: snapshot.index.regions.length,
+      ports: snapshot.index.ports.length,
+      inspectedProvinceCount: selected.provinces.length,
+      inspectedStateCount: selected.states.length,
+      inspectedRegionCount: selected.regions.length,
+      allocationCount: 0,
+      queryMatchCount: queryMatches.length,
+      coordinateMatchCount: coordinateMatches.length,
+      overviewRendered: false,
+      provinceGeometryCount: 0,
+      provinceGeometryPixelCount: 0,
+      provinceGeometryRowRunCount: 0,
+      unknownProvinceIds: [],
+      missingGeometryProvinceIds: [],
+      lookupOnly: true,
+    });
+    result.code = 'MAP_LOOKUP_COMPLETED';
+    result.validation = {
+      passed: true,
+      checks: [
+        {
+          id: 'lookup-only',
+          passed: true,
+          message: 'Lookup completed; full map validation was not requested',
+        },
+      ],
+    };
+    setInlineFilesScanned(
+      result,
+      snapshot.files.map(({ displayPath }) => displayPath),
+    );
+    result.artifacts = [publicArtifactLink(artifact)];
+    await context.progress(3, 3, 'Map lookup complete');
+    return result;
+  }
   const { snapshot, validation } = await nudger.validate(
     context.workspaceId,
     context.principal,
@@ -608,6 +693,8 @@ export async function renderMapView(
     ...(input.layer === undefined ? {} : { layer: input.layer }),
     ...(input.overlays === undefined ? {} : { overlays: input.overlays }),
     ...(input.scale === undefined ? {} : { scale: input.scale }),
+    ...(input.tile === undefined ? {} : { tile: input.tile }),
+    ...(input.area === undefined ? {} : { area: input.area }),
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
@@ -617,6 +704,7 @@ export async function renderMapView(
     height: rendered.bundle.height,
     hashes: rendered.bundle.hashes,
     offlineRepresentation: true as const,
+    ...(rendered.bundle.tile === undefined ? {} : { tile: rendered.bundle.tile }),
   });
   result.code = 'MAP_RENDERED';
   setInlineFilesScanned(result, rendered.filesScanned);

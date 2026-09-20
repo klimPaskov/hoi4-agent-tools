@@ -731,6 +731,7 @@ export interface GuiStudioRenderInput {
   relatedScenarios?: unknown[];
   generatedScenarios?: unknown;
   comparisonScenario?: unknown;
+  sourceBaseline?: GuiTextPackageFileInput;
   principal?: string;
   signal?: AbortSignal;
 }
@@ -807,21 +808,138 @@ function assertUniqueScenarioIds(scenarios: readonly GuiPreviewScenario[]): void
   }
 }
 
-function scenarioMatrixEvidence(scenes: readonly GuiScene[]): Record<string, unknown> {
+function scenarioMatrixEvidence(
+  graph: GuiSourceGraph,
+  scenes: readonly GuiScene[],
+): Record<string, unknown> {
   const primary = scenes[0];
   if (primary === undefined) return { offline: true, scenarios: [], changes: [] };
+  const visibilityNames = new Set<string>();
+  const enabledNames = new Set<string>();
+  for (const scripted of graph.scriptedGuis) {
+    for (const trigger of scripted.triggerDefinitions) {
+      if (trigger.name.endsWith('_visible')) visibilityNames.add(trigger.elementName);
+      if (trigger.name.endsWith('_click_enabled')) enabledNames.add(trigger.elementName);
+    }
+    for (const property of scripted.propertyDefinitions) {
+      if (Object.keys(property.attributes).some((name) => name.toLowerCase() === 'visible'))
+        visibilityNames.add(property.elementName);
+      if (Object.keys(property.attributes).some((name) => name.toLowerCase() === 'enabled'))
+        enabledNames.add(property.elementName);
+    }
+  }
+  for (const scene of scenes) {
+    for (const name of Object.keys(scene.scenario.visibility)) visibilityNames.add(name);
+    for (const name of [
+      ...Object.keys(scene.scenario.values),
+      ...Object.keys(scene.scenario.scriptedGui),
+    ]) {
+      if (name.endsWith('.visible')) visibilityNames.add(name.slice(0, -'.visible'.length));
+      if (name.endsWith('.enabled')) enabledNames.add(name.slice(0, -'.enabled'.length));
+    }
+  }
+  const branchCoverage = [...new Set([...visibilityNames, ...enabledNames])]
+    .sort(compareCodeUnits)
+    .flatMap((name) => {
+      const matches = scenes
+        .map((scene) => ({
+          scene,
+          elements: scene.elements.filter((element) => element.name === name),
+        }))
+        .filter(({ elements }) => elements.length > 0);
+      if (matches.length === 0) return [];
+      const shown = matches
+        .filter(({ elements }) => elements.some(({ visible }) => visible))
+        .map(({ scene }) => scene.scenario.id);
+      const hidden = matches
+        .filter(({ elements }) => elements.every(({ visible }) => !visible))
+        .map(({ scene }) => scene.scenario.id);
+      const enabled = matches
+        .filter(({ elements }) => elements.some(({ clickable }) => clickable))
+        .map(({ scene }) => scene.scenario.id);
+      const disabled = matches
+        .filter(({ elements }) => elements.every(({ clickable }) => !clickable))
+        .map(({ scene }) => scene.scenario.id);
+      return [
+        {
+          element: name,
+          sourcePaths: [
+            ...new Set(
+              matches.flatMap(({ elements }) => elements.map(({ sourcePath }) => sourcePath)),
+            ),
+          ].sort(compareCodeUnits),
+          ...(visibilityNames.has(name)
+            ? { visibility: { shown, hidden, covered: shown.length > 0 && hidden.length > 0 } }
+            : {}),
+          ...(enabledNames.has(name)
+            ? { enabled: { enabled, disabled, covered: enabled.length > 0 && disabled.length > 0 } }
+            : {}),
+        },
+      ];
+    });
   const elementKey = (element: GuiScene['elements'][number]) =>
     `${element.sourceId}#${element.rowIndex ?? 0}`;
   const primaryByKey = new Map(primary.elements.map((element) => [elementKey(element), element]));
   return {
     offline: true,
+    branchCoverage,
+    branchCoverageSummary: {
+      elements: branchCoverage.length,
+      uncoveredVisibility: branchCoverage.filter(
+        (entry) => 'visibility' in entry && !entry.visibility.covered,
+      ).length,
+      uncoveredEnabled: branchCoverage.filter(
+        (entry) => 'enabled' in entry && !entry.enabled.covered,
+      ).length,
+    },
     scenarios: scenes.map((scene) => ({
       scenario: scene.scenario,
       sourceRevision: scene.sourceRevision,
       fidelity: scene.fidelity,
+      labelMeasurements: scene.elements
+        .filter(({ visible, text }) => visible && text !== undefined)
+        .map(({ id, name, sourcePath, rect, unclippedRect, text }) => ({
+          id,
+          name,
+          sourcePath,
+          box: rect,
+          unclippedBox: unclippedRect,
+          measuredText: {
+            width: text!.measuredWidth,
+            height: text!.measuredHeight,
+            metricSource: text!.metricSource,
+            overflowX: text!.overflowX,
+            overflowY: text!.overflowY,
+          },
+        })),
+      backgroundMeasurements: scene.elements
+        .filter(
+          ({ visible, sprite, secondarySprite, elementType }) =>
+            visible &&
+            (sprite !== undefined || secondarySprite !== undefined) &&
+            /(?:containerwindow|windowtype|buttontype|icontype|progressbar)/iu.test(elementType),
+        )
+        .map(
+          ({ id, name, parentId, sourcePath, rect, unclippedRect, sprite, secondarySprite }) => ({
+            id,
+            name,
+            parentId,
+            sourcePath,
+            box: rect,
+            unclippedBox: unclippedRect,
+            sprite: sprite?.spriteName ?? secondarySprite?.spriteName,
+            texture: sprite?.texturePath ?? secondarySprite?.texturePath,
+          }),
+        ),
       visibleElements: scene.elements
         .filter(({ visible }) => visible)
         .map(({ id, name }) => ({ id, name })),
+      hiddenElements: scene.elements
+        .filter(({ visible }) => !visible)
+        .map(({ id, name, visibilityReason }) => ({ id, name, reason: visibilityReason })),
+      disabledElements: scene.elements
+        .filter(({ disabledReason }) => disabledReason !== undefined)
+        .map(({ id, name, disabledReason }) => ({ id, name, reason: disabledReason })),
     })),
     changes: scenes.slice(1).map((scene) => {
       const currentByKey = new Map(scene.elements.map((element) => [elementKey(element), element]));
@@ -834,11 +952,15 @@ function scenarioMatrixEvidence(scenes: readonly GuiScene[]): Record<string, unk
       const resized: string[] = [];
       const textChanged: string[] = [];
       const frameChanged: string[] = [];
+      const disabled: string[] = [];
+      const enabled: string[] = [];
       for (const key of keys) {
         const before = primaryByKey.get(key);
         const after = currentByKey.get(key);
         if (before?.visible !== true && after?.visible === true) shown.push(after.name);
         if (before?.visible === true && after?.visible !== true) hidden.push(before.name);
+        if (before?.clickable === true && after?.clickable === false) disabled.push(after.name);
+        if (before?.clickable === false && after?.clickable === true) enabled.push(after.name);
         if (before === undefined || after === undefined) continue;
         if (
           before.unclippedRect.x !== after.unclippedRect.x ||
@@ -861,6 +983,8 @@ function scenarioMatrixEvidence(scenes: readonly GuiScene[]): Record<string, unk
         resized,
         textChanged,
         frameChanged,
+        disabled,
+        enabled,
       };
     }),
   };
@@ -1444,6 +1568,63 @@ export class ScriptedGuiStudio {
       budget,
       input.signal,
     );
+    let sourceBaselineScene: GuiScene | undefined;
+    let sourceBaselineImage: GuiRenderResult['images'][number] | undefined;
+    let sourceComparison: GuiComparisonResult | undefined;
+    if (input.sourceBaseline !== undefined) {
+      const { relativePath, source } = input.sourceBaseline;
+      guiTextPackageFileKind(workspace, relativePath, true);
+      const original = scanned.files.find(
+        (file) =>
+          file.rootKind === 'mod' &&
+          portableSourcePathKey(file.relativePath) === portableSourcePathKey(relativePath),
+      );
+      if (original === undefined)
+        throw new ServiceError(
+          'GUI_SOURCE_BASELINE_FILE_MISSING',
+          'Source baseline must identify a scanned mod-owned GUI file',
+          { relativePath },
+        );
+      const bytes = Buffer.from(source, 'utf8');
+      if (bytes.length > SOURCE_MAX_BYTES)
+        throw new ServiceError(
+          'GUI_SOURCE_BASELINE_TOO_LARGE',
+          'Source baseline exceeds the file byte limit',
+        );
+      const baselineFiles = overlayGuiTextPackageFiles(scanned.files, [
+        {
+          relativePath,
+          kind: 'gui',
+          bytes,
+          absolutePath: original.absolutePath,
+          loadOrder: original.loadOrder,
+        },
+      ]);
+      const baselineGraph = this.graphForFiles(
+        baselineFiles,
+        `source-baseline:${input.workspaceId}`,
+      ).graph;
+      if (!baselineGraph.elements.some(({ name }) => name === input.windowName))
+        throw new ServiceError(
+          'GUI_SOURCE_BASELINE_WINDOW_MISSING',
+          'Source baseline does not define the requested GUI window',
+          { relativePath, windowName: input.windowName },
+        );
+      sourceBaselineScene = await buildGuiScene(
+        baselineGraph,
+        baselineFiles,
+        input.windowName,
+        scenario,
+        new GuiAssetCatalog(baselineGraph, baselineFiles, budget, scenario.language),
+      );
+      sourceBaselineImage = await renderFull(sourceBaselineScene);
+      sourceComparison = await compareGuiImages(
+        sourceBaselineImage.png,
+        fullImage(render).png,
+        budget,
+        input.signal,
+      );
+    }
     const renderedSourceIds = [
       ...scenarioScenes,
       ...stateScenes,
@@ -1594,7 +1775,7 @@ export class ScriptedGuiStudio {
     add(
       `${slug}-scenario-matrix.json`,
       'application/json',
-      `${canonicalJson(scenarioMatrixEvidence(scenarioScenes))}\n`,
+      `${canonicalJson(scenarioMatrixEvidence(scanned.graph, scenarioScenes))}\n`,
       'gui-scripted-scenario-matrix-json',
       scenarioScenes,
     );
@@ -1645,6 +1826,43 @@ export class ScriptedGuiStudio {
       'gui-before-after-comparison',
       [scene, baselineScene],
     );
+    if (
+      sourceBaselineScene !== undefined &&
+      sourceBaselineImage !== undefined &&
+      sourceComparison !== undefined
+    ) {
+      add(
+        `${slug}-source-baseline.png`,
+        'image/png',
+        sourceBaselineImage.png,
+        'gui-source-baseline',
+        [sourceBaselineScene],
+      );
+      add(
+        `${slug}-source-comparison.png`,
+        'image/png',
+        sourceComparison.png,
+        'gui-source-comparison',
+        [sourceBaselineScene, scene],
+      );
+      add(
+        `${slug}-source-comparison.json`,
+        'application/json',
+        `${canonicalJson({
+          kind: 'gui-source-comparison',
+          scenario,
+          before: {
+            sourceRevision: sourceBaselineScene.sourceRevision,
+            sourcePath: input.sourceBaseline!.relativePath,
+            sourceHash: sha256Bytes(Buffer.from(input.sourceBaseline!.source, 'utf8')),
+          },
+          after: { sourceRevision: scene.sourceRevision },
+          comparison: JSON.parse(sourceComparison.json) as unknown,
+        })}\n`,
+        'gui-source-comparison',
+        [sourceBaselineScene, scene],
+      );
+    }
     const stored = await this.artifacts.withAtomicChunkedWrites(
       workspace,
       writes,
@@ -1659,6 +1877,7 @@ export class ScriptedGuiStudio {
       stateScenes,
       resolutionScenes,
       comparison,
+      ...(sourceComparison === undefined ? {} : { sourceComparison }),
       validation: completeValidation,
     };
   }

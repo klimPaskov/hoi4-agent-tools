@@ -283,10 +283,187 @@ interface CompactCandidateStrategy {
   straightenChains: boolean;
 }
 
+export interface CompactFocusSelection {
+  focusIds?: readonly string[];
+  pinnedFocusIds?: readonly string[];
+  symmetryGroups?: readonly {
+    centerFocusId: string;
+    pairs: readonly { leftFocusId: string; rightFocusId: string }[];
+  }[];
+}
+
+function validatedSelection(
+  plan: FocusTreePlan,
+  selection: CompactFocusSelection,
+): {
+  focusIds?: ReadonlySet<string>;
+  pinnedFocusIds: ReadonlySet<string>;
+  symmetryGroups: NonNullable<CompactFocusSelection['symmetryGroups']>;
+} {
+  if (selection.focusIds?.length === 0)
+    throw new ServiceError(
+      'FOCUS_COMPACT_SELECTION_EMPTY',
+      'Compact focus selection requires at least one focus',
+    );
+  const known = new Set(plan.focuses.map(({ id }) => id));
+  for (const id of [...(selection.focusIds ?? []), ...(selection.pinnedFocusIds ?? [])])
+    if (!known.has(id))
+      throw new ServiceError(
+        'FOCUS_COMPACT_SELECTION_UNKNOWN',
+        'Compact focus selection names an unknown focus',
+        { treeId: plan.id, focusId: id },
+      );
+  const used = new Set<string>();
+  for (const group of selection.symmetryGroups ?? []) {
+    if (!known.has(group.centerFocusId))
+      throw new ServiceError('FOCUS_COMPACT_SYMMETRY_UNKNOWN', 'Symmetry center is unknown', {
+        treeId: plan.id,
+        focusId: group.centerFocusId,
+      });
+    for (const pair of group.pairs) {
+      for (const id of [pair.leftFocusId, pair.rightFocusId]) {
+        if (!known.has(id))
+          throw new ServiceError('FOCUS_COMPACT_SYMMETRY_UNKNOWN', 'Symmetry focus is unknown', {
+            treeId: plan.id,
+            focusId: id,
+          });
+        if (id === group.centerFocusId || used.has(id))
+          throw new ServiceError(
+            'FOCUS_COMPACT_SYMMETRY_DUPLICATE',
+            'A symmetry focus must belong to one pair and differ from its center',
+            { treeId: plan.id, focusId: id },
+          );
+        used.add(id);
+      }
+    }
+  }
+  return {
+    ...(selection.focusIds === undefined ? {} : { focusIds: new Set(selection.focusIds) }),
+    pinnedFocusIds: new Set(selection.pinnedFocusIds ?? []),
+    symmetryGroups: selection.symmetryGroups ?? [],
+  };
+}
+
+function symmetryViolations(
+  layout: FocusLayoutResult,
+  groups: NonNullable<CompactFocusSelection['symmetryGroups']>,
+): Array<{
+  centerFocusId: string;
+  leftFocusId: string;
+  rightFocusId: string;
+  xOffset: number;
+  yOffset: number;
+}> {
+  const positions = new Map(layout.nodes.map(({ id, x, y }) => [id, { x, y }]));
+  return groups.flatMap(({ centerFocusId, pairs }) => {
+    const center = positions.get(centerFocusId);
+    if (center === undefined) return [];
+    return pairs.flatMap(({ leftFocusId, rightFocusId }) => {
+      const left = positions.get(leftFocusId);
+      const right = positions.get(rightFocusId);
+      if (left === undefined || right === undefined) return [];
+      const xOffset = left.x + right.x - 2 * center.x;
+      const yOffset = left.y - right.y;
+      return Math.abs(xOffset) <= 1 && yOffset === 0
+        ? []
+        : [{ centerFocusId, leftFocusId, rightFocusId, xOffset, yOffset }];
+    });
+  });
+}
+
+function applySymmetryGroups(
+  selection: ReturnType<typeof validatedSelection>,
+  layout: FocusLayoutResult,
+  preferredX: Map<string, number>,
+  preferredY: Map<string, number>,
+): void {
+  const original = new Map(layout.nodes.map(({ id, x, y }) => [id, { x, y }]));
+  const fixed = (id: string) =>
+    selection.pinnedFocusIds.has(id) || selection.focusIds?.has(id) === false;
+  for (const { centerFocusId, pairs } of selection.symmetryGroups) {
+    const centerX = fixed(centerFocusId)
+      ? original.get(centerFocusId)?.x
+      : preferredX.get(centerFocusId);
+    if (centerX === undefined) continue;
+    for (const { leftFocusId, rightFocusId } of pairs) {
+      const leftFixed = fixed(leftFocusId);
+      const rightFixed = fixed(rightFocusId);
+      const leftX = leftFixed ? original.get(leftFocusId)?.x : preferredX.get(leftFocusId);
+      const rightX = rightFixed ? original.get(rightFocusId)?.x : preferredX.get(rightFocusId);
+      if (leftX === undefined || rightX === undefined) continue;
+      if (!leftFixed && !rightFixed) {
+        const distance = Math.max(1, Math.round((rightX - leftX) / 2));
+        preferredX.set(leftFocusId, centerX - distance);
+        preferredX.set(rightFocusId, centerX + distance);
+      } else if (!leftFixed) preferredX.set(leftFocusId, 2 * centerX - rightX);
+      else if (!rightFixed) preferredX.set(rightFocusId, 2 * centerX - leftX);
+      const leftY = leftFixed ? original.get(leftFocusId)?.y : preferredY.get(leftFocusId);
+      const rightY = rightFixed ? original.get(rightFocusId)?.y : preferredY.get(rightFocusId);
+      if (leftY === undefined || rightY === undefined) continue;
+      const row = leftFixed ? leftY : rightFixed ? rightY : Math.round((leftY + rightY) / 2);
+      if (!leftFixed) preferredY.set(leftFocusId, row);
+      if (!rightFixed) preferredY.set(rightFocusId, row);
+    }
+  }
+}
+
+function scopedPrevious(
+  current: FocusLayoutResult,
+  focusIds: ReadonlySet<string>,
+): FocusLayoutResult {
+  return { ...current, nodes: current.nodes.filter(({ id }) => !focusIds.has(id)) };
+}
+
+function movedOutsideSelection(
+  current: FocusLayoutResult,
+  proposed: FocusLayoutResult,
+  focusIds: ReadonlySet<string> | undefined,
+  pinnedFocusIds: ReadonlySet<string>,
+): string[] {
+  const fixed = new Set([
+    ...current.nodes.filter(({ id }) => focusIds?.has(id) === false).map(({ id }) => id),
+    ...pinnedFocusIds,
+  ]);
+  const before = new Map(current.nodes.map(({ id, x, y }) => [id, { x, y }]));
+  return proposed.nodes
+    .filter(({ id, x, y }) => {
+      const original = before.get(id);
+      return fixed.has(id) && (original?.x !== x || original.y !== y);
+    })
+    .map(({ id }) => id)
+    .sort(compareCodeUnits);
+}
+
+function relativeCompactRegressions(
+  current: FocusLayoutResult,
+  proposed: FocusLayoutResult,
+): string[] {
+  const before = requiredMetrics(current);
+  const after = requiredMetrics(proposed);
+  const hard = (layout: FocusLayoutResult) =>
+    layout.diagnostics.filter(({ code }) => COMPACT_HARD_DIAGNOSTICS.has(code)).length;
+  return [
+    ...(hard(proposed) > hard(current) ? ['hardLayoutDiagnostics'] : []),
+    ...(after.connectors.crossingCount > before.connectors.crossingCount
+      ? ['connectorCrossingCount']
+      : []),
+    ...(after.connectors.nodeIntersectionCount > before.connectors.nodeIntersectionCount
+      ? ['connectorNodeIntersections']
+      : []),
+    ...(after.spacing.tooCloseSameRowPairCount > before.spacing.tooCloseSameRowPairCount
+      ? ['sameRowSpacing']
+      : []),
+  ];
+}
+
 function compactCandidate(
   plan: FocusTreePlan,
   layout: FocusLayoutResult,
   strategy: CompactCandidateStrategy,
+  selection: ReturnType<typeof validatedSelection> = {
+    pinnedFocusIds: new Set(),
+    symmetryGroups: [],
+  },
 ): FocusTreePlan {
   const {
     scale,
@@ -295,21 +472,31 @@ function compactCandidate(
     mirrorSiblings,
     straightenChains,
   } = strategy;
-  const minimumX = Math.min(...layout.nodes.map(({ x }) => x));
-  const maximumX = Math.max(...layout.nodes.map(({ x }) => x));
-  const minimumY = Math.min(...layout.nodes.map(({ y }) => y));
+  const scopeNodes =
+    selection.focusIds === undefined
+      ? layout.nodes
+      : layout.nodes.filter(({ id }) => selection.focusIds!.has(id));
+  const minimumX = Math.min(...scopeNodes.map(({ x }) => x));
+  const maximumX = Math.max(...scopeNodes.map(({ x }) => x));
+  const minimumY = Math.min(...scopeNodes.map(({ y }) => y));
   const centerX = (minimumX + maximumX) / 2;
   const preferredX = new Map(
-    layout.nodes.map((node) => [node.id, Math.round((node.x - centerX) * scale)]),
+    layout.nodes.map((node) => [
+      node.id,
+      Math.round((node.x - centerX) * scale + (selection.focusIds === undefined ? 0 : centerX)),
+    ]),
   );
-  const sourceRows = [...new Set(layout.nodes.map(({ y }) => y))].sort(
-    (left, right) => left - right,
-  );
+  const sourceRows = [...new Set(scopeNodes.map(({ y }) => y))].sort((left, right) => left - right);
   const compactRows = new Map(sourceRows.map((row, index) => [row, index]));
   const preferredY = new Map(
     layout.nodes.map((node) => [
       node.id,
-      compressRows ? (compactRows.get(node.y) ?? node.y - minimumY) : node.y - minimumY,
+      compressRows
+        ? (compactRows.get(node.y) ?? node.y - minimumY) +
+          (selection.focusIds === undefined ? 0 : minimumY)
+        : selection.focusIds === undefined
+          ? node.y - minimumY
+          : node.y,
     ]),
   );
   if (useStructuralRows) {
@@ -347,13 +534,24 @@ function compactCandidate(
   }
   if (mirrorSiblings) mirrorSiblingCohorts(plan, preferredX, preferredY);
   if (straightenChains) straightenLinearChains(plan, preferredX, preferredY);
+  applySymmetryGroups(selection, layout, preferredX, preferredY);
   const compacted = structuredClone(plan);
-  compacted.laneGroups = compacted.laneGroups.map(({ id, label, order }) => ({
-    id,
-    label,
-    order,
-  }));
+  if (selection.focusIds === undefined)
+    compacted.laneGroups = compacted.laneGroups.map(({ id, label, order }) => ({
+      id,
+      label,
+      order,
+    }));
+  const currentCoordinates = new Map(layout.nodes.map(({ id, x, y }) => [id, { x, y }]));
   for (const focus of compacted.focuses) {
+    if (selection.focusIds !== undefined && !selection.focusIds.has(focus.id)) continue;
+    if (selection.pinnedFocusIds.has(focus.id)) {
+      if (focus.position.mode === 'auto') {
+        const point = currentCoordinates.get(focus.id);
+        if (point !== undefined) focus.position = { mode: 'fixed', ...point, pinned: true };
+      } else focus.position = { ...focus.position, pinned: true };
+      continue;
+    }
     focus.position = {
       mode: 'auto',
       pinned: false,
@@ -482,44 +680,96 @@ function needsPresentationNormalization(plan: FocusTreePlan): boolean {
  * repair and compression candidates are measured with the same layout engine.
  * Invalid geometry cannot win; aesthetic tradeoffs are resolved by the score.
  */
-export function compactFocusTreePlan(plan: FocusTreePlan): FocusTreePlan {
+export function compactFocusTreePlan(
+  plan: FocusTreePlan,
+  requested: CompactFocusSelection = {},
+): FocusTreePlan {
+  const selection = validatedSelection(plan, requested);
   const currentLayout = layoutFocusTree(plan, { aggressiveAestheticRepair: true });
   const normalizedPlan = needsPresentationNormalization(plan)
-    ? compactCandidate(plan, currentLayout, {
-        scale: 1,
-        compressRows: false,
-        structuralRows: false,
-        mirrorSiblings: false,
-        straightenChains: false,
-      })
+    ? compactCandidate(
+        plan,
+        currentLayout,
+        {
+          scale: 1,
+          compressRows: false,
+          structuralRows: false,
+          mirrorSiblings: false,
+          straightenChains: false,
+        },
+        selection,
+      )
     : plan;
   const normalizedLayout =
     normalizedPlan === plan
       ? currentLayout
-      : layoutFocusTree(normalizedPlan, { aggressiveAestheticRepair: true });
+      : layoutFocusTree(normalizedPlan, {
+          aggressiveAestheticRepair: true,
+          ...(selection.focusIds === undefined
+            ? {}
+            : { previous: scopedPrevious(currentLayout, selection.focusIds) }),
+        });
   let selected: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
+  const blockedFocusIds = new Set<string>();
+  let blockedSymmetry: ReturnType<typeof symmetryViolations> = [];
   for (const strategy of compactStrategies(plan.focuses.length)) {
-    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy);
+    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy, selection);
     let layout: FocusLayoutResult;
     try {
-      layout = layoutFocusTree(candidate, { aggressiveAestheticRepair: true });
+      layout = layoutFocusTree(candidate, {
+        aggressiveAestheticRepair: true,
+        ...(selection.focusIds === undefined
+          ? {}
+          : { previous: scopedPrevious(currentLayout, selection.focusIds) }),
+      });
     } catch (error) {
       if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED')
         continue;
       throw error;
     }
+    const moved = movedOutsideSelection(
+      currentLayout,
+      layout,
+      selection.focusIds,
+      selection.pinnedFocusIds,
+    );
+    for (const id of moved) blockedFocusIds.add(id);
+    if (moved.length > 0) continue;
+    const symmetry = symmetryViolations(layout, selection.symmetryGroups);
+    if (symmetry.length > 0) {
+      blockedSymmetry = symmetry;
+      continue;
+    }
     if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
       fallback = { plan: candidate, layout };
-    if (absoluteCompactRegressions(layout).length > 0) continue;
+    if (
+      (selection.focusIds === undefined
+        ? absoluteCompactRegressions(layout)
+        : relativeCompactRegressions(currentLayout, layout)
+      ).length > 0
+    )
+      continue;
     if (selected === undefined || betterScore(compactScore(layout), compactScore(selected.layout)))
       selected = { plan: candidate, layout };
   }
   if (selected !== undefined) return selected.plan;
   if (fallback !== undefined) {
-    assertCompactLayoutQuality(currentLayout, fallback.layout);
+    assertCompactLayoutQuality(currentLayout, fallback.layout, selection.focusIds !== undefined);
     return fallback.plan;
   }
+  if (blockedFocusIds.size > 0)
+    throw new ServiceError(
+      'FOCUS_COMPACT_ANCHOR_CONFLICT',
+      'No compact candidate preserves the selected branch boundary and pinned anchors',
+      { treeId: plan.id, movedFocusIds: [...blockedFocusIds].sort(compareCodeUnits) },
+    );
+  if (blockedSymmetry.length > 0)
+    throw new ServiceError(
+      'FOCUS_COMPACT_SYMMETRY_CONFLICT',
+      'No compact candidate satisfies the requested symmetry pairs',
+      { treeId: plan.id, pairs: blockedSymmetry },
+    );
   throw new ServiceError(
     'FOCUS_COMPACT_LAYOUT_REQUIRED',
     'Compact focus planning did not produce a measurable layout candidate',
@@ -531,6 +781,9 @@ export interface CompactFocusTreePlanAsyncOptions {
   signal?: AbortSignal;
   /** One ceiling shared by the current layout and every compact candidate. */
   maximumWork?: number;
+  focusIds?: readonly string[];
+  pinnedFocusIds?: readonly string[];
+  symmetryGroups?: NonNullable<CompactFocusSelection['symmetryGroups']>;
 }
 
 export interface CompactFocusTreePlanAsyncResult {
@@ -547,6 +800,7 @@ export async function compactFocusTreePlanAsync(
   plan: FocusTreePlan,
   options: CompactFocusTreePlanAsyncOptions = {},
 ): Promise<CompactFocusTreePlanAsyncResult> {
+  const selection = validatedSelection(plan, options);
   const workBudget = new FocusLayoutWorkBudget(options.maximumWork ?? COMPACT_LAYOUT_WORK_MAX);
   const layoutOptions = {
     workBudget,
@@ -555,27 +809,44 @@ export async function compactFocusTreePlanAsync(
   };
   const currentLayout = await layoutFocusTreeAsync(plan, layoutOptions);
   const normalizedPlan = needsPresentationNormalization(plan)
-    ? compactCandidate(plan, currentLayout, {
-        scale: 1,
-        compressRows: false,
-        structuralRows: false,
-        mirrorSiblings: false,
-        straightenChains: false,
-      })
+    ? compactCandidate(
+        plan,
+        currentLayout,
+        {
+          scale: 1,
+          compressRows: false,
+          structuralRows: false,
+          mirrorSiblings: false,
+          straightenChains: false,
+        },
+        selection,
+      )
     : plan;
   const normalizedLayout =
     normalizedPlan === plan
       ? currentLayout
-      : await layoutFocusTreeAsync(normalizedPlan, layoutOptions);
+      : await layoutFocusTreeAsync(normalizedPlan, {
+          ...layoutOptions,
+          ...(selection.focusIds === undefined
+            ? {}
+            : { previous: scopedPrevious(currentLayout, selection.focusIds) }),
+        });
   let selected: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let fallback: { plan: FocusTreePlan; layout: FocusLayoutResult } | undefined;
   let exhausted: ServiceError | undefined;
+  const blockedFocusIds = new Set<string>();
+  let blockedSymmetry: ReturnType<typeof symmetryViolations> = [];
   candidateSearch: for (const strategy of compactStrategies(plan.focuses.length)) {
     options.signal?.throwIfAborted();
-    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy);
+    const candidate = compactCandidate(normalizedPlan, normalizedLayout, strategy, selection);
     let layout: FocusLayoutResult;
     try {
-      layout = await layoutFocusTreeAsync(candidate, layoutOptions);
+      layout = await layoutFocusTreeAsync(candidate, {
+        ...layoutOptions,
+        ...(selection.focusIds === undefined
+          ? {}
+          : { previous: scopedPrevious(currentLayout, selection.focusIds) }),
+      });
     } catch (error) {
       if (error instanceof ServiceError && error.code === 'FOCUS_LAYOUT_WORK_BUDGET_BLOCKED') {
         exhausted = error;
@@ -583,9 +854,28 @@ export async function compactFocusTreePlanAsync(
       }
       throw error;
     }
+    const moved = movedOutsideSelection(
+      currentLayout,
+      layout,
+      selection.focusIds,
+      selection.pinnedFocusIds,
+    );
+    for (const id of moved) blockedFocusIds.add(id);
+    if (moved.length > 0) continue;
+    const symmetry = symmetryViolations(layout, selection.symmetryGroups);
+    if (symmetry.length > 0) {
+      blockedSymmetry = symmetry;
+      continue;
+    }
     if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
       fallback = { plan: candidate, layout };
-    if (absoluteCompactRegressions(layout).length > 0) continue;
+    if (
+      (selection.focusIds === undefined
+        ? absoluteCompactRegressions(layout)
+        : relativeCompactRegressions(currentLayout, layout)
+      ).length > 0
+    )
+      continue;
     if (selected === undefined || betterScore(compactScore(layout), compactScore(selected.layout)))
       selected = { plan: candidate, layout };
   }
@@ -595,9 +885,21 @@ export async function compactFocusTreePlanAsync(
   }
   if (exhausted !== undefined) throw exhausted;
   if (fallback !== undefined) {
-    assertCompactLayoutQuality(currentLayout, fallback.layout);
+    assertCompactLayoutQuality(currentLayout, fallback.layout, selection.focusIds !== undefined);
     return { plan: fallback.plan, currentLayout, proposedLayout: fallback.layout };
   }
+  if (blockedFocusIds.size > 0)
+    throw new ServiceError(
+      'FOCUS_COMPACT_ANCHOR_CONFLICT',
+      'No compact candidate preserves the selected branch boundary and pinned anchors',
+      { treeId: plan.id, movedFocusIds: [...blockedFocusIds].sort(compareCodeUnits) },
+    );
+  if (blockedSymmetry.length > 0)
+    throw new ServiceError(
+      'FOCUS_COMPACT_SYMMETRY_CONFLICT',
+      'No compact candidate satisfies the requested symmetry pairs',
+      { treeId: plan.id, pairs: blockedSymmetry },
+    );
   throw new ServiceError(
     'FOCUS_COMPACT_LAYOUT_REQUIRED',
     'Compact focus planning did not produce a measurable layout candidate',
@@ -609,10 +911,13 @@ export async function compactFocusTreePlanAsync(
 export function assertCompactLayoutQuality(
   _current: FocusLayoutResult | undefined,
   proposed: FocusLayoutResult,
+  relativeToBaseline = false,
 ): void {
-  const regressions = [...absoluteCompactRegressions(proposed)].filter(
-    (value, index, all) => all.indexOf(value) === index,
-  );
+  const regressions = [
+    ...(relativeToBaseline && _current !== undefined
+      ? relativeCompactRegressions(_current, proposed)
+      : absoluteCompactRegressions(proposed)),
+  ].filter((value, index, all) => all.indexOf(value) === index);
   if (regressions.length === 0) return;
   throw new ServiceError(
     'FOCUS_COMPACT_QUALITY_BLOCKED',

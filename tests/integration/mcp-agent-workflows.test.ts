@@ -144,7 +144,12 @@ describe('MCP coding-agent workflows', () => {
     const inspected = resultOf(
       await client.callTool({
         name: 'hoi4.focus_inspect',
-        arguments: { workspaceId: 'focus', relativePath, treeId: 'workflow_tree' },
+        arguments: {
+          workspaceId: 'focus',
+          relativePath,
+          treeId: 'workflow_tree',
+          scenario: { completedFocusIds: ['workflow_root'] },
+        },
       }),
     );
     expect(inspected).toMatchObject({
@@ -158,6 +163,7 @@ describe('MCP coding-agent workflows', () => {
             id: 'workflow_tree',
             continuousFocusPosition: { x: 18, y: 7 },
             continuousFocusPaletteIds: ['workflow_continuous'],
+            scenarioSummary: expect.objectContaining({ completed: 1, choiceConflictCount: 0 }),
           }),
         ],
       },
@@ -166,7 +172,11 @@ describe('MCP coding-agent workflows', () => {
     const plan = (inspection.plans as Array<Record<string, unknown>>)[0]!;
     expect(plan).toMatchObject({ id: 'workflow_tree' });
     expect(inspection.layouts).toEqual([
-      expect.objectContaining({ treeId: 'workflow_tree', layout: expect.any(Object) }),
+      expect.objectContaining({
+        treeId: 'workflow_tree',
+        layout: expect.any(Object),
+        scenario: expect.objectContaining({ completedFocusIds: ['workflow_root'] }),
+      }),
     ]);
 
     const rendered = resultOf(
@@ -266,6 +276,9 @@ describe('MCP coding-agent workflows', () => {
         'utf8',
       ),
     ) as Record<string, unknown>;
+    const baselineGuiSource = (
+      await readFile(path.join(mod, 'interface', 'synthetic_acceptance.gui'), 'utf8')
+    ).replace('position = { x = 210 y = 90 }', 'position = { x = 180 y = 90 }');
     const client = await connect(temporary, {
       id: 'gui',
       name: 'Synthetic GUI workflow',
@@ -310,6 +323,10 @@ describe('MCP coding-agent workflows', () => {
           resolutions: [{ width: 960, height: 540 }],
           relatedScenarios: [comparisonScenario],
           comparisonScenario,
+          sourceBaseline: {
+            relativePath: 'interface/synthetic_acceptance.gui',
+            source: baselineGuiSource,
+          },
         },
       }),
     );
@@ -321,12 +338,35 @@ describe('MCP coding-agent workflows', () => {
         stateCount: 3,
         scenarioCount: 2,
         resolutionCount: 1,
+        sourceComparison: expect.objectContaining({ changedPixels: expect.any(Number) }),
         offlineRepresentation: true,
       },
     });
     expect(rendered.artifacts.map(({ mimeType }) => mimeType)).toEqual(
       expect.arrayContaining(['image/svg+xml', 'image/png', 'application/json']),
     );
+    expect(rendered.artifacts.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/-source-baseline\.png$/u),
+        expect.stringMatching(/-source-comparison\.json$/u),
+      ]),
+    );
+    const scenarioMatrixLink = rendered.artifacts.find(({ name }) =>
+      name.endsWith('-scenario-matrix.json'),
+    );
+    expect(scenarioMatrixLink).toBeDefined();
+    expect(await readJsonArtifact(client, scenarioMatrixLink!.uri)).toMatchObject({
+      branchCoverage: expect.any(Array),
+      branchCoverageSummary: expect.objectContaining({ elements: expect.any(Number) }),
+      scenarios: expect.arrayContaining([
+        expect.objectContaining({
+          hiddenElements: expect.any(Array),
+          disabledElements: expect.any(Array),
+          labelMeasurements: expect.any(Array),
+          backgroundMeasurements: expect.any(Array),
+        }),
+      ]),
+    });
 
     const cleanTemporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-agent-gui-write-'));
     const cleanMod = path.join(cleanTemporary, 'mod');
@@ -635,6 +675,34 @@ describe('MCP coding-agent workflows', () => {
         overviewRendered: true,
       },
     });
+    const lookup = resultOf(
+      await client.callTool({
+        name: 'hoi4.map_inspect',
+        arguments: {
+          workspaceId: 'map',
+          lookupOnly: true,
+          provinceIds: [4],
+          query: 'region',
+          coordinates: [{ kind: 'pixel', x: 10, y: 10 }],
+        },
+      }),
+    );
+    expect(lookup).toMatchObject({
+      status: 'ok',
+      code: 'MAP_LOOKUP_COMPLETED',
+      data: {
+        inspectedProvinceCount: 1,
+        queryMatchCount: 2,
+        coordinateMatchCount: 1,
+        overviewRendered: false,
+        lookupOnly: true,
+      },
+    });
+    expect(lookup.artifacts).toHaveLength(1);
+    expect(await readJsonArtifact(client, jsonArtifact(lookup).uri)).toMatchObject({
+      lookupOnly: true,
+      selected: { provinces: [expect.objectContaining({ id: 4 })] },
+    });
     const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
     expect(inspection).toMatchObject({
       selected: {
@@ -666,6 +734,43 @@ describe('MCP coding-agent workflows', () => {
     expect(rendered.artifacts.map(({ mimeType }) => mimeType)).toEqual(
       expect.arrayContaining(['image/png', 'application/json', 'text/html']),
     );
+    const tile = resultOf(
+      await client.callTool({
+        name: 'hoi4.map_render',
+        arguments: {
+          workspaceId: 'map',
+          layer: 'province',
+          overlays: ['coastlines'],
+          tile: { x: 0, y: 0, width: 16, height: 16 },
+        },
+      }),
+    );
+    expect(tile).toMatchObject({
+      status: 'ok',
+      code: 'MAP_RENDERED',
+      data: { width: 16, height: 16, tile: { x: 0, y: 0, width: 16, height: 16 } },
+    });
+    expect(await readJsonArtifact(client, jsonArtifact(tile).uri)).toMatchObject({
+      schemaVersion: 'map-tile.v1',
+      tile: { x: 0, y: 0, width: 16, height: 16 },
+    });
+    const area = resultOf(
+      await client.callTool({
+        name: 'hoi4.map_render',
+        arguments: {
+          workspaceId: 'map',
+          layer: 'province',
+          area: { provinceIds: [1], padding: 2 },
+        },
+      }),
+    );
+    expect(area).toMatchObject({
+      status: 'ok',
+      code: 'MAP_RENDERED',
+      data: {
+        tile: expect.objectContaining({ width: expect.any(Number), height: expect.any(Number) }),
+      },
+    });
 
     const pixels = Array.from({ length: 128 }, (_, y) =>
       Array.from({ length: 16 }, (_unused, x) => ({ x: x + 80, y: y + 64 })),

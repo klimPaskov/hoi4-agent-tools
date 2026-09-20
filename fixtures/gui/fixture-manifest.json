@@ -18,7 +18,7 @@
     "fontAtlasPngSha256": "a4319cfd9578f9293ee04cbde3b734d7a5e1d840e518f75e6edd3900df03f05a",
     "fullSvgSha256": "c64384cc351bddf27c10ef89f854289a2c796c5294c81af25860b59b8d6eaa1d",
     "fullPngSha256": "51af6e73568020703e1c7dff515ea3470d9a91327cc97b533ad980ad3496bdfe",
-    "layoutJsonSha256": "a7d41b77404532323683e2e90a4a1a8ebe9b09dbaa8edad8f42e5965120bea74"
+    "layoutJsonSha256": "fcbcb7ab3220791e01ea6c53baea06ab70086a34ba2bfda5d7bfec5f78a91a54"
   },
   "defectVariantIds": [
     "conflicting-tabs",

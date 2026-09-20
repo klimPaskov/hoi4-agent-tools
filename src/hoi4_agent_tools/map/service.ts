@@ -711,6 +711,7 @@ export class AgentNudger {
     workspaceId: string,
     principal?: string,
     signal?: AbortSignal,
+    includeExternalScriptReferences = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -738,8 +739,32 @@ export class AgentNudger {
       principal,
       signal,
     );
+    const externalScriptSnapshot = includeExternalScriptReferences
+      ? await this.engine.scan(
+          workspaceId,
+          {
+            patterns: [
+              'events/**/*.txt',
+              'common/national_focus/**/*.txt',
+              'common/decisions/**/*.txt',
+              'common/scripted_effects/**/*.txt',
+              'common/scripted_triggers/**/*.txt',
+              'common/on_actions/**/*.txt',
+              'common/ideas/**/*.txt',
+              'common/characters/**/*.txt',
+              'history/countries/**/*.txt',
+            ],
+          },
+          principal,
+          signal,
+        )
+      : undefined;
     signal?.throwIfAborted();
-    const files = [...contentSnapshot.files, ...locatorSnapshot.files].sort(
+    const files = [
+      ...contentSnapshot.files,
+      ...locatorSnapshot.files,
+      ...(externalScriptSnapshot?.files ?? []),
+    ].sort(
       (left, right) =>
         left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
     );
@@ -773,7 +798,12 @@ export class AgentNudger {
     signal?: AbortSignal,
   ): Promise<PreparedMapOperations> {
     signal?.throwIfAborted();
-    const snapshot = await this.scan(workspaceId, principal, signal);
+    const snapshot = await this.scan(
+      workspaceId,
+      principal,
+      signal,
+      operations.some(({ kind }) => kind === 'renumber_map_entity'),
+    );
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal);
     const baselineValidation = await validateMapAsync(
       snapshot.index,
@@ -898,6 +928,10 @@ export class AgentNudger {
     const bundle = mapBundleWithSourceHashes(rawBundle, completeSourceHashes);
     const workspace = this.resolver.get(workspaceId, options.principal);
     const layer = options.layer ?? 'province';
+    const tileSuffix =
+      options.tile === undefined && options.area === undefined
+        ? ''
+        : `-tile-${hashCanonical({ tile: bundle.tile, area: options.area, overlays: [...new Set(options.overlays ?? [])].sort(), scale: options.scale ?? 1 }).slice(0, 12)}`;
     const provenance = {
       kind: 'map-render',
       toolVersion: PACKAGE_VERSION,
@@ -908,24 +942,26 @@ export class AgentNudger {
         layer,
         overlays: [...new Set(options.overlays ?? [])].sort(),
         scale: options.scale ?? 1,
+        ...(bundle.tile === undefined ? {} : { tile: bundle.tile }),
+        ...(options.area === undefined ? {} : { area: options.area }),
       },
       metadata: { sourceHashInventory: sourceEvidence.inventory },
     };
     const writes: ArtifactWrite[] = [
       {
-        name: `map-${layer}.png`,
+        name: `map-${layer}${tileSuffix}.png`,
         mimeType: 'image/png',
         content: bundle.png,
         provenance,
       },
       {
-        name: `map-${layer}.json`,
+        name: `map-${layer}${tileSuffix}.json`,
         mimeType: 'application/json',
         content: bundle.json,
         provenance,
       },
       {
-        name: `map-${layer}.html`,
+        name: `map-${layer}${tileSuffix}.html`,
         mimeType: 'text/html',
         content: bundle.html,
         provenance,

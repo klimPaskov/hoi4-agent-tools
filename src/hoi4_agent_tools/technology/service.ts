@@ -114,6 +114,7 @@ export interface TechnologyRenderServiceInput {
   categoryId?: string;
   targetId?: string;
   maxNodes?: number;
+  scenario?: { year: number; researchedTechnologyIds: string[] };
   includeHtml?: boolean;
   refresh?: boolean;
   principal?: string;
@@ -326,10 +327,24 @@ async function resolveTechnologyIconDataUris(
   requestedSprites: ReadonlySet<string>,
   budget: RenderBudget,
   signal?: AbortSignal,
-): Promise<Record<string, string>> {
+): Promise<{
+  dataUris: Record<string, string>;
+  dimensions: Record<
+    string,
+    { width: number; height: number; borderWidth?: number; borderHeight?: number }
+  >;
+}> {
   const icons = [
     ...cached.graph.technologies.map(({ icon }) => icon),
     ...cached.graph.doctrineDefinitions.flatMap(({ icon }) => icon ?? []),
+    ...(cached.graph.backgrounds ?? []).map(({ sprite }) => ({
+      sprite,
+      spritePath: cached.snapshot.index.find('sprite', sprite)?.path,
+    })),
+    ...[...requestedSprites].map((sprite) => ({
+      sprite,
+      spritePath: cached.snapshot.index.find('sprite', sprite)?.path,
+    })),
   ].filter(({ sprite }) => requestedSprites.has(sprite));
   const spriteSourcePaths = new Set(
     icons.flatMap(({ spritePath }) => (spritePath === undefined ? [] : [spritePath])),
@@ -337,7 +352,7 @@ async function resolveTechnologyIconDataUris(
   const spriteFiles = cached.snapshot.files.filter(({ displayPath }) =>
     spriteSourcePaths.has(displayPath),
   );
-  if (spriteFiles.length === 0) return {};
+  if (spriteFiles.length === 0) return { dataUris: {}, dimensions: {} };
   const graph = buildGuiSourceGraph(spriteFiles, cached.snapshot.index);
   const files = new Map<string, ScannedFile>();
   for (const file of [...spriteFiles, ...cached.assetFiles]) files.set(file.displayPath, file);
@@ -346,6 +361,10 @@ async function resolveTechnologyIconDataUris(
   for (const icon of icons) if (!unique.has(icon.sprite)) unique.set(icon.sprite, icon);
   const entries = [...unique.entries()].sort(([left], [right]) => compareCodeUnits(left, right));
   const dataUris: Record<string, string> = {};
+  const dimensions: Record<
+    string,
+    { width: number; height: number; borderWidth?: number; borderHeight?: number }
+  > = {};
   let cursor = 0;
   await Promise.all(
     Array.from({ length: Math.min(8, entries.length) }, async () => {
@@ -358,14 +377,30 @@ async function resolveTechnologyIconDataUris(
         const sprite = activeTechnologySprite(spriteName, icon.spritePath, graph.sprites);
         if (sprite === undefined) continue;
         const frame = await catalog.loadSpriteFrame(sprite, 0);
-        if (frame?.supported === true && frame.dataUri !== undefined)
+        if (frame?.supported === true && frame.dataUri !== undefined) {
           dataUris[spriteName] = frame.dataUri;
+          dimensions[spriteName] = {
+            width: frame.width,
+            height: frame.height,
+            ...(sprite.borderSize?.width === undefined
+              ? {}
+              : { borderWidth: sprite.borderSize.width }),
+            ...(sprite.borderSize?.height === undefined
+              ? {}
+              : { borderHeight: sprite.borderSize.height }),
+          };
+        }
       }
     }),
   );
-  return Object.fromEntries(
-    Object.entries(dataUris).sort(([left], [right]) => compareCodeUnits(left, right)),
-  );
+  return {
+    dataUris: Object.fromEntries(
+      Object.entries(dataUris).sort(([left], [right]) => compareCodeUnits(left, right)),
+    ),
+    dimensions: Object.fromEntries(
+      Object.entries(dimensions).sort(([left], [right]) => compareCodeUnits(left, right)),
+    ),
+  };
 }
 
 function rememberGraph(state: SharedTechnologyState, graph: TechnologyGraphSnapshot): void {
@@ -758,7 +793,10 @@ export class TechnologyTreeViewer {
       options.principal,
       options.signal,
     );
-    const analysisMode = 'full' as const;
+    const analysisMode =
+      workspace.roots.some(({ kind }) => kind === 'game') || snapshot.files.length > 1_000
+        ? ('focused' as const)
+        : undefined;
     const unchangedSource =
       cached?.generation === generation && cached.snapshot.revision === snapshot.revision;
     const preliminary = unchangedSource
@@ -766,10 +804,30 @@ export class TechnologyTreeViewer {
       : await buildTechnologyGraphAsync(snapshot, {
           workspaceIdentity: workspace.workspaceIdentity,
           cache: this.#state.fragments,
-          analysisMode,
+          ...(analysisMode === undefined ? {} : { analysisMode }),
           ...(options.signal === undefined ? {} : { signal: options.signal }),
         });
-    const patterns = technologyAssetPatterns(preliminary);
+    const guiSprites = [
+      ...preliminary.itemLayouts.flatMap(({ backgroundSprite }) =>
+        backgroundSprite === undefined
+          ? []
+          : [
+              backgroundSprite,
+              backgroundSprite.replace('_unavailable_item_bg', '_available_item_bg'),
+              backgroundSprite.replace('_unavailable_item_bg', '_researched_item_bg'),
+            ],
+      ),
+      ...(preliminary.backgrounds ?? []).map(({ sprite }) => sprite),
+    ];
+    const guiTextures = guiSprites.flatMap((sprite) => {
+      const texture = snapshot.index.find('sprite', sprite)?.metadata.texture;
+      if (typeof texture !== 'string') return [];
+      const normalized = texture.replaceAll('\\', '/').replace(/\/{2,}/gu, '/');
+      return normalized.includes('..') || /[[\]{}*?!]/u.test(normalized) ? [] : [normalized];
+    });
+    const patterns = [...new Set([...technologyAssetPatterns(preliminary), ...guiTextures])].sort(
+      compareCodeUnits,
+    );
     const assetFiles =
       patterns.length === 0
         ? []
@@ -792,7 +850,7 @@ export class TechnologyTreeViewer {
       workspaceIdentity: workspace.workspaceIdentity,
       cache: this.#state.fragments,
       assetFiles,
-      analysisMode,
+      ...(analysisMode === undefined ? {} : { analysisMode }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     this.#state.current.set(workspaceId, { generation, snapshot, assetFiles, graph });
@@ -979,6 +1037,7 @@ export class TechnologyTreeViewer {
       maxNodes: input.maxNodes ?? 1_000,
       includeHtml: input.includeHtml ?? false,
       budget,
+      ...(input.scenario === undefined ? {} : { scenario: input.scenario }),
       ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
       ...(input.technologyId === undefined ? {} : { technologyId: input.technologyId }),
       ...(input.categoryId === undefined ? {} : { categoryId: input.categoryId }),
@@ -1001,13 +1060,10 @@ export class TechnologyTreeViewer {
         }),
       ),
     ]);
-    const iconDataUris = await resolveTechnologyIconDataUris(
-      cached,
-      requestedIconSprites,
-      budget,
-      input.signal,
-    );
+    const { dataUris: iconDataUris, dimensions: spriteDimensions } =
+      await resolveTechnologyIconDataUris(cached, requestedIconSprites, budget, input.signal);
     renderOptions.iconDataUris = iconDataUris;
+    renderOptions.spriteDimensions = spriteDimensions;
     const render = await renderTechnologyGraph(graph, renderOptions);
     const focused: TechnologyRenderBundle[] = [];
     for (const folder of focusedFolders) {
@@ -1019,7 +1075,9 @@ export class TechnologyTreeViewer {
           maxNodes: 1_000,
           includeHtml: false,
           iconDataUris,
+          spriteDimensions,
           budget,
+          ...(input.scenario === undefined ? {} : { scenario: input.scenario }),
           ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       );

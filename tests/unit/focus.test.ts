@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ArtifactStore } from '../../src/hoi4_agent_tools/core/artifacts.js';
 import { compareCodeUnits, sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
@@ -12,6 +13,7 @@ import { TransactionManager } from '../../src/hoi4_agent_tools/core/transactions
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { nativeFocusEffectKeys } from '../../src/hoi4_agent_tools/focus/native-effects.js';
 import { focusTreePlanSchema } from '../../src/hoi4_agent_tools/schemas/focus.js';
+import { inspectFocusScenario } from '../../src/hoi4_agent_tools/focus/scenario.js';
 
 const postValidate = () =>
   Promise.resolve({
@@ -1264,6 +1266,160 @@ describe('Focus Tree Workbench layout', () => {
     expect(after.metrics!.bounds.rowCount).toBe(2);
   });
 
+  it('keeps unrelated branches and requested anchors fixed during selected compact cleanup', () => {
+    const selectedRoot = focusNode('selected_root', { mode: 'fixed', x: -16, y: 0, pinned: true });
+    const selectedLeaf = focusNode(
+      'selected_leaf',
+      { mode: 'fixed', x: -30, y: 3, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: ['selected_root'], rawPassthrough: [] }],
+        },
+      },
+    );
+    const otherRoot = focusNode('other_root', { mode: 'fixed', x: 16, y: 0, pinned: true });
+    const otherLeaf = focusNode(
+      'other_leaf',
+      { mode: 'fixed', x: 16, y: 1, pinned: true },
+      {
+        prerequisites: {
+          operator: 'and',
+          groups: [{ operator: 'or', focusIds: ['other_root'], rawPassthrough: [] }],
+        },
+      },
+    );
+    const plan = focusPlan([selectedRoot, selectedLeaf, otherRoot, otherLeaf]);
+    const before = layoutFocusTree(plan);
+    const compacted = compactFocusTreePlan(plan, {
+      focusIds: ['selected_root', 'selected_leaf'],
+      pinnedFocusIds: ['selected_root'],
+    });
+    const after = layoutFocusTree(compacted, {
+      previous: { ...before, nodes: before.nodes.filter(({ id }) => id.startsWith('other_')) },
+    });
+    expect(compacted.focuses.find(({ id }) => id === 'selected_root')?.position).toEqual(
+      selectedRoot.position,
+    );
+    expect(compacted.focuses.find(({ id }) => id === 'other_root')?.position).toEqual(
+      otherRoot.position,
+    );
+    expect(compacted.focuses.find(({ id }) => id === 'other_leaf')?.position).toEqual(
+      otherLeaf.position,
+    );
+    expect(
+      after.nodes.filter(({ id }) => id.startsWith('other_')).map(({ id, x, y }) => ({ id, x, y })),
+    ).toEqual(
+      before.nodes
+        .filter(({ id }) => id.startsWith('other_'))
+        .map(({ id, x, y }) => ({ id, x, y })),
+    );
+    expect(after.nodes.find(({ id }) => id === 'selected_root')).toMatchObject(
+      before.nodes.find(({ id }) => id === 'selected_root')!,
+    );
+    expect(after.nodes.find(({ id }) => id === 'selected_leaf')?.x).toBeGreaterThan(-30);
+  });
+
+  it('keeps requested symmetry pairs around their source anchor', () => {
+    const root = focusNode('symmetry_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const child = (id: string, x: number) =>
+      focusNode(
+        id,
+        { mode: 'fixed', x, y: 1, pinned: true },
+        {
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: ['symmetry_root'], rawPassthrough: [] }],
+          },
+        },
+      );
+    const plan = focusPlan([root, child('symmetry_left', -8), child('symmetry_right', 10)]);
+    const compacted = compactFocusTreePlan(plan, {
+      focusIds: ['symmetry_left', 'symmetry_right'],
+      pinnedFocusIds: ['symmetry_root'],
+      symmetryGroups: [
+        {
+          centerFocusId: 'symmetry_root',
+          pairs: [{ leftFocusId: 'symmetry_left', rightFocusId: 'symmetry_right' }],
+        },
+      ],
+    });
+    const layout = layoutFocusTree(compacted);
+    const byId = new Map(layout.nodes.map(({ id, x, y }) => [id, { x, y }]));
+    expect(byId.get('symmetry_root')).toEqual({ x: 0, y: 0 });
+    expect(byId.get('symmetry_left')!.x + byId.get('symmetry_right')!.x).toBe(0);
+    expect(byId.get('symmetry_left')!.y).toBe(byId.get('symmetry_right')!.y);
+    expect(() =>
+      compactFocusTreePlan(plan, {
+        symmetryGroups: [
+          {
+            centerFocusId: 'symmetry_root',
+            pairs: [{ leftFocusId: 'symmetry_left', rightFocusId: 'missing_focus' }],
+          },
+        ],
+      }),
+    ).toThrow('Symmetry focus is unknown');
+    expect(() =>
+      compactFocusTreePlan(plan, {
+        pinnedFocusIds: ['symmetry_root', 'symmetry_left', 'symmetry_right'],
+        symmetryGroups: [
+          {
+            centerFocusId: 'symmetry_root',
+            pairs: [{ leftFocusId: 'symmetry_left', rightFocusId: 'symmetry_right' }],
+          },
+        ],
+      }),
+    ).toThrow('No compact candidate satisfies the requested symmetry pairs');
+  });
+
+  it('explains structural route choices from an explicit completed-focus scenario', () => {
+    const root = focusNode('scenario_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
+    const branch = (id: string, x: number) =>
+      focusNode(
+        id,
+        { mode: 'fixed', x, y: 1, pinned: true },
+        {
+          prerequisites: {
+            operator: 'and',
+            groups: [{ operator: 'or', focusIds: ['scenario_root'], rawPassthrough: [] }],
+          },
+        },
+      );
+    const left = branch('scenario_left', -2);
+    left.mutuallyExclusive = ['scenario_right'];
+    const right = branch('scenario_right', 2);
+    const conditional = focusNode(
+      'scenario_conditional',
+      { mode: 'fixed', x: 0, y: 2, pinned: true },
+      { availability: { text: 'has_country_flag = possible', referencedFocusIds: [] } },
+    );
+    const plan = focusPlan([root, left, right, conditional]);
+    const before = inspectFocusScenario(plan, ['scenario_root']);
+    expect(before.focuses.find(({ focusId }) => focusId === 'scenario_right')?.status).toBe(
+      'structural_candidate',
+    );
+    expect(before.focuses.find(({ focusId }) => focusId === 'scenario_conditional')).toMatchObject({
+      status: 'unresolved',
+      unresolvedFields: ['available'],
+    });
+    const after = inspectFocusScenario(plan, ['scenario_root', 'scenario_left']);
+    expect(after.focuses.find(({ focusId }) => focusId === 'scenario_right')).toMatchObject({
+      status: 'blocked',
+      exclusiveWithCompletedIds: ['scenario_left'],
+    });
+    const conflict = inspectFocusScenario(plan, [
+      'scenario_root',
+      'scenario_left',
+      'scenario_right',
+    ]);
+    expect(conflict.mutualExclusionConflicts).toEqual([
+      { leftFocusId: 'scenario_left', rightFocusId: 'scenario_right' },
+    ]);
+    expect(() => inspectFocusScenario(plan, ['missing_focus'])).toThrow(
+      'Scenario names an unknown focus',
+    );
+  });
+
   it('moves exclusive sibling branches while keeping shared convergence centered', () => {
     const root = focusNode('branch_root', { mode: 'fixed', x: 0, y: 0, pinned: true });
     const left = focusNode(
@@ -1471,6 +1627,16 @@ describe('Focus Tree Workbench layout', () => {
         maximumHorizontalSpan: 12,
       }),
     );
+    expect(layout.connectorMeasurements).toEqual([
+      {
+        parentId: 'metric_root',
+        childId: 'metric_distant',
+        horizontalSpan: 12,
+        verticalSpan: 1,
+        manhattanSpan: 13,
+        long: true,
+      },
+    ]);
     expect(layout.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'FOCUS_LAYOUT_SAME_ROW_SPACING_UNSATISFIED' }),
@@ -2628,6 +2794,24 @@ describe('Focus Tree Workbench rendering', () => {
     };
     expect(graph.tree.id).toBe('layout_tree');
     expect(graph.diagnostics.map(({ code }) => code)).toContain('FOCUS_TEST_WARNING');
+    const withCrop = await renderFocusTree(plan, layout, diagnostics, {
+      iconDataUris: { GFX_fixture: icon },
+      cropFocusIds: ['child'],
+    });
+    expect(withCrop.problemCrops).toHaveLength(1);
+    const crop = withCrop.problemCrops![0]!;
+    expect(crop.diagnostics).toContain('FOCUS_TEST_WARNING');
+    expect(await sharp(crop.png).raw().toBuffer()).toEqual(
+      await sharp(withCrop.png)
+        .extract({
+          left: crop.bounds.x,
+          top: crop.bounds.y,
+          width: crop.bounds.width,
+          height: crop.bounds.height,
+        })
+        .raw()
+        .toBuffer(),
+    );
   });
 
   it('rolls back the complete focus artifact bundle when cancellation arrives mid-write', async () => {

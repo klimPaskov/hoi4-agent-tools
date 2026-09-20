@@ -2748,6 +2748,23 @@ function* layoutFocusTreeSteps(
       symmetry,
       spacing,
     ),
+    connectorMeasurements: edges
+      .map((edge) => {
+        const spans = connectorSpans(edge);
+        return {
+          parentId: edge.parentId,
+          childId: edge.childId,
+          horizontalSpan: spans.horizontal,
+          verticalSpan: spans.vertical,
+          manhattanSpan: spans.manhattan,
+          long: longConnectorSpans(spans),
+        };
+      })
+      .sort(
+        (left, right) =>
+          compareCodeUnits(left.parentId, right.parentId) ||
+          compareCodeUnits(left.childId, right.childId),
+      ),
     layoutHash: hashCanonical(nodes.map(({ id, x, y, laneId }) => ({ id, laneId, x, y }))),
   };
 }

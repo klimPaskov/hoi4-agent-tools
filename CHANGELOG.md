@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 3.4.0 - 2026-09-20
+
+- Add branch-local focus cleanup with pinned anchors and symmetry groups, connector measurements, source-linked crops, and scenario-backed structural route diagnostics.
+- Report GUI visibility and enabled branches, measured label and background boxes, and matched source-baseline renders alongside scenario comparisons.
+- Expose complete source-backed probability catalogs, actionable missing scenario inputs, and eligible, excluded, and unresolved inventories.
+- Add selected event-chain comparisons and revision-bound bounded helper expansion while retaining explicit lifecycle coverage limits.
+- Compose technology folders from source pixel placements, native item skins, icon and subtechnology positions, panel and background artwork, year labels, and supplied research scenarios; report unresolved placement and asset coverage honestly.
+- Add focused map lookups, reusable render tiles, affected-area output, and typed external script-reference updates for map renumbering.
+
 ## 3.3.0 - 2026-09-20
 
 - Add `hoi4.mechanic_test` with copied versioned scenario state, bounded source effects, explicit time advancement, traces, and typed gameplay assertions.

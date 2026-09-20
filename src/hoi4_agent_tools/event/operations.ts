@@ -158,6 +158,15 @@ export async function compareEvents(viewer: EventChainViewer, input: EventCompar
     ...(compared.render === undefined ? {} : { renderHashes: compared.render.hashes }),
     counts: {
       changes: comparison.changes.length,
+      ...(compared.selection === undefined
+        ? {}
+        : {
+            selectedChanges: compared.selection.selectedChangeCount,
+            omittedChanges: compared.selection.omittedChangeCount,
+            unattributedChanges: compared.selection.unattributedChangeIds.length,
+            selectedBeforeNodes: compared.selection.beforeNodeIds.length,
+            selectedAfterNodes: compared.selection.afterNodeIds.length,
+          }),
       addedNodes: comparison.addedNodeIds.length,
       removedNodes: comparison.removedNodeIds.length,
       changedNodes: comparison.changedNodeIds.length,
@@ -183,6 +192,13 @@ export async function compareEvents(viewer: EventChainViewer, input: EventCompar
     },
     boundary: {
       proposedSources: input.proposedSources?.length ?? 0,
+      ...(compared.selection === undefined
+        ? {}
+        : {
+            selector: compared.selection.selector,
+            maxChainNodes: compared.selection.maxChainNodes,
+            selectionTruncated: compared.selection.truncated,
+          }),
       render: input.render ?? true,
       maxRenderNodes: input.maxRenderNodes ?? 120,
       refresh: compared.refresh,

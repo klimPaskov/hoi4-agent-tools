@@ -24,13 +24,19 @@ async function fixture() {
   return value;
 }
 interface Report {
-  records: Array<{ id: string; kind: string; rootId: string; path: string[] }>;
+  records: Array<{
+    id: string;
+    kind: string;
+    rootId: string;
+    path: string[];
+    scopeEvidence?: { declaredScope?: string; resolvedScope: string };
+  }>;
   edges: Array<{
     id: string;
     evidence: {
       kind: string;
       edge?: { conditions: unknown[] };
-      access?: { name: string };
+      access?: { name: string; scope: string };
       reference?: { technologyId?: string };
     };
   }>;
@@ -201,6 +207,15 @@ describe('event and technology helper continuation evidence', () => {
           : evidence.reference?.technologyId === 'page_tech',
       );
       expect(leaf).toBeDefined();
+      if (domain === 'event')
+        expect(
+          expected.records
+            .filter(({ kind, path }) => kind === 'terminal' && path.at(-1) === leaf!.id)
+            .map(({ scopeEvidence }) => scopeEvidence),
+        ).toEqual([
+          expect.objectContaining({ declaredScope: 'unknown', resolvedScope: 'country' }),
+          expect.objectContaining({ declaredScope: 'unknown', resolvedScope: 'country' }),
+        ]);
       expect(
         expected.records.filter(
           ({ kind, path }) => kind === 'terminal' && path.at(-1) === leaf!.id,

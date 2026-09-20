@@ -37,6 +37,9 @@ export interface HelperExpansionInventory {
   edges: Array<{ id: string; from: string; to: string; evidence: unknown }>;
   roots: string[];
   branches: string[];
+  recordDetails?: (
+    path: readonly HelperExpansionInventory['edges'][number][],
+  ) => Record<string, unknown>;
 }
 export interface HelperExpansionResult {
   report: unknown;
@@ -158,6 +161,9 @@ export async function inspectHelperExpansion(
     kind,
     rootId: input.roots[root]!,
     path: path.map((index) => inventory.edges[index]!.id),
+    ...(inventory.recordDetails === undefined
+      ? {}
+      : inventory.recordDetails(path.map((index) => inventory.edges[index]!))),
   }));
   const continuationName = `${inventory.domain}-helper-continuation.json`;
   const report = {

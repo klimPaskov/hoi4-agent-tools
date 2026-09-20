@@ -231,6 +231,19 @@ describe('Event Chain Viewer service', () => {
     expect(comparisonArtifact.evidence.after.nodes).toContainEqual(
       expect.objectContaining({ eventId: 'service.3' }),
     );
+    const selected = await viewer.compareAndStore({
+      workspaceId: 'event-service',
+      before: { artifactUri: artifactUri! },
+      proposedSources: [{ relativePath: 'events/service.txt', source: proposed }],
+      selector: { kind: 'event', eventId: 'service.3' },
+      maxChainNodes: 40,
+      render: false,
+    });
+    expect(selected.selection?.selectedChangeIds).toContain('node_added:event:service.3');
+    expect(JSON.parse(selected.comparisonJson)).toMatchObject({
+      filters: { selector: { kind: 'event', eventId: 'service.3' }, maxChainNodes: 40 },
+      selection: { selectedChangeCount: expect.any(Number), truncated: false },
+    });
     expect(artifactRead.mock.calls[0]?.[2]).toEqual({ offset: 0, length: 1 });
     expect(await readFile(sourcePath, 'utf8')).toBe(source);
   });

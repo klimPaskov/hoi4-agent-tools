@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
+import { selectEventComparison } from '../../src/hoi4_agent_tools/event/comparison-selection.js';
 import {
   analyzeEventImpact,
   compareEventGraphs,
@@ -559,6 +560,52 @@ describe('Event Chain Viewer graph algorithms', () => {
     expect(comparison.removedEdgeIds).toEqual(['edge:terminal']);
     expect(comparison.newlyDisconnectedTerminalIds).toEqual(['terminal:unit.2']);
     expect(comparison.changes.map(({ kind }) => kind)).toContain('terminal_disconnected');
+  });
+
+  it('selects one changed event chain and reports unrelated and unowned changes', () => {
+    const before = graph();
+    const after: EventGraphSnapshot = {
+      ...before,
+      revision: sha256Bytes('chain-selection-after'),
+      nodes: before.nodes.map((current) =>
+        current.id === 'event:unit.1' || current.id === 'event:unit.3'
+          ? { ...current, label: `${current.label} changed` }
+          : current,
+      ),
+      issues: [
+        {
+          code: 'EVENT_TEST_WARNING',
+          classification: 'design_warning',
+          severity: 'warning',
+          message: 'A warning without a chain owner.',
+          confidence: 'high',
+          location: location('warning', 150),
+          blockers: [],
+          details: {},
+        },
+      ],
+    };
+    const comparison = compareEventGraphs(before, after);
+    const selected = selectEventComparison(
+      before,
+      after,
+      comparison,
+      { kind: 'event', eventId: 'unit.1' },
+      20,
+    );
+    expect(selected.selectedChangeIds).toContain('node_changed:event:unit.1');
+    expect(selected.selectedChangeIds).not.toContain('node_changed:event:unit.3');
+    expect(selected.unattributedChangeIds).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^diagnostic_added:/u)]),
+    );
+    expect(selected.omittedChangeCount).toBe(
+      comparison.changes.length - selected.selectedChangeCount,
+    );
+    expect(selected.truncated).toBe(false);
+    expect(
+      selectEventComparison(before, after, comparison, { kind: 'event', eventId: 'unit.1' }, 1)
+        .truncated,
+    ).toBe(true);
   });
 
   it('cooperatively cancels comparison work after it has started', () => {

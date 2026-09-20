@@ -50,6 +50,7 @@ import {
   underConfiguredRoot,
   validationFromDiagnostics,
 } from './tool-support.js';
+import { inspectFocusScenario, type FocusScenarioEvidence } from './scenario.js';
 
 const LARGE_FOCUS_RENDER_NODE_THRESHOLD = 200;
 const LARGE_FOCUS_RENDER_SCALE = 0.5;
@@ -335,6 +336,9 @@ export async function prepareFocusRewrite(
       compactSourcePlan = suppliedPlan;
       compactPlanning = await compactFocusTreePlanAsync(suppliedPlan, {
         ...(context.signal === undefined ? {} : { signal: context.signal }),
+        ...(input.compactFocusIds === undefined ? {} : { focusIds: input.compactFocusIds }),
+        ...(input.pinnedFocusIds === undefined ? {} : { pinnedFocusIds: input.pinnedFocusIds }),
+        ...(input.symmetryGroups === undefined ? {} : { symmetryGroups: input.symmetryGroups }),
       });
       plan = compactPlanning.plan;
     } else plan = suppliedPlan;
@@ -348,6 +352,9 @@ export async function prepareFocusRewrite(
     compactSourcePlan = selectPlan(imported.result, input.treeId);
     compactPlanning = await compactFocusTreePlanAsync(compactSourcePlan, {
       ...(context.signal === undefined ? {} : { signal: context.signal }),
+      ...(input.compactFocusIds === undefined ? {} : { focusIds: input.compactFocusIds }),
+      ...(input.pinnedFocusIds === undefined ? {} : { pinnedFocusIds: input.pinnedFocusIds }),
+      ...(input.symmetryGroups === undefined ? {} : { symmetryGroups: input.symmetryGroups }),
     });
     plan = compactPlanning.plan;
   }
@@ -413,7 +420,8 @@ export async function prepareFocusRewrite(
     (await workbench.layoutAsync(reviewPlan, {
       ...(context.signal === undefined ? {} : { signal: context.signal }),
     }));
-  if (input.layoutMode === 'compact') assertCompactLayoutQuality(currentLayout, proposedLayout);
+  if (input.layoutMode === 'compact')
+    assertCompactLayoutQuality(currentLayout, proposedLayout, input.compactFocusIds !== undefined);
   const proposed = await workbench.renderAndStore(context.workspaceId, reviewPlan, {
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     index: snapshot.index,
@@ -663,6 +671,7 @@ export async function inspectFocus(
     plan: FocusTreePlan;
     layout: FocusLayoutResult;
     diagnosticCount: number;
+    scenario?: FocusScenarioEvidence;
   }> = [];
   for (const plan of plans) {
     const layout = await workbench.layoutAsync(plan, {
@@ -677,7 +686,14 @@ export async function inspectFocus(
       layout,
     });
     diagnostics.push(...lintDiagnostics);
-    inspectedPlans.push({ plan, layout, diagnosticCount: lintDiagnostics.length });
+    inspectedPlans.push({
+      plan,
+      layout,
+      diagnosticCount: lintDiagnostics.length,
+      ...(input.scenario === undefined
+        ? {}
+        : { scenario: inspectFocusScenario(plan, input.scenario.completedFocusIds) }),
+    });
   }
   const presentation = await resolveFocusPresentation({
     plans,
@@ -710,10 +726,11 @@ export async function inspectFocus(
       schemaVersion: 1,
       revision: snapshot.revision,
       plans,
-      layouts: inspectedPlans.map(({ plan, layout, diagnosticCount }) => ({
+      layouts: inspectedPlans.map(({ plan, layout, diagnosticCount, scenario }) => ({
         treeId: plan.id,
         layout,
         diagnosticCount,
+        ...(scenario === undefined ? {} : { scenario }),
       })),
       continuousFocusPalettes: paletteImport.palettes,
       presentation: focusPresentationEvidence(presentation),
@@ -735,7 +752,7 @@ export async function inspectFocus(
     revision: snapshot.revision,
     treeCount: plans.length,
     paletteCount: paletteImport.palettes.length,
-    trees: inspectedPlans.slice(0, 100).map(({ plan, layout, diagnosticCount }) => ({
+    trees: inspectedPlans.slice(0, 100).map(({ plan, layout, diagnosticCount, scenario }) => ({
       id: plan.id,
       sourcePath: plan.provenance.sourcePath,
       focusCount: plan.focuses.length,
@@ -751,6 +768,14 @@ export async function inspectFocus(
       layoutDecisionCount: layout.decisions.length,
       layoutMetrics: layout.metrics!,
       diagnosticCount,
+      ...(scenario === undefined
+        ? {}
+        : {
+            scenarioSummary: {
+              ...scenario.counts,
+              choiceConflictCount: scenario.mutualExclusionConflicts.length,
+            },
+          }),
     })),
     palettes: [],
   });
@@ -781,6 +806,11 @@ export async function renderFocus(
   rasterize: boolean,
 ) {
   const outputName = rasterize ? 'raster' : 'render';
+  if (!rasterize && (input.cropFocusIds?.length ?? 0) > 0)
+    throw new ServiceError(
+      'FOCUS_CROP_REQUIRES_RASTER',
+      'Focus problem crops require focus_raster',
+    );
   await context.progress(0, 4, 'Importing and indexing focus source');
   const workspace = engine.resolver.get(context.workspaceId, context.principal);
   const snapshot = await engine.scan(
@@ -880,6 +910,7 @@ export async function renderFocus(
     ...(input.padding === undefined ? {} : { padding: input.padding }),
     outputScale: effectiveReviewScale,
     rasterize,
+    ...(input.cropFocusIds === undefined ? {} : { cropFocusIds: input.cropFocusIds }),
     renderProfile: {
       sourceRevision: snapshot.revision,
       reviewScale: effectiveReviewScale,

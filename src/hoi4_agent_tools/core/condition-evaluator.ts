@@ -147,6 +147,7 @@ function unresolved(
   assignment: AssignmentNode,
   candidate: ConditionSubject,
   reason: string,
+  scenarioInput?: string,
 ): TriggerEvaluation {
   return {
     state: 'unresolved',
@@ -155,6 +156,7 @@ function unresolved(
         code: 'TRIGGER_UNRESOLVED',
         message: reason,
         path: assignment.key.value,
+        ...(scenarioInput === undefined ? {} : { details: { scenarioInput } }),
         candidateId: candidate.id,
         ...(candidate.provenance[0] === undefined ? {} : { provenance: candidate.provenance[0] }),
       },
@@ -205,6 +207,11 @@ function evaluateCheckVariable(
       assignment,
       candidate,
       `Scenario does not resolve numeric operands ${variable} and ${target}`,
+      leftNumber === undefined && !/^(?:@|constant:)/u.test(variable)
+        ? `variable.${variable}`
+        : rightNumber === undefined && !/^(?:@|constant:)/u.test(target)
+          ? `variable.${target}`
+          : undefined,
     );
   const compareName =
     firstScalar(block, 'compare')?.value ??
@@ -306,7 +313,12 @@ function evaluateAssignmentCore(
         scopeStateValue(scenario, `array.${arrayId}`, scopeContext) ??
         rootStateValue(scenario, `array.${arrayId}`);
       if (!Array.isArray(array))
-        return unresolved(assignment, candidate, `Scenario does not declare array ${arrayId}`);
+        return unresolved(
+          assignment,
+          candidate,
+          `Scenario does not declare array ${arrayId}`,
+          `array.${arrayId}`,
+        );
       const compared =
         ['THIS', 'ROOT', 'PREV'].includes(declaredValue.toUpperCase()) ||
         resolveScopeContext(scenario, declaredValue, scopeContext) !== undefined
@@ -373,6 +385,7 @@ function evaluateAssignmentCore(
       assignment,
       candidate,
       `Scoped or compound trigger ${key} is not declared by the scenario`,
+      `scope.${key}`,
     );
   }
 
@@ -393,7 +406,12 @@ function evaluateAssignmentCore(
           ? scenario.flags
           : scopeContext.binding.flags;
     if (scenario.closedFlags === false && flags?.includes(right) !== true)
-      return unresolved(assignment, candidate, `Scenario does not declare flag ${right}`);
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not declare flag ${right}`,
+        `flag.${right}`,
+      );
     return { state: flags?.includes(right) === true ? 'true' : 'false', unresolved: [] };
   }
   if (key === 'has_event_target') {
@@ -409,7 +427,12 @@ function evaluateAssignmentCore(
         ? scenario.actor
         : (scopeContext.binding.actor ?? scopeContext.binding.id);
     if (actor === undefined)
-      return unresolved(assignment, candidate, `Scenario does not declare actor for ${key}`);
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not declare actor for ${key}`,
+        'actor',
+      );
     return {
       state: compare(actor, right, assignment.operator.text) ? 'true' : 'false',
       unresolved: [],
@@ -417,7 +440,7 @@ function evaluateAssignmentCore(
   }
   if (key === 'date') {
     if (scenario.date === undefined)
-      return unresolved(assignment, candidate, 'Scenario does not declare date');
+      return unresolved(assignment, candidate, 'Scenario does not declare date', 'date');
     const dateNumber = (value: string): number | undefined => {
       const parts = /^(\d+)\.(\d{1,2})\.(\d{1,2})$/u.exec(value);
       if (parts === null) return undefined;
@@ -474,7 +497,7 @@ function evaluateAssignmentCore(
     scopeStateValue(scenario, key, scopeContext) ??
     numberValue(key, scenario, scopeContext, definitions, candidate.provenance[0]?.path);
   if (declared === undefined)
-    return unresolved(assignment, candidate, `Scenario does not declare trigger ${key}`);
+    return unresolved(assignment, candidate, `Scenario does not declare trigger ${key}`, key);
   const expectedBoolean = bool(right);
   const actualBoolean = bool(declared);
   if (expectedBoolean !== undefined && actualBoolean !== undefined)

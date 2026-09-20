@@ -37,6 +37,13 @@ export interface MapRenderOptions {
   layer?: MapBaseLayer;
   overlays?: MapOverlay[];
   scale?: number;
+  tile?: { x: number; y: number; width: number; height: number };
+  area?: {
+    provinceIds?: number[] | undefined;
+    stateIds?: number[] | undefined;
+    regionIds?: number[] | undefined;
+    padding?: number | undefined;
+  };
   budget?: RenderBudget;
   signal?: AbortSignal;
 }
@@ -44,6 +51,7 @@ export interface MapRenderOptions {
 export interface MapRenderBundle {
   width: number;
   height: number;
+  tile?: { x: number; y: number; width: number; height: number };
   png: Buffer;
   json: string;
   html: string;
@@ -481,7 +489,7 @@ async function applyOverlays(
 
 async function renderMetadata(
   index: MapWorkspaceIndex,
-  options: Required<Omit<MapRenderOptions, 'signal' | 'budget'>>,
+  options: Required<Omit<MapRenderOptions, 'signal' | 'budget' | 'tile' | 'area'>>,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const catalog = buildMapCatalog(index);
@@ -582,7 +590,7 @@ export async function renderMap(
       'Cannot render without a valid province bitmap and definitions',
     );
   }
-  const resolved: Required<Omit<MapRenderOptions, 'signal' | 'budget'>> = {
+  const resolved: Required<Omit<MapRenderOptions, 'signal' | 'budget' | 'tile' | 'area'>> = {
     layer: options.layer ?? 'province',
     overlays: [...new Set(options.overlays ?? [])].sort(),
     scale: options.scale ?? 1,
@@ -594,9 +602,69 @@ export async function renderMap(
     );
   const budget = options.budget ?? new RenderBudget();
   assertRenderDimensions(raster.width, raster.height, 'map RGBA source plane');
+  let tile = options.tile;
+  if (options.area !== undefined) {
+    if (tile !== undefined)
+      throw new ServiceError('MAP_RENDER_AREA_CONFLICT', 'Choose a map tile or entity area');
+    const ids = new Set(options.area.provinceIds ?? []);
+    for (const stateId of options.area.stateIds ?? []) {
+      const state = index.statesById.get(stateId);
+      if (state === undefined)
+        throw new ServiceError('MAP_AREA_STATE_MISSING', 'Map area state ID is missing', {
+          stateId,
+        });
+      for (const id of state.provinces) ids.add(id);
+    }
+    for (const regionId of options.area.regionIds ?? []) {
+      const region = index.regionsById.get(regionId);
+      if (region === undefined)
+        throw new ServiceError('MAP_AREA_REGION_MISSING', 'Map area region ID is missing', {
+          regionId,
+        });
+      for (const id of region.provinces) ids.add(id);
+    }
+    if (ids.size === 0) throw new ServiceError('MAP_AREA_EMPTY', 'Map area has no provinces');
+    const geometry = [...ids].map((id) => {
+      const province = raster.geometry.get(id);
+      if (province === undefined)
+        throw new ServiceError(
+          'MAP_AREA_PROVINCE_MISSING',
+          'Map area province ID has no raster geometry',
+          { provinceId: id },
+        );
+      return province;
+    });
+    const padding = options.area.padding ?? 32;
+    const x = Math.max(0, Math.min(...geometry.map(({ minX }) => minX)) - padding);
+    const y = Math.max(0, Math.min(...geometry.map(({ minY }) => minY)) - padding);
+    const right = Math.min(
+      raster.width,
+      Math.max(...geometry.map(({ maxX }) => maxX)) + padding + 1,
+    );
+    const bottom = Math.min(
+      raster.height,
+      Math.max(...geometry.map(({ maxY }) => maxY)) + padding + 1,
+    );
+    tile = { x, y, width: right - x, height: bottom - y };
+    if (tile.width > 2_048 || tile.height > 2_048)
+      throw new ServiceError(
+        'MAP_AREA_TOO_LARGE',
+        'Map area exceeds the tile limit; select fewer entities',
+        { tile },
+      );
+  }
+  if (
+    tile !== undefined &&
+    (tile.x + tile.width > raster.width || tile.y + tile.height > raster.height)
+  )
+    throw new ServiceError(
+      'MAP_TILE_OUT_OF_BOUNDS',
+      'Map tile extends beyond the province raster',
+      { tile, rasterWidth: raster.width, rasterHeight: raster.height },
+    );
   const outputDimensions = budget.reserve(
-    raster.width * resolved.scale,
-    raster.height * resolved.scale,
+    (tile?.width ?? raster.width) * resolved.scale,
+    (tile?.height ?? raster.height) * resolved.scale,
     'map PNG output',
   );
   const raw = Buffer.alloc(raster.width * raster.height * 4);
@@ -611,6 +679,35 @@ export async function renderMap(
   }
   await applyOverlays(index, raw, new Set(resolved.overlays), options.signal);
   options.signal?.throwIfAborted();
+  if (tile !== undefined) {
+    const tileRaw = Buffer.alloc(tile.width * tile.height * 4);
+    const provinceIds = new Set<number>();
+    for (let row = 0; row < tile.height; row += 1) {
+      if (row % 32 === 0) await renderCheckpoint(options.signal);
+      raw.copy(
+        tileRaw,
+        row * tile.width * 4,
+        ((tile.y + row) * raster.width + tile.x) * 4,
+        ((tile.y + row) * raster.width + tile.x + tile.width) * 4,
+      );
+      for (let column = 0; column < tile.width; column += 1) {
+        const id = raster.provinceIds[(tile.y + row) * raster.width + tile.x + column];
+        if (id !== undefined && id >= 0) provinceIds.add(id);
+      }
+    }
+    const png = await encodePng(tileRaw, tile.width, tile.height, resolved.scale);
+    const json = `${canonicalJson({ schemaVersion: 'map-tile.v1', layer: resolved.layer, overlays: resolved.overlays, scale: resolved.scale, tile, raster: { width: raster.width, height: raster.height }, provinceIds: [...provinceIds].sort((left, right) => left - right) })}\n`;
+    const html = diffHtmlDocument(`HOI4 map tile - ${resolved.layer}`, png, json);
+    return {
+      width: outputDimensions.width,
+      height: outputDimensions.height,
+      tile,
+      png,
+      json,
+      html,
+      hashes: { png: sha256Bytes(png), json: sha256Bytes(json), html: sha256Bytes(html) },
+    };
+  }
   const png = await encodePng(raw, raster.width, raster.height, resolved.scale);
   options.signal?.throwIfAborted();
   const json = `${canonicalJson(await renderMetadata(index, resolved, options.signal))}\n`;

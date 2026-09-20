@@ -160,6 +160,18 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(graph.folders.map(({ id }) => id)).toEqual(graphManifest.folderIds);
     expect(graph.placements).toHaveLength(graphManifest.counts.placements);
     expect(graph.gridboxes).toHaveLength(graphManifest.counts.gridboxes);
+    expect(graph.backgrounds).toEqual([
+      expect.objectContaining({
+        folderId: 'synthetic_folder_01',
+        name: 'synthetic_techtree_bg',
+        sprite: 'GFX_synthetic_techtree_bg',
+        size: { width: 144, height: 96 },
+      }),
+    ]);
+    expect(
+      graph.itemLayouts.find(({ name }) => name === 'techtree_synthetic_folder_00_item')
+        ?.subTechnologySlots,
+    ).toEqual([{ index: 0, position: { x: 139, y: 2 }, size: { width: 35, height: 26 } }]);
     expect(graph.edges.filter(({ kind }) => kind === 'prerequisite')).toHaveLength(
       graphManifest.counts.prerequisites,
     );
@@ -336,6 +348,20 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(first.render.generatedAnalysisLayout).toBe(true);
     expect(first.focused).toHaveLength(graph.folders.length);
     expect(first.focused.every(({ sourceAccurate }) => sourceAccurate)).toBe(true);
+    const backgroundFolderIndex = graph.folders.findIndex(({ id }) => id === 'synthetic_folder_01');
+    const backgroundReport = JSON.parse(first.focused[backgroundFolderIndex]!.json) as {
+      backgrounds: Array<{ status: string }>;
+    };
+    expect(backgroundReport.backgrounds.map(({ status }) => status)).toEqual(['rendered']);
+    expect(first.focused[backgroundFolderIndex]?.svg).toContain(
+      'data-tech-background="synthetic_techtree_bg"',
+    );
+    const subTechnologyFolderIndex = graph.folders.findIndex(
+      ({ id }) => id === 'synthetic_folder_00',
+    );
+    expect(first.focused[subTechnologyFolderIndex]?.svg).toContain(
+      'data-subtechnology-id="synthetic_tech_0008" data-slot-index="0"',
+    );
     expect(new Set(first.focused.flatMap(({ selectedIds }) => selectedIds)).size).toBe(
       graph.technologies.length - 2,
     );
@@ -377,6 +403,14 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         'spriteTypes = {',
         `\tSpriteType = { name = GFX_layered_small_medium texturefile = "${texturePath}" }`,
         `\tSpriteType = { name = GFX_layered_large_medium texturefile = "${texturePath}" }`,
+        `\tSpriteType = { name = GFX_layered_techtree_bg texturefile = "${texturePath}" }`,
+        `\tcorneredTileSpriteType = { name = GFX_layered_panel texturefile = "${texturePath}" borderSize = { x = 16 y = 16 } tilingCenter = yes }`,
+        ...['small', 'large'].flatMap((size) =>
+          ['unavailable', 'available', 'researched'].map(
+            (status) =>
+              `\tSpriteType = { name = GFX_layered_${size}_${status}_item_bg texturefile = "${texturePath}" }`,
+          ),
+        ),
         '}',
         '',
       ].join('\n'),
@@ -417,6 +451,8 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         'guiTypes = {',
         '\tcontainerWindowType = {',
         '\t\tname = layered_folder',
+        '\t\tbackground = { quadTextureSprite = GFX_layered_panel }',
+        '\t\ticonType = { name = layered_techtree_bg spriteType = GFX_layered_techtree_bg position = { x = 0 y = 0 } }',
         '\t\tinstantTextBoxType = { name = layered_year_1936 position = { x = -110 y = 0 } text = "1936" }',
         '\t\tinstantTextBoxType = { name = layered_year_1940 position = { x = -110 y = 96 } text = "1940" }',
         '\t\tgridBoxType = {',
@@ -426,8 +462,8 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         '\t\t\tformat = LEFT',
         '\t\t}',
         '\t}',
-        '\tcontainerWindowType = { name = techtree_layered_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } }',
-        '\tcontainerWindowType = { name = techtree_layered_folder_item position = { x = -56 y = -7 } size = { width = 183 height = 84 } }',
+        '\tcontainerWindowType = { name = techtree_layered_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } background = { quadTextureSprite = GFX_layered_small_unavailable_item_bg } iconType = { name = Icon position = { x = 36 y = 36 } centerposition = yes } }',
+        '\tcontainerWindowType = { name = techtree_layered_folder_item position = { x = -56 y = -7 } size = { width = 183 height = 84 } background = { quadTextureSprite = GFX_layered_large_unavailable_item_bg } iconType = { name = Icon position = { x = 91 y = 46 } centerposition = yes } instantTextBoxType = { name = name position = { x = 3 y = -3 } maxWidth = 160 } }',
         '}',
         '',
       ].join('\n'),
@@ -449,6 +485,20 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     const layeredViewer = new TechnologyTreeViewer(layeredEngine);
     const layeredGraph = await layeredViewer.scan('layered-icons', { refresh: true });
     expect(layeredGraph.itemLayouts).toHaveLength(2);
+    expect(layeredGraph.itemLayouts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          layoutSize: 'small',
+          backgroundSprite: 'GFX_layered_small_unavailable_item_bg',
+          iconPosition: { x: 36, y: 36, centered: true },
+        }),
+        expect.objectContaining({
+          layoutSize: 'large',
+          backgroundSprite: 'GFX_layered_large_unavailable_item_bg',
+          namePosition: { x: 3, y: -3, maxWidth: 160 },
+        }),
+      ]),
+    );
     expect(layeredGraph.yearMarkers.map(({ year }) => year)).toEqual([1936, 1940]);
     expect(
       layeredGraph.placements.map(({ technologyId, layoutSize, layoutWidth, layoutHeight }) => ({
@@ -489,9 +539,14 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       view: 'folder',
       folderId: 'layered_folder',
     });
-    expect(rendered.render.renderedIconCount).toBe(2);
+    expect(rendered.render.renderedIconCount).toBe(10);
     expect(rendered.render.unresolvedIconSprites).toEqual([]);
-    expect(rendered.render.svg.match(/<image /gu)).toHaveLength(2);
+    expect(rendered.render.svg.match(/<image /gu)).toHaveLength(6);
+    expect(rendered.render.svg).toContain('pattern id="tech-folder-panel"');
+    expect(rendered.render.svg).toContain('data-tech-background="layered_techtree_bg"');
+    expect(rendered.render.svg).toContain(
+      'data-item-background-sprite="GFX_layered_small_unavailable_item_bg"',
+    );
     expect(rendered.render.svg).toContain(
       'data-icon-sprite="GFX_layered_small_medium" data-source-path="mod:common/technologies/layered_technologies.txt"',
     );
@@ -504,6 +559,57 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(rendered.render.svg).toContain('data-layout-size="large"');
     expect(rendered.render.svg).toContain('width="183" height="84"');
     expect(rendered.render.json).not.toContain('data:image/png;base64,');
+    const unavailableAssets = await renderTechnologyGraph(layeredGraph, {
+      view: 'folder',
+      folderId: 'layered_folder',
+    });
+    expect(unavailableAssets.unresolvedIconSprites).toContain('GFX_layered_techtree_bg');
+    expect(unavailableAssets.svg).not.toContain('data-tech-background="layered_techtree_bg"');
+    expect(
+      (JSON.parse(unavailableAssets.json) as { backgrounds: Array<{ status: string }> })
+        .backgrounds[0]?.status,
+    ).toBe('unresolved');
+    const scenario = await renderTechnologyGraph(layeredGraph, {
+      view: 'folder',
+      folderId: 'layered_folder',
+      scenario: { year: 1935, researchedTechnologyIds: [] },
+    });
+    const scenarioNodes = (
+      JSON.parse(scenario.json) as {
+        nodes: Array<{
+          id: string;
+          scenarioStatus: string;
+          missingPrerequisiteIds: string[];
+          aheadOfTimeYears: number;
+        }>;
+      }
+    ).nodes;
+    expect(scenarioNodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'layered_small', scenarioStatus: 'structural_candidate' }),
+        expect.objectContaining({
+          id: 'layered_large',
+          scenarioStatus: 'missing_prerequisite',
+          missingPrerequisiteIds: ['layered_small'],
+          aheadOfTimeYears: 1,
+        }),
+      ]),
+    );
+    expect(scenario.svg).toContain('data-scenario-status="missing_prerequisite"');
+    const afterResearch = await renderTechnologyGraph(layeredGraph, {
+      view: 'folder',
+      folderId: 'layered_folder',
+      scenario: { year: 1936, researchedTechnologyIds: ['layered_small'] },
+    });
+    expect(afterResearch.json).toContain('"scenarioStatus":"researched"');
+    expect(afterResearch.json).toContain('"scenarioStatus":"structural_candidate"');
+    await expect(
+      renderTechnologyGraph(layeredGraph, {
+        view: 'folder',
+        folderId: 'layered_folder',
+        scenario: { year: 1936, researchedTechnologyIds: ['unknown_technology'] },
+      }),
+    ).rejects.toThrow('unknown researched technology');
   });
 
   it('projects an oversized scan report without serializing the full graph', () => {
@@ -571,6 +677,93 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       }
     }
   }, 120_000);
+
+  it('uses a declared gridbox for a technology with two prerequisite roots', async () => {
+    const isolatedRoot = path.join(temporaryRoot, 'multiple-roots');
+    const modRoot = path.join(isolatedRoot, 'mod');
+    const technologyPath = path.join(modRoot, 'common/technologies/multiple_roots.txt');
+    const guiPath = path.join(modRoot, 'interface/multiple_roots.gui');
+    await mkdir(path.dirname(technologyPath), { recursive: true });
+    await mkdir(path.dirname(guiPath), { recursive: true });
+    await writeFile(
+      technologyPath,
+      [
+        'technologies = {',
+        '\talpha = { folder = { name = multiple_roots_folder position = { x = 0 y = 0 } } }',
+        '\tbeta = { folder = { name = multiple_roots_folder position = { x = 1 y = 0 } } }',
+        '\tmerged = { dependencies = { alpha = 1 beta = 1 } folder = { name = multiple_roots_folder position = { x = 2 y = 0 } } }',
+        '}',
+      ].join('\n'),
+    );
+    const gui = (includeOwnGridbox: boolean) =>
+      [
+        'guiTypes = {',
+        '\tcontainerWindowType = {',
+        '\t\tname = multiple_roots_folder',
+        '\t\tgridBoxType = { name = alpha_tree position = { x = 0 y = 0 } slotsize = { width = 70 height = 70 } }',
+        '\t\tgridBoxType = { name = beta_tree position = { x = 70 y = 0 } slotsize = { width = 70 height = 70 } }',
+        ...(includeOwnGridbox
+          ? [
+              '\t\tgridBoxType = { name = merged_tree position = { x = 140 y = 0 } slotsize = { width = 70 height = 70 } }',
+            ]
+          : []),
+        '\t}',
+        '\tcontainerWindowType = { name = techtree_multiple_roots_folder_small_item position = { x = 0 y = 0 } size = { width = 72 height = 72 } }',
+        '}',
+      ].join('\n');
+    await writeFile(guiPath, gui(false));
+    const configuration = serverConfigurationSchema.parse({
+      version: 1,
+      serverStateRoot: path.join(isolatedRoot, 'server-state'),
+      workspaceStorageRoot: path.join(isolatedRoot, 'storage'),
+      workspaces: [{ id: 'multiple_roots', name: 'Multiple roots', root: modRoot, kind: 'mod' }],
+    });
+    const isolatedEngine = new CoreEngine(await WorkspaceResolver.create(configuration));
+    await isolatedEngine.initialize();
+    const isolatedViewer = new TechnologyTreeViewer(isolatedEngine);
+    const before = await isolatedViewer.scan('multiple_roots', { refresh: true });
+    expect(before.placements.find(({ technologyId }) => technologyId === 'merged')).toMatchObject({
+      geometryStatus: 'source_coordinate',
+    });
+    await writeFile(guiPath, gui(true));
+    const after = await isolatedViewer.scan('multiple_roots', { refresh: true });
+    expect(after.placements.find(({ technologyId }) => technologyId === 'merged')).toMatchObject({
+      geometryStatus: 'source_pixel',
+      pixelX: 280,
+      pixelY: 0,
+    });
+  });
+
+  it('resolves file-level technology constants and reports incomplete folder geometry', async () => {
+    const technology = graph.technologies.find(({ id }) => id === 'synthetic_tech_0000');
+    expect(technology).toMatchObject({ startYear: '1936', researchCost: '1' });
+    const placement = graph.placements.find(
+      ({ technologyId, folderId }) =>
+        technologyId === 'synthetic_tech_0000' && folderId === 'synthetic_folder_00',
+    );
+    expect(placement).toMatchObject({ x: 0, y: 0, geometryStatus: 'source_pixel' });
+
+    const unresolvedPlacement = { ...placement!, geometryStatus: 'unresolved' as const };
+    delete unresolvedPlacement.pixelX;
+    delete unresolvedPlacement.pixelY;
+    delete unresolvedPlacement.x;
+    delete unresolvedPlacement.y;
+    const incompleteGraph = {
+      ...graph,
+      placements: graph.placements.map((candidate) =>
+        candidate.id === placement!.id ? unresolvedPlacement : candidate,
+      ),
+    };
+    const rendered = await renderTechnologyGraph(incompleteGraph, {
+      view: 'folder',
+      folderId: 'synthetic_folder_00',
+    });
+    expect(rendered.sourceAccurate).toBe(false);
+    expect(JSON.parse(rendered.json)).toMatchObject({
+      sourceAccurate: false,
+      generatedAnalysisLayout: true,
+    });
+  });
 
   it('compares a proposed rename without writing source and separates regressions', async () => {
     const relativePath = 'common/technologies/synthetic_technologies_01.txt';

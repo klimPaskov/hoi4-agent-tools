@@ -8,7 +8,20 @@ containerWindowType = {
 	}
 }
 containerWindowType = {
+	name = techtree_synthetic_folder_00_small_item
+	position = { x = 0 y = 0 }
+	size = { width = 64 height = 64 }
+	containerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } }
+}
+containerWindowType = {
+	name = techtree_synthetic_folder_00_item
+	position = { x = 0 y = 0 }
+	size = { width = 176 height = 82 }
+	containerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } }
+}
+containerWindowType = {
 	name = synthetic_folder_01
+	iconType = { name = synthetic_techtree_bg spriteType = GFX_synthetic_techtree_bg position = { x = 0 y = 0 } size = { width = 144 height = 96 } }
 	instantTextBoxType = {
 		name = synthetic_year_1936
 		position = { x = 0 y = -60 }

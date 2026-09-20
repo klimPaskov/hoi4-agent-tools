@@ -73,6 +73,7 @@ const eventRenderInputSchema = z
 const eventCompareInputSchema = z
   .object({
     ...eventCompareRequestSchema.shape,
+    selector: nestedSelectorSchema.optional(),
     before: nestedGraphReferenceSchema.optional(),
     after: nestedGraphReferenceSchema.optional(),
     proposedSources: z.array(nestedProposedSourceSchema).min(1).max(64).optional(),
@@ -172,6 +173,11 @@ const eventCompareOutputSchema = strictOperationResultSchema(
       counts: z
         .object({
           changes: nonNegativeIntegerSchema,
+          selectedChanges: nonNegativeIntegerSchema.optional(),
+          omittedChanges: nonNegativeIntegerSchema.optional(),
+          unattributedChanges: nonNegativeIntegerSchema.optional(),
+          selectedBeforeNodes: nonNegativeIntegerSchema.optional(),
+          selectedAfterNodes: nonNegativeIntegerSchema.optional(),
           addedNodes: nonNegativeIntegerSchema,
           removedNodes: nonNegativeIntegerSchema,
           changedNodes: nonNegativeIntegerSchema,
@@ -199,6 +205,9 @@ const eventCompareOutputSchema = strictOperationResultSchema(
       boundary: z
         .object({
           proposedSources: nonNegativeIntegerSchema,
+          selector: eventSelectorSchema.optional(),
+          maxChainNodes: nonNegativeIntegerSchema.optional(),
+          selectionTruncated: z.boolean().optional(),
           render: z.boolean(),
           maxRenderNodes: nonNegativeIntegerSchema,
           refresh: z.boolean(),
@@ -238,7 +247,7 @@ export const eventTaskTools = [
     name: 'hoi4.event_compare',
     title: 'Compare event chains',
     description:
-      'Compare cached, artifact-backed, current, or in-memory proposed event graphs without writing source. Full changes are resources.',
+      'Compare cached, artifact-backed, current, or in-memory proposed event graphs, optionally selecting one downstream chain. Full changes and explicit selection coverage are resources.',
     inputSchema: eventCompareInputSchema,
     outputSchema: eventCompareOutputSchema,
     annotations: readOnlyEventTool,

@@ -301,6 +301,7 @@ export async function renderGui(
     ...(input.comparisonScenario === undefined
       ? {}
       : { comparisonScenario: input.comparisonScenario }),
+    ...(input.sourceBaseline === undefined ? {} : { sourceBaseline: input.sourceBaseline }),
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
@@ -323,6 +324,14 @@ export async function renderGui(
       changedPixels: rendered.comparison.changedPixels,
       changedRatio: rendered.comparison.changedRatio,
     },
+    ...(rendered.sourceComparison === undefined
+      ? {}
+      : {
+          sourceComparison: {
+            changedPixels: rendered.sourceComparison.changedPixels,
+            changedRatio: rendered.sourceComparison.changedRatio,
+          },
+        }),
     fidelityCounts: Object.fromEntries(
       Object.entries(rendered.render.fidelity).map(([key, values]) => [key, values.length]),
     ),

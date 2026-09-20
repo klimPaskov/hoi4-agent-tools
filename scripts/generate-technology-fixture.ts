@@ -41,7 +41,7 @@ function definition(index: number): string {
     index >= technologyCount - 2
       ? ''
       : [
-          `\tfolder = { name = ${folderId(folder)} position = { x = ${coordinateX} y = ${coordinateY} } }`,
+          `\tfolder = { name = ${folderId(folder)} position = { x = ${index === 0 ? '@synthetic_zero' : coordinateX} y = ${coordinateY} } }`,
           ...(folder === 0 && local < 5
             ? [
                 `\tfolder = { name = ${folderId(1)} position = { x = ${10 + (local % 2)} y = ${Math.floor(local / 2)} } }`,
@@ -85,8 +85,8 @@ function definition(index: number): string {
       : '\tproduction_speed_buildings_factor = 0.01';
   return [
     `${id} = {`,
-    `\tstart_year = ${year}`,
-    `\tresearch_cost = ${index === 22 ? 50 : (1 + (local % 4) * 0.25).toFixed(2)}`,
+    `\tstart_year = ${index === 0 ? '@synthetic_start_year' : year}`,
+    `\tresearch_cost = ${index === 0 ? '@synthetic_research_cost' : index === 22 ? 50 : (1 + (local % 4) * 0.25).toFixed(2)}`,
     ...(index === 0
       ? ['\tforce_use_small_tech_layout = yes']
       : index === 1
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
     );
     await put(
       `common/technologies/synthetic_technologies_${String(file + 1).padStart(2, '0')}.txt`,
-      `technologies = {\n${definitions
+      `${file === 0 ? '@synthetic_zero = 0\n@synthetic_start_year = 1936\n@synthetic_research_cost = 1\n' : ''}technologies = {\n${definitions
         .map((value) =>
           value
             .split('\n')
@@ -161,6 +161,7 @@ async function main(): Promise<void> {
       `\tname = ${folderId(folder)}`,
       ...(folder === 1
         ? [
+            '\ticonType = { name = synthetic_techtree_bg spriteType = GFX_synthetic_techtree_bg position = { x = 0 y = 0 } size = { width = 144 height = 96 } }',
             '\tinstantTextBoxType = {',
             '\t\tname = synthetic_year_1936',
             '\t\tposition = { x = 0 y = -60 }',
@@ -197,6 +198,22 @@ async function main(): Promise<void> {
         '}',
       );
     }
+    if (folder === 0) {
+      gridboxes.push(
+        'containerWindowType = {',
+        '\tname = techtree_synthetic_folder_00_small_item',
+        '\tposition = { x = 0 y = 0 }',
+        '\tsize = { width = 64 height = 64 }',
+        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } }',
+        '}',
+        'containerWindowType = {',
+        '\tname = techtree_synthetic_folder_00_item',
+        '\tposition = { x = 0 y = 0 }',
+        '\tsize = { width = 176 height = 82 }',
+        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } }',
+        '}',
+      );
+    }
   }
   await put('interface/synthetic_technology_view.gui', `${gridboxes.join('\n')}\n`);
 
@@ -207,7 +224,7 @@ async function main(): Promise<void> {
   });
   await put(
     'interface/synthetic_technology_icons.gfx',
-    `spriteTypes = {\n${sprites.join('\n')}\n}\n`,
+    `spriteTypes = {\n${sprites.join('\n')}\n\tspriteType = { name = GFX_synthetic_techtree_bg texturefile = ${texturePath} }\n}\n`,
   );
   await put(
     texturePath,

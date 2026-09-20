@@ -144,6 +144,13 @@ export const technologyRenderRequestSchema = z
     categoryId: technologyIdSchema.optional(),
     targetId: technologyIdSchema.optional(),
     maxNodes: z.number().int().min(1).max(2_000).optional(),
+    scenario: z
+      .object({
+        year: z.number().int().min(1).max(9999),
+        researchedTechnologyIds: z.array(technologyIdSchema).max(25_000),
+      })
+      .strict()
+      .optional(),
     includeHtml: z.boolean().optional(),
     refresh: z.boolean().optional(),
   })

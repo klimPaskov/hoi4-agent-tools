@@ -50,6 +50,7 @@ import {
   type EventSelector,
 } from './queries.js';
 import { compareEventGraphs, eventGraphHash, type EventGraphComparison } from './compare.js';
+import { selectEventComparison, type EventComparisonSelection } from './comparison-selection.js';
 import { eventFlowEdges } from './algorithms.js';
 import { validateEventGraphArtifact } from './artifact-validation.js';
 import {
@@ -137,6 +138,8 @@ export interface EventCompareInput {
   before?: EventGraphReference;
   after?: EventGraphReference;
   proposedSources?: EventProposedSource[];
+  selector?: EventSelector;
+  maxChainNodes?: number;
   render?: boolean;
   maxRenderNodes?: number;
   refresh?: boolean;
@@ -149,6 +152,7 @@ export interface EventCompareResult {
   after: EventGraphSnapshot;
   refresh: boolean;
   comparison: EventGraphComparison;
+  selection?: EventComparisonSelection;
   comparisonJson: string;
   render?: EventRenderBundle;
   artifacts: StoredArtifact[];
@@ -1887,16 +1891,43 @@ export class EventChainViewer {
       after = current;
     }
     const comparison = compareEventGraphs(before, after, input.signal);
+    const selection =
+      input.selector === undefined
+        ? undefined
+        : selectEventComparison(
+            before,
+            after,
+            comparison,
+            input.selector,
+            input.maxChainNodes ?? 1_000,
+            input.signal,
+          );
+    if (selection?.beforeNodeIds.length === 0 && selection.afterNodeIds.length === 0)
+      throw new ServiceError(
+        'EVENT_COMPARISON_SELECTOR_NOT_FOUND',
+        'The selector matched no event-chain nodes in either revision',
+      );
     graphHashCache.set(before, comparison.beforeGraphHash);
     graphHashCache.set(after, comparison.afterGraphHash);
     let render: EventRenderBundle | undefined;
     if (input.render !== false) {
       const projection = comparisonRenderProjection(before, after, comparison, input.signal);
+      const selectedChainIds =
+        selection === undefined
+          ? undefined
+          : new Set([...selection.beforeNodeIds, ...selection.afterNodeIds]);
+      const changedNodeIds =
+        selectedChainIds === undefined
+          ? projection.selectedNodeIds
+          : projection.selectedNodeIds.filter((id) => selectedChainIds.has(id));
       const selector: EventSelector = {
         kind: 'manifest',
         manifest: {
           id: 'comparison',
-          nodeIds: projection.selectedNodeIds,
+          nodeIds:
+            changedNodeIds.length > 0
+              ? changedNodeIds
+              : (selection?.afterNodeIds.slice(0, 1) ?? selection?.beforeNodeIds.slice(0, 1) ?? []),
         } satisfies EventFeatureManifest,
       };
       render = await renderEventGraph(projection.graph, {
@@ -1911,7 +1942,7 @@ export class EventChainViewer {
     }
     const workspace = this.engine.resolver.get(input.workspaceId, input.principal);
     const prefix = safeSlug(
-      `event-compare-${before.revision.slice(0, 8)}-${after.revision.slice(0, 8)}`,
+      `event-compare-${before.revision.slice(0, 8)}-${after.revision.slice(0, 8)}${selection === undefined ? '' : `-${hashCanonical({ selector: selection.selector, maxChainNodes: selection.maxChainNodes }).slice(0, 8)}`}`,
     );
     const resourceNames = {
       json: `${prefix}.json`,
@@ -1938,6 +1969,9 @@ export class EventChainViewer {
       filters: {
         ...(input.before === undefined ? {} : { before: input.before }),
         ...(input.after === undefined ? {} : { after: input.after }),
+        ...(input.selector === undefined
+          ? {}
+          : { selector: input.selector, maxChainNodes: input.maxChainNodes ?? 1_000 }),
         proposedSources:
           input.proposedSources?.map(({ relativePath, source, expectedSourceHash }) => ({
             relativePath,
@@ -1956,6 +1990,7 @@ export class EventChainViewer {
       evidence: comparisonEntityEvidence(before, after, comparison, input.signal),
       resources: resourceNames,
       comparison,
+      ...(selection === undefined ? {} : { selection }),
     })}\n`;
     const provenance = eventProvenance(
       after,
@@ -2016,6 +2051,7 @@ export class EventChainViewer {
       after,
       refresh,
       comparison,
+      ...(selection === undefined ? {} : { selection }),
       comparisonJson,
       ...(render === undefined ? {} : { render }),
       artifacts,

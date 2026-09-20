@@ -423,7 +423,9 @@ export interface GuiSceneElement {
   depth: number;
   zIndex: number;
   visible: boolean;
+  visibilityReason?: 'visible' | 'parent_hidden' | 'visibility_false' | 'outside_clip';
   clickable: boolean;
+  disabledReason?: 'hidden' | 'click_through' | 'scenario_state' | 'scripted_enabled_false';
   clickThrough: boolean;
   rect: GuiRect;
   unclippedRect: GuiRect;
@@ -505,6 +507,7 @@ export interface GuiArtifactSet {
   stateScenes: GuiScene[];
   resolutionScenes: GuiScene[];
   comparison: GuiComparisonResult;
+  sourceComparison?: GuiComparisonResult;
   validation: GuiValidationResult;
 }
 

@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
@@ -2945,6 +2946,79 @@ describe('Agent Nudger map model and operations', () => {
     ).toBe('West Region');
   });
 
+  it('renumbers typed external script references while preserving unrelated numbers', async () => {
+    const relativePath = 'events/map_reference_event.txt';
+    const { nudger } = await setup({
+      [relativePath]: [
+        'country_event = {',
+        '\tid = 1',
+        '\timmediate = {',
+        '\t\tprovince = 1',
+        '\t\ttarget_province = 2',
+        '\t\tstate = 1',
+        '\t\towns_state = 2',
+        '\t\tstrategic_region = 1',
+        '\t\tvalue = 1',
+        '\t\t# province = 2 remains a comment',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const snapshot = await nudger.scan('map-test', undefined, undefined, true);
+    const changedText = (entity: 'province' | 'state', fromId: number, toId: number) => {
+      const plan = planMapOperations(snapshot.index, [
+        mapOperationSchema.parse({
+          id: `swap-${entity}`,
+          kind: 'renumber_map_entity',
+          entity,
+          fromId,
+          toId,
+        }) as MapOperation,
+      ]);
+      expect(plan.blockers).toEqual([]);
+      const content = plan.changes.find((change) => change.relativePath === relativePath)?.content;
+      if (content === undefined || content === null)
+        throw new Error('External script change missing');
+      return Buffer.from(content).toString('utf8');
+    };
+    const provinceText = changedText('province', 1, 2);
+    expect(provinceText).toContain('\t\tprovince = 2');
+    expect(provinceText).toContain('\t\ttarget_province = 1');
+    expect(provinceText).toContain('\t\tstate = 1');
+    expect(provinceText).toContain('\t\tvalue = 1');
+    expect(provinceText).toContain('# province = 2 remains a comment');
+    const stateText = changedText('state', 1, 2);
+    expect(stateText).toContain('\t\tstate = 2');
+    expect(stateText).toContain('\t\towns_state = 1');
+    expect(stateText).toContain('\t\tprovince = 1');
+    expect(stateText).toContain('\t\tvalue = 1');
+    const readOnly = MapWorkspaceIndex.build(
+      [
+        ...snapshot.index.sourceFiles,
+        scannedText(
+          'events/vanilla_map_reference.txt',
+          'country_event = { immediate = { state = 1 } }',
+          -1,
+          'game',
+        ),
+      ],
+      snapshot.index.sourceRoots,
+    );
+    const blocked = planMapOperations(readOnly, [
+      mapOperationSchema.parse({
+        id: 'blocked-state-swap',
+        kind: 'renumber_map_entity',
+        entity: 'state',
+        fromId: 1,
+        toId: 2,
+      }) as MapOperation,
+    ]);
+    expect(blocked.blockers).toEqual([
+      expect.objectContaining({ code: 'MAP_EXTERNAL_REFERENCE_READ_ONLY' }),
+    ]);
+  });
+
   it('produces deterministic layer renders and pixel/semantic diffs', async () => {
     const { snapshot } = await setup();
     const first = await renderMap(snapshot.index, {
@@ -2987,6 +3061,46 @@ describe('Agent Nudger map model and operations', () => {
     expect(first.html).not.toContain('Â');
     const withoutValueOverlays = await renderMap(snapshot.index, { layer: 'continent' });
     expect(withoutValueOverlays.hashes.png).not.toBe(first.hashes.png);
+    const tile = await renderMap(snapshot.index, {
+      layer: 'continent',
+      overlays: ['railways', 'supply-nodes', 'resources', 'state-buildings', 'province-buildings'],
+      tile: { x: 4, y: 6, width: 16, height: 12 },
+    });
+    expect(tile.width).toBe(16);
+    expect(tile.height).toBe(12);
+    expect(JSON.parse(tile.json)).toMatchObject({
+      schemaVersion: 'map-tile.v1',
+      tile: { x: 4, y: 6, width: 16, height: 12 },
+    });
+    expect(await sharp(tile.png).raw().toBuffer()).toEqual(
+      await sharp(first.png).extract({ left: 4, top: 6, width: 16, height: 12 }).raw().toBuffer(),
+    );
+    const provinceArea = await renderMap(snapshot.index, {
+      layer: 'continent',
+      overlays: ['railways', 'supply-nodes', 'resources', 'state-buildings', 'province-buildings'],
+      area: { provinceIds: [1], padding: 2 },
+    });
+    const provinceBounds = snapshot.index.raster!.geometry.get(1)!;
+    expect(provinceArea.tile).toMatchObject({
+      x: Math.max(0, provinceBounds.minX - 2),
+      y: Math.max(0, provinceBounds.minY - 2),
+    });
+    expect(await sharp(provinceArea.png).raw().toBuffer()).toEqual(
+      await sharp(first.png)
+        .extract({
+          left: provinceArea.tile!.x,
+          top: provinceArea.tile!.y,
+          width: provinceArea.tile!.width,
+          height: provinceArea.tile!.height,
+        })
+        .raw()
+        .toBuffer(),
+    );
+    await expect(
+      renderMap(snapshot.index, {
+        tile: { x: snapshot.index.raster!.width, y: 0, width: 1, height: 1 },
+      }),
+    ).rejects.toMatchObject({ code: 'MAP_TILE_OUT_OF_BOUNDS' });
     const cancelled = new AbortController();
     cancelled.abort();
     await expect(renderMap(snapshot.index, { signal: cancelled.signal })).rejects.toMatchObject({

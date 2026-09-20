@@ -32,6 +32,9 @@ const analysisDataSchema = z
     cacheKey: sha256Schema,
     scenarios: nonNegativeIntegerSchema,
     candidates: nonNegativeIntegerSchema,
+    eligibleCandidates: nonNegativeIntegerSchema,
+    excludedCandidates: nonNegativeIntegerSchema,
+    unresolvedCandidates: nonNegativeIntegerSchema,
     scopePools: nonNegativeIntegerSchema.optional(),
     scopePoolCandidates: nonNegativeIntegerSchema.optional(),
     unresolved: nonNegativeIntegerSchema,
@@ -80,6 +83,8 @@ const inspectDataSchema = z
     candidateExamples: z.array(z.string().max(512)).max(10),
     poolComplete: z.boolean().optional(),
     requiredInputs: nonNegativeIntegerSchema,
+    requiredInputPaths: z.array(z.string().max(1024)).max(32),
+    requiredInputPathsTruncated: z.boolean(),
     unresolved: nonNegativeIntegerSchema,
   })
   .strict();

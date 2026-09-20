@@ -7,6 +7,7 @@ import type { TechnologyGraphComparison } from './compare.js';
 import { traceTechnology } from './queries.js';
 import type {
   TechnologyGraphSnapshot,
+  TechnologyBackground,
   TechnologyPlacement,
   TechnologyYearMarker,
 } from './model.js';
@@ -35,9 +36,14 @@ export interface TechnologyRenderOptions {
   targetId?: string;
   maxNodes?: number;
   includeHtml?: boolean;
+  /** Read-only structural presentation. Dynamic country conditions remain unresolved. */
+  scenario?: { year: number; researchedTechnologyIds: readonly string[] };
   comparison?: TechnologyGraphComparison;
   /** Decoded sprite frames keyed by the Clausewitz sprite name. */
   iconDataUris?: Readonly<Record<string, string>>;
+  spriteDimensions?: Readonly<
+    Record<string, { width: number; height: number; borderWidth?: number; borderHeight?: number }>
+  >;
   budget?: RenderBudget;
   signal?: AbortSignal;
 }
@@ -64,6 +70,11 @@ interface RenderNode {
   id: string;
   label: string;
   subtitle: string;
+  scenarioStatus?:
+    'researched' | 'exclusive_conflict' | 'missing_prerequisite' | 'structural_candidate';
+  missingPrerequisiteIds?: string[];
+  exclusiveConflictIds?: string[];
+  aheadOfTimeYears?: number;
   kind:
     | 'technology'
     | 'legacy_doctrine'
@@ -81,6 +92,19 @@ interface RenderNode {
   placement?: TechnologyPlacement;
   layoutSize?: 'small' | 'large' | 'unknown';
   iconSprite?: string;
+  itemBackgroundSprite?: string;
+  iconPosition?: { x: number; y: number; centered: boolean };
+  namePosition?: { x: number; y: number; maxWidth?: number };
+  subTechnologies?: Array<{
+    id: string;
+    iconSprite?: string;
+    placementStatus: 'source_slot' | 'missing_source_slot';
+    slot?: {
+      index: number;
+      position: { x: number; y: number };
+      size: { width: number; height: number };
+    };
+  }>;
 }
 
 interface RenderEdge {
@@ -102,6 +126,11 @@ interface PositionedYearMarker extends TechnologyYearMarker {
   y: number;
 }
 
+interface PositionedBackground extends TechnologyBackground {
+  x: number;
+  y: number;
+}
+
 const MAX_RENDER_NODES = 2_000;
 const LARGE_NODE_WIDTH = 183;
 const LARGE_NODE_HEIGHT = 84;
@@ -117,6 +146,15 @@ const GENERATED_LAYER_ROWS = 32;
 const GENERATED_BAND_GAP = 32;
 const PADDING = 42;
 const HEADER_HEIGHT = 86;
+
+function itemBackgroundSprites(sprite: string): string[] {
+  if (!sprite.includes('_unavailable_item_bg')) return [sprite];
+  return [
+    sprite,
+    sprite.replace('_unavailable_item_bg', '_available_item_bg'),
+    sprite.replace('_unavailable_item_bg', '_researched_item_bg'),
+  ];
+}
 
 function escapeXml(value: string): string {
   return value
@@ -134,6 +172,7 @@ function technologyNode(
 ): RenderNode | undefined {
   const technology = graph.technologies.find(({ id }) => id === technologyId);
   if (technology === undefined) return undefined;
+  const itemLayout = graph.itemLayouts.find(({ id }) => id === placement?.itemLayoutId);
   return {
     id: technology.id,
     label: technology.localisation.name ?? technology.id,
@@ -151,6 +190,27 @@ function technologyNode(
     sourceLine: technology.source.location.start.line,
     layoutSize: placement?.layoutSize ?? technology.layoutSize,
     iconSprite: technology.icon.sprite,
+    ...(itemLayout?.backgroundSprite === undefined
+      ? {}
+      : { itemBackgroundSprite: itemLayout.backgroundSprite }),
+    ...(itemLayout?.iconPosition === undefined ? {} : { iconPosition: itemLayout.iconPosition }),
+    ...(itemLayout?.namePosition === undefined ? {} : { namePosition: itemLayout.namePosition }),
+    ...(placement === undefined || technology.subTechnologies.length === 0
+      ? {}
+      : {
+          subTechnologies: technology.subTechnologies.map((id, index) => {
+            const definition = graph.technologies.find((candidate) => candidate.id === id);
+            const slot = itemLayout?.subTechnologySlots?.find(
+              (candidate) => candidate.index === index,
+            );
+            return {
+              id,
+              ...(definition === undefined ? {} : { iconSprite: definition.icon.sprite }),
+              placementStatus: slot === undefined ? 'missing_source_slot' : 'source_slot',
+              ...(slot === undefined ? {} : { slot }),
+            };
+          }),
+        }),
     ...(placement === undefined ? {} : { placement }),
   };
 }
@@ -161,6 +221,61 @@ function sortedUniqueNodes(values: readonly RenderNode[]): RenderNode[] {
   return [...result.values()].sort((left, right) => compareCodeUnits(left.id, right.id));
 }
 
+function presentScenario(
+  graph: TechnologyGraphSnapshot,
+  nodes: readonly RenderNode[],
+  scenario: NonNullable<TechnologyRenderOptions['scenario']>,
+): RenderNode[] {
+  const known = new Map(graph.technologies.map((technology) => [technology.id, technology]));
+  const researched = new Set(scenario.researchedTechnologyIds);
+  for (const id of researched)
+    if (!known.has(id))
+      throw new ServiceError(
+        'TECH_RENDER_SCENARIO_TECH_UNKNOWN',
+        `Scenario references unknown researched technology ${id}`,
+        { technologyId: id },
+      );
+  return nodes.map((node) => {
+    const technology = known.get(node.id);
+    if (technology === undefined) return node;
+    const missingPrerequisiteIds = graph.edges
+      .filter(
+        ({ kind, to, from }) => kind === 'prerequisite' && to === node.id && !researched.has(from),
+      )
+      .map(({ from }) => from)
+      .sort(compareCodeUnits);
+    const exclusiveConflictIds = graph.edges
+      .filter(
+        ({ kind, to, from }) =>
+          kind === 'exclusive' &&
+          ((to === node.id && researched.has(from)) || (from === node.id && researched.has(to))),
+      )
+      .map(({ to, from }) => (to === node.id ? from : to))
+      .sort(compareCodeUnits);
+    const parsedYear = Number(technology.startYear);
+    const aheadOfTimeYears =
+      technology.startYear !== undefined &&
+      /^\d+$/u.test(technology.startYear) &&
+      Number.isSafeInteger(parsedYear)
+        ? Math.max(0, parsedYear - scenario.year)
+        : undefined;
+    const scenarioStatus = researched.has(node.id)
+      ? 'researched'
+      : exclusiveConflictIds.length > 0
+        ? 'exclusive_conflict'
+        : missingPrerequisiteIds.length > 0
+          ? 'missing_prerequisite'
+          : 'structural_candidate';
+    return {
+      ...node,
+      scenarioStatus,
+      missingPrerequisiteIds,
+      exclusiveConflictIds,
+      ...(aheadOfTimeYears === undefined ? {} : { aheadOfTimeYears }),
+    };
+  });
+}
+
 function viewSelection(
   graph: TechnologyGraphSnapshot,
   options: TechnologyRenderOptions,
@@ -168,6 +283,7 @@ function viewSelection(
   nodes: RenderNode[];
   edges: RenderEdge[];
   yearMarkers: TechnologyYearMarker[];
+  backgrounds: TechnologyBackground[];
   sourceAccurate: boolean;
   title: string;
   payload: Record<string, unknown>;
@@ -175,6 +291,7 @@ function viewSelection(
   const nodes: RenderNode[] = [];
   const edges: RenderEdge[] = [];
   let yearMarkers: TechnologyYearMarker[] = [];
+  let backgrounds: TechnologyBackground[] = [];
   let title: string;
   let sourceAccurate = false;
   if (options.view === 'summary') {
@@ -233,8 +350,9 @@ function viewSelection(
         .filter(({ from, to }) => selected.has(from) && selected.has(to))
         .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
     );
-    sourceAccurate = true;
+    sourceAccurate = nodes.every(({ placement }) => placement?.geometryStatus === 'source_pixel');
     yearMarkers = graph.yearMarkers.filter(({ folderId }) => folderId === options.folderId);
+    backgrounds = (graph.backgrounds ?? []).filter(({ folderId }) => folderId === options.folderId);
   } else if (options.view === 'dependencies' || options.view === 'technology') {
     const ids =
       options.technologyId === undefined
@@ -542,6 +660,7 @@ function viewSelection(
     nodes: selectedNodes,
     edges: selectedEdges,
     yearMarkers,
+    backgrounds,
     sourceAccurate,
     title,
     payload: {
@@ -565,6 +684,7 @@ function issueKey(issue: { code: string; details: Record<string, unknown> }): st
 function layoutFolder(
   nodes: readonly RenderNode[],
   yearMarkers: readonly TechnologyYearMarker[],
+  backgrounds: readonly TechnologyBackground[],
 ): {
   nodes: PositionedNode[];
   yearMarkers: PositionedYearMarker[];
@@ -580,6 +700,7 @@ function layoutFolder(
     ({ placement }) => placement?.pixelX !== undefined && placement.pixelY !== undefined,
   );
   if (sourcePixel.length === nodes.length && sourcePixel.length > 0) {
+    const placedBackgrounds = backgrounds.filter(({ name }) => name !== 'folder_panel');
     const sourceNodeX = (node: RenderNode): number =>
       node.placement!.pixelX! + (node.placement?.layoutOffsetX ?? 0);
     const sourceNodeY = (node: RenderNode): number =>
@@ -587,24 +708,26 @@ function layoutFolder(
     const minimumX = Math.min(
       ...sourcePixel.map(sourceNodeX),
       ...yearMarkers.map(({ position }) => position.x),
+      ...placedBackgrounds.map(({ position }) => position.x),
     );
     const minimumY = Math.min(
       ...sourcePixel.map(sourceNodeY),
       ...yearMarkers.map(({ position }) => position.y),
+      ...placedBackgrounds.map(({ position }) => position.y),
     );
     const positionedNodes = sourcePixel.map((node) => {
       const size = dimensions(node);
       return {
         ...node,
         x: PADDING + sourceNodeX(node) - minimumX,
-        y: HEADER_HEIGHT + PADDING + sourceNodeY(node) - minimumY,
+        y: PADDING + sourceNodeY(node) - minimumY,
         ...size,
       };
     });
     const positionedYearMarkers = yearMarkers.map((marker) => ({
       ...marker,
       x: PADDING + marker.position.x - minimumX,
-      y: HEADER_HEIGHT + PADDING + marker.position.y - minimumY,
+      y: PADDING + marker.position.y - minimumY,
     }));
     const xValues = yearMarkers.map(({ position }) => position.x);
     const yValues = yearMarkers.map(({ position }) => position.y);
@@ -741,18 +864,39 @@ function svgFor(
   edges: readonly RenderEdge[],
   sourceAccurate: boolean,
   iconDataUris: Readonly<Record<string, string>>,
+  spriteDimensions: Readonly<
+    Record<string, { width: number; height: number; borderWidth?: number; borderHeight?: number }>
+  >,
   yearMarkers: readonly PositionedYearMarker[],
+  backgrounds: readonly PositionedBackground[],
   yearAxis?: 'horizontal' | 'vertical',
+  folderView = false,
 ): { svg: string; width: number; height: number } {
   const maximumX = Math.max(
     PADDING + LARGE_NODE_WIDTH,
     ...positioned.map(({ x, width }) => x + width),
+    ...positioned.flatMap(({ x, subTechnologies }) =>
+      (subTechnologies ?? []).flatMap(({ slot }) =>
+        slot === undefined ? [] : [x + slot.position.x + slot.size.width],
+      ),
+    ),
     ...yearMarkers.map(({ x }) => x + 70),
+    ...backgrounds
+      .filter(({ name }) => name !== 'folder_panel')
+      .map(({ x, size, sprite }) => x + (size.width ?? spriteDimensions[sprite]?.width ?? 0)),
   );
   const maximumY = Math.max(
-    HEADER_HEIGHT + LARGE_NODE_HEIGHT,
+    (folderView ? PADDING : HEADER_HEIGHT) + LARGE_NODE_HEIGHT,
     ...positioned.map(({ y, height }) => y + height),
+    ...positioned.flatMap(({ y, subTechnologies }) =>
+      (subTechnologies ?? []).flatMap(({ slot }) =>
+        slot === undefined ? [] : [y + slot.position.y + slot.size.height],
+      ),
+    ),
     ...yearMarkers.map(({ y }) => y + 30),
+    ...backgrounds
+      .filter(({ name }) => name !== 'folder_panel')
+      .map(({ y, size, sprite }) => y + (size.height ?? spriteDimensions[sprite]?.height ?? 0)),
   );
   const width = Math.ceil(maximumX + PADDING);
   const height = Math.ceil(maximumY + PADDING);
@@ -767,35 +911,133 @@ function svgFor(
     );
   const byId = new Map(positioned.map((node) => [node.id, node]));
   const text = new DeterministicSvgTextRenderer();
+  const panel = folderView ? backgrounds.find(({ name }) => name === 'folder_panel') : undefined;
+  const panelDimensions = panel === undefined ? undefined : spriteDimensions[panel.sprite];
+  const panelUri = panel === undefined ? undefined : iconDataUris[panel.sprite];
+  const borderWidth = panelDimensions?.borderWidth ?? Math.floor((panelDimensions?.width ?? 0) / 3);
+  const borderHeight =
+    panelDimensions?.borderHeight ?? Math.floor((panelDimensions?.height ?? 0) / 3);
+  const tileWidth = (panelDimensions?.width ?? 0) - 2 * borderWidth;
+  const tileHeight = (panelDimensions?.height ?? 0) - 2 * borderHeight;
+  const panelPattern =
+    panelUri !== undefined && panelDimensions !== undefined && tileWidth > 0 && tileHeight > 0
+      ? `<pattern id="tech-folder-panel" patternUnits="userSpaceOnUse" width="${tileWidth}" height="${tileHeight}"><image href="${escapeXml(panelUri)}" x="${-borderWidth}" y="${-borderHeight}" width="${panelDimensions.width}" height="${panelDimensions.height}"/></pattern>`
+      : '';
+  const backgroundSvg = backgrounds.flatMap((background) => {
+    if (background.name === 'folder_panel') return [];
+    const uri = iconDataUris[background.sprite];
+    const width = background.size.width ?? spriteDimensions[background.sprite]?.width;
+    const height = background.size.height ?? spriteDimensions[background.sprite]?.height;
+    if (uri === undefined || width === undefined || height === undefined) return [];
+    return [
+      `<image data-tech-background="${escapeXml(background.name)}" data-sprite="${escapeXml(background.sprite)}" data-source-path="${escapeXml(background.sourcePath)}" data-source-line="${background.location.start.line}" href="${escapeXml(uri)}" x="${background.x}" y="${background.y}" width="${width}" height="${height}" preserveAspectRatio="xMinYMin meet"/>`,
+    ];
+  });
   const yearGuideSvg = yearMarkers.map((marker) => {
-    const guide =
-      yearAxis === 'vertical'
+    const guide = folderView
+      ? ''
+      : yearAxis === 'vertical'
         ? `<line x1="${PADDING}" y1="${marker.y + 15}" x2="${width - PADDING}" y2="${marker.y + 15}" stroke="#34495c" stroke-width="1" stroke-dasharray="5 7"/>`
         : `<line x1="${marker.x + 24}" y1="${HEADER_HEIGHT}" x2="${marker.x + 24}" y2="${height - PADDING}" stroke="#34495c" stroke-width="1" stroke-dasharray="5 7"/>`;
+    const fontSize = Math.max(10, Math.min(32, (marker.style?.maxHeight ?? 24) * 0.75));
+    const measuredWidth = text.measure(String(marker.year), fontSize);
+    const alignment = marker.style?.format?.toLowerCase();
+    const labelX =
+      alignment === 'center'
+        ? marker.x + ((marker.style?.maxWidth ?? measuredWidth) - measuredWidth) / 2
+        : alignment === 'right'
+          ? marker.x + (marker.style?.maxWidth ?? measuredWidth) - measuredWidth
+          : marker.x;
     const label = text.render(String(marker.year), {
-      x: marker.x,
-      y: marker.y + 22,
-      fontSize: 18,
-      fill: '#c7d4df',
+      x: labelX,
+      y: marker.y + fontSize,
+      fontSize,
+      fill: marker.style?.colour?.match(/^#[0-9a-fA-F]{6}$/u) ? marker.style.colour : '#dadada',
       weight: 700,
     });
-    return `<g data-tech-year="${marker.year}" data-year-axis="${yearAxis ?? 'horizontal'}" data-source-path="${escapeXml(marker.sourcePath)}" data-source-line="${marker.location.start.line}">${guide}${label}</g>`;
+    return `<g data-tech-year="${marker.year}" data-year-axis="${yearAxis ?? 'horizontal'}" data-source-path="${escapeXml(marker.sourcePath)}" data-source-line="${marker.location.start.line}" data-font="${escapeXml(marker.style?.fontName ?? '')}" data-format="${escapeXml(marker.style?.format ?? '')}">${guide}${label}</g>`;
   });
   const edgeSvg = edges.flatMap((edge) => {
     const from = byId.get(edge.from);
     const to = byId.get(edge.to);
     if (from === undefined || to === undefined) return [];
-    const x1 = from.x + from.width;
+    const x1 = folderView ? from.x + from.width / 2 : from.x + from.width;
     const y1 = from.y + from.height / 2;
-    const x2 = to.x;
+    const x2 = folderView ? to.x + to.width / 2 : to.x;
     const y2 = to.y + to.height / 2;
     const middle = (x1 + x2) / 2;
-    const colour = edge.kind.includes('exclusive') ? '#e27878' : '#8298ad';
+    const colour = edge.kind.includes('exclusive') ? '#a47942' : folderView ? '#70716e' : '#8298ad';
     const dash = edge.kind.includes('exclusive') ? ' stroke-dasharray="7 5"' : '';
+    if (folderView) {
+      const horizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+      const route = horizontal
+        ? `M ${x1} ${y1} H ${middle} V ${y2} H ${x2}`
+        : `M ${x1} ${y1} V ${(y1 + y2) / 2} H ${x2} V ${y2}`;
+      return `<path d="${route}" fill="none" stroke="#242523" stroke-width="6"/><path d="${route}" fill="none" stroke="${colour}" stroke-width="3"${dash}><title>${escapeXml(edge.kind)}</title></path>`;
+    }
     return `<path d="M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}" fill="none" stroke="${colour}" stroke-width="2" marker-end="url(#tech-arrow)"${dash}><title>${escapeXml(edge.kind)}</title></path>`;
   });
   const nodeSvg = positioned.map((node) => {
-    const colour = colours(node.kind);
+    if (folderView && node.placement !== undefined) {
+      const preferredSprite =
+        node.itemBackgroundSprite === undefined
+          ? undefined
+          : node.scenarioStatus === 'researched'
+            ? node.itemBackgroundSprite.replace('_unavailable_item_bg', '_researched_item_bg')
+            : node.scenarioStatus === 'structural_candidate'
+              ? node.itemBackgroundSprite.replace('_unavailable_item_bg', '_available_item_bg')
+              : node.itemBackgroundSprite;
+      const itemSkin =
+        preferredSprite === undefined
+          ? undefined
+          : (iconDataUris[preferredSprite] ?? iconDataUris[node.itemBackgroundSprite!]);
+      const icon = node.iconSprite === undefined ? undefined : iconDataUris[node.iconSprite];
+      const iconSize = node.layoutSize === 'small' ? 62 : 70;
+      const center = node.iconPosition ?? { x: node.width / 2, y: node.height / 2, centered: true };
+      const iconX = node.x + center.x - (center.centered ? iconSize / 2 : 0);
+      const iconY = node.y + center.y - (center.centered ? iconSize / 2 : 0);
+      const name = node.namePosition ?? { x: 3, y: -3, maxWidth: node.width - 6 };
+      const labelWidth = Math.min(name.maxWidth ?? node.width - 6, node.width - name.x - 3);
+      let fittedLabel = node.label;
+      while (fittedLabel.length > 1 && text.measure(fittedLabel, 12) > labelWidth)
+        fittedLabel = `${fittedLabel.slice(0, -2)}…`;
+      const label =
+        node.layoutSize === 'small'
+          ? ''
+          : text.render(fittedLabel, {
+              x: node.x + name.x,
+              y: node.y + name.y + 15,
+              fontSize: 12,
+              fill: '#e8e7e1',
+              weight: 600,
+            });
+      const skin =
+        itemSkin === undefined
+          ? `<rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="3" fill="#3a3936" stroke="#8b8b86" stroke-width="1"/>`
+          : `<image data-item-background-sprite="${escapeXml(preferredSprite!)}" href="${escapeXml(itemSkin)}" x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" preserveAspectRatio="none"/>`;
+      const iconSvg =
+        icon === undefined
+          ? ''
+          : `<image href="${escapeXml(icon)}" x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet"/>`;
+      const subTechnologySvg = (node.subTechnologies ?? []).flatMap(({ id, iconSprite, slot }) => {
+        if (slot === undefined) return [];
+        const x = node.x + slot.position.x;
+        const y = node.y + slot.position.y;
+        const subIcon = iconSprite === undefined ? undefined : iconDataUris[iconSprite];
+        return [
+          `<g data-subtechnology-id="${escapeXml(id)}" data-slot-index="${slot.index}" data-icon-sprite="${escapeXml(iconSprite ?? '')}"><rect x="${x}" y="${y}" width="${slot.size.width}" height="${slot.size.height}" rx="3" fill="#3a3936" stroke="#8b8b86" stroke-width="1"/>${subIcon === undefined ? '' : `<image href="${escapeXml(subIcon)}" x="${x + 2}" y="${y + 2}" width="${Math.max(1, slot.size.width - 4)}" height="${Math.max(1, slot.size.height - 4)}" preserveAspectRatio="xMidYMid meet"/>`}<title>${escapeXml(id)}</title></g>`,
+        ];
+      });
+      return `<g data-node-id="${escapeXml(node.id)}"${node.scenarioStatus === undefined ? '' : ` data-scenario-status="${node.scenarioStatus}"`} data-layout-size="${node.layoutSize ?? 'unknown'}" data-icon-sprite="${escapeXml(node.iconSprite ?? '')}"${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}>${skin}${iconSvg}${label}${subTechnologySvg.join('')}<title>${escapeXml(node.id)}</title></g>`;
+    }
+    const colour =
+      node.scenarioStatus === 'researched'
+        ? { fill: '#214c38', stroke: '#79d29b' }
+        : node.scenarioStatus === 'exclusive_conflict'
+          ? { fill: '#503039', stroke: '#e27878' }
+          : node.scenarioStatus === 'missing_prerequisite'
+            ? { fill: '#423c29', stroke: '#e0b66b' }
+            : colours(node.kind);
     const small = node.layoutSize === 'small';
     const iconDataUri = node.iconSprite === undefined ? undefined : iconDataUris[node.iconSprite];
     const compactIcon = iconDataUri !== undefined && small && node.width <= SMALL_NODE_WIDTH;
@@ -846,7 +1088,16 @@ function svgFor(
       node.layoutSize === undefined ? '' : ` data-layout-size="${node.layoutSize}"`;
     const iconAttribute =
       node.iconSprite === undefined ? '' : ` data-icon-sprite="${escapeXml(node.iconSprite)}"`;
-    return `<g data-node-id="${escapeXml(node.id)}"${layoutAttribute}${iconAttribute}${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.layoutSize === undefined ? '' : ` · ${node.layoutSize} layout`}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${iconSvg}${labelSvg}${subtitleSvg}</g>`;
+    const subTechnologySvg = (node.subTechnologies ?? []).flatMap(({ id, iconSprite, slot }) => {
+      if (slot === undefined) return [];
+      const x = node.x + slot.position.x;
+      const y = node.y + slot.position.y;
+      const image = iconSprite === undefined ? undefined : iconDataUris[iconSprite];
+      return [
+        `<g data-subtechnology-id="${escapeXml(id)}" data-slot-index="${slot.index}" data-icon-sprite="${escapeXml(iconSprite ?? '')}"><rect x="${x}" y="${y}" width="${slot.size.width}" height="${slot.size.height}" rx="3" fill="#23364b" stroke="#91a9bd" stroke-width="1"/>${image === undefined ? '' : `<image href="${escapeXml(image)}" x="${x + 2}" y="${y + 2}" width="${Math.max(1, slot.size.width - 4)}" height="${Math.max(1, slot.size.height - 4)}" preserveAspectRatio="xMidYMid meet"/>`}<title>${escapeXml(id)}</title></g>`,
+      ];
+    });
+    return `<g data-node-id="${escapeXml(node.id)}"${node.scenarioStatus === undefined ? '' : ` data-scenario-status="${node.scenarioStatus}"`}${layoutAttribute}${iconAttribute}${node.sourcePath === undefined ? '' : ` data-source-path="${escapeXml(node.sourcePath)}" data-source-line="${node.sourceLine ?? 1}"`}><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="${colour.fill}" stroke="${colour.stroke}" stroke-width="2"/><title>${escapeXml(`${node.id}${node.layoutSize === undefined ? '' : ` · ${node.layoutSize} layout`}${node.sourcePath === undefined ? '' : ` · ${node.sourcePath}:${node.sourceLine ?? 1}`}`)}</title>${iconSvg}${labelSvg}${subtitleSvg}${subTechnologySvg.join('')}</g>`;
   });
   const title = text.render(titleText, {
     x: PADDING,
@@ -862,7 +1113,7 @@ function svgFor(
   return {
     width,
     height,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(titleText)}"><defs><marker id="tech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8298ad"/></marker>${text.definitions()}</defs><rect width="100%" height="100%" fill="#0d1721"/>${title}${mode}<g>${yearGuideSvg.join('')}</g><g>${edgeSvg.join('')}</g><g>${nodeSvg.join('')}</g></svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(titleText)}"><defs><marker id="tech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8298ad"/></marker>${panelPattern}${text.definitions()}</defs><rect width="100%" height="100%" fill="${panelPattern === '' ? (folderView ? '#171715' : '#0d1721') : 'url(#tech-folder-panel)'}"/><g>${backgroundSvg.join('')}</g>${folderView ? '' : title + mode}<g>${yearGuideSvg.join('')}</g><g>${edgeSvg.join('')}</g><g>${nodeSvg.join('')}</g></svg>`,
   };
 }
 
@@ -877,20 +1128,55 @@ export async function renderTechnologyGraph(
   options.signal?.throwIfAborted();
   const maximum = Math.max(1, Math.min(options.maxNodes ?? 600, MAX_RENDER_NODES));
   const selection = viewSelection(graph, options);
-  const retained = selection.nodes.slice(0, maximum);
+  const retained =
+    options.scenario === undefined
+      ? selection.nodes.slice(0, maximum)
+      : presentScenario(graph, selection.nodes.slice(0, maximum), options.scenario);
   const retainedIds = new Set(retained.map(({ id }) => id));
   const edges = selection.edges.filter(
     ({ from, to }) => retainedIds.has(from) && retainedIds.has(to),
   );
-  const folderLayout = selection.sourceAccurate
-    ? layoutFolder(retained, selection.yearMarkers)
-    : { nodes: layoutGenerated(retained, edges), yearMarkers: [] as PositionedYearMarker[] };
+  const folderLayout =
+    options.view === 'folder'
+      ? layoutFolder(retained, selection.yearMarkers, selection.backgrounds)
+      : { nodes: layoutGenerated(retained, edges), yearMarkers: [] as PositionedYearMarker[] };
   const positioned = folderLayout.nodes;
   const iconDataUris = options.iconDataUris ?? {};
+  const spriteDimensions = options.spriteDimensions ?? {};
+  const firstSourceNode =
+    positioned.length > 0 &&
+    positioned.every(
+      ({ placement }) => placement?.pixelX !== undefined && placement.pixelY !== undefined,
+    )
+      ? positioned[0]
+      : undefined;
+  const positionedBackgrounds: PositionedBackground[] =
+    firstSourceNode === undefined
+      ? []
+      : selection.backgrounds.map((background) => ({
+          ...background,
+          x:
+            background.position.x +
+            firstSourceNode.x -
+            firstSourceNode.placement!.pixelX! -
+            (firstSourceNode.placement!.layoutOffsetX ?? 0),
+          y:
+            background.position.y +
+            firstSourceNode.y -
+            firstSourceNode.placement!.pixelY! -
+            (firstSourceNode.placement!.layoutOffsetY ?? 0),
+        }));
   const requestedIconSprites = [
-    ...new Set(
-      retained.flatMap(({ iconSprite }) => (iconSprite === undefined ? [] : [iconSprite])),
-    ),
+    ...new Set([
+      ...retained.flatMap(({ iconSprite, itemBackgroundSprite, subTechnologies }) => [
+        ...(iconSprite === undefined ? [] : [iconSprite]),
+        ...(itemBackgroundSprite === undefined ? [] : itemBackgroundSprites(itemBackgroundSprite)),
+        ...(subTechnologies ?? []).flatMap((sub) =>
+          sub.iconSprite === undefined ? [] : [sub.iconSprite],
+        ),
+      ]),
+      ...selection.backgrounds.map(({ sprite }) => sprite),
+    ]),
   ].sort(compareCodeUnits);
   const renderedIconSprites = requestedIconSprites.filter(
     (sprite) => iconDataUris[sprite] !== undefined,
@@ -904,8 +1190,11 @@ export async function renderTechnologyGraph(
     edges,
     selection.sourceAccurate,
     iconDataUris,
+    spriteDimensions,
     folderLayout.yearMarkers,
+    positionedBackgrounds,
     folderLayout.yearAxis,
+    options.view === 'folder' && selection.sourceAccurate,
   );
   const budget = options.budget ?? new RenderBudget();
   budget.reserve(rendered.width, rendered.height, `technology ${options.view} render`);
@@ -921,6 +1210,18 @@ export async function renderTechnologyGraph(
   options.signal?.throwIfAborted();
   const json = `${canonicalJson({
     ...selection.payload,
+    ...(options.scenario === undefined
+      ? {}
+      : {
+          scenarioPresentation: {
+            year: options.scenario.year,
+            researchedTechnologyIds: [...new Set(options.scenario.researchedTechnologyIds)].sort(
+              compareCodeUnits,
+            ),
+            interpretation:
+              'Structural prerequisites and exclusivity only; dynamic country conditions remain unresolved',
+          },
+        }),
     nodes: retained,
     edges,
     omittedNodeCount: Math.max(0, selection.nodes.length - retained.length),
@@ -934,6 +1235,22 @@ export async function renderTechnologyGraph(
       axis: folderLayout.yearAxis ?? null,
       markerCount: folderLayout.yearMarkers.length,
     },
+    backgrounds: selection.backgrounds.map((background) => ({
+      id: background.id,
+      folderId: background.folderId,
+      name: background.name,
+      sprite: background.sprite,
+      sourcePath: background.sourcePath,
+      sourceLine: background.location.start.line,
+      placement: positionedBackgrounds.find(({ id }) => id === background.id) ?? null,
+      status:
+        positionedBackgrounds.some(({ id }) => id === background.id) &&
+        iconDataUris[background.sprite] !== undefined &&
+        (background.size.width ?? spriteDimensions[background.sprite]?.width) !== undefined &&
+        (background.size.height ?? spriteDimensions[background.sprite]?.height) !== undefined
+          ? 'rendered'
+          : 'unresolved',
+    })),
   })}\n`;
   const html =
     options.includeHtml === true ? htmlFor(selection.title, rendered.svg, json) : undefined;
@@ -967,11 +1284,21 @@ export function technologyRenderIconSprites(
   options: TechnologyRenderOptions,
 ): string[] {
   const maximum = Math.max(1, Math.min(options.maxNodes ?? 600, MAX_RENDER_NODES));
+  const selection = viewSelection(graph, options);
   return [
-    ...new Set(
-      viewSelection(graph, options)
-        .nodes.slice(0, maximum)
-        .flatMap(({ iconSprite }) => (iconSprite === undefined ? [] : [iconSprite])),
-    ),
+    ...new Set([
+      ...selection.nodes
+        .slice(0, maximum)
+        .flatMap(({ iconSprite, itemBackgroundSprite, subTechnologies }) => [
+          ...(iconSprite === undefined ? [] : [iconSprite]),
+          ...(itemBackgroundSprite === undefined
+            ? []
+            : itemBackgroundSprites(itemBackgroundSprite)),
+          ...(subTechnologies ?? []).flatMap((sub) =>
+            sub.iconSprite === undefined ? [] : [sub.iconSprite],
+          ),
+        ]),
+      ...selection.backgrounds.map(({ sprite }) => sprite),
+    ]),
   ].sort(compareCodeUnits);
 }

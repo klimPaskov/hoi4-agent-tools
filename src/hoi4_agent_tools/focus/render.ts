@@ -49,6 +49,7 @@ export interface FocusRenderOptions {
   outputScale?: number;
   /** Generate and store PNG output. Structural callers can disable this and avoid native raster work. */
   rasterize?: boolean;
+  cropFocusIds?: readonly string[];
   iconDataUris?: Readonly<Record<string, string>>;
   presentation?: FocusPresentationResolution;
   sourceHashes?: Record<string, string>;
@@ -66,6 +67,12 @@ export interface FocusRenderBundle {
   sourceMap: FocusGeneratedSourceMap;
   width: number;
   height: number;
+  problemCrops?: Array<{
+    focusId: string;
+    bounds: { x: number; y: number; width: number; height: number };
+    png: Buffer;
+    diagnostics: string[];
+  }>;
 }
 
 export async function admitFocusIconDataUris(
@@ -499,6 +506,7 @@ function svgDocument(
       nodes,
       decisions: layout.decisions,
       metrics: layout.metrics ?? null,
+      connectorMeasurements: layout.connectorMeasurements ?? null,
     },
     focuses: [...plan.focuses]
       .sort((left, right) => compareCodeUnits(left.id, right.id))
@@ -652,6 +660,50 @@ export async function renderFocusTree(
       .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
       .toBuffer();
   }
+  const problemCrops: NonNullable<FocusRenderBundle['problemCrops']> = [];
+  if ((options.cropFocusIds?.length ?? 0) > 0) {
+    if (options.cropFocusIds!.length > 16)
+      throw new ServiceError('FOCUS_CROP_LIMIT', 'Focus render accepts at most 16 problem crops');
+    if (options.rasterize === false)
+      throw new ServiceError(
+        'FOCUS_CROP_REQUIRES_RASTER',
+        'Focus problem crops require raster output',
+      );
+    const nodes = new Map(layout.nodes.map((node) => [node.id, node]));
+    const minimumX = Math.min(...layout.nodes.map(({ x }) => x));
+    const minimumY = Math.min(...layout.nodes.map(({ y }) => y));
+    const horizontal = options.horizontalSpacing ?? FOCUS_HORIZONTAL_GRID_PIXELS;
+    const vertical = options.verticalSpacing ?? FOCUS_VERTICAL_GRID_PIXELS;
+    const padding = options.padding ?? 80;
+    const scale = options.outputScale ?? 1;
+    for (const focusId of [...new Set(options.cropFocusIds)]) {
+      const node = nodes.get(focusId);
+      if (node === undefined)
+        throw new ServiceError('FOCUS_CROP_FOCUS_MISSING', 'Problem crop names an unknown focus', {
+          focusId,
+        });
+      const origin = focusNodeOrigin(node, minimumX, minimumY, padding, horizontal, vertical);
+      const centerX = Math.round((origin.x + FOCUS_NODE_WIDTH_PIXELS / 2) * scale);
+      const centerY = Math.round((origin.y + FOCUS_NODE_HEIGHT_PIXELS / 2) * scale);
+      const width = Math.min(rendered.width, 640);
+      const height = Math.min(rendered.height, 440);
+      budget.reserve(width, height, 'focus problem crop PNG');
+      const x = Math.max(0, Math.min(rendered.width - width, centerX - Math.floor(width / 2)));
+      const y = Math.max(0, Math.min(rendered.height - height, centerY - Math.floor(height / 2)));
+      const crop = await sharp(png)
+        .extract({ left: x, top: y, width, height })
+        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+        .toBuffer();
+      problemCrops.push({
+        focusId,
+        bounds: { x, y, width, height },
+        png: crop,
+        diagnostics: diagnostics
+          .filter((diagnostic) => focusIdForDiagnostic(diagnostic) === focusId)
+          .map(({ code }) => code),
+      });
+    }
+  }
   options.signal?.throwIfAborted();
   return {
     html,
@@ -667,6 +719,7 @@ export async function renderFocusTree(
     sourceMap: compiled.sourceMap,
     width: rendered.width,
     height: rendered.height,
+    ...(problemCrops.length === 0 ? {} : { problemCrops }),
   };
 }
 
@@ -741,6 +794,25 @@ export async function storeFocusRenderArtifacts(
       description: 'Source-hash-bound non-Clausewitz planning metadata',
     },
   ];
+  if (bundle.problemCrops !== undefined) {
+    for (const crop of bundle.problemCrops)
+      writes.push({
+        name: `${stem}.focus-problem-${safeArtifactStem(crop.focusId)}-${sha256Bytes(crop.focusId).slice(0, 8)}.png`,
+        mimeType: 'image/png',
+        content: crop.png,
+        provenance: {
+          ...provenance,
+          kind: 'focus-problem-crop',
+          metadata: { ...provenance.metadata, focusId: crop.focusId, bounds: crop.bounds },
+        },
+      });
+    writes.push({
+      name: `${stem}.focus-problem-crops.json`,
+      mimeType: 'application/json',
+      content: `${canonicalJson(bundle.problemCrops.map(({ focusId, bounds, png, diagnostics }) => ({ focusId, bounds, sha256: sha256Bytes(png), diagnostics })))}\n`,
+      provenance: { ...provenance, kind: 'focus-problem-crop-manifest' },
+    });
+  }
   return artifacts.withAtomicChunkedWrites(
     workspace,
     writes,

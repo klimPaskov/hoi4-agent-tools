@@ -50,6 +50,17 @@ function evaluate(text: string, scenario: Partial<ConditionScenario> = {}) {
 }
 
 describe('shared structured condition evaluation', () => {
+  it('identifies the scenario field that can resolve a missing flag or variable', () => {
+    expect(
+      evaluate('has_country_flag = research_gate', { closedFlags: false, flags: [] }).unresolved[0]
+        ?.details?.scenarioInput,
+    ).toBe('flag.research_gate');
+    expect(
+      evaluate('check_variable = { var = a value = missing_threshold }').unresolved[0]?.details
+        ?.scenarioInput,
+    ).toBe('variable.missing_threshold');
+    expect(evaluate('date > 1937.1.1').unresolved[0]?.details?.scenarioInput).toBe('date');
+  });
   it.each([
     ['check_variable = { var = a value = 10 compare = greater_than_or_equals }', 'true'],
     ['AND = { a > 5 b > 5 }', 'false'],
