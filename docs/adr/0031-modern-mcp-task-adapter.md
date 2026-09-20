@@ -1,6 +1,6 @@
 # 31. Modern MCP task adapter
 
-Status: modern operation/task factory, production stdio/HTTP routing, and opt-in private-tool parity implemented locally; qualification remains incomplete.
+Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
 
 ## Protocol and SDK boundary
 
@@ -152,8 +152,8 @@ The local production stdio entry now pins each bounded connection to either the 
 The local production HTTP entry uses the SDK's public era classifier after the existing authentication, Origin, Host, byte, and admission gates, then invokes the strict modern handler with a principal derived only from the authenticated request.
 Legacy stateful sessions and their transport remain separate.
 The optional ChaosX private tools share their underlying operations between protocol adapters and are enabled only by the existing stdio process flag; HTTP never advertises them.
-Full transport, platform, Inspector, installation, and release qualification remain open.
-No installed MCP process was restarted, no modern endpoint was published, and this partial Stage 2 candidate does not qualify for release.
+At this 2026-09-19 development checkpoint, full transport, platform, Inspector, installation, and release qualification remained open.
+No installed MCP process was restarted or replaced during development.
 The candidate pins Sharp 0.35.4, Hono 4.13.8, and Vitest plus coverage 4.1.11 after the earlier versions were reported by npm as affected by advisories.
 The installed dependency graph reported zero npm audit findings on 2026-09-19; this does not replace rendering, transport, platform, or release qualification.
 The first identifier-hardening matrix passed 50 tests across five files in 86.20 seconds on 2026-09-13, including 20 modern wire cases over connection and Fetch-based HTTP serving.
@@ -185,4 +185,5 @@ The opt-in modern stdio regression separately passed discovery of both private t
 After sharing the private implementations and keeping their import behind the stdio flag, the six-file cross-era transport and modern-task matrix passed all 83 tests in 154.31 seconds on 2026-09-19.
 All eight test shards passed separately after two overloaded-shard safety deadlines and one worker-observation assertion were corrected: 1,135 passing tests and one skip on 2026-09-19.
 The built package passed its 267-file dry run and Registry validation, and the official MCP Inspector passed its 25-tool workflow.
-The candidate remains uncommitted and unpublished; generated-file cleanliness, exact full-check/coverage runs, platform CI, and public installation remain open.
+The subsequent committed candidate `b34f042` passed the complete Windows/Linux, Node 22/24 CI matrix, coverage, and official Inspector in run `35467092544`.
+Publication and installed-package verification require separate release evidence.

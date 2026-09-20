@@ -2,15 +2,13 @@
 
 ## Unreleased
 
-The 3.1.0 candidate is not release-qualified or published.
-
-## 3.1.0 - Unreleased candidate
+## 3.1.0 - 2026-09-20
 
 - Reuse authenticated content-addressed parsed documents and file-local index segments across authorized local processes while revalidating current source bytes, load order, shadowing, workspace topology, and principal scope.
 - Rebuild exact indexes from immutable segments, retain typed reverse source dependencies, and heal malformed or tampered persistent cache entries without trusting timestamps or file sizes.
 - Run event, technology, probability, map, GUI, and focus analysis in fixed-entry isolated workers backed by durable authenticated jobs, revision-fenced ownership, bounded retention, and source-revision result checkpoints.
 - Advertise optional negotiated MCP tasks for all long-running domain calls while preserving exact ordinary-call results, progress, cancellation, linked resources, tool errors, and both stdio and HTTP compatibility.
-- Share task execution, authorization, and all 23 domain tool definitions with an MCP 2026-07-28 Tasks extension adapter, routed by the local production stdio and authenticated HTTP entry points; full qualification remains pending.
+- Share task execution, authorization, and all 23 domain tool definitions with an MCP 2026-07-28 Tasks extension adapter, routed by production stdio and authenticated HTTP entry points.
 - Share `hoi4.job_inspect` and `hoi4.job_cancel` between protocol adapters as responsive, principal-private compatibility controls that remain available while domain execution slots are occupied.
 - Share the bounded probability-analysis prompt metadata and body between protocol adapters without starting jobs or source analysis.
 - Advertise the same server instructions through legacy initialization and modern discovery.

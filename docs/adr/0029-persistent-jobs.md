@@ -1,6 +1,6 @@
 # 29. Persistent jobs
 
-Status: persistent execution core, modern operation/task adapter, and production stdio/HTTP routing implemented locally for Stage 2; release qualification remains pending.
+Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
 
 ## Decision
 

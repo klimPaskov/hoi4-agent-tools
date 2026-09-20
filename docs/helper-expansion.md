@@ -69,10 +69,10 @@ This is not permanent storage of every historical page.
 
 ## Compatibility and boundaries
 
-This opt-in mode and optional result summary are additive changes in the unreleased 3.1.0 candidate.
+This opt-in mode and optional result summary are additive in 3.1.0.
 Existing inspection modes retain their own ordering, representative-path policy, and materialization limits.
 A depth- or projection-truncated materialized graph reports incomplete coverage.
 The paged edge-path stream must not be mistaken for the deduplicated projections in those graphs.
 Ordinary calls and persisted jobs return the same page contract.
 Within-page work is bounded; the existing durable result checkpoint handles interruption after a page result has been staged.
-Broader materialized-graph memory refinement, modern negotiated MCP protocol migration, platform qualification, publication, and installation remain separate acceptance work.
+Broader materialized-graph memory refinement remains separate from this bounded page contract.

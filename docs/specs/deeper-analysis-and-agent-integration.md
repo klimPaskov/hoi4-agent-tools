@@ -19,16 +19,17 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Reproduce the three observed helper failures and test the complete generation-to-render path.
 - [x] Complete release qualification, publication verification, and side-by-side local installation.
 
-## Stage 2: Incremental analysis and persistent jobs — candidate 3.1.0
+## Stage 2: Incremental analysis and persistent jobs — 3.1.0 release candidate
 
-- [ ] Cache per-file parsed/indexed segments and reverse dependencies; invalidate additions, removals, renames, load-order changes, aliases, and same-size/same-timestamp edits.
+- [x] Cache per-file parsed/indexed segments and reverse dependencies; invalidate additions, removals, renames, load-order changes, aliases, and same-size/same-timestamp edits.
 - [x] Reuse content-addressed analysis across authorized local processes without sharing private results across workspace/principal boundaries.
-- [ ] Expand event/technology helper closure incrementally with source-revision-bound checkpoints and exact coverage boundaries.
+- [x] Expand event/technology helper closure incrementally with source-revision-bound checkpoints and exact coverage boundaries.
 - [x] Add persistent jobs, bounded CPU workers, responsive control traffic, cancellation, and result retrieval.
-- [ ] Recover interrupted read-only expansion work from checkpoints and reconcile rewrite outcomes through transaction journals.
+- [x] Recover interrupted read-only expansion work from checkpoints and reconcile rewrite outcomes through transaction journals.
 - [x] Deduplicate background rewrites using caller-reusable request keys; never blindly replay an uncertain write.
-- [ ] Add native negotiated MCP task adapters and ordinary `hoi4.job_inspect` / `hoi4.job_cancel` compatibility tools.
-- [ ] Prove crash recovery, isolation, incremental/full-rebuild equivalence, and release/install qualification.
+- [x] Add native negotiated MCP task adapters and ordinary `hoi4.job_inspect` / `hoi4.job_cancel` compatibility tools.
+- [x] Prove crash recovery, isolation, incremental/full-rebuild equivalence, and the Windows/Linux, Node 22/24 qualification matrix.
+- [ ] Verify publication, exact public installation, and side-by-side local installation.
 
 ## Stage 3: Cross-system impact and decisions — planned 3.2.0
 
@@ -115,10 +116,10 @@ No active server or coding-agent process was restarted or replaced.
 GitHub has one latest public release entry, v3.0.9, and both v3.0.8 and v3.0.9 tags remain.
 See [the shared-condition decision](../adr/0027-shared-condition-evaluation.md) for the architecture and remaining interpreter boundaries.
 
-Stage 2 has an incomplete local 3.1.0 candidate implementation; release qualification remains pending.
+The first Stage 2 candidate was incomplete; later implementation and qualification evidence follows.
 Review of candidate `041f586` found that reverse source dependencies were not consumed by product analysis and that job checkpoints retained completed results, not interrupted helper-expansion progress.
-The published production transport adapters support the SDK 1.x task extension; the local candidate additionally routes modern-protocol requests through the production stdio and HTTP entry points, but is not installed or release-qualified.
-Those requirements are reopened above; the candidate is not release-ready.
+At that checkpoint the published production transport adapters supported the SDK 1.x task extension, while modern-protocol routing remained local and unqualified.
+Those requirements were reopened above and addressed in the subsequent candidate.
 Content-addressed parsed documents, file-local index segments, typed reverse source dependencies, and the authenticated cross-process cache preserve exact source identities and coverage boundaries while re-enumerating and verifying current bytes.
 Event and technology graphs revalidate external edits and retain revision-addressed helper and comparison evidence.
 Synthetic incremental/full-rebuild cases cover additions, removals, renames, aliases, shadowing, load-order changes, same-size/same-timestamp edits, partial limits, cycles, tampering, and principal isolation.
@@ -198,6 +199,9 @@ The production build, 267-file package dry run, Registry metadata validation, ze
 The separate Stage 2 qualification checkout excludes the unfinished Stage 5 GUI renderer changes; its generated-fixture and schema cleanliness gates, typecheck, lint, formatting, build, package dry run, and Registry metadata validation passed on 2026-09-19.
 A mixed-shard HTTP stress failure exposed an `ENOENT` during worker-capacity lease handoff before IPC dispatch.
 The host now classifies that precise pre-dispatch loss and makes at most two additional admission attempts without replaying work; unit tests cover successful recovery and bounded persistent failure, and the full 134-test shard passed after the correction.
-Remaining Stage 2 gates are a reviewed candidate commit, the exact `npm run check` and coverage commands, Windows/Linux and Node 22/24 CI, publication, exact public-install verification, and a side-by-side local installation.
+At the 2026-09-19 local checkpoint, a reviewed candidate commit, the exact `npm run check` and coverage commands, Windows/Linux and Node 22/24 CI, publication, exact public-install verification, and a side-by-side local installation remained.
+Commit `b34f0420c631ac6eb8a0805214d4132ca4a57803` passed CI run `35467092544` on Windows and Linux with Node 22 and 24.
+Every matrix job passed `npm run check`; the Ubuntu Node 22 job also passed `npm run test:coverage` and the official MCP Inspector.
+The exact source qualified by that run is on branch `codex/stage2-3.1.0`; publication and installed-package verification remain open.
 Stages 3–4 and external Chaos Redux integration have not started.
 Stage 5 native-GUI fidelity work remains outside this Stage 2 release candidate.

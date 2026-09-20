@@ -1,6 +1,6 @@
 # 28. Incremental source segments
 
-Status: partially implemented for Stage 2; semantic consumer invalidation and resumable dependency frontiers are implemented, while full large-analysis and release acceptance remain pending.
+Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
 
 ## Decision
 
@@ -84,18 +84,18 @@ The cursor contains only the active DFS frames and exact counters, while source 
 Event state accesses and technology references are leaf edges, so one helper with many facts is paginated rather than attached as an unbounded record payload.
 `core/helper-expansion.ts` binds opaque continuation resources to the configured workspace, root topology, principal, tool version, exact source revision, root selection, and depth.
 Page and cursor publication is one artifact-store batch; page size and work allowance may change on resume, but semantic query changes fail explicitly.
-This opt-in API is an additive candidate-3.1.0 change and does not alter representative-path selection in existing materialized graph modes.
+This opt-in API is additive in 3.1.0 and does not alter representative-path selection in existing materialized graph modes.
 Those graphs report incomplete coverage for depth and projection truncation.
 The initial page regression passed 17 tests on 2026-09-13, including 786,431 compact traversal records, exponential source graphs, fresh-service resumption, source edits, principal and domain isolation, chunked cursor loading, cursor tampering, depth recovery, and exact MCP/persisted-job result equivalence.
 The final frozen regression passed 190 tests across 22 files on 2026-09-13 in 232.21 seconds on this Windows host.
 It includes both large domain acceptance fixtures, full event and technology MCP workflows, ordinary/persisted-job parity, all four real-worker interruption/recovery scenarios, checkpoint retention, semantic invalidation, and package metadata alongside the new page cases.
-The generated request and summary schemas, packaged documentation, strict request validation, and additive result summary are synchronized for this candidate.
-Type checking and scoped linting also passed; a complete `npm run check`, coverage, platform matrix, package installation, Inspector qualification, and publication are not established by this subset.
-Broader materialized-graph memory refinement and complete Stage 2 acceptance remain pending.
-The negotiated modern MCP task adapters are implemented in the local candidate and tracked separately in [ADR 0031](0031-modern-mcp-task-adapter.md); their presence does not qualify this stage for release.
+The generated request and summary schemas, packaged documentation, strict request validation, and additive result summary are synchronized for 3.1.0.
+The complete `npm run check`, coverage, Windows/Linux and Node 22/24 matrix, and official Inspector passed on commit `b34f042` in CI run `35467092544`.
+Broader materialized-graph memory refinement remains outside this Stage 2 contract.
+The negotiated modern MCP task adapters are documented separately in [ADR 0031](0031-modern-mcp-task-adapter.md).
 
 This implementation does not claim zero-cost change detection: root enumeration and byte verification remain mandatory correctness work.
-The complete platform, package, publication, and installed-package gates remain release evidence.
+Publication and installed-package gates require separate release evidence in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
 
 ## Shared rewrite execution
 

@@ -4,9 +4,8 @@ Long-running domain operations support optional MCP tasks while preserving the o
 Clients that negotiate task support can request a task, disconnect, reconnect with the same authorized identity, inspect or cancel it, and retrieve the original tool result after completion.
 Clients that do not request a task continue to receive the same synchronous tool result as before.
 
-The local 3.1.0 candidate routes 2025-era clients through the existing stateful adapter and 2026-07-28 clients through the [modern operation/task adapter](adr/0031-modern-mcp-task-adapter.md) on both stdio and HTTP.
+Version 3.1.0 routes 2025-era clients through the existing stateful adapter and 2026-07-28 clients through the [modern operation/task adapter](adr/0031-modern-mcp-task-adapter.md) on both stdio and HTTP.
 Modern requests independently negotiate the Tasks extension, use authenticated flat handles, and receive terminal results in `tasks/get`.
-This code is not yet published or installed; the currently released server remains on the 2025-era path.
 
 Clients can request ordinary-call progress with a progress token.
 Both protocol adapters share strictly increasing updates and bounded-frequency heartbeats, with cleanup when the request completes, fails, or is cancelled.
@@ -77,7 +76,7 @@ Job records are principal-private, including when another principal has access t
 Native task identifiers include the workspace and persistent job identifier.
 They are opaque client values; transaction identifiers and plan hashes are never public workflow inputs.
 New persistent job IDs are derived from private server state, and earlier authenticated retry receipts remain usable without repeating their original operation.
-The modern candidate adds an authenticated handle suffix, including when it references an earlier receipt, so clients must retain the complete task ID rather than reconstructing it from job metadata or reusing a handle from another protocol generation.
+The modern adapter adds an authenticated handle suffix, including when it references an earlier receipt, so clients must retain the complete task ID rather than reconstructing it from job metadata or reusing a handle from another protocol generation.
 Read-only terminal jobs follow the negotiated task retention period, clamped between one minute and seven days with a 24-hour default.
 Mutation receipts remain durable after task visibility expires so a retry cannot duplicate an uncertain write.
 Renewed task responses report their total lifetime from the original creation time, including elapsed age, while the newly granted visibility window remains bounded.
