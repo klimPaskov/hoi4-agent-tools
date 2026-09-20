@@ -275,6 +275,41 @@ function validateButtonLabelsAndBackgrounds(
 ): void {
   const visible = scene.elements.filter((element) => element.visible);
   const byId = new Map(scene.elements.map((element) => [element.id, element]));
+  const backgrounds = new Map<string, GuiRect>();
+  for (const element of visible) {
+    if (
+      element.elementType !== 'background' ||
+      element.parentId === undefined ||
+      area(element.rect) === 0
+    )
+      continue;
+    const previous = backgrounds.get(element.parentId);
+    const rect = element.unclippedRect;
+    const x = Math.min(previous?.x ?? rect.x, rect.x);
+    const y = Math.min(previous?.y ?? rect.y, rect.y);
+    backgrounds.set(element.parentId, {
+      x,
+      y,
+      width:
+        Math.max(previous === undefined ? x : previous.x + previous.width, rect.x + rect.width) - x,
+      height:
+        Math.max(previous === undefined ? y : previous.y + previous.height, rect.y + rect.height) -
+        y,
+    });
+  }
+  const backgroundOwner = (
+    element: GuiSceneElement,
+  ): { owner: GuiSceneElement; rect: GuiRect } | undefined => {
+    const visited = new Set<string>();
+    let parent = element.parentId === undefined ? undefined : byId.get(element.parentId);
+    while (parent !== undefined && !visited.has(parent.id)) {
+      visited.add(parent.id);
+      const rect = parent.sprite === undefined ? backgrounds.get(parent.id) : parent.unclippedRect;
+      if (rect !== undefined) return { owner: parent, rect };
+      parent = parent.parentId === undefined ? undefined : byId.get(parent.parentId);
+    }
+    return undefined;
+  };
   const buttons = visible.filter(
     (element) => element.clickable && /button/iu.test(element.elementType),
   );
@@ -333,44 +368,40 @@ function validateButtonLabelsAndBackgrounds(
         );
     }
 
-    let parent = label.parentId === undefined ? undefined : byId.get(label.parentId);
-    while (parent !== undefined && parent.sprite === undefined)
-      parent = parent.parentId === undefined ? undefined : byId.get(parent.parentId);
+    const parent = backgroundOwner(label);
     if (
       parent !== undefined &&
-      !contains(parent.unclippedRect, label.unclippedRect, 0.5) &&
-      intersection(parent.unclippedRect, label.unclippedRect) !== undefined
+      !contains(parent.rect, label.unclippedRect, 0.5) &&
+      intersection(parent.rect, label.unclippedRect) !== undefined
     )
       diagnostics.push(
         issue(
           'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
           'warning',
           'layout',
-          `${label.name} crosses the visible background boundary of ${parent.name} in scenario ${scene.scenario.id}.`,
+          `${label.name} crosses the visible background boundary of ${parent.owner.name} in scenario ${scene.scenario.id}.`,
           label,
-          { scenarioId: scene.scenario.id, element: label.name, background: parent.name },
+          { scenarioId: scene.scenario.id, element: label.name, background: parent.owner.name },
         ),
       );
   }
   for (const control of visible.filter(
     (element) => element.clickable && element.text === undefined,
   )) {
-    let parent = control.parentId === undefined ? undefined : byId.get(control.parentId);
-    while (parent !== undefined && parent.sprite === undefined)
-      parent = parent.parentId === undefined ? undefined : byId.get(parent.parentId);
+    const parent = backgroundOwner(control);
     if (
       parent !== undefined &&
-      !contains(parent.unclippedRect, control.unclippedRect, 0.5) &&
-      intersection(parent.unclippedRect, control.unclippedRect) !== undefined
+      !contains(parent.rect, control.unclippedRect, 0.5) &&
+      intersection(parent.rect, control.unclippedRect) !== undefined
     )
       diagnostics.push(
         issue(
           'GUI_CONTENT_CROSSES_BACKGROUND_EDGE',
           'warning',
           'layout',
-          `${control.name} crosses the visible background boundary of ${parent.name} in scenario ${scene.scenario.id}.`,
+          `${control.name} crosses the visible background boundary of ${parent.owner.name} in scenario ${scene.scenario.id}.`,
           control,
-          { scenarioId: scene.scenario.id, element: control.name, background: parent.name },
+          { scenarioId: scene.scenario.id, element: control.name, background: parent.owner.name },
         ),
       );
   }

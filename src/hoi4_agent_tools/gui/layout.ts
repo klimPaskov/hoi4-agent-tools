@@ -37,6 +37,9 @@ import type {
   ScriptedGuiDynamicListDefinition,
 } from './types.js';
 import { emptyFidelityReport } from './types.js';
+import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
+import { evaluateGuiCondition, guiConditionScenario } from './scenario-conditions.js';
+import { parseClausewitz } from '../core/source/index.js';
 
 const clickableTypes = /(?:button|checkbox|editbox|scrollbar|progressbar)/iu;
 const numericDynamicPlaceholder = '[X]';
@@ -64,6 +67,8 @@ function scalarString(value: GuiPropertyValue | undefined): string | undefined {
 }
 
 const defaultTextColour = '#f5f2e8';
+// Native text-box default, independently visible in installed inlays without maxWidth.
+const nativeTextBoxWidth = 200;
 const hoi4TextColours: Readonly<Record<string, string>> = {
   C: '#23ceff',
   L: '#c3b091',
@@ -169,8 +174,8 @@ function scaledNumber(
 
 function scalarBoolean(value: GuiPropertyValue | undefined): boolean | undefined {
   if (typeof value === 'boolean') return value;
-  if (value === 'yes' || value === 'true') return true;
-  if (value === 'no' || value === 'false') return false;
+  if (value === 'yes' || value === 'true' || value === 1) return true;
+  if (value === 'no' || value === 'false' || value === 0) return false;
   return undefined;
 }
 
@@ -690,6 +695,7 @@ function frameFor(
   sprite: GuiSourceGraph['sprites'][number],
   scenario: GuiPreviewScenario,
   rowValues?: Readonly<Record<string, string | number | boolean>>,
+  effectiveState?: GuiPreviewState,
 ): number {
   const frameCount = Math.max(1, sprite.frameCount);
   const selected = scenario.selectedFrames[element.name] ?? scenario.selectedFrames[sprite.name];
@@ -703,6 +709,14 @@ function frameFor(
       frameCount - 1,
       Math.max(0, Math.trunc(scriptedFrame > 0 ? scriptedFrame - 1 : scriptedFrame)),
     );
+  const state = effectiveState ?? scenario.elementStates[element.name] ?? scenario.state;
+  const checked =
+    rowValues?.[`${element.name}.checked`] ?? scenario.values[`${element.name}.checked`];
+  if (
+    /checkbox/iu.test(element.elementType) &&
+    (typeof checked === 'boolean' || state === 'selected' || state === 'active')
+  )
+    return Math.min(frameCount - 1, checked === false ? 0 : 1);
   const explicit = scalarNumber(property(element.attributes, 'frame'), frameCount);
   if (explicit !== undefined)
     return Math.min(
@@ -724,7 +738,9 @@ function frameFor(
       ? frameCount - 1
       : Math.min(frameCount - 1, Math.floor(phase * framesPerSecond));
   }
-  const state = scenario.elementStates[element.name] ?? scenario.state;
+  // Effects select a shader entry point, not an unrelated atlas frame.
+  // Explicit frames and frame animation above remain independent of button state.
+  if (sprite.effectFile !== undefined || /checkbox/iu.test(element.elementType)) return 0;
   const mapped =
     state === 'hover'
       ? 1
@@ -745,7 +761,9 @@ function alignment(
   attributes: Record<string, GuiPropertyValue>,
   buttonText: boolean,
 ): Pick<GuiTextLayout, 'horizontalAlignment' | 'verticalAlignment'> {
-  const explicitFormat = scalarString(property(attributes, 'format'))?.toLowerCase();
+  const explicitFormat = scalarString(property(attributes, 'format'))
+    ?.toLowerCase()
+    .replaceAll('centre', 'center');
   const format = explicitFormat ?? '';
   const horizontalAlignment = format.includes('center')
     ? 'center'
@@ -754,13 +772,19 @@ function alignment(
       : buttonText && explicitFormat === undefined
         ? 'center'
         : 'left';
-  const verticalAlignment = format.includes('bottom')
-    ? 'bottom'
-    : format.includes('center')
-      ? 'center'
-      : buttonText && explicitFormat === undefined
-        ? 'center'
-        : 'top';
+  const vertical = scalarString(property(attributes, 'vertical_alignment'))
+    ?.toLowerCase()
+    .replaceAll('centre', 'center');
+  const verticalAlignment =
+    vertical === 'top'
+      ? 'top'
+      : vertical === 'bottom' || format.includes('bottom')
+        ? 'bottom'
+        : vertical === 'center'
+          ? 'center'
+          : buttonText && explicitFormat === undefined
+            ? 'center'
+            : 'top';
   return { horizontalAlignment, verticalAlignment };
 }
 
@@ -798,6 +822,10 @@ function anchoredCoordinate(
       : start + offset;
 }
 
+function legacyRowSuffix(instanceSuffix: string): string {
+  return instanceSuffix.replace(/#list-[^#]+/gu, '');
+}
+
 interface LayoutContext {
   graph: GuiSourceGraph;
   scenario: GuiPreviewScenario;
@@ -813,8 +841,155 @@ interface LayoutContext {
   localisation: Map<string, string>;
   output: GuiSceneElement[];
   instancesById: Map<string, GuiSceneElement>;
+  geometry: Map<string, LayoutGeometry>;
   work: GuiSceneWorkBudget;
   baseScale: number;
+}
+
+interface LayoutGeometry {
+  appearanceVisible: boolean;
+  // Shared rectangle references follow their owning element when an outer container scrolls.
+  clipChain: readonly GuiRect[];
+  contentRect: GuiRect;
+  measuredRect: GuiRect;
+}
+
+interface AttachedScrollbar {
+  definition: GuiElementDefinition;
+  horizontal: boolean;
+}
+
+function explicitElementVisibility(
+  definition: GuiElementDefinition,
+  scenario: GuiPreviewScenario,
+  rowValues?: Readonly<Record<string, string | number | boolean>>,
+): boolean | undefined {
+  const scripted =
+    rowValues?.[`${definition.name}.visible`] ??
+    scenario.values[`${definition.name}.visible`] ??
+    scenario.scriptedGui[`${definition.name}.visible`];
+  return (
+    scenario.visibility[definition.name] ??
+    scenario.visibility[definition.id] ??
+    (definition.sourceOwnerId === undefined
+      ? undefined
+      : scenario.visibility[definition.sourceOwnerId]) ??
+    (typeof scripted === 'boolean' ? scripted : undefined)
+  );
+}
+
+function clippedByChain(chain: readonly GuiRect[]): GuiRect | undefined {
+  let result: GuiRect | undefined;
+  for (const clip of chain)
+    result =
+      result === undefined
+        ? clip
+        : (rectIntersection(result, clip) ?? { ...clip, width: 0, height: 0 });
+  return result;
+}
+
+function refreshSceneClips(context: LayoutContext): void {
+  for (const element of context.output) {
+    const geometry = context.geometry.get(element.id)!;
+    context.work.spend('resolved scroll clipping', geometry.clipChain.length + 1);
+    const clip = clippedByChain(geometry.clipChain);
+    const intersection =
+      clip === undefined ? element.unclippedRect : rectIntersection(element.unclippedRect, clip);
+    if (clip === undefined) delete element.clipRect;
+    else element.clipRect = { ...clip };
+    element.rect =
+      intersection === undefined
+        ? { ...element.unclippedRect, width: 0, height: 0 }
+        : { ...intersection };
+    element.clipped =
+      clip !== undefined &&
+      (intersection === undefined || !equalRect(element.unclippedRect, intersection));
+    element.visible = geometry.appearanceVisible && intersection !== undefined;
+  }
+}
+
+function attachedScrollbars(
+  definition: GuiElementDefinition,
+  context: LayoutContext,
+): AttachedScrollbar[] {
+  if (!/^(?:containerwindowtype|windowtype)$/iu.test(definition.elementType)) return [];
+  const result: AttachedScrollbar[] = [];
+  const add = (
+    candidate: GuiElementDefinition | undefined,
+    horizontal: boolean,
+    reference: string,
+  ) => {
+    if (candidate?.elementType.toLowerCase() !== 'extendedscrollbartype') {
+      context.diagnostics.push(
+        diagnostic(
+          'GUI_SCROLLBAR_TEMPLATE_MISSING',
+          'warning',
+          `Container ${definition.name} cannot resolve extended scrollbar ${reference}.`,
+          definition,
+        ),
+      );
+      addFidelity(
+        context.fidelity,
+        'missing',
+        'attached_scrollbar',
+        `Extended scrollbar ${reference} is missing.`,
+        definition,
+      );
+      return;
+    }
+    if ((scalarBoolean(property(candidate.attributes, 'horizontal')) ?? false) !== horizontal) {
+      context.diagnostics.push(
+        diagnostic(
+          'GUI_SCROLLBAR_AXIS_MISMATCH',
+          'warning',
+          `Scrollbar ${reference} has the wrong axis for container ${definition.name}.`,
+          definition,
+        ),
+      );
+      addFidelity(
+        context.fidelity,
+        'unsupported',
+        'attached_scrollbar',
+        `Scrollbar ${reference} has the wrong axis.`,
+        definition,
+      );
+      return;
+    }
+    if (result.some((entry) => entry.horizontal === horizontal)) {
+      context.diagnostics.push(
+        diagnostic(
+          'GUI_SCROLLBAR_AXIS_DUPLICATE',
+          'warning',
+          `Container ${definition.name} assigns more than one ${horizontal ? 'horizontal' : 'vertical'} scrollbar.`,
+          definition,
+        ),
+      );
+      addFidelity(
+        context.fidelity,
+        'unsupported',
+        'attached_scrollbar',
+        'Multiple scrollbars target the same container axis.',
+        definition,
+      );
+      return;
+    }
+    result.push({ definition: candidate, horizontal });
+  };
+  for (const horizontal of [false, true]) {
+    const name = scalarString(
+      property(definition.attributes, horizontal ? 'horizontalScrollbar' : 'verticalScrollbar'),
+    );
+    if (name !== undefined) {
+      const candidate = context.elementsByName.get(name);
+      add(candidate?.parentId === undefined ? candidate : undefined, horizontal, name);
+    }
+  }
+  for (const id of definition.childIds) {
+    const child = context.elementsById.get(id);
+    if (child?.elementType.toLowerCase() === 'extendedscrollbartype')
+      add(child, scalarBoolean(property(child.attributes, 'horizontal')) ?? false, child.name);
+  }
+  return result;
 }
 
 function dynamicCountryFlag(
@@ -823,8 +998,17 @@ function dynamicCountryFlag(
   scenario: GuiPreviewScenario,
   rowValues?: Readonly<Record<string, string | number | boolean>>,
 ): { tag: string; ideology?: string } | undefined {
-  if (typeof expression !== 'string') return undefined;
-  const match = /^\[\?([^\]|]+)(?:\|[^\]]+)?\]$|^\[([^\]]+)\]$/u.exec(expression);
+  const explicitTag =
+    rowValues?.[`${elementName}.countryTag`] ??
+    scenario.values[`${elementName}.countryTag`] ??
+    scenario.scriptedGui[`${elementName}.countryTag`];
+  // Native engine-owned flag slots have no scripted GetFlag property. Require an
+  // explicit per-element binding; a generic country context must not replace every icon.
+  if (typeof expression !== 'string' && explicitTag === undefined) return undefined;
+  const match =
+    typeof expression === 'string'
+      ? /^\[\?([^\]|]+)(?:\|[^\]]+)?\]$|^\[([^\]]+)\]$/u.exec(expression)
+      : null;
   const token = match?.[1] ?? match?.[2];
   const shortToken = token?.slice(token.lastIndexOf('.') + 1);
   const tagCandidates = [
@@ -841,10 +1025,13 @@ function dynamicCountryFlag(
     scenario.country?.GetTag,
     scenario.country?.tag,
   ];
-  const rawTag = tagCandidates.find(
-    (candidate): candidate is string =>
-      typeof candidate === 'string' && /^[A-Za-z0-9_]{2,64}$/u.test(candidate),
-  );
+  const rawTag =
+    explicitTag === undefined
+      ? tagCandidates.find(
+          (candidate): candidate is string =>
+            typeof candidate === 'string' && /^[A-Za-z0-9_]{2,64}$/u.test(candidate),
+        )
+      : String(explicitTag);
   if (rawTag === undefined) return undefined;
   const ideologyCandidates = [
     rowValues?.[`${elementName}.ideology`],
@@ -936,6 +1123,595 @@ class GuiSceneWorkBudget {
   }
 }
 
+/** Native scrollbar children are role templates; their authored coordinates are not layout. */
+async function extendedScrollbarChildren(
+  definition: GuiElementDefinition,
+  children: GuiElementDefinition[],
+  rect: GuiRect,
+  scale: number,
+  context: LayoutContext,
+): Promise<GuiElementDefinition[]> {
+  const horizontal = scalarBoolean(property(definition.attributes, 'horizontal')) ?? false;
+  const roles = new Map<
+    string,
+    { definition: GuiElementDefinition; width: number; height: number; x: number; y: number }
+  >();
+  for (const role of ['track', 'slider', 'decreaseButton', 'increaseButton']) {
+    const value = property(definition.attributes, role);
+    if (value === undefined) continue;
+    const attributes = objectProperty(value);
+    if (attributes === undefined) {
+      addFidelity(
+        context.fidelity,
+        'unsupported',
+        'extended_scrollbar_role',
+        `${role} must be a single inline role definition.`,
+        definition,
+      );
+      continue;
+    }
+    const child: GuiElementDefinition = {
+      ...definition,
+      id: `${definition.id}:role-${role}`,
+      sourceOwnerId: definition.sourceOwnerId ?? definition.id,
+      parentId: definition.id,
+      name: scalarString(property(attributes, 'name')) ?? `${definition.name}_${role}`,
+      elementType: role === 'track' ? 'iconType' : 'buttonType',
+      attributes,
+      childIds: [],
+      unsupportedAttributes: Object.keys(attributes).filter(
+        (key) => guiElementAttributeFidelity(key, 'buttonType') === 'unsupported',
+      ),
+    };
+    const spriteName = scalarString(property(attributes, 'spriteType', 'quadTextureSprite'));
+    const sprite =
+      spriteName === undefined ? undefined : context.spritesByName.get(spriteName.toLowerCase());
+    const frame =
+      sprite === undefined ? undefined : await context.catalog.loadSpriteFrame(sprite, 0);
+    const size = objectProperty(property(attributes, 'size'));
+    const position = objectProperty(property(attributes, 'position'));
+    const width =
+      scaledNumber(
+        size === undefined ? undefined : property(size, 'width', 'x'),
+        rect.width,
+        scale,
+      ) ?? (frame?.width ?? 0) * scale;
+    const height =
+      scaledNumber(
+        size === undefined ? undefined : property(size, 'height', 'y'),
+        rect.height,
+        scale,
+      ) ?? (frame?.height ?? 0) * scale;
+    roles.set(role, {
+      definition: child,
+      width,
+      height,
+      x:
+        scaledNumber(
+          position === undefined ? undefined : property(position, 'x'),
+          rect.width,
+          scale,
+        ) ?? (role === 'increaseButton' ? -width : 0),
+      y:
+        scaledNumber(
+          position === undefined ? undefined : property(position, 'y'),
+          rect.height,
+          scale,
+        ) ?? (role === 'increaseButton' ? -height : 0),
+    });
+  }
+  const length = horizontal ? rect.width : rect.height;
+  const decrease = roles.get('decreaseButton');
+  const increase = roles.get('increaseButton');
+  const start = Math.max(
+    0,
+    Math.min(
+      length,
+      decrease === undefined
+        ? 0
+        : horizontal
+          ? decrease.x + decrease.width
+          : decrease.y + decrease.height,
+    ),
+  );
+  const end = Math.max(
+    start,
+    Math.min(
+      length,
+      increase === undefined ? length : length + (horizontal ? increase.x : increase.y),
+    ),
+  );
+  const minimum = scalarNumber(property(definition.attributes, 'minValue'), 1) ?? 0;
+  const maximum = scalarNumber(property(definition.attributes, 'maxValue'), 1) ?? 1;
+  const value = scalarNumber(property(definition.attributes, 'startValue'), 1) ?? minimum;
+  const ratio =
+    maximum > minimum ? Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum))) : 0;
+  const track = roles.get('track');
+  const trackAxis = start + (track === undefined ? 0 : horizontal ? track.x : track.y);
+  const trackLength = Math.max(0, end - trackAxis);
+  const result: GuiElementDefinition[] = [];
+  for (const [role, part] of roles) {
+    let x = part.x;
+    let y = part.y;
+    let width = part.width;
+    let height = part.height;
+    if (role === 'increaseButton') {
+      x += rect.width;
+      y += rect.height;
+    } else if (role === 'track') {
+      if (horizontal) {
+        x = trackAxis;
+        width = trackLength;
+      } else {
+        y = trackAxis;
+        height = trackLength;
+      }
+    } else if (role === 'slider') {
+      const axis = trackAxis + Math.max(0, trackLength - (horizontal ? width : height)) * ratio;
+      if (horizontal) {
+        x += axis;
+        y += track?.y ?? 0;
+      } else {
+        x += track?.x ?? 0;
+        y += axis;
+      }
+    }
+    result.push({
+      ...part.definition,
+      attributes: {
+        ...part.definition.attributes,
+        position: { x: x / scale, y: y / scale },
+        size: { width: width / scale, height: height / scale },
+        orientation: 'upper_left',
+        origo: 'upper_left',
+        centerposition: false,
+        ...(maximum <= minimum ? { enabled: false } : {}),
+      },
+    });
+  }
+  addFidelity(
+    context.fidelity,
+    'modelled',
+    'native_extended_scrollbar_roles',
+    `Composed inline ${horizontal ? 'horizontal' : 'vertical'} scrollbar artwork with source role offsets and ${ratio} of its value range.`,
+    definition,
+  );
+  return [...result, ...children];
+}
+
+async function scrollbarChildren(
+  definition: GuiElementDefinition,
+  children: GuiElementDefinition[],
+  rect: GuiRect,
+  scale: number,
+  context: LayoutContext,
+  rowValues?: Readonly<Record<string, string | number | boolean>>,
+): Promise<GuiElementDefinition[]> {
+  if (definition.elementType.toLowerCase() === 'extendedscrollbartype')
+    return extendedScrollbarChildren(definition, children, rect, scale, context);
+  if (definition.elementType.toLowerCase() !== 'scrollbartype') return children;
+  const horizontal = scalarBoolean(property(definition.attributes, 'horizontal')) ?? false;
+  const length = horizontal ? rect.width : rect.height;
+  const crossLength = horizontal ? rect.height : rect.width;
+  const roles = new Map<
+    string,
+    { definition: GuiElementDefinition; width: number; height: number }
+  >();
+  for (const role of ['track', 'leftbutton', 'rightbutton', 'slider']) {
+    const name = scalarString(property(definition.attributes, role));
+    if (name === undefined) continue;
+    const child = children.find((candidate) => candidate.name === name);
+    if (child === undefined) {
+      context.diagnostics.push(
+        diagnostic(
+          'GUI_SCROLLBAR_ROLE_MISSING',
+          'warning',
+          `Scrollbar ${definition.name} cannot resolve ${role} template ${name}.`,
+          definition,
+        ),
+      );
+      addFidelity(
+        context.fidelity,
+        'missing',
+        'scrollbar_role',
+        `${role} template ${name} is missing.`,
+        definition,
+      );
+      continue;
+    }
+    const spriteName = scalarString(property(child.attributes, 'spriteType', 'quadTextureSprite'));
+    const sprite =
+      spriteName === undefined ? undefined : context.spritesByName.get(spriteName.toLowerCase());
+    const frame =
+      sprite === undefined
+        ? undefined
+        : await context.catalog.loadSpriteFrame(
+            sprite,
+            frameFor(child, sprite, context.scenario, rowValues),
+          );
+    const size = objectProperty(property(child.attributes, 'size'));
+    roles.set(role, {
+      definition: child,
+      width:
+        scaledNumber(
+          size === undefined ? undefined : property(size, 'width', 'x'),
+          rect.width,
+          scale,
+        ) ?? (frame?.width ?? 0) * scale,
+      height:
+        scaledNumber(
+          size === undefined ? undefined : property(size, 'height', 'y'),
+          rect.height,
+          scale,
+        ) ?? (frame?.height ?? 0) * scale,
+    });
+  }
+  const border = objectProperty(property(definition.attributes, 'borderSize'));
+  const borderValue = scaledNumber(
+    border === undefined
+      ? undefined
+      : property(border, horizontal ? 'x' : 'y', horizontal ? 'width' : 'height'),
+    length,
+    scale,
+  );
+  const extent = (role: string) =>
+    horizontal ? (roles.get(role)?.width ?? 0) : (roles.get(role)?.height ?? 0);
+  const start = Math.max(0, Math.min(length, borderValue ?? extent('leftbutton')));
+  const end = Math.max(0, Math.min(length - start, borderValue ?? extent('rightbutton')));
+  const trackLength = Math.max(0, length - start - end);
+  const minimum = scalarNumber(property(definition.attributes, 'minValue'), 1) ?? 0;
+  const maximum = scalarNumber(property(definition.attributes, 'maxValue'), 1) ?? 100;
+  const explicitValue =
+    rowValues?.[`${definition.name}.value`] ??
+    rowValues?.[definition.name] ??
+    context.scenario.values[`${definition.name}.value`] ??
+    context.scenario.values[definition.name] ??
+    context.scenario.scriptedGui[definition.name];
+  const state = context.scenario.elementStates[definition.name] ?? context.scenario.state;
+  const value =
+    state === 'minimum-value'
+      ? minimum
+      : state === 'maximum-value'
+        ? maximum
+        : typeof explicitValue === 'number'
+          ? explicitValue
+          : (scalarNumber(property(definition.attributes, 'startValue'), 1) ?? minimum);
+  const ratio =
+    maximum > minimum ? Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum))) : 0;
+  const result: GuiElementDefinition[] = [];
+  const controlledIds = new Set<string>();
+  for (const [role, part] of roles) {
+    controlledIds.add(part.definition.id);
+    const partLength = role === 'track' ? trackLength : Math.min(length, extent(role));
+    const crossSize = role === 'track' ? crossLength : horizontal ? part.height : part.width;
+    const axis =
+      role === 'track'
+        ? start
+        : role === 'rightbutton'
+          ? length - partLength
+          : role === 'slider'
+            ? start + Math.max(0, trackLength - partLength) * ratio
+            : 0;
+    const cross = (crossLength - crossSize) / 2;
+    result.push({
+      ...part.definition,
+      attributes: {
+        ...part.definition.attributes,
+        position: {
+          x: (horizontal ? axis : cross) / scale,
+          y: (horizontal ? cross : axis) / scale,
+        },
+        size: {
+          width: (horizontal ? partLength : crossSize) / scale,
+          height: (horizontal ? crossSize : partLength) / scale,
+        },
+        orientation: 'upper_left',
+        origo: 'upper_left',
+        centerposition: false,
+        ...(maximum <= minimum ? { enabled: false } : {}),
+      },
+    });
+  }
+  addFidelity(
+    context.fidelity,
+    'modelled',
+    'native_scrollbar_roles',
+    `Composed ${horizontal ? 'horizontal' : 'vertical'} track, end buttons, and thumb at ${ratio} of its value range.`,
+    definition,
+  );
+  return [...result, ...children.filter(({ id }) => !controlledIds.has(id))];
+}
+
+async function layoutAttachedScrollbars(
+  definition: GuiElementDefinition,
+  scrollbars: AttachedScrollbar[],
+  owner: GuiSceneElement,
+  childOutput: GuiSceneElement[],
+  context: LayoutContext,
+  depth: number,
+  scale: number,
+  rowIndex: number | undefined,
+  rowValues: Readonly<Record<string, string | number | boolean>> | undefined,
+  instanceSuffix: string,
+): Promise<void> {
+  const geometry = context.geometry.get(owner.id)!;
+  const viewport = geometry.contentRect;
+  const directChildren = childOutput.filter((child) => child.parentId === owner.id);
+  const fixedChildren = new Set(
+    directChildren
+      .filter((child) => {
+        const rect = child.unclippedRect;
+        const outer = rectIntersection(rect, owner.unclippedRect);
+        return (
+          outer !== undefined &&
+          equalRect(rect, outer) &&
+          rectIntersection(rect, viewport) === undefined
+        );
+      })
+      .map(({ id }) => id),
+  );
+  let right = viewport.x + viewport.width;
+  let bottom = viewport.y + viewport.height;
+  for (const child of directChildren) {
+    const childGeometry = context.geometry.get(child.id)!;
+    if (!childGeometry.appearanceVisible || fixedChildren.has(child.id)) continue;
+    const measured = childGeometry.measuredRect;
+    right = Math.max(right, measured.x + measured.width);
+    bottom = Math.max(bottom, measured.y + measured.height);
+  }
+  const maximumX = scrollbars.some(({ horizontal }) => horizontal)
+    ? Math.max(0, right - viewport.x - viewport.width)
+    : 0;
+  const maximumY = scrollbars.some(({ horizontal }) => !horizontal)
+    ? Math.max(0, bottom - viewport.y - viewport.height)
+    : 0;
+  const requestedOffset = (horizontal: boolean) => {
+    const requestedState =
+      context.scenario.elementStates[definition.name] ?? context.scenario.state;
+    if (requestedState === 'minimum-value') return 0;
+    if (requestedState === 'maximum-value') return horizontal ? maximumX : maximumY;
+    const key = `${definition.name}.scroll${horizontal ? 'X' : 'Y'}`;
+    const explicit =
+      rowValues?.[key] ?? context.scenario.values[key] ?? context.scenario.scriptedGui[key];
+    if (typeof explicit === 'number' && Number.isFinite(explicit))
+      return Math.max(0, explicit) * scale;
+    return horizontal
+      ? 0
+      : (context.scenario.scrollOffsets[`${definition.name}${instanceSuffix}`] ??
+          context.scenario.scrollOffsets[`${definition.name}${legacyRowSuffix(instanceSuffix)}`] ??
+          context.scenario.scrollOffsets[definition.name] ??
+          context.scenario.scrollOffsets[definition.id] ??
+          0) * scale;
+  };
+  const offsetX = Math.min(maximumX, requestedOffset(true));
+  const offsetY = Math.min(maximumY, requestedOffset(false));
+  owner.scroll = {
+    viewport,
+    contentWidth: right - viewport.x,
+    contentHeight: bottom - viewport.y,
+    offsetX,
+    offsetY,
+    maximumX,
+    maximumY,
+  };
+  let fixed = false;
+  for (const child of childOutput) {
+    context.work.spend('container scroll translation');
+    if (child.parentId === owner.id) fixed = fixedChildren.has(child.id);
+    const childGeometry = context.geometry.get(child.id)!;
+    if (fixed) {
+      // A child wholly in the fixed margin keeps the outer window clip, not the scrolled inner clip.
+      childGeometry.clipChain = childGeometry.clipChain.map((clip) =>
+        clip === viewport ? owner.unclippedRect : clip,
+      );
+      continue;
+    }
+    for (const rect of new Set([
+      child.unclippedRect,
+      childGeometry.contentRect,
+      childGeometry.measuredRect,
+    ])) {
+      rect.x -= offsetX;
+      rect.y -= offsetY;
+    }
+  }
+  addFidelity(
+    context.fidelity,
+    'modelled',
+    'native_container_scrolling',
+    `Resolved content extents ${right - viewport.x} by ${bottom - viewport.y}; offsets ${offsetX},${offsetY} are clamped to ${maximumX},${maximumY}. Nested container bounds, not their overflowing descendants, contribute to the parent range.`,
+    definition,
+  );
+  if (property(definition.attributes, 'margin') !== undefined)
+    addFidelity(
+      context.fidelity,
+      'modelled',
+      'margin',
+      'Container margins preserve fixed border content and inset the scrolling clip without adding child-layout padding.',
+      definition,
+    );
+  const autohide = scalarBoolean(property(definition.attributes, 'autohide_scrollbars')) ?? true;
+  const barLayouts: Array<{
+    definition: GuiElementDefinition;
+    rect: GuiRect;
+    scale: number;
+    horizontal: boolean;
+    shown: boolean;
+    index: number;
+  }> = [];
+  for (const [index, attached] of scrollbars.entries()) {
+    const maximum = attached.horizontal ? maximumX : maximumY;
+    const offset = attached.horizontal ? offsetX : offsetY;
+    const size = objectProperty(property(attached.definition.attributes, 'size'));
+    const barScale =
+      scale * (scalarNumber(property(attached.definition.attributes, 'scale'), 1) ?? 1);
+    if (!Number.isFinite(barScale) || barScale <= 0) {
+      addFidelity(
+        context.fidelity,
+        'unsupported',
+        'attached_scrollbar_scale',
+        'Attached scrollbar scale must be positive and finite.',
+        attached.definition,
+      );
+      continue;
+    }
+    const barWidth = attached.horizontal
+      ? viewport.width
+      : (scaledNumber(
+          size === undefined ? undefined : property(size, 'width', 'x'),
+          viewport.width,
+          barScale,
+        ) ?? 0);
+    const barHeight = attached.horizontal
+      ? (scaledNumber(
+          size === undefined ? undefined : property(size, 'height', 'y'),
+          viewport.height,
+          barScale,
+        ) ?? 0)
+      : viewport.height;
+    const position = objectProperty(property(attached.definition.attributes, 'position'));
+    const axis = anchorAxes(
+      scalarString(property(attached.definition.attributes, 'orientation'))?.toLowerCase() ??
+        'upper_left',
+    );
+    const origin =
+      scalarBoolean(property(attached.definition.attributes, 'centerposition')) === true
+        ? { horizontal: 'center' as const, vertical: 'center' as const }
+        : anchorAxes(
+            scalarString(property(attached.definition.attributes, 'origo'))?.toLowerCase() ??
+              'upper_left',
+          );
+    const coordinate = (horizontal: boolean) => {
+      const key = `${attached.definition.name}.${horizontal ? 'x' : 'y'}`;
+      const explicit =
+        rowValues?.[key] ?? context.scenario.values[key] ?? context.scenario.scriptedGui[key];
+      const span = horizontal ? viewport.width : viewport.height;
+      const offset =
+        typeof explicit === 'number' && Number.isFinite(explicit)
+          ? explicit * scale
+          : (scaledNumber(
+              position === undefined ? undefined : property(position, horizontal ? 'x' : 'y'),
+              span,
+              scale,
+            ) ?? 0);
+      const anchor = horizontal ? axis.horizontal : axis.vertical;
+      const origo = horizontal ? origin.horizontal : origin.vertical;
+      const length = horizontal ? barWidth : barHeight;
+      return (
+        anchoredCoordinate(horizontal ? viewport.x : viewport.y, span, offset, anchor) -
+        (origo === 'center' ? length / 2 : origo === 'right' || origo === 'bottom' ? length : 0)
+      );
+    };
+    const bar: GuiElementDefinition = {
+      ...attached.definition,
+      id: `${attached.definition.id}:attached-${definition.id}-${index}`,
+      sourceOwnerId: attached.definition.id,
+      parentId: definition.id,
+      attributes: {
+        ...attached.definition.attributes,
+        size: {
+          width: attached.horizontal
+            ? viewport.width / barScale
+            : ((size === undefined ? undefined : property(size, 'width', 'x')) ?? 0),
+          height: attached.horizontal
+            ? ((size === undefined ? undefined : property(size, 'height', 'y')) ?? 0)
+            : viewport.height / barScale,
+        },
+        minValue: 0,
+        maxValue: maximum,
+        startValue: offset,
+        ...(maximum === 0 ? { enabled: false } : {}),
+      },
+    };
+    const sourceShown =
+      scalarBoolean(property(bar.attributes, 'visible')) ??
+      !(scalarBoolean(property(bar.attributes, 'hide', 'hidden')) ?? false);
+    barLayouts.push({
+      definition: bar,
+      rect: { x: coordinate(true), y: coordinate(false), width: barWidth, height: barHeight },
+      scale: barScale,
+      horizontal: attached.horizontal,
+      shown:
+        explicitElementVisibility(bar, context.scenario, rowValues) ??
+        (sourceShown && (!autohide || maximum > 0)),
+      index,
+    });
+  }
+  const horizontal = barLayouts.find((bar) => bar.horizontal && bar.shown);
+  const vertical = barLayouts.find((bar) => !bar.horizontal && bar.shown);
+  if (
+    horizontal !== undefined &&
+    vertical !== undefined &&
+    rectIntersection(horizontal.rect, vertical.rect) !== undefined
+  ) {
+    const horizontalRect = { ...horizontal.rect };
+    const verticalRect = { ...vertical.rect };
+    // Each visible orthogonal scrollbar reserves its actual anchored gutter, including its inset.
+    if (
+      verticalRect.x + verticalRect.width / 2 >=
+      owner.unclippedRect.x + owner.unclippedRect.width / 2
+    )
+      horizontal.rect.width = Math.max(0, verticalRect.x - horizontalRect.x);
+    else {
+      horizontal.rect.x = Math.max(horizontalRect.x, verticalRect.x + verticalRect.width);
+      horizontal.rect.width = Math.max(
+        0,
+        horizontalRect.x + horizontalRect.width - horizontal.rect.x,
+      );
+    }
+    if (
+      horizontalRect.y + horizontalRect.height / 2 >=
+      owner.unclippedRect.y + owner.unclippedRect.height / 2
+    )
+      vertical.rect.height = Math.max(0, horizontalRect.y - verticalRect.y);
+    else {
+      vertical.rect.y = Math.max(verticalRect.y, horizontalRect.y + horizontalRect.height);
+      vertical.rect.height = Math.max(0, verticalRect.y + verticalRect.height - vertical.rect.y);
+    }
+    addFidelity(
+      context.fidelity,
+      'modelled',
+      'orthogonal_scrollbar_gutters',
+      'Visible horizontal and vertical scrollbars reserve their anchored cross-axis gutters instead of drawing their end buttons over the same corner.',
+      definition,
+    );
+  }
+  for (const bar of barLayouts) {
+    await layoutElement(
+      {
+        ...bar.definition,
+        attributes: {
+          ...bar.definition.attributes,
+          position: {
+            x: (bar.rect.x - owner.unclippedRect.x) / scale,
+            y: (bar.rect.y - owner.unclippedRect.y) / scale,
+          },
+          size: { width: bar.rect.width / bar.scale, height: bar.rect.height / bar.scale },
+          orientation: 'upper_left',
+          origo: 'upper_left',
+          centerposition: false,
+        },
+      },
+      owner.unclippedRect,
+      clippedByChain(geometry.clipChain),
+      scale,
+      depth + 1,
+      context,
+      `${instanceSuffix}#scrollbar-${definition.id}-${bar.index}`,
+      rowIndex,
+      {
+        ...rowValues,
+        [`${bar.definition.name}.x`]: (bar.rect.x - owner.unclippedRect.x) / scale,
+        [`${bar.definition.name}.y`]: (bar.rect.y - owner.unclippedRect.y) / scale,
+      },
+      owner.id,
+      'upper_left',
+      geometry.appearanceVisible && bar.shown,
+      geometry.clipChain,
+    );
+  }
+}
+
 async function layoutElement(
   definition: GuiElementDefinition,
   parentRect: GuiRect,
@@ -949,11 +1725,13 @@ async function layoutElement(
   parentInstanceId?: string,
   inheritedOrientation = 'upper_left',
   inheritedVisible = true,
+  inheritedClipChain?: readonly GuiRect[],
 ): Promise<void> {
   context.work.admitElement(depth);
   const { scenario, catalog, fidelity, diagnostics } = context;
   const instanceId =
     instanceSuffix.length === 0 ? definition.id : `${definition.id}${instanceSuffix}`;
+  const clipChain = inheritedClipChain ?? (inheritedClip === undefined ? [] : [inheritedClip]);
   const localScale = scalarNumber(property(definition.attributes, 'scale'), 1) ?? 1;
   const scale = parentScale * localScale;
   const position = objectProperty(property(definition.attributes, 'position'));
@@ -986,28 +1764,56 @@ async function layoutElement(
       parentScale,
     ) ??
     0;
-  let width =
-    scaledNumber(
-      size === undefined ? undefined : property(size, 'width', 'x'),
-      parentRect.width,
-      scale,
-    ) ?? 0;
-  let height =
-    scaledNumber(
-      size === undefined ? undefined : property(size, 'height', 'y'),
-      parentRect.height,
-      scale,
-    ) ?? 0;
-  const scriptedVisible =
-    rowValues?.[`${definition.name}.visible`] ??
-    scenario.values[`${definition.name}.visible`] ??
-    scenario.scriptedGui[`${definition.name}.visible`];
-  const explicitlyVisible =
-    scenario.visibility[definition.name] ??
-    scenario.visibility[definition.id] ??
-    (typeof scriptedVisible === 'boolean' ? scriptedVisible : undefined);
-  const resolveVisibleAppearance = inheritedVisible && explicitlyVisible !== false;
-  const background = objectProperty(property(definition.attributes, 'background'));
+  const orientation =
+    scalarString(property(definition.attributes, 'orientation'))?.toLowerCase() ??
+    inheritedOrientation;
+  const origo =
+    scalarString(property(definition.attributes, 'origo'))?.toLowerCase() ?? 'upper_left';
+  const orientationAxes = anchorAxes(orientation);
+  const anchorX = anchoredCoordinate(
+    parentRect.x,
+    parentRect.width,
+    localX,
+    orientationAxes.horizontal,
+  );
+  const anchorY = anchoredCoordinate(
+    parentRect.y,
+    parentRect.height,
+    localY,
+    orientationAxes.vertical,
+  );
+  const widthValue = size === undefined ? undefined : property(size, 'width', 'x');
+  const heightValue = size === undefined ? undefined : property(size, 'height', 'y');
+  let width = scaledNumber(widthValue, parentRect.width, scale) ?? 0;
+  let height = scaledNumber(heightValue, parentRect.height, scale) ?? 0;
+  // A doubled percent names a far-edge coordinate in the parent, whereas a single
+  // percent is a proportional extent. Resolve the anchor first, including screen-centred roots.
+  if (typeof widthValue === 'string' && widthValue.endsWith('%%'))
+    width = Math.max(0, width - (anchorX - parentRect.x));
+  if (typeof heightValue === 'string' && heightValue.endsWith('%%'))
+    height = Math.max(0, height - (anchorY - parentRect.y));
+  const inferWidth = !(typeof widthValue === 'string' && widthValue.endsWith('%%'));
+  const inferHeight = !(typeof heightValue === 'string' && heightValue.endsWith('%%'));
+  // Native negative extents specify an inset from the parent's far edge.
+  if (width < 0) width = Math.max(0, parentRect.width - localX + width);
+  if (height < 0) height = Math.max(0, parentRect.height - localY + height);
+  const explicitlyVisible = explicitElementVisibility(definition, scenario, rowValues);
+  const declaredHidden = scalarBoolean(property(definition.attributes, 'hide', 'hidden')) ?? false;
+  const sourceVisible =
+    scalarBoolean(property(definition.attributes, 'visible')) ?? !declaredHidden;
+  const resolveVisibleAppearance = inheritedVisible && (explicitlyVisible ?? sourceVisible);
+  const scriptedEnabled =
+    rowValues?.[`${definition.name}.enabled`] ??
+    scenario.values[`${definition.name}.enabled`] ??
+    scenario.scriptedGui[`${definition.name}.enabled`] ??
+    context.constantElementEnabled[definition.name] ??
+    scalarBoolean(property(definition.attributes, 'enabled'));
+  const requestedState = scenario.elementStates[definition.name] ?? scenario.state;
+  const state: GuiPreviewState = scriptedEnabled === false ? 'disabled' : requestedState;
+  const backgroundValue = property(definition.attributes, 'background');
+  const backgrounds = (Array.isArray(backgroundValue) ? backgroundValue : [backgroundValue])
+    .map(objectProperty)
+    .filter((value): value is Record<string, GuiPropertyValue> => value !== undefined);
   const scriptedImage =
     rowValues?.[`${definition.name}.image`] ??
     rowValues?.[definition.name] ??
@@ -1017,17 +1823,15 @@ async function layoutElement(
     scenario.scriptedGui[definition.name];
   const spriteName =
     (typeof scriptedImage === 'string' && scriptedImage.length > 0 ? scriptedImage : undefined) ??
-    scalarString(property(definition.attributes, 'spriteType', 'quadTextureSprite')) ??
-    scalarString(
-      background === undefined
-        ? undefined
-        : property(background, 'spriteType', 'quadTextureSprite'),
-    );
+    scalarString(property(definition.attributes, 'spriteType', 'quadTextureSprite'));
   const spriteDefinition =
     spriteName === undefined ? undefined : context.spritesByName.get(spriteName.toLowerCase());
   let sprite: GuiSceneElement['sprite'];
   let secondarySprite: GuiSceneElement['secondarySprite'];
   let spriteRenderMode: GuiSceneElement['spriteRenderMode'];
+  let spriteShader: GuiSceneElement['spriteShader'];
+  let progressShader: GuiSceneElement['progressShader'];
+  let progressColours: GuiSceneElement['progressColours'];
   const countryFlag = dynamicCountryFlag(
     definition.name,
     context.countryFlagProperties.get(definition.name),
@@ -1043,8 +1847,8 @@ async function layoutElement(
     );
     spriteRenderMode = 'stretch';
     if (sprite.supported) {
-      if (width === 0) width = sprite.width * scale;
-      if (height === 0) height = sprite.height * scale;
+      if (width === 0 && inferWidth) width = sprite.width * scale;
+      if (height === 0 && inferHeight) height = sprite.height * scale;
       addFidelity(
         fidelity,
         'modelled',
@@ -1105,10 +1909,73 @@ async function layoutElement(
           : spriteType === 'maskedshieldtype'
             ? 'masked-shield'
             : 'stretch';
-    if (spriteDefinition.effectFile !== undefined) {
-      const detail = `Effect ${spriteDefinition.effectFile} is retained in the source graph but is not executed by the offline renderer.`;
-      addFidelity(fidelity, 'unsupported', 'effectFile', detail, definition);
-      partialAppearance.push(detail);
+    const colourProgress =
+      spriteRenderMode === 'progressbar' &&
+      spriteDefinition.texturePath === undefined &&
+      spriteDefinition.texturePath2 === undefined &&
+      spriteDefinition.primaryColour !== undefined &&
+      spriteDefinition.secondaryColour !== undefined;
+    if (colourProgress) {
+      progressColours = {
+        first: spriteDefinition.primaryColour!,
+        second: spriteDefinition.secondaryColour!,
+      };
+      if (width === 0 && inferWidth) width = (spriteDefinition.declaredSize?.width ?? 0) * scale;
+      if (height === 0 && inferHeight)
+        height = (spriteDefinition.declaredSize?.height ?? 0) * scale;
+    }
+    if (spriteDefinition.effectFile !== undefined && spriteRenderMode === 'progressbar') {
+      const shader = catalog.progressShader(spriteDefinition, colourProgress ? 'Color' : 'Texture');
+      if (shader.supported) {
+        progressShader = shader.shader;
+        addFidelity(
+          fidelity,
+          'modelled',
+          'progress_shader_threshold',
+          `${progressShader.sourcePath} :: ${progressShader.entryPoint} selects one of two ${colourProgress ? 'colours' : 'textures'} at the supplied progress.`,
+          definition,
+        );
+      } else {
+        const detail = `Effect ${spriteDefinition.effectFile}: ${shader.reason}`;
+        addFidelity(fidelity, 'unsupported', 'effectFile', detail, definition);
+        partialAppearance.push(detail);
+      }
+    } else if (spriteDefinition.effectFile !== undefined) {
+      const pressed =
+        rowValues?.[`${definition.name}.pressed`] ?? scenario.values[`${definition.name}.pressed`];
+      const effect =
+        state === 'disabled' || state === 'locked'
+          ? 'Disable'
+          : pressed === true
+            ? 'Down'
+            : state === 'hover'
+              ? 'Over'
+              : 'Up';
+      const elapsed =
+        rowValues?.[`${definition.name}.stateTimeSeconds`] ??
+        scenario.values[`${definition.name}.stateTimeSeconds`] ??
+        scenario.animationTimeSeconds;
+      const shader = catalog.spriteShader(spriteDefinition, effect, {
+        time:
+          typeof elapsed === 'number'
+            ? Math.max(0, Math.min(86_400, elapsed))
+            : scenario.animationTimeSeconds,
+        animationTime: 0,
+      });
+      if (shader.supported) {
+        spriteShader = shader.shader;
+        addFidelity(
+          fidelity,
+          'modelled',
+          'sprite_shader_colour',
+          `${spriteShader.sourcePath} :: ${spriteShader.entryPoint} supplies the ${effect} colour transform.`,
+          definition,
+        );
+      } else {
+        const detail = `Effect ${spriteDefinition.effectFile}: ${shader.reason}`;
+        addFidelity(fidelity, 'unsupported', 'effectFile', detail, definition);
+        partialAppearance.push(detail);
+      }
     }
     if (partialAppearance.length > 0)
       diagnostics.push(
@@ -1119,11 +1986,19 @@ async function layoutElement(
           definition,
         ),
       );
-    const frame = frameFor(definition, spriteDefinition, scenario, rowValues);
+    const frame = frameFor(definition, spriteDefinition, scenario, rowValues, state);
     sprite = await catalog.loadSpriteFrame(spriteDefinition, frame);
     if (spriteDefinition.texturePath2 !== undefined)
       secondarySprite = await catalog.loadSecondarySpriteFrame(spriteDefinition, frame);
-    if (!sprite?.supported) {
+    if (colourProgress) {
+      addFidelity(
+        fidelity,
+        partialAppearance.length === 0 ? 'modelled' : 'approximated',
+        'progressbar_composition',
+        `Progress bar ${spriteDefinition.name} uses its declared primary and secondary colours without a texture.`,
+        definition,
+      );
+    } else if (!sprite?.supported) {
       addFidelity(
         fidelity,
         'unsupported',
@@ -1140,8 +2015,8 @@ async function layoutElement(
         ),
       );
     } else {
-      if (width === 0) width = sprite.width * scale;
-      if (height === 0) height = sprite.height * scale;
+      if (width === 0 && inferWidth) width = sprite.width * scale;
+      if (height === 0 && inferHeight) height = sprite.height * scale;
       addFidelity(
         fidelity,
         partialAppearance.length === 0 ? 'modelled' : 'approximated',
@@ -1229,12 +2104,21 @@ async function layoutElement(
     );
 
   const rawButtonText = scalarString(property(definition.attributes, 'buttonText'));
-  const rawText = scalarString(property(definition.attributes, 'text')) ?? rawButtonText;
+  const overrideText =
+    rowValues?.[`${definition.name}.text`] ??
+    scenario.values[`${definition.name}.text`] ??
+    scenario.scriptedGui[`${definition.name}.text`];
+  const rawText =
+    (typeof overrideText === 'string' || typeof overrideText === 'number'
+      ? String(overrideText)
+      : undefined) ??
+    scalarString(property(definition.attributes, 'text', 'context_aware_text')) ??
+    rawButtonText;
   const embeddedButtonText =
     rawText !== undefined &&
     (rawButtonText !== undefined || definition.elementType.toLowerCase().includes('button'));
   let text: GuiTextLayout | undefined;
-  if (rawText !== undefined && resolveVisibleAppearance) {
+  if (rawText !== undefined && rawText.length > 0 && resolveVisibleAppearance) {
     const resolved = resolveTokenText(rawText, scenario, context.localisation, rowValues);
     let displayText = resolved.text;
     const state = scenario.elementStates[definition.name] ?? scenario.state;
@@ -1313,8 +2197,10 @@ async function layoutElement(
       parentRect.height,
       scale,
     );
-    if (width === 0 && declaredMaxWidth !== undefined) width = declaredMaxWidth;
-    if (height === 0 && declaredMaxHeight !== undefined) height = declaredMaxHeight;
+    if (width === 0 && inferWidth && declaredMaxWidth !== undefined) width = declaredMaxWidth;
+    if (width === 0 && inferWidth && /textbox/iu.test(definition.elementType))
+      width = nativeTextBoxWidth * scale;
+    if (height === 0 && inferHeight && declaredMaxHeight !== undefined) height = declaredMaxHeight;
     const maxWidth = declaredMaxWidth ?? width;
     const wrapped = wrapText(
       catalog,
@@ -1355,8 +2241,8 @@ async function layoutElement(
         )
       : undefined;
     const maximumLineWidth = wrapped.widths.reduce((maximum, value) => Math.max(maximum, value), 0);
-    if (width === 0) width = maximumLineWidth;
-    if (height === 0) height = wrapped.lines.length * wrapped.lineHeight;
+    if (width === 0 && inferWidth) width = maximumLineWidth;
+    if (height === 0 && inferHeight) height = wrapped.lines.length * wrapped.lineHeight;
     const measuredWidth = maximumLineWidth;
     const measuredHeight = wrapped.lines.length * wrapped.lineHeight;
     text = {
@@ -1438,7 +2324,7 @@ async function layoutElement(
         `BMFont native size ${resolvedFontMetrics.nativeSize}, line height ${resolvedFontMetrics.nativeLineHeight}, and baseline ${resolvedFontMetrics.nativeBaseline}${explicitFontSize === undefined ? ' determine this element layout' : ' are scaled to the element fontSize'}.`,
         definition,
       );
-    if (resolved.missingLocalisation)
+    if (resolved.missingLocalisation && overrideText === undefined)
       addFidelity(
         fidelity,
         'missing',
@@ -1456,14 +2342,8 @@ async function layoutElement(
       );
   }
 
-  const orientation =
-    scalarString(property(definition.attributes, 'orientation'))?.toLowerCase() ??
-    inheritedOrientation;
-  const origo =
-    scalarString(property(definition.attributes, 'origo'))?.toLowerCase() ?? 'upper_left';
-  const orientationAxes = anchorAxes(orientation);
-  let x = anchoredCoordinate(parentRect.x, parentRect.width, localX, orientationAxes.horizontal);
-  let y = anchoredCoordinate(parentRect.y, parentRect.height, localY, orientationAxes.vertical);
+  let x = anchorX;
+  let y = anchorY;
   const centerPosition = scalarBoolean(property(definition.attributes, 'centerposition')) ?? false;
   const origoAxes = centerPosition
     ? { horizontal: 'center' as const, vertical: 'center' as const }
@@ -1473,12 +2353,56 @@ async function layoutElement(
   } else if (origoAxes.horizontal === 'right') x -= width;
   if (origoAxes.vertical === 'center') y -= height / 2;
   else if (origoAxes.vertical === 'bottom') y -= height;
-  const scrollOffset =
-    (scenario.scrollOffsets[definition.name] ?? scenario.scrollOffsets[definition.id] ?? 0) * scale;
   const unclippedRect = { x, y, width: Math.max(0, width), height: Math.max(0, height) };
   const ownClipping =
     scalarBoolean(property(definition.attributes, 'clipping')) ??
-    (background !== undefined && /(?:containerwindow|windowtype)/iu.test(definition.elementType));
+    (backgrounds.length > 0 && /(?:containerwindow|windowtype)/iu.test(definition.elementType));
+  let scrollbars = attachedScrollbars(definition, context);
+  if (scrollbars.length > 0 && (!ownClipping || backgrounds.length === 0)) {
+    diagnostics.push(
+      diagnostic(
+        'GUI_SCROLLBAR_CONTAINER_BOUNDARY_MISSING',
+        'warning',
+        `Container ${definition.name} needs a background and clipping for attached scrolling.`,
+        definition,
+      ),
+    );
+    addFidelity(
+      fidelity,
+      'unsupported',
+      'attached_scrollbar',
+      'The container has no active clipped background boundary.',
+      definition,
+    );
+    scrollbars = [];
+  }
+  const margin =
+    scrollbars.length === 0 ? undefined : objectProperty(property(definition.attributes, 'margin'));
+  const inset = (name: string, reference: number) =>
+    Math.max(
+      0,
+      Math.min(
+        reference,
+        scaledNumber(margin === undefined ? undefined : property(margin, name), reference, scale) ??
+          0,
+      ),
+    );
+  const left = inset('left', unclippedRect.width);
+  const top = inset('top', unclippedRect.height);
+  const contentRect = {
+    x: x + left,
+    y: y + top,
+    width: Math.max(0, unclippedRect.width - left - inset('right', unclippedRect.width)),
+    height: Math.max(0, unclippedRect.height - top - inset('bottom', unclippedRect.height)),
+  };
+  const scrollOffset =
+    scrollbars.length > 0
+      ? 0
+      : (scenario.scrollOffsets[`${definition.name}${instanceSuffix}`] ??
+          scenario.scrollOffsets[`${definition.name}${legacyRowSuffix(instanceSuffix)}`] ??
+          scenario.scrollOffsets[definition.name] ??
+          scenario.scrollOffsets[definition.id] ??
+          0) * scale;
   const availableClip =
     inheritedClip === undefined ? unclippedRect : rectIntersection(inheritedClip, unclippedRect);
   const clipRect = inheritedClip;
@@ -1486,23 +2410,18 @@ async function layoutElement(
     clipRect !== undefined &&
     (availableClip === undefined || !equalRect(unclippedRect, availableClip));
   const visible =
-    inheritedVisible &&
-    (explicitlyVisible ?? (availableClip !== undefined || inheritedClip === undefined));
+    resolveVisibleAppearance && (availableClip !== undefined || inheritedClip === undefined);
   const clickThrough =
     scalarBoolean(
       property(definition.attributes, 'clickThrough', 'alwaystransparent', 'allwaystransparent'),
     ) ?? false;
-  const scriptedEnabled =
-    rowValues?.[`${definition.name}.enabled`] ??
-    scenario.values[`${definition.name}.enabled`] ??
-    scenario.scriptedGui[`${definition.name}.enabled`] ??
-    context.constantElementEnabled[definition.name];
   const clickable =
-    clickableTypes.test(definition.elementType) && !clickThrough && scriptedEnabled !== false;
-  const state: GuiPreviewState = scenario.elementStates[definition.name] ?? scenario.state;
-  const zPriority = scalarNumber(property(definition.attributes, 'priority'), 0) ?? 0;
+    clickableTypes.test(definition.elementType) &&
+    !clickThrough &&
+    state !== 'disabled' &&
+    state !== 'locked';
   let progressRatio: number | undefined;
-  if (/progressbar/iu.test(definition.elementType)) {
+  if (/progressbar/iu.test(definition.elementType) || spriteRenderMode === 'progressbar') {
     const minimum = scalarNumber(property(definition.attributes, 'minValue'), 1) ?? 0;
     const maximum = scalarNumber(property(definition.attributes, 'maxValue'), 1) ?? 100;
     const startValueToken = scalarString(property(definition.attributes, 'startValue'));
@@ -1523,10 +2442,16 @@ async function layoutElement(
     if (state === 'maximum-value' || state === 'completed') value = maximum;
     progressRatio =
       maximum === minimum ? 0 : Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum)));
+    const explicitProgress =
+      rowValues?.[`${definition.name}.progress`] ??
+      scenario.values[`${definition.name}.progress`] ??
+      scenario.scriptedGui[`${definition.name}.progress`];
+    if (typeof explicitProgress === 'number')
+      progressRatio = Math.max(0, Math.min(1, explicitProgress));
   }
   const sceneElement: GuiSceneElement = {
     id: instanceId,
-    sourceId: definition.id,
+    sourceId: definition.sourceOwnerId ?? definition.id,
     name: definition.name,
     elementType: definition.elementType,
     ...(parentInstanceId === undefined
@@ -1540,7 +2465,7 @@ async function layoutElement(
           }
       : { parentId: parentInstanceId }),
     depth,
-    zIndex: Math.trunc(zPriority * 1_000_000 + definition.definitionOrder),
+    zIndex: context.output.length,
     visible,
     clickable,
     clickThrough,
@@ -1554,6 +2479,9 @@ async function layoutElement(
     ...(sprite === undefined ? {} : { sprite }),
     ...(secondarySprite === undefined ? {} : { secondarySprite }),
     ...(spriteRenderMode === undefined ? {} : { spriteRenderMode }),
+    ...(spriteShader === undefined ? {} : { spriteShader }),
+    ...(progressShader === undefined ? {} : { progressShader }),
+    ...(progressColours === undefined ? {} : { progressColours }),
     ...(spriteDefinition?.borderSize === undefined
       ? {}
       : { spriteBorderSize: spriteDefinition.borderSize }),
@@ -1571,6 +2499,63 @@ async function layoutElement(
   };
   context.output.push(sceneElement);
   context.instancesById.set(instanceId, sceneElement);
+  context.geometry.set(instanceId, {
+    appearanceVisible: resolveVisibleAppearance,
+    clipChain,
+    contentRect,
+    measuredRect: unclippedRect,
+  });
+  for (const [index, attributes] of backgrounds.entries()) {
+    const backgroundSprite = scalarString(property(attributes, 'spriteType', 'quadTextureSprite'));
+    const nativeSprite =
+      backgroundSprite === undefined
+        ? undefined
+        : context.spritesByName.get(backgroundSprite.toLowerCase());
+    const tiled = nativeSprite?.spriteType.toLowerCase() === 'corneredtilespritetype';
+    const backgroundDefinition: GuiElementDefinition = {
+      ...definition,
+      id: `${definition.id}:background-${index}`,
+      sourceOwnerId: definition.sourceOwnerId ?? definition.id,
+      name: scalarString(property(attributes, 'name')) ?? `${definition.name}_background_${index}`,
+      elementType: 'background',
+      parentId: definition.id,
+      childIds: [],
+      attributes: {
+        ...attributes,
+        ...(tiled && property(attributes, 'size') === undefined
+          ? { size: { width: width / scale, height: height / scale } }
+          : {}),
+        alwaystransparent: true,
+      },
+      unsupportedAttributes: Object.keys(attributes).filter(
+        (key) => guiElementAttributeFidelity(key) === 'unsupported',
+      ),
+    };
+    await layoutElement(
+      backgroundDefinition,
+      unclippedRect,
+      inheritedClip,
+      scale,
+      depth + 1,
+      context,
+      instanceSuffix,
+      rowIndex,
+      rowValues,
+      instanceId,
+      'upper_left',
+      resolveVisibleAppearance,
+      clipChain,
+    );
+    addFidelity(
+      fidelity,
+      'modelled',
+      'native_background',
+      tiled
+        ? 'Cornered background fills its container; fixed source borders retain their native size.'
+        : 'Fixed background retains its native texture size and local position independently of the container bounds.',
+      definition,
+    );
+  }
   addFidelity(
     fidelity,
     'modelled',
@@ -1581,7 +2566,7 @@ async function layoutElement(
   for (const attribute of Object.keys(definition.attributes).sort((left, right) =>
     compareCodeUnits(left, right),
   )) {
-    const classification = guiElementAttributeFidelity(attribute);
+    const classification = guiElementAttributeFidelity(attribute, definition.elementType);
     if (classification === 'structural' || classification === 'unsupported') continue;
     addFidelity(
       fidelity,
@@ -1613,36 +2598,102 @@ async function layoutElement(
   const childParentRect = { ...unclippedRect, y: unclippedRect.y - scrollOffset };
   const childClip = ownClipping
     ? inheritedClip === undefined
-      ? unclippedRect
-      : rectIntersection(inheritedClip, unclippedRect)
+      ? contentRect
+      : (rectIntersection(inheritedClip, contentRect) ?? {
+          ...contentRect,
+          width: 0,
+          height: 0,
+        })
     : inheritedClip;
-  const childDefinitions = definition.childIds
-    .map((id) => context.elementsById.get(id))
-    .filter((element): element is GuiElementDefinition => element !== undefined);
-  let rows = scenario.lists[definition.name] ?? scenario.lists[definition.id];
+  const childClipChain = ownClipping ? [...clipChain, contentRect] : clipChain;
+  const childDefinitions = await scrollbarChildren(
+    definition,
+    definition.childIds
+      .map((id) => context.elementsById.get(id))
+      .filter((element): element is GuiElementDefinition => element !== undefined)
+      .filter(
+        (element) =>
+          !/^(?:containerwindowtype|windowtype)$/iu.test(definition.elementType) ||
+          element.elementType.toLowerCase() !== 'extendedscrollbartype',
+      )
+      .sort(
+        (left, right) =>
+          (scalarNumber(property(left.attributes, 'priority'), 0) ?? 0) -
+            (scalarNumber(property(right.attributes, 'priority'), 0) ?? 0) ||
+          left.definitionOrder - right.definitionOrder,
+      ),
+    unclippedRect,
+    scale,
+    context,
+    rowValues,
+  );
+  const rowList = rowValues?.[`${definition.name}.list`];
+  let rows =
+    (typeof rowList === 'string' ? scenario.lists[rowList] : undefined) ??
+    scenario.lists[`${definition.name}${instanceSuffix}`] ??
+    scenario.lists[`${definition.name}${legacyRowSuffix(instanceSuffix)}`] ??
+    scenario.lists[definition.name] ??
+    scenario.lists[definition.id];
   if (state === 'empty-list') rows = [];
   if (state === 'full-list' && rows === undefined)
     rows = Array.from({ length: 12 }, (_unused, index) => ({ index }));
   const dynamicList = context.dynamicListsByName.get(definition.name);
-  const listElement = /(?:grid|listbox|scroll)/iu.test(definition.elementType);
+  const listElement = /(?:grid|listbox|overlappingelements)/iu.test(definition.elementType);
   const slotSize = objectProperty(property(definition.attributes, 'slotsize'));
   const slotHeight = scaledNumber(
     slotSize === undefined ? undefined : property(slotSize, 'height', 'y'),
     height,
     scale,
   );
+  const slotWidth = scaledNumber(
+    slotSize === undefined ? undefined : property(slotSize, 'width', 'x'),
+    width,
+    scale,
+  );
+  const spacingValue = objectProperty(property(definition.attributes, 'spacing'));
+  const spacingY =
+    (scalarNumber(
+      spacingValue === undefined
+        ? property(definition.attributes, 'spacing')
+        : property(spacingValue, 'y'),
+      height,
+    ) ?? 0) * scale;
+  const spacingX =
+    (scalarNumber(
+      spacingValue === undefined
+        ? property(definition.attributes, 'spacing')
+        : property(spacingValue, 'x'),
+      width,
+    ) ?? 0) * scale;
+  const maxHorizontal = scalarNumber(property(definition.attributes, 'max_slots_horizontal'), 1);
+  const maxVertical = scalarNumber(property(definition.attributes, 'max_slots_vertical'), 1);
+  const grid = /grid/iu.test(definition.elementType);
+  const rowPosition = (index: number, fallbackY: number): { x: number; y: number } => {
+    if (!grid || slotWidth === undefined || slotHeight === undefined) return { x: 0, y: fallbackY };
+    if (maxVertical !== undefined && maxVertical > 0) {
+      const rowsPerColumn = Math.max(1, Math.trunc(maxVertical));
+      return {
+        x: Math.floor(index / rowsPerColumn) * (slotWidth + spacingX),
+        y: (index % rowsPerColumn) * (slotHeight + spacingY),
+      };
+    }
+    const fit = Math.max(1, Math.floor((width + spacingX) / Math.max(1, slotWidth + spacingX)));
+    const columns =
+      maxHorizontal === undefined || maxHorizontal <= 0
+        ? fit
+        : Math.max(1, Math.min(fit, Math.trunc(maxHorizontal)));
+    return {
+      x: (index % columns) * (slotWidth + spacingX),
+      y: Math.floor(index / columns) * (slotHeight + spacingY),
+    };
+  };
+  const firstChildOutput = context.output.length;
+  const rowSuffix = (index: number) => `${instanceSuffix}#list-${definition.id}#row-${index}`;
   if (rows !== undefined && childDefinitions.length > 0 && listElement) {
-    const spacingValue = objectProperty(property(definition.attributes, 'spacing'));
-    const spacingY =
-      scalarNumber(
-        spacingValue === undefined
-          ? property(definition.attributes, 'spacing')
-          : property(spacingValue, 'y'),
-        height,
-      ) ?? 0;
     let rowY = 0;
     for (const [index, row] of rows.entries()) {
       context.work.spend('scenario list row expansion');
+      const offset = rowPosition(index, rowY);
       let rowHeight = 0;
       for (const child of childDefinitions) {
         context.work.spend('scenario list child expansion');
@@ -1654,7 +2705,10 @@ async function layoutElement(
           ) ?? 0;
         const shiftedParent = {
           ...childParentRect,
-          y: childParentRect.y + rowY - originalY * scale,
+          x: childParentRect.x + offset.x,
+          y: childParentRect.y + offset.y - originalY * scale,
+          ...(slotWidth === undefined ? {} : { width: slotWidth }),
+          ...(slotHeight === undefined ? {} : { height: slotHeight }),
         };
         await layoutElement(
           child,
@@ -1663,17 +2717,18 @@ async function layoutElement(
           scale,
           depth + 1,
           context,
-          `${instanceSuffix}#row-${index}`,
+          rowSuffix(index),
           index,
           row,
           instanceId,
           origo,
-          visible,
+          resolveVisibleAppearance,
+          childClipChain,
         );
-        const rendered = context.instancesById.get(`${child.id}${instanceSuffix}#row-${index}`);
+        const rendered = context.instancesById.get(`${child.id}${rowSuffix(index)}`);
         rowHeight = Math.max(rowHeight, rendered?.unclippedRect.height ?? 0);
       }
-      rowY += (slotHeight ?? rowHeight) + spacingY * scale;
+      rowY += (slotHeight ?? rowHeight) + spacingY;
     }
     addFidelity(
       fidelity,
@@ -1682,7 +2737,12 @@ async function layoutElement(
       `Expanded ${rows.length} scenario rows for ${definition.name}.`,
       definition,
     );
-  } else if (rows !== undefined && dynamicList !== undefined && listElement) {
+  } else if (
+    rows !== undefined &&
+    listElement &&
+    (dynamicList !== undefined ||
+      rows.some(({ entryContainer }) => typeof entryContainer === 'string'))
+  ) {
     let rowY = 0;
     let renderedRows = 0;
     for (const [index, row] of rows.entries()) {
@@ -1693,8 +2753,8 @@ async function layoutElement(
           ? explicitTemplate
           : undefined) ??
         (row.countryScope === true
-          ? (dynamicList.countryScopeEntryContainer ?? dynamicList.entryContainer)
-          : (dynamicList.entryContainer ?? dynamicList.countryScopeEntryContainer));
+          ? (dynamicList?.countryScopeEntryContainer ?? dynamicList?.entryContainer)
+          : (dynamicList?.entryContainer ?? dynamicList?.countryScopeEntryContainer));
       const template =
         templateName === undefined ? undefined : context.elementsByName.get(templateName);
       if (template === undefined) {
@@ -1711,6 +2771,12 @@ async function layoutElement(
         continue;
       }
       const templatePosition = objectProperty(property(template.attributes, 'position'));
+      const offset = rowPosition(index, rowY);
+      const originalX =
+        scalarNumber(
+          templatePosition === undefined ? undefined : property(templatePosition, 'x'),
+          width,
+        ) ?? 0;
       const originalY =
         scalarNumber(
           templatePosition === undefined ? undefined : property(templatePosition, 'y'),
@@ -1718,7 +2784,10 @@ async function layoutElement(
         ) ?? 0;
       const shiftedParent = {
         ...childParentRect,
-        y: childParentRect.y + rowY - originalY * scale,
+        x: childParentRect.x + offset.x - originalX * scale,
+        y: childParentRect.y + offset.y - originalY * scale,
+        ...(slotWidth === undefined ? {} : { width: slotWidth }),
+        ...(slotHeight === undefined ? {} : { height: slotHeight }),
       };
       await layoutElement(
         template,
@@ -1727,22 +2796,23 @@ async function layoutElement(
         scale,
         depth + 1,
         context,
-        `${instanceSuffix}#row-${index}`,
+        rowSuffix(index),
         index,
         row,
         instanceId,
         origo,
-        visible,
+        resolveVisibleAppearance,
+        childClipChain,
       );
-      const rendered = context.instancesById.get(`${template.id}${instanceSuffix}#row-${index}`);
-      rowY += slotHeight ?? rendered?.unclippedRect.height ?? 0;
+      const rendered = context.instancesById.get(`${template.id}${rowSuffix(index)}`);
+      rowY += (slotHeight ?? rendered?.unclippedRect.height ?? 0) + spacingY;
       renderedRows += 1;
     }
     addFidelity(
       fidelity,
       renderedRows === rows.length ? 'modelled' : 'missing',
-      'scripted_gui_dynamic_list',
-      `Expanded ${renderedRows}/${rows.length} scenario rows for ${definition.name} through its scripted-GUI entry containers.`,
+      dynamicList === undefined ? 'native_dynamic_list' : 'scripted_gui_dynamic_list',
+      `Expanded ${renderedRows}/${rows.length} scenario rows for ${definition.name} through ${dynamicList === undefined ? 'explicit native' : 'scripted-GUI'} entry containers.`,
       definition,
     );
   } else {
@@ -1760,10 +2830,36 @@ async function layoutElement(
         rowValues,
         instanceId,
         origo,
-        visible,
+        resolveVisibleAppearance,
+        childClipChain,
       );
     }
   }
+  const childOutput = context.output.slice(firstChildOutput);
+  context.work.spend('child content measurement', childOutput.length);
+  const directChildren = childOutput.filter(
+    (child) => child.parentId === instanceId && context.geometry.get(child.id)!.appearanceVisible,
+  );
+  if (listElement && rows !== undefined) {
+    // Declared list bounds remain a minimum even when its runtime row collection is short.
+    context.geometry.get(instanceId)!.measuredRect = unionRects([
+      unclippedRect,
+      ...directChildren.map((child) => child.unclippedRect),
+    ]);
+  }
+  if (scrollbars.length > 0)
+    await layoutAttachedScrollbars(
+      definition,
+      scrollbars,
+      sceneElement,
+      childOutput,
+      context,
+      depth,
+      scale,
+      rowIndex,
+      rowValues,
+      instanceSuffix,
+    );
 }
 
 /** Build a deterministic GUI scene from the connected source graph and scenario. */
@@ -1806,14 +2902,12 @@ export async function buildGuiScene(
       compareCodeUnits(right.sourcePath, left.sourcePath) ||
       right.definitionOrder - left.definitionOrder,
   )[0];
-  const baseScale =
-    Math.min(scenario.resolution.width / 1920, scenario.resolution.height / 1080) *
-    scenario.uiScale;
+  const baseScale = scenario.uiScale;
   addFidelity(
     fidelity,
-    'approximated',
+    'modelled',
     'resolution_scale',
-    `Coordinates use a 1920x1080 reference with UI scale ${scenario.uiScale}.`,
+    `Pixel dimensions use UI scale ${scenario.uiScale}; resolution changes the viewport and anchors, not the pixel scale.`,
   );
   if (root === undefined) {
     diagnostics.push({
@@ -1881,15 +2975,65 @@ export async function buildGuiScene(
   const resolvedScriptedProperties: Record<string, string | number | boolean> = {};
   const dynamicListsByName = new Map<string, ScriptedGuiDynamicListDefinition>();
   const countryFlagProperties = new Map<string, GuiPropertyValue>();
+  const conditionDefinitions =
+    relevantScriptedGuiNames.size === 0
+      ? undefined
+      : ClausewitzEvaluationDefinitions.build({ files: [...scannedFiles] });
+  const conditionScenario = guiConditionScenario(scenario);
   for (const scripted of graph.scriptedGuis.filter(({ name }) =>
     relevantScriptedGuiNames.has(name),
   )) {
+    const source = scannedFiles.find(({ displayPath }) => displayPath === scripted.sourcePath);
+    const subject = {
+      id: scripted.id,
+      provenance: [],
+      ...(source === undefined
+        ? {}
+        : { document: parseClausewitz(source.bytes, source.displayPath) }),
+    };
+    for (const image of scripted.imageDefinitions ?? []) {
+      let selected: string | undefined;
+      let unresolved = false;
+      for (const choice of image.choices) {
+        const result = evaluateGuiCondition(
+          choice.conditionExpression,
+          conditionScenario,
+          subject,
+          conditionDefinitions,
+        );
+        if (result.state === 'unresolved') {
+          unresolved = true;
+          addFidelity(
+            fidelity,
+            'unresolved',
+            'focus_inlay_image',
+            `${scripted.name}.${image.elementName} requires more scenario facts before selecting a sprite.`,
+          );
+          break;
+        }
+        if (result.state === 'true') {
+          selected = choice.spriteName;
+          break;
+        }
+      }
+      if (unresolved) continue;
+      constantElementVisibility[image.elementName] = selected !== undefined;
+      if (selected !== undefined)
+        resolvedScriptedProperties[`${image.elementName}.image`] = selected;
+      addFidelity(
+        fidelity,
+        'modelled',
+        'focus_inlay_image',
+        `${scripted.name}.${image.elementName} ${selected === undefined ? 'has no matching sprite and is hidden' : `selects ${selected}`}.`,
+      );
+    }
     for (const dynamicList of scripted.dynamicListDefinitions)
       dynamicListsByName.set(dynamicList.name, dynamicList);
     for (const propertyDefinition of scripted.propertyDefinitions) {
       for (const [attribute, expression] of Object.entries(propertyDefinition.attributes)) {
         const suffix = attribute.toLowerCase();
-        if (!['image', 'frame', 'x', 'y', 'visible', 'enabled'].includes(suffix)) continue;
+        if (!['image', 'frame', 'x', 'y', 'visible', 'enabled', 'progress'].includes(suffix))
+          continue;
         const countryFlagExpression =
           suffix === 'image' &&
           typeof expression === 'string' &&
@@ -1897,7 +3041,10 @@ export async function buildGuiScene(
         if (countryFlagExpression)
           countryFlagProperties.set(propertyDefinition.elementName, expression);
         if (countryFlagExpression) continue;
-        const resolved = scenarioExpressionValue(expression, scenario.values);
+        const resolved = scenarioExpressionValue(expression, {
+          ...scenario.variables,
+          ...scenario.values,
+        });
         if (resolved === undefined) continue;
         const key = `${propertyDefinition.elementName}.${suffix}`;
         if (scenario.values[key] === undefined) resolvedScriptedProperties[key] = resolved;
@@ -1910,16 +3057,41 @@ export async function buildGuiScene(
       }
     }
     for (const trigger of scripted.triggerDefinitions) {
-      if (trigger.constantResult === undefined) continue;
+      const evaluated =
+        trigger.conditionExpression === undefined
+          ? undefined
+          : evaluateGuiCondition(
+              trigger.conditionExpression,
+              conditionScenario,
+              subject,
+              conditionDefinitions,
+            );
+      const result =
+        evaluated === undefined
+          ? trigger.constantResult
+          : evaluated.state === 'unresolved'
+            ? undefined
+            : evaluated.state === 'true';
+      if (result === undefined) {
+        addFidelity(
+          fidelity,
+          'unresolved',
+          'scripted_gui_trigger',
+          `${trigger.name} requires more scenario facts.`,
+        );
+        continue;
+      }
       if (trigger.name.endsWith('_visible'))
-        constantElementVisibility[trigger.elementName] = trigger.constantResult;
+        constantElementVisibility[trigger.elementName] = result;
       if (trigger.name.endsWith('_click_enabled'))
-        constantElementEnabled[trigger.elementName] = trigger.constantResult;
+        constantElementEnabled[trigger.elementName] = result;
       addFidelity(
         fidelity,
         'modelled',
-        'scripted_gui_constant_trigger',
-        `${trigger.name} resolves to ${trigger.constantResult ? 'yes' : 'no'}.`,
+        trigger.constantResult === undefined
+          ? 'scripted_gui_trigger'
+          : 'scripted_gui_constant_trigger',
+        `${trigger.name} resolves to ${result ? 'yes' : 'no'}.`,
       );
     }
     addFidelity(
@@ -1929,10 +3101,19 @@ export async function buildGuiScene(
       `${scripted.name} uses ${scripted.contextType ?? '<unspecified>'} context.`,
     );
     if (scripted.visibleExpression === undefined) continue;
+    const evaluatedVisibility = evaluateGuiCondition(
+      scripted.visibleExpression,
+      conditionScenario,
+      subject,
+      conditionDefinitions,
+    );
     const mockedVisibility =
       scenario.visibility[scripted.name] ??
       scenario.values[`${scripted.name}.visible`] ??
-      scenario.scriptedGui[`${scripted.name}.visible`];
+      scenario.scriptedGui[`${scripted.name}.visible`] ??
+      (evaluatedVisibility.state === 'unresolved'
+        ? undefined
+        : evaluatedVisibility.state === 'true');
     if (typeof mockedVisibility === 'boolean') {
       if (scripted.windowName !== undefined)
         scriptedWindowVisibility[scripted.windowName] =
@@ -1941,14 +3122,14 @@ export async function buildGuiScene(
         fidelity,
         'modelled',
         'scripted_gui_visibility',
-        `${scripted.name}.visible was supplied by the preview scenario.`,
+        `${scripted.name}.visible resolves to ${mockedVisibility}.`,
       );
     } else {
       addFidelity(
         fidelity,
         'unresolved',
         'scripted_gui_visibility',
-        `${scripted.name}.visible requires an explicit scenario mock; the offline renderer leaves it visible.`,
+        `${scripted.name}.visible requires more scenario facts; its source visibility remains unresolved.`,
       );
     }
   }
@@ -1987,6 +3168,7 @@ export async function buildGuiScene(
     localisation,
     output,
     instancesById: new Map(),
+    geometry: new Map(),
     work: new GuiSceneWorkBudget(),
     baseScale,
   };
@@ -2037,7 +3219,8 @@ export async function buildGuiScene(
           undefined,
           parentScene.id,
           'upper_left',
-          parentScene.visible,
+          context.geometry.get(parentScene.id)!.appearanceVisible,
+          [...context.geometry.get(parentScene.id)!.clipChain, parentScene.unclippedRect],
         );
         addFidelity(
           fidelity,
@@ -2060,9 +3243,41 @@ export async function buildGuiScene(
       ...(scripted.location === undefined ? {} : { location: scripted.location }),
     });
   }
+  refreshSceneClips(context);
   output.sort((left, right) => left.zIndex - right.zIndex || compareCodeUnits(left.id, right.id));
   const bounds = unionRects(
-    output.filter(({ visible }) => visible).map(({ unclippedRect }) => unclippedRect),
+    output.flatMap((element) => {
+      if (!element.visible) return [];
+      const painted: GuiRect[] =
+        element.sprite === undefined && element.progressColours === undefined ? [] : [element.rect];
+      const text = element.text;
+      if (text !== undefined && text.text.length > 0) {
+        const rect = element.unclippedRect;
+        let textRect: GuiRect | undefined = {
+          x:
+            rect.x +
+            (text.horizontalAlignment === 'center'
+              ? (rect.width - text.measuredWidth) / 2
+              : text.horizontalAlignment === 'right'
+                ? rect.width - text.measuredWidth
+                : 0),
+          y:
+            rect.y +
+            (text.verticalAlignment === 'center'
+              ? (rect.height - text.measuredHeight) / 2
+              : text.verticalAlignment === 'bottom'
+                ? rect.height - text.measuredHeight
+                : 0),
+          width: text.measuredWidth,
+          height: text.measuredHeight,
+        };
+        if (text.fixedSize) textRect = rectIntersection(textRect, rect);
+        if (textRect !== undefined && element.clipRect !== undefined)
+          textRect = rectIntersection(textRect, element.clipRect);
+        if (textRect !== undefined) painted.push(textRect);
+      }
+      return painted;
+    }),
   );
   return {
     windowName,

@@ -1,12 +1,16 @@
 # Project-owned synthetic sprite and bitmap-font declarations.
 spriteTypes = {
-	spriteType = {
+	corneredTileSpriteType = {
 		name = "GFX_syn_panel"
 		texturefile = "gfx/interface/synthetic_gui/panel.png"
+		size = { x = 96 y = 96 }
+		borderSize = { x = 8 y = 8 }
 	}
-	spriteType = {
+	corneredTileSpriteType = {
 		name = "GFX_syn_card"
 		texturefile = "gfx/interface/synthetic_gui/card.png"
+		size = { x = 96 y = 96 }
+		borderSize = { x = 8 y = 8 }
 	}
 	spriteType = {
 		name = "GFX_syn_button"
@@ -37,9 +41,11 @@ spriteTypes = {
 		name = "GFX_syn_pulse_static"
 		texturefile = "gfx/interface/synthetic_gui/pulse_static.png"
 	}
-	spriteType = {
+	corneredTileSpriteType = {
 		name = "GFX_syn_modal"
 		texturefile = "gfx/interface/synthetic_gui/modal.png"
+		size = { x = 96 y = 96 }
+		borderSize = { x = 10 y = 10 }
 	}
 }
 bitmapfonts = {

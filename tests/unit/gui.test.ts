@@ -1388,6 +1388,12 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
   it('centres native button text and validates value-driven visibility, panel, and label contracts', async () => {
     const files = [
       scanned(
+        'gfx/interface/panel.png',
+        await sharp({ create: { width: 240, height: 140, channels: 4, background: '#242820' } })
+          .png()
+          .toBuffer(),
+      ),
+      scanned(
         'interface/contracts.gui',
         `guiTypes = {
 	containerWindowType = {
@@ -1543,7 +1549,7 @@ kernings count=0
       parsePreviewScenario({
         id: 'native-font',
         resolution: { width: 480, height: 270 },
-        uiScale: 4,
+        uiScale: 1,
       }),
     );
     const text = scene.elements.find(({ name }) => name === 'native_text')?.text;
@@ -1598,7 +1604,7 @@ kernings count=0
       parsePreviewScenario({
         id: 'outline-font',
         resolution: { width: 480, height: 270 },
-        uiScale: 4,
+        uiScale: 1,
       }),
     );
     const text = scene.elements.find(({ name }) => name === 'outline_text')?.text;
@@ -2139,7 +2145,9 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
 \ticonType = { name = "center_down" orientation = CENTER_DOWN position = { x = 10 y = -15 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
 \ticonType = { name = "centered" position = { x = 50 y = 50 } centerposition = yes size = { width = 20 height = 10 } spriteType = "GFX_anchor" }
 \ticonType = { name = "scaled" position = { x = 10 y = 10 } scale = 2 size = { width = 10 height = 5 } spriteType = "GFX_anchor" }
-\ticonType = { name = "percent" position = { x = 50%% y = 0 } size = { width = 50%% height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "percent" position = { x = 50%% y = 0 } size = { width = 50% height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "percent_edge" position = { x = 50%% y = 0 } size = { width = 80%% height = 10 } spriteType = "GFX_anchor" }
+\ticonType = { name = "empty_percent_edge" position = { x = 50%% y = 0 } size = { width = 50%% height = 10 } spriteType = "GFX_anchor" }
 \ticonType = { name = "clipped_by_default" position = { x = 195 y = 95 } size = { width = 20 height = 20 } spriteType = "GFX_anchor" }
 \tinstantTextBoxType = { name = "bounded_text" position = { x = 0 y = 70 } text = "A long line of text that wraps into several lines" maxWidth = 100 maxHeight = 20 fixedsize = yes }
 \tcontainerWindowType = { name = "inherited_parent" orientation = CENTER origo = CENTER position = { x = 0 y = 0 } size = { width = 200 height = 100 } iconType = { name = "inherited_center" position = { x = 0 y = 0 } size = { width = 20 height = 10 } spriteType = "GFX_anchor" } }
@@ -2162,6 +2170,8 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(rect('centered')).toEqual({ x: 40, y: 45, width: 20, height: 10 });
     expect(rect('scaled')).toEqual({ x: 10, y: 10, width: 20, height: 10 });
     expect(rect('percent')).toEqual({ x: 100, y: 0, width: 100, height: 10 });
+    expect(rect('percent_edge')).toEqual({ x: 100, y: 0, width: 60, height: 10 });
+    expect(rect('empty_percent_edge')).toEqual({ x: 100, y: 0, width: 0, height: 10 });
     expect(rect('inherited_center')).toEqual({ x: 100, y: 50, width: 20, height: 10 });
     expect(scene.elements.find(({ name }) => name === 'bounded_text')).toMatchObject({
       unclippedRect: { x: 0, y: 70, width: 100, height: 20 },
