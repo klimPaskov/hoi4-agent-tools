@@ -31,13 +31,13 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Prove crash recovery, isolation, incremental/full-rebuild equivalence, and the Windows/Linux, Node 22/24 qualification matrix.
 - [x] Verify publication, exact public installation, and side-by-side local installation.
 
-## Stage 3: Cross-system impact and decisions — planned 3.2.0
+## Stage 3: Cross-system impact and decisions — 3.2.0
 
-- [ ] Add `hoi4.impact_inspect` over the shared graph: symbols, locations, changed files, proposed overlays, active/overridden definitions, consumers, affected files, and scenario suites.
-- [ ] Connect events, focuses, decisions, ideas, technologies, helpers, variables, flags, targets, localisation, GUI, and assets.
-- [ ] Add `hoi4.decision_inspect`: inventory, eligibility, targets, affordability/payment, cooldowns, mission completion/cancellation/timeout, and comparisons.
-- [ ] Reuse the probability service for AI scores and retain exact unresolved dynamic-reference evidence.
-- [ ] Test broken multi-system connections and actor/target scope distinctions; qualify release and installation.
+- [x] Add `hoi4.impact_inspect` over the shared graph: symbols, locations, changed files, proposed overlays, active/overridden definitions, consumers, affected files, and scenario suites.
+- [x] Connect events, focuses, decisions, ideas, technologies, helpers, variables, flags, targets, localisation, GUI, and assets.
+- [x] Add `hoi4.decision_inspect`: inventory, eligibility, targets, affordability/payment, cooldowns, mission completion/cancellation/timeout, and comparisons.
+- [x] Reuse the probability service for AI scores and retain exact unresolved dynamic-reference evidence.
+- [x] Test broken multi-system connections and actor/target scope distinctions; qualify release and installation.
 
 ## Stage 4: Mechanic tests, packages, and suites — planned 3.3.0
 
@@ -209,5 +209,11 @@ Release workflow `35496091503` completed on attempt 2 through npm, GHCR, immutab
 The first attempt published the signed npm tarball, but its immediate verification saw the preceding `latest` dist-tag during registry propagation; the failed verification and dependent jobs were rerun after the public registry showed 3.1.0 as latest, without repeating npm publication.
 An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.1.0` reports version 3.1.0 and verified 135 dependency signatures and 23 attestations.
 The active older installation and coding-agent processes were not restarted or replaced.
-Stage 3 internal analysis work has begun in an isolated branch and remains unpublished; Stage 4 and the wider external test-profile integration remain open.
-Stage 5 native-GUI fidelity work remains outside the Stage 2 release.
+Stage 3 release commit `24e80d5f8a4e6c641e73d7cc6c9c2bee34ba0132` passed CI run `35505308755` on Windows and Linux with Node 22 and 24, including coverage, the official MCP Inspector, and container checks.
+Tag `v3.2.0` peels to that commit on main.
+Release workflow `35507374620` completed on attempt 2 through npm, GHCR, immutable GitHub release, MCP Registry, exact public verification, and clean installation.
+The first attempt published the signed npm tarball, but its immediate verification read the previous `latest` dist-tag; only the failed verification chain was rerun after the registry exposed 3.2.0 as latest.
+An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.2.0` reports version 3.2.0 and verified 135 dependency signatures and 23 attestations.
+A separate clean public-install check verified the published 27-tool package over stdio and authenticated HTTP.
+The active older installation and coding-agent processes were not restarted or replaced.
+Stage 4, Stage 5, and the wider external test-profile integration remain open.
