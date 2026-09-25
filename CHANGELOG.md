@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 3.4.1 - 2026-09-25
+
 - Validate technology renders against the requested view's source placement, node coverage, and sprite resolution without inheriting unrelated graph-wide diagnostics, while reporting deferred whole-workspace helper projection as a separate analysis boundary; resolve subtechnology art from the source GUI slot before using a technology-id fallback and include every referenced slot texture in the asset scan.
 - Accept focused event inspection and render evidence when every event source was scanned and no blocking diagnostics remain, while retaining deferred workspace-wide helper and lifecycle projections as an explicit boundary.
 - Keep repeated window-local GUI control names additive in the shared index, exclude engine-owned compound-control roles from scripted click-effect requirements, and preserve compact operation summaries when linked evidence exceeds the MCP wire budget.
