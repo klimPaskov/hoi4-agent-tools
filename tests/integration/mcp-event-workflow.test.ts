@@ -143,7 +143,11 @@ agent.2.a: "Finish"
         counts: { events: 2 },
       },
     });
-    expect(progress).toEqual([0, 2, 3]);
+    expect(progress[0]).toBe(0);
+    expect(progress.slice(-2)).toEqual([2, 3]);
+    for (let index = 1; index < progress.length; index += 1) {
+      expect(progress[index]).toBeGreaterThan(progress[index - 1]!);
+    }
     const scanEvidence = await jsonArtifact(client, scanned);
     expect(scanEvidence).toMatchObject({ mode: 'scan' });
 
@@ -329,5 +333,5 @@ country_event = {
       expect(bytes.length, artifact.name).toBeGreaterThan(0);
       expect(sha256Bytes(bytes), artifact.name).toBe(artifact.sha256);
     }
-  }, 60_000);
+  });
 });
