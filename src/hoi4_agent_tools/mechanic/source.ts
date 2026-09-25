@@ -116,12 +116,25 @@ export function selectMechanicSource(snapshot: ScanSnapshot, selector: Selector)
 
 export function scriptedEffectSources(snapshot: ScanSnapshot): Map<string, MechanicSource> {
   const result = new Map<string, MechanicSource>();
+  const symbolsByPath = new Map<string, typeof snapshot.index.symbols>();
   for (const symbol of snapshot.index.symbols) {
     if (symbol.kind !== 'scripted_effect' || symbol.overridden || symbol.sourceShadowed) continue;
-    const document = activeDocument(snapshot, symbol.path);
-    const block =
-      document === undefined ? undefined : assignments(document.root, symbol.id)[0]?.value;
-    if (block?.type === 'block') result.set(symbol.id, { id: symbol.id, path: symbol.path, block });
+    const symbols = symbolsByPath.get(symbol.path) ?? [];
+    symbols.push(symbol);
+    symbolsByPath.set(symbol.path, symbols);
+  }
+  for (const [sourcePath, symbols] of symbolsByPath) {
+    const document = activeDocument(snapshot, sourcePath);
+    if (document === undefined) continue;
+    const blocks = new Map<string, BlockNode>();
+    for (const definition of assignments(document.root)) {
+      if (definition.value.type === 'block' && !blocks.has(definition.key.value))
+        blocks.set(definition.key.value, definition.value);
+    }
+    for (const symbol of symbols) {
+      const block = blocks.get(symbol.id);
+      if (block !== undefined) result.set(symbol.id, { id: symbol.id, path: symbol.path, block });
+    }
   }
   return result;
 }

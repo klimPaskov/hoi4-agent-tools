@@ -204,13 +204,13 @@ async function main(): Promise<void> {
         '\tname = techtree_synthetic_folder_00_small_item',
         '\tposition = { x = 0 y = 0 }',
         '\tsize = { width = 64 height = 64 }',
-        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } }',
+        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } iconType = { name = picture spriteType = GFX_synthetic_subtech_slot } }',
         '}',
         'containerWindowType = {',
         '\tname = techtree_synthetic_folder_00_item',
         '\tposition = { x = 0 y = 0 }',
         '\tsize = { width = 176 height = 82 }',
-        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } }',
+        '\tcontainerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } iconType = { name = picture spriteType = GFX_synthetic_subtech_slot } }',
         '}',
       );
     }
@@ -218,20 +218,21 @@ async function main(): Promise<void> {
   await put('interface/synthetic_technology_view.gui', `${gridboxes.join('\n')}\n`);
 
   const texturePath = 'gfx/interface/technologies/synthetic_technology.png';
+  const subtechnologyTexturePath = 'gfx/interface/technologies/synthetic_subtech_slot.png';
   const sprites = Array.from({ length: technologyCount - 17 }, (_, index) => {
     const actual = index < 503 ? index : index + 17;
     return `\tspriteType = { name = GFX_${techId(actual)}_medium texturefile = ${texturePath} }`;
   });
   await put(
     'interface/synthetic_technology_icons.gfx',
-    `spriteTypes = {\n${sprites.join('\n')}\n\tspriteType = { name = GFX_synthetic_techtree_bg texturefile = ${texturePath} }\n}\n`,
+    `spriteTypes = {\n${sprites.join('\n')}\n\tspriteType = { name = GFX_synthetic_subtech_slot texturefile = ${subtechnologyTexturePath} }\n\tspriteType = { name = GFX_synthetic_techtree_bg texturefile = ${texturePath} }\n}\n`,
   );
-  await put(
-    texturePath,
-    await sharp({ create: { width: 64, height: 64, channels: 4, background: '#41627f' } })
-      .png()
-      .toBuffer(),
-  );
+  const texture = await sharp({
+    create: { width: 64, height: 64, channels: 4, background: '#41627f' },
+  })
+    .png()
+    .toBuffer();
+  await Promise.all([put(texturePath, texture), put(subtechnologyTexturePath, texture)]);
 
   const localisation = ['l_english:'];
   for (let index = 0; index < technologyCount; index += 1) {

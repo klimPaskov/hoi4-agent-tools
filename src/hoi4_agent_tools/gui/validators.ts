@@ -938,6 +938,9 @@ function validateReferencesAndScript(
     const elementsById = new Map(graph.elements.map((element) => [element.id, element]));
     for (const button of scene.elements.filter(({ elementType }) => /button/iu.test(elementType))) {
       const source = elementsById.get(button.sourceId);
+      const referencedByScript = effects.has(button.name) || triggers.has(button.name);
+      if ((source === undefined || !/button/iu.test(source.elementType)) && !referencedByScript)
+        continue;
       const tooltipOnly =
         !effects.has(button.name) &&
         !triggers.has(button.name) &&

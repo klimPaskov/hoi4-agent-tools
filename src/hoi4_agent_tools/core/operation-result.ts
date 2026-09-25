@@ -132,6 +132,10 @@ function boundedResult(
       : 'Tool output exceeded the wire budget; nonessential inline details were omitted',
     details: { actualBytes, maxBytes: MAX_TOOL_RESULT_BYTES },
   };
+  const compactData =
+    result.data !== null && typeof result.data === 'object' && !Array.isArray(result.data)
+      ? (result.data as Record<string, unknown>)
+      : {};
   return {
     status: result.status,
     code: result.code.slice(0, 256),
@@ -160,7 +164,7 @@ function boundedResult(
               },
             },
           ],
-    data: {},
+    data: jsonBytesWithin(compactData, 2_048) ? compactData : {},
   };
 }
 

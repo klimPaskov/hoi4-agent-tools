@@ -9,6 +9,7 @@ import {
   technologyRenderRequestSchema,
 } from '../schemas/technology.js';
 import type { TechnologyGraphSnapshot } from './model.js';
+import type { TechnologyRenderBundle } from './render.js';
 import { technologyDiagnostics } from './service.js';
 import type {
   TechnologyTreeViewer,
@@ -89,6 +90,39 @@ export function technologyValidation(graph: TechnologyGraphSnapshot) {
   };
 }
 
+export function technologyRenderValidation(
+  graph: TechnologyGraphSnapshot,
+  render: TechnologyRenderBundle,
+) {
+  const omitted = render.omittedNodeCount;
+  const unresolvedSprites = render.unresolvedIconSprites.length;
+  const sourcePlacementPassed = render.view !== 'folder' || render.sourceAccurate;
+  const analysisBoundaryPassed =
+    graph.complete || (graph.analysisMode === 'focused' && graph.skippedSourceCount === 0);
+  const renderPassed = sourcePlacementPassed && omitted === 0 && unresolvedSprites === 0;
+  return {
+    passed: renderPassed && analysisBoundaryPassed,
+    checks: [
+      {
+        id: 'technology-render',
+        passed: renderPassed,
+        message: renderPassed
+          ? 'The requested technology view rendered with complete node and sprite coverage'
+          : `${sourcePlacementPassed ? 0 : 1} source-placement failure(s), ${omitted} omitted node(s), and ${unresolvedSprites} unresolved sprite(s) affect the requested technology view`,
+      },
+      {
+        id: 'technology-analysis-boundary',
+        passed: analysisBoundaryPassed,
+        message: graph.complete
+          ? 'The supporting technology analysis is complete'
+          : analysisBoundaryPassed
+            ? 'Whole-workspace helper projections were deferred; the requested render retains direct source evidence'
+            : `${graph.skippedSourceCount} technology source(s) were skipped; linked evidence records the partial analysis boundary`,
+      },
+    ],
+  };
+}
+
 export async function inspectTechnologies(
   viewer: TechnologyTreeViewer,
   input: TechnologyAnalysisInput,
@@ -131,7 +165,7 @@ export async function renderTechnologies(
   result.code = output.graph.complete ? 'TECH_RENDERED' : 'TECH_RENDERED_PARTIAL';
   setInlineFilesScanned(result, output.graph.filesScanned);
   result.artifacts = output.artifacts.map(publicArtifactLink);
-  result.validation = technologyValidation(output.graph);
+  result.validation = technologyRenderValidation(output.graph, output.render);
   return result;
 }
 

@@ -120,6 +120,29 @@ describe('MCP error privacy', () => {
     );
   });
 
+  it('retains compact operation data when other inline evidence exceeds the wire budget', () => {
+    const result = emptyServiceResult('test', { scenarioId: 'meter_history', variantCount: 5 });
+    result.diagnostics = Array.from({ length: 20 }, (_, index) => ({
+      code: `GUI_${index}`,
+      severity: 'error' as const,
+      category: 'design' as const,
+      message: 'm'.repeat(2_000),
+      related: Array.from({ length: 3 }, (_, related) => ({
+        path: `interface/${index}-${related}-${'p'.repeat(2_000)}.gui`,
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 2, offset: 1 },
+      })),
+    }));
+    const output = toolResult(result);
+    expect(output.structuredContent).toMatchObject({
+      diagnostics: [{ code: 'MCP_RESPONSE_TRUNCATED' }],
+      data: { scenarioId: 'meter_history', variantCount: 5 },
+    });
+    expect(Buffer.byteLength(JSON.stringify(output), 'utf8')).toBeLessThanOrEqual(
+      MAX_TOOL_RESULT_BYTES,
+    );
+  });
+
   it('bounds deep, cyclic, and non-finite unknown detail payloads without recursion failure', () => {
     const deep: Record<string, unknown> = {};
     let current = deep;

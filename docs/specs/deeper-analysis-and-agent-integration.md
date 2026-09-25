@@ -51,25 +51,25 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Batch/resume large suites without silently dropping cases.
 - [x] Prove intentional failures, unknown-input handling, deterministic traces, and release/install qualification.
 
-## Stage 5: Domain refinement and visual regression — planned 3.4.0
+## Stage 5: Domain refinement and visual regression — released 3.4.0
 
-- [ ] Focus: branch-local cleanup, pinned anchors, symmetry groups, preserved unaffected branches/gameplay, connector measurements, problem crops, incompatible-constraint explanations, and scenario-backed feasibility/choice diagnostics.
-- [ ] GUI: visibility/boundary branch coverage, hidden/disabled explanations, label/background measurements, and matched source-baseline comparison through `gui_render`; preserve `comparisonScenario` semantics.
-- [ ] Probability: source-backed catalogs, minimal missing inputs, and complete eligible/excluded/unresolved inventories.
-- [ ] Events: chain-selectable comparisons and revision-bound lazy helper/scope expansion.
-- [ ] Technology: native folder composition, backgrounds, subtechnology placement, year styling, supported scenario presentation, and unchanged read-only boundary.
-- [ ] Map: lightweight lookups, reusable tiles, affected-area rendering, and typed external script references for renumbering without arbitrary numeric replacements.
-- [ ] Prove diagnostic precision, unrelated-content preservation, matched visual identities, and release/install qualification.
+- [x] Focus: branch-local cleanup, pinned anchors, symmetry groups, preserved unaffected branches/gameplay, connector measurements, problem crops, incompatible-constraint explanations, and scenario-backed feasibility/choice diagnostics.
+- [x] GUI: visibility/boundary branch coverage, hidden/disabled explanations, label/background measurements, and matched source-baseline comparison through `gui_render`; preserve `comparisonScenario` semantics.
+- [x] Probability: source-backed catalogs, minimal missing inputs, and complete eligible/excluded/unresolved inventories.
+- [x] Events: chain-selectable comparisons and revision-bound lazy helper/scope expansion.
+- [x] Technology: native folder composition, backgrounds, subtechnology placement, year styling, supported scenario presentation, and unchanged read-only boundary.
+- [x] Map: lightweight lookups, reusable tiles, affected-area rendering, and typed external script references for renumbering without arbitrary numeric replacements.
+- [x] Prove diagnostic precision, unrelated-content preservation, matched visual identities, and release/install qualification.
 
 ## Cross-stage validation
 
-- [ ] Every release: complete existing tests, Windows/Linux and Node matrix, both transports, official MCP Inspector, installation, and exact public publication checks.
+- [x] Every release: complete existing tests, Windows/Linux and Node matrix, both transports, official MCP Inspector, installation, and exact public publication checks.
 - [x] At least 64 concurrent mixed-domain requests across 16 clients and two workspaces, with cancellations, disconnects, worker failures, and recovery.
 - [x] Rewrite crash points before/during/after commit; no duplicate changes or cross-job artifact deletion.
-- [ ] Focus fixtures with 1,024, 4,096, and 10,000 nodes, including chains, wide branches, convergences, anchors, and incompatible constraints.
-- [ ] Complete large helper/candidate analysis and explicit continuations.
-- [ ] GUI branch/list/flag/texticon/font/colour/native/fractional-scale and screenshot-backed regressions.
-- [ ] Map pixel, semantic, connectivity, and external-reference regressions.
+- [x] Focus fixtures with 1,024, 4,096, and 10,000 nodes, including chains, wide branches, convergences, anchors, and incompatible constraints.
+- [x] Complete large helper/candidate analysis and explicit continuations.
+- [x] GUI branch/list/flag/texticon/font/colour/native/fractional-scale and screenshot-backed regressions.
+- [x] Map pixel, semantic, connectivity, and external-reference regressions.
 
 Public CI uses project-owned synthetic fixtures.
 Local installed-game/mod checks remain opt-in and never launch the game or copy proprietary material into the public repository.
@@ -77,13 +77,13 @@ Measure avoided parsing, bounded memory, fairness, and control responsiveness ra
 
 ## External workflow integration and rollout
 
-- [ ] Create external mod-owned profiles under its chosen testing directory; no path convention is required by the server.
-- [ ] Cover meter/settings/insurgency GUI states, transfer invariants, event integration, and representative focus/technology surfaces in the requested external test workspace.
-- [ ] Use supplied screenshots with explicit matching scenarios; never hide discrepancies with sharpening, resizing, or changed test inputs.
-- [ ] Update existing owner-skill, subagent, and AGENTS sections without setup guidance or a central MCP skill.
-- [ ] Route non-trivial skill changes through the requested skill-maintenance specialist; edit canonical runtime instructions and use existing generators while preserving unrelated changes.
-- [ ] Keep mechanic-specific facts in profiles and report external gameplay defects separately, without editing gameplay to make tests pass.
-- [ ] Commit/publish only completed stages; synchronize versions, schemas, documentation, and Registry metadata.
+- [x] Create external mod-owned profiles under its chosen testing directory; no path convention is required by the server.
+- [x] Cover meter/settings/insurgency GUI states, transfer invariants, event integration, and representative focus/technology surfaces in the requested external test workspace.
+- [x] Use supplied screenshots with explicit matching scenarios; never hide discrepancies with sharpening, resizing, or changed test inputs.
+- [x] Update existing owner-skill, subagent, and AGENTS sections without setup guidance or a central MCP skill.
+- [x] Route non-trivial skill changes through the requested skill-maintenance specialist; edit canonical runtime instructions and use existing generators while preserving unrelated changes.
+- [x] Keep mechanic-specific facts in profiles and report external gameplay defects separately, without editing gameplay to make tests pass.
+- [x] Commit/publish only completed stages; synchronize versions, schemas, documentation, and Registry metadata.
 - [ ] Install verified versions side-by-side and preserve active processes; retain historical tags while keeping one latest public release entry after verification.
 
 Planned versions use the next unused compatible version if the registry advances.
@@ -92,7 +92,7 @@ No stage is complete until its code, tests, public package, installation, and ap
 ## Evidence ledger
 
 Stage 1 is release-qualified, published, and installed side-by-side.
-Stage 5 remains incomplete until its final release and external profile checks are recorded below.
+Stage 5 is release-qualified, published, and installed side-by-side. The external profiles pass against the corrective post-release build; publication and exact installed-package verification of that corrective patch remain pending.
 The implementation began from commit `d8a8117b18649eee622f9acb44c11462a1ee9950` (3.0.8).
 
 Stage 1 implementation and targeted regressions are complete; release evidence follows.
@@ -223,8 +223,11 @@ The first attempt published the signed npm tarball, but its immediate verificati
 An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.3.0` reports version 3.3.0 and verified 135 dependency signatures and 23 attestations.
 A separate clean public-install check verified the published package over stdio and authenticated HTTP.
 The active older installation and coding-agent processes were not restarted or replaced.
-Stage 5 and the wider external test-profile integration remain open.
+Stage 5 release commit `ba598fa3a326f7e54bfce2b2b4069942887f9f84` passed CI run `35776400446` on Windows and Linux with Node 22 and 24, including coverage, the official MCP Inspector, both transports, container checks, package checks, and Registry validation.
+Tag `v3.4.0` peels to that commit on main, and release workflow `35776418189` completed npm, GHCR, GitHub Release, MCP Registry, and exact public-install verification.
+An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.4.0` reports version 3.4.0 without replacing an active older installation or restarting a coding-agent process.
 
 The three Chaos Redux focus examples contain 52 Fury, 111 Holy Realm, and 124 Utopia Manifesto focuses. Their rendered branch arrangements can be compared at 96-pixel horizontal and 130-pixel vertical spacing, but the in-game icon plates, continuous-focus panel, frame, and connector styling are visibly different from the offline focus cards. No whole-tree 99.9% pixel-accuracy claim follows from those images.
-The sampled chemical and biological folder renders place 22 of 22 and 12 of 12 current-source nodes, respectively, and resolve every requested sprite. Seven native-size technology card crops from supplied game captures match the rendered card interiors at normalized grayscale correlations from 0.998712 to 0.999589 without resizing. These scores measure selected cards, not complete folder images; the supplied chemical viewport depicts a different 40-node source revision.
-The combined local check on commit `1e7e0dd` passed 1,215 tests with one skip across eight shards, deterministic fixture and schema checks, the production build, a 304-file package dry run, and Registry validation. The opt-in installed-game scrollbar template test passed both scroll endpoints after outer-window attachment geometry was corrected, and both private images were visually reviewed. Cross-platform CI, public release, installation, and external suite execution remain open.
+The sampled chemical and biological folder renders place 19 of 19 and 8 of 8 current-source nodes, respectively, resolve every requested sprite, and retain the source GUI's large technology-card layout. Seven native-size technology card crops from supplied game captures match the rendered card interiors at normalized grayscale correlations from 0.998712 to 0.999589 without resizing. These scores measure selected cards, not complete folder images; the supplied chemical viewport depicts a different source revision.
+The combined local check on commit `1e7e0dd` passed 1,215 tests with one skip across eight shards, deterministic fixture and schema checks, the production build, a 304-file package dry run, and Registry validation. The opt-in installed-game scrollbar template test passed both scroll endpoints after outer-window attachment geometry was corrected, and both private images were visually reviewed.
+The external Chaos Redux visual profile passes all 9 cases on the corrective build, the scripted-GUI profile passes all 12 cases, and the transfer/event profile passes all 5 cases. The final reports contain zero failed or unresolved cases and preserve the source revision, scenario evidence, and continuation boundaries. The corrective patch fixes requested-view technology validation, GUI local-name and native-control handling, bounded result summaries, event focused-validation boundaries, scripted-effect source reuse, and temporary-variable scenario semantics; its public qualification remains the final release task.

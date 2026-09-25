@@ -11,13 +11,13 @@ containerWindowType = {
 	name = techtree_synthetic_folder_00_small_item
 	position = { x = 0 y = 0 }
 	size = { width = 64 height = 64 }
-	containerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } }
+	containerWindowType = { name = sub_technology_slot_0 position = { x = 44 y = 12 } size = { width = 20 height = 20 } iconType = { name = picture spriteType = GFX_synthetic_subtech_slot } }
 }
 containerWindowType = {
 	name = techtree_synthetic_folder_00_item
 	position = { x = 0 y = 0 }
 	size = { width = 176 height = 82 }
-	containerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } }
+	containerWindowType = { name = sub_technology_slot_0 position = { x = 139 y = 2 } size = { width = 35 height = 26 } iconType = { name = picture spriteType = GFX_synthetic_subtech_slot } }
 }
 containerWindowType = {
 	name = synthetic_folder_01

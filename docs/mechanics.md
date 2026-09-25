@@ -41,7 +41,8 @@ An `advance_days` step only expires modeled timed flags; it never runs on action
 
 The linked trace records applied, skipped, and unresolved source operations with before and after values.
 The `single_payment` assertion checks the named balance's final change and the number and size of its traced deductions, so a compensating grant cannot hide a second charge.
-Supported operations include documented variable arithmetic, flags, event targets, arrays, conditionals, finite declared scope iteration, scripted helpers, safe meta substitutions, and selected balance effects.
+Supported operations include documented persistent and unscoped temporary-variable arithmetic, exact `has_variable` presence checks, flags, event targets, arrays, conditionals, finite declared scope iteration, scripted helpers, safe meta substitutions, and selected balance effects.
+Active scripted-effect documents are parsed once per source file and their helper blocks share that bounded source model.
 Decision engine political-power costs are applied once before `complete_effect`; custom cost triggers check affordability and their payment remains in `complete_effect`.
 Unresolved eligibility, unsupported effects, dynamic names that cannot be resolved, missing finite scope catalogs, and bounded-work limits remain unresolved rather than guessed.
 An effect with an unknown write set conservatively makes state assertions unresolved.

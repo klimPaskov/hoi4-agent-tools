@@ -207,9 +207,10 @@ function technologyNode(
             const slot = itemLayout?.subTechnologySlots?.find(
               (candidate) => candidate.index === index,
             );
+            const iconSprite = slot?.sprite ?? definition?.icon.sprite;
             return {
               id,
-              ...(definition === undefined ? {} : { iconSprite: definition.icon.sprite }),
+              ...(iconSprite === undefined ? {} : { iconSprite }),
               placementStatus: slot === undefined ? 'missing_source_slot' : 'source_slot',
               ...(slot === undefined ? {} : { slot }),
             };

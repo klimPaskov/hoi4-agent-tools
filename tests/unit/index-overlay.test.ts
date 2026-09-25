@@ -301,6 +301,26 @@ describe('load-order scanner and shared index', () => {
     ).toBe(false);
   });
 
+  it('keeps repeated local GUI element names additive across independent windows', () => {
+    const index = SymbolIndex.build([
+      scannedSourceFile(
+        'interface/local-controls.gui',
+        'guiTypes = { containerWindowType = { name = first_window buttonType = { name = close_button } } containerWindowType = { name = second_window buttonType = { name = close_button } } }',
+      ),
+    ]);
+
+    expect(index.findAll('gui_element', 'close_button')).toHaveLength(2);
+    expect(
+      index.findAll('gui_element', 'close_button').every(({ overridden }) => !overridden),
+    ).toBe(true);
+    expect(
+      index.diagnostics.some(
+        ({ code, message }) =>
+          code === 'INDEX_SYMBOL_COLLISION' && message.includes('gui_element:close_button'),
+      ),
+    ).toBe(false);
+  });
+
   it('skips a source instead of indexing its partial tree after the nesting ceiling', () => {
     const depth = 5_000;
     const source = `root = ${'{ nested = '.repeat(depth)}yes${' }'.repeat(depth)}\n`;

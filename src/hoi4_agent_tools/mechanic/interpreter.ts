@@ -56,6 +56,25 @@ const numericEffects = new Map<
   ['add_war_support', { key: 'war_support', mode: 'add', min: 0, max: 1 }],
 ]);
 const harmlessEffects = new Set(['hidden_effect', 'custom_effect_tooltip', 'log', 'tooltip']);
+const variableEffects = new Map<
+  string,
+  'set' | 'add' | 'subtract' | 'multiply' | 'divide' | 'clamp' | 'round'
+>([
+  ['set_variable', 'set'],
+  ['set_temp_variable', 'set'],
+  ['add_to_variable', 'add'],
+  ['add_to_temp_variable', 'add'],
+  ['subtract_from_variable', 'subtract'],
+  ['subtract_from_temp_variable', 'subtract'],
+  ['multiply_variable', 'multiply'],
+  ['multiply_temp_variable', 'multiply'],
+  ['divide_variable', 'divide'],
+  ['divide_temp_variable', 'divide'],
+  ['clamp_variable', 'clamp'],
+  ['clamp_temp_variable', 'clamp'],
+  ['round_variable', 'round'],
+  ['round_temp_variable', 'round'],
+]);
 
 function numeric(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -261,6 +280,47 @@ export class MechanicInterpreter {
       numeric(scenarioValue(this.state, key, targetScope)) ??
       numeric(scenarioValue(this.state, `variable.${key}`, targetScope))
     );
+  }
+
+  private scopeReference(expression: string, scope: string, stack: string[]): string | undefined {
+    const scopeId = (name: string): string | undefined => {
+      if (name === 'ROOT') return this.state.scenario.actor ?? 'ROOT';
+      if (name === 'THIS')
+        return scope === 'ROOT'
+          ? (this.state.scenario.actor ?? 'ROOT')
+          : this.state.scenario.scopes?.[scope]?.id;
+      if (name === 'PREV') {
+        const previous = stack.findLast((item) => item.startsWith('scope:'))?.slice(6);
+        return previous === undefined
+          ? undefined
+          : previous === 'ROOT'
+            ? (this.state.scenario.actor ?? 'ROOT')
+            : this.state.scenario.scopes?.[previous]?.id;
+      }
+      return this.state.scenario.scopes?.[name]?.id;
+    };
+    if (expression.startsWith('event_target:'))
+      return this.state.scenario.eventTargets?.[expression.slice(13)];
+    const identifier = /^([A-Za-z0-9_:]+)(?:\.id)?$/u.exec(expression)?.[1];
+    return identifier === undefined ? undefined : scopeId(identifier.toUpperCase());
+  }
+
+  private value(
+    expression: string,
+    path: string,
+    scope: string,
+    stack: string[],
+  ): string | number | boolean | null | (string | number | boolean | null)[] | undefined {
+    const numberValue = this.number(expression, path, scope);
+    if (numberValue !== undefined) return numberValue;
+    const dotted = /^(ROOT|THIS|FROM|PREV)\.(.+)$/iu.exec(expression);
+    const targetScope =
+      dotted?.[1]?.toUpperCase() === 'THIS' ? scope : (dotted?.[1]?.toUpperCase() ?? scope);
+    const key = dotted?.[2] ?? expression;
+    const existing =
+      scenarioValue(this.state, key, targetScope) ??
+      scenarioValue(this.state, `variable.${key}`, targetScope);
+    return existing ?? this.scopeReference(expression, scope, stack);
   }
 
   private mathExpression(block: BlockNode, path: string, scope: string): number | undefined {
@@ -523,16 +583,35 @@ export class MechanicInterpreter {
       }
       return;
     }
-    if (
-      [
-        'set_variable',
-        'add_to_variable',
-        'subtract_from_variable',
-        'multiply_variable',
-        'divide_variable',
-        'clamp_variable',
-      ].includes(key)
-    ) {
+    const variableMode = variableEffects.get(key);
+    if (variableMode !== undefined) {
+      const variableScope = key.includes('temp_variable') ? 'ROOT' : scope;
+      const scalarVariable = asText(entry.value);
+      if (variableMode === 'round') {
+        const variable =
+          scalarVariable ?? (child === undefined ? undefined : firstScalar(child, 'var')?.value);
+        const before =
+          variable === undefined
+            ? undefined
+            : numeric(scenarioValue(this.state, variable, variableScope));
+        const after = before === undefined ? undefined : Math.round(before);
+        if (variable === undefined) {
+          this.unknown(key, path, scope, 'Variable must resolve');
+          return;
+        }
+        setScenarioValue(this.state, variable, after, variableScope);
+        this.note(
+          key,
+          path,
+          scope,
+          after === undefined ? 'unresolved' : 'applied',
+          before,
+          after,
+          after === undefined ? 'Variable value is not numeric' : undefined,
+          variable,
+        );
+        return;
+      }
       if (child === undefined) {
         this.unknown(key, path, scope, 'Variable effect requires a block');
         return;
@@ -541,27 +620,28 @@ export class MechanicInterpreter {
         (item) => !['var', 'value', 'min', 'max', 'tooltip'].includes(item.key.value),
       );
       const variable = firstScalar(child, 'var')?.value ?? short?.key.value;
+      if (variable === undefined) {
+        this.unknown(key, path, scope, 'Variable must resolve');
+        return;
+      }
       const expression =
         firstScalar(child, 'value')?.value ??
         (short === undefined ? undefined : asText(short.value));
-      if (variable === undefined || expression === undefined) {
-        if (variable === undefined || short?.value.type !== 'block') {
-          this.unknown(key, path, scope, 'Variable and operand must resolve');
-          return;
-        }
-      }
-      const value =
+      const operand =
         expression === undefined
-          ? this.mathExpression(short!.value as BlockNode, path, scope)
-          : this.number(expression, path, scope);
-      const before = numeric(scenarioValue(this.state, variable, scope)) ?? 0;
-      let after = value;
-      if (value !== undefined && key === 'add_to_variable') after = before + value;
-      if (value !== undefined && key === 'subtract_from_variable') after = before - value;
-      if (value !== undefined && key === 'multiply_variable') after = before * value;
-      if (value !== undefined && key === 'divide_variable')
-        after = value === 0 ? undefined : before / value;
-      if (value !== undefined && key === 'clamp_variable') {
+          ? variableMode === 'set' && short?.value.type === 'block'
+            ? this.mathExpression(short.value, path, scope)
+            : undefined
+          : this.value(expression, path, scope, stack);
+      const previous = scenarioValue(this.state, variable, variableScope);
+      const before = numeric(previous) ?? 0;
+      let after = variableMode === 'set' ? operand : numeric(operand);
+      if (variableMode === 'add' && typeof after === 'number') after = before + after;
+      if (variableMode === 'subtract' && typeof after === 'number') after = before - after;
+      if (variableMode === 'multiply' && typeof after === 'number') after = before * after;
+      if (variableMode === 'divide' && typeof after === 'number')
+        after = after === 0 ? undefined : before / after;
+      if (variableMode === 'clamp') {
         const minimum = firstScalar(child, 'min')?.value;
         const maximum = firstScalar(child, 'max')?.value;
         const min = minimum === undefined ? -Infinity : this.number(minimum, path, scope);
@@ -569,13 +649,13 @@ export class MechanicInterpreter {
         after =
           min === undefined || max === undefined ? undefined : Math.max(min, Math.min(max, before));
       }
-      setScenarioValue(this.state, variable, after, scope);
+      setScenarioValue(this.state, variable, after, variableScope);
       this.note(
         key,
         path,
         scope,
         after === undefined ? 'unresolved' : 'applied',
-        before,
+        previous,
         after,
         after === undefined ? 'Numeric operand is unknown or division by zero' : undefined,
         variable,

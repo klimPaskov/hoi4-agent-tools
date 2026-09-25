@@ -57,25 +57,32 @@ export function eventGraphCounts(graph: EventGraphSnapshot, artifacts: number) {
 
 export function eventGraphValidation(graph: EventGraphSnapshot) {
   const counts = eventGraphCounts(graph, 0);
+  const analysisBoundaryPassed =
+    graph.complete || (graph.analysisMode === 'focused' && graph.skippedSourceCount === 0);
+  const passed = analysisBoundaryPassed && counts.blockingDiagnostics === 0;
   return {
-    passed: graph.complete && counts.blockingDiagnostics === 0,
+    passed,
     checks: [
       {
         id: 'event-analysis',
-        passed: graph.complete && counts.blockingDiagnostics === 0,
+        passed,
         message:
-          graph.analysisMode === 'focused'
-            ? 'Large workspace analysis deferred workspace-wide helper projections and lifecycle passes; direct evidence is linked'
+          counts.blockingDiagnostics > 0
+            ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
             : graph.complete
-              ? `${counts.blockingDiagnostics} blocking event-chain diagnostics; full evidence is linked`
-              : graph.issues.some(
-                    ({ code }) =>
-                      code === 'EVENT_HELPER_DEPTH_LIMIT' ||
-                      code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
-                      code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
-                  )
-                ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
-                : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
+              ? 'The event-chain analysis is complete and has no blocking diagnostics'
+              : graph.analysisMode === 'focused' && graph.skippedSourceCount === 0
+                ? 'Whole-workspace helper projections and lifecycle passes were deferred; the requested event analysis retains direct source evidence'
+                : graph.analysisMode === 'focused'
+                  ? `${graph.skippedSourceCount} event-analysis source(s) were skipped; linked evidence records the partial boundary`
+                  : graph.issues.some(
+                        ({ code }) =>
+                          code === 'EVENT_HELPER_DEPTH_LIMIT' ||
+                          code === 'EVENT_HELPER_PROJECTION_LIMIT' ||
+                          code === 'EVENT_HELPER_STATE_PROJECTION_LIMIT',
+                      )
+                    ? 'Helper expansion reached a depth or materialization boundary; helper_expansion mode provides bounded source-linked continuation'
+                    : `${graph.skippedSourceCount} event-analysis source(s) were skipped; full evidence is linked`,
       },
     ],
   };

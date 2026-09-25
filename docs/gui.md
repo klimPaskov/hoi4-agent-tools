@@ -51,6 +51,7 @@ The scene records the selected shader source, hash and entry point.
 Additional shader operations, including animated end-cap sampling, remain explicit unsupported findings rather than accepted pixel-parity evidence.
 
 Container scrollbars use referenced or inline `extendedScrollbarType` templates, including their backgrounds, inline track, thumb and end-button artwork.
+The template's slider and end-button roles are engine-owned compound controls, so scripted click-effect checks apply to authored source buttons and explicitly referenced role names rather than requiring effects for the native scrollbar internals.
 Each attachment has independent instance IDs and source provenance even when multiple containers reuse one template.
 The renderer measures direct content bounds and populated grid/list rows, retaining declared list bounds as a minimum, clamps scroll offsets, and applies `autohide_scrollbars`.
 A nested container contributes its declared bounds rather than the overflowing artwork of its descendants.

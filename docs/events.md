@@ -19,7 +19,7 @@ Use the three event tools directly from the target mod.
 
 Use narrow identifiers, direction, and depth limits when the task concerns one chain.
 Broad scans build the structural event graph without expanding every scripted helper into duplicate paths.
-Focused trace, path, and selector-based inventory requests may defer workspace-wide helper projections and lifecycle passes; their linked evidence records the partial boundary.
+Focused trace, path, and selector-based inventory requests may defer workspace-wide helper projections and lifecycle passes. When every event source was scanned and no blocking diagnostics remain, validation accepts the requested direct-source evidence while the linked artifacts continue to record that deferred boundary.
 Focused trace and path calls collapse only the selected bounded route.
 For a large helper closure, use [bounded helper expansion](helper-expansion.md) to receive resumable pages without first materializing every projection.
 

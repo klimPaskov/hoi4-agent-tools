@@ -1385,6 +1385,65 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     );
   });
 
+  it('does not require scripted click effects for synthesized native scrollbar roles', async () => {
+    const files = [
+      scanned(
+        'interface/native-scrollbar.gui',
+        `guiTypes = {
+\textendedScrollbarType = {
+\t\tname = "native_scrollbar"
+\t\tsize = { width = 18 height = 18 }
+\t\tslider = { name = "Slider" size = { width = 18 height = 18 } }
+\t\tdecreaseButton = { name = "Decrease" size = { width = 18 height = 18 } }
+\t\tincreaseButton = { name = "Increase" size = { width = 18 height = 18 } }
+\t}
+\tcontainerWindowType = {
+\t\tname = "native_scrollbar_window"
+\t\tsize = { width = 240 height = 180 }
+\t\tcontainerWindowType = {
+\t\t\tname = "scrolling_content"
+\t\t\tposition = { x = 10 y = 10 }
+\t\t\tsize = { width = 210 height = 150 }
+\t\t\tverticalScrollbar = "native_scrollbar"
+\t\t\tautohide_scrollbars = no
+\t\t\tclipping = yes
+\t\t\tbackground = { name = "Background" }
+\t\t}
+\t}
+}`,
+      ),
+      scanned(
+        'common/scripted_guis/native-scrollbar.txt',
+        `scripted_gui = {
+\tnative_scrollbar_gui = {
+\t\tcontext_type = player_context
+\t\twindow_name = native_scrollbar_window
+\t\tvisible = { always = yes }
+\t\tai_enabled = { always = no }
+\t}
+}`,
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'native_scrollbar_window',
+      parsePreviewScenario({ id: 'native-scrollbar' }),
+    );
+    expect(scene.elements.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['Slider', 'Decrease', 'Increase']),
+    );
+    const validation = await validateGuiScene(graph, scene, files);
+    expect(
+      validation.diagnostics.some(
+        ({ code, message }) =>
+          code === 'GUI_BUTTON_EFFECT_MISSING' &&
+          /Button (?:Slider|Decrease|Increase) /u.test(message),
+      ),
+    ).toBe(false);
+  });
+
   it('centres native button text and validates value-driven visibility, panel, and label contracts', async () => {
     const files = [
       scanned(

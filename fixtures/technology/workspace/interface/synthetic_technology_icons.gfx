@@ -1022,5 +1022,6 @@ spriteTypes = {
 	spriteType = { name = GFX_synthetic_tech_1037_medium texturefile = gfx/interface/technologies/synthetic_technology.png }
 	spriteType = { name = GFX_synthetic_tech_1038_medium texturefile = gfx/interface/technologies/synthetic_technology.png }
 	spriteType = { name = GFX_synthetic_tech_1039_medium texturefile = gfx/interface/technologies/synthetic_technology.png }
+	spriteType = { name = GFX_synthetic_subtech_slot texturefile = gfx/interface/technologies/synthetic_subtech_slot.png }
 	spriteType = { name = GFX_synthetic_techtree_bg texturefile = gfx/interface/technologies/synthetic_technology.png }
 }

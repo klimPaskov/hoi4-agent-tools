@@ -421,6 +421,14 @@ function evaluateAssignmentCore(
       unresolved: [],
     };
   }
+  if (key === 'has_variable') {
+    const state = scopeContext.expression === 'ROOT' ? scenario.state : scopeContext.binding.state;
+    return {
+      state:
+        Object.hasOwn(state, right) || Object.hasOwn(state, `variable.${right}`) ? 'true' : 'false',
+      unresolved: [],
+    };
+  }
   if (key === 'tag' || key === 'original_tag') {
     const actor =
       scopeContext.expression === 'ROOT'

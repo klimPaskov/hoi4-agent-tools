@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Validate technology renders against the requested view's source placement, node coverage, and sprite resolution without inheriting unrelated graph-wide diagnostics, while reporting deferred whole-workspace helper projection as a separate analysis boundary; resolve subtechnology art from the source GUI slot before using a technology-id fallback and include every referenced slot texture in the asset scan.
+- Accept focused event inspection and render evidence when every event source was scanned and no blocking diagnostics remain, while retaining deferred workspace-wide helper and lifecycle projections as an explicit boundary.
+- Keep repeated window-local GUI control names additive in the shared index, exclude engine-owned compound-control roles from scripted click-effect requirements, and preserve compact operation summaries when linked evidence exceeds the MCP wire budget.
+- Parse each active scripted-effect source document once when building mechanic helper inventories so bounded real-workspace scenarios do not multiply parser state by the number of helpers in a file.
+- Interpret declared temporary-variable assignment, arithmetic, rounding, clamping, and scope-valued inputs with chain-wide unscoped semantics in bounded mechanic scenarios.
+- Evaluate `has_variable` against declared scenario state so guarded defaults and subsequent temporary-variable arithmetic remain deterministic.
+
 ## 3.4.0 - 2026-09-20
 
 - Add branch-local focus cleanup with pinned anchors and symmetry groups, connector measurements, source-linked crops, and scenario-backed structural route diagnostics.

@@ -6,6 +6,7 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { MechanicAnalyzer } from '../../src/hoi4_agent_tools/mechanic/service.js';
+import { scriptedEffectSources } from '../../src/hoi4_agent_tools/mechanic/source.js';
 import { PackageAnalyzer } from '../../src/hoi4_agent_tools/package-check/service.js';
 import { ScenarioAnalyzer } from '../../src/hoi4_agent_tools/scenario-suite/service.js';
 import {
@@ -86,6 +87,16 @@ async function fixture() {
 }
 
 describe('Stage 4 source-backed services', () => {
+  it('collects every active scripted effect from a shared source document', async () => {
+    const { engine } = await fixture();
+    const snapshot = await engine.scan('fixture');
+    expect([...scriptedEffectSources(snapshot).keys()].sort()).toEqual([
+      'deceptive_payment',
+      'invoke_transfer',
+      'transfer',
+    ]);
+  });
+
   it('charges engine costs once, keeps custom payments explicit, and blocks duplicate cost paths', async () => {
     const { engine } = await fixture();
     const analyzer = new MechanicAnalyzer(engine);

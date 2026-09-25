@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { renderTechnologies } from '../../src/hoi4_agent_tools/technology/operations.js';
 import {
   TechnologyTreeViewer,
   analyzeTechnologyImpact,
@@ -171,7 +172,14 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(
       graph.itemLayouts.find(({ name }) => name === 'techtree_synthetic_folder_00_item')
         ?.subTechnologySlots,
-    ).toEqual([{ index: 0, position: { x: 139, y: 2 }, size: { width: 35, height: 26 } }]);
+    ).toEqual([
+      {
+        index: 0,
+        position: { x: 139, y: 2 },
+        size: { width: 35, height: 26 },
+        sprite: 'GFX_synthetic_subtech_slot',
+      },
+    ]);
     expect(graph.edges.filter(({ kind }) => kind === 'prerequisite')).toHaveLength(
       graphManifest.counts.prerequisites,
     );
@@ -362,6 +370,9 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(first.focused[subTechnologyFolderIndex]?.svg).toContain(
       'data-subtechnology-id="synthetic_tech_0008" data-slot-index="0"',
     );
+    expect(first.focused[subTechnologyFolderIndex]?.svg).toContain(
+      'data-icon-sprite="GFX_synthetic_subtech_slot"',
+    );
     expect(new Set(first.focused.flatMap(({ selectedIds }) => selectedIds)).size).toBe(
       graph.technologies.length - 2,
     );
@@ -369,6 +380,69 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect(first.artifacts.map(({ mimeType }) => mimeType)).toEqual(
       expect.arrayContaining(['application/json', 'image/svg+xml', 'image/png', 'text/html']),
     );
+
+    const folderRender = first.focused[backgroundFolderIndex]!;
+    const focusedResult = await renderTechnologies(
+      {
+        renderAndStore: () =>
+          Promise.resolve({
+            ...first,
+            graph: {
+              ...first.graph,
+              complete: false,
+              analysisMode: 'focused',
+              diagnostics: [
+                {
+                  code: 'TECH_UNRELATED_GRAPH_DIAGNOSTIC',
+                  severity: 'error',
+                  category: 'reference',
+                  message: 'An unrelated technology outside the requested folder is invalid',
+                },
+              ],
+              issues: [],
+            },
+            render: folderRender,
+            focused: [],
+          }),
+      } as unknown as TechnologyTreeViewer,
+      { workspaceId, view: 'folder', folderId: 'synthetic_folder_01' },
+    );
+    expect(focusedResult.code).toBe('TECH_RENDERED_PARTIAL');
+    expect(focusedResult.validation).toMatchObject({
+      passed: true,
+      checks: [
+        { id: 'technology-render', passed: true },
+        { id: 'technology-analysis-boundary', passed: true },
+      ],
+    });
+
+    const skippedSourceResult = await renderTechnologies(
+      {
+        renderAndStore: () =>
+          Promise.resolve({
+            ...first,
+            graph: {
+              ...first.graph,
+              complete: false,
+              analysisMode: 'focused',
+              skippedSourceCount: 1,
+              diagnostics: [],
+              issues: [],
+            },
+            render: folderRender,
+            focused: [],
+          }),
+      } as unknown as TechnologyTreeViewer,
+      { workspaceId, view: 'folder', folderId: 'synthetic_folder_01' },
+    );
+    expect(skippedSourceResult.validation).toMatchObject({
+      passed: false,
+      checks: [
+        { id: 'technology-render', passed: true },
+        { id: 'technology-analysis-boundary', passed: false },
+      ],
+    });
+
     const workspaceRegistration = engine.resolver.get(workspaceId);
     const manifest = await engine.artifacts.read(workspaceRegistration, first.artifacts[0]!.uri);
     expect(JSON.parse(manifest.bytes.toString('utf8'))).toMatchObject({

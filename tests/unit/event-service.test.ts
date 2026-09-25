@@ -13,6 +13,7 @@ import {
   eventScanReport,
   inspectEventStateFlow,
 } from '../../src/hoi4_agent_tools/event/index.js';
+import { eventGraphValidation } from '../../src/hoi4_agent_tools/event/operations.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -94,6 +95,26 @@ async function fixture(artifactMaxSingleBytes?: number) {
 }
 
 describe('Event Chain Viewer service', () => {
+  it('accepts complete direct evidence when focused analysis defers workspace-wide helpers', async () => {
+    const { engine } = await fixture();
+    const graph = await new EventChainViewer(engine).scan('event-service');
+    const focused = {
+      ...graph,
+      complete: false,
+      analysisMode: 'focused' as const,
+      skippedSourceCount: 0,
+    };
+
+    expect(eventGraphValidation(focused)).toMatchObject({
+      passed: true,
+      checks: [{ id: 'event-analysis', passed: true }],
+    });
+    expect(eventGraphValidation({ ...focused, skippedSourceCount: 1 })).toMatchObject({
+      passed: false,
+      checks: [{ id: 'event-analysis', passed: false }],
+    });
+  });
+
   it('shares an unchanged semantic graph across viewers and invalidates by generation', async () => {
     const { engine, scan } = await fixture();
     const first = new EventChainViewer(engine);

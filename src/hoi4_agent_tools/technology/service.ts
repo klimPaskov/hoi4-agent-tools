@@ -811,6 +811,9 @@ export class TechnologyTreeViewer {
       ...preliminary.itemLayouts.flatMap(({ designTeamIcon }) =>
         designTeamIcon === undefined ? [] : [designTeamIcon.sprite],
       ),
+      ...preliminary.itemLayouts.flatMap(({ subTechnologySlots }) =>
+        (subTechnologySlots ?? []).flatMap(({ sprite }) => (sprite === undefined ? [] : [sprite])),
+      ),
       ...preliminary.itemLayouts.flatMap(({ backgroundSprite }) =>
         backgroundSprite === undefined
           ? []

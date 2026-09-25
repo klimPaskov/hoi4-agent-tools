@@ -111,7 +111,7 @@ These are limited-region development measurements, not a whole-window or univers
 Both country rows are visible, but the current explicitly maximum-scroll scenario places their sampled border/text regions six pixels above the reference.
 Removing or changing a scenario state merely to align pixels would not establish the native grid/scroll contract.
 The scenario's zero surrender-bar fill also differs from the green primary fill visible in the capture; screenshot-matched runtime values must be separated from renderer defects.
-Native grid placement, zero-range controller behavior, progress end-cap shaders, remaining reference surfaces and release qualification are still open.
+Native grid placement, zero-range controller behavior, progress end-cap shaders, and remaining reference surfaces retain the explicit renderer boundaries described above; the release qualification is recorded below and does not convert those bounded comparisons into a whole-window parity claim.
 
 The renderer additionally recognizes source-backed two-colour and two-texture threshold progress programs through their selected `Color` or `Texture` entry points, native vertex transform, sampler contracts and straight-alpha blend state.
 It does not interpret arbitrary branches or execute shader code.
@@ -128,4 +128,4 @@ The slower wall times include concurrently running installed-source scans and ar
 The combined local product check passed 1,215 tests with one skip across eight shards, then generated fixture and schema checks, build, package dry run, and Registry metadata validation on 2026-09-20.
 After anchoring attached scrollbars to the outer container while keeping margins on the content viewport, the isolated installed-template test passed at both scroll endpoints in 109.3 seconds.
 Both private endpoint images were visually reviewed; the native rail, thumb, and end buttons remain separated at the corner.
-Platform, transport, publication and side-by-side installation qualification remain outstanding.
+Release commit `ba598fa3a326f7e54bfce2b2b4069942887f9f84` passed the Windows/Linux and Node 22/24 matrix, both transports, coverage, the official MCP Inspector, container and publication checks. Version 3.4.0 was published to npm, GHCR, GitHub Releases and the MCP Registry and installed side-by-side for exact public-package verification.

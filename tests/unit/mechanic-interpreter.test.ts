@@ -39,6 +39,57 @@ describe('bounded mechanic interpreter', () => {
     expect(runner.result().complete).toBe(true);
   });
 
+  it('models unscoped temporary-variable arithmetic and scope-valued assignments', () => {
+    const runner = new MechanicInterpreter(
+      {
+        ...scenario(),
+        scopes: { FROM: { id: 'BBB', type: 'country', state: { treasury: 2 } } },
+      },
+      definitions,
+      new Map(),
+    );
+    runner.execute(
+      parseMechanicBlock(`
+      FROM = {
+        set_temp_variable = { scratch = treasury }
+        multiply_temp_variable = { scratch = 1.55 }
+        round_temp_variable = scratch
+        subtract_from_temp_variable = { scratch = 2 }
+        clamp_temp_variable = { var = scratch min = 0 max = 20 }
+        set_temp_variable = { selected_actor = ROOT }
+      }
+    `),
+    );
+    expect(runner.result().state.scenario.state).toMatchObject({
+      scratch: 1,
+      selected_actor: 'AAA',
+    });
+    expect(runner.result().state.scenario.scopes?.FROM?.state.scratch).toBeUndefined();
+    expect(runner.result().complete).toBe(true);
+  });
+
+  it('resolves has_variable for declared and absent scenario variables', () => {
+    const runner = new MechanicInterpreter(scenario(), definitions, new Map());
+    runner.execute(
+      parseMechanicBlock(`
+      if = {
+        limit = { has_variable = treasury }
+        set_temp_variable = { declared_variable_seen = 1 }
+      }
+      if = {
+        limit = { NOT = { has_variable = missing_variable } }
+        set_temp_variable = { missing_variable_defaulted = 1 }
+      }
+    `),
+    );
+
+    expect(runner.result().state.scenario.state).toMatchObject({
+      declared_variable_seen: 1,
+      missing_variable_defaulted: 1,
+    });
+    expect(runner.result().complete).toBe(true);
+  });
+
   it('keeps skipped branches from changing state', () => {
     const runner = new MechanicInterpreter(scenario(), definitions, new Map());
     runner.execute(
