@@ -14,7 +14,7 @@ HOI4 Agent Tools is a public Model Context Protocol server for coding agents tha
 - Never launch, automate, control, or capture output from the game. Offline renders are tool-generated evidence, never game screenshots.
 - Keep the Event Chain Viewer read-only. It statically analyzes definitions, calls, state, scope, timing, and routes; it is not an event writer or runtime simulator.
 - Keep the Technology Tree Viewer read-only. It statically analyzes technologies, doctrines, placements, unlocks, grants, bonuses, and references; it is not a technology writer, balance scorer, or runtime simulator.
-- Do not commit installed-game content or third-party mod content. CI fixtures must be synthetic and project-owned.
+- Do not commit installed-game files, third-party mod source, or raw game assets. User-approved in-game screenshots and MCP renders may be published under `docs/images/comparisons/` with attribution and outside the npm package. CI fixtures must be synthetic and project-owned.
 
 ## Code and tests
 

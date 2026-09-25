@@ -243,7 +243,7 @@ Create a project-owned synthetic technology system containing at least:
 
 Maintain an expected graph and reference manifest. Tests must prove exact node and edge discovery, source provenance, folder placement, path explanations, unlock mapping, grant mapping, bonus coverage, diagnostic classification, comparison accuracy, stable renders, cancellation, resource retrieval, and incremental re-indexing.
 
-Run read-only local integration tests against large vanilla technology and doctrine families and at least one external mod workspace. Do not copy external source or proprietary assets into the public repository.
+Run read-only local integration tests against large vanilla technology and doctrine families and at least one external mod workspace. Keep external source files and raw proprietary assets out of the public repository. User-approved game captures and MCP renders for visual comparisons belong in documentation and are excluded from the npm package.
 
 ## Completion standard
 

@@ -997,10 +997,16 @@ function svgFor(
           ? undefined
           : (iconDataUris[preferredSprite] ?? iconDataUris[node.itemBackgroundSprite!]);
       const icon = node.iconSprite === undefined ? undefined : iconDataUris[node.iconSprite];
-      const iconSize = node.layoutSize === 'small' ? 62 : 70;
+      const nativeIconSize =
+        node.layoutSize === 'large' && node.iconSprite !== undefined
+          ? spriteDimensions[node.iconSprite]
+          : undefined;
+      const fallbackIconSize = node.layoutSize === 'small' ? 62 : 70;
+      const iconWidth = nativeIconSize?.width ?? fallbackIconSize;
+      const iconHeight = nativeIconSize?.height ?? fallbackIconSize;
       const center = node.iconPosition ?? { x: node.width / 2, y: node.height / 2, centered: true };
-      const iconX = node.x + center.x - (center.centered ? iconSize / 2 : 0);
-      const iconY = node.y + center.y - (center.centered ? iconSize / 2 : 0);
+      const iconX = node.x + center.x - (center.centered ? iconWidth / 2 : 0);
+      const iconY = node.y + center.y - (center.centered ? iconHeight / 2 : 0);
       const name = node.namePosition ?? { x: 3, y: -3, maxWidth: node.width - 6 };
       const labelWidth = Math.min(name.maxWidth ?? node.width - 6, node.width - name.x - 3);
       let fittedLabel = node.label;
@@ -1023,7 +1029,7 @@ function svgFor(
       const iconSvg =
         icon === undefined
           ? ''
-          : `<image href="${escapeXml(icon)}" x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet"/>`;
+          : `<image data-tech-icon-sprite="${escapeXml(node.iconSprite!)}" href="${escapeXml(icon)}" x="${iconX}" y="${iconY}" width="${iconWidth}" height="${iconHeight}" preserveAspectRatio="xMidYMid meet"/>`;
       const designTeamSprite = node.designTeamIcon?.sprite;
       const designTeamImage =
         designTeamSprite === undefined ? undefined : iconDataUris[designTeamSprite];

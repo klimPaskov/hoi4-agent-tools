@@ -1,6 +1,6 @@
 # 32. Cross-system impact and decision inspection
 
-Status: Stage 3 implementation is in progress in an isolated worktree; the public tools and focused regressions are implemented, while full qualification, publication, installation, and external integration remain open.
+Status: Cross-system impact and decision tools were released in 3.2.0; qualification, publication, installation, and external integration evidence is recorded in the [release ledger](../specs/deeper-analysis-and-agent-integration.md).
 
 ## Source and authority
 

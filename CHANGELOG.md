@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 3.4.2 - 2026-09-26
+
+- Draw wide technology-folder icons at their decoded sprite dimensions and the source GUI's icon anchor, preserving 131×52 chemical cylinders instead of shrinking them to 70×70.
+- Include user-approved in-game focus and technology captures beside current-source and source-matched historical MCP renders, with source revisions and explicit whole-image comparison limits.
+
 ## 3.4.1 - 2026-09-25
 
 - Validate technology renders against the requested view's source placement, node coverage, and sprite resolution without inheriting unrelated graph-wide diagnostics, while reporting deferred whole-workspace helper projection as a separate analysis boundary; resolve subtechnology art from the source GUI slot before using a technology-id fallback and include every referenced slot texture in the asset scan.

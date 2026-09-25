@@ -32,9 +32,11 @@ The same scenario-aware renderer can select mutually exclusive settings panes an
 
 The other workbenches return complete source-linked layouts and catalogs rather than prose-only summaries.
 
-| Focus tree                                                                     | Technology tree                                                                    |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| ![Large focus tree rendered by the MCP](docs/images/readme/focus-tree-mcp.png) | ![Technology tree rendered by the MCP](docs/images/readme/technology-tree-mcp.png) |
+For the supplied focus and technology game captures beside current-source MCP renders, see [Visual examples and comparison limits](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md). These comparisons do not establish 99.9% whole-image accuracy.
+
+| Fury focus tree from Chaos Redux                                                          | Infantry technology folder from Chaos Redux and vanilla                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ![Fury focus tree rendered from Chaos Redux source](docs/images/comparisons/fury-mcp.png) | ![Infantry technology folder rendered from installed source](docs/images/comparisons/infantry-mcp.png) |
 
 | Map                                                             | Event chain                                                                | Probability ranking                                                                |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |

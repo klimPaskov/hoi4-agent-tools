@@ -1,6 +1,6 @@
 # HOI4 source research ledger
 
-Reviewed 2026-07-22. These sources informed format support and tests; no installed-game or third-party-mod content is included in this repository.
+Reviewed 2026-07-22. These sources informed format support and tests. Source files and raw asset binaries from the installed game and external mods are excluded from this repository. User-approved game captures and MCP renders appear in the [visual comparisons](../visual-comparisons.md) and are excluded from the npm package.
 
 ## Offline wiki snapshot
 

@@ -5,6 +5,7 @@
 - [Cross-system impact and decisions](analysis.md): trace source consumers and evaluate decision or mission scenarios.
 - [Mechanic tests and scenario suites](mechanics.md): interpret declared effect steps, check package links, and run resumable cases.
 - [Technology trees](technology.md): inspect, trace, lint, render, and compare technologies and doctrines.
+- [Visual examples and comparison limits](visual-comparisons.md): real game captures beside MCP renders, with measured findings and limits.
 - [Bounded helper expansion](helper-expansion.md): resume source-linked event and technology helper paths with exact coverage boundaries.
 - [Persistent jobs](jobs.md): run, inspect, cancel, and recover long operations.
 - [AI and MTTH analysis](probability.md): evaluate weighted logic, timing, uncertainty, sequences, and patches.

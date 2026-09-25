@@ -470,6 +470,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       await writeFile(target, content);
     };
     const texturePath = 'gfx/interface/technologies/vanilla_shared.png';
+    const wideTexturePath = 'gfx/interface/technologies/vanilla_wide.png';
     const designTeamTexturePath = 'gfx/interface/technologies/design_team.png';
     await put(
       gameRoot,
@@ -477,7 +478,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       [
         'spriteTypes = {',
         `\tSpriteType = { name = GFX_layered_small_medium texturefile = "${texturePath}" }`,
-        `\tSpriteType = { name = GFX_layered_large_medium texturefile = "${texturePath}" }`,
+        `\tSpriteType = { name = GFX_layered_large_medium texturefile = "${wideTexturePath}" }`,
         `\tSpriteType = { name = GFX_layered_techtree_bg texturefile = "${texturePath}" }`,
         `\tSpriteType = { name = GFX_design_team_icon texturefile = "${designTeamTexturePath}" }`,
         `\tcorneredTileSpriteType = { name = GFX_layered_panel texturefile = "${texturePath}" borderSize = { x = 16 y = 16 } tilingCenter = yes }`,
@@ -495,6 +496,13 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
       gameRoot,
       texturePath,
       await sharp({ create: { width: 64, height: 64, channels: 4, background: '#d89a43' } })
+        .png()
+        .toBuffer(),
+    );
+    await put(
+      gameRoot,
+      wideTexturePath,
+      await sharp({ create: { width: 131, height: 52, channels: 4, background: '#a36827' } })
         .png()
         .toBuffer(),
     );
@@ -613,7 +621,7 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
         sprite: 'GFX_layered_large_medium',
         status: 'resolved',
         spritePath: 'game:interface/vanilla_technology_icons.gfx',
-        texturePath,
+        texturePath: wideTexturePath,
       },
       {
         sprite: 'GFX_layered_small_medium',
@@ -640,6 +648,12 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     );
     expect(rendered.render.svg).toContain(
       'data-icon-sprite="GFX_layered_small_medium" data-source-path="mod:common/technologies/layered_technologies.txt"',
+    );
+    expect(rendered.render.svg).toMatch(
+      /data-tech-icon-sprite="GFX_layered_small_medium"[^>]+width="62" height="62"/u,
+    );
+    expect(rendered.render.svg).toMatch(
+      /data-tech-icon-sprite="GFX_layered_large_medium"[^>]+width="131" height="52"/u,
     );
     expect(rendered.render.svg).toContain('href="data:image/png;base64,');
     expect(rendered.render.svg).toContain('data-tech-year="1936"');

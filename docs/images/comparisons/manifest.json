@@ -1,0 +1,116 @@
+{
+  "toolVersion": "3.4.2",
+  "focusSourceRevision": "5c208b5b7812390819825f48a0a2e71999df9ea9f3db71c2dbe0807e4fcf0111",
+  "focus": [
+    {
+      "treeId": "fury_focus_tree",
+      "sourcePath": "common/national_focus/007_fury_focus_tree.txt",
+      "sourceSha256": "c5ae9029be5642d1b5cd871722a365c990ac0348bccf937ece3bdbedc75fbfd5",
+      "nodes": 52
+    },
+    {
+      "treeId": "THR_focus",
+      "sourcePath": "common/national_focus/003_holy_realm.txt",
+      "sourceSha256": "1e29143c43c5867e920826c4fed3325f51716edafaecac0e06dc6bc69b27c6ef",
+      "nodes": 111
+    },
+    {
+      "treeId": "utopia_manifesto_tree",
+      "sourcePath": "common/national_focus/015_utopia_manifesto_focus_tree.txt",
+      "sourceSha256": "ebf16843f9c4f34be9200691a2b06d9a9f6e771b14197d39147792d323300104",
+      "nodes": 124
+    }
+  ],
+  "technology": [
+    {
+      "folderId": "infantry_folder",
+      "graphRevision": "c1ee392deee97c532b81c955aba5a1499df20117609d827a07ee564bd2b3ee47",
+      "nodes": 43,
+      "omitted": 0,
+      "sourceAccurate": true,
+      "iconCoverage": {
+        "rendered": 50,
+        "requested": 50,
+        "unresolvedSprites": []
+      },
+      "layouts": {
+        "small": 29,
+        "large": 14,
+        "unknown": 0
+      }
+    },
+    {
+      "folderId": "chemical_warfare_folder",
+      "graphRevision": "456afa2c11ffd755cf109c0e22b6a0a376c289ad06c2d8a7a88f8c5d805ed0ef",
+      "nodes": 19,
+      "omitted": 0,
+      "sourceAccurate": true,
+      "iconCoverage": {
+        "rendered": 25,
+        "requested": 25,
+        "unresolvedSprites": []
+      },
+      "layouts": {
+        "small": 19,
+        "large": 0,
+        "unknown": 0
+      }
+    },
+    {
+      "folderId": "biowarfare_folder",
+      "graphRevision": "d54fbe655fe41b69dd1e5a8cdc3d5e39f4970a01141906c7cf2e3906978051c6",
+      "nodes": 8,
+      "omitted": 0,
+      "sourceAccurate": true,
+      "iconCoverage": {
+        "rendered": 14,
+        "requested": 14,
+        "unresolvedSprites": []
+      },
+      "layouts": {
+        "small": 8,
+        "large": 0,
+        "unknown": 0
+      }
+    }
+  ],
+  "historicalChemical": {
+    "sourceRevision": "4efc01fc87f1137e98c864f928dd5603e6b7d2f1",
+    "overlaidSources": [
+      "common/technologies/chaosx_technologies.txt",
+      "interface/countrytechtreeview.gui"
+    ],
+    "graphRevision": "cd0c35f213ee018e47f0db3c1d63fea72249f85ec186a24362b631f4f62f7499",
+    "nodes": 30,
+    "omitted": 0,
+    "sourceAccurate": true,
+    "iconCoverage": {
+      "rendered": 39,
+      "requested": 39,
+      "unresolvedSprites": []
+    },
+    "layouts": {
+      "small": 21,
+      "large": 9,
+      "unknown": 0
+    }
+  },
+  "chemicalCardCrop": {
+    "file": "chemical-cards-mcp.png",
+    "sourceX": 113,
+    "sourceY": 184
+  },
+  "chemicalWideCardCrops": {
+    "inGame": {
+      "file": "chemical-wide-cards-ingame.png",
+      "sourceX": 30,
+      "sourceY": 230
+    },
+    "mcp": {
+      "file": "chemical-wide-cards-mcp.png",
+      "sourceX": 140,
+      "sourceY": 220
+    }
+  },
+  "note": "User-approved game captures and source-linked MCP renders; screenshots may differ in viewport and source revision."
+}
