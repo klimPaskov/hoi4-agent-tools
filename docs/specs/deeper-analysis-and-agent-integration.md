@@ -51,7 +51,7 @@ Do not restart coding-agent applications or interrupt their active MCP processes
 - [x] Batch/resume large suites without silently dropping cases.
 - [x] Prove intentional failures, unknown-input handling, deterministic traces, and release/install qualification.
 
-## Stage 5: Domain refinement and visual regression — released 3.4.0
+## Stage 5: Domain refinement and visual regression — released 3.4.0, qualified correction 3.4.1
 
 - [x] Focus: branch-local cleanup, pinned anchors, symmetry groups, preserved unaffected branches/gameplay, connector measurements, problem crops, incompatible-constraint explanations, and scenario-backed feasibility/choice diagnostics.
 - [x] GUI: visibility/boundary branch coverage, hidden/disabled explanations, label/background measurements, and matched source-baseline comparison through `gui_render`; preserve `comparisonScenario` semantics.
@@ -84,7 +84,7 @@ Measure avoided parsing, bounded memory, fairness, and control responsiveness ra
 - [x] Route non-trivial skill changes through the requested skill-maintenance specialist; edit canonical runtime instructions and use existing generators while preserving unrelated changes.
 - [x] Keep mechanic-specific facts in profiles and report external gameplay defects separately, without editing gameplay to make tests pass.
 - [x] Commit/publish only completed stages; synchronize versions, schemas, documentation, and Registry metadata.
-- [ ] Install verified versions side-by-side and preserve active processes; retain historical tags while keeping one latest public release entry after verification.
+- [x] Install verified versions side-by-side and preserve active processes; retain historical tags while keeping one latest public release entry after verification.
 
 Planned versions use the next unused compatible version if the registry advances.
 No stage is complete until its code, tests, public package, installation, and applicable integration have evidence.
@@ -92,7 +92,7 @@ No stage is complete until its code, tests, public package, installation, and ap
 ## Evidence ledger
 
 Stage 1 is release-qualified, published, and installed side-by-side.
-Stage 5 is release-qualified, published, and installed side-by-side. The external profiles pass against the corrective post-release build; publication and exact installed-package verification of that corrective patch remain pending.
+Stage 5 and its 3.4.1 corrective release are release-qualified, published, installed side-by-side, and verified through the external profiles.
 The implementation began from commit `d8a8117b18649eee622f9acb44c11462a1ee9950` (3.0.8).
 
 Stage 1 implementation and targeted regressions are complete; release evidence follows.
@@ -226,8 +226,13 @@ The active older installation and coding-agent processes were not restarted or r
 Stage 5 release commit `ba598fa3a326f7e54bfce2b2b4069942887f9f84` passed CI run `35776400446` on Windows and Linux with Node 22 and 24, including coverage, the official MCP Inspector, both transports, container checks, package checks, and Registry validation.
 Tag `v3.4.0` peels to that commit on main, and release workflow `35776418189` completed npm, GHCR, GitHub Release, MCP Registry, and exact public-install verification.
 An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.4.0` reports version 3.4.0 without replacing an active older installation or restarting a coding-agent process.
+Corrective release commit `36835a5d2d25fdd1756f14d224b9f2b48f07ab48` passed CI run `36143069374` on Windows and Linux with Node 22 and 24, including the full check, coverage, official MCP Inspector, container, and package gates.
+Tag `v3.4.1` peels to that commit on main, and release workflow `36147712177` completed on attempt 2 through npm, GHCR, GitHub Release, MCP Registry, exact public verification, and clean installation.
+The first release attempt published the signed npm package, but its immediate verification still observed the previous `latest` dist-tag during registry propagation; only the failed verification chain was rerun after the public registry exposed 3.4.1.
+An independent Windows installation at `C:/Users/klimp/AppData/Local/hoi4-agent-tools/3.4.1` reports version 3.4.1 and verified 135 registry signatures and 23 attestations without replacing an active installation or restarting a coding-agent process.
+GitHub retains every historical version tag and one latest public release entry, v3.4.1; no pull request or feature branch remains.
 
 The three Chaos Redux focus examples contain 52 Fury, 111 Holy Realm, and 124 Utopia Manifesto focuses. Their rendered branch arrangements can be compared at 96-pixel horizontal and 130-pixel vertical spacing, but the in-game icon plates, continuous-focus panel, frame, and connector styling are visibly different from the offline focus cards. No whole-tree 99.9% pixel-accuracy claim follows from those images.
 The sampled chemical and biological folder renders place 19 of 19 and 8 of 8 current-source nodes, respectively, resolve every requested sprite, and retain the source GUI's large technology-card layout. Seven native-size technology card crops from supplied game captures match the rendered card interiors at normalized grayscale correlations from 0.998712 to 0.999589 without resizing. These scores measure selected cards, not complete folder images; the supplied chemical viewport depicts a different source revision.
 The combined local check on commit `1e7e0dd` passed 1,215 tests with one skip across eight shards, deterministic fixture and schema checks, the production build, a 304-file package dry run, and Registry validation. The opt-in installed-game scrollbar template test passed both scroll endpoints after outer-window attachment geometry was corrected, and both private images were visually reviewed.
-The external Chaos Redux visual profile passes all 9 cases on the corrective build, the scripted-GUI profile passes all 12 cases, and the transfer/event profile passes all 5 cases. The final reports contain zero failed or unresolved cases and preserve the source revision, scenario evidence, and continuation boundaries. The corrective patch fixes requested-view technology validation, GUI local-name and native-control handling, bounded result summaries, event focused-validation boundaries, scripted-effect source reuse, and temporary-variable scenario semantics; its public qualification remains the final release task.
+The external Chaos Redux visual profile passes all 9 cases against the installed public 3.4.1 package, the scripted-GUI profile passes all 12 cases, and the transfer/event profile passes all 5 cases. The final report hashes are `fb0e87b9bdfce82c96c202a9e5735d890596d66926c77813b939719ac0b5854a`, `7d6c34b55be490e017372e31a8bb783c06f6667c2b39a536fcd04f78b7d5be5b`, and `1dc9aa4cd6daa39261f8d13096212aee323d5f509480a4523295a9ee6a0909fa`; every report contains zero failed or unresolved cases and preserves source revision `db88af45c55d7959069c7a498e8a5bb6f63c2a4d384884aa139c3282ddb6be1e`, scenario evidence, and continuation boundaries. The first scripted-GUI delivery attempt reached its 15-minute client wait before returning a scenario result; the unchanged suite then passed as one-case continuation pages with a 30-minute client wait, and the timeout report remains preserved separately. Version 3.4.1 includes requested-view technology validation, source-slot subtechnology sprites, GUI local-name and native-control handling, bounded result summaries, event focused-validation boundaries, scripted-effect source reuse, temporary-variable and `has_variable` scenario semantics, and terminal following of live replacement workers.
