@@ -57,6 +57,7 @@ Event and technology helper expansion also saves an authenticated intermediate f
 A replacement validates the saved paths, adjacency cursor, graph identity, and checkpoint bytes before continuing.
 Source changes before intermediate-frontier recovery cause a fresh analysis of the current revision; old and new graph evidence are never combined.
 An active host allows at most two replacement attempts after proven worker death, and never retries the same unchanged frontier twice.
+If another bounded host has already claimed an interrupted job, the initiating host follows that live replacement until it publishes a terminal outcome; it does not expose the replacement's intermediate `running` record as the synchronous result.
 Checkpoint recovery never overrides cancellation or live/unverifiable ownership, and never replays a rewrite.
 Event and technology scan artifacts retain revision-addressed graphs for later comparisons, and bounded responses state their requested depth, node, edge, render, helper-expansion, or candidate coverage.
 Their opt-in `helper_expansion` mode also returns [bounded continuation pages](helper-expansion.md) through both ordinary calls and persistent jobs.

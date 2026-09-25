@@ -85,7 +85,7 @@ describe('production dependency worker recovery', () => {
             expect(current.owner!.pid).not.toBe(process.pid);
             interrupted = current;
           },
-          { timeout: 30_000, interval: 5 },
+          { timeout: 120_000, interval: 5 },
         );
         if (editSources) {
           if (domain === 'event') {

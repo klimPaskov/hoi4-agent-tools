@@ -107,6 +107,33 @@ describe('bounded checkpoint worker recovery policy', () => {
     expect(launch).toHaveBeenCalledTimes(1);
   });
 
+  it('waits for a live replacement owner to publish a terminal outcome', async () => {
+    const { host, launch, record, jobs, scope } = await fixture();
+    const owner = currentJobOwner();
+    let resolvePublication!: () => void;
+    let rejectPublication!: (error: unknown) => void;
+    const publication = new Promise<void>((resolve, reject) => {
+      resolvePublication = resolve;
+      rejectPublication = reject;
+    });
+    void publication.catch(() => undefined);
+    launch.mockImplementation(async () => {
+      const claimed = await jobs.store.claim(scope, record.id, owner);
+      await jobs.store.updateOwned(scope, record.id, owner.token, { status: 'running' });
+      setTimeout(() => {
+        void jobs.store
+          .updateOwned(scope, record.id, owner.token, {
+            status: 'completed',
+            result: { structuredContent: { status: 'ok' } },
+          })
+          .then(() => resolvePublication(), rejectPublication);
+      }, 25);
+      expect(claimed.recovery).toBe(true);
+    });
+    await expect(host.run('test', record.id)).resolves.toMatchObject({ status: 'completed' });
+    await expect(publication).resolves.toBeUndefined();
+  });
+
   it('recognizes a committed result but rejects incomplete or mismatched commitments', async () => {
     const { jobs, record, scope, owner } = await fixture();
     const result = { exact: true };

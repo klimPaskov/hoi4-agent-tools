@@ -10,6 +10,7 @@
 - Parse each active scripted-effect source document once when building mechanic helper inventories so bounded real-workspace scenarios do not multiply parser state by the number of helpers in a file.
 - Interpret declared temporary-variable assignment, arithmetic, rounding, clamping, and scope-valued inputs with chain-wide unscoped semantics in bounded mechanic scenarios.
 - Evaluate `has_variable` against declared scenario state so guarded defaults and subsequent temporary-variable arithmetic remain deterministic.
+- Follow a live replacement worker through its terminal publication instead of returning a nonterminal job record during concurrent checkpoint recovery.
 
 ## 3.4.0 - 2026-09-20
 

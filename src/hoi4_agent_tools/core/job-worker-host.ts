@@ -85,7 +85,14 @@ export class JobWorkerHost {
         await this.scheduler.run(this.owner, 1024, signal, () =>
           this.capacity.run(signal, (lease) => this.launch(workspaceId, id, lease, principal)),
         );
-        return await this.jobs.get(workspaceId, id, principal);
+        const current = await this.jobs.get(workspaceId, id, principal);
+        if (['completed', 'cancelled', 'failed'].includes(current.status)) return current;
+        if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive')
+          return await this.followOwner(workspaceId, id, principal);
+        throw new ServiceError(
+          'JOB_WORKER_EXIT',
+          'The worker stopped without publishing a terminal job outcome',
+        );
       } catch (error) {
         const current = await this.jobs.get(workspaceId, id, principal);
         if (
@@ -127,6 +134,26 @@ export class JobWorkerHost {
           principal,
         );
       }
+    }
+  }
+
+  private async followOwner(
+    workspaceId: string,
+    id: string,
+    principal?: string,
+  ): Promise<JobRecord> {
+    for (;;) {
+      const record = await this.jobs.get(workspaceId, id, principal);
+      if (['completed', 'failed', 'cancelled'].includes(record.status)) return record;
+      const liveness = record.owner === undefined ? 'dead' : jobOwnerLiveness(record.owner);
+      if (liveness !== 'alive')
+        throw new ServiceError(
+          liveness === 'unknown' ? 'JOB_OWNER_UNRESOLVED' : 'JOB_WORKER_EXIT',
+          liveness === 'unknown'
+            ? 'The replacement execution owner cannot be verified on this host'
+            : 'The replacement worker stopped without publishing a terminal job outcome',
+        );
+      await delay(100);
     }
   }
 
