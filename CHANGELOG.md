@@ -418,4 +418,4 @@
 - Removed runtime workspace registration, manual rollback, legacy write-policy inputs, and package-level library/schema exports.
 - Renamed the HTTP discovery grant to `allowDiscoveredMods`; it grants discovered mod IDs only.
 
-Earlier release history is available in the [Git tags](https://github.com/klimPaskov/hoi4-agent-tools/tags).
+Earlier release history is preserved in the [commit history](https://github.com/klimPaskov/hoi4-agent-tools/commits/main).
