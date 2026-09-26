@@ -494,14 +494,25 @@ export class ReferenceService {
   ): Promise<ReferenceContextResult> {
     const inventory = await this.inventory(workspace, signal);
     const wanted = surfaceNames[input.surface];
-    const selected: IndexedSection[] = [];
+    const ranked =
+      input.question === undefined ? [] : this.rank(inventory.sections, input.question);
+    const required: Array<{ name: string; section: IndexedSection }> = [];
     const missing: string[] = [];
+    const includeRequired = (name: string, section: IndexedSection | undefined) => {
+      if (section === undefined) {
+        missing.push(name);
+        return;
+      }
+      const matching = ranked.find(
+        (entry) => entry.section.path === section.path && entry.section.source === section.source,
+      );
+      required.push({ name, section: matching?.section ?? section });
+    };
     for (const name of [...new Set(wanted)]) {
       const section = inventory.sections.find(
         (entry) => entry.source === 'wiki' && entry.title.toLowerCase() === name.toLowerCase(),
       );
-      if (section === undefined) missing.push(name);
-      else selected.push(section);
+      includeRequired(name, section);
     }
     for (const name of gameDocNames[input.surface]) {
       const section = inventory.sections.find(
@@ -509,23 +520,42 @@ export class ReferenceService {
           entry.source === 'game_doc' &&
           entry.path.replaceAll('\\', '/').toLowerCase().endsWith(`${name}.md`),
       );
-      if (section !== undefined) selected.push(section);
-      else missing.push(name);
+      includeRequired(name, section);
     }
-    const ranked =
-      input.question === undefined ? [] : this.rank(inventory.sections, input.question).slice(0, 5);
+    const questionOrder = new Map(ranked.map(({ section }, index) => [section.id, index]));
+    const byQuestion = (left: (typeof required)[number], right: (typeof required)[number]) =>
+      (questionOrder.get(left.section.id) ?? Number.MAX_SAFE_INTEGER) -
+      (questionOrder.get(right.section.id) ?? Number.MAX_SAFE_INTEGER);
+    const game = required.filter(({ section }) => section.source === 'game_doc').sort(byQuestion);
+    const wiki = required.filter(({ section }) => section.source === 'wiki').sort(byQuestion);
+    const seen = new Set<string>();
     const prioritized = [
-      ...ranked.map(({ section }) => section),
-      ...selected.filter((section) => !ranked.some((entry) => entry.section.id === section.id)),
-    ];
+      ...[...game.slice(0, 1), ...wiki.slice(0, 1), ...game.slice(1), ...wiki.slice(1)].map(
+        ({ section }) => section,
+      ),
+      ...ranked.slice(0, 5).map(({ section }) => section),
+    ].filter((section) => {
+      if (seen.has(section.id)) return false;
+      seen.add(section.id);
+      return true;
+    });
+    const selected = prioritized.slice(0, input.limit);
     return {
       surface: input.surface,
-      sections: prioritized.slice(0, input.limit).map((section) => ({
+      sections: selected.map((section) => ({
         ...this.publicSection(section),
         excerpt:
           ranked.find((entry) => entry.section.id === section.id)?.excerpt ?? section.excerpt,
       })),
       omitted: Math.max(0, prioritized.length - input.limit),
+      omittedSources: required
+        .filter(
+          ({ section }) =>
+            !selected.some(
+              (entry) => entry.path === section.path && entry.source === section.source,
+            ),
+        )
+        .map(({ name }) => name),
       missing,
       coverage: inventory.coverage,
       skipped: inventory.skipped,

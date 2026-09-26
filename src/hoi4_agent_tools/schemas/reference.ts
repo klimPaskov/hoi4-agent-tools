@@ -115,6 +115,7 @@ export const referenceContextDataSchema = z
     surface: referenceSurfaceSchema,
     sections: z.array(referenceSectionSchema).max(24),
     omitted: count,
+    omittedSources: z.array(z.string().max(256)).max(32),
     missing: z.array(z.string().max(256)).max(32),
     coverage: coverageBySource,
     skipped: count,

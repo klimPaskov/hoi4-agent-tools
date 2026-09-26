@@ -91,11 +91,15 @@ describe('MCP local reference tools', () => {
     );
     const context = await client.callTool({
       name: 'hoi4.reference_context',
-      arguments: { workspaceId: 'fixture', surface: 'event' },
+      arguments: { workspaceId: 'fixture', surface: 'event', limit: 2 },
     });
-    expect(
-      (context.structuredContent as { data: { sections: unknown[] } }).data.sections.length,
-    ).toBeGreaterThan(0);
+    const contextData = (
+      context.structuredContent as {
+        data: { sections: Array<{ source: string }>; omittedSources: string[] };
+      }
+    ).data;
+    expect(contextData.sections.map(({ source: kind }) => kind)).toEqual(['game_doc', 'wiki']);
+    expect(contextData.omittedSources).toEqual([]);
     const source = await client.callTool({
       name: 'hoi4.source_lookup',
       arguments: { workspaceId: 'fixture', symbol: 'reference.1', kind: 'event' },

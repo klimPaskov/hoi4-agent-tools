@@ -279,7 +279,7 @@ jobs:
         run: npm run publication:verify
         env:
           PUBLICATION_VERIFY_SCOPE: npm
-          PUBLICATION_VERIFY_ATTEMPTS: 12
+          PUBLICATION_VERIFY_ATTEMPTS: 60
           PUBLICATION_VERIFY_DELAY_MS: 5000
 
   publish_image:

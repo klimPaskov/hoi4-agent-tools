@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 3.5.1 - 2026-09-27
+
+- Preserve installed-game and offline-wiki citations in compact reference context bundles, select question-relevant sections within required sources, and report sources omitted by the result limit separately from missing files.
+- Exercise one-, two-, and eight-result context budgets across six real-source work surfaces while retaining the nine-query discovery benchmark.
+- Allow up to five minutes for npm registry processing before publication verification fails.
+
 ## 3.5.0 - 2026-09-26
 
 - Search and read bounded, revision-bound local offline-wiki, installed-game, and optional generated-script documentation sections; retrieve task citation bundles and exact indexed source definitions and usages through four read-only MCP tools.

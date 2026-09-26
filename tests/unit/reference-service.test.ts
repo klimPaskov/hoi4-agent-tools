@@ -249,6 +249,80 @@ describe('bounded local HOI4 references', () => {
     expect(focused.sections[0]?.heading).toBe('country_event');
   });
 
+  it('retains installed documentation when matching wiki sections exhaust a compact context', async () => {
+    const { workspace, mod, game } = await fixture();
+    const topics = [
+      'Interface modding',
+      'Scripted GUI modding',
+      'Graphical asset modding',
+      'Localisation',
+      'Scopes',
+    ];
+    for (const title of topics) {
+      await writeFile(
+        path.join(mod, 'paradox_wiki', `${title} - Hearts of Iron 4 Wiki.md`),
+        `# ${title}\nIntroduction.\n` +
+          (title === 'Scripted GUI modding'
+            ? Array.from(
+                { length: 5 },
+                (_, index) =>
+                  `## Click effects and triggers ${index}\nScripted GUI click effects and triggers.\n`,
+              ).join('')
+            : ''),
+      );
+    }
+    const nativeDirectory = path.join(game, 'common', 'scripted_guis');
+    await mkdir(nativeDirectory, { recursive: true });
+    const nativeDocumentation = path.join(nativeDirectory, '_documentation.md');
+    await writeFile(
+      nativeDocumentation,
+      '# Native callback documentation\nRegistered callbacks.\n',
+    );
+    const result = await new ReferenceService().context(
+      workspace,
+      referenceContextRequestSchema.parse({
+        workspaceId: 'fixture',
+        surface: 'gui',
+        question: 'scripted GUI click effects triggers',
+        limit: 8,
+      }),
+    );
+    expect(result.sections.map(({ path: source }) => source)).toContain(nativeDocumentation);
+    expect(result.sections.some(({ source }) => source === 'wiki')).toBe(true);
+    expect(result.sections).toHaveLength(8);
+    expect(result.missing).toEqual([]);
+    expect(result.omittedSources).toEqual([]);
+    expect(result.omitted).toBeGreaterThan(0);
+
+    for (const question of [undefined, 'scripted GUI click effects triggers']) {
+      const service = new ReferenceService();
+      const single = await service.context(
+        workspace,
+        referenceContextRequestSchema.parse({ surface: 'gui', question, limit: 1 }),
+      );
+      expect(single.sections.map(({ source }) => source)).toEqual(['game_doc']);
+      expect(single.omittedSources).toEqual(topics);
+      expect(single.missing).toEqual([]);
+      const pair = await service.context(
+        workspace,
+        referenceContextRequestSchema.parse({ surface: 'gui', question, limit: 2 }),
+      );
+      expect(pair.sections.map(({ source }) => source)).toEqual(['game_doc', 'wiki']);
+      expect(pair.omittedSources).toHaveLength(4);
+      expect(pair.omittedSources).not.toContain('common/scripted_guis/_documentation');
+      expect(pair.missing).toEqual([]);
+    }
+
+    await rm(nativeDocumentation);
+    const missingNative = await new ReferenceService().context(
+      workspace,
+      referenceContextRequestSchema.parse({ surface: 'gui', limit: 1 }),
+    );
+    expect(missingNative.sections.map(({ source }) => source)).toEqual(['wiki']);
+    expect(missingNative.missing).toEqual(['common/scripted_guis/_documentation']);
+    expect(missingNative.omittedSources).not.toContain('common/scripted_guis/_documentation');
+  });
+
   it('reopens the same citation after unrelated retrieval without carrying a page in conversation state', async () => {
     const { workspace } = await fixture();
     const service = new ReferenceService();

@@ -26,3 +26,17 @@ Revision-bound section IDs stayed stable across unrelated retrieval calls in the
 The retrieval benchmark used the local service directly. A separate real-workspace stdio run identified the built server as 3.5.0 and completed documentation context in 306 ms, a cited section read in 162 ms, and a first exact source lookup in 58,851 ms. That lookup builds the broader game/mod symbol inventory; it should not be confused with the much narrower documentation lookup. MCP transport fixtures cover both protocol adapters, workspace authorization, read-scope denial, and source usage discovery. Individual task adequacy and actual engine behavior remain separate checks.
 
 The four additional public tool definitions add approximately 6.5 KB to the one-time MCP tool discovery response. The complete list is about 72 KB in the discovery fixture and is tested against a 72 KiB ceiling. The context reduction above applies to reference retrieval after discovery.
+
+## Compact context budgets
+
+A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.
+
+For the GUI question “Where are scripted GUI click effects and triggers defined?”, the measured results were:
+
+| Citation limit | Returned source kinds            | Required sources omitted | JSON bytes | Milliseconds |
+| -------------- | -------------------------------- | -----------------------: | ---------: | -----------: |
+| 1              | Installed documentation          |                        5 |        877 |          348 |
+| 2              | Installed documentation and wiki |                        4 |      1,480 |          396 |
+| 8              | Installed documentation and wiki |                        0 |      5,926 |          339 |
+
+The default six-surface context bundles used 3,545–5,556 bytes including omission metadata. A smaller response is not sufficient evidence when `omittedSources` is nonempty: increase the limit or search and read those sources directly. The evaluation script fails when a compact budget drops a required source kind or silently omits its required-source pointers.

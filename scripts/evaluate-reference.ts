@@ -53,6 +53,14 @@ const resolver = await WorkspaceResolver.create(
 const workspace = resolver.get('evaluation');
 const service = new ReferenceService();
 const surfaces = ['event', 'decision', 'focus', 'technology', 'gui', 'map'] as const;
+const surfaceQuestions = {
+  event: 'event option ai_chance',
+  decision: 'mission timeout days',
+  focus: 'how do focus prerequisites with OR work',
+  technology: 'where does technology icon background size come from',
+  gui: 'Where are scripted GUI click effects and triggers defined?',
+  map: 'state history dated owner at bookmark',
+};
 const contexts = [];
 for (const surface of surfaces) {
   const start = performance.now();
@@ -67,10 +75,48 @@ for (const surface of surfaces) {
     surface,
     citations: response.sections.length,
     wikiCitations: response.sections.filter(({ source }) => source === 'wiki').length,
+    gameCitations: response.sections.filter(({ source }) => source === 'game_doc').length,
     missing: response.missing,
+    omittedSources: response.omittedSources,
     bytes: Buffer.byteLength(JSON.stringify(response)),
     ms: Math.round(performance.now() - start),
   });
+}
+const compactContexts = [];
+const budgetFailures: string[] = [];
+for (const surface of surfaces) {
+  for (const limit of [1, 2, 8]) {
+    const start = performance.now();
+    const response = await service.context(
+      workspace,
+      referenceContextRequestSchema.parse({
+        workspaceId: 'evaluation',
+        surface,
+        question: surfaceQuestions[surface],
+        limit,
+      }),
+    );
+    const sources = [...new Set(response.sections.map(({ source }) => source))];
+    if (
+      response.sections.length > limit ||
+      !sources.includes('game_doc') ||
+      (limit >= 2 && !sources.includes('wiki')) ||
+      response.missing.length > 0 ||
+      (limit === 1 && response.omittedSources.length === 0)
+    ) {
+      budgetFailures.push(`${surface}:${limit}`);
+    }
+    compactContexts.push({
+      surface,
+      limit,
+      citations: response.sections.length,
+      sources,
+      missing: response.missing,
+      omittedSources: response.omittedSources,
+      bytes: Buffer.byteLength(JSON.stringify(response)),
+      ms: Math.round(performance.now() - start),
+    });
+  }
 }
 const results = [];
 for (const item of cases) {
@@ -102,7 +148,11 @@ for (const item of cases) {
 const pagesFound = results.filter(({ pageRank }) => pageRank !== null).length;
 const sectionsFound = results.filter(({ sectionRank }) => sectionRank !== null).length;
 process.stdout.write(
-  `${JSON.stringify({ pagesFound, sectionsFound, total: results.length, contexts, results }, null, 2)}\n`,
+  `${JSON.stringify({ pagesFound, sectionsFound, total: results.length, contexts, compactContexts, budgetFailures, results }, null, 2)}\n`,
 );
-if (sectionsFound !== cases.length || contexts.some(({ missing }) => missing.length > 0))
+if (
+  sectionsFound !== cases.length ||
+  contexts.some(({ missing, omittedSources }) => missing.length > 0 || omittedSources.length > 0) ||
+  budgetFailures.length > 0
+)
   process.exitCode = 1;
