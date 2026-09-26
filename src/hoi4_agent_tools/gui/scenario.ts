@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ConditionScopeBindingSchema, ConditionResultSchema } from '../core/condition-schema.js';
+import {
+  ConditionScopeBindingSchema,
+  ConditionResultSchema,
+  ConditionControlMapSchema,
+  GuiScenarioDateSchema,
+} from '../core/condition-schema.js';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { GuiGeneratedScenarioOptions, GuiPreviewScenario } from './types.js';
@@ -133,6 +138,8 @@ const GuiPreviewScenarioBodySchema = z
       .max(128)
       .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u),
     description: z.string().max(500).optional(),
+    date: GuiScenarioDateSchema.optional(),
+    controls: ConditionControlMapSchema.optional(),
     resolution: GuiPreviewResolutionSchema.default({ width: 1920, height: 1080 }),
     uiScale: z
       .number()

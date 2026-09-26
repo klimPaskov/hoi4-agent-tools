@@ -62,6 +62,9 @@ export function resolveScopeContext(
   if (chainedBinding !== undefined) return chainedBinding;
   const direct = explicitScope(scenario, expression, current);
   if (direct !== undefined) return direct;
+  if (/^[1-9][0-9]*$/u.test(expression) && Object.hasOwn(scenario.controls ?? {}, expression)) {
+    return { expression, binding: { id: expression, type: 'state', state: {} }, parent: current };
+  }
 
   const targetMatch = /^(?:event_target|scope):(.+)$/iu.exec(expression);
   const targetId =

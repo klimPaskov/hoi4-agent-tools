@@ -562,7 +562,7 @@ class FragmentAnalyzer {
         kind: 'event',
         label: id,
         eventId: id,
-        namespace: id.includes('.') ? id.slice(0, id.indexOf('.')) : id,
+        namespace: id.includes('.') ? id.slice(0, id.lastIndexOf('.')) : id,
         sourcePath: this.file.displayPath,
         location: this.location(assignment, id),
         metadata: {

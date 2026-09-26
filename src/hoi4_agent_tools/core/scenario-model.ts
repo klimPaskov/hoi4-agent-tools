@@ -60,6 +60,9 @@ export function scenarioFromGui(base: GuiPreviewScenario, values = base.values):
   };
   for (const [key, value] of Object.entries(base.flags)) state[`flag.${key}`] = value;
   const scopes = structuredClone(base.scopes ?? {});
+  for (const stateId of Object.keys(base.controls ?? {})) {
+    scopes[stateId] ??= { id: stateId, type: 'state', state: {} };
+  }
   for (const [key, value] of Object.entries(state)) {
     const match = /^(ROOT|THIS|FROM(?:\.FROM)*|PREV)\.(.+)$/u.exec(key);
     if (match === null) continue;
@@ -73,6 +76,8 @@ export function scenarioFromGui(base: GuiPreviewScenario, values = base.values):
   return {
     schemaVersion: '1.0',
     id: base.id,
+    ...(base.date === undefined ? {} : { date: base.date }),
+    ...(base.controls === undefined ? {} : { controls: { ...base.controls } }),
     state,
     scopes,
     closedFlags: false,
@@ -87,6 +92,7 @@ export function scenarioFromProbability(base: ProbabilityScenario): SharedScenar
     id: base.id,
     ...(base.actor === undefined ? {} : { actor: base.actor }),
     ...(base.date === undefined ? {} : { date: base.date }),
+    ...(base.controls === undefined ? {} : { controls: { ...base.controls } }),
     state: structuredClone(base.state),
     ...(base.flags === undefined ? {} : { flags: [...base.flags] }),
     ...(base.eventTargets === undefined ? {} : { eventTargets: { ...base.eventTargets } }),

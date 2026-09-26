@@ -11,24 +11,21 @@ HOI4 Agent Tools is an MCP server for coding agents to understand Hearts of Iron
 - Cross-system impact and decisions: trace definitions and consumers across source systems, evaluate declared actor and target scenarios, inspect costs and mission paths, and compare in-memory proposals.
 - Technology trees: reconstruct technology and doctrine paths, folder layouts, unlocks, bonuses, grants, metadata, assets, and structural changes.
 - AI and MTTH: evaluate weighted choices and timing across explicit scenarios, bind special scope chains, enumerate dynamic target pools, sweep uncertain inputs, simulate distributions, compare patches, and analyze declared stateful pools.
+- Local references: search and read cited offline wiki pages, installed game documentation, optional script documentation, and exact source symbols without loading whole manuals into the conversation.
 
 ## Real results
 
-The GUI renderer resolves the mod and installed-game sources, fonts, localisation colours, sprites, scripted visibility, dynamic values, lists, controls, and panel composition. These pairs show the in-game surface beside the MCP result.
+The examples use real installed vanilla and Chaos Redux source, supplied game captures, and explicit reproducible display scenarios. They demonstrate source-backed review, not a claim of 99.9% whole-image accuracy. Images, source revisions, hashes, and known differences are in [Visual comparisons](docs/visual-comparisons.md) and [Interface examples](docs/gui-comparisons.md).
 
-| Communist Insurgency in game                                                        | Communist Insurgency from MCP                                                                |
-| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ![Communist Insurgency in game](docs/images/readme/communist-insurgency-ingame.png) | ![Communist Insurgency rendered by the MCP](docs/images/readme/communist-insurgency-mcp.png) |
+| Options Video in game                                                          | Options Video from the MCP renderer                                                                |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| ![Options Video in game](docs/images/comparisons/gui/options-video-ingame.png) | ![Options Video rendered from installed source](docs/images/comparisons/gui/options-video-mcp.png) |
 
-| Chaos Meter in game                                               | Chaos Meter from MCP                                                       |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| ![Chaos Meter in game](docs/images/readme/chaos-meter-ingame.png) | ![Chaos Meter rendered by the MCP](docs/images/readme/chaos-meter-mcp.png) |
+| Škoda Priority in game                                                           | Škoda Priority from the MCP renderer                                                                 |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| ![Škoda Priority in game](docs/images/comparisons/gui/skoda-priority-ingame.png) | ![Škoda Priority rendered from installed source](docs/images/comparisons/gui/skoda-priority-mcp.png) |
 
-The same scenario-aware renderer can select mutually exclusive settings panes and populate plausible runtime values.
-
-| Trigger Events settings                                                                    | Advanced settings                                                                      |
-| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| ![Trigger Events settings rendered by the MCP](docs/images/readme/settings-events-mcp.png) | ![Advanced settings rendered by the MCP](docs/images/readme/settings-advanced-mcp.png) |
+The interface gallery also includes Chaos Redux Settings, Event Log, and Chaos Meter, plus populated vanilla decision and occupation templates. Their manifests separate source-defined layout from declared native runtime fields.
 
 The other workbenches return complete source-linked layouts and catalogs rather than prose-only summaries.
 
@@ -38,9 +35,11 @@ For the supplied focus and technology game captures beside current-source MCP re
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | ![Fury focus tree rendered from Chaos Redux source](docs/images/comparisons/fury-mcp.png) | ![Infantry technology folder rendered from installed source](docs/images/comparisons/infantry-mcp.png) |
 
-| Map                                                             | Event chain                                                                | Probability ranking                                                                |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| ![Full map rendered by the MCP](docs/images/readme/map-mcp.png) | ![Event chain rendered by the MCP](docs/images/readme/event-chain-mcp.png) | ![Probability ranking rendered by the MCP](docs/images/readme/probability-mcp.png) |
+| Map                                                                              | Event options                                                                                      |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| ![Installed map rendered by the MCP](docs/images/comparisons/source/map-mcp.png) | ![Chaos Redux event chain rendered by the MCP](docs/images/comparisons/source/event-chain-mcp.png) |
+
+These two views retain native output resolution. Their [source manifest](docs/images/comparisons/source/manifest.json) records the map revision and the exact Fury event used for the option view. The event renderer's omitted-node count includes the rest of the workspace graph outside that selection.
 
 ## Use from a coding agent
 
@@ -71,6 +70,10 @@ On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repo
 | `hoi4.map_inspect`          | Search, click, navigate, and inspect the complete rendered map and its linked data.       |
 | `hoi4.map_render`           | Render full-map layers, overlays, names, IDs, coordinates, and source-linked catalogs.    |
 | `hoi4.map_rewrite`          | Create or update states, provinces, IDs, networks, positions, and connected map data.     |
+| `hoi4.reference_context`    | Get compact, cited wiki and installed documentation pointers for a modding surface.       |
+| `hoi4.reference_search`     | Search bounded local documentation sections.                                              |
+| `hoi4.reference_read`       | Read one revision-bound section, with line continuation.                                  |
+| `hoi4.source_lookup`        | Find exact definitions, overrides, usages, and narrow source blocks.                      |
 | `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                  |
 | `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.   |
 | `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                           |
@@ -116,6 +119,7 @@ Ask your agent in normal task language. A typical workflow is inspect, render, r
 - Mechanics and packages: "Test this transfer's conservation and payment," or "Check every declared package link and resume its named scenario suite." See [Mechanic tests and scenario suites](docs/mechanics.md).
 - Technology trees: "Explain everything this technology requires and unlocks," or "Compare this technology patch and render every affected folder and doctrine branch." See [Technology trees](docs/technology.md).
 - AI and MTTH: "Compare these focus weights across peace, defensive-war, and low-stability scenarios," or "Show when this MTTH event becomes likely and which unknown inputs control the result." See [AI and MTTH analysis](docs/probability.md).
+- References: "Find the installed effect signature and an exact vanilla example," or "Show the pertinent wiki and installed documentation for this GUI task." See [Local references](docs/reference.md).
 
 ## HTTP
 

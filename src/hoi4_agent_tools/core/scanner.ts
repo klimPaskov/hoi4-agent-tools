@@ -246,7 +246,7 @@ export class WorkspaceScanner {
   }
 }
 
-async function readBoundedFile(
+export async function readBoundedFile(
   handle: FileHandle,
   remainingBytes: number,
   signal?: AbortSignal,

@@ -1,0 +1,61 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.5.0/schemas/source-lookup-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "includeReferences": {
+      "default": true,
+      "type": "boolean"
+    },
+    "maxDefinitions": {
+      "default": 3,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "maxReferences": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20
+    },
+    "maxLines": {
+      "default": 30,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 80
+    },
+    "fromLine": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "fromColumn": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "expectedRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "symbol"
+  ],
+  "additionalProperties": false
+}

@@ -1027,7 +1027,14 @@ function ensureReferencedNodes(graph: MutableGraph): void {
       id: edge.to,
       kind: 'unresolved',
       label: `Missing ${isEvent ? 'event' : 'helper'}: ${expression}`,
-      ...(isEvent ? { eventId: expression, namespace: expression.split('.')[0] } : {}),
+      ...(isEvent
+        ? {
+            eventId: expression,
+            namespace: expression.includes('.')
+              ? expression.slice(0, expression.lastIndexOf('.'))
+              : expression,
+          }
+        : {}),
       sourcePath: edge.location.path,
       location: edge.location,
       metadata: { expression, unresolvedKind },

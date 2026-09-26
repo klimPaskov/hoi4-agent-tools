@@ -1017,6 +1017,168 @@ describe('Agent Nudger map model and operations', () => {
     expect(tiedCapital.finalIndex.statesById.get(1)?.capital).toBe(1);
   });
 
+  it('blocks edits shadowed by applicable dated state history and preserves unrelated changes', async () => {
+    const state = fixtureFiles()['history/states/1-ONE.txt'] as string;
+    const dated = state.replace(
+      '\t\towner = AAA',
+      '\t\towner = AAA\n\t\t1935.1.1 = { owner = BBB add_core_of = BBB victory_points = { 4 9 } buildings = { infrastructure = 5 4 = { bunker = 2 } } }\n\t\t1939.1.1 = { owner = DDD }',
+    );
+    const { snapshot } = await setup({
+      'history/states/1-ONE.txt': dated,
+      'common/bookmarks/start.txt': 'bookmarks = { bookmark = { date = 1936.1.1.12 } }\n',
+    });
+    expect(snapshot.index.earliestBookmark).toMatchObject({ value: '1936.1.1.12' });
+    expect(snapshot.index.statesById.get(1)).toMatchObject({
+      owner: 'BBB',
+      cores: ['AAA', 'BBB'],
+      capital: 4,
+    });
+    expect(snapshot.index.statesById.get(1)?.stateBuildings.get('infrastructure')).toBe(5);
+    expect(snapshot.index.statesById.get(1)?.provinceBuildings.get(4)?.get('bunker')).toBe(2);
+    expect(buildMapCatalog(snapshot.index).states.find(({ id }) => id === 1)?.owner).toBe('BBB');
+    const owner = planMapOperations(snapshot.index, [
+      { id: 'dated-owner', kind: 'update_state', stateId: 1, changes: { owner: 'CCC' } },
+    ]);
+    expect(owner.blockers).toMatchObject([
+      {
+        code: 'MAP_DATED_STATE_HISTORY_CONFLICT',
+        operationId: 'dated-owner',
+        details: { field: 'owner', datedAt: '1935.1.1', earliestBookmark: '1936.1.1.12' },
+      },
+    ]);
+    const cores = planMapOperations(snapshot.index, [
+      { id: 'dated-core', kind: 'update_state', stateId: 1, changes: { cores: ['CCC'] } },
+    ]);
+    expect(cores.blockers).toMatchObject([
+      { code: 'MAP_DATED_STATE_HISTORY_CONFLICT', details: { field: 'cores' } },
+    ]);
+    const unrelated = planMapOperations(snapshot.index, [
+      {
+        id: 'direct-resource',
+        kind: 'update_state',
+        stateId: 1,
+        changes: { resources: { steel: 12 } },
+      },
+    ]);
+    expect(unrelated.blockers).toEqual([]);
+    const futureOnly = await setup({
+      'history/states/1-ONE.txt': state.replace(
+        '\t\towner = AAA',
+        '\t\towner = AAA\n\t\t1939.1.1 = { owner = DDD }',
+      ),
+      'common/bookmarks/start.txt': 'bookmarks = { bookmark = { date = 1936.1.1.12 } }\n',
+    });
+    const futureOwner = planMapOperations(futureOnly.snapshot.index, [
+      { id: 'future-owner', kind: 'update_state', stateId: 1, changes: { owner: 'CCC' } },
+    ]);
+    expect(futureOnly.snapshot.index.statesById.get(1)?.owner).toBe('AAA');
+    expect(futureOwner.blockers).toEqual([]);
+    expect(Buffer.from(futureOwner.changes[0]?.content ?? []).toString()).toContain(
+      '1939.1.1 = { owner = DDD }',
+    );
+    const withoutBookmark = await setup({ 'history/states/1-ONE.txt': dated });
+    expect(withoutBookmark.snapshot.index.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_STATE_DATED_HISTORY_UNRESOLVED' }),
+    );
+    expect(
+      planMapOperations(withoutBookmark.snapshot.index, [
+        { id: 'unknown-date-owner', kind: 'update_state', stateId: 1, changes: { owner: 'CCC' } },
+      ]).blockers,
+    ).toMatchObject([{ code: 'MAP_DATED_STATE_HISTORY_CONFLICT' }]);
+  });
+
+  it('blocks state distribution when source history has dated commands', async () => {
+    const state = fixtureFiles()['history/states/1-ONE.txt'] as string;
+    const { snapshot } = await setup({
+      'history/states/1-ONE.txt': state.replace(
+        '\t\towner = AAA',
+        '\t\towner = AAA\n\t\t1939.1.1 = { owner = DDD }',
+      ),
+    });
+    const split = planMapOperations(snapshot.index, [
+      {
+        id: 'dated-split',
+        kind: 'split_state',
+        sourceStateId: 1,
+        provinceIds: [4],
+        stateId: 3,
+        name: 'STATE_3',
+        distribution: splitStatePolicy,
+      },
+    ]);
+    expect(split.blockers).toMatchObject([
+      { code: 'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED', operationId: 'dated-split' },
+    ]);
+    const datedSource = await setup({
+      'history/states/2-TWO.txt':
+        'state = { id = 2 name = "STATE_2" manpower = 500 state_category = town provinces = { 2 } history = { owner = BBB add_core_of = BBB 1939.1.1 = { owner = DDD } } }\n',
+    });
+    const merge = planMapOperations(datedSource.snapshot.index, [
+      {
+        id: 'dated-merge',
+        kind: 'merge_states',
+        sourceStateIds: [2],
+        targetStateId: 1,
+        distribution: {
+          stateValues: 'sum-into-target',
+          ownership: 'retain-target',
+          controller: 'retain-target',
+          cores: 'union',
+          claims: 'union',
+          victoryPoints: 'follow-province',
+          provinceBuildings: 'follow-province',
+          ports: 'follow-province',
+          supplyNodes: 'follow-province',
+          railways: 'follow-province',
+          positions: 'follow-province',
+          strategicRegion: 'require-same',
+        },
+      },
+    ]);
+    expect(merge.blockers).toMatchObject([
+      { code: 'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED', operationId: 'dated-merge' },
+    ]);
+  });
+
+  it('validates floating-harbor sea placements against their coastal land targets', async () => {
+    const buildings = fixtureFiles()['map/buildings.txt'] as string;
+    const { snapshot } = await setup({
+      'map/buildings.txt': `${buildings}2;floating_harbor;200;0;100;0;2\n`,
+    });
+    expect(snapshot.index.provinceAtMapCoordinate(200, 100)).toBe(3);
+    expect(snapshot.index.ports).toHaveLength(1);
+    expect(
+      validateMap(snapshot.index).diagnostics.filter(({ code }) =>
+        code.startsWith('MAP_FLOATING_HARBOR_'),
+      ),
+    ).toEqual([]);
+
+    const wrongLand = await setup({
+      'map/buildings.txt': `${buildings}2;floating_harbor;200;0;100;0;3\n`,
+    });
+    expect(validateMap(wrongLand.snapshot.index).diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_FLOATING_HARBOR_LAND_INVALID' }),
+    );
+    const wrongSea = await setup({
+      'map/buildings.txt': `${buildings}2;floating_harbor;150;0;100;0;2\n`,
+    });
+    expect(validateMap(wrongSea.snapshot.index).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_FLOATING_HARBOR_POSITION_REVIEW',
+        severity: 'warning',
+      }),
+    );
+    const unusualAssociation = await setup({
+      'map/buildings.txt': `${buildings}2;floating_harbor;200;0;100;0;4\n`,
+    });
+    expect(validateMap(unusualAssociation.snapshot.index).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_FLOATING_HARBOR_ASSOCIATION_REVIEW',
+        severity: 'warning',
+      }),
+    );
+  });
+
   it('migrates land, sea, and lake definitions only with complete dependency policies', async () => {
     const { snapshot } = await setup();
     const unresolved = planMapOperations(snapshot.index, [

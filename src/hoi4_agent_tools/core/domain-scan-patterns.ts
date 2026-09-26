@@ -1,5 +1,6 @@
 import { compareCodeUnits } from './canonical.js';
 import type { ResolvedWorkspace } from './workspace.js';
+import { ServiceError } from './result.js';
 
 function under(roots: readonly string[], glob: string): string[] {
   return roots.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
@@ -49,9 +50,19 @@ export function probabilityDomainScanPatterns(
   sourcePaths: readonly string[] = [],
 ): string[] {
   const roots = workspace.registration.roots;
-  const normalizedSourcePaths = sourcePaths.map((sourcePath) =>
-    sourcePath.replace(/^.*?:/u, '').replaceAll('\\', '/').replace(/^\.\//u, ''),
-  );
+  const normalizedSourcePaths = sourcePaths.map((sourcePath) => {
+    const normalized = sourcePath.replaceAll('\\', '/').replace(/^\.\//u, '');
+    if (
+      normalized.startsWith('/') ||
+      normalized.split('/').includes('..') ||
+      /[:*?[\]{}!\0]/u.test(normalized)
+    )
+      throw new ServiceError(
+        'PROBABILITY_SOURCE_PATH_INVALID',
+        'Probability source paths must be exact workspace-relative files',
+      );
+    return normalized;
+  });
   if (normalizedSourcePaths.length > 0)
     return uniquePatterns([...normalizedSourcePaths, ...probabilitySharedDefinitionPatterns()]);
   return uniquePatterns([

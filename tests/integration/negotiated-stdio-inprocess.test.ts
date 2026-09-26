@@ -113,7 +113,7 @@ describe('in-process negotiated stdio', () => {
         result: { supportedVersions: ['2026-07-28'] },
       });
       const tools = await request(2, 'tools/list', { _meta: modernMeta });
-      expect((tools.result as { tools: unknown[] }).tools).toHaveLength(30);
+      expect((tools.result as { tools: unknown[] }).tools).toHaveLength(34);
       expect(
         await request(3, 'tools/call', {
           _meta: modernMeta,
@@ -155,7 +155,7 @@ describe('in-process negotiated stdio', () => {
       });
       input.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
       const tools = await request(2, 'tools/list');
-      expect((tools.result as { tools: unknown[] }).tools).toHaveLength(30);
+      expect((tools.result as { tools: unknown[] }).tools).toHaveLength(34);
       expect(errors).toEqual([]);
       expect(failures).toEqual([]);
     } finally {

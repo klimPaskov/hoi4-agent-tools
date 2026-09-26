@@ -21,6 +21,8 @@ import { MODERN_TASK_ROUTES, ModernTaskRoutingServer } from '../transports/moder
 import { registerModernResources } from '../resources/register-modern.js';
 import { registerModernPrompts } from '../prompts/register-modern.js';
 import { jobControlTools } from '../tools/job.js';
+import { referenceTools } from '../tools/reference.js';
+import { isReferenceTool, ReferenceToolService } from '../../reference/operations.js';
 import type { createChaosxToolOperations } from '../tools/chaosx.js';
 import { ModernTaskAdapter, TASKS_EXTENSION } from './modern-tasks.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
@@ -62,9 +64,13 @@ export function createModernOperationServer(
 ): ModernTaskRoutingServer {
   const adapter = new ModernTaskAdapter(tasks);
   const controls = new JobControlService(engine);
+  const references = new ReferenceToolService(engine);
   const privateOperations = options.createPrivateTools?.(engine, context);
+  const mapEnd = taskToolCatalog.findIndex(({ name }) => name === 'hoi4.map_rewrite') + 1;
   const definitions: readonly ToolDefinition[] = [
-    ...taskToolCatalog,
+    ...taskToolCatalog.slice(0, mapEnd),
+    ...referenceTools,
+    ...taskToolCatalog.slice(mapEnd),
     ...jobControlTools,
     ...(privateOperations === undefined
       ? []
@@ -142,6 +148,29 @@ export function createModernOperationServer(
       };
     }
     try {
+      if (isReferenceTool(definition.name)) {
+        const name = definition.name;
+        const result = await withProgressHeartbeat(
+          () =>
+            engine.requests.run(
+              references,
+              Buffer.byteLength(JSON.stringify(arguments_)),
+              extra.mcpReq.signal,
+              () =>
+                engine.sharedRequests.run(extra.mcpReq.signal, () =>
+                  references.call(name, arguments_, operationContext, extra.mcpReq.signal),
+                ),
+            ),
+          modernProgressReporter(extra),
+        );
+        definition.outputSchema?.parse(result.structuredContent);
+        return CallToolResultSchema.parse({
+          ...result,
+          resultType: 'complete',
+          ttlMs: 0,
+          cacheScope: 'private',
+        });
+      }
       if (privateOperations !== undefined) {
         const operations =
           operationContext === context || options.createPrivateTools === undefined

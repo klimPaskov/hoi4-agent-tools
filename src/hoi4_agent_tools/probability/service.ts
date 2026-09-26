@@ -1390,7 +1390,7 @@ export class ProbabilityAnalyzer {
       );
     const snapshot = await this.scan(
       context,
-      [source?.path],
+      [source?.path, source?.snapshotPath],
       source === undefined ? 'none' : source.inlineClausewitz === undefined ? 'domain' : 'shared',
     );
     if (customPoolManifest !== undefined) {
@@ -1661,7 +1661,7 @@ export class ProbabilityAnalyzer {
       );
     const snapshot = await this.scan(
       request,
-      [request.source?.path],
+      [request.source?.path, request.source?.snapshotPath],
       usingManifest ? 'none' : request.source?.inlineClausewitz === undefined ? 'domain' : 'shared',
     );
     const resolvedAdapter = usingManifest

@@ -33,6 +33,8 @@ hoi4-agent-tools-setup --init --mod-root /projects/hoi4-mods --mod-root /worksho
 
 The corresponding config fields are `modRoots`, `gameRoot`, and `workspaceStorageRoot`.
 
+For a configured workspace, `wikiRoot` can select an absolute path to an offline Paradox Wiki snapshot and `scriptDocsRoot` can select an absolute path to a user-supplied generated documentation dump. Without these fields, the reference tools look for `paradox_wiki/` and `script_docs/` inside the mod. See [Local references](reference.md).
+
 Linked directory entries are not followed. If a mod folder is a symlink or junction, configure the real parent directory as another `--mod-root`.
 
 ## MCP client registration

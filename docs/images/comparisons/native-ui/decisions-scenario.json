@@ -1,0 +1,58 @@
+{
+  "id": "vanilla-political-decision-source-catalog",
+  "description": "Installed vanilla political decision names, icons and costs in the native decisions window. This source catalog fixture does not assert campaign eligibility or an engine save.",
+  "resolution": { "width": 1920, "height": 1080 },
+  "uiScale": 1,
+  "country": { "tag": "ENG" },
+  "date": "1936.1.1",
+  "state": "normal",
+  "lists": {
+    "decision_grid": [
+      {
+        "entryContainer": "category_header",
+        "name_text.text": "political_actions",
+        "icon.image": "GFX_decision_category_generic_political_actions"
+      },
+      {
+        "entryContainer": "decision_item",
+        "name_text.text": "anti_fascist_raids",
+        "cost_and_timer_text.text": "£pol_power 50",
+        "icon.image": "GFX_decision_generic_civil_support",
+        "target_flag.visible": false,
+        "target_flag_frame.visible": false,
+        "btn_progress_good.visible": false,
+        "btn_progress_bad.visible": false
+      },
+      {
+        "entryContainer": "decision_item",
+        "name_text.text": "anti_communist_raids",
+        "cost_and_timer_text.text": "£pol_power 50",
+        "icon.image": "GFX_decision_generic_civil_support",
+        "target_flag.visible": false,
+        "target_flag_frame.visible": false,
+        "btn_progress_good.visible": false,
+        "btn_progress_bad.visible": false
+      },
+      {
+        "entryContainer": "decision_item",
+        "name_text.text": "ban_fascist_party",
+        "cost_and_timer_text.text": "£pol_power 100",
+        "icon.image": "GFX_decision_generic_civil_support",
+        "target_flag.visible": false,
+        "target_flag_frame.visible": false,
+        "btn_progress_good.visible": false,
+        "btn_progress_bad.visible": false
+      },
+      {
+        "entryContainer": "decision_item",
+        "name_text.text": "ban_communist_party",
+        "cost_and_timer_text.text": "£pol_power 100",
+        "icon.image": "GFX_decision_generic_civil_support",
+        "target_flag.visible": false,
+        "target_flag_frame.visible": false,
+        "btn_progress_good.visible": false,
+        "btn_progress_bad.visible": false
+      }
+    ]
+  }
+}

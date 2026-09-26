@@ -1085,6 +1085,45 @@ function* validatePositions(
     const location = lineLocation(position.document, position.line);
     const state = index.statesById.get(position.stateId);
     const province = index.provinceAtMapCoordinate(position.x, position.z);
+    if (position.building === 'floating_harbor') {
+      const sea = province === undefined ? undefined : index.definitionsById.get(province);
+      const land = index.definitionsById.get(position.adjacentSeaProvince);
+      if (sea?.type !== 'sea') {
+        addDiagnostic(diagnostics, options, {
+          code: 'MAP_FLOATING_HARBOR_POSITION_REVIEW',
+          severity: 'warning',
+          category: 'map',
+          message:
+            'Floating-harbor position resolves outside a sea province; review the installed-map precedent',
+          ...(location === undefined ? {} : { location }),
+          details: { resolvedProvince: province },
+        });
+      }
+      if (land?.type !== 'land') {
+        addDiagnostic(diagnostics, options, {
+          code: 'MAP_FLOATING_HARBOR_LAND_INVALID',
+          severity: 'error',
+          category: 'map',
+          message: 'Floating-harbor final field must name an existing land province',
+          ...(location === undefined ? {} : { location }),
+          details: { landingProvince: position.adjacentSeaProvince, stateId: position.stateId },
+        });
+      } else if (
+        state === undefined ||
+        !state.provinces.includes(position.adjacentSeaProvince) ||
+        !index.coastalProvinceIds.has(position.adjacentSeaProvince)
+      ) {
+        addDiagnostic(diagnostics, options, {
+          code: 'MAP_FLOATING_HARBOR_ASSOCIATION_REVIEW',
+          severity: 'warning',
+          category: 'map',
+          message: 'Floating-harbor target differs from its state or computed coastal membership',
+          ...(location === undefined ? {} : { location }),
+          details: { landingProvince: position.adjacentSeaProvince, stateId: position.stateId },
+        });
+      }
+      continue;
+    }
     if (state === undefined || province === undefined || !state.provinces.includes(province)) {
       addDiagnostic(diagnostics, options, {
         code: 'MAP_BUILDING_POSITION_INVALID',
@@ -1095,7 +1134,7 @@ function* validatePositions(
         details: { resolvedProvince: province },
       });
     }
-    if (position.building === 'naval_base_spawn' || position.building === 'floating_harbor') {
+    if (position.building === 'naval_base_spawn') {
       if (province !== undefined) navalLocatorProvinces.add(province);
       const adjacent = index.definitionsById.get(position.adjacentSeaProvince);
       if (adjacent?.type !== 'sea') {

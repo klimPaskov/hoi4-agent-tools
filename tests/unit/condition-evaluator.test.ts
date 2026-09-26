@@ -64,6 +64,12 @@ describe('shared structured condition evaluation', () => {
   it.each([
     ['check_variable = { var = a value = 10 compare = greater_than_or_equals }', 'true'],
     ['AND = { a > 5 b > 5 }', 'false'],
+    ['hidden_trigger = { a > 5 b = 0 }', 'true'],
+    ['custom_trigger_tooltip = { tooltip = RULE_TEXT a > 5 b > 5 }', 'false'],
+    [
+      'custom_override_tooltip = { tooltip = { localization_key = RULE_TEXT VALUE = "42" } not_tooltip = NEGATIVE_TEXT a > 5 }',
+      'true',
+    ],
     ['NOT = { a > 5 }', 'false'],
     ['check_variable = { var = a value = 10 compare = less_than_or_equals }', 'true'],
     ['check_variable = { var = a value = 10 compare = greater_than }', 'false'],
@@ -161,5 +167,20 @@ describe('shared structured condition evaluation', () => {
   it('orders dates by components instead of variable-width digit concatenation', () => {
     expect(evaluate('date < 1936.10.1', { date: '1936.9.30' }).state).toBe('true');
     expect(evaluate('date > 1936.9.30', { date: '1936.10.1' }).state).toBe('true');
+  });
+
+  it('evaluates declared state controllers and leaves absent control facts unresolved', () => {
+    const scenario = { actor: 'GER', controls: { '87': 'GER', '88': 'POL' } };
+    expect(evaluate('controls_state = 87', scenario).state).toBe('true');
+    expect(evaluate('controls_state = 88', scenario).state).toBe('false');
+    expect(evaluate('87 = { is_controlled_by = ROOT }', scenario).state).toBe('true');
+    expect(evaluate('88 = { is_controlled_by = GER }', scenario).state).toBe('false');
+    expect(evaluate('controls_state = 89', scenario).state).toBe('unresolved');
+    expect(evaluate('controls_state = 89', scenario).unresolved[0]?.details?.scenarioInput).toBe(
+      'controls.89',
+    );
+    expect(evaluate('87 = { is_controlled_by = ROOT }', { controls: { '87': 'GER' } }).state).toBe(
+      'unresolved',
+    );
   });
 });

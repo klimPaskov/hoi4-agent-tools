@@ -12,6 +12,7 @@ import {
   EventChainViewer,
   eventScanReport,
   inspectEventStateFlow,
+  selectEventNodes,
 } from '../../src/hoi4_agent_tools/event/index.js';
 import { eventGraphValidation } from '../../src/hoi4_agent_tools/event/operations.js';
 
@@ -95,6 +96,55 @@ async function fixture(artifactMaxSingleBytes?: number) {
 }
 
 describe('Event Chain Viewer service', () => {
+  it('compacts selected event views instead of preserving gaps from unrelated graph rows', async () => {
+    const { engine, sourcePath } = await fixture();
+    await writeFile(
+      sourcePath,
+      source +
+        Array.from(
+          { length: 60 },
+          (_, i) =>
+            `country_event = { id = unrelated.${i} is_triggered_only = yes option = { name = unrelated.${i}.a } }`,
+        ).join('\n'),
+    );
+    const viewer = new EventChainViewer(engine);
+    const request = {
+      workspaceId: 'event-service',
+      view: 'options' as const,
+      selector: { kind: 'event' as const, eventId: 'service.2' },
+    };
+    const sparse = await viewer.renderAndStore({ ...request, compactLayout: false });
+    const focused = await viewer.renderAndStore(request);
+    expect(focused.render.selectedNodeIds).toEqual(sparse.render.selectedNodeIds);
+    expect(focused.render.layout.height).toBeLessThan(sparse.render.layout.height);
+    expect(focused.render.layout.height).toBeLessThan(500);
+    expect(JSON.parse(focused.render.json).filters.compactLayout).toBe(true);
+  });
+
+  it('keeps dotted namespaces distinct in source selection', async () => {
+    const { engine, sourcePath } = await fixture();
+    await writeFile(
+      sourcePath,
+      `add_namespace = service.route
+      country_event = { id = service.route.1 is_triggered_only = yes
+        immediate = { country_event = { id = service.route.2 } }
+      }
+      country_event = { id = service.route.2 is_triggered_only = yes }
+      country_event = { id = service.other.1 is_triggered_only = yes }
+    `,
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service');
+    const selected = selectEventNodes(graph, { kind: 'namespace', namespace: 'service.route' });
+    expect(
+      selected
+        .filter(({ kind }) => kind === 'event')
+        .map(({ eventId }) => eventId)
+        .sort(),
+    ).toEqual(['service.route.1', 'service.route.2']);
+    expect(selected.every(({ namespace }) => namespace === 'service.route')).toBe(true);
+    expect(selected.some(({ eventId }) => eventId === 'service.other.1')).toBe(false);
+  });
+
   it('accepts complete direct evidence when focused analysis defers workspace-wide helpers', async () => {
     const { engine } = await fixture();
     const graph = await new EventChainViewer(engine).scan('event-service');

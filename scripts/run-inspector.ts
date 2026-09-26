@@ -22,6 +22,10 @@ const publicToolNames = [
   'hoi4.map_inspect',
   'hoi4.map_render',
   'hoi4.map_rewrite',
+  'hoi4.reference_search',
+  'hoi4.reference_read',
+  'hoi4.reference_context',
+  'hoi4.source_lookup',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
@@ -148,9 +152,14 @@ try {
     mkdir(path.join(mod, 'events'), { recursive: true }),
     mkdir(path.join(mod, 'interface'), { recursive: true }),
     mkdir(path.join(mod, 'localisation', 'english'), { recursive: true }),
+    mkdir(path.join(mod, 'paradox_wiki'), { recursive: true }),
     mkdir(storage),
   ]);
   await Promise.all([
+    writeFile(
+      path.join(mod, 'paradox_wiki', 'Event modding - Hearts of Iron 4 Wiki.md'),
+      '# Event modding\n## Events\nUse country_event for an event.\n',
+    ),
     writeFile(
       path.join(mod, 'common', 'national_focus', 'inspector.txt'),
       'focus_tree = { id = inspector focus = { id = inspector_root x = 0 y = 0 cost = 10 ai_will_do = { factor = 2 modifier = { factor = 3 has_war = yes } } } }\n',
@@ -205,6 +214,65 @@ try {
   if (!exactNames(toolNames, publicToolNames)) {
     throw new Error(`Inspector returned the wrong public tools: ${toolNames.join(', ')}`);
   }
+
+  const referenceSearch = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.reference_search',
+      '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
+      'query=country_event',
+    ]),
+    'Inspector hoi4.reference_search',
+  );
+  const referenceData = referenceSearch.data as {
+    results?: Array<{ id?: string; revision?: string }>;
+  };
+  const citation = referenceData.results?.[0];
+  if (citation?.id === undefined || citation.revision === undefined)
+    throw new Error('Inspector reference search returned no citation');
+  const referenceRead = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.reference_read',
+      '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
+      `id=${citation.id}`,
+      '--tool-arg',
+      `revision=${citation.revision}`,
+    ]),
+    'Inspector hoi4.reference_read',
+  );
+  if (!(referenceRead.data as { text?: string }).text?.includes('country_event'))
+    throw new Error('Inspector reference read lost the cited section');
+  successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.reference_context',
+      '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
+      'surface=event',
+    ]),
+    'Inspector hoi4.reference_context',
+  );
+  const sourceLookup = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.source_lookup',
+      '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
+      'symbol=inspector.1',
+      '--tool-arg',
+      'kind=event',
+    ]),
+    'Inspector hoi4.source_lookup',
+  );
+  if ((sourceLookup.data as { definitionCount?: number }).definitionCount !== 1)
+    throw new Error('Inspector source lookup missed its exact event');
 
   const templates = successfulJson(
     await runInspector('resources/templates/list'),
@@ -392,7 +460,7 @@ try {
   }
 
   process.stderr.write(
-    'Official MCP Inspector verified 30 tools, one prompt, artifact resources, and event, technology, probability, and job workflows.\n',
+    `Official MCP Inspector verified ${publicToolNames.length} tools, one prompt, artifact resources, and reference, source, event, technology, probability, and job workflows.\n`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

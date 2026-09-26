@@ -108,6 +108,7 @@ export interface EventRenderServiceInput {
   maxNodes?: number;
   expandHelpers?: boolean;
   includeHtml?: boolean;
+  compactLayout?: boolean;
   refresh?: boolean;
   principal?: string;
   signal?: AbortSignal;
@@ -1423,6 +1424,7 @@ export class EventChainViewer {
     const renderOptions: EventRenderOptions = {
       view: input.view,
       budget,
+      compactLayout: input.compactLayout ?? input.selector !== undefined,
       ...(input.selector === undefined ? {} : { selector: input.selector }),
       ...(input.direction === undefined ? {} : { direction: input.direction }),
       ...(input.maxDepth === undefined ? {} : { maxDepth: input.maxDepth }),

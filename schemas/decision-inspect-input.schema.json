@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.4.2/schemas/decision-inspect-input.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.5.0/schemas/decision-inspect-input.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -16,13 +16,13 @@
       "$ref": "#/$defs/__schema3"
     },
     "proposedSources": {
-      "$ref": "#/$defs/__schema13"
-    },
-    "expectedRevision": {
       "$ref": "#/$defs/__schema15"
     },
+    "expectedRevision": {
+      "$ref": "#/$defs/__schema17"
+    },
     "refresh": {
-      "$ref": "#/$defs/__schema16"
+      "$ref": "#/$defs/__schema18"
     }
   },
   "additionalProperties": false,
@@ -70,14 +70,23 @@
           "type": "string",
           "maxLength": 64
         },
+        "controls": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/__schema5"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema6"
+          }
+        },
         "state": {
-          "$ref": "#/$defs/__schema5"
+          "$ref": "#/$defs/__schema7"
         },
         "flags": {
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema9"
+            "$ref": "#/$defs/__schema11"
           }
         },
         "eventTargets": {
@@ -94,10 +103,10 @@
         "scopes": {
           "type": "object",
           "propertyNames": {
-            "$ref": "#/$defs/__schema10"
+            "$ref": "#/$defs/__schema12"
           },
           "additionalProperties": {
-            "$ref": "#/$defs/__schema11"
+            "$ref": "#/$defs/__schema13"
           }
         },
         "candidateOverrides": {
@@ -121,34 +130,42 @@
       "additionalProperties": false
     },
     "__schema5": {
-      "type": "object",
-      "propertyNames": {
-        "$ref": "#/$defs/__schema6"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/__schema7"
-      }
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,8}$"
     },
     "__schema6": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{3}$"
+    },
+    "__schema7": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/__schema8"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema9"
+      }
+    },
+    "__schema8": {
       "type": "string",
       "minLength": 1,
       "maxLength": 1024
     },
-    "__schema7": {
+    "__schema9": {
       "anyOf": [
         {
-          "$ref": "#/$defs/__schema8"
+          "$ref": "#/$defs/__schema10"
         },
         {
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema8"
+            "$ref": "#/$defs/__schema10"
           }
         }
       ]
     },
-    "__schema8": {
+    "__schema10": {
       "anyOf": [
         {
           "type": "string",
@@ -165,17 +182,17 @@
         }
       ]
     },
-    "__schema9": {
+    "__schema11": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512
     },
-    "__schema10": {
+    "__schema12": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128
     },
-    "__schema11": {
+    "__schema13": {
       "type": "object",
       "properties": {
         "id": {
@@ -201,13 +218,13 @@
           "maxLength": 256
         },
         "state": {
-          "$ref": "#/$defs/__schema5"
+          "$ref": "#/$defs/__schema7"
         },
         "flags": {
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema12"
+            "$ref": "#/$defs/__schema14"
           }
         },
         "eventTargets": {
@@ -239,20 +256,20 @@
       ],
       "additionalProperties": false
     },
-    "__schema12": {
+    "__schema14": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512
     },
-    "__schema13": {
+    "__schema15": {
       "minItems": 1,
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema14"
+        "$ref": "#/$defs/__schema16"
       }
     },
-    "__schema14": {
+    "__schema16": {
       "type": "object",
       "properties": {
         "relativePath": {
@@ -278,11 +295,11 @@
       ],
       "additionalProperties": false
     },
-    "__schema15": {
+    "__schema17": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "__schema16": {
+    "__schema18": {
       "default": false,
       "type": "boolean"
     }

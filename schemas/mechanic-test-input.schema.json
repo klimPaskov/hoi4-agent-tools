@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.4.2/schemas/mechanic-test-input.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.5.0/schemas/mechanic-test-input.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -30,14 +30,23 @@
               "type": "string",
               "maxLength": 64
             },
+            "controls": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema2"
+              }
+            },
             "state": {
-              "$ref": "#/$defs/__schema1"
+              "$ref": "#/$defs/__schema3"
             },
             "flags": {
               "maxItems": 10000,
               "type": "array",
               "items": {
-                "$ref": "#/$defs/__schema5"
+                "$ref": "#/$defs/__schema7"
               }
             },
             "eventTargets": {
@@ -54,10 +63,10 @@
             "scopes": {
               "type": "object",
               "propertyNames": {
-                "$ref": "#/$defs/__schema6"
+                "$ref": "#/$defs/__schema8"
               },
               "additionalProperties": {
-                "$ref": "#/$defs/__schema7"
+                "$ref": "#/$defs/__schema9"
               }
             },
             "candidateOverrides": {
@@ -123,7 +132,7 @@
           "maxItems": 128,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema9"
+            "$ref": "#/$defs/__schema11"
           }
         },
         "assertions": {
@@ -131,7 +140,7 @@
           "maxItems": 256,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema10"
+            "$ref": "#/$defs/__schema12"
           }
         }
       },
@@ -163,34 +172,42 @@
       "maxLength": 512
     },
     "__schema1": {
-      "type": "object",
-      "propertyNames": {
-        "$ref": "#/$defs/__schema2"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/__schema3"
-      }
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,8}$"
     },
     "__schema2": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{3}$"
+    },
+    "__schema3": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/__schema4"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema5"
+      }
+    },
+    "__schema4": {
       "type": "string",
       "minLength": 1,
       "maxLength": 1024
     },
-    "__schema3": {
+    "__schema5": {
       "anyOf": [
         {
-          "$ref": "#/$defs/__schema4"
+          "$ref": "#/$defs/__schema6"
         },
         {
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema4"
+            "$ref": "#/$defs/__schema6"
           }
         }
       ]
     },
-    "__schema4": {
+    "__schema6": {
       "anyOf": [
         {
           "type": "string",
@@ -207,17 +224,17 @@
         }
       ]
     },
-    "__schema5": {
+    "__schema7": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512
     },
-    "__schema6": {
+    "__schema8": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128
     },
-    "__schema7": {
+    "__schema9": {
       "type": "object",
       "properties": {
         "id": {
@@ -243,13 +260,13 @@
           "maxLength": 256
         },
         "state": {
-          "$ref": "#/$defs/__schema1"
+          "$ref": "#/$defs/__schema3"
         },
         "flags": {
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema8"
+            "$ref": "#/$defs/__schema10"
           }
         },
         "eventTargets": {
@@ -281,12 +298,12 @@
       ],
       "additionalProperties": false
     },
-    "__schema8": {
+    "__schema10": {
       "type": "string",
       "minLength": 1,
       "maxLength": 512
     },
-    "__schema9": {
+    "__schema11": {
       "oneOf": [
         {
           "type": "object",
@@ -354,7 +371,7 @@
         }
       ]
     },
-    "__schema10": {
+    "__schema12": {
       "oneOf": [
         {
           "type": "object",
@@ -367,10 +384,10 @@
               "const": "equals"
             },
             "path": {
-              "$ref": "#/$defs/__schema11"
+              "$ref": "#/$defs/__schema13"
             },
             "expected": {
-              "$ref": "#/$defs/__schema12"
+              "$ref": "#/$defs/__schema14"
             }
           },
           "required": [
@@ -396,7 +413,7 @@
               "maxItems": 64,
               "type": "array",
               "items": {
-                "$ref": "#/$defs/__schema11"
+                "$ref": "#/$defs/__schema13"
               }
             },
             "tolerance": {
@@ -427,7 +444,7 @@
               "maxItems": 32,
               "type": "array",
               "items": {
-                "$ref": "#/$defs/__schema11"
+                "$ref": "#/$defs/__schema13"
               }
             }
           },
@@ -449,7 +466,7 @@
               "const": "affordability"
             },
             "balance": {
-              "$ref": "#/$defs/__schema11"
+              "$ref": "#/$defs/__schema13"
             },
             "cost": {
               "type": "number",
@@ -475,7 +492,7 @@
               "const": "single_payment"
             },
             "balance": {
-              "$ref": "#/$defs/__schema11"
+              "$ref": "#/$defs/__schema13"
             },
             "cost": {
               "type": "number",
@@ -597,10 +614,10 @@
               "const": "end_state"
             },
             "path": {
-              "$ref": "#/$defs/__schema11"
+              "$ref": "#/$defs/__schema13"
             },
             "expected": {
-              "$ref": "#/$defs/__schema12"
+              "$ref": "#/$defs/__schema14"
             }
           },
           "required": [
@@ -613,7 +630,7 @@
         }
       ]
     },
-    "__schema11": {
+    "__schema13": {
       "type": "object",
       "properties": {
         "scope": {
@@ -629,7 +646,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema12": {
+    "__schema14": {
       "anyOf": [
         {
           "type": "string",

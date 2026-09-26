@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { workspaceIdSchema, workspaceRelativePathSchema } from './common.js';
+import { ConditionControlMapSchema } from '../core/condition-schema.js';
 
 const symbolKindSchema = z.enum([
   'focus_tree',
@@ -115,6 +116,7 @@ export const declaredConditionScenarioSchema = z
     id: z.string().min(1).max(512),
     actor: z.string().max(256).optional(),
     date: z.string().max(64).optional(),
+    controls: ConditionControlMapSchema.optional(),
     state: scenarioStateSchema,
     flags: z.array(z.string().min(1).max(512)).max(10_000).optional(),
     eventTargets: z.record(z.string().max(512), z.string().max(512)).optional(),

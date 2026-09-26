@@ -94,6 +94,7 @@ const modelledElementAttributes = new Set([
   'maxWidth',
   'maxHeight',
   'fixedsize',
+  'multiline',
   'format',
   'buttonText',
   'buttonFont',
@@ -1692,6 +1693,7 @@ function referenceLabel(edge: GuiSourceEdge): string {
 export function buildGuiSourceGraph(
   files: readonly ScannedFile[],
   sharedIndex: SymbolIndex,
+  additionalLocalisationKeys: readonly string[] = [],
 ): GuiSourceGraph {
   const activeFiles = files.filter(({ shadowedBy }) => shadowedBy === undefined);
   const nodes: GuiSourceNode[] = [];
@@ -1841,6 +1843,7 @@ export function buildGuiSourceGraph(
   }
 
   const referencedLocalisationKeys = referencedGuiLocalisationKeys(elements, scriptedLocalisation);
+  for (const key of additionalLocalisationKeys) referencedLocalisationKeys.add(key);
   for (const { file, fileNodeId } of localisationFiles.sort(
     (left, right) =>
       right.file.loadOrder - left.file.loadOrder ||

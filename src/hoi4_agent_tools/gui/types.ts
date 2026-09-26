@@ -286,6 +286,8 @@ export interface GuiScenarioExpectations {
 
 export interface GuiPreviewScenario {
   id: string;
+  date?: string;
+  controls?: Record<string, string>;
   description?: string;
   resolution: GuiSize;
   uiScale: number;

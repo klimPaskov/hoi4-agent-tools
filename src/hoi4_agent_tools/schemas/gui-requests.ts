@@ -18,7 +18,10 @@ function compact<T extends z.ZodType>(schema: T, description: string): z.ZodPipe
   return z.unknown().describe(description).pipe(schema);
 }
 
-const compactGuiScenarioSchema = compact(GuiPreviewScenarioSchema, 'GUI preview scenario.');
+const compactGuiScenarioSchema = compact(
+  GuiPreviewScenarioSchema,
+  'GUI preview scenario; optional date and controls {stateId: controllerTag}.',
+);
 const compactGeneratedScenarioOptionsSchema = compact(
   GuiGeneratedScenarioOptionsSchema,
   'GUI generated-scenario options.',

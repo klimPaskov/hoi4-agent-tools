@@ -82,3 +82,11 @@ Set `collision` to `reject` to require an unused destination. Set `renameLocalis
 `hoi4.map_rewrite` also moves and merges states, moves provinces between strategic regions, merges or removes provinces, changes province definitions and types, adds or removes normal and special adjacency, and updates supply, railway, building, unit, weather, and entity-locator records. Send one ordered operation list when several connected changes belong together.
 
 Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnostic, and rendered comparison evidence. A failed operation does not leave a partial multi-file result.
+
+## Dated state history
+
+Map inspection reads active `common/bookmarks/*.txt` sources and uses the earliest valid bookmark date as the state-history basis. Supported owner, controller, core, claim, victory-point, and building commands in earlier dated blocks contribute to the inspected state and its rendered owner or controller layer. If no bookmark date is available, dated state fields retain their direct values and inspection reports `MAP_STATE_DATED_HISTORY_UNRESOLVED`.
+
+Map rewrites preserve dated source blocks byte-for-byte. An update to a field overridden by an applicable dated block returns `MAP_DATED_STATE_HISTORY_CONFLICT`. Province membership changes also block when a dated victory point or building entry would need remapping. Splitting or merging a source state with dated history returns `MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED`, because copying or deleting that history would change its later meaning. A direct edit with only later dated changes may proceed; those later commands remain and can supersede the direct value at later bookmarks. Edit the dated source deliberately when that later behavior is the intended change.
+
+`floating_harbor` placement rows differ from fixed `naval_base_spawn` ports. Their XYZ coordinates normally identify a sea placement, while the final numeric field names a land target. The map catalog does not count floating-harbor placements as starting naval-base locators. A missing or non-land target is an error. An off-sea position or an unusual state/coastal association is a review warning because those patterns also occur in installed vanilla map data; the warning retains the exact source line.

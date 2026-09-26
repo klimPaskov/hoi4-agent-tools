@@ -1,6 +1,12 @@
 import { z } from 'zod/v4';
-import { diagnosticSchema, sourceLocationSchema, workspaceIdSchema } from './common.js';
+import {
+  diagnosticSchema,
+  sourceLocationSchema,
+  workspaceIdSchema,
+  workspaceRelativePathSchema,
+} from './common.js';
 import { artifactLinkSchema } from './transaction.js';
+import { ConditionControlMapSchema } from '../core/condition-schema.js';
 
 export const probabilityAdapterIdSchema = z.enum([
   'event_mean_time_to_happen',
@@ -167,6 +173,7 @@ export const probabilityScenarioSchema = z
     prevalence: z.number().min(0).max(1).optional(),
     actor: z.string().max(256).optional(),
     date: z.string().max(64).optional(),
+    controls: ConditionControlMapSchema.optional(),
     state: z.record(z.string().min(1).max(1024), scenarioValueSchema),
     flags: z.array(z.string().min(1).max(512)).max(100_000).optional(),
     eventTargets: z.record(z.string().max(512), z.string().max(512)).optional(),
@@ -291,10 +298,16 @@ export const probabilityDiagnosticThresholdsSchema = z
 
 export const probabilitySamplingMethodSchema = z.enum(['latin_hypercube', 'pseudo_random']);
 
+const probabilitySourcePathSchema = workspaceRelativePathSchema.refine(
+  (value) => !/[:*?[\]{}!]/u.test(value),
+  'Source path must be an exact workspace-relative file path',
+);
+
 export const probabilitySourceSchema = z
   .object({
     identifier: z.string().min(1).max(1024).optional(),
-    path: z.string().min(1).max(1024).optional(),
+    path: probabilitySourcePathSchema.optional(),
+    snapshotPath: probabilitySourcePathSchema.optional(),
     line: z.number().int().min(1).optional(),
     inlineClausewitz: z.string().max(16_777_216).optional(),
     virtualPatch: z.string().max(16_777_216).optional(),
@@ -304,6 +317,26 @@ export const probabilitySourceSchema = z
       .optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if (value.snapshotPath === undefined) return;
+    if (value.path === undefined || value.expectedSourceHash === undefined)
+      context.addIssue({
+        code: 'custom',
+        message:
+          'snapshotPath requires the logical source path and expectedSourceHash of the frozen bytes',
+      });
+    if (value.inlineClausewitz !== undefined || value.virtualPatch !== undefined)
+      context.addIssue({
+        code: 'custom',
+        message: 'snapshotPath cannot be combined with inline source or a virtual patch',
+      });
+    if (value.path !== undefined && !workspaceRelativePathSchema.safeParse(value.path).success)
+      context.addIssue({
+        code: 'custom',
+        path: ['path'],
+        message: 'Snapshot logical source path must be workspace-relative',
+      });
+  })
   .refine(
     (value) =>
       value.identifier !== undefined ||

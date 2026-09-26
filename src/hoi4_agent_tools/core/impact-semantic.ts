@@ -21,7 +21,7 @@ export interface ImpactSemanticResult {
 }
 
 interface Owner {
-  kind: SymbolKind;
+  kind: SymbolKind | 'on_action';
   id: string;
 }
 
@@ -93,11 +93,20 @@ function ownerFor(
   file: ScannedFile,
   assignment: AssignmentNode,
   ancestors: readonly string[],
+  includeOnActions: boolean,
 ): Owner | undefined {
   if (assignment.value.type !== 'block') return undefined;
   const key = assignment.key.value;
   const sourcePath = normalized(file);
-  let owner: Owner | undefined;
+  let owner: { kind: SymbolKind; id: string } | undefined;
+  if (
+    includeOnActions &&
+    sourcePath.startsWith('common/on_actions/') &&
+    ancestors.length === 1 &&
+    ancestors[0] === 'on_actions'
+  ) {
+    return { kind: 'on_action', id: key };
+  }
   if (sourcePath.startsWith('events/') && ancestors.length === 0 && eventKeys.has(key)) {
     const id = firstScalar(assignment.value, 'id')?.value;
     if (id !== undefined) owner = { kind: 'event', id };
@@ -156,6 +165,7 @@ function staticTarget(value: string): boolean {
 export function scanImpactSemanticReferences(
   snapshot: ScanSnapshot,
   maxReferences = 200_000,
+  options: { includeOnActions?: boolean } = {},
 ): ImpactSemanticResult {
   if (!Number.isSafeInteger(maxReferences) || maxReferences < 1 || maxReferences > 1_000_000)
     throw new RangeError('Semantic reference limit is outside the supported range');
@@ -203,7 +213,13 @@ export function scanImpactSemanticReferences(
     owner?: Owner,
   ): void => {
     for (const assignment of assignments(block)) {
-      const identified = ownerFor(snapshot, file, assignment, ancestors);
+      const identified = ownerFor(
+        snapshot,
+        file,
+        assignment,
+        ancestors,
+        options.includeOnActions === true,
+      );
       const current = identified ?? owner;
       if (identified?.kind === 'decision' && ancestors.length === 1)
         emit(
@@ -335,7 +351,8 @@ export function scanImpactSemanticReferences(
         path.startsWith('common/technologies/') ||
         path.startsWith('common/scripted_effects/') ||
         path.startsWith('common/scripted_triggers/') ||
-        path.startsWith('common/scripted_guis/')
+        path.startsWith('common/scripted_guis/') ||
+        (options.includeOnActions === true && path.startsWith('common/on_actions/'))
       )
     )
       continue;

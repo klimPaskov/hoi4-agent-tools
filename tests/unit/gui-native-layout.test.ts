@@ -65,6 +65,127 @@ async function sceneFor(files: ScannedFile[], scenario: unknown = {}) {
 }
 
 describe('native GUI geometry and composition', () => {
+  it('keeps multiline=no labels on one line while reporting horizontal overflow', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
+      instantTextboxType = { name = "single_line" text = "Show non-resisting countries" maxWidth = 80 multiline = no }
+      instantTextboxType = { name = "wrapped" text = "Show non-resisting countries" maxWidth = 80 multiline = yes }
+    }`);
+    const scene = await sceneFor(files);
+    expect(scene.elements.find(({ name }) => name === 'single_line')?.text).toMatchObject({
+      lines: ['Show non-resisting countries'],
+      overflowX: true,
+    });
+    expect(
+      scene.elements.find(({ name }) => name === 'wrapped')?.text?.lines.length,
+    ).toBeGreaterThan(1);
+  });
+
+  it('retains one inferred font line without enlarging an explicit fixed-size text box', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
+      instantTextboxType = { name = "inferred" text = "Title" fontSize = 36 maxWidth = 400 maxHeight = 20 fixedsize = yes }
+      instantTextboxType = { name = "explicit" text = "Title" fontSize = 36 size = { width = 400 height = 20 } fixedsize = yes }
+    }`);
+    const scene = await sceneFor(files);
+    const inferred = scene.elements.find(({ name }) => name === 'inferred')!;
+    expect(inferred.unclippedRect.height).toBe(inferred.text!.lineHeight);
+    expect(inferred.text?.overflowY).toBe(false);
+    expect(scene.elements.find(({ name }) => name === 'explicit')).toMatchObject({
+      unclippedRect: { height: 20 },
+      text: { overflowY: true },
+    });
+    expect(scene.fidelity.approximated).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'text_minimum_line_height' })]),
+    );
+  });
+
+  it('renders a requested native window at its settled show position', async () => {
+    const files = await fixture(`containerWindowType = { name = "native_window"
+      position = { x = -606 y = 78 } show_position = { x = -6 y = 78 }
+      animation_time = 300 size = { width = 550 height = 100%% }
+      background = { name = "panel" spriteType = "GFX_tile" }
+    }`);
+    const scene = await sceneFor(files);
+    const root = scene.elements.find(({ name }) => name === 'native_window')!;
+    expect(root.unclippedRect.x).toBe(-6);
+    expect(root.unclippedRect.y).toBe(78);
+    expect(root.rect.width).toBeGreaterThan(500);
+    expect(root.visible).toBe(true);
+  });
+
+  it('stacks variable-height native entries in a one-column pixel grid', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
+      gridboxtype = { name = "rows" size = { width = 502 height = 300 } slotsize = { width = 502 height = 1 } max_slots_horizontal = 1 }
+    }
+    containerWindowType = { name = "category" size = { width = 502 height = 58 } }
+    containerWindowType = { name = "entry" size = { width = 502 height = 41 } }`);
+    const scene = await sceneFor(files, {
+      lists: {
+        rows: [
+          { entryContainer: 'category' },
+          { entryContainer: 'entry' },
+          { entryContainer: 'entry' },
+        ],
+      },
+    });
+    expect(scene.elements.filter(({ name }) => name === 'entry').map(({ rect }) => rect.y)).toEqual(
+      [58, 99],
+    );
+  });
+
+  it('uses declared native control dimensions for engine-populated containers', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 550 height = 300 }
+      containerWindowType = { name = "native_list" position = { x = 0 y = 40 } size = { width = 100%% height = 0 } }
+    }`);
+    const scene = await sceneFor(files, {
+      values: { 'native_list.height': 120, 'native_list.width': 500 },
+    });
+    expect(scene.elements.find(({ name }) => name === 'native_list')?.unclippedRect).toMatchObject({
+      width: 500,
+      height: 120,
+    });
+  });
+
+  it('binds an explicit native row template to its owning GUI file', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 300 height = 150 }
+      gridboxtype = { name = "rows" size = { width = 300 height = 150 } slotsize = { width = 300 height = 1 } max_slots_horizontal = 1 }
+    }
+    containerWindowType = { name = "shared_entry" size = { width = 300 height = 58 }
+      instantTextBoxType = { name = "owned_text" text = "Correct source" maxWidth = 250 maxHeight = 20 }
+    }`);
+    files.push(
+      scanned(
+        'interface/zzz_other.gui',
+        'guiTypes = { containerWindowType = { name = "shared_entry" size = { width = 100 height = 44 } } }',
+      ),
+    );
+    const scene = await sceneFor(files, { lists: { rows: [{ entryContainer: 'shared_entry' }] } });
+    expect(scene.elements.find(({ name }) => name === 'shared_entry')?.unclippedRect.height).toBe(
+      58,
+    );
+    expect(scene.elements.find(({ name }) => name === 'owned_text')?.text?.text).toBe(
+      'Correct source',
+    );
+  });
+
+  it('instantiates an explicit native template at a source position anchor', async () => {
+    const files =
+      await fixture(`containerWindowType = { name = "native_window" size = { width = 300 height = 150 }
+      positionType = { name = "native_anchor" position = { x = 70 y = 30 } }
+    }
+    containerWindowType = { name = "status_template" position = { x = 300 y = 40 } size = { width = 45 height = 31 } }`);
+    const scene = await sceneFor(files, {
+      lists: { native_anchor: [{ entryContainer: 'status_template' }] },
+    });
+    expect(
+      scene.elements.find(({ name }) => name === 'status_template')?.unclippedRect,
+    ).toMatchObject({ x: 70, y: 30, width: 45, height: 31 });
+  });
+
   it('isolates reused row-template ids and clipping across sibling native lists', async () => {
     const files =
       await fixture(`containerWindowType = { name = "native_window" size = { width = 300 height = 200 }

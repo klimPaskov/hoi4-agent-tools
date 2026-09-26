@@ -1,0 +1,42 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.5.0/schemas/reference-context-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "surface": {
+      "type": "string",
+      "enum": [
+        "general",
+        "event",
+        "decision",
+        "idea",
+        "focus",
+        "technology",
+        "gui",
+        "map",
+        "localisation",
+        "ai"
+      ]
+    },
+    "question": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 160
+    },
+    "limit": {
+      "default": 16,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24
+    }
+  },
+  "required": [
+    "surface"
+  ],
+  "additionalProperties": false
+}

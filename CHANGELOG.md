@@ -2,11 +2,22 @@
 
 ## Unreleased
 
-## 3.4.2 - 2026-09-26
+## 3.5.0 - 2026-09-26
 
+- Search and read bounded, revision-bound local offline-wiki, installed-game, and optional generated-script documentation sections; retrieve task citation bundles and exact indexed source definitions and usages through four read-only MCP tools.
+- Compare hash-bound frozen probability source files at their logical gameplay paths while preserving physical source provenance and leaving current files untouched.
+- Keep candidate eligibility overrides separate from weight-modifier conditions so an eligible scenario does not force every modifier to apply.
+- Evaluate hidden and custom-tooltip trigger wrappers with their enclosed conditions while excluding presentation metadata from eligibility logic.
+- Accept explicit GUI scenario dates and state-controller facts, evaluate their source conditions, render requested native windows at their declared settled show position, and resolve native list templates and scenario-only localisation from the correct source.
+- Honor single-line native labels and preserve the first inferred font line, with explicit fidelity reporting for undersized native text-height conventions.
+- Preserve dotted event namespaces so a namespace query selects its own events rather than unrelated systems sharing the first name segment.
+- Compact selected event diagrams without retaining empty row gaps from the rest of the workspace graph.
+- Resolve supported dated state-history values at the earliest active bookmark for map inspection, and refuse state rewrites that would silently conflict with or discard dated commands.
+- Interpret floating-harbor placements as sea-side markers with land targets, preserving vanilla-compatible anomalies as source-linked review warnings instead of thousands of false map errors.
 - Show alternatives within a national focus prerequisite group with dotted connectors, leaving individually required prerequisites solid.
 - Draw wide technology-folder icons at their decoded sprite dimensions and the source GUI's icon anchor, preserving 131×52 chemical cylinders instead of shrinking them to 70×70.
 - Include user-approved in-game focus and technology captures beside current-source and source-matched historical MCP renders, with source revisions and explicit whole-image comparison limits.
+- Include native-size vanilla and Chaos Redux interface references with declared scenarios, full images, diagnostics, and source hashes; keep game imagery outside the npm package.
 
 ## 3.4.1 - 2026-09-25
 

@@ -684,6 +684,21 @@ function scenarioTemplateNames(scenarios: readonly GuiPreviewScenario[]): string
   ].sort(compareCodeUnits);
 }
 
+function scenarioLocalisationKeys(scenarios: readonly GuiPreviewScenario[]): string[] {
+  const keys = new Set<string>();
+  const pending: unknown[] = [...scenarios];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (/^[A-Za-z0-9_.-]{1,512}$/u.test(value)) keys.add(value);
+      for (const match of value.matchAll(/\$([A-Za-z0-9_.-]+)\$/gu)) keys.add(match[1]!);
+    } else if (Array.isArray(value)) pending.push(...(value as unknown[]));
+    else if (value !== null && typeof value === 'object')
+      pending.push(...Object.values(value as Record<string, unknown>));
+  }
+  return [...keys].sort(compareCodeUnits);
+}
+
 /** Native row bindings admit only bounded country tokens, never caller-supplied paths or globs. */
 export function scenarioCountryFlagPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
   const tags = new Set<string>();
@@ -1176,8 +1191,12 @@ export class ScriptedGuiStudio {
     this.artifacts = this.engine.artifacts;
   }
 
-  private graphForFiles(files: readonly ScannedFile[], scope: string): GuiStudioScanResult {
-    const key = `${scope}:${hashCanonical(
+  private graphForFiles(
+    files: readonly ScannedFile[],
+    scope: string,
+    additionalLocalisationKeys: readonly string[] = [],
+  ): GuiStudioScanResult {
+    const key = `${scope}:${hashCanonical(additionalLocalisationKeys)}:${hashCanonical(
       files.map(({ displayPath, sha256, shadowedBy }) => ({
         displayPath,
         sha256,
@@ -1193,7 +1212,11 @@ export class ScriptedGuiStudio {
     const retainedFiles = [...files];
     const scanned = {
       files: retainedFiles,
-      graph: buildGuiSourceGraph(retainedFiles, this.engine.indexFiles(retainedFiles)),
+      graph: buildGuiSourceGraph(
+        retainedFiles,
+        this.engine.indexFiles(retainedFiles),
+        additionalLocalisationKeys,
+      ),
     };
     this.#graphCache.set(key, scanned);
     while (this.#graphCache.size > 1) {
@@ -1244,6 +1267,7 @@ export class ScriptedGuiStudio {
     additionalSpriteNames: readonly string[] = [],
     additionalTemplateNames: readonly string[] = [],
     additionalAssetPatterns: readonly string[] = [],
+    additionalLocalisationKeys: readonly string[] = [],
   ): Promise<GuiStudioScanResult> {
     const workspace = this.resolver.get(workspaceId, principal);
     const layoutPatterns = guiLayoutPatterns(workspace);
@@ -1311,7 +1335,11 @@ export class ScriptedGuiStudio {
       linkedDefinitions.files,
       localisation.files,
     );
-    const definitions = this.graphForFiles(definitionFiles, `definitions:${workspaceId}`);
+    const definitions = this.graphForFiles(
+      definitionFiles,
+      `definitions:${workspaceId}`,
+      additionalLocalisationKeys,
+    );
     assertTargetWindowAvailable(definitions.graph, windowName);
     const referencedPatterns = [
       ...referencedAssetPatternsForWindow(
@@ -1360,7 +1388,11 @@ export class ScriptedGuiStudio {
     const fontPages = mergeScannedFiles(exactFontPages, fallbackFontPages);
     signal?.throwIfAborted();
     const files = mergeScannedFiles(definitions.files, referenced, fontPages);
-    return this.graphForFiles(files, `window:${workspaceId}:${windowName}`);
+    return this.graphForFiles(
+      files,
+      `window:${workspaceId}:${windowName}`,
+      additionalLocalisationKeys,
+    );
   }
 
   public async lint(
@@ -1385,6 +1417,7 @@ export class ScriptedGuiStudio {
       ),
       scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
       scenarioCountryFlagPatterns([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioLocalisationKeys([placeholderScenario, ...explicitRelatedScenarios]),
     );
     const generatedScenarios =
       generatedOptions === undefined
@@ -1446,6 +1479,7 @@ export class ScriptedGuiStudio {
       scenarioSpriteNames([beforeScenario, afterScenario]),
       scenarioTemplateNames([beforeScenario, afterScenario]),
       scenarioCountryFlagPatterns([beforeScenario, afterScenario]),
+      scenarioLocalisationKeys([beforeScenario, afterScenario]),
     );
     const beforeCatalog = new GuiAssetCatalog(
       scanned.graph,
@@ -1541,6 +1575,11 @@ export class ScriptedGuiStudio {
         ...explicitRelatedScenarios,
       ]),
       scenarioCountryFlagPatterns([
+        placeholderScenario,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+        ...explicitRelatedScenarios,
+      ]),
+      scenarioLocalisationKeys([
         placeholderScenario,
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
@@ -1708,6 +1747,7 @@ export class ScriptedGuiStudio {
       const baselineGraph = this.graphForFiles(
         baselineFiles,
         `source-baseline:${input.workspaceId}`,
+        scenarioLocalisationKeys([scenario]),
       ).graph;
       if (!baselineGraph.elements.some(({ name }) => name === input.windowName))
         throw new ServiceError(
@@ -2177,6 +2217,7 @@ export class ScriptedGuiStudio {
             scenarioSpriteNames([previewScenario!]),
             scenarioTemplateNames([previewScenario!]),
             scenarioCountryFlagPatterns([previewScenario!]),
+            scenarioLocalisationKeys([previewScenario!]),
           );
     const exactTargets = await this.scanner.scan(workspace, {
       patterns: prepared.map(({ relativePath }) => relativePath),

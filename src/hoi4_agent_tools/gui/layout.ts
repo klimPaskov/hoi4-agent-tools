@@ -834,6 +834,7 @@ interface LayoutContext {
   diagnostics: Diagnostic[];
   elementsById: Map<string, GuiElementDefinition>;
   elementsByName: Map<string, GuiElementDefinition>;
+  elementsByNameCandidates: Map<string, GuiElementDefinition[]>;
   dynamicListsByName: Map<string, ScriptedGuiDynamicListDefinition>;
   countryFlagProperties: Map<string, GuiPropertyValue>;
   constantElementEnabled: Readonly<Record<string, boolean>>;
@@ -1749,7 +1750,18 @@ async function layoutElement(
   const clipChain = inheritedClipChain ?? (inheritedClip === undefined ? [] : [inheritedClip]);
   const localScale = scalarNumber(property(definition.attributes, 'scale'), 1) ?? 1;
   const scale = parentScale * localScale;
-  const position = objectProperty(property(definition.attributes, 'position'));
+  const shownPosition =
+    depth === 0 ? objectProperty(property(definition.attributes, 'show_position')) : undefined;
+  const position = shownPosition ?? objectProperty(property(definition.attributes, 'position'));
+  if (shownPosition !== undefined) {
+    addFidelity(
+      fidelity,
+      'modelled',
+      'window_show_position',
+      'The requested root window uses its declared settled show position.',
+      definition,
+    );
+  }
   const size = objectProperty(property(definition.attributes, 'size'));
   const scriptedX =
     rowValues?.[`${definition.name}.x`] ??
@@ -1797,8 +1809,26 @@ async function layoutElement(
     localY,
     orientationAxes.vertical,
   );
-  const widthValue = size === undefined ? undefined : property(size, 'width', 'x');
-  const heightValue = size === undefined ? undefined : property(size, 'height', 'y');
+  const scriptedWidth =
+    rowValues?.[`${definition.name}.width`] ??
+    scenario.values[`${definition.name}.width`] ??
+    scenario.scriptedGui[`${definition.name}.width`];
+  const scriptedHeight =
+    rowValues?.[`${definition.name}.height`] ??
+    scenario.values[`${definition.name}.height`] ??
+    scenario.scriptedGui[`${definition.name}.height`];
+  const widthValue =
+    typeof scriptedWidth === 'number' && Number.isFinite(scriptedWidth)
+      ? scriptedWidth
+      : size === undefined
+        ? undefined
+        : property(size, 'width', 'x');
+  const heightValue =
+    typeof scriptedHeight === 'number' && Number.isFinite(scriptedHeight)
+      ? scriptedHeight
+      : size === undefined
+        ? undefined
+        : property(size, 'height', 'y');
   let width = scaledNumber(widthValue, parentRect.width, scale) ?? 0;
   let height = scaledNumber(heightValue, parentRect.height, scale) ?? 0;
   // A doubled percent names a far-edge coordinate in the parent, whereas a single
@@ -2215,7 +2245,8 @@ async function layoutElement(
     if (width === 0 && inferWidth && declaredMaxWidth !== undefined) width = declaredMaxWidth;
     if (width === 0 && inferWidth && /textbox/iu.test(definition.elementType))
       width = nativeTextBoxWidth * scale;
-    if (height === 0 && inferHeight && declaredMaxHeight !== undefined) height = declaredMaxHeight;
+    const inferredTextHeight = height === 0 && inferHeight;
+    if (inferredTextHeight && declaredMaxHeight !== undefined) height = declaredMaxHeight;
     const maxWidth = declaredMaxWidth ?? width;
     const wrapped = wrapText(
       catalog,
@@ -2223,10 +2254,22 @@ async function layoutElement(
       displayText,
       visibleText.colours,
       fontSize * scale,
-      maxWidth,
+      scalarBoolean(property(definition.attributes, 'multiline')) === false ? 0 : maxWidth,
       context.work,
       resolvedInlineIcons,
     );
+    // Native maxHeight text boxes retain at least one font line. Explicit size
+    // rectangles and inherited parent clipping still constrain their pixels.
+    if (inferredTextHeight && declaredMaxHeight !== undefined && height < wrapped.lineHeight) {
+      height = wrapped.lineHeight;
+      addFidelity(
+        fidelity,
+        'approximated',
+        'text_minimum_line_height',
+        'An inferred maxHeight smaller than one font line retains the first line; this native layout convention has no engine capture in this scenario.',
+        definition,
+      );
+    }
     const glyphLines: GuiTextGlyphLine[] = [];
     const inlineIcons: GuiTextInlineIcon[] = [];
     for (const [lineIndex, line] of wrapped.lines.entries()) {
@@ -2670,7 +2713,9 @@ async function layoutElement(
   if (state === 'full-list' && rows === undefined)
     rows = Array.from({ length: 12 }, (_unused, index) => ({ index }));
   const dynamicList = context.dynamicListsByName.get(definition.name);
-  const listElement = /(?:grid|listbox|overlappingelements)/iu.test(definition.elementType);
+  const listElement = /(?:grid|listbox|overlappingelements|positiontype)/iu.test(
+    definition.elementType,
+  );
   const slotSize = objectProperty(property(definition.attributes, 'slotsize'));
   const slotHeight = scaledNumber(
     slotSize === undefined ? undefined : property(slotSize, 'height', 'y'),
@@ -2700,8 +2745,15 @@ async function layoutElement(
   const maxHorizontal = scalarNumber(property(definition.attributes, 'max_slots_horizontal'), 1);
   const maxVertical = scalarNumber(property(definition.attributes, 'max_slots_vertical'), 1);
   const grid = /grid/iu.test(definition.elementType);
+  const singleColumnFlow =
+    grid &&
+    maxHorizontal === 1 &&
+    slotHeight !== undefined &&
+    slotHeight <= scale &&
+    (maxVertical === undefined || maxVertical <= 0);
   const rowPosition = (index: number, fallbackY: number): { x: number; y: number } => {
-    if (!grid || slotWidth === undefined || slotHeight === undefined) return { x: 0, y: fallbackY };
+    if (!grid || singleColumnFlow || slotWidth === undefined || slotHeight === undefined)
+      return { x: 0, y: fallbackY };
     if (maxVertical !== undefined && maxVertical > 0) {
       const rowsPerColumn = Math.max(1, Math.trunc(maxVertical));
       return {
@@ -2787,8 +2839,22 @@ async function layoutElement(
         (row.countryScope === true
           ? (dynamicList?.countryScopeEntryContainer ?? dynamicList?.entryContainer)
           : (dynamicList?.entryContainer ?? dynamicList?.countryScopeEntryContainer));
+      const candidates =
+        templateName === undefined
+          ? []
+          : (context.elementsByNameCandidates.get(templateName) ?? []);
+      const localCandidates = candidates.filter(
+        ({ sourcePath }) => sourcePath === definition.sourcePath,
+      );
+      const localRoots = localCandidates.filter(({ parentId }) => parentId === undefined);
       const template =
-        templateName === undefined ? undefined : context.elementsByName.get(templateName);
+        localRoots.length === 1
+          ? localRoots[0]
+          : localCandidates.length === 1
+            ? localCandidates[0]
+            : candidates.length === 1
+              ? candidates[0]
+              : undefined;
       if (template === undefined) {
         diagnostics.push(
           diagnostic(
@@ -2796,7 +2862,7 @@ async function layoutElement(
             'error',
             templateName === undefined
               ? `Dynamic list ${definition.name} has no entry container for scenario row ${index}.`
-              : `Dynamic list ${definition.name} cannot resolve entry container ${templateName}.`,
+              : `Dynamic list ${definition.name} cannot unambiguously resolve entry container ${templateName}.`,
             definition,
           ),
         );
@@ -2837,7 +2903,7 @@ async function layoutElement(
         childClipChain,
       );
       const rendered = context.instancesById.get(`${template.id}${rowSuffix(index)}`);
-      rowY += (slotHeight ?? rendered?.unclippedRect.height ?? 0) + spacingY;
+      rowY += Math.max(slotHeight ?? 0, rendered?.unclippedRect.height ?? 0) + spacingY;
       renderedRows += 1;
     }
     addFidelity(
@@ -3179,12 +3245,17 @@ export async function buildGuiScene(
   };
   const output: GuiSceneElement[] = [];
   const elementsByName = new Map<string, GuiElementDefinition>();
+  const elementsByNameCandidates = new Map<string, GuiElementDefinition[]>();
   for (const element of [...graph.elements].sort(
     (left, right) =>
       compareCodeUnits(right.sourcePath, left.sourcePath) ||
       right.definitionOrder - left.definitionOrder,
-  ))
+  )) {
     if (!elementsByName.has(element.name)) elementsByName.set(element.name, element);
+    const candidates = elementsByNameCandidates.get(element.name) ?? [];
+    candidates.push(element);
+    elementsByNameCandidates.set(element.name, candidates);
+  }
   const context: LayoutContext = {
     graph,
     scenario: layoutScenario,
@@ -3193,6 +3264,7 @@ export async function buildGuiScene(
     diagnostics,
     elementsById,
     elementsByName,
+    elementsByNameCandidates,
     dynamicListsByName,
     countryFlagProperties,
     constantElementEnabled,

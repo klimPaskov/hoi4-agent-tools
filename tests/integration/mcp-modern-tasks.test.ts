@@ -284,6 +284,100 @@ async function holdExecutionCapacity(engine: CoreEngine): Promise<() => Promise<
 }
 
 describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode) => {
+  it('serves bounded reference calls with workspace and read-scope authorization', async () => {
+    const { connect, alpha } = await fixture();
+    await mkdir(path.join(alpha, 'paradox_wiki'));
+    await writeFile(
+      path.join(alpha, 'paradox_wiki', 'Event modding - Hearts of Iron 4 Wiki.md'),
+      '# Event modding\n## Events\nUse country_event for a country event.\n',
+    );
+    const wire = await connect(mode);
+    const searched = result(
+      await wire.request(
+        'tools/call',
+        {
+          name: 'hoi4.reference_search',
+          arguments: { workspaceId: 'alpha', query: 'country_event' },
+        },
+        {},
+      ),
+    );
+    const searchData = z
+      .object({
+        structuredContent: z
+          .object({
+            data: z
+              .object({
+                results: z.array(z.object({ id: z.string(), revision: z.string() }).loose()),
+              })
+              .loose(),
+          })
+          .loose(),
+      })
+      .parse(searched);
+    const citation = searchData.structuredContent.data.results[0]!;
+    const read = result(
+      await wire.request(
+        'tools/call',
+        {
+          name: 'hoi4.reference_read',
+          arguments: { workspaceId: 'alpha', id: citation.id, revision: citation.revision },
+        },
+        {},
+      ),
+    );
+    expect(read).toMatchObject({
+      resultType: 'complete',
+      structuredContent: { status: 'ok', data: { text: expect.stringContaining('country_event') } },
+    });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          { name: 'hoi4.reference_context', arguments: { workspaceId: 'alpha', surface: 'event' } },
+          {},
+        ),
+      ),
+    ).toMatchObject({ structuredContent: { status: 'ok' } });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          {
+            name: 'hoi4.source_lookup',
+            arguments: { workspaceId: 'alpha', symbol: 'modern.1', kind: 'event' },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ structuredContent: { data: { definitionCount: 1 } } });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          {
+            name: 'hoi4.reference_search',
+            arguments: { workspaceId: 'beta', query: 'country_event' },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ isError: true, structuredContent: { code: 'WORKSPACE_INACCESSIBLE' } });
+    const denied = await connect(mode, 'alpha-user', []);
+    expect(
+      result(
+        await denied.request(
+          'tools/call',
+          {
+            name: 'hoi4.reference_search',
+            arguments: { workspaceId: 'alpha', query: 'country_event' },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ isError: true, structuredContent: { code: 'AUTH_SCOPE_REQUIRED' } });
+  });
+
   it('serves impact and decision analysis through ordinary and native task calls', async () => {
     const { connect } = await fixture();
     const wire = await connect(mode);
@@ -1298,7 +1392,7 @@ it('retains all shared tool names, descriptions, annotations, and schemas across
   expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   const listed = await client.listTools();
   const operations = listed.tools.map(({ execution: _execution, ...definition }) => definition);
-  expect(operations).toHaveLength(30);
+  expect(operations).toHaveLength(34);
   expect(modern.tools).toEqual(operations);
 });
 
@@ -1319,7 +1413,7 @@ it('supports the official SDK v2 ordinary-call client without requiring the Task
   });
   await client.connect(clientTransport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools).toHaveLength(30);
+  expect((await client.listTools()).tools).toHaveLength(34);
   expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
     'hoi4.probability_analysis',
   ]);

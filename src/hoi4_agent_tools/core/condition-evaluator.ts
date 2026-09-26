@@ -262,9 +262,23 @@ function evaluateAssignmentCore(
   if (assignment.value.type === 'block') {
     const malformed = malformedBlock(assignment.value, candidate);
     if (malformed !== undefined) return malformed;
-    if (key === 'AND')
+    if (
+      key === 'AND' ||
+      key === 'hidden_trigger' ||
+      key === 'custom_trigger_tooltip' ||
+      key === 'custom_override_tooltip'
+    )
       return evaluateTriggerBlock(
-        assignment.value,
+        key === 'custom_trigger_tooltip' || key === 'custom_override_tooltip'
+          ? {
+              ...assignment.value,
+              entries: assignment.value.entries.filter(
+                (entry) =>
+                  entry.type !== 'assignment' ||
+                  !['tooltip', 'not_tooltip'].includes(entry.key.value),
+              ),
+            }
+          : assignment.value,
         scenario,
         candidate,
         definitions,
@@ -464,6 +478,52 @@ function evaluateAssignmentCore(
       return unresolved(assignment, candidate, 'Date comparison is not numeric');
     return {
       state: compare(leftDate, rightDate, assignment.operator.text) ? 'true' : 'false',
+      unresolved: [],
+    };
+  }
+  if ((key === 'controls_state' || key === 'is_controlled_by') && scenario.controls !== undefined) {
+    const targetScope = resolveScopeContext(scenario, right, scopeContext);
+    const stateId =
+      key === 'controls_state'
+        ? /^[1-9][0-9]*$/u.test(right)
+          ? right
+          : targetScope?.binding.id
+        : scopeContext.binding.id;
+    const country =
+      key === 'controls_state'
+        ? scopeContext.expression === 'ROOT'
+          ? scenario.actor
+          : scopeIdentity(scopeContext)
+        : targetScope === undefined
+          ? /^[A-Z0-9]{3}$/u.test(right)
+            ? right
+            : undefined
+          : targetScope.expression === 'ROOT' && scenario.actor === undefined
+            ? undefined
+            : scopeIdentity(targetScope);
+    if (stateId === undefined || !/^[1-9][0-9]*$/u.test(stateId) || country === undefined)
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not bind the state and country for ${key}`,
+        'controls',
+      );
+    const controller = scenario.controls[stateId];
+    if (controller === undefined)
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not declare the controller of state ${stateId}`,
+        `controls.${stateId}`,
+      );
+    if (!['=', '!='].includes(assignment.operator.text))
+      return unresolved(
+        assignment,
+        candidate,
+        `Unsupported controller comparison ${assignment.operator.text}`,
+      );
+    return {
+      state: compare(controller, country, assignment.operator.text) ? 'true' : 'false',
       unresolved: [],
     };
   }

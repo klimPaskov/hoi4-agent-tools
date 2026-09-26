@@ -574,6 +574,7 @@ function sourceTextPatterns(roots: {
   localisation: readonly string[];
 }): string[] {
   return [
+    'common/bookmarks/**/*.txt',
     ...roots.map.flatMap((root) => {
       const normalized = normalizeSourceRoot(root);
       return ['map', 'csv', 'txt'].map((extension) => `${normalized}/**/*.${extension}`);

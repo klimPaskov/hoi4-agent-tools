@@ -1,0 +1,26 @@
+{
+  "toolVersion": "3.5.0",
+  "offline": true,
+  "source": "Chaos Redux with installed vanilla dependencies",
+  "map": {
+    "sourceRevision": "0e96f0fac3aa10bc874a340cc101278dd7ca4b51b3e5edb73b77e58e907df3c4",
+    "filesScanned": 2038,
+    "width": 5632,
+    "height": 2048,
+    "pngSha256": "06862ee46ae6ff2778002719a3bbd5bcd567fefa7fd3c1da0f612bd363b84d11",
+    "layer": "state",
+    "overlays": ["coastlines", "ports", "victory-points", "supply-nodes", "railways"]
+  },
+  "event": {
+    "eventId": "chaosx.nr7.60",
+    "view": "options",
+    "compactLayout": true,
+    "direction": "downstream",
+    "maxDepth": 3,
+    "maxNodes": 80,
+    "sourceRevision": "a29827c827624d500d049a257e56797e0f7fb54939bf0f0fc3b3ca70acd46d37",
+    "selectedNodeCount": 5,
+    "omittedNodeCount": 42859,
+    "pngSha256": "607b3de180749d3c37e1087409b124a16083288af3071b567996c6fc455b26a7"
+  }
+}

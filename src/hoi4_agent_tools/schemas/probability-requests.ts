@@ -17,7 +17,10 @@ function compact<T extends z.ZodType>(schema: T, description: string): z.ZodPipe
   return z.unknown().describe(description).pipe(schema);
 }
 
-const nestedSource = compact(probabilitySourceSchema, 'Source selector or proposed source.');
+const nestedSource = compact(
+  probabilitySourceSchema,
+  'Source selector; snapshotPath binds frozen bytes to path with expectedSourceHash.',
+);
 const nestedScenarios = compact(probabilityScenarioSetSchema, 'Explicit world-state scenarios.');
 const nestedManifest = compact(
   customWeightedPoolManifestSchema,

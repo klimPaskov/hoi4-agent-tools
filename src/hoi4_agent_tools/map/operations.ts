@@ -29,6 +29,7 @@ import {
   derivedStateCapital,
   encodeTextDocument,
   MapWorkspaceIndex,
+  parseMapDate,
   parseTextDocument,
   type AdjacencyRecord,
   type BuildingPositionRecord,
@@ -1899,12 +1900,89 @@ function commitState(
   fields: StatePatchFields,
   operationId: string,
 ): void {
+  assertDatedStateHistorySafe(state, fields, operationId);
   addChange(
     changes,
     state.file.relativePath,
     patchState(state, data, fields),
     operationId,
     'text/plain',
+  );
+}
+
+function assertDatedStateHistorySafe(
+  state: StateRecord,
+  fields: StatePatchFields,
+  operationId: string,
+): void {
+  if (state.historyBlock === undefined) return;
+  for (const entry of assignments(state.historyBlock)) {
+    if (entry.value.type !== 'block') continue;
+    const datedAt = parseMapDate(entry.key.value);
+    if (datedAt === undefined) continue;
+    const keys = new Set(assignments(entry.value).map(({ key }) => key.value));
+    const applicable =
+      state.earliestBookmark === undefined || datedAt <= state.earliestBookmark.ordinal;
+    const affected = [
+      ['owner', fields.owner === true && keys.has('owner') && applicable],
+      ['controller', fields.controller === true && keys.has('controller') && applicable],
+      [
+        'cores',
+        fields.cores === true &&
+          (keys.has('add_core_of') || keys.has('remove_core_of')) &&
+          applicable,
+      ],
+      [
+        'claims',
+        fields.claims === true &&
+          (keys.has('add_claim_by') || keys.has('remove_claim_by')) &&
+          applicable,
+      ],
+      [
+        'victoryPoints',
+        ((fields.victoryPoints === true && applicable) || fields.provinces === true) &&
+          keys.has('victory_points'),
+      ],
+      [
+        'buildings',
+        ((fields.buildings === true && applicable) || fields.provinces === true) &&
+          keys.has('buildings'),
+      ],
+    ] as const;
+    const conflict = affected.find(([, selected]) => selected);
+    if (conflict === undefined) continue;
+    throw new ServiceError(
+      'MAP_DATED_STATE_HISTORY_CONFLICT',
+      `State ${state.id} has a dated ${conflict[0]} change that this map operation cannot safely rewrite`,
+      {
+        operationId,
+        stateId: state.id,
+        field: conflict[0],
+        datedAt: entry.key.value,
+        earliestBookmark: state.earliestBookmark?.value ?? null,
+        sourcePath: state.file.displayPath,
+        sourceOffset: entry.start,
+      },
+    );
+  }
+}
+
+function assertNoDatedStateHistory(state: StateRecord, operationId: string): void {
+  if (state.historyBlock === undefined) return;
+  const dated = assignments(state.historyBlock).find(
+    (entry) => entry.value.type === 'block' && parseMapDate(entry.key.value) !== undefined,
+  );
+  if (dated === undefined) return;
+  throw new ServiceError(
+    'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED',
+    `State ${state.id} has dated history that cannot be distributed to a new or merged state`,
+    {
+      operationId,
+      stateId: state.id,
+      datedAt: dated.key.value,
+      sourcePath: state.file.displayPath,
+      sourceOffset: dated.start,
+    },
   );
 }
 
@@ -2222,6 +2300,7 @@ function* applySplitState(
   const source = index.statesById.get(sourceStateId);
   if (source === undefined)
     throw new ServiceError('MAP_STATE_NOT_FOUND', `State ${sourceStateId} does not exist`);
+  assertNoDatedStateHistory(source, operation.id);
   const selectedSet = new Set(selected);
   if (selected.length === 0 || selected.some((id) => !source.provinces.includes(id))) {
     throw new ServiceError(
@@ -2412,6 +2491,7 @@ function applyMergeStates(
       'Merge target and source states must exist',
     );
   }
+  for (const source of sources) assertNoDatedStateHistory(source, operation.id);
   const regionIds = new Set(
     [...target.provinces, ...sources.flatMap((state) => state.provinces)].map((id) =>
       regionMembershipId(index, id),
@@ -3405,14 +3485,17 @@ function* applyUpdateProvinceDefinition(
     if (policy.ports === 'retain-if-valid') {
       for (const position of dependentPortPositions) {
         const locatedProvince = index.provinceAtMapCoordinate(position.x, position.z);
-        if (
-          (locatedProvince === source.id &&
-            (targetType !== 'land' ||
-              position.stateId !== projectedStateId ||
-              !updated.coastal ||
-              index.definitionsById.get(position.adjacentSeaProvince)?.type !== 'sea')) ||
-          (position.adjacentSeaProvince === source.id && targetType !== 'sea')
-        )
+        const incompatible =
+          position.building === 'floating_harbor'
+            ? (locatedProvince === source.id && targetType !== 'sea') ||
+              (position.adjacentSeaProvince === source.id && targetType !== 'land')
+            : (locatedProvince === source.id &&
+                (targetType !== 'land' ||
+                  position.stateId !== projectedStateId ||
+                  !updated.coastal ||
+                  index.definitionsById.get(position.adjacentSeaProvince)?.type !== 'sea')) ||
+              (position.adjacentSeaProvince === source.id && targetType !== 'sea');
+        if (incompatible)
           provinceTypeDistributionConflict(
             source,
             targetType,

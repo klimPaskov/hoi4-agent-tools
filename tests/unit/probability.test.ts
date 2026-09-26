@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +10,11 @@ import {
   Rational,
   uniformRaceProbabilities,
 } from '../../src/hoi4_agent_tools/probability/rational.js';
-import { ProbabilityAnalyzer } from '../../src/hoi4_agent_tools/probability/service.js';
+import {
+  ProbabilityAnalyzer,
+  type ProbabilityCompareRequest,
+} from '../../src/hoi4_agent_tools/probability/service.js';
+import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -120,6 +124,76 @@ describe('probability arithmetic and adapters', () => {
 });
 
 describe('AI and MTTH analyzer', () => {
+  it('compares a hash-bound frozen decision at its logical domain path without rewriting source', async () => {
+    const { engine, workspaceId } = await fixture();
+    const root = engine.resolver.get(workspaceId).modRoot;
+    const logicalPath = 'common/decisions/transfer.txt';
+    const snapshotPath = 'docs/evidence/transfer-before.txt';
+    const before = Buffer.from(
+      'policy = { transfer = { ai_will_do = { base = 55 modifier = { factor = 0 capped = yes } } } }',
+    );
+    const after = 'policy = { transfer = { ai_will_do = { base = 55 } } }';
+    await mkdir(path.dirname(path.join(root, logicalPath)), { recursive: true });
+    await mkdir(path.dirname(path.join(root, snapshotPath)), { recursive: true });
+    await writeFile(path.join(root, logicalPath), after);
+    await writeFile(path.join(root, snapshotPath), before);
+    const analyzer = new ProbabilityAnalyzer(engine);
+    const request = {
+      workspaceId,
+      adapter: 'decision_ai_will_do' as const,
+      before: {
+        path: logicalPath,
+        snapshotPath,
+        expectedSourceHash: sha256Bytes(before),
+        identifier: 'transfer',
+      },
+      after: { path: logicalPath, identifier: 'transfer' },
+      candidatePool: ['transfer'],
+      scenarioSet: {
+        schemaVersion: '1.0' as const,
+        id: 'caps',
+        scenarios: [
+          {
+            id: 'clear',
+            actor: 'GER',
+            state: { capped: false },
+            candidateOverrides: { transfer: true },
+          },
+          {
+            id: 'breached',
+            actor: 'GER',
+            state: { capped: true },
+            candidateOverrides: { transfer: true },
+          },
+        ],
+      },
+      outputs: ['json'],
+    } satisfies ProbabilityCompareRequest;
+    const compared = await analyzer.compare(request);
+    expect(compared.comparison?.scenarioChanges).toContainEqual(
+      expect.objectContaining({ scenarioId: 'breached', candidateId: 'transfer', rawDelta: 55 }),
+    );
+    expect(compared.status).toBe('complete');
+    expect(
+      compared.comparison?.scenarioChanges.filter(({ scenarioId }) => scenarioId === 'clear'),
+    ).toEqual([]);
+    expect(compared.adapter.selectionRule).toBe('score_only');
+    expect(await readFile(path.join(root, logicalPath), 'utf8')).toBe(after);
+    expect(await readFile(path.join(root, snapshotPath))).toEqual(before);
+    await expect(
+      analyzer.compare({
+        ...request,
+        before: { ...request.before, expectedSourceHash: '0'.repeat(64) },
+      }),
+    ).rejects.toMatchObject({ code: 'PROBABILITY_SOURCE_STALE' });
+    await expect(
+      analyzer.compare({
+        ...request,
+        before: { ...request.before, snapshotPath: '../private.txt' },
+      }),
+    ).rejects.toMatchObject({ code: 'PROBABILITY_SOURCE_PATH_INVALID' });
+  });
+
   it('records the verified installed game identity and rejects unsupported versions', async () => {
     const verified = await fixture({ rawVersion: '1.19.2.0', checksum: 'd245' });
     const verifiedResult = await new ProbabilityAnalyzer(verified.engine).evaluate({

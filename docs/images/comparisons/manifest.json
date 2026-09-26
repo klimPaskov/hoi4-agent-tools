@@ -1,6 +1,6 @@
 {
-  "toolVersion": "3.4.2",
-  "focusSourceRevision": "6827ac7f511d39ea88a743b9697480bffc49cc697ba98a7f156d1348b4761d89",
+  "toolVersion": "3.5.0",
+  "focusSourceRevision": "f0a4a1e0f0e05d124bcaa8f673193e7e55962e306b6be11f3528e7d3fccfc399",
   "focus": [
     {
       "treeId": "fury_focus_tree",
@@ -33,7 +33,7 @@
   "technology": [
     {
       "folderId": "infantry_folder",
-      "graphRevision": "c1ee392deee97c532b81c955aba5a1499df20117609d827a07ee564bd2b3ee47",
+      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
       "nodes": 43,
       "omitted": 0,
       "sourceAccurate": true,
@@ -50,7 +50,7 @@
     },
     {
       "folderId": "chemical_warfare_folder",
-      "graphRevision": "456afa2c11ffd755cf109c0e22b6a0a376c289ad06c2d8a7a88f8c5d805ed0ef",
+      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
       "nodes": 19,
       "omitted": 0,
       "sourceAccurate": true,
@@ -67,7 +67,7 @@
     },
     {
       "folderId": "biowarfare_folder",
-      "graphRevision": "d54fbe655fe41b69dd1e5a8cdc3d5e39f4970a01141906c7cf2e3906978051c6",
+      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
       "nodes": 8,
       "omitted": 0,
       "sourceAccurate": true,
@@ -89,7 +89,7 @@
       "common/technologies/chaosx_technologies.txt",
       "interface/countrytechtreeview.gui"
     ],
-    "graphRevision": "cd0c35f213ee018e47f0db3c1d63fea72249f85ec186a24362b631f4f62f7499",
+    "graphRevision": "78866e57c410bba0c4d1d4ef6587ebf7e3ebd26f659b65ffdeef3bd9e3431411",
     "nodes": 30,
     "omitted": 0,
     "sourceAccurate": true,

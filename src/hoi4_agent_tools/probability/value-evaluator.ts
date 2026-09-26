@@ -283,6 +283,7 @@ export function evaluateValueBlock(
   const trace: ValueTraceStep[] = [];
   const unresolved: ProbabilityUnresolved[] = [];
   const referencedProvenance: ProbabilitySourceProvenance[] = [];
+  const { candidateOverrides: _eligibilityOverrides, ...modifierScenario } = scenario;
   if (block === undefined) return { value: initial, interval: current, trace, unresolved };
   for (const assignment of assignments(block)) {
     if (assignment.value.type === 'scalar') {
@@ -341,7 +342,7 @@ export function evaluateValueBlock(
     const modifier = assignment.value;
     const condition = evaluateTriggerBlock(
       conditionBlock(modifier),
-      scenario,
+      modifierScenario,
       candidate,
       definitions,
     );

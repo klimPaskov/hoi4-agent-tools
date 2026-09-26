@@ -164,6 +164,7 @@ export interface ProbabilityScenario {
   prevalence?: number;
   actor?: string;
   date?: string;
+  controls?: Record<string, string>;
   state: Record<string, ScenarioValue>;
   flags?: string[];
   eventTargets?: Record<string, string>;
@@ -187,6 +188,7 @@ export interface ProbabilityScenarioSet {
 export interface ProbabilitySourceInput {
   identifier?: string;
   path?: string;
+  snapshotPath?: string;
   line?: number;
   inlineClausewitz?: string;
   virtualPatch?: string;

@@ -17,6 +17,10 @@ const publicToolNames = [
   'hoi4.map_inspect',
   'hoi4.map_render',
   'hoi4.map_rewrite',
+  'hoi4.reference_search',
+  'hoi4.reference_read',
+  'hoi4.reference_context',
+  'hoi4.source_lookup',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
@@ -284,6 +288,32 @@ export async function qualifyInstalledHttpBinary(
     const tools = await client.listTools();
     const toolNames = tools.tools.map(({ name }) => name);
     requireExactNames(toolNames, publicToolNames, 'Installed HTTP tools');
+
+    const referenceContext = await client.callTool({
+      name: 'hoi4.reference_context',
+      arguments: { workspaceId: options.workspaceId, surface: 'focus' },
+    });
+    requireCondition(
+      referenceContext.isError !== true,
+      'Installed HTTP reference context returned an error',
+    );
+    const sourceLookup = await client.callTool({
+      name: 'hoi4.source_lookup',
+      arguments: {
+        workspaceId: options.workspaceId,
+        symbol: options.probabilityFocusId,
+        kind: 'focus',
+      },
+    });
+    requireCondition(
+      sourceLookup.isError !== true,
+      'Installed HTTP source lookup returned an error',
+    );
+    requireCondition(
+      (sourceLookup.structuredContent as { data?: { definitionCount?: number } } | undefined)?.data
+        ?.definitionCount === 1,
+      'Installed HTTP source lookup missed the fixture focus',
+    );
 
     const resources = await client.listResources();
     const resourceUris = resources.resources.map(({ uri }) => uri);

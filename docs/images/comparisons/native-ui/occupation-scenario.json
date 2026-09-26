@@ -1,0 +1,92 @@
+{
+  "id": "vanilla-occupation-declared-two-state-layout",
+  "description": "Installed vanilla occupation templates populated with Poland and state 87/88 names. GER control and civilian oversight are declared layout assumptions. Dashes mark runtime quantities unavailable without a save; this is not an engine receipt. The release-nation action is the declared native action state; return-territory is hidden. Its engine availability is not evaluated.",
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "uiScale": 1,
+  "country": {
+    "tag": "GER"
+  },
+  "date": "1944.10.1",
+  "controls": {
+    "87": "GER",
+    "88": "GER"
+  },
+  "state": "normal",
+  "values": {
+    "foreign_support_amount.text": "—",
+    "selected_law.text": "foreign_civilian_oversight",
+    "template_need_text.text": "—"
+  },
+  "visibility": {
+    "invalid_default_law": false,
+    "top_bg_locked": false,
+    "release_button": true,
+    "return_territory_button": false
+  },
+  "lists": {
+    "occupation_territories_list": [
+      {
+        "entryContainer": "occupied_territory_country_entry",
+        "occupied_territory_country_entry.height": 241,
+        "country_name.text": "POL",
+        "flag.countryTag": "POL",
+        "occupied_state_count.text": "2",
+        "manpower.text": "—",
+        "industrial_capacity.text": "—",
+        "resources.text": "—",
+        "state_grid.height": 120,
+        "state_grid.list": "polish_state_rows",
+        "resistance_status_pos.list": "country_resistance",
+        "compliance_status_pos.list": "country_compliance"
+      }
+    ],
+    "polish_state_rows": [
+      {
+        "entryContainer": "occupied_territory_state_entry",
+        "state_name.text": "STATE_87",
+        "resistance_status_pos.list": "state_resistance",
+        "compliance_status_pos.list": "state_compliance"
+      },
+      {
+        "entryContainer": "occupied_territory_state_entry",
+        "state_name.text": "STATE_88",
+        "resistance_status_pos.list": "state_resistance",
+        "compliance_status_pos.list": "state_compliance"
+      }
+    ],
+    "country_resistance": [
+      {
+        "entryContainer": "large_resistance_status_container",
+        "progress_text.text": "—",
+        "progress.frame": 0
+      }
+    ],
+    "country_compliance": [
+      {
+        "entryContainer": "large_compliance_status_container",
+        "progress_text.text": "—",
+        "progress.frame": 0
+      }
+    ],
+    "state_resistance": [
+      {
+        "entryContainer": "medium_resistance_status_container",
+        "progress_text.text": "—",
+        "progress.frame": 0
+      }
+    ],
+    "state_compliance": [
+      {
+        "entryContainer": "tiny_compliance_status_container",
+        "progress_text.text": "—",
+        "progress.frame": 0
+      }
+    ]
+  },
+  "localisation": {
+    "NUM": "—"
+  }
+}

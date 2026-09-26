@@ -467,6 +467,37 @@ function candidatesFor(
 }
 
 function sourceContexts(snapshot: ScanSnapshot, source: ProbabilitySourceInput): SourceContext[] {
+  if (source.snapshotPath !== undefined) {
+    if (
+      source.path === undefined ||
+      source.expectedSourceHash === undefined ||
+      source.inlineClausewitz !== undefined ||
+      source.virtualPatch !== undefined
+    )
+      throw new ServiceError(
+        'PROBABILITY_SNAPSHOT_CONTRACT_REQUIRED',
+        'Frozen source requires a logical path and exact snapshot hash',
+      );
+    const snapshotPath = normalized(source.snapshotPath);
+    const selected = snapshot.files.filter(
+      (file) => file.shadowedBy === undefined && normalized(file.relativePath) === snapshotPath,
+    );
+    if (selected.length !== 1)
+      throw new ServiceError(
+        'PROBABILITY_SNAPSHOT_NOT_FOUND',
+        'Frozen source must resolve to one active authorized file',
+        { snapshotPath: source.snapshotPath },
+      );
+    const original = selected[0]!;
+    if (original.sha256 !== source.expectedSourceHash)
+      throw new ServiceError(
+        'PROBABILITY_SOURCE_STALE',
+        'Frozen probability source hash is stale',
+        { expectedSourceHash: source.expectedSourceHash, actualSourceHashes: [original.sha256] },
+      );
+    const file = { ...original, relativePath: normalized(source.path) };
+    return [{ file, document: parseClausewitz(file.bytes, file.displayPath) }];
+  }
   if (source.inlineClausewitz !== undefined || source.virtualPatch !== undefined) {
     const text = source.virtualPatch ?? source.inlineClausewitz ?? '';
     const bytes = Buffer.from(text, 'utf8');

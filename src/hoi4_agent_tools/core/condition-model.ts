@@ -28,6 +28,7 @@ export interface ConditionScenario {
   id: string;
   actor?: string;
   date?: string;
+  controls?: Record<string, string>;
   state: Record<string, ScenarioValue>;
   flags?: string[];
   globalFlags?: string[];

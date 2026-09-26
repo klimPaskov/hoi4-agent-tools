@@ -11,6 +11,7 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
+import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -74,6 +75,50 @@ async function connected(): Promise<{ client: Client; mod: string }> {
 }
 
 describe('probability MCP workflow', () => {
+  it('accepts an immutable snapshot operand through the public comparison tool', async () => {
+    const { client, mod } = await connected();
+    const logical = 'common/decisions/policy.txt';
+    const frozen = 'docs/evidence/policy-before.txt';
+    const before = Buffer.from('policy = { action = { ai_will_do = { base = 4 } } }');
+    await mkdir(path.dirname(path.join(mod, logical)), { recursive: true });
+    await mkdir(path.dirname(path.join(mod, frozen)), { recursive: true });
+    await writeFile(path.join(mod, logical), 'policy = { action = { ai_will_do = { base = 9 } } }');
+    await writeFile(path.join(mod, frozen), before);
+    const compared = await client.callTool({
+      name: 'hoi4.probability_compare',
+      arguments: {
+        workspaceId: 'probability-mcp',
+        adapter: 'decision_ai_will_do',
+        before: { path: logical, snapshotPath: frozen, expectedSourceHash: sha256Bytes(before) },
+        after: { path: logical },
+        candidatePool: ['action'],
+        outputs: ['json'],
+        scenarioSet: {
+          schemaVersion: '1.0',
+          id: 'snapshot',
+          scenarios: [{ id: 'declared', state: {} }],
+        },
+      },
+    });
+    expect(compared.isError).not.toBe(true);
+    expect(compared.structuredContent).toMatchObject({
+      status: 'ok',
+      data: { operation: 'compare', adapterId: 'decision_ai_will_do' },
+    });
+    const artifact = (
+      compared.structuredContent as { artifacts: Array<{ uri: string; mimeType: string }> }
+    ).artifacts.find(({ mimeType }) => mimeType === 'application/json')!;
+    const resource = await client.readResource({ uri: artifact.uri });
+    const content = resource.contents[0]!;
+    expect('text' in content).toBe(true);
+    const evidence = JSON.parse('text' in content ? content.text : '{}') as {
+      comparison?: { scenarioChanges?: unknown[] };
+    };
+    expect(evidence.comparison?.scenarioChanges).toContainEqual(
+      expect.objectContaining({ candidateId: 'action', rawDelta: 5 }),
+    );
+  });
+
   it('evaluates and compares complete declared dynamic candidate pools', async () => {
     const { client } = await connected();
     const manifest = (secondWeight: number) => ({

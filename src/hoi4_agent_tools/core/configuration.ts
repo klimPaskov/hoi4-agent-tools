@@ -109,6 +109,16 @@ export const workspaceRegistrationSchema = z
     artifactRoot: z.string().min(1).optional(),
     cacheRoot: z.string().min(1).optional(),
     fixtureRoot: z.string().min(1).optional(),
+    wikiRoot: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), 'Wiki root must be absolute')
+      .optional(),
+    scriptDocsRoot: z
+      .string()
+      .min(1)
+      .refine((value) => path.isAbsolute(value), 'Script documentation root must be absolute')
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {

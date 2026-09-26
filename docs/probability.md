@@ -18,6 +18,9 @@ All seven tools are read-only. Proposed source is parsed in memory and never wri
 
 Pass a source without an adapter when the surface type is not yet known. Inspection returns every compatible adapter, candidate counts, and example candidate IDs; its discovery artifact includes every candidate ID and source location. If a requested adapter, identifier, or candidate pool does not match the source, inspection returns the same discovery result with an explanation and suggested adapter instead of `PROBABILITY_SURFACE_EMPTY`.
 
+Source request paths are exact workspace-relative files, such as `common/decisions/example.txt`.
+The `mod:`, `game:`, and `dependency-N:` labels in returned source citations identify origins; they are not part of a probability request's `source.path`.
+
 For a selected source, `hoi4.probability_inspect` includes missing source-condition fields in compact `requiredInputPaths`, adapter-wide completeness flags in `adapterRequiredInputPaths`, and the full candidate catalog, source provenance, and per-candidate requirements in its JSON resource. Unsupported source constructs remain unresolved evidence rather than being presented as scenario inputs. Evaluation reports eligible, excluded, and unresolved candidate counts inline; the resource preserves each candidate's exact eligibility and unresolved reasons for every scenario.
 
 Evaluation, sweep, simulation, and source comparison also accept an omitted adapter. When a source selector identifies one unambiguous weighted surface, the analyzer selects that source-backed adapter automatically. If a caller supplies a mismatched adapter or `custom_weighted_pool` for a source-backed request, the analyzer corrects it when the source has exactly one match. `customPoolManifest`, `beforeManifest`, and `afterManifest` use the custom-pool adapter automatically; `PROBABILITY_SURFACE_EMPTY` is reserved for sources with no weighted surface, while genuinely multi-adapter sources ask the caller to narrow by identifier or line.
@@ -94,6 +97,8 @@ Focus, technology, and doctrine probabilities require a complete candidate pool.
 
 Decision and mission adapters intentionally return scores and ranks without inventing normalized probabilities. Event-option and `random_list` adapters normalize only their complete local pools. Direct random remains an independent percentage. MTTH horizon chance uses the versioned game timing model and returns a bound when an inactive-to-active polling phase is unknown.
 
+`candidateOverrides` declares candidate eligibility for a scenario. It does not force weight-modifier conditions to be true or false; those conditions still use the scenario's actual declared variables, flags, scopes, and controller facts. An overridden eligibility claim is an explicit scenario assumption, not evidence that the engine makes that candidate available.
+
 Named acceptance bands and configurable diagnostic thresholds let a test suite state intended probability, timing, starvation, dominance, prevalence, and sensitivity limits. Evaluate, sweep, and simulation requests can name the metrics of interest; that set is retained in result metadata while the authoritative result keeps the eligibility and trace context required to explain them. Sweeps enumerate declared alternatives exactly, add trigger breakpoints and their adjacent values for continuous ranges, and report local elasticities, pairwise interactions, rank reversals, cliffs, and missed target bands. Sweep expansion is bounded and rejected before it can silently truncate the requested analysis.
 
 ## Results
@@ -118,6 +123,8 @@ Deterministic simulation uses constant-memory Latin hypercube sampling by defaul
 ## Proposed patches
 
 Pass `inlineClausewitz` or `virtualPatch` in a source selector to analyze text without writing it. `hoi4.probability_compare` evaluates the before and after source under the same scenarios and attributes each changed rank, score, probability, or uncertainty to its modifier trace.
+
+For a frozen file stored outside its gameplay folder, set the source selector's `path` to its logical gameplay path, `snapshotPath` to the preserved workspace-relative file, and `expectedSourceHash` to the SHA-256 of that file's exact bytes. For example, a decision copy in `docs/evidence/decisions-before.txt` can be analyzed as `common/decisions/policy.txt`. The server verifies the frozen bytes and retains their physical source provenance while using the logical path for domain recognition. It never replaces the current file. Both paths must identify exact files inside authorized roots; traversal and wildcard selectors are rejected. Shared helpers and constants still come from the current configured workspace, so one frozen file is not a complete historical workspace snapshot.
 
 ## Declared sequences
 

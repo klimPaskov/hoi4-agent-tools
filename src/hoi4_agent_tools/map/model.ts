@@ -100,6 +100,13 @@ export interface StateRecord {
   historyBlock?: BlockNode;
   resourcesBlock?: BlockNode;
   buildingsBlock?: BlockNode;
+  earliestBookmark?: MapBookmarkDate;
+}
+
+export interface MapBookmarkDate {
+  value: string;
+  ordinal: number;
+  sourcePath: string;
 }
 
 export interface StrategicRegionRecord {
@@ -440,6 +447,37 @@ function parseNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+export function parseMapDate(value: string): number | undefined {
+  const match = /^(\d{1,4})\.(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?$/u.exec(value);
+  if (match === null) return undefined;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = match[4] === undefined ? 0 : Number(match[4]);
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23)
+    return undefined;
+  return year * 1_000_000 + month * 10_000 + day * 100 + hour;
+}
+
+function earliestBookmarkDate(files: readonly ScannedFile[]): MapBookmarkDate | undefined {
+  let earliest: MapBookmarkDate | undefined;
+  for (const file of files) {
+    if (!/^common\/bookmarks\/.*\.txt$/iu.test(normalizedPath(file.relativePath))) continue;
+    const document = parseClausewitz(file.bytes, file.displayPath);
+    for (const root of childBlocks(document.root, 'bookmarks')) {
+      for (const bookmark of childBlocks(root, 'bookmark')) {
+        const value = firstScalar(bookmark, 'date')?.value;
+        if (value === undefined) continue;
+        const ordinal = parseMapDate(value);
+        if (ordinal === undefined) continue;
+        if (earliest === undefined || ordinal < earliest.ordinal)
+          earliest = { value, ordinal, sourcePath: file.displayPath };
+      }
+    }
+  }
+  return earliest;
+}
+
 function requiredNumber(
   values: readonly (number | undefined)[],
   index: number,
@@ -544,7 +582,11 @@ export function parseDefinitions(
   return definitions;
 }
 
-export function parseState(file: ScannedFile, diagnostics: Diagnostic[]): StateRecord | undefined {
+export function parseState(
+  file: ScannedFile,
+  diagnostics: Diagnostic[],
+  earliestBookmark?: MapBookmarkDate,
+): StateRecord | undefined {
   const document = parseClausewitz(file.bytes, file.displayPath);
   addMapDiagnostics(diagnostics, document.diagnostics);
   const assignment = firstTopLevelAssignment(document, 'state');
@@ -599,8 +641,78 @@ export function parseState(file: ScannedFile, diagnostics: Diagnostic[]): StateR
       }
     }
   }
-  const owner = firstScalar(historyBlock ?? block, 'owner')?.value;
-  const controller = firstScalar(historyBlock ?? block, 'controller')?.value;
+  let owner = firstScalar(historyBlock ?? block, 'owner')?.value;
+  let controller = firstScalar(historyBlock ?? block, 'controller')?.value;
+  let cores =
+    historyBlock === undefined
+      ? []
+      : assignments(historyBlock, 'add_core_of').flatMap(({ value }) =>
+          value.type === 'scalar' ? [value.value] : [],
+        );
+  let claims =
+    historyBlock === undefined
+      ? []
+      : assignments(historyBlock, 'add_claim_by').flatMap(({ value }) =>
+          value.type === 'scalar' ? [value.value] : [],
+        );
+  if (historyBlock !== undefined) {
+    const dated = assignments(historyBlock)
+      .flatMap((entry) => {
+        if (entry.value.type !== 'block') return [];
+        const date = parseMapDate(entry.key.value);
+        return date === undefined ? [] : [{ entry, date }];
+      })
+      .sort((left, right) => left.date - right.date || left.entry.start - right.entry.start);
+    if (dated.length > 0 && earliestBookmark === undefined) {
+      addMapDiagnostic(diagnostics, {
+        code: 'MAP_STATE_DATED_HISTORY_UNRESOLVED',
+        severity: 'warning',
+        category: 'map',
+        message: `State ${id} has dated history but no active bookmark date was found`,
+        location: nodeLocation(document, dated[0]!.entry),
+      });
+    }
+    for (const { entry, date } of dated) {
+      if (earliestBookmark === undefined || date >= earliestBookmark.ordinal) continue;
+      if (entry.value.type !== 'block') continue;
+      for (const command of assignments(entry.value)) {
+        const value = command.value;
+        if (value.type === 'scalar') {
+          if (command.key.value === 'owner') owner = value.value;
+          else if (command.key.value === 'controller') controller = value.value;
+          else if (command.key.value === 'add_core_of' && !cores.includes(value.value))
+            cores.push(value.value);
+          else if (command.key.value === 'remove_core_of')
+            cores = cores.filter((tag) => tag !== value.value);
+          else if (command.key.value === 'add_claim_by' && !claims.includes(value.value))
+            claims.push(value.value);
+          else if (command.key.value === 'remove_claim_by')
+            claims = claims.filter((tag) => tag !== value.value);
+        } else if (command.key.value === 'victory_points') {
+          const values = scalarList(value);
+          const provinceId = parseInteger(values[0]);
+          const amount = parseNumber(values[1]);
+          if (provinceId === undefined || amount === undefined) continue;
+          const existing = victoryPoints.findIndex((point) => point.provinceId === provinceId);
+          if (existing >= 0) victoryPoints.splice(existing, 1);
+          victoryPoints.push({ provinceId, value: amount, assignment: command });
+        } else if (command.key.value === 'buildings') {
+          for (const building of assignments(value)) {
+            if (building.value.type === 'block') {
+              const provinceId = parseInteger(building.key.value);
+              if (provinceId === undefined) continue;
+              const merged = new Map(provinceBuildings.get(provinceId) ?? []);
+              for (const [key, level] of numericMap(building.value)) merged.set(key, level);
+              provinceBuildings.set(provinceId, merged);
+            } else {
+              const level = parseNumber(building.value.value);
+              if (level !== undefined) stateBuildings.set(building.key.value, level);
+            }
+          }
+        }
+      }
+    }
+  }
   const capital = derivedStateCapital(victoryPoints);
   return {
     id,
@@ -612,18 +724,8 @@ export function parseState(file: ScannedFile, diagnostics: Diagnostic[]): StateR
     resources: numericMap(resourcesBlock),
     ...(owner === undefined ? {} : { owner }),
     ...(controller === undefined ? {} : { controller }),
-    cores:
-      historyBlock === undefined
-        ? []
-        : assignments(historyBlock, 'add_core_of').flatMap(({ value }) =>
-            value.type === 'scalar' ? [value.value] : [],
-          ),
-    claims:
-      historyBlock === undefined
-        ? []
-        : assignments(historyBlock, 'add_claim_by').flatMap(({ value }) =>
-            value.type === 'scalar' ? [value.value] : [],
-          ),
+    cores,
+    claims,
     victoryPoints,
     provinceBuildings,
     stateBuildings,
@@ -1213,6 +1315,7 @@ export class MapWorkspaceIndex {
   /** Shared cross-domain symbol/reference authority for these exact source bytes. */
   readonly sharedIndex: SymbolIndex;
   readonly activeFiles: ActiveFileSet;
+  readonly earliestBookmark: MapBookmarkDate | undefined;
   readonly diagnostics: Diagnostic[] = [];
   readonly definitions: ProvinceDefinition[];
   readonly definitionsAcrossRoots: ProvinceDefinition[];
@@ -1268,6 +1371,7 @@ export class MapWorkspaceIndex {
       localisation: sourceRoots.localisation.map(normalizeConfiguredRoot),
     };
     this.activeFiles = selectActiveFiles(files);
+    this.earliestBookmark = earliestBookmarkDate(this.activeFiles.all);
     const modelBudget = new MapModelBudget();
     modelBudget.assertScriptFiles(
       this.sourceFiles.filter(
@@ -1355,7 +1459,10 @@ export class MapWorkspaceIndex {
       const state = parseState(
         file,
         activeStatePaths.has(file.displayPath) ? this.diagnostics : [],
+        this.earliestBookmark,
       );
+      if (state !== undefined && this.earliestBookmark !== undefined)
+        state.earliestBookmark = this.earliestBookmark;
       parsedStates.set(file.displayPath, state ?? null);
       if (state !== undefined) {
         modelBudget.addDocument(state.document);
@@ -1519,9 +1626,7 @@ export class MapWorkspaceIndex {
     this.coastalProvinceIds = this.raster?.coastalProvinceIds ?? new Set<number>();
     const portPositionsByStateProvince = new Map<string, BuildingPositionRecord[]>();
     for (const position of this.buildingPositions) {
-      if (position.building !== 'naval_base_spawn' && position.building !== 'floating_harbor') {
-        continue;
-      }
+      if (position.building !== 'naval_base_spawn') continue;
       const provinceId = this.provinceAtMapCoordinate(position.x, position.z);
       if (provinceId === undefined) continue;
       const key = `${position.stateId}:${provinceId}`;

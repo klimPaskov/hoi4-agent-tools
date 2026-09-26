@@ -28,6 +28,12 @@ import {
 } from '../src/hoi4_agent_tools/schemas/scenarios.js';
 import { eventFeatureManifestSchema } from '../src/hoi4_agent_tools/schemas/event.js';
 import {
+  referenceContextRequestSchema,
+  referenceReadRequestSchema,
+  referenceSearchRequestSchema,
+  sourceLookupRequestSchema,
+} from '../src/hoi4_agent_tools/schemas/reference.js';
+import {
   helperExpansionRequestSchema,
   helperExpansionSummarySchema,
 } from '../src/hoi4_agent_tools/schemas/helper-expansion.js';
@@ -69,6 +75,10 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['gui-scenario.schema.json', GuiPreviewScenarioSchema],
   ['map-operation.schema.json', mapOperationSchema],
   ['event-feature-manifest.schema.json', eventFeatureManifestSchema],
+  ['reference-context-input.schema.json', referenceContextRequestSchema],
+  ['reference-read-input.schema.json', referenceReadRequestSchema],
+  ['reference-search-input.schema.json', referenceSearchRequestSchema],
+  ['source-lookup-input.schema.json', sourceLookupRequestSchema],
   ['helper-expansion-request.schema.json', helperExpansionRequestSchema],
   ['helper-expansion-summary.schema.json', helperExpansionSummarySchema],
   ['probability-scenario-set.schema.json', probabilityScenarioSetSchema],

@@ -35,6 +35,8 @@ export interface ResolvedWorkspace {
   artifactRoot: string;
   cacheRoot: string;
   fixtureRoot?: string;
+  wikiRoot?: string;
+  scriptDocsRoot?: string;
   writeEnabled: boolean;
   /** SHA-256 binding for the canonical root topology and source-resolution behavior. */
   workspaceIdentity: string;
@@ -733,6 +735,12 @@ export class WorkspaceResolver {
       registration.fixtureRoot === undefined
         ? undefined
         : await canonicalPath(registration.fixtureRoot);
+    const wikiRoot =
+      registration.wikiRoot === undefined ? undefined : await canonicalPath(registration.wikiRoot);
+    const scriptDocsRoot =
+      registration.scriptDocsRoot === undefined
+        ? undefined
+        : await canonicalPath(registration.scriptDocsRoot);
     const generatedAllowed = (candidate: string, generatedKind: 'artifacts' | 'cache'): boolean =>
       (registration.kind === 'mod' &&
         isWithin(path.join(modRoot, '.hoi4-agent', generatedKind), candidate)) ||
@@ -803,9 +811,13 @@ export class WorkspaceResolver {
     }
     if (
       this.#serverStateRoot !== undefined &&
-      [modRoot, ...sourceRoots, artifactRoot, cacheRoot].some((root) =>
-        pathsOverlap(this.#serverStateRoot!, root),
-      )
+      [
+        modRoot,
+        ...sourceRoots,
+        artifactRoot,
+        cacheRoot,
+        ...[wikiRoot, scriptDocsRoot].filter((root): root is string => root !== undefined),
+      ].some((root) => pathsOverlap(this.#serverStateRoot!, root))
     ) {
       throw new ServiceError(
         'SERVER_STATE_ROOT_OVERLAP',
@@ -883,6 +895,8 @@ export class WorkspaceResolver {
       artifactRoot,
       cacheRoot,
       ...(fixtureRoot === undefined ? {} : { fixtureRoot }),
+      ...(wikiRoot === undefined ? {} : { wikiRoot }),
+      ...(scriptDocsRoot === undefined ? {} : { scriptDocsRoot }),
       writeEnabled: registration.kind === 'mod',
     };
     const workspaceIdentity = resolvedWorkspaceIdentity(workspaceBase);
