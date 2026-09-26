@@ -52,6 +52,8 @@ npm install --global hoi4-agent-tools@latest
 ```toml
 [mcp_servers.hoi4_agent_tools]
 command = "hoi4-agent-tools.cmd"
+startup_timeout_sec = 120
+tool_timeout_sec = 600
 ```
 
 On non-Windows systems, use `hoi4-agent-tools` as the command. Agentic HOI4 repositories can include these steps in their agent template so the coding agent installs and registers the server itself; manual installation is not required in that workflow. Once connected, the server follows the active mod supplied by the client and the agent can call its HOI4 tools directly.

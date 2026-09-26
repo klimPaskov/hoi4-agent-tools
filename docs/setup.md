@@ -1,5 +1,9 @@
 # Setup
 
+For Codex, the supplied registration allows 120 seconds for startup and 600 seconds per tool call.
+Large source scans and GUI renders can take several minutes; keep selectors and scenario matrices bounded and use negotiated task support when available.
+`tool_timeout_sec` is the per-server tool deadline described in the [official configuration reference](https://developers.openai.com/ja-JP/docs/config-file/config-reference).
+
 HOI4 Agent Tools requires Node.js 22.19 or later in the Node 22 line, or Node.js 24.
 
 ## Install
