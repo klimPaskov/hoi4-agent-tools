@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'hoi4-reference-'));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'hoi4-reference-')));
   roots.push(root);
   const mod = path.join(root, 'mod');
   const game = path.join(root, 'game');
@@ -59,6 +59,29 @@ async function fixture() {
 }
 
 describe('bounded local HOI4 references', () => {
+  it('returns canonical citations through a configured directory alias', async () => {
+    const { mod, game, wiki } = await fixture();
+    const root = path.dirname(mod);
+    const alias = path.join(root, 'mod-alias');
+    await symlink(mod, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const resolver = await WorkspaceResolver.create(
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(root, 'alias-state'),
+        workspaces: [{ id: 'alias', name: 'Aliased source', root: alias, gameRoot: game }],
+      }),
+    );
+    const result = await new ReferenceService().search(
+      resolver.get('alias'),
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'alias',
+        query: 'country_event',
+      }),
+    );
+    expect(result.results.map(({ path: source }) => source)).toContain(wiki);
+    for (const section of result.results) expect(section.path).toBe(await realpath(section.path));
+  });
+
   it('searches actual wiki and installed documentation with exact source spans', async () => {
     const { workspace, wiki, gameDoc } = await fixture();
     const service = new ReferenceService();
@@ -67,8 +90,8 @@ describe('bounded local HOI4 references', () => {
       referenceSearchRequestSchema.parse({ query: 'country_event', workspaceId: 'fixture' }),
     );
     expect(result.total).toBeGreaterThanOrEqual(2);
-    expect(result.results.some(({ path: source }) => source === wiki)).toBe(true);
-    expect(result.results.some(({ path: source }) => source === gameDoc)).toBe(true);
+    expect(result.results.map(({ path: source }) => source)).toContain(wiki);
+    expect(result.results.map(({ path: source }) => source)).toContain(gameDoc);
     for (const section of result.results) {
       const lines = (await readFile(section.path, 'utf8')).split('\n');
       expect(
@@ -91,6 +114,7 @@ describe('bounded local HOI4 references', () => {
       workspace,
       referenceSearchRequestSchema.parse({ query: 'Each option', workspaceId: 'fixture' }),
     );
+    expect(found.results.map(({ path: source }) => source)).toContain(wiki);
     const section = found.results.find((result) => result.path === wiki)!;
     const input = referenceReadRequestSchema.parse({
       workspaceId: 'fixture',
