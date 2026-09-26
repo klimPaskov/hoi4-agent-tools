@@ -25,6 +25,7 @@ await Promise.all([access(gameRoot), access(modRoot)]);
 
 const references = [
   ['HOI4_FURY_SCREENSHOT', 'fury-ingame.png'],
+  ['HOI4_FURY_OR_SCREENSHOT', 'fury-or-ingame.png'],
   ['HOI4_HOLY_REALM_SCREENSHOT', 'holy-realm-ingame.png'],
   ['HOI4_UTOPIA_SCREENSHOT', 'utopia-ingame.png'],
   ['HOI4_INFANTRY_SCREENSHOT', 'infantry-ingame.png'],
@@ -49,15 +50,17 @@ const technologyFolders = [
   ['biowarfare_folder', 'biological-mcp.png'],
 ] as const;
 const historicalChemicalRevision = '4efc01fc87f1137e98c864f928dd5603e6b7d2f1';
+const furyAlternativeCrop = { left: 550, top: 590, width: 320, height: 160 };
 const historicalChemicalSources = [
   'common/technologies/chaosx_technologies.txt',
   'interface/countrytechtreeview.gui',
 ] as const;
 const comparisonStage = process.env.HOI4_COMPARISON_STAGE ?? 'all';
-if (!['all', 'current', 'historical'].includes(comparisonStage))
-  throw new Error('HOI4_COMPARISON_STAGE must be all, current, or historical');
+if (!['all', 'current', 'historical', 'focus'].includes(comparisonStage))
+  throw new Error('HOI4_COMPARISON_STAGE must be all, current, historical, or focus');
 const historicalOnly = comparisonStage === 'historical';
-const currentOnly = comparisonStage === 'current';
+const focusOnly = comparisonStage === 'focus';
+const currentOnly = comparisonStage === 'current' || focusOnly;
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'hoi4-real-visual-comparisons-'));
 try {
@@ -73,7 +76,8 @@ try {
       : undefined;
   let focusSourceRevision = priorManifest?.focusSourceRevision;
   const focusManifest: unknown[] = historicalOnly ? (priorManifest?.focus ?? []) : [];
-  const technologyManifest: unknown[] = historicalOnly ? (priorManifest?.technology ?? []) : [];
+  const technologyManifest: unknown[] =
+    historicalOnly || focusOnly ? (priorManifest?.technology ?? []) : [];
   if (!historicalOnly) {
     for (const [variable, filename] of references) {
       const source = process.env[variable];
@@ -140,55 +144,66 @@ try {
         presentation,
         index: focusSnapshot.index,
       });
-      await writeFile(
-        path.join(outputRoot, filename),
-        await sharp(result.bundle.png)
-          .resize({ width: 2400, withoutEnlargement: true })
-          .png()
-          .toBuffer(),
-      );
+      const renderedImage = await sharp(result.bundle.png)
+        .resize({ width: 2400, withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      await writeFile(path.join(outputRoot, filename), renderedImage);
+      if (treeId === 'fury_focus_tree') {
+        await writeFile(
+          path.join(outputRoot, 'fury-or-mcp.png'),
+          await sharp(renderedImage).extract(furyAlternativeCrop).png().toBuffer(),
+        );
+      }
       focusManifest.push({
         treeId,
         sourcePath,
         sourceSha256: source.sha256,
         nodes: plan.focuses.length,
-      });
-    }
-
-    const viewer = new TechnologyTreeViewer(engine);
-    for (const [folderId, filename] of technologyFolders) {
-      const result = await viewer.renderAndStore({
-        workspaceId,
-        view: 'folder',
-        folderId,
-        maxNodes: 1000,
-        includeHtml: false,
-      });
-      await writeFile(path.join(outputRoot, filename), result.render.png);
-      const report = JSON.parse(result.render.json) as {
-        nodes: Array<{
-          id: string;
-          layoutSize?: string;
-          placement?: { layoutWidth?: number; layoutHeight?: number };
-        }>;
-        iconCoverage: { rendered: number; requested: number; unresolvedSprites: string[] };
-      };
-      technologyManifest.push({
-        folderId,
-        graphRevision: result.graph.revision,
-        nodes: report.nodes.length,
-        omitted: result.render.omittedNodeCount,
-        sourceAccurate: result.render.sourceAccurate,
-        iconCoverage: report.iconCoverage,
-        layouts: Object.fromEntries(
-          ['small', 'large', 'unknown'].map((size) => [
-            size,
-            report.nodes.filter((node) => node.layoutSize === size).length,
-          ]),
+        alternativePrerequisiteGroups: plan.focuses.reduce(
+          (count, focus) =>
+            count + focus.prerequisites.groups.filter((group) => group.focusIds.length > 1).length,
+          0,
         ),
       });
     }
-    viewer.clearCaches();
+
+    if (!focusOnly) {
+      const viewer = new TechnologyTreeViewer(engine);
+      for (const [folderId, filename] of technologyFolders) {
+        const result = await viewer.renderAndStore({
+          workspaceId,
+          view: 'folder',
+          folderId,
+          maxNodes: 1000,
+          includeHtml: false,
+        });
+        await writeFile(path.join(outputRoot, filename), result.render.png);
+        const report = JSON.parse(result.render.json) as {
+          nodes: Array<{
+            id: string;
+            layoutSize?: string;
+            placement?: { layoutWidth?: number; layoutHeight?: number };
+          }>;
+          iconCoverage: { rendered: number; requested: number; unresolvedSprites: string[] };
+        };
+        technologyManifest.push({
+          folderId,
+          graphRevision: result.graph.revision,
+          nodes: report.nodes.length,
+          omitted: result.render.omittedNodeCount,
+          sourceAccurate: result.render.sourceAccurate,
+          iconCoverage: report.iconCoverage,
+          layouts: Object.fromEntries(
+            ['small', 'large', 'unknown'].map((size) => [
+              size,
+              report.nodes.filter((node) => node.layoutSize === size).length,
+            ]),
+          ),
+        });
+      }
+      viewer.clearCaches();
+    }
   }
   let historicalChemicalManifest: unknown = priorManifest?.historicalChemical;
   if (!currentOnly) {
@@ -278,7 +293,7 @@ try {
     };
   }
   // Native-size crop aligned to the three supplied chemical card interiors.
-  if (!historicalOnly) {
+  if (!historicalOnly && !focusOnly) {
     await writeFile(
       path.join(outputRoot, 'chemical-cards-mcp.png'),
       await sharp(path.join(outputRoot, 'chemical-mcp.png'))
@@ -299,6 +314,12 @@ try {
         toolVersion: packageJson.version,
         focusSourceRevision,
         focus: focusManifest,
+        focusAlternativeCrop: {
+          treeId: 'fury_focus_tree',
+          file: 'fury-or-mcp.png',
+          sourceX: furyAlternativeCrop.left,
+          sourceY: furyAlternativeCrop.top,
+        },
         technology: technologyManifest,
         historicalChemical: historicalChemicalManifest,
         chemicalCardCrop: { file: 'chemical-cards-mcp.png', sourceX: 113, sourceY: 184 },

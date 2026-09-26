@@ -2734,6 +2734,30 @@ describe('Focus Tree Workbench lint', () => {
 });
 
 describe('Focus Tree Workbench rendering', () => {
+  it('draws alternatives within one prerequisite group as dots and required groups as solid lines', async () => {
+    const document = parseClausewitz(
+      Buffer.from(sampleSource),
+      'mod:common/national_focus/fixture.txt',
+    );
+    const plan = importFocusTrees(document).plans[0]!;
+    const bundle = await renderFocusTree(plan, layoutFocusTree(plan), [], { rasterize: false });
+    const paths = [...bundle.svg.matchAll(/<path\b[^>]*data-child="child"[^>]*\/>/gu)].map(
+      ([markup]) => markup,
+    );
+    expect(paths).toHaveLength(3);
+    for (const parentId of ['root', 'alternate']) {
+      const path = paths.find((markup) => markup.includes(`data-parent="${parentId}"`));
+      expect(path).toContain('stroke-dasharray="2 4"');
+      expect(path).toContain('stroke-linecap="round"');
+      expect(path).toContain('data-prerequisite-group="0"');
+      expect(path).toContain('data-prerequisite-kind="or"');
+    }
+    const required = paths.find((markup) => markup.includes('data-parent="gate"'));
+    expect(required).toContain('data-prerequisite-group="1"');
+    expect(required).toContain('data-prerequisite-kind="required"');
+    expect(required).not.toContain('stroke-dasharray');
+  });
+
   it('produces deterministic HTML, SVG, JSON, and a real rasterized PNG', async () => {
     const root = focusNode('root', { mode: 'fixed', x: 0, y: 0, pinned: true });
     const child = focusNode(

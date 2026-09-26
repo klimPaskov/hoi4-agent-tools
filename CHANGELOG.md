@@ -4,6 +4,7 @@
 
 ## 3.4.2 - 2026-09-26
 
+- Show alternatives within a national focus prerequisite group with dotted connectors, leaving individually required prerequisites solid.
 - Draw wide technology-folder icons at their decoded sprite dimensions and the source GUI's icon anchor, preserving 131×52 chemical cylinders instead of shrinking them to 70×70.
 - Include user-approved in-game focus and technology captures beside current-source and source-matched historical MCP renders, with source revisions and explicit whole-image comparison limits.
 

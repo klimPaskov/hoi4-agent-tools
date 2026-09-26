@@ -1,26 +1,35 @@
 {
   "toolVersion": "3.4.2",
-  "focusSourceRevision": "5c208b5b7812390819825f48a0a2e71999df9ea9f3db71c2dbe0807e4fcf0111",
+  "focusSourceRevision": "6827ac7f511d39ea88a743b9697480bffc49cc697ba98a7f156d1348b4761d89",
   "focus": [
     {
       "treeId": "fury_focus_tree",
       "sourcePath": "common/national_focus/007_fury_focus_tree.txt",
       "sourceSha256": "c5ae9029be5642d1b5cd871722a365c990ac0348bccf937ece3bdbedc75fbfd5",
-      "nodes": 52
+      "nodes": 52,
+      "alternativePrerequisiteGroups": 1
     },
     {
       "treeId": "THR_focus",
       "sourcePath": "common/national_focus/003_holy_realm.txt",
       "sourceSha256": "1e29143c43c5867e920826c4fed3325f51716edafaecac0e06dc6bc69b27c6ef",
-      "nodes": 111
+      "nodes": 111,
+      "alternativePrerequisiteGroups": 1
     },
     {
       "treeId": "utopia_manifesto_tree",
       "sourcePath": "common/national_focus/015_utopia_manifesto_focus_tree.txt",
       "sourceSha256": "ebf16843f9c4f34be9200691a2b06d9a9f6e771b14197d39147792d323300104",
-      "nodes": 124
+      "nodes": 124,
+      "alternativePrerequisiteGroups": 5
     }
   ],
+  "focusAlternativeCrop": {
+    "treeId": "fury_focus_tree",
+    "file": "fury-or-mcp.png",
+    "sourceX": 550,
+    "sourceY": 590
+  },
   "technology": [
     {
       "folderId": "infantry_folder",

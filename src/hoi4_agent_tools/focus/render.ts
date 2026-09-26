@@ -348,7 +348,12 @@ function svgDocument(
   const prerequisiteEdges = plan.focuses
     .flatMap((focus) =>
       focus.prerequisites.groups.flatMap((group, groupIndex) =>
-        group.focusIds.map((parentId) => ({ parentId, childId: focus.id, groupIndex })),
+        group.focusIds.map((parentId) => ({
+          parentId,
+          childId: focus.id,
+          groupIndex,
+          alternative: group.focusIds.length > 1,
+        })),
       ),
     )
     .filter(({ parentId, childId }) => pixel.has(parentId) && pixel.has(childId))
@@ -390,8 +395,11 @@ function svgDocument(
       originX: padding - minimumX * horizontal,
       originY: padding - minimumY * vertical,
     });
+    const stroke = edge.alternative
+      ? 'stroke-width="2.5" stroke-dasharray="2 4" stroke-linecap="round"'
+      : 'stroke-width="2"';
     parts.push(
-      `<path d="${focusConnectorSvgPath(curve)}" fill="none" stroke="#8da2bc" stroke-width="2" marker-end="url(#arrow)" data-parent="${escapeXml(edge.parentId)}" data-child="${escapeXml(edge.childId)}" data-prerequisite-group="${edge.groupIndex}"/>`,
+      `<path d="${focusConnectorSvgPath(curve)}" fill="none" stroke="#8da2bc" ${stroke} marker-end="url(#arrow)" data-parent="${escapeXml(edge.parentId)}" data-child="${escapeXml(edge.childId)}" data-prerequisite-group="${edge.groupIndex}" data-prerequisite-kind="${edge.alternative ? 'or' : 'required'}"/>`,
     );
   }
   parts.push('</g>', '<g id="mutual-exclusions">');

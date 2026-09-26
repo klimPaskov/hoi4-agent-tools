@@ -10,7 +10,13 @@ These are real user-supplied Hearts of Iron IV captures and MCP renders from the
 | ![Holy Realm focus tree in game](images/comparisons/holy-realm-ingame.png)   | ![Holy Realm focus tree MCP render](images/comparisons/holy-realm-mcp.png)   |
 | ![Utopia Manifesto focus tree in game](images/comparisons/utopia-ingame.png) | ![Utopia Manifesto focus tree MCP render](images/comparisons/utopia-mcp.png) |
 
-The three source trees contain 52 Fury, 111 Holy Realm, and 124 Utopia Manifesto focuses in the reviewed revision. The MCP review uses 96-pixel horizontal and 130-pixel vertical spacing. The broad branch arrangements are comparable, but the game's standalone icons, dark labels, decorative frame, continuous-focus panel, and orthogonal connector treatment differ visibly from the MCP's small blue cards and links. These focus renders are useful for structure and route review; they are not pixel replicas.
+The three source trees contain 52 Fury, 111 Holy Realm, and 124 Utopia Manifesto focuses in the reviewed revision, with 1, 1, and 5 alternative prerequisite groups respectively. The MCP review uses 96-pixel horizontal and 130-pixel vertical spacing. Alternatives in one prerequisite group have dotted connectors; individually required prerequisites have solid connectors. The broad branch arrangements are comparable, but the game's standalone icons, dark labels, decorative frame, continuous-focus panel, and orthogonal connector treatment differ visibly from the MCP's small blue cards and links. These focus renders are useful for structure and route review; they are not pixel replicas.
+
+The supplied crop and the source-based crop below show the Fury branch leading into “The Last Neighbor Has Fallen.” The two alternatives use dotted connectors in both views; other required links stay solid. The MCP still uses curved paths and blue cards where the game uses its own focus styling.
+
+| In-game Fury branch                                                            | MCP Fury branch                                                                         |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| ![Fury alternative focus links in game](images/comparisons/fury-or-ingame.png) | ![Dotted alternative focus links in the MCP render](images/comparisons/fury-or-mcp.png) |
 
 ## Technology folders
 
