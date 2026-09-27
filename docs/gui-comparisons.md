@@ -25,15 +25,6 @@ These differences prevent a whole-image accuracy percentage.
 These views use declared empty or zero states for layout review.
 They are not captures from an observed campaign.
 
-## Tooltip text
-
-[![Vanilla Close control and its tooltip preview](images/comparisons/gui-tooltip/tooltip-detail.png)](images/comparisons/gui-tooltip/advisorroleselectionview-window.png)
-
-This example uses the vanilla Close tooltip, its game font and background asset.
-Its position, width and padding are declared preview inputs; native automatic placement and timing are not verified.
-The [full preview](images/comparisons/gui-tooltip/advisorroleselectionview-full.png), [scenario](images/comparisons/gui-tooltip/scenario.json) and [source details](images/comparisons/gui-tooltip/manifest.json) are available alongside the crop.
-See [tooltip inputs](gui.md#preview-immediate-tooltip-text) to try it on a control in your mod.
-
 ## Vanilla decisions and occupation
 
 | Decisions                                                                                  | Occupation                                                                                     |

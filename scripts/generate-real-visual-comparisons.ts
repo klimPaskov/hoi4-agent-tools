@@ -25,14 +25,10 @@ await Promise.all([access(gameRoot), access(modRoot)]);
 
 const references = [
   ['HOI4_FURY_SCREENSHOT', 'fury-ingame.png'],
-  ['HOI4_FURY_OR_SCREENSHOT', 'fury-or-ingame.png'],
   ['HOI4_HOLY_REALM_SCREENSHOT', 'holy-realm-ingame.png'],
   ['HOI4_UTOPIA_SCREENSHOT', 'utopia-ingame.png'],
   ['HOI4_INFANTRY_SCREENSHOT', 'infantry-ingame.png'],
-  ['HOI4_CHEMICAL_SCREENSHOT', 'chemical-ingame.png'],
   ['HOI4_CHEMICAL_CURRENT_SCREENSHOT', 'chemical-recent-ingame.png'],
-  ['HOI4_CHEMICAL_CARDS_SCREENSHOT', 'chemical-cards-ingame.png'],
-  ['HOI4_BIOLOGICAL_CARDS_SCREENSHOT', 'biological-cards-ingame.png'],
 ] as const;
 
 const focusTrees = [
@@ -44,13 +40,8 @@ const focusTrees = [
     'utopia-mcp.png',
   ],
 ] as const;
-const technologyFolders = [
-  ['infantry_folder', 'infantry-mcp.png'],
-  ['chemical_warfare_folder', 'chemical-mcp.png'],
-  ['biowarfare_folder', 'biological-mcp.png'],
-] as const;
+const technologyFolders = [['infantry_folder', 'infantry-mcp.png']] as const;
 const historicalChemicalRevision = '4efc01fc87f1137e98c864f928dd5603e6b7d2f1';
-const furyAlternativeCrop = { left: 550, top: 590, width: 320, height: 160 };
 const historicalChemicalSources = [
   'common/technologies/chaosx_technologies.txt',
   'interface/countrytechtreeview.gui',
@@ -149,12 +140,6 @@ try {
         .png()
         .toBuffer();
       await writeFile(path.join(outputRoot, filename), renderedImage);
-      if (treeId === 'fury_focus_tree') {
-        await writeFile(
-          path.join(outputRoot, 'fury-or-mcp.png'),
-          await sharp(renderedImage).extract(furyAlternativeCrop).png().toBuffer(),
-        );
-      }
       focusManifest.push({
         treeId,
         sourcePath,
@@ -256,22 +241,6 @@ try {
       path.join(outputRoot, 'chemical-historical-mcp.png'),
       historicalResult.render.png,
     );
-    await Promise.all([
-      writeFile(
-        path.join(outputRoot, 'chemical-wide-cards-ingame.png'),
-        await sharp(path.join(outputRoot, 'chemical-recent-ingame.png'))
-          .extract({ left: 30, top: 230, width: 230, height: 270 })
-          .png()
-          .toBuffer(),
-      ),
-      writeFile(
-        path.join(outputRoot, 'chemical-wide-cards-mcp.png'),
-        await sharp(historicalResult.render.png)
-          .extract({ left: 140, top: 220, width: 220, height: 270 })
-          .png()
-          .toBuffer(),
-      ),
-    ]);
     const historicalReport = JSON.parse(historicalResult.render.json) as {
       nodes: Array<{ id: string; layoutSize?: string }>;
       iconCoverage: { rendered: number; requested: number; unresolvedSprites: string[] };
@@ -292,16 +261,6 @@ try {
       ),
     };
   }
-  // Native-size crop aligned to the three supplied chemical card interiors.
-  if (!historicalOnly && !focusOnly) {
-    await writeFile(
-      path.join(outputRoot, 'chemical-cards-mcp.png'),
-      await sharp(path.join(outputRoot, 'chemical-mcp.png'))
-        .extract({ left: 113, top: 184, width: 302, height: 320 })
-        .png()
-        .toBuffer(),
-    );
-  }
   const packageJson = JSON.parse(
     await readFile(path.join(projectRoot, 'package.json'), 'utf8'),
   ) as {
@@ -314,19 +273,8 @@ try {
         toolVersion: packageJson.version,
         focusSourceRevision,
         focus: focusManifest,
-        focusAlternativeCrop: {
-          treeId: 'fury_focus_tree',
-          file: 'fury-or-mcp.png',
-          sourceX: furyAlternativeCrop.left,
-          sourceY: furyAlternativeCrop.top,
-        },
         technology: technologyManifest,
         historicalChemical: historicalChemicalManifest,
-        chemicalCardCrop: { file: 'chemical-cards-mcp.png', sourceX: 113, sourceY: 184 },
-        chemicalWideCardCrops: {
-          inGame: { file: 'chemical-wide-cards-ingame.png', sourceX: 30, sourceY: 230 },
-          mcp: { file: 'chemical-wide-cards-mcp.png', sourceX: 140, sourceY: 220 },
-        },
         note: 'User-approved game captures and source-linked MCP renders; screenshots may differ in viewport and source revision.',
       },
       null,

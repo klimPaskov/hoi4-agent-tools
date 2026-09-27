@@ -24,12 +24,6 @@
       "alternativePrerequisiteGroups": 5
     }
   ],
-  "focusAlternativeCrop": {
-    "treeId": "fury_focus_tree",
-    "file": "fury-or-mcp.png",
-    "sourceX": 550,
-    "sourceY": 590
-  },
   "technology": [
     {
       "folderId": "infantry_folder",
@@ -45,40 +39,6 @@
       "layouts": {
         "small": 29,
         "large": 14,
-        "unknown": 0
-      }
-    },
-    {
-      "folderId": "chemical_warfare_folder",
-      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
-      "nodes": 19,
-      "omitted": 0,
-      "sourceAccurate": true,
-      "iconCoverage": {
-        "rendered": 25,
-        "requested": 25,
-        "unresolvedSprites": []
-      },
-      "layouts": {
-        "small": 19,
-        "large": 0,
-        "unknown": 0
-      }
-    },
-    {
-      "folderId": "biowarfare_folder",
-      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
-      "nodes": 8,
-      "omitted": 0,
-      "sourceAccurate": true,
-      "iconCoverage": {
-        "rendered": 14,
-        "requested": 14,
-        "unresolvedSprites": []
-      },
-      "layouts": {
-        "small": 8,
-        "large": 0,
         "unknown": 0
       }
     }
@@ -102,23 +62,6 @@
       "small": 21,
       "large": 9,
       "unknown": 0
-    }
-  },
-  "chemicalCardCrop": {
-    "file": "chemical-cards-mcp.png",
-    "sourceX": 113,
-    "sourceY": 184
-  },
-  "chemicalWideCardCrops": {
-    "inGame": {
-      "file": "chemical-wide-cards-ingame.png",
-      "sourceX": 30,
-      "sourceY": 230
-    },
-    "mcp": {
-      "file": "chemical-wide-cards-mcp.png",
-      "sourceX": 140,
-      "sourceY": 220
     }
   },
   "note": "User-approved game captures and source-linked MCP renders; screenshots may differ in viewport and source revision."

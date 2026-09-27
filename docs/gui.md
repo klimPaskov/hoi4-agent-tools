@@ -14,22 +14,8 @@ These are source-model results, not proof of native click execution.
 
 ## Preview immediate tooltip text
 
-An explicit tooltip request uses a visible element's `pdx_tooltip` localisation key:
+An explicit tooltip request uses a visible element's `pdx_tooltip` localisation key. Supply `tooltip.target` with its inspected instance ID or a unique element name, plus viewport `x`, `y`, `width` and `padding` values.
 
-```json
-{
-  "id": "close-tooltip",
-  "tooltip": {
-    "target": "close_button",
-    "x": 980,
-    "y": 100,
-    "width": 160,
-    "padding": 16
-  }
-}
-```
-
-The target can be an instance ID from inspection or a unique element name.
 Position, width and padding are declared viewport pixels; height follows the measured text.
 The preview uses the loaded `ToolTip` sprite and `cg_16b` font.
 Missing or ambiguous targets, hidden or unresolved visibility, missing text/assets, and bounds errors produce diagnostics without a guessed popup.

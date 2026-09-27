@@ -26,14 +26,11 @@ The examples below show the results.
 
 ### Focus trees and alternative prerequisites
 
-> Render Fury, Holy Realm and Utopia Manifesto. Trace their branches and show which prerequisites are alternatives.
-
-| Tree or branch                       | Supplied in-game capture                                                                                                       | MCP source preview                                                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Fury                                 | [![Fury in game](docs/images/comparisons/fury-ingame.png)](docs/images/comparisons/fury-ingame.png)                            | [![Fury focus tree](docs/images/comparisons/fury-mcp.png)](docs/images/comparisons/fury-mcp.png)                        |
-| Holy Realm                           | [![Holy Realm in game](docs/images/comparisons/holy-realm-ingame.png)](docs/images/comparisons/holy-realm-ingame.png)          | [![Holy Realm focus tree](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png)      |
-| Utopia Manifesto                     | [![Utopia in game](docs/images/comparisons/utopia-ingame.png)](docs/images/comparisons/utopia-ingame.png)                      | [![Utopia focus tree](docs/images/comparisons/utopia-mcp.png)](docs/images/comparisons/utopia-mcp.png)                  |
-| Fury: “The Last Neighbor Has Fallen” | [![Alternative prerequisites in game](docs/images/comparisons/fury-or-ingame.png)](docs/images/comparisons/fury-or-ingame.png) | [![Dotted alternative prerequisites](docs/images/comparisons/fury-or-mcp.png)](docs/images/comparisons/fury-or-mcp.png) |
+| Tree or branch   | Supplied in-game capture                                                                                              | MCP source preview                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Fury             | [![Fury in game](docs/images/comparisons/fury-ingame.png)](docs/images/comparisons/fury-ingame.png)                   | [![Fury focus tree](docs/images/comparisons/fury-mcp.png)](docs/images/comparisons/fury-mcp.png)                   |
+| Holy Realm       | [![Holy Realm in game](docs/images/comparisons/holy-realm-ingame.png)](docs/images/comparisons/holy-realm-ingame.png) | [![Holy Realm focus tree](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png) |
+| Utopia Manifesto | [![Utopia in game](docs/images/comparisons/utopia-ingame.png)](docs/images/comparisons/utopia-ingame.png)             | [![Utopia focus tree](docs/images/comparisons/utopia-mcp.png)](docs/images/comparisons/utopia-mcp.png)             |
 
 Dotted connectors in the MCP preview mark focuses where either preceding focus satisfies one prerequisite group.
 The tree previews show route structure; the game's focus screen has different framing, labels and icons.
@@ -41,32 +38,15 @@ The [focus guide](docs/focus.md) explains inspection, rendering and edits, and t
 
 ### Technology folders and card artwork
 
-> Render the infantry, chemical and biological technology folders. Check card sizes, artwork, links and missing placements.
+> Render a technology folder. Check card sizes, artwork, links and missing placements.
 
-| Folder                                       | Supplied in-game capture                                                                                                                   | MCP source preview                                                                                                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Infantry                                     | [![Infantry in game](docs/images/comparisons/infantry-ingame.png)](docs/images/comparisons/infantry-ingame.png)                            | [![Infantry technology folder](docs/images/comparisons/infantry-mcp.png)](docs/images/comparisons/infantry-mcp.png)                       |
-| Chemical warfare, current source             | [![Chemical warfare in game](docs/images/comparisons/chemical-ingame.png)](docs/images/comparisons/chemical-ingame.png)                    | [![Current chemical folder](docs/images/comparisons/chemical-mcp.png)](docs/images/comparisons/chemical-mcp.png)                          |
-| Chemical warfare, matching historical source | [![Older chemical folder in game](docs/images/comparisons/chemical-recent-ingame.png)](docs/images/comparisons/chemical-recent-ingame.png) | [![Historical chemical folder](docs/images/comparisons/chemical-historical-mcp.png)](docs/images/comparisons/chemical-historical-mcp.png) |
+| Folder           | Supplied in-game capture                                                                                                             | MCP source preview                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Infantry         | [![Infantry in game](docs/images/comparisons/infantry-ingame.png)](docs/images/comparisons/infantry-ingame.png)                      | [![Infantry technology folder](docs/images/comparisons/infantry-mcp.png)](docs/images/comparisons/infantry-mcp.png)                    |
+| Chemical warfare | [![Chemical folder in game](docs/images/comparisons/chemical-recent-ingame.png)](docs/images/comparisons/chemical-recent-ingame.png) | [![Chemical folder preview](docs/images/comparisons/chemical-historical-mcp.png)](docs/images/comparisons/chemical-historical-mcp.png) |
 
-The current chemical source uses square cards and differs from the supplied capture.
-The matching historical source includes nine wide cards; its cylinders use full-size 131×52 artwork.
-
-| Wide cylinder cards in game                                                                                                             | Wide cylinder cards in the MCP preview                                                                                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Wide cards in game](docs/images/comparisons/chemical-wide-cards-ingame.png)](docs/images/comparisons/chemical-wide-cards-ingame.png) | [![Wide artwork in the MCP preview](docs/images/comparisons/chemical-wide-cards-mcp.png)](docs/images/comparisons/chemical-wide-cards-mcp.png) |
-
-| Square card interiors in game                                                                                                            | MCP square card interiors                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [![Chemical square cards in game](docs/images/comparisons/chemical-cards-ingame.png)](docs/images/comparisons/chemical-cards-ingame.png) | [![Chemical square card preview](docs/images/comparisons/chemical-cards-mcp.png)](docs/images/comparisons/chemical-cards-mcp.png) |
-
-[![Biological technology folder preview](docs/images/comparisons/biological-mcp.png)](docs/images/comparisons/biological-mcp.png)
-
-The biological preview uses its current source; the supplied bomb-card crop below belongs to a different layout.
-
-[![Bomb cards from the supplied game crop](docs/images/comparisons/biological-cards-ingame.png)](docs/images/comparisons/biological-cards-ingame.png)
-
-The [technology comparison](docs/visual-comparisons.md#technology-folders) includes the square-card crop and explains the source versions, and the [technology guide](docs/technology.md) covers inspection and doctrine paths.
+The chemical comparison uses the source revision recorded with the screenshot and includes wide equipment cards.
+The [technology comparison](docs/visual-comparisons.md#technology-folders) records its source revision, and the [technology guide](docs/technology.md) covers inspection and doctrine paths.
 
 ### Scripted interfaces
 
@@ -85,11 +65,11 @@ The Options preview has no observed gamma value, and Škoda's game capture frame
 | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Event Log preview](docs/images/comparisons/gui/event-log-mcp.png)](docs/images/comparisons/gui/event-log-mcp.png) | [![Chaos Meter status](docs/images/comparisons/gui/chaos-meter-status-mcp.png)](docs/images/comparisons/gui/chaos-meter-status-mcp.png) | [![Chaos Meter deaths](docs/images/comparisons/gui/chaos-meter-deaths-mcp.png)](docs/images/comparisons/gui/chaos-meter-deaths-mcp.png) |
 
-| Vanilla decisions                                                                                                                                        | Vanilla occupation                                                                                                                                             | Vanilla Close tooltip                                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Decision window](docs/images/comparisons/native-ui/countrydecisionview-window.png)](docs/images/comparisons/native-ui/countrydecisionview-window.png) | [![Occupation window](docs/images/comparisons/native-ui/countryoccupationview-window.png)](docs/images/comparisons/native-ui/countryoccupationview-window.png) | [![Close tooltip](docs/images/comparisons/gui-tooltip/tooltip-detail.png)](docs/images/comparisons/gui-tooltip/advisorroleselectionview-window.png) |
+| Vanilla decisions                                                                                                                                        | Vanilla occupation                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [![Decision window](docs/images/comparisons/native-ui/countrydecisionview-window.png)](docs/images/comparisons/native-ui/countrydecisionview-window.png) | [![Occupation window](docs/images/comparisons/native-ui/countryoccupationview-window.png)](docs/images/comparisons/native-ui/countryoccupationview-window.png) |
 
-The Event Log, Chaos Meter, decision, occupation and tooltip previews use declared states or positions for layout review.
+The Event Log, Chaos Meter, decision and occupation previews use declared states or positions for layout review.
 They are source previews, not observations of a running campaign.
 See the [interface gallery](docs/gui-comparisons.md) for full images and fidelity notes, and the [GUI guide](docs/gui.md) for scenario inputs.
 

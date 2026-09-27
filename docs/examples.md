@@ -14,16 +14,6 @@ No wiki download or game launch was needed.
 
 Use [Local references](reference.md) to configure an offline wiki snapshot or narrow a search.
 
-## Check alternative focus prerequisites
-
-> Find Fury's focus tree. Render the branch leading to “The Last Neighbor Has Fallen” and show whether both preceding focuses are required or either one is enough.
-
-![Fury branch with dotted alternative prerequisites](images/comparisons/fury-or-mcp.png)
-
-Dotted connectors mark alternatives within one prerequisite group; solid connectors mark separate required prerequisites.
-The agent can link each finding to the source block before you change the route.
-The [in-game comparison](visual-comparisons.md#focus-trees) shows the same branch and explains the presentation differences.
-
 ## Review a large tree
 
 > Render the Utopia Manifesto focus tree. Check its branch connections, alternative prerequisites, missing references and crowded areas before suggesting edits.
@@ -41,7 +31,7 @@ The [focus guide](focus.md) covers inspecting, rendering and reorganizing trees.
 [![Infantry technology folder](images/comparisons/infantry-mcp.png)](images/comparisons/infantry-mcp.png)
 
 The preview follows the loaded technology and GUI definitions, including wide equipment cards.
-The [technology comparisons](visual-comparisons.md#technology-folders) also show chemical and biological folders and explain why different source versions can produce different layouts.
+The [technology comparisons](visual-comparisons.md#technology-folders) also show a chemical folder rendered from a matching recorded source revision.
 See the [technology guide](technology.md) for grants, bonuses and doctrine paths.
 
 ## Inspect an interface before editing it
