@@ -364,6 +364,12 @@ async function verifyGitHubRelease(
   ) {
     throw new Error('Public GitHub release tag, state, or immutable policy is incorrect');
   }
+  const authoredBody = await readFile(
+    path.join(root, 'docs', 'releases', `${releaseTag}.md`),
+    'utf8',
+  );
+  if (release.body !== authoredBody)
+    throw new Error('Public GitHub release body differs from the authored release page');
 
   const assets = records(release.assets, 'GitHub release assets');
   await verifyAssetBytes(

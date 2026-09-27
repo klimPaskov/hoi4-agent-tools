@@ -20,6 +20,7 @@ You can ask your coding agent for these tasks in ordinary language; you do not n
 ## See the results
 
 - [Examples](examples.md): practical prompts with real renders.
+- [Latest release](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest): a short introduction to the published server.
 - [Focus and technology comparisons](visual-comparisons.md): supplied game captures beside source renders.
 - [Interface comparisons](gui-comparisons.md): vanilla and Chaos Redux windows.
 

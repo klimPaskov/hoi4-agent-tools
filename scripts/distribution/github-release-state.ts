@@ -66,7 +66,7 @@ export function validateGitHubReleaseMetadata(
     throw new Error('GitHub release title differs from the canonical title');
   }
   if (release.body !== expectedBody) {
-    throw new Error('GitHub release body differs from the canonical changelog');
+    throw new Error('GitHub release body differs from the canonical release page');
   }
   assertGitHubActionsBot(release.author, 'GitHub release author');
 }

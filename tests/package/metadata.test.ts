@@ -392,6 +392,7 @@ describe('offline package and Registry metadata', () => {
     expect(staging).toContain('name: HOI4 Agent Tools ${{ github.ref_name }}');
     expect(staging).toContain('body_path: ${{ runner.temp }}/release-notes.md');
     expect(releaseJob).toContain('node scripts/distribution/release-notes.ts CHANGELOG.md');
+    expect(workflow).toContain('Require an authored release page for the tag');
     expect(releaseJob.match(/"\$RUNNER_TEMP\/release-notes\.md"/gu)?.length).toBe(5);
     expect(staging).not.toContain('generate_release_notes: true');
     expect(staging).toContain('overwrite_files: false');

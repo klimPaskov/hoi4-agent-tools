@@ -68,6 +68,9 @@ jobs:
           test "$(node -p "require('./server.json').version")" = "$VERSION"
           test "$(node -p "require('./package.json').mcpName")" = "$EXPECTED_MCP_NAME"
           test "$(node -p "require('./server.json').name")" = "$EXPECTED_MCP_NAME"
+      - name: Require an authored release page for the tag
+        shell: bash
+        run: node scripts/distribution/release-notes.ts CHANGELOG.md "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-notes.md"
       - name: Require a monotonic npm latest release
         run: npm run release:order:verify
       - name: Require a public source repository
