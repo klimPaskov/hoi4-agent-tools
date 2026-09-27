@@ -88,7 +88,7 @@ describe('offline package and Registry metadata', () => {
     expect(versionSource).toContain(`export const PACKAGE_VERSION = '${version}';`);
     expect(changelog).toContain(`## ${version}`);
 
-    expect(readme).toContain('hoi4-agent-tools@latest');
+    expect(readme).toContain('npm install --global hoi4-agent-tools\n');
     expect(readme).not.toMatch(/hoi4-agent-tools@\d+\.\d+\.\d+/u);
 
     const schemaFiles = (await readdir(path.join(projectRoot, 'schemas')))
@@ -127,7 +127,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'Analyze HOI4 events, decisions, impact, tech, AI, and MTTH; build focus trees, GUIs, and maps.',
+        'HOI4 modding tools for agents: local references, visual previews, focus trees, interfaces and maps.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -157,6 +157,8 @@ describe('offline package and Registry metadata', () => {
       'dist/',
       'docs/README.md',
       'docs/setup.md',
+      'docs/examples.md',
+      'docs/tools.md',
       'docs/events.md',
       'docs/analysis.md',
       'docs/mechanics.md',
@@ -388,7 +390,9 @@ describe('offline package and Registry metadata', () => {
     expect(releaseJob).toContain('absent|draft|complete)');
     expect(staging).toContain('draft: true');
     expect(staging).toContain('name: HOI4 Agent Tools ${{ github.ref_name }}');
-    expect(staging).toContain('body_path: CHANGELOG.md');
+    expect(staging).toContain('body_path: ${{ runner.temp }}/release-notes.md');
+    expect(releaseJob).toContain('node scripts/distribution/release-notes.ts CHANGELOG.md');
+    expect(releaseJob.match(/"\$RUNNER_TEMP\/release-notes\.md"/gu)?.length).toBe(5);
     expect(staging).not.toContain('generate_release_notes: true');
     expect(staging).toContain('overwrite_files: false');
     expect(staging).toContain('fail_on_unmatched_files: true');

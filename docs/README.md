@@ -1,20 +1,35 @@
 # Documentation
 
-- [Setup](setup.md): install the server, configure HOI4 paths, and connect an MCP client.
-- [Local references](reference.md): retrieve cited offline wiki and installed documentation sections and exact source definitions.
-- [Event chains](events.md): inspect, trace, lint, render, and compare event chains.
-- [Cross-system impact and decisions](analysis.md): trace source consumers and evaluate decision or mission scenarios.
-- [Mechanic tests and scenario suites](mechanics.md): interpret declared effect steps, check package links, and run resumable cases.
-- [Technology trees](technology.md): inspect, trace, lint, render, and compare technologies and doctrines.
-- [Visual examples and comparison limits](visual-comparisons.md): real game captures beside MCP renders, with measured findings and limits.
-- [Interface examples and comparison limits](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md): native-size vanilla and Chaos Redux windows, populated templates, scenarios, and provenance.
-- [Bounded helper expansion](helper-expansion.md): resume source-linked event and technology helper paths with exact coverage boundaries.
-- [Persistent jobs](jobs.md): run, inspect, cancel, and recover long operations.
-- [AI and MTTH analysis](probability.md): evaluate weighted logic, timing, uncertainty, sequences, and patches.
-- [Focus trees](focus.md): inspect, create, render, and clean national or continuous focus content.
-- [Scripted GUIs](gui.md): inspect linked UI source, render states, and create or repair GUIs.
-- [Maps](map.md): inspect and edit provinces, states, regions, adjacency, supply, and railways.
-- [HTTP](http.md): run the MCP server for shared or remote access.
-- [Development](development.md): build, test, and contribute.
+Start with [Setup](setup.md), then try the [Examples](examples.md).
+You can ask your coding agent for these tasks in ordinary language; you do not need to memorize tool names.
 
-For vulnerability reporting, see the repository [Security Policy](../SECURITY.md).
+## Choose a task
+
+| I want to…                                           | Read                                      |
+| ---------------------------------------------------- | ----------------------------------------- |
+| Find a modding rule or a vanilla example             | [Local references](reference.md)          |
+| Work on a focus tree                                 | [Focus trees](focus.md)                   |
+| Understand an event chain                            | [Events](events.md)                       |
+| Trace dependencies or inspect decisions and missions | [Decisions and dependencies](analysis.md) |
+| Preview a technology or doctrine tree                | [Technology trees](technology.md)         |
+| Build or review an interface                         | [Scripted GUIs](gui.md)                   |
+| Inspect or edit the map                              | [Maps](map.md)                            |
+| Compare weights, chances or timing                   | [AI and probability](probability.md)      |
+| Test a mechanic or check a content package           | [Mechanic tests](mechanics.md)            |
+
+## See the results
+
+- [Examples](examples.md): practical prompts with real renders.
+- [Focus and technology comparisons](visual-comparisons.md): supplied game captures beside source renders.
+- [Interface comparisons](gui-comparisons.md): vanilla and Chaos Redux windows.
+
+## Detailed reference
+
+- [Tool reference](tools.md): tool names and what each one does.
+- [Background jobs](jobs.md): inspect, cancel or retrieve long operations.
+- [Large event and technology queries](helper-expansion.md): follow bounded results without losing coverage.
+- [Remote hosting](http.md): share the server over HTTP.
+- [Development](development.md): build, test and contribute.
+- [Architecture decisions](adr/README.md): implementation rationale for contributors.
+
+For vulnerability reporting, use the [security policy](../SECURITY.md).

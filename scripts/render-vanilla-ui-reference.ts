@@ -90,12 +90,41 @@ try {
     images,
     diagnostics: result.validation.diagnostics,
     fidelity: result.render.scene.fidelity,
+    ...(result.render.scene.tooltipPreview === undefined
+      ? {}
+      : {
+          tooltipPreview: {
+            targetId: result.render.scene.tooltipPreview.targetId,
+            localisationKey: result.render.scene.tooltipPreview.localisationKey,
+            placement: result.render.scene.tooltipPreview.placement,
+            rect: result.render.scene.tooltipPreview.element.rect,
+            text: result.render.scene.tooltipPreview.textElement.text?.text,
+            textRect: result.render.scene.tooltipPreview.textElement.rect,
+            fontName: result.render.scene.tooltipPreview.textElement.text?.fontName,
+            spriteName: result.render.scene.tooltipPreview.element.sprite?.spriteName,
+          },
+        }),
     controls: result.render.scene.elements.map(
-      ({ name, rect, visible, clickable, disabledReason, text }) => ({
+      ({
         name,
         rect,
         visible,
+        visibilityStatus,
+        visibilityStatusReason,
         clickable,
+        enablement,
+        enablementReason,
+        disabledReason,
+        text,
+      }) => ({
+        name,
+        rect,
+        visible,
+        visibilityStatus,
+        visibilityStatusReason,
+        clickable,
+        enablement,
+        enablementReason,
         disabledReason,
         text: text?.text,
       }),

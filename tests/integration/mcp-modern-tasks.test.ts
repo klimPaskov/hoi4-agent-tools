@@ -50,6 +50,7 @@ const responseSchema = z
   .loose();
 type Response = z.infer<typeof responseSchema>;
 type Mode = 'stdio' | 'http';
+const operationDeadlineMs = 60_000;
 interface Wire {
   request(
     method: string,
@@ -138,7 +139,10 @@ async function fixture() {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const response = new Promise<Response>((resolve, reject) => {
           pending.set(requestId, resolve);
-          timer = setTimeout(() => reject(new Error('Test wire response timed out')), 60_000);
+          timer = setTimeout(
+            () => reject(new Error('Test wire response timed out')),
+            operationDeadlineMs,
+          );
         });
         try {
           await client.send(message);
@@ -222,9 +226,14 @@ async function terminal(wire: Wire, taskId: string, status = 'completed') {
   await vi.waitFor(
     async () => {
       state = result(await wire.request('tasks/get', { taskId }));
-      expect(state.status).toBe(status);
+      expect(
+        state.status,
+        `Last task state: ${JSON.stringify({ status: state.status, progress: state.progress, error: state.error })}`,
+      ).toBe(status);
     },
-    { timeout: 20_000, interval: 50 },
+    // Native tasks start isolated source workers; use the wire deadline for the
+    // complete operation rather than a shorter warm-process assumption.
+    { timeout: operationDeadlineMs, interval: 250 },
   );
   return state;
 }

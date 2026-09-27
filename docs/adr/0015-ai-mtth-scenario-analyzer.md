@@ -11,7 +11,7 @@ Each weighted surface has its own versioned adapter. Exact categorical pools, in
 
 Scenario sets declare world state, alternatives, ranges, distributions, numeric correlations, prevalence, acceptance bands, diagnostic thresholds, and scheduled changes. Sweeps expose local and pairwise sensitivity around trigger breakpoints. Deterministic simulation defaults to constant-memory Latin hypercube sampling and records statistical and timing-quantile evidence. Stateful sequence analysis executes only transitions in a validated custom-pool manifest and reports candidate and category outcomes. Proposed source is parsed in memory. Large matrices, traces, simulations, and visuals are stored as content-addressed resources.
 
-The public server exposes 23 tools, one prompt, and one artifact resource template. The measured tool-list payload must remain within 48 KiB, with per-tool schema and description budgets retained.
+The probability domain contributes seven tools and one optional prompt to the shared public catalog. Discovery remains bounded; the live server catalog and generated schemas are authoritative for the current total.
 
 ## Rationale
 
@@ -21,4 +21,4 @@ HOI4 uses materially different selection and timing rules across event options, 
 
 The public package includes generated JSON Schemas, callable examples, adapter evidence, a 250-scenario synthetic fixture, deterministic analysis artifacts, and tests for exact identities, uncertainty, state transitions, comparisons, isolation, cancellation, performance, both transports, package installation, and MCP Inspector discovery.
 
-Earlier ADRs remain historical records for the releases in which they were accepted. Their 16-tool, 32 KiB, and no-prompt limits are superseded by this decision.
+Earlier ADRs record the decisions made at their time. Their tool-count and prompt limits do not describe the current catalog.

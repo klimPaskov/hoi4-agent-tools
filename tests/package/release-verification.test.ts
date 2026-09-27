@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { releaseNotesForTag } from '../../scripts/distribution/release-notes.js';
 import {
   classifyGitHubRelease,
   crossCheckPublishedGitHubRelease,
@@ -127,6 +128,34 @@ function provenanceFixture(): {
     sha512,
   };
 }
+
+describe('public release notes', () => {
+  const changelog =
+    '# Changelog\n\n## Unreleased\n\n- Future work.\n\n## 3.6.0 - 2026-09-27\n\n- Tooltip preview.\n\n### Details\n\nSource fonts are required.\n\n## 3.5.1 - 2026-09-27\n\n- Older work.\n';
+
+  it.each(['\n', '\r\n'])(
+    'publishes only the selected version with install and guide links',
+    (newline) => {
+      const notes = releaseNotesForTag(changelog.replace(/\n/gu, newline), 'v3.6.0');
+      expect(notes).toContain('npm install --global hoi4-agent-tools@3.6.0');
+      expect(notes).toContain('- Tooltip preview.\n\n### Details\n\nSource fonts are required.');
+      expect(notes).toContain('/blob/v3.6.0/docs/examples.md');
+      expect(notes).not.toMatch(/Unreleased|Future work|Older work|3\.5\.1/u);
+      expect(notes).not.toContain('\r');
+    },
+  );
+
+  it('rejects ambiguous, absent, empty and invalid version inputs', () => {
+    expect(() => releaseNotesForTag(`${changelog}\n## 3.6.0\nDuplicate\n`, 'v3.6.0')).toThrow(
+      /exactly one/u,
+    );
+    expect(() => releaseNotesForTag(changelog, 'v3.7.0')).toThrow(/exactly one/u);
+    expect(() => releaseNotesForTag('## 3.6.0\n\n## 3.5.1\nOld\n', 'v3.6.0')).toThrow(/empty/u);
+    expect(() => releaseNotesForTag('## 3.6.0', 'v3.6.0')).toThrow(/empty/u);
+    for (const tag of ['3.6.0', 'v3.6.0-rc.1', 'v03.6.0', 'v3.6.0\n'])
+      expect(() => releaseNotesForTag(changelog, tag)).toThrow(/stable version/u);
+  });
+});
 
 describe('immutable GitHub release state verification', () => {
   const tag = 'v0.1.0';

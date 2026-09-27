@@ -1,58 +1,103 @@
-# Game captures and MCP render comparisons
+# Focus and technology examples
 
-These are real user-supplied Hearts of Iron IV captures and MCP renders from the active Chaos Redux source and installed game assets. The images are published with the user's permission for comparison only and are not covered by this repository's Apache-2.0 code license. Game imagery belongs to Paradox Interactive; Chaos Redux material belongs to its respective creators. The captures and renders are not included in the npm package. The [render manifest](images/comparisons/manifest.json) records the tool version, source revisions, tree and folder coverage, item layouts, and sprite coverage. The captures were supplied in September 2026; the renders were regenerated from source available on 25–26 September 2026. The screenshots do not include zoom, viewport, country, research state, or enabled-DLC metadata, so differences cannot all be attributed to the renderer.
+Compare supplied in-game captures with MCP previews from real Chaos Redux and installed HOI4 files.
+Focus previews help review structure and routes; they do not reproduce the game's entire focus-screen styling.
+Technology previews follow the loaded source's card layouts and artwork.
 
 ## Focus trees
 
-| In game                                                                      | MCP render                                                                   |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| ![Fury focus tree in game](images/comparisons/fury-ingame.png)               | ![Fury focus tree MCP render](images/comparisons/fury-mcp.png)               |
-| ![Holy Realm focus tree in game](images/comparisons/holy-realm-ingame.png)   | ![Holy Realm focus tree MCP render](images/comparisons/holy-realm-mcp.png)   |
-| ![Utopia Manifesto focus tree in game](images/comparisons/utopia-ingame.png) | ![Utopia Manifesto focus tree MCP render](images/comparisons/utopia-mcp.png) |
+| In game                                                           | MCP preview                                                    |
+| ----------------------------------------------------------------- | -------------------------------------------------------------- |
+| ![Fury in game](images/comparisons/fury-ingame.png)               | ![Fury preview](images/comparisons/fury-mcp.png)               |
+| ![Holy Realm in game](images/comparisons/holy-realm-ingame.png)   | ![Holy Realm preview](images/comparisons/holy-realm-mcp.png)   |
+| ![Utopia Manifesto in game](images/comparisons/utopia-ingame.png) | ![Utopia Manifesto preview](images/comparisons/utopia-mcp.png) |
 
-The three source trees contain 52 Fury, 111 Holy Realm, and 124 Utopia Manifesto focuses in the reviewed revision, with 1, 1, and 5 alternative prerequisite groups respectively. The MCP review uses 96-pixel horizontal and 130-pixel vertical spacing. Alternatives in one prerequisite group have dotted connectors; individually required prerequisites have solid connectors. The broad branch arrangements are comparable, but the game's standalone icons, dark labels, decorative frame, continuous-focus panel, and orthogonal connector treatment differ visibly from the MCP's small blue cards and links. These focus renders are useful for structure and route review; they are not pixel replicas.
+The recorded trees contain 52 Fury, 111 Holy Realm and 124 Utopia Manifesto focuses.
+The MCP uses cards and curved connectors for structural review, while the game uses its own icons, labels, frame and continuous-focus panel.
 
-The supplied crop and the source-based crop below show the Fury branch leading into “The Last Neighbor Has Fallen.” The two alternatives use dotted connectors in both views; other required links stay solid. The MCP still uses curved paths and blue cards where the game uses its own focus styling.
+### Alternative prerequisites
 
-| In-game Fury branch                                                            | MCP Fury branch                                                                         |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| ![Fury alternative focus links in game](images/comparisons/fury-or-ingame.png) | ![Dotted alternative focus links in the MCP render](images/comparisons/fury-or-mcp.png) |
+| In-game Fury branch                                                         | MCP preview                                                             |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| ![Alternative prerequisites in game](images/comparisons/fury-or-ingame.png) | ![Dotted alternative prerequisites](images/comparisons/fury-or-mcp.png) |
+
+The branch leading to “The Last Neighbor Has Fallen” has two alternatives.
+Dotted connectors mark the alternatives; separately required prerequisites remain solid.
 
 ## Technology folders
 
-| In game                                                                               | MCP render                                                                            |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| ![Infantry technology folder in game](images/comparisons/infantry-ingame.png)         | ![Infantry technology folder MCP render](images/comparisons/infantry-mcp.png)         |
-| ![Chemical warfare technology folder in game](images/comparisons/chemical-ingame.png) | ![Chemical warfare technology folder MCP render](images/comparisons/chemical-mcp.png) |
+| In game                                                             | MCP preview                                                                     |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| ![Infantry in game](images/comparisons/infantry-ingame.png)         | ![Infantry preview](images/comparisons/infantry-mcp.png)                        |
+| ![Chemical warfare in game](images/comparisons/chemical-ingame.png) | ![Chemical warfare current-source preview](images/comparisons/chemical-mcp.png) |
 
-The current infantry render contains 43 nodes: 29 small and 14 wide items. It resolves all 50 requested sprites with no omitted nodes. The current chemical render contains 19 square items and resolves all 25 requested sprites with no omissions. The supplied chemical captures cannot validate that render as an in-game visual match: the recent full-folder capture plainly shows wide cylinder and projector cards, while the current-source MCP render makes them square.
+The infantry example resolves all 43 nodes, including 14 wide equipment cards.
+The current chemical source forces square cards and has different placements from the supplied game capture.
+That source difference must not be mistaken for a matched in-game comparison.
 
-The recent capture's visible layout matches the historical Chaos Redux technology and GUI definitions at revision `4efc01fc87f1137e98c864f928dd5603e6b7d2f1`: Phosgene is stacked below Chlorine, Sarin and Soman have folder placements, and the GUI has year headings through 1946. The current source instead places Phosgene beside Chlorine, omits Sarin and Soman folder placements, and defines fewer year headings. These are source differences that prevent a like-for-like current-source comparison; the date of the capture does not establish which source revision the game loaded. The current source also declares `force_use_small_tech_layout = yes` on the equipment technologies. The renderer follows that declaration. This does not resolve the observed mismatch with the supplied in-game capture.
+### Wide cards from the matching source version
 
-The historical render uses the exact technology and research-GUI files from that commit over the currently installed remaining mod and game assets. It contains 30 placed technologies, including all nine wide equipment cards visible in the capture and 21 small cards; no requested sprite is unresolved. The renderer uses native sprite dimensions and GUI icon anchors for wide cards: the Chlorine and Phosgene cylinder textures are 131×52, not 70×70. Small cards retain their bounded icon viewport. The matching wide-card geometry and full-size artwork address the small-icon defect in the earlier render. This is not full visual parity: its card labels use technology names rather than the game's equipment names, its default research state makes every card gray instead of the captured green/gold/striped mix, and it omits some section text, tabs, and other framing. Those are remaining presentation differences, not evidence of 99.9% accuracy.
+| Supplied chemical-folder capture                                          | Matching historical-source preview                                                    |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| ![Chemical folder in game](images/comparisons/chemical-recent-ingame.png) | ![Historical-source chemical preview](images/comparisons/chemical-historical-mcp.png) |
 
-| Recently supplied in-game chemical folder                                                | Source-matched historical MCP render                                                                                |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| ![Recent chemical warfare folder in game](images/comparisons/chemical-recent-ingame.png) | ![MCP render from historical Chaos Redux technology and GUI source](images/comparisons/chemical-historical-mcp.png) |
+| In-game wide cards                                                                | MCP wide cards                                                                       |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| ![Wide cylinder cards in game](images/comparisons/chemical-wide-cards-ingame.png) | ![Wide cards with full-size artwork](images/comparisons/chemical-wide-cards-mcp.png) |
 
-The Chlorine and Phosgene crops below preserve the pixels from those two images. They show the wide card and cylinder art at their rendered sizes.
+The matching source version produces all nine wide equipment cards visible in the capture.
+Their cylinder artwork uses its native 131×52 size rather than being squeezed into a square icon area.
+Names, research-state colors and surrounding interface text still differ, so this is not whole-image parity.
 
-| In-game wide cards                                                                        | Source-matched MCP wide cards                                                                                        |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| ![In-game Chlorine and Phosgene cards](images/comparisons/chemical-wide-cards-ingame.png) | ![MCP Chlorine and Phosgene cards with native-size cylinder sprites](images/comparisons/chemical-wide-cards-mcp.png) |
+### Biological folder
 
-| In-game chemical cards                                                              | Native-size crop of current MCP render                                                                        |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| ![Chemical warfare card crop in game](images/comparisons/chemical-cards-ingame.png) | ![Matching chemical warfare card crop from the current MCP render](images/comparisons/chemical-cards-mcp.png) |
+![Biological folder preview](images/comparisons/biological-mcp.png)
 
-These three 70×70 chemical card interiors correlate with the regenerated square-card MCP output at 0.999548, 0.998830, and 0.999481 in normalized grayscale without resizing. They measure only the artwork inside the supplied square-card crop; they do not validate the wide cards, the entire folder, or the current game presentation.
+The current folder contains eight square items with no missing nodes or requested sprites.
+There is no matching full-folder game capture.
+The four bomb cards in the [supplied crop](images/comparisons/biological-cards-ingame.png) belong to a different source layout; their current definitions use special-project unlocks without folder placements.
 
-![Current biological warfare folder MCP render](images/comparisons/biological-mcp.png)
+## What these comparisons establish
 
-The current biological folder contains 8 square items, resolves all 14 requested sprites, and omits no nodes. There is no supplied full biological folder screenshot. The [supplied historical biological card crop](images/comparisons/biological-cards-ingame.png) shows four bomb technologies absent from the current folder; their current source definitions have no folder placement and are marked as special-project unlocks. An older local development render did show those four bomb cards, but it is not a current-release folder comparison. Its four native-size card-interior correlations ranged from 0.998712 to 0.999589. Do not apply those historical scores to the current biological folder.
+They demonstrate real source layouts, resolved artwork, wide-card sizing and dotted alternative links.
+They do not establish 99.9% whole-image accuracy or prove runtime state.
+Use the [examples guide](examples.md) for practical prompts and the [interface gallery](gui-comparisons.md) for GUI previews.
 
-Neither the focus nor the technology evidence supports a **99.9% whole-image accuracy** claim. Source placement, sprite resolution, and sampled-card similarity are separate measures. In-game visual acceptance remains a user-side check.
+<details>
+<summary>Measurements, source versions and reproduction</summary>
 
-## Regenerating the renders
+The [manifest](images/comparisons/manifest.json) records tool version, source revisions, folder/tree coverage, layouts and sprite resolution.
+Captures were supplied in September 2026 and renders use source available on 25–26 September 2026.
+The captures lack complete zoom, viewport, country, research-state and DLC metadata.
 
-Set `HOI4_GAME_ROOT` to an installed Hearts of Iron IV directory and `HOI4_EXTERNAL_MOD_ROOT` to the Chaos Redux checkout, then run `npm run docs:comparison-examples`. The historical chemical comparison also requires commit `4efc01fc87f1137e98c864f928dd5603e6b7d2f1` in that checkout. The command reads the checked-in user captures and writes MCP renders, crops, and the source manifest under `docs/images/comparisons/`.
+The focus previews use 96-pixel horizontal and 130-pixel vertical spacing.
+Fury, Holy Realm and Utopia contain 1, 1 and 5 alternative prerequisite groups in the recorded source.
+
+Infantry resolves 50 requested sprites across 29 small and 14 wide items.
+The current chemical folder has 19 square items and resolves 25 requested sprites without omissions.
+The supplied wide-card capture matches technology and research-GUI definitions at Chaos Redux revision `4efc01fc87f1137e98c864f928dd5603e6b7d2f1`.
+That version stacks Phosgene below Chlorine, includes Sarin/Soman folder placements, and has year headings through 1946.
+The current source places Phosgene beside Chlorine, lacks those two placements, has fewer year headings, and sets `force_use_small_tech_layout = yes`.
+
+The historical preview uses that revision's technology and research-GUI files over the other currently installed assets.
+It contains 30 placed technologies: nine wide and 21 small, with no unresolved requested sprites.
+Its labels use technology names rather than equipment names, its declared research state produces gray cards, and some section text/tabs/framing are absent.
+
+The three supplied square-card interiors correlate with the corresponding MCP crops at 0.999548, 0.998830 and 0.999481 in normalized grayscale without resizing.
+Those scores describe only the 70×70 interiors shown below, not wide cards or a complete folder.
+
+| Supplied square-card crop                                                      | MCP square-card crop                                                       |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| ![Square chemical cards in game](images/comparisons/chemical-cards-ingame.png) | ![Square chemical card preview](images/comparisons/chemical-cards-mcp.png) |
+
+The current biological folder resolves all 14 requested sprites.
+An older local render of the four historical bomb cards had interior correlations of 0.998712–0.999589; those scores do not validate the current folder.
+
+To reproduce, set `HOI4_GAME_ROOT` and `HOI4_EXTERNAL_MOD_ROOT`, then run `npm run docs:comparison-examples`.
+The historical chemical comparison also requires the pinned commit in the mod checkout.
+The command reads the checked-in captures and writes renders, crops and the manifest.
+
+Images are published with permission for comparison, are excluded from the npm package, and are not covered by the repository's Apache-2.0 code license.
+Game imagery belongs to Paradox Interactive and mod material to its respective creators.
+
+</details>

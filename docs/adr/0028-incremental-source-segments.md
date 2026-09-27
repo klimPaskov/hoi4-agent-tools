@@ -1,7 +1,5 @@
 # 28. Incremental source segments
 
-Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
-
 ## Decision
 
 Workspace scans verify current file bytes and enumerate every selected root, including installed-game roots.
@@ -48,54 +46,11 @@ Hydration revalidates serialized documents against current bytes and paths befor
 Malformed, tampered, mismatched, or runtime-incompatible entries are ignored and healed from source; no cache entry can broaden workspace access.
 The persistent cache has a 256 MiB and 50,000-entry global default budget plus a 16 MiB single-entry ceiling.
 
-## Validation and remaining work
+## Bounded expansion and recovery
 
-Synthetic tests compare cached and clean rebuilds across edits, additions, removals, renames, shadowing, load-order changes, province-table selection, typed transitive consumers, cycles, and unrelated files.
-Negative tests cover partial sources, map-table limits, consumer mutations, bounded retention, generated-storage aliases, principal separation, persistent-entry tampering, and same-size/same-timestamp external edits.
-A real child process reopens exact parsed and indexed facts, and a later engine heals a corrupted entry without changing the analysis result.
+Event and technology helper expansion streams distinct structural paths with an opaque continuation bound to workspace, principal, tool version, source revision, root selection, and depth. A page and its cursor publish together; changing page size or work allowance is safe, while changing the semantic query fails. Source inventories are verified on every continuation, and materialized graphs report incomplete depth or projection coverage.
 
-Event and technology services re-enumerate and hash their selected roots before reusing a derived graph.
-Event focused analysis preserves structural helper calls and expands requested paths within explicit depth, node, and edge boundaries; full analysis materializes the bounded workspace helper projection.
-Technology helper references retain complete eligible, excluded, unresolved, and deferred evidence under their declared bounds.
-Read-job results and retained graph artifacts bind those coverage decisions to their exact source revision.
-
-Dependency checkpoints publish their logical envelope, all physical chunks, and authenticated job-record commitment under the artifact publication lock.
-Active checkpoints pin their physical resources across engine processes sharing the same workspace identity and root fingerprint, including distinct authorized principal scopes.
-Admission-pressure eviction reads authenticated job records through an operator-internal guard; it does not expose other principals' jobs through the public API.
-Terminal jobs release those pins, and replacement-publication failure preserves the previous checkpoint.
-Enumeration, resource counts, record sizes and logical chunk loading remain bounded; invalid or tampered pin records fail retention closed.
-The checkpoint tests exercise fresh-engine hydration under repeated eviction pressure, terminal unpinning, revision/hash mismatches, failed replacement publication and tampered records.
-The checkpoint suite passed five tests, including rejection of an unrecognized record filename.
-Production worker recovery tests use separate synthetic event and technology fixtures with 2,500 helper branches, stop only the proven test-owned child after it publishes an intermediate checkpoint, and compare the replacement's entire tool result with a clean execution.
-All four cases passed on 2026-09-13: both domains with unchanged source and with source edits before recovery.
-The tests distinguish the checkpoint's source-scan revision from the technology presentation graph's derived revision and prove stale source checkpoints are not mixed with current evidence.
-The targeted artifact, job, event-service, technology-acceptance, checkpoint, and traversal regression suites passed 110 tests across ten files; the four production recovery cases passed in a separate rerun.
-Elementary-transition tests restore both node- and path-based walks after every transition, including cycles, convergence, depth boundaries, reversed adjacency order, and a 4,000-edge wide cursor.
-Negative cases reject malformed frontiers and preserve the last valid state on cancellation or work-limit failure; worker policy cases bound retries and prohibit write replay or cancelled-job restart.
-The semantic dependency regression initially reproduced workspace-wide invalidation after an unrelated helper addition in both domains and incorrect technology diagnostic provenance for identical source bytes in separate files.
-The corrected nine-case suite compares cached and clean graphs through missing definitions, additions, same-size edits, transitive cycles, removals, renames, overlays, load-order changes, shadowing, inventory completeness, source-root isolation, and dependency-proof release.
-It also asserts which source fragments were rebuilt, so graph equivalence alone cannot mask workspace-wide semantic reanalysis.
-The first targeted event/technology, index/cache, and production worker-recovery regression passed 103 tests across eleven files.
-A subsequent negative case exposed pending invalidation being lost when a rebuild stopped after inventory reconciliation; persistent per-consumer revision stamps fixed it, and the nine-case suite also checks bounded inventory eviction.
-The final targeted matrix passed 114 tests across twelve files on 2026-09-13, including the project-owned large event and technology acceptance fixtures, parsed/index cache isolation, per-file provenance, transitive invalidation, and all four real-worker dependency-recovery cases.
-This is local development evidence for the changed candidate, not the complete platform or release gate.
-The opt-in `helper_expansion` mode in both inspectors uses `DependencyPages` to stream distinct structural edge paths without retaining completed traversal history.
-The cursor contains only the active DFS frames and exact counters, while source inventories are rebuilt and verified on every page request.
-Event state accesses and technology references are leaf edges, so one helper with many facts is paginated rather than attached as an unbounded record payload.
-`core/helper-expansion.ts` binds opaque continuation resources to the configured workspace, root topology, principal, tool version, exact source revision, root selection, and depth.
-Page and cursor publication is one artifact-store batch; page size and work allowance may change on resume, but semantic query changes fail explicitly.
-This opt-in API is additive in 3.1.0 and does not alter representative-path selection in existing materialized graph modes.
-Those graphs report incomplete coverage for depth and projection truncation.
-The initial page regression passed 17 tests on 2026-09-13, including 786,431 compact traversal records, exponential source graphs, fresh-service resumption, source edits, principal and domain isolation, chunked cursor loading, cursor tampering, depth recovery, and exact MCP/persisted-job result equivalence.
-The final frozen regression passed 190 tests across 22 files on 2026-09-13 in 232.21 seconds on this Windows host.
-It includes both large domain acceptance fixtures, full event and technology MCP workflows, ordinary/persisted-job parity, all four real-worker interruption/recovery scenarios, checkpoint retention, semantic invalidation, and package metadata alongside the new page cases.
-The generated request and summary schemas, packaged documentation, strict request validation, and additive result summary are synchronized for 3.1.0.
-The complete `npm run check`, coverage, Windows/Linux and Node 22/24 matrix, and official Inspector passed on commit `b34f042` in CI run `35467092544`.
-Broader materialized-graph memory refinement remains outside this Stage 2 contract.
-The negotiated modern MCP task adapters are documented separately in [ADR 0031](0031-modern-mcp-task-adapter.md).
-
-This implementation does not claim zero-cost change detection: root enumeration and byte verification remain mandatory correctness work.
-Publication and installed-package gates require separate release evidence in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
+Dependency checkpoints publish their envelope, chunks, and authenticated job commitment together. Active checkpoints pin resources until the job terminates; a failed replacement leaves the earlier checkpoint usable. Recovery must reject a stale source revision or tampered frontier rather than merge old and new evidence. These rules cover large graphs while keeping source scanning and byte verification mandatory.
 
 ## Shared rewrite execution
 

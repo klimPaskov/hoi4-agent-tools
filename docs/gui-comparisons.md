@@ -1,61 +1,81 @@
-# Interface renders and evidence
+# Interface examples
 
-These images use the production GUI renderer in `hoi4-agent-tools` 3.5.0, installed vanilla source, and the local Chaos Redux source.
-The game screenshots were supplied by the user and are published unchanged with permission.
-Game artwork belongs to its respective owners; this project is unaffiliated with Paradox Interactive.
-The images remain outside the npm package.
+These previews use actual vanilla and Chaos Redux interface files, artwork and fonts.
+Supplied in-game screenshots appear beside the MCP results where available.
 
-Each reference is an unscaled crop of the full 1920×1080 output at UI scale 1.
-The [manifest](images/comparisons/gui/manifest.json) records exact scenarios, source revisions, renderer implementation hashes, PNG hashes, diagnostics, and fidelity limitations.
-The complete full-window PNG accompanies each crop.
-An offline render does not execute clicks, native tooltips, transfers, or engine timers.
+## Compare with the game
 
-## Supplied game comparisons
+| View                    | In game                                                               | MCP preview                                                        |
+| ----------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Video options           | ![Options in game](images/comparisons/gui/options-video-ingame.png)   | ![Options preview](images/comparisons/gui/options-video-mcp.png)   |
+| Škoda Priority          | ![Škoda in game](images/comparisons/gui/skoda-priority-ingame.png)    | ![Škoda preview](images/comparisons/gui/skoda-priority-mcp.png)    |
+| Chaos Redux Tag Manager | ![Tag Manager in game](images/comparisons/gui/tag-manager-ingame.png) | ![Tag Manager preview](images/comparisons/gui/tag-manager-mcp.png) |
 
-| View                    | In game                                                               | MCP renderer                                                      |
-| ----------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Options Video           | ![Options in game](images/comparisons/gui/options-video-ingame.png)   | ![Options render](images/comparisons/gui/options-video-mcp.png)   |
-| Škoda Priority          | ![Škoda in game](images/comparisons/gui/skoda-priority-ingame.png)    | ![Škoda render](images/comparisons/gui/skoda-priority-mcp.png)    |
-| Chaos Redux Tag Manager | ![Tag Manager in game](images/comparisons/gui/tag-manager-ingame.png) | ![Tag Manager render](images/comparisons/gui/tag-manager-mcp.png) |
-
-Options and Škoda use the selection and values visible in their captures.
-The Options gamma value is unavailable, so its neutral knob position is not a matched engine setting.
-The Škoda inlay uses its full source-defined 552×516 background; the game's embedding and capture framing differ.
-The Tag Manager capture predates the current source's +5/−5 controls and wider action buttons.
+The Options preview uses the captured values except gamma, whose value is unknown.
+Škoda's full source background and the game's capture framing differ.
+The Tag Manager screenshot uses an older layout than the loaded source, which has +5/−5 controls and wider buttons.
 These differences prevent a whole-image accuracy percentage.
 
-## General-system source views
+## Other interfaces
 
-| Event Log, empty Events tab                            | Chaos Meter, Status                                                      | Chaos Meter, Deaths                                                      |
+| Event Log                                              | Chaos Meter: Status                                                      | Chaos Meter: Deaths                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | ![Event Log](images/comparisons/gui/event-log-mcp.png) | ![Chaos Meter Status](images/comparisons/gui/chaos-meter-status-mcp.png) | ![Chaos Meter Deaths](images/comparisons/gui/chaos-meter-deaths-mcp.png) |
 
-These views use their current source definitions and declared initial zero/empty states.
-They have no matched game capture and do not represent an observed campaign.
-Native compound controls can generate overlap diagnostics; unsupported or approximated behavior remains visible in the manifest instead of being counted as a passed engine check.
+These views use declared empty or zero states for layout review.
+They are not captures from an observed campaign.
 
-## Populated native templates
+## Tooltip text
 
-| Vanilla decisions                                                                                    | Vanilla occupation                                                                                       |
-| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| ![Populated vanilla decision templates](images/comparisons/native-ui/countrydecisionview-window.png) | ![Populated vanilla occupation templates](images/comparisons/native-ui/countryoccupationview-window.png) |
+[![Vanilla Close control and its tooltip preview](images/comparisons/gui-tooltip/tooltip-detail.png)](images/comparisons/gui-tooltip/advisorroleselectionview-window.png)
 
-The [decision fixture](images/comparisons/native-ui/decisions-scenario.json) uses the installed political category and four actual decisions, their icons, names, and source costs.
-It is a source catalogue, not an assertion that all four are simultaneously available in one campaign.
-The [occupation fixture](images/comparisons/native-ui/occupation-scenario.json) uses the installed Polish country and state templates with declared control of states 87 and 88.
-Its two entries are declared layout inputs; unavailable campaign quantities are shown as dashes.
-Only the release-nation button is displayed as a declared native action state; its engine availability is not evaluated.
-Native controllers can supply dimensions and text that are absent from static GUI files; the fixture records those inputs explicitly.
+This example uses the vanilla Close tooltip, its game font and background asset.
+Its position, width and padding are declared preview inputs; native automatic placement and timing are not verified.
+The [full preview](images/comparisons/gui-tooltip/advisorroleselectionview-full.png), [scenario](images/comparisons/gui-tooltip/scenario.json) and [source details](images/comparisons/gui-tooltip/manifest.json) are available alongside the crop.
+See [tooltip inputs](gui.md#preview-immediate-tooltip-text) to try it on a control in your mod.
 
-The [decisions manifest](images/comparisons/native-ui/countrydecisionview-manifest.json) and [occupation manifest](images/comparisons/native-ui/countryoccupationview-manifest.json) retain full source, control, and fidelity evidence.
-The occupation title uses the renderer's minimum-one-font-line convention for an inferred `maxHeight` smaller than its font line.
-This is reported as approximated fidelity, because there is no matching engine capture for that convention.
-No engine-equivalence claim follows from these populated images.
+## Vanilla decisions and occupation
 
-## Reproduction
+| Decisions                                                                                  | Occupation                                                                                     |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| ![Vanilla decision templates](images/comparisons/native-ui/countrydecisionview-window.png) | ![Vanilla occupation templates](images/comparisons/native-ui/countryoccupationview-window.png) |
 
-Use `npx tsx scripts/render-vanilla-ui-reference.ts GAME_ROOT WINDOW SCENARIO_JSON OUTPUT_DIRECTORY [MOD_ROOT]` from the source checkout for an individual reference.
-Omit `MOD_ROOT` for installed vanilla.
-Use each manifest's exact scenario as `SCENARIO_JSON`; the production service receives it with generated scenarios disabled.
-The source script writes full, window-cropped, annotated, click-region, and source-map images with provenance.
-Review the rendered pixels as well as the diagnostic and fidelity records before accepting a reference.
+The decision example uses four real decisions with their source icons, names and costs; it does not assert that all four are available together.
+The occupation example uses real Polish country and state templates with declared control of states 87 and 88, and dashes for unavailable campaign quantities.
+The displayed release action is a declared preview state, not proof of in-game availability.
+
+## Try it on your mod
+
+> Render this window at 100% and 125% UI scale. Show the control regions and list any missing state inputs, clipped text or overlaps.
+
+Use the [GUI guide](gui.md) for scenario inputs and the [examples guide](examples.md) for other tasks.
+Offline previews do not execute native clicks, tooltip timing or engine effects.
+
+<details>
+<summary>Source details and reproduction</summary>
+
+The images were produced by the production GUI renderer in 3.5.0; the GUI rendering implementation is unchanged in 3.5.1.
+Each general-system crop is unscaled from the full 1920×1080 output at UI scale 1.
+Its full-window PNG accompanies the crop.
+The [GUI manifest](images/comparisons/gui/manifest.json) records exact scenarios, source revisions, implementation and PNG hashes, diagnostics and fidelity limits.
+
+The [decisions scenario](images/comparisons/native-ui/decisions-scenario.json) and [occupation scenario](images/comparisons/native-ui/occupation-scenario.json) declare the native fields used by those examples.
+The [decisions manifest](images/comparisons/native-ui/countrydecisionview-manifest.json) and [occupation manifest](images/comparisons/native-ui/countryoccupationview-manifest.json) retain their source and fidelity evidence.
+Native controllers can supply dimensions and text absent from static GUI files.
+The occupation title's minimum-one-font-line convention is classified as approximated because no matching game capture verifies it.
+
+From a source checkout, run:
+
+```text
+npx tsx scripts/render-vanilla-ui-reference.ts GAME_ROOT WINDOW SCENARIO_JSON OUTPUT_DIRECTORY [MOD_ROOT]
+```
+
+Omit `MOD_ROOT` for vanilla and use the exact scenario from the relevant manifest.
+The script writes full, cropped, annotated, click-region and source-map images.
+Inspect the pixels and the diagnostic/fidelity records before accepting a preview.
+
+The user supplied the in-game screenshots and approved their unchanged publication.
+Game artwork belongs to its respective owners, is not covered by the code license, and is excluded from the npm package.
+This project is unaffiliated with Paradox Interactive.
+
+</details>

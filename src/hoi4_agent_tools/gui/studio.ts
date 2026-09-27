@@ -491,10 +491,15 @@ export function referencedAssetPatternsForWindow(
   additionalSpriteNames: readonly string[] = [],
   languages: readonly string[] = ['l_english'],
   additionalTemplateNames: readonly string[] = [],
+  includeImmediateTooltip = false,
 ): string[] {
   const spriteNames = new Set<string>(additionalSpriteNames);
   const fontNames = new Set<string>();
   const textValues = new Set<string>();
+  if (includeImmediateTooltip) {
+    spriteNames.add('ToolTip');
+    fontNames.add('cg_16b');
+  }
   for (const element of selectedElements(graph, windowName, additionalTemplateNames)) {
     collectNamedAttributes(
       element.attributes,
@@ -507,6 +512,8 @@ export function referencedAssetPatternsForWindow(
       new Set(['text', 'buttonText', 'context_aware_text']),
       textValues,
     );
+    if (includeImmediateTooltip)
+      collectNamedAttributes(element.attributes, new Set(['pdx_tooltip']), textValues);
   }
   for (const localisation of graph.localisation) {
     if (textValues.has(localisation.key)) textValues.add(localisation.value);
@@ -895,7 +902,7 @@ function assertUniqueScenarioIds(scenarios: readonly GuiPreviewScenario[]): void
   }
 }
 
-function scenarioMatrixEvidence(
+export function scenarioMatrixEvidence(
   graph: GuiSourceGraph,
   scenes: readonly GuiScene[],
 ): Record<string, unknown> {
@@ -936,16 +943,30 @@ function scenarioMatrixEvidence(
         .filter(({ elements }) => elements.length > 0);
       if (matches.length === 0) return [];
       const shown = matches
-        .filter(({ elements }) => elements.some(({ visible }) => visible))
+        .filter(
+          ({ elements }) =>
+            elements.every(({ visibilityStatus }) => visibilityStatus !== 'unresolved') &&
+            elements.some(({ visibilityStatus }) => visibilityStatus === 'shown'),
+        )
         .map(({ scene }) => scene.scenario.id);
       const hidden = matches
-        .filter(({ elements }) => elements.every(({ visible }) => !visible))
+        .filter(({ elements }) =>
+          elements.every(({ visibilityStatus }) => visibilityStatus === 'hidden'),
+        )
+        .map(({ scene }) => scene.scenario.id);
+      const unresolvedVisibility = matches
+        .filter(({ elements }) =>
+          elements.some(({ visibilityStatus }) => visibilityStatus === 'unresolved'),
+        )
         .map(({ scene }) => scene.scenario.id);
       const enabled = matches
-        .filter(({ elements }) => elements.some(({ clickable }) => clickable))
+        .filter(({ elements }) => elements.some(({ enablement }) => enablement === 'enabled'))
         .map(({ scene }) => scene.scenario.id);
       const disabled = matches
-        .filter(({ elements }) => elements.every(({ clickable }) => !clickable))
+        .filter(({ elements }) => elements.every(({ enablement }) => enablement === 'disabled'))
+        .map(({ scene }) => scene.scenario.id);
+      const unresolved = matches
+        .filter(({ elements }) => elements.some(({ enablement }) => enablement === 'unresolved'))
         .map(({ scene }) => scene.scenario.id);
       return [
         {
@@ -956,10 +977,24 @@ function scenarioMatrixEvidence(
             ),
           ].sort(compareCodeUnits),
           ...(visibilityNames.has(name)
-            ? { visibility: { shown, hidden, covered: shown.length > 0 && hidden.length > 0 } }
+            ? {
+                visibility: {
+                  shown,
+                  hidden,
+                  unresolved: unresolvedVisibility,
+                  covered: shown.length > 0 && hidden.length > 0,
+                },
+              }
             : {}),
           ...(enabledNames.has(name)
-            ? { enabled: { enabled, disabled, covered: enabled.length > 0 && disabled.length > 0 } }
+            ? {
+                enabled: {
+                  enabled,
+                  disabled,
+                  unresolved,
+                  covered: enabled.length > 0 && disabled.length > 0,
+                },
+              }
             : {}),
         },
       ];
@@ -1020,13 +1055,37 @@ function scenarioMatrixEvidence(
         ),
       visibleElements: scene.elements
         .filter(({ visible }) => visible)
-        .map(({ id, name }) => ({ id, name })),
+        .map(({ id, name, visibilityStatus }) => ({ id, name, visibilityStatus })),
       hiddenElements: scene.elements
         .filter(({ visible }) => !visible)
-        .map(({ id, name, visibilityReason }) => ({ id, name, reason: visibilityReason })),
+        .map(({ id, name, visibilityReason, visibilityStatus }) => ({
+          id,
+          name,
+          reason: visibilityReason,
+          visibilityStatus,
+        })),
+      unresolvedVisibility: scene.elements
+        .filter(({ visibilityStatus }) => visibilityStatus === 'unresolved')
+        .map(({ id, name, visible, visibilityStatusReason }) => ({
+          id,
+          name,
+          previewVisible: visible,
+          reason: visibilityStatusReason,
+        })),
       disabledElements: scene.elements
-        .filter(({ disabledReason }) => disabledReason !== undefined)
+        .filter(
+          ({ disabledReason, enablement }) =>
+            disabledReason !== undefined && enablement === 'disabled',
+        )
         .map(({ id, name, disabledReason }) => ({ id, name, reason: disabledReason })),
+      unresolvedClickRegions: scene.elements
+        .filter(({ visible, enablement }) => visible && enablement === 'unresolved')
+        .map(({ id, name, rect, enablementReason }) => ({
+          id,
+          name,
+          rect,
+          reason: enablementReason,
+        })),
     })),
     changes: scenes.slice(1).map((scene) => {
       const currentByKey = new Map(scene.elements.map((element) => [elementKey(element), element]));
@@ -1044,10 +1103,14 @@ function scenarioMatrixEvidence(
       for (const key of keys) {
         const before = primaryByKey.get(key);
         const after = currentByKey.get(key);
-        if (before?.visible !== true && after?.visible === true) shown.push(after.name);
-        if (before?.visible === true && after?.visible !== true) hidden.push(before.name);
-        if (before?.clickable === true && after?.clickable === false) disabled.push(after.name);
-        if (before?.clickable === false && after?.clickable === true) enabled.push(after.name);
+        if (before?.visibilityStatus === 'hidden' && after?.visibilityStatus === 'shown')
+          shown.push(after.name);
+        if (before?.visibilityStatus === 'shown' && after?.visibilityStatus === 'hidden')
+          hidden.push(before.name);
+        if (before?.enablement === 'enabled' && after?.enablement === 'disabled')
+          disabled.push(after.name);
+        if (before?.enablement === 'disabled' && after?.enablement === 'enabled')
+          enabled.push(after.name);
         if (before === undefined || after === undefined) continue;
         if (
           before.unclippedRect.x !== after.unclippedRect.x ||
@@ -1268,6 +1331,7 @@ export class ScriptedGuiStudio {
     additionalTemplateNames: readonly string[] = [],
     additionalAssetPatterns: readonly string[] = [],
     additionalLocalisationKeys: readonly string[] = [],
+    includeImmediateTooltip = false,
   ): Promise<GuiStudioScanResult> {
     const workspace = this.resolver.get(workspaceId, principal);
     const layoutPatterns = guiLayoutPatterns(workspace);
@@ -1348,6 +1412,7 @@ export class ScriptedGuiStudio {
         additionalSpriteNames,
         languages,
         additionalTemplateNames,
+        includeImmediateTooltip,
       ),
       ...additionalAssetPatterns,
     ];
@@ -1418,6 +1483,9 @@ export class ScriptedGuiStudio {
       scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
       scenarioCountryFlagPatterns([placeholderScenario, ...explicitRelatedScenarios]),
       scenarioLocalisationKeys([placeholderScenario, ...explicitRelatedScenarios]),
+      [placeholderScenario, ...explicitRelatedScenarios].some(
+        ({ tooltip }) => tooltip !== undefined,
+      ),
     );
     const generatedScenarios =
       generatedOptions === undefined
@@ -1480,6 +1548,7 @@ export class ScriptedGuiStudio {
       scenarioTemplateNames([beforeScenario, afterScenario]),
       scenarioCountryFlagPatterns([beforeScenario, afterScenario]),
       scenarioLocalisationKeys([beforeScenario, afterScenario]),
+      [beforeScenario, afterScenario].some(({ tooltip }) => tooltip !== undefined),
     );
     const beforeCatalog = new GuiAssetCatalog(
       scanned.graph,
@@ -1584,6 +1653,11 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
       ]),
+      [
+        placeholderScenario,
+        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+        ...explicitRelatedScenarios,
+      ].some(({ tooltip }) => tooltip !== undefined),
     );
     const generatedScenarios =
       generatedOptions === undefined
@@ -2218,6 +2292,7 @@ export class ScriptedGuiStudio {
             scenarioTemplateNames([previewScenario!]),
             scenarioCountryFlagPatterns([previewScenario!]),
             scenarioLocalisationKeys([previewScenario!]),
+            previewScenario!.tooltip !== undefined,
           );
     const exactTargets = await this.scanner.scan(workspace, {
       patterns: prepared.map(({ relativePath }) => relativePath),

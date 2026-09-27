@@ -1,7 +1,5 @@
 # Native GUI composition and source-backed inlay states
 
-Status: implementation in progress, not release-qualified.
-
 ## Evidence and decision
 
 User-supplied game captures exposed native-layout errors in offline previews.
@@ -45,87 +43,23 @@ Clip chains retain references to owning geometry until final positioning so nest
 Simultaneous horizontal and vertical scrollbars reserve their actual anchored cross-axis gutters, including source insets.
 This corner-space rule is an inferred composition contract supported by non-overlap regressions, not yet a verified match to an in-game two-axis capture.
 
-## Validation and remaining work
+## Shader and progress boundaries
 
-`tests/unit/gui-native-layout.test.ts` contains synthetic regressions for native dimensions, repeated backgrounds, text alignment, visibility, row stacking, ordinary scrollbar roles, inlay selection, unknown predicates, progress, and nested native templates.
-The opt-in `tests/local/gui-native-fidelity.test.ts` reads an explicitly configured installed game through the same core GUI services used by MCP and optionally writes private output under `HOI4_GUI_FIDELITY_OUTPUT`.
-It does not launch the game or change its files.
+Installed GFX definitions can name `buttonstate.lua` while the effect source is `gfx/FX/buttonstate.shader`. The renderer resolves that alias and evaluates bounded affine RGBA expressions from the selected pixel program, including the disabled-state luminance path. It checks the native atlas-offset transform, sampler contract, and straight-alpha blend before accepting a colour result. Unsupported feature branches, extra texture samples, nonlinear sampled-colour operations, geometry changes, or unsupported blend states remain explicit fidelity findings; source shader code is never executed.
 
-The inlay render demonstrates correct panel dimensions, selected/unselected overlays, description wrapping, and tier text using installed sources.
-This is not proof of universal native-interface parity.
-Portrait and native runtime bindings, comprehensive screenshot measurements, full platform qualification, publication, and side-by-side installation remain open.
-The two-interface installed-source fixture passed on 2026-09-13 in 107.6 seconds, and the settings and inlay outputs were visually compared with the supplied captures.
-The targeted GUI suite passed 71 assertions across four files after the native-layout changes.
-These are local development results, not immutable release evidence or a universal pixel-parity gate.
-The settings comparison exposed orange disabled arrows because native button-state shader operations were missing.
-Installed GFX definitions refer to `buttonstate.lua`, while the implementation resides in `gfx/FX/buttonstate.shader`; the disabled branch computes luminance before normal colour multiplication.
-Both that shader and `buttonstate_nodowneffect.shader` were inspected, including their normal, hover, pressed, and disabled paths.
-Shader effects must be modeled from source with explicit unsupported boundaries, not approximated by arbitrarily selecting atlas frames.
-The renderer resolves referenced effect source, including the legacy `.lua` to `.shader` alias, and evaluates bounded affine RGBA expressions from the selected pixel program.
-Supported expressions include scalar/vector arithmetic, swizzles, constant interpolation, dot products and clock-dependent constant calculations.
-Native atlas-offset vertex transforms and straight-alpha blending are checked before accepting the colour result.
-The primary sampler must bind texture slot zero with clamp addressing and no mip filtering; point and linear minification/magnification are retained separately.
-Byte, token, statement, nesting and coefficient limits apply; the interpreter never executes JavaScript, HLSL, commands or user-defined functions.
-Unknown feature branches, active sprite-animation or masking features, nonlinear sampled-colour operations, additional texture samples, unsupported geometry and unsupported blend states remain explicit fidelity findings.
-The resulting SVG colour matrix uses sRGB channel arithmetic and affects only the sprite, not its label or adjacent controls.
-The scene retains the shader source path, hash, selected effect and entry point.
-Shader state selection is independent of explicit atlas frames and checkbox checked state.
-`element.checked`, `element.pressed` and `element.stateTimeSeconds` values, including row values, provide concrete compound states without inferring them from unrelated animation frames.
-Disabled source/scenario controls are also excluded from click regions.
-The source-backed shader unit and existing GUI suites passed 94 tests across five files on 2026-09-13.
-The installed-source checks compiled all eight normal/hover/pressed/disabled branches in the two inspected shader programs and re-rendered the Options and inlay examples in 107.7 seconds.
-The Options render shows grayscale disabled arrows with checked boxes retained; this is still development evidence, not a full screenshot, native-control, release or installation acceptance pass.
-The complete GUI suite passed 147 tests across 12 files after these changes, and a fresh installed-source run passed both tests in 118.0 seconds.
-The project-owned stress fixture declares its compact 0.5 UI scale explicitly and uses cornered sprites for its stretchable panel, cards and modal.
-Its 217 visible scene elements comprise the original 203 elements plus 14 independently tracked backgrounds.
-The rendered fixture was visually reviewed before updating its deterministic PNG, SVG and layout baselines; the resolution matrix also retains a full native 1.0-scale case.
-The user confirmed that all five in-game captures use 2560 by 1440 at UI scale 1.0, including the viewport-relative war overview.
-Those values are the common comparison baseline; an unresolved native size discrepancy must not be hidden with a different viewport or forced output dimensions.
-Other supplied captures cover the shared settings panel, scientist roster, portrait-heavy inlay, and paired war lists; those surfaces are not yet accepted as complete.
+Shader state follows the declared element state, including checked, pressed, and elapsed-state values, independently of atlas frames. Disabled controls are excluded from click regions. Two-colour and two-texture threshold progress programs use their selected entry points and preserve native dimensions. Filled and remainder regions are disjoint, so alpha is not applied against a second complete texture layer.
 
-The first container-scrolling tranche passed 154 GUI tests across 13 files.
-`tests/unit/gui-scrolling.test.ts` also covers both scrollbar axes, fractional UI scale, independent reused templates, nested scrolling, fixed margins, exact rendered pixels, invalid bindings, ambiguous inline role blocks, empty ranges and corner-space reservation.
-The installed-template harness uses a project-owned temporary container and reads native `right_vertical_slider` and `bottom_horizontal_slider` definitions and their actual artwork/shaders from the opted-in installation.
-Its initial minimum/maximum render exposed overlapping corner buttons.
-After the corner-space change, the fresh installed-template endpoint check passed in 191.8 seconds and the minimum output was visually reviewed with separated end controls.
-The complete GUI rerun passed 156 of 157 tests; one invalid-request test failed during temporary-directory cleanup because asynchronous cache initialization had not been awaited by its harness.
-The harness waits for that initialization before returning.
-The final fresh run passed all 159 GUI tests across 13 files in 100.9 seconds, including the short-list bounds and explicit scrollbar-visibility cases.
-The installed-template minimum and maximum output images were both visually reviewed after gutter reservation.
-These results remain development evidence, not a release or general in-game parity claim.
+## Evidence boundary
 
-A read-only Chaos Redux source search found no override of the war window or its paired-list/background identifiers.
-The live installed MCP inspection resolved the window to `game:interface/waroverview.gui` with complete source coverage and no changed files.
-At the user-confirmed 2560 by 1440, scale 1.0 baseline, that installed renderer reported a 1556-pixel width for the authored 1167-pixel window, confirming the resolution-normalization defect corrected in the candidate.
-The exact inspection request, source revision and resource identity are retained in the private fidelity workspace; no mod-owned source or proprietary output is distributed in public fixtures.
-The user's subsequent uncropped 2560 by 1440 screenshot resolved the independent percentage-height discrepancy.
-The installed root at x=697, y=423 has width 1167 and height 801: `85%%` supplies a far-edge coordinate, unlike the proportional extent supplied by `85%`.
-Paired child containers consequently resolve to y=615 and height 576.96 using their own `96%%` extents.
-Synthetic coverage includes nested percent dimensions, centered anchors, scaling, negative extents and collapsed double-percent bounds without automatic text/image expansion.
-The native war harness passed in 69.5 seconds after case-insensitive element recognition, explicit country-flag bindings, independent row-instance identities, three-slice scrollbar backgrounds and margin-aware scrollbar spans were applied.
-The public tests contain no game artwork or screenshot pixels.
+Visibility and enablement carry three states: confirmed, rejected and unresolved under the declared scenario.
+Unknown scripted triggers and dynamic boolean properties retain their reasons instead of contributing to confirmed branch coverage.
+Preview appearance can remain visible or hovered while the corresponding interaction is unresolved; click overlays distinguish these potential regions from confirmed controls.
+Explicit scenario overrides retain their meaning as declared inputs, not observations of the running game.
 
-Read-only pixel searches against the uncropped reference found exact RGB equality for sampled bottom-frame and close-button regions at zero displacement.
-After the margin correction, sampled scrollbar up-arrow, down-arrow and thumb regions also have their best alignment at zero displacement, with mean absolute RGB differences of 0.015, 0.507 and 0.300 on a 0–255 scale respectively.
-These are limited-region development measurements, not a whole-window or universal parity claim.
-Both country rows are visible, but the current explicitly maximum-scroll scenario places their sampled border/text regions six pixels above the reference.
-Removing or changing a scenario state merely to align pixels would not establish the native grid/scroll contract.
-The scenario's zero surrender-bar fill also differs from the green primary fill visible in the capture; screenshot-matched runtime values must be separated from renderer defects.
-Native grid placement, zero-range controller behavior, progress end-cap shaders, and remaining reference surfaces retain the explicit renderer boundaries described above; the release qualification is recorded below and does not convert those bounded comparisons into a whole-window parity claim.
+Immediate tooltip previews require an explicit target, viewport position, width and padding.
+They resolve `pdx_tooltip` through the existing localisation, font and sprite pipeline using the source `ToolTip` sprite and `cg_16b` font.
+Popup height follows measured text plus declared padding, independently of the background texture's intrinsic height.
+Missing source data, assets, glyphs or unresolved engine-generated text prevent the popup and produce findings.
+Caller-declared placement and approximate text-sprite composition do not establish native popup placement, padding or delayed timing.
 
-The renderer additionally recognizes source-backed two-colour and two-texture threshold progress programs through their selected `Color` or `Texture` entry points, native vertex transform, sampler contracts and straight-alpha blend state.
-It does not interpret arbitrary branches or execute shader code.
-Pure-colour progress sprites retain declared dimensions without a texture, and filled/remainder regions are disjoint so alpha is not applied against a second complete texture layer.
-Negative tests retain explicit unsupported findings for geometry changes, altered thresholds, extra sampled-colour operations, mismatched samplers, blend overrides, unbound features and excessive source bytes.
-The targeted GUI run passed 111 existing/new checks while three progress-pixel fixtures initially used resolutions below the public schema minimum.
-Those fixtures were corrected to valid 320 by 200 viewports without changing the tested pixel coordinates, and all 14 progress tests passed.
-The subsequent complete GUI run passed 178 of 179 tests; only the expected row-identity SVG/layout baseline differed.
-The reference PNG hash was unchanged, and an exact JSON comparison found 90 changes confined to row `id` and `parentId` fields.
-The synthetic output was visually reviewed before accepting the two metadata-dependent hashes.
-The fresh combined run passed all 179 GUI tests plus five checkpoint tests across 15 files in 191.1 seconds.
-The concurrent opt-in war check passed in 149.6 seconds, including both installed `Color`/`Texture` threshold entry points and the scene's selected warscore shader.
-The slower wall times include concurrently running installed-source scans and are not comparable performance benchmarks.
-The combined local product check passed 1,215 tests with one skip across eight shards, then generated fixture and schema checks, build, package dry run, and Registry metadata validation on 2026-09-20.
-After anchoring attached scrollbars to the outer container while keeping margins on the content viewport, the isolated installed-template test passed at both scroll endpoints in 109.3 seconds.
-Both private endpoint images were visually reviewed; the native rail, thumb, and end buttons remain separated at the corner.
-Release commit `ba598fa3a326f7e54bfce2b2b4069942887f9f84` passed the Windows/Linux and Node 22/24 matrix, both transports, coverage, the official MCP Inspector, container and publication checks. Version 3.4.0 was published to npm, GHCR, GitHub Releases and the MCP Registry and installed side-by-side for exact public-package verification.
+Offline renders retain declared scenario, resolution, UI scale, source revision, and any unsupported fields. A user-supplied game capture is a comparison reference, not renderer output. The installed war-window comparison established that `85%%` supplies a far-edge coordinate while `85%` supplies a proportional extent. The sampled frame, close button, and scrollbar regions aligned at zero displacement, but the maximum-scroll scenario left sampled row regions six pixels above the capture. Native grid placement, zero-range controllers, progress end-cap shaders, and other reference surfaces still need case-specific comparison. None of these limited regions establishes whole-window parity or live gameplay behavior.

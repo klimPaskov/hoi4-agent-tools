@@ -169,7 +169,7 @@ describe('native container scrolling', () => {
           second.y + second.height <= first.y,
       ).toBe(true);
       expect(
-        scene.fidelity.modelled.some(({ field }) => field === 'orthogonal_scrollbar_gutters'),
+        scene.fidelity.approximated.some(({ field }) => field === 'orthogonal_scrollbar_gutters'),
       ).toBe(true);
     }
   });

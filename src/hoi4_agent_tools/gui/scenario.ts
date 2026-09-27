@@ -137,6 +137,26 @@ const GuiPreviewScenarioBodySchema = z
       .min(1)
       .max(128)
       .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u),
+    tooltip: z
+      .object({
+        target: elementNameSchema,
+        x: z.number().nonnegative(),
+        y: z.number().nonnegative(),
+        width: z.number().positive().max(RENDER_MAX_DIMENSION),
+        padding: z
+          .number()
+          .nonnegative()
+          .max(RENDER_MAX_DIMENSION / 2)
+          .describe(
+            'Caller-declared inset on each side, in viewport pixels; no native padding is inferred.',
+          ),
+      })
+      .strict()
+      .refine(({ padding, width }) => padding * 2 < width, {
+        path: ['padding'],
+        message: 'Tooltip padding must leave a positive text width.',
+      })
+      .optional(),
     description: z.string().max(500).optional(),
     date: GuiScenarioDateSchema.optional(),
     controls: ConditionControlMapSchema.optional(),

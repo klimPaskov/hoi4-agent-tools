@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Build one reusable engine with six focused modules and the 23-tool MCP surface defined in `06_public_mcp_server.md`. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create unrelated services.
+Build one reusable engine for focus, GUI, map, event, technology, and probability tools. The modules share workspace discovery, parsing, indexing, diagnostics, configuration, artifacts, and machine-readable results; the three writable domains also share transactions and recovery. Local calls resolve the mod containing the MCP working directory; explicit workspace IDs remain available for configured multi-mod deployments. Do not create unrelated services.
 
-The implementation belongs under the standalone root defined in `00_standalone_project_bootstrap.md`.
+The implementation belongs in this standalone repository, outside any HOI4 mod or game installation.
 
 A suggested source layout is:
 
@@ -75,7 +75,7 @@ The index must understand vanilla, the active mod workspace, configured dependen
 
 ## Agent service contract
 
-All public capability is exposed through the MCP server defined in `06_public_mcp_server.md`. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, map, event, or technology application.
+All public capability is exposed through the MCP server. Internal services and test harnesses may invoke the same typed functions directly, but there is no supported interactive focus, GUI, map, event, or technology application.
 
 Every MCP operation must return structured results containing:
 

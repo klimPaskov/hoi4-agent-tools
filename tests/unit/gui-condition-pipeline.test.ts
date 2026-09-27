@@ -6,6 +6,7 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { ScriptedGuiStudio, renderGuiScene } from '../../src/hoi4_agent_tools/gui/index.js';
+import { scenarioMatrixEvidence } from '../../src/hoi4_agent_tools/gui/studio.js';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -20,7 +21,15 @@ async function fixture() {
     'descriptor.mod': 'name = "Condition pipeline fixture"',
     'interface/test.gui': `guiTypes = { containerWindowType = { name = "condition_window" size = { width = 640 height = 280 }
       ${['inclusive', 'compound', 'negation', 'helper', 'scoped', 'unknown', 'dated', 'controlled'].map((name, index) => `instantTextBoxType = { name = "${name}" position = { x = 5 y = ${index * 30} } size = { width = 600 height = 25 } text = "LABEL_${name}" }`).join('\n')}
+      buttonType = { name = "controlled_action" position = { x = 5 y = 245 } size = { width = 100 height = 25 } }
+      buttonType = { name = "scoped_action" position = { x = 115 y = 245 } size = { width = 100 height = 25 } }
+      iconType = { name = "controlled_visibility" position = { x = 225 y = 245 } size = { width = 50 height = 25 } }
+      iconType = { name = "scoped_visibility" position = { x = 285 y = 245 } size = { width = 50 height = 25 } }
+      buttonType = { name = "visibility_action" position = { x = 345 y = 245 } size = { width = 100 height = 25 } }
+      iconType = { name = "dynamic_visibility" position = { x = 455 y = 245 } size = { width = 50 height = 25 } }
+      buttonType = { name = "dynamic_enablement" position = { x = 515 y = 245 } size = { width = 100 height = 25 } }
     } }`,
+    'common/scripted_guis/conditions.txt': `scripted_gui = { condition_gui = { context_type = player_context window_name = condition_window effects = { controlled_action_click = { } scoped_action_click = { } visibility_action_click = { } dynamic_enablement_click = { } } triggers = { controlled_action_click_enabled = { controls_state = 87 } scoped_action_click_enabled = { FROM = { a > 0 } } controlled_visibility_visible = { controls_state = 87 } scoped_visibility_visible = { FROM = { a > 0 } } visibility_action_visible = { controls_state = 87 } } properties = { dynamic_visibility = { visible = "[?show_dynamic]" } dynamic_enablement = { enabled = "[?allow_dynamic]" } } } }`,
     'common/scripted_localisation/test.txt': `@limit = 10
       defined_text = { name = GetInclusive text = { trigger = { check_variable = { var = a value = @limit compare = greater_than_or_equals } } localization_key = TRUE_TEXT } text = { localization_key = FALSE_TEXT } }
       defined_text = { name = GetCompound text = { trigger = { AND = { a > 5 b > 5 } } localization_key = TRUE_TEXT } text = { localization_key = FALSE_TEXT } }
@@ -63,6 +72,317 @@ async function fixture() {
 }
 
 describe('generated scenario to production GUI render', () => {
+  it('keeps missing dynamic visible/enabled properties unresolved until boolean values are declared', async () => {
+    const studio = await fixture();
+    const preview = async (id: string, values: Record<string, string | number | boolean>) =>
+      await studio.lint({
+        workspaceId: 'fixture',
+        windowName: 'condition_window',
+        scenario: { id, values },
+        generatedScenarios: { enabled: false },
+      });
+    const missing = await preview('property-missing', {});
+    const declaredTrue = await preview('property-true', {
+      show_dynamic: true,
+      allow_dynamic: true,
+    });
+    const declaredFalse = await preview('property-false', {
+      show_dynamic: false,
+      allow_dynamic: false,
+    });
+    const overridden = await preview('property-override', {
+      'dynamic_visibility.visible': false,
+      'dynamic_enablement.enabled': true,
+    });
+    const element = (result: typeof missing, name: string) =>
+      result.scene.elements.find((candidate) => candidate.name === name);
+    expect(element(missing, 'dynamic_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'unresolved',
+    });
+    expect(element(missing, 'dynamic_visibility')?.visibilityStatusReason).toContain(
+      'show_dynamic',
+    );
+    expect(element(missing, 'dynamic_enablement')).toMatchObject({
+      visible: true,
+      enablement: 'unresolved',
+      clickable: false,
+    });
+    expect(element(missing, 'dynamic_enablement')?.enablementReason).toContain('allow_dynamic');
+    expect(element(declaredTrue, 'dynamic_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'shown',
+    });
+    expect(element(declaredTrue, 'dynamic_enablement')).toMatchObject({
+      enablement: 'enabled',
+      clickable: true,
+    });
+    expect(element(declaredFalse, 'dynamic_visibility')).toMatchObject({
+      visible: false,
+      visibilityStatus: 'hidden',
+    });
+    expect(element(declaredFalse, 'dynamic_enablement')).toMatchObject({
+      enablement: 'disabled',
+      clickable: false,
+    });
+    expect(element(overridden, 'dynamic_visibility')).toMatchObject({
+      visible: false,
+      visibilityStatus: 'hidden',
+    });
+    expect(element(overridden, 'dynamic_enablement')).toMatchObject({
+      enablement: 'enabled',
+      clickable: true,
+    });
+    const missingMatrix = scenarioMatrixEvidence(missing.graph, [missing.scene]);
+    const branches = missingMatrix.branchCoverage as Array<{
+      element: string;
+      visibility?: { shown: string[]; hidden: string[]; unresolved: string[]; covered: boolean };
+      enabled?: { enabled: string[]; disabled: string[]; unresolved: string[]; covered: boolean };
+    }>;
+    expect(branches.find(({ element }) => element === 'dynamic_visibility')?.visibility).toEqual({
+      shown: [],
+      hidden: [],
+      unresolved: ['property-missing'],
+      covered: false,
+    });
+    expect(branches.find(({ element }) => element === 'dynamic_enablement')?.enabled).toEqual({
+      enabled: [],
+      disabled: [],
+      unresolved: ['property-missing'],
+      covered: false,
+    });
+    const resolvedMatrix = scenarioMatrixEvidence(missing.graph, [
+      declaredTrue.scene,
+      declaredFalse.scene,
+    ]);
+    const resolvedBranches = resolvedMatrix.branchCoverage as typeof branches;
+    expect(
+      resolvedBranches.find(({ element }) => element === 'dynamic_visibility')?.visibility,
+    ).toMatchObject({ shown: ['property-true'], hidden: ['property-false'], covered: true });
+    expect(
+      resolvedBranches.find(({ element }) => element === 'dynamic_enablement')?.enabled,
+    ).toMatchObject({ enabled: ['property-true'], disabled: ['property-false'], covered: true });
+  });
+  it('keeps uncertain visibility as a preview while withholding verified branch coverage', async () => {
+    const studio = await fixture();
+    const preview = async (id: string, patch: Record<string, unknown>) =>
+      await studio.lint({
+        workspaceId: 'fixture',
+        windowName: 'condition_window',
+        scenario: { id, country: { tag: 'GER' }, ...patch },
+        generatedScenarios: { enabled: false },
+      });
+    const matching = await preview('matching-visible', { controls: { '87': 'GER' } });
+    const wrong = await preview('wrong-visible', { controls: { '87': 'FRA' } });
+    const missing = await preview('missing-visible', {});
+    const scoped = await preview('scoped-visible', {
+      scopes: { FROM: { id: 'target', state: { a: 1 } } },
+    });
+    const forcedShown = await preview('forced-shown', {
+      visibility: { controlled_visibility: true },
+    });
+    const forcedHidden = await preview('forced-hidden', {
+      visibility: { controlled_visibility: false },
+    });
+    const element = (result: typeof matching, name: string) =>
+      result.scene.elements.find((candidate) => candidate.name === name);
+    expect(element(matching, 'controlled_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'shown',
+    });
+    expect(element(wrong, 'controlled_visibility')).toMatchObject({
+      visible: false,
+      visibilityStatus: 'hidden',
+    });
+    expect(element(missing, 'controlled_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'unresolved',
+    });
+    expect(element(missing, 'controlled_visibility')?.visibilityStatusReason).toContain(
+      'controlled_visibility_visible',
+    );
+    expect(element(missing, 'visibility_action')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'unresolved',
+      enablement: 'unresolved',
+      clickable: false,
+    });
+    expect(element(missing, 'scoped_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'unresolved',
+    });
+    expect(element(missing, 'scoped_visibility')?.visibilityStatusReason).toContain('FROM');
+    expect(element(scoped, 'scoped_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'shown',
+    });
+    expect(element(forcedShown, 'controlled_visibility')).toMatchObject({
+      visible: true,
+      visibilityStatus: 'shown',
+    });
+    expect(element(forcedHidden, 'controlled_visibility')).toMatchObject({
+      visible: false,
+      visibilityStatus: 'hidden',
+    });
+    const potentialOverlay = await renderGuiScene(missing.scene, ['click-regions']);
+    expect(potentialOverlay.images[0]?.svg).toContain(
+      'Potential click region: condition_gui.visibility_action_visible',
+    );
+    const evidence = scenarioMatrixEvidence(matching.graph, [
+      matching.scene,
+      wrong.scene,
+      missing.scene,
+      forcedShown.scene,
+      forcedHidden.scene,
+    ]);
+    const branch = (
+      evidence.branchCoverage as Array<{
+        element: string;
+        visibility?: { shown: string[]; hidden: string[]; unresolved: string[]; covered: boolean };
+      }>
+    ).find(({ element }) => element === 'controlled_visibility');
+    expect(branch?.visibility).toEqual({
+      shown: ['matching-visible', 'forced-shown'],
+      hidden: ['wrong-visible', 'forced-hidden'],
+      unresolved: ['missing-visible'],
+      covered: true,
+    });
+    const unresolvedOnly = scenarioMatrixEvidence(matching.graph, [missing.scene]);
+    const onlyBranch = (
+      unresolvedOnly.branchCoverage as Array<{
+        element: string;
+        visibility?: { shown: string[]; hidden: string[]; unresolved: string[]; covered: boolean };
+      }>
+    ).find(({ element }) => element === 'controlled_visibility');
+    expect(onlyBranch?.visibility).toEqual({
+      shown: [],
+      hidden: [],
+      unresolved: ['missing-visible'],
+      covered: false,
+    });
+    const visibilityAction = (
+      unresolvedOnly.branchCoverage as Array<{
+        element: string;
+        visibility?: { shown: string[]; unresolved: string[] };
+      }>
+    ).find(({ element }) => element === 'visibility_action');
+    expect(visibilityAction?.visibility).toMatchObject({
+      shown: [],
+      unresolved: ['missing-visible'],
+    });
+    expect(
+      (
+        unresolvedOnly.scenarios as Array<{
+          unresolvedVisibility: Array<{ name: string; previewVisible: boolean }>;
+        }>
+      )[0]?.unresolvedVisibility,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'controlled_visibility', previewVisible: true }),
+      ]),
+    );
+  });
+  it('retains verified, rejected, and unresolved click enablement in scenes and matrix evidence', async () => {
+    const studio = await fixture();
+    const preview = async (id: string, patch: Record<string, unknown>) =>
+      await studio.lint({
+        workspaceId: 'fixture',
+        windowName: 'condition_window',
+        scenario: { id, country: { tag: 'GER' }, ...patch },
+        generatedScenarios: { enabled: false },
+      });
+    const matching = await preview('matching', { controls: { '87': 'GER' } });
+    const wrong = await preview('wrong', { controls: { '87': 'FRA' } });
+    const missing = await preview('missing', {});
+    const scoped = await preview('scoped', { scopes: { FROM: { id: 'target', state: { a: 1 } } } });
+    const overridden = await preview('override', {
+      values: { 'controlled_action.enabled': true, 'scoped_action.enabled': false },
+    });
+    const action = (result: typeof matching, name: string) =>
+      result.scene.elements.find((element) => element.name === name);
+    expect(action(matching, 'controlled_action')).toMatchObject({
+      enablement: 'enabled',
+      clickable: true,
+    });
+    expect(action(wrong, 'controlled_action')).toMatchObject({
+      enablement: 'disabled',
+      clickable: false,
+      disabledReason: 'scripted_enabled_false',
+    });
+    expect(action(missing, 'controlled_action')).toMatchObject({
+      enablement: 'unresolved',
+      clickable: false,
+      state: 'normal',
+    });
+    expect(action(missing, 'controlled_action')?.enablementReason).toContain(
+      'controlled_action_click_enabled',
+    );
+    expect(action(missing, 'scoped_action')).toMatchObject({
+      enablement: 'unresolved',
+      clickable: false,
+    });
+    expect(action(scoped, 'scoped_action')).toMatchObject({
+      enablement: 'enabled',
+      clickable: true,
+    });
+    expect(action(overridden, 'controlled_action')).toMatchObject({
+      enablement: 'enabled',
+      clickable: true,
+    });
+    expect(action(overridden, 'scoped_action')).toMatchObject({
+      enablement: 'disabled',
+      clickable: false,
+    });
+    const hover = await preview('hover', { state: 'hover' });
+    const locked = await preview('locked', { elementStates: { controlled_action: 'locked' } });
+    expect(action(hover, 'controlled_action')).toMatchObject({
+      state: 'hover',
+      enablement: 'unresolved',
+      clickable: false,
+    });
+    expect(action(locked, 'controlled_action')).toMatchObject({
+      state: 'locked',
+      enablement: 'disabled',
+      disabledReason: 'scenario_state',
+      clickable: false,
+    });
+    const overlay = await renderGuiScene(missing.scene, ['click-regions']);
+    expect(overlay.images[0]?.svg).toContain('Potential click region:');
+    const lockedOverlay = await renderGuiScene(locked.scene, ['click-regions']);
+    expect(lockedOverlay.images[0]?.svg).not.toContain(
+      'Potential click region: condition_gui.controlled_action_click_enabled',
+    );
+    const matrix = scenarioMatrixEvidence(matching.graph, [
+      matching.scene,
+      wrong.scene,
+      missing.scene,
+      overridden.scene,
+    ]);
+    const branch = (
+      matrix.branchCoverage as Array<{
+        element: string;
+        enabled?: { enabled: string[]; disabled: string[]; unresolved: string[]; covered: boolean };
+      }>
+    ).find(({ element }) => element === 'controlled_action');
+    expect(branch?.enabled).toEqual({
+      enabled: ['matching', 'override'],
+      disabled: ['wrong'],
+      unresolved: ['missing'],
+      covered: true,
+    });
+    const unresolvedOnly = scenarioMatrixEvidence(matching.graph, [missing.scene]);
+    const unresolvedBranch = (
+      unresolvedOnly.branchCoverage as Array<{
+        element: string;
+        enabled?: { covered: boolean; unresolved: string[] };
+      }>
+    ).find(({ element }) => element === 'controlled_action');
+    expect(unresolvedBranch?.enabled).toMatchObject({ covered: false, unresolved: ['missing'] });
+    expect(
+      (unresolvedOnly.scenarios as Array<{ unresolvedClickRegions: Array<{ name: string }> }>)[0]
+        ?.unresolvedClickRegions,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'controlled_action' })]));
+  });
   it('loads localisation selected only by explicit scenario text overrides', async () => {
     const studio = await fixture();
     const result = await studio.lint({

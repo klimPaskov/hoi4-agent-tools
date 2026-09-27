@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compareCodeUnits } from '../../src/hoi4_agent_tools/core/canonical.js';
+import { SERVER_INSTRUCTIONS } from '../../src/hoi4_agent_tools/mcp/server/instructions.js';
 import {
   PACKAGE_BIN_TARGETS,
   buildPackAndInstall,
@@ -440,11 +441,7 @@ describe('clean npm-pack installation', () => {
         },
       });
       const instructions = (initialized.result as { instructions?: string }).instructions ?? '';
-      expect(instructions).toContain('hoi4.event_inspect');
-      expect(instructions).toContain('Event tools are read-only');
-      expect(instructions).toContain('hoi4.tech_inspect');
-      expect(instructions).toContain('Technology tools are read-only');
-      expect(instructions).toContain('hoi4.probability_inspect');
+      expect(instructions).toBe(SERVER_INSTRUCTIONS);
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
       );

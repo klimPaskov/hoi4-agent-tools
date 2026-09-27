@@ -61,7 +61,10 @@ function sceneGlyphDefinitions(scene: GuiScene): string {
     string,
     { dataUri: string; borderDataUri?: string; width: number; height: number }
   >();
-  for (const element of scene.elements) {
+  for (const element of [
+    ...scene.elements,
+    ...(scene.tooltipPreview === undefined ? [] : [scene.tooltipPreview.textElement]),
+  ]) {
     for (const line of element.text?.glyphLines ?? []) {
       for (const glyph of line.glyphs) {
         if (glyph.kind === 'outline') outlines.set(glyph.key, glyph.path);
@@ -505,6 +508,8 @@ function renderOverlay(
   const rect = element.rect;
   if (rect.width <= 0 || rect.height <= 0) return '';
   if (variant === 'click-regions') {
+    if (element.enablement === 'unresolved')
+      return `<g><rect ${rectAttributes(rect)} fill="#ffb84d" fill-opacity="0.12" stroke="#ffb84d" stroke-width="2" stroke-dasharray="5 3"/><title>${escapeXml(`Potential click region: ${element.enablementReason ?? element.visibilityStatusReason ?? element.name}`)}</title>${toolText.render(`${element.name} (?)`, { x: rect.x + 3, y: rect.y + 13, fontSize: 11, fill: '#ffb84d' })}</g>`;
     if (!element.clickable) return '';
     return `<g><rect ${rectAttributes(rect)} fill="#00d4ff" fill-opacity="0.2" stroke="#00d4ff" stroke-width="2"/>${toolText.render(element.name, { x: rect.x + 3, y: rect.y + 13, fontSize: 11, fill: '#00d4ff' })}</g>`;
   }
@@ -521,6 +526,15 @@ function renderOverlay(
     return `<g><rect ${rectAttributes(rect)} fill="none" stroke="${colour}" stroke-width="1" stroke-dasharray="4 2"/><rect x="${finite(rect.x)}" y="${finite(rect.y)}" width="${Math.max(30, finite(toolText.measure(element.name, 10) + 8))}" height="14" fill="#090d12" fill-opacity="0.82"/>${toolText.render(element.name, { x: rect.x + 3, y: rect.y + 11, fontSize: 10, fill: colour })}</g>`;
   }
   return '';
+}
+
+function renderTooltipPreview(scene: GuiScene, toolText: DeterministicSvgTextRenderer): string {
+  const tooltip = scene.tooltipPreview;
+  if (tooltip === undefined) return '';
+  return (
+    renderBaseElement(tooltip.element, undefined, toolText) +
+    renderBaseElement(tooltip.textElement, undefined, toolText)
+  );
 }
 
 function viewFor(
@@ -567,15 +581,16 @@ export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
       ? []
       : [`<clipPath id="clip-${index}"><rect ${rectAttributes(element.clipRect)}/></clipPath>`],
   );
-  const body = scene.elements
-    .map((element, index) =>
-      renderBaseElement(
-        element,
-        element.clipRect === undefined ? undefined : `clip-${index}`,
-        toolText,
-      ),
-    )
-    .join('');
+  const body =
+    scene.elements
+      .map((element, index) =>
+        renderBaseElement(
+          element,
+          element.clipRect === undefined ? undefined : `clip-${index}`,
+          toolText,
+        ),
+      )
+      .join('') + renderTooltipPreview(scene, toolText);
   const overlays = scene.elements
     .map((element) => renderOverlay(element, variant, toolText))
     .join('');
@@ -616,16 +631,17 @@ async function sceneToSvgCooperative(
         : `<clipPath id="clip-${index}"><rect ${rectAttributes(element.clipRect)}/></clipPath>`,
     signal,
   );
-  const body = await cooperativeParts(
-    scene.elements,
-    (element, index) =>
-      renderBaseElement(
-        element,
-        element.clipRect === undefined ? undefined : `clip-${index}`,
-        toolText,
-      ),
-    signal,
-  );
+  const body =
+    (await cooperativeParts(
+      scene.elements,
+      (element, index) =>
+        renderBaseElement(
+          element,
+          element.clipRect === undefined ? undefined : `clip-${index}`,
+          toolText,
+        ),
+      signal,
+    )) + renderTooltipPreview(scene, toolText);
   const overlays = await cooperativeParts(
     scene.elements,
     (element) => renderOverlay(element, variant, toolText),
@@ -682,6 +698,27 @@ export function hierarchyToSvg(scene: GuiScene): string {
 function sceneLayoutEvidence(scene: GuiScene): Record<string, unknown> {
   return {
     ...scene,
+    ...(scene.tooltipPreview === undefined
+      ? {}
+      : {
+          tooltipPreview: {
+            targetId: scene.tooltipPreview.targetId,
+            localisationKey: scene.tooltipPreview.localisationKey,
+            placement: scene.tooltipPreview.placement,
+            element: {
+              id: scene.tooltipPreview.element.id,
+              rect: scene.tooltipPreview.element.rect,
+              sprite: scene.tooltipPreview.element.sprite?.spriteName,
+            },
+            textElement: {
+              id: scene.tooltipPreview.textElement.id,
+              rect: scene.tooltipPreview.textElement.rect,
+              text: scene.tooltipPreview.textElement.text?.text,
+              lines: scene.tooltipPreview.textElement.text?.lines,
+              fontName: scene.tooltipPreview.textElement.text?.fontName,
+            },
+          },
+        }),
     elements: scene.elements.map((element) => ({
       ...element,
       ...(element.sprite === undefined

@@ -1,7 +1,5 @@
 # 29. Persistent jobs
 
-Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
-
 ## Decision
 
 Long-running domain operations use authenticated persistent jobs as their single execution record.
@@ -104,16 +102,4 @@ The public API never accepts transaction IDs, plan hashes, apply calls, or rollb
 The [modern Tasks extension adapter](0031-modern-mcp-task-adapter.md) uses the same core service and retry receipts with a different wire vocabulary and per-request negotiation.
 Its authenticated wire references preserve identifier entropy even for retained earlier receipts; legacy handles and modern handles need not be textually identical.
 Its status projection distinguishes ordinary stored job failures from JSON-RPC errors, and the modern protocol has no task-list or separate task-result method.
-The operation factory is not yet the production transport factory.
-
-## Validation boundary
-
-Synthetic coverage includes authenticated store reopening and tamper rejection, concurrent publication, request-key conflict detection, principal isolation, bounded listing and retention, queued and running cancellation, stopped-owner takeover, launcher exit, result-checkpoint recovery, transaction crash points, post-validation rollback, completion-recipe recovery, and exact ordinary/native result parity.
-Transport coverage includes stdio and authenticated HTTP reconnects, cross-principal denial, task reuse with changed polling hints, 64 mixed-domain requests across 16 clients, worker failure, and control responsiveness while capacity is occupied.
-`tests/integration/dependency-worker-recovery.test.ts` passed four real-worker cases on 2026-09-13, covering 2,500-helper event and technology jobs with unchanged and changed sources.
-`tests/unit/dependency-walk.test.ts` and `tests/unit/job-worker-recovery.test.ts` cover exact frontier continuation, corrupt-state rejection, finite retry policy, durable cancellation after owner death, and exclusion of writes from read recovery.
-The event/technology MCP-job and worker-policy/startup matrix passed 35 tests across four files, including exact ordinary/task payload and artifact parity, comparison recovery in a fresh server, launcher exit, and both startup-death boundaries.
-These checks exercise the persistent execution core, not the pending modern MCP protocol migration.
-
-This ADR records the implemented architecture but does not by itself qualify version 3.1.0.
-The complete test, platform, Node, Inspector, package, publication, and installed-package gates remain release evidence.
+The operation factory serves both protocol adapters through shared execution.

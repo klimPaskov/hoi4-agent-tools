@@ -286,6 +286,8 @@ export interface GuiScenarioExpectations {
 
 export interface GuiPreviewScenario {
   id: string;
+  /** Caller-declared immediate tooltip preview; coordinates, width and padding are viewport pixels. */
+  tooltip?: { target: string; x: number; y: number; width: number; padding: number };
   date?: string;
   controls?: Record<string, string>;
   description?: string;
@@ -458,7 +460,13 @@ export interface GuiSceneElement {
   zIndex: number;
   visible: boolean;
   visibilityReason?: 'visible' | 'parent_hidden' | 'visibility_false' | 'outside_clip';
+  /** Visibility established by the scenario; preview appearance can remain visible when unresolved. */
+  visibilityStatus?: 'shown' | 'hidden' | 'unresolved';
+  visibilityStatusReason?: string;
   clickable: boolean;
+  /** Confirmed scenario availability; unresolved source triggers never verify a click. */
+  enablement?: 'enabled' | 'disabled' | 'unresolved';
+  enablementReason?: string;
   disabledReason?: 'hidden' | 'click_through' | 'scenario_state' | 'scripted_enabled_false';
   clickThrough: boolean;
   rect: GuiRect;
@@ -510,6 +518,15 @@ export interface GuiScene {
   scenario: GuiPreviewScenario;
   resolution: GuiSize;
   elements: GuiSceneElement[];
+  tooltipPreview?: {
+    targetId: string;
+    localisationKey: string;
+    placement: 'caller-declared';
+    /** Background rectangle and sprite, sized from the measured text plus caller padding. */
+    element: GuiSceneElement;
+    /** Text in the background's caller-declared inset, using the existing text layout. */
+    textElement: GuiSceneElement;
+  };
   bounds: GuiRect;
   fidelity: FidelityReport;
   diagnostics: Diagnostic[];

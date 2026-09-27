@@ -2,6 +2,43 @@
 
 Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points.
 
+## Start with a preview
+
+> Render this window at 100% and 125% UI scale. Show its control regions and list the state inputs needed to establish visibility and availability.
+
+The [interface examples](gui-comparisons.md) show real vanilla and Chaos Redux windows.
+Cyan click regions have confirmed availability under the supplied scenario.
+Dashed amber regions are potential controls with unresolved visibility or enabling conditions; they do not count as confirmed branch coverage.
+The scene retains the reason so the agent can supply the missing facts instead of guessing.
+These are source-model results, not proof of native click execution.
+
+## Preview immediate tooltip text
+
+An explicit tooltip request uses a visible element's `pdx_tooltip` localisation key:
+
+```json
+{
+  "id": "close-tooltip",
+  "tooltip": {
+    "target": "close_button",
+    "x": 980,
+    "y": 100,
+    "width": 160,
+    "padding": 16
+  }
+}
+```
+
+The target can be an instance ID from inspection or a unique element name.
+Position, width and padding are declared viewport pixels; height follows the measured text.
+The preview uses the loaded `ToolTip` sprite and `cg_16b` font.
+Missing or ambiguous targets, hidden or unresolved visibility, missing text/assets, and bounds errors produce diagnostics without a guessed popup.
+A visibly disabled control can still have tooltip text.
+
+Engine-generated `[!element_action]` and `[!element_action_enabled]` descriptions are not invented.
+If their exact text is known, supply the exact bracketed token as a string key in `scenario.values` or `scenario.scriptedGui`; otherwise the tooltip remains unresolved.
+The preview does not establish native automatic positioning, frame composition, delayed timing or `click_to_front` behavior.
+
 ## Create a GUI
 
 `hoi4.gui_rewrite` can work from supported source, targeted patches, or structured helpers. Source and helper rewrites may include one bounded text package: the main `.gui` plus additional interface `.gui`/`.gfx`, configured GFX `.gfx`, `common/scripted_guis/*.txt`, and localisation `.yml` files. The package is path-checked, parsed, linked, rendered, validated, and applied together in one rewrite. Existing text encodings are retained, while localisation is always written as UTF-8 with BOM.

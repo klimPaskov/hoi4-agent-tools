@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 3.6.0 - 2026-09-27
+
+- Preview immediate tooltip text from source localisation with declared position, width and padding, using the source tooltip sprite and font.
+- Keep unknown GUI visibility and enablement separate from confirmed states, branch coverage and click regions.
+- Identify inferred scrollbar gutter geometry as approximate.
+- Provide a shorter setup guide, practical examples with real renders, and a separate tool reference; remove redundant planning and release-history documents.
+
 ## 3.5.1 - 2026-09-27
 
 - Preserve installed-game and offline-wiki citations in compact reference context bundles, select question-relevant sections within required sources, and report sources omitted by the result limit separately from missing files.

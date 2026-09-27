@@ -1,5 +1,7 @@
 # Architecture decisions
 
+Implementation rationale for contributors. For using the server, start with the [task guides](../README.md).
+
 1. [Runtime and language](0001-runtime-and-language.md)
 2. [Lossless source model](0002-lossless-source-model.md)
 3. [Image and font codecs](0003-image-and-font-codecs.md)
@@ -33,3 +35,11 @@
 31. [Modern MCP task adapter](0031-modern-mcp-task-adapter.md)
 32. [Cross-system impact and decision inspection](0032-cross-system-impact-and-decisions.md)
 33. [Mechanic scenarios, package checks, and scenario suites](0033-mechanic-scenarios-and-package-suites.md)
+
+34. [Dated state history](0034-map-bookmark-history.md)
+35. [Floating harbor records](0035-floating-harbor-map-records.md)
+36. [Local reference retrieval](0036-local-reference-retrieval.md)
+37. [GUI dates, controllers and shown positions](0037-gui-date-control-and-shown-position.md)
+38. [Frozen probability source comparisons](0038-frozen-probability-source-operands.md)
+
+[Progress heartbeats](0024-long-running-progress-heartbeats.md) describes progress reporting for long operations.

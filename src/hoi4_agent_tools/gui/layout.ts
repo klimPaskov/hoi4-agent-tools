@@ -36,7 +36,7 @@ import type {
   GuiTextLayout,
   ScriptedGuiDynamicListDefinition,
 } from './types.js';
-import { emptyFidelityReport } from './types.js';
+import { emptyFidelityReport, fidelityCategories } from './types.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { evaluateGuiCondition, guiConditionScenario } from './scenario-conditions.js';
 import { parseClausewitz } from '../core/source/index.js';
@@ -838,6 +838,8 @@ interface LayoutContext {
   dynamicListsByName: Map<string, ScriptedGuiDynamicListDefinition>;
   countryFlagProperties: Map<string, GuiPropertyValue>;
   constantElementEnabled: Readonly<Record<string, boolean>>;
+  unresolvedElementEnabled: ReadonlyMap<string, string>;
+  unresolvedElementVisibility: ReadonlyMap<string, string>;
   spritesByName: Map<string, GuiSourceGraph['sprites'][number]>;
   localisation: Map<string, string>;
   output: GuiSceneElement[];
@@ -912,11 +914,27 @@ function refreshSceneClips(context: LayoutContext): void {
       : geometry.appearanceVisible
         ? 'outside_clip'
         : (element.visibilityReason ?? 'visibility_false');
+    element.visibilityStatus =
+      intersection === undefined
+        ? 'hidden'
+        : element.visibilityStatusReason !== undefined
+          ? 'unresolved'
+          : element.visible
+            ? 'shown'
+            : 'hidden';
     if (clickableTypes.test(element.elementType)) {
       const reason = element.visible ? geometry.interactionBlock : 'hidden';
       if (reason === undefined) delete element.disabledReason;
       else element.disabledReason = reason;
-      element.clickable = reason === undefined;
+      element.enablement =
+        geometry.interactionBlock !== undefined
+          ? 'disabled'
+          : element.visibilityStatus === 'unresolved' || element.enablementReason !== undefined
+            ? 'unresolved'
+            : reason === undefined
+              ? 'enabled'
+              : 'disabled';
+      element.clickable = element.enablement === 'enabled';
     }
   }
 }
@@ -1686,7 +1704,7 @@ async function layoutAttachedScrollbars(
     }
     addFidelity(
       context.fidelity,
-      'modelled',
+      'approximated',
       'orthogonal_scrollbar_gutters',
       'Visible horizontal and vertical scrollbars reserve their anchored cross-axis gutters instead of drawing their end buttons over the same corner.',
       definition,
@@ -1843,6 +1861,13 @@ async function layoutElement(
   if (width < 0) width = Math.max(0, parentRect.width - localX + width);
   if (height < 0) height = Math.max(0, parentRect.height - localY + height);
   const explicitlyVisible = explicitElementVisibility(definition, scenario, rowValues);
+  const unresolvedVisibilityReason = context.unresolvedElementVisibility.get(definition.name);
+  const parentSceneElement =
+    parentInstanceId === undefined ? undefined : context.instancesById.get(parentInstanceId);
+  const parentUnresolvedVisibility =
+    parentSceneElement?.visibilityStatus === 'unresolved'
+      ? parentSceneElement.visibilityStatusReason
+      : undefined;
   const declaredHidden = scalarBoolean(property(definition.attributes, 'hide', 'hidden')) ?? false;
   const sourceVisible =
     scalarBoolean(property(definition.attributes, 'visible')) ?? !declaredHidden;
@@ -1853,6 +1878,13 @@ async function layoutElement(
     scenario.scriptedGui[`${definition.name}.enabled`] ??
     context.constantElementEnabled[definition.name] ??
     scalarBoolean(property(definition.attributes, 'enabled'));
+  const unresolvedEnabledReason = context.unresolvedElementEnabled.get(definition.name);
+  const explicitEnabled =
+    rowValues?.[`${definition.name}.enabled`] ??
+    scenario.values[`${definition.name}.enabled`] ??
+    scenario.scriptedGui[`${definition.name}.enabled`];
+  const enablementUnresolved =
+    unresolvedEnabledReason !== undefined && typeof explicitEnabled !== 'boolean';
   const requestedState = scenario.elementStates[definition.name] ?? scenario.state;
   const state: GuiPreviewState = scriptedEnabled === false ? 'disabled' : requestedState;
   const backgroundValue = property(definition.attributes, 'background');
@@ -2469,6 +2501,13 @@ async function layoutElement(
     (availableClip === undefined || !equalRect(unclippedRect, availableClip));
   const visible =
     resolveVisibleAppearance && (availableClip !== undefined || inheritedClip === undefined);
+  const visibilityStatusReason =
+    explicitlyVisible === false
+      ? undefined
+      : (parentUnresolvedVisibility ??
+        (inheritedVisible && explicitlyVisible === undefined
+          ? unresolvedVisibilityReason
+          : undefined));
   const clickThrough =
     scalarBoolean(
       property(definition.attributes, 'clickThrough', 'alwaystransparent', 'allwaystransparent'),
@@ -2484,7 +2523,23 @@ async function layoutElement(
           ? ('scenario_state' as const)
           : undefined;
   const disabledReason = interactive && !visible ? 'hidden' : interactionBlock;
-  const clickable = interactive && disabledReason === undefined;
+  const visibilityStatus =
+    availableClip === undefined && inheritedClip !== undefined
+      ? ('hidden' as const)
+      : visibilityStatusReason !== undefined
+        ? ('unresolved' as const)
+        : visible
+          ? ('shown' as const)
+          : ('hidden' as const);
+  const enablement =
+    interactionBlock !== undefined
+      ? ('disabled' as const)
+      : visibilityStatus === 'unresolved' || enablementUnresolved
+        ? ('unresolved' as const)
+        : disabledReason === undefined
+          ? ('enabled' as const)
+          : ('disabled' as const);
+  const clickable = interactive && enablement === 'enabled';
   const visibilityReason = visible
     ? 'visible'
     : !inheritedVisible
@@ -2540,7 +2595,11 @@ async function layoutElement(
     zIndex: context.output.length,
     visible,
     visibilityReason,
+    visibilityStatus,
+    ...(visibilityStatusReason === undefined ? {} : { visibilityStatusReason }),
     clickable,
+    ...(interactive ? { enablement } : {}),
+    ...(interactive && enablementUnresolved ? { enablementReason: unresolvedEnabledReason } : {}),
     ...(disabledReason === undefined ? {} : { disabledReason }),
     clickThrough,
     rect: availableClip ?? { x: unclippedRect.x, y: unclippedRect.y, width: 0, height: 0 },
@@ -3070,6 +3129,8 @@ export async function buildGuiScene(
   const scriptedWindowVisibility: Record<string, boolean> = {};
   const constantElementVisibility: Record<string, boolean> = {};
   const constantElementEnabled: Record<string, boolean> = {};
+  const unresolvedElementEnabled = new Map<string, string>();
+  const unresolvedElementVisibility = new Map<string, string>();
   const resolvedScriptedProperties: Record<string, string | number | boolean> = {};
   const dynamicListsByName = new Map<string, ScriptedGuiDynamicListDefinition>();
   const countryFlagProperties = new Map<string, GuiPropertyValue>();
@@ -3143,9 +3204,26 @@ export async function buildGuiScene(
           ...scenario.variables,
           ...scenario.values,
         });
-        if (resolved === undefined) continue;
         const key = `${propertyDefinition.elementName}.${suffix}`;
-        if (scenario.values[key] === undefined) resolvedScriptedProperties[key] = resolved;
+        if (suffix === 'visible' || suffix === 'enabled') {
+          const booleanValue = scalarBoolean(resolved ?? expression);
+          if (booleanValue === undefined) {
+            const reason = `${scripted.name}.${key}: scenario has no boolean value for ${typeof expression === 'string' ? expression : JSON.stringify(expression)}.`;
+            (suffix === 'visible' ? unresolvedElementVisibility : unresolvedElementEnabled).set(
+              propertyDefinition.elementName,
+              reason,
+            );
+            addFidelity(fidelity, 'unresolved', 'scripted_gui_scenario_property', reason);
+            continue;
+          }
+          (suffix === 'visible' ? unresolvedElementVisibility : unresolvedElementEnabled).delete(
+            propertyDefinition.elementName,
+          );
+          if (scenario.values[key] === undefined) resolvedScriptedProperties[key] = booleanValue;
+        } else {
+          if (resolved === undefined) continue;
+          if (scenario.values[key] === undefined) resolvedScriptedProperties[key] = resolved;
+        }
         addFidelity(
           fidelity,
           'modelled',
@@ -3171,18 +3249,34 @@ export async function buildGuiScene(
             ? undefined
             : evaluated.state === 'true';
       if (result === undefined) {
+        if (trigger.name.endsWith('_visible'))
+          unresolvedElementVisibility.set(
+            trigger.elementName,
+            `${scripted.name}.${trigger.name}: ${evaluated?.unresolved.map(({ message }) => message).join('; ') ?? 'condition requires more scenario facts'}`,
+          );
+        if (trigger.name.endsWith('_click_enabled'))
+          unresolvedElementEnabled.set(
+            trigger.elementName,
+            `${scripted.name}.${trigger.name}: ${evaluated?.unresolved.map(({ message }) => message).join('; ') ?? 'condition requires more scenario facts'}`,
+          );
         addFidelity(
           fidelity,
           'unresolved',
           'scripted_gui_trigger',
-          `${trigger.name} requires more scenario facts.`,
+          unresolvedElementVisibility.get(trigger.elementName) ??
+            unresolvedElementEnabled.get(trigger.elementName) ??
+            `${scripted.name}.${trigger.name} requires more scenario facts.`,
         );
         continue;
       }
       if (trigger.name.endsWith('_visible'))
         constantElementVisibility[trigger.elementName] = result;
+      if (trigger.name.endsWith('_visible'))
+        unresolvedElementVisibility.delete(trigger.elementName);
       if (trigger.name.endsWith('_click_enabled'))
         constantElementEnabled[trigger.elementName] = result;
+      if (trigger.name.endsWith('_click_enabled'))
+        unresolvedElementEnabled.delete(trigger.elementName);
       addFidelity(
         fidelity,
         'modelled',
@@ -3268,6 +3362,8 @@ export async function buildGuiScene(
     dynamicListsByName,
     countryFlagProperties,
     constantElementEnabled,
+    unresolvedElementEnabled,
+    unresolvedElementVisibility,
     spritesByName: new Map(graph.sprites.map((sprite) => [sprite.name.toLowerCase(), sprite])),
     localisation,
     output,
@@ -3348,46 +3444,288 @@ export async function buildGuiScene(
     });
   }
   refreshSceneClips(context);
+  let tooltipPreview: GuiScene['tooltipPreview'];
+  if (scenario.tooltip !== undefined) {
+    const { target: targetToken, x, y, width, padding } = scenario.tooltip;
+    const textWidth = width - 2 * padding;
+    const skipTooltip = (code: string, message: string): void => {
+      diagnostics.push({ code, severity: 'warning', category: 'rendering', message });
+      addFidelity(fidelity, 'unresolved', 'immediate_tooltip_preview', message);
+    };
+    const matches = output.filter(({ id, name }) => id === targetToken || name === targetToken);
+    const target = matches[0];
+    if (matches.length === 0)
+      skipTooltip(
+        'GUI_TOOLTIP_TARGET_MISSING',
+        `Tooltip target ${targetToken} is absent from the scene.`,
+      );
+    else if (matches.length > 1)
+      skipTooltip(
+        'GUI_TOOLTIP_TARGET_AMBIGUOUS',
+        `Tooltip target ${targetToken} matches ${matches.length} scene elements; select an instance id.`,
+      );
+    else if (target?.visibilityStatus === 'unresolved')
+      skipTooltip(
+        'GUI_TOOLTIP_TARGET_UNRESOLVED',
+        `Tooltip target ${targetToken} has unresolved visibility: ${target.visibilityStatusReason ?? 'more scenario facts are required'}.`,
+      );
+    else if (target?.visible !== true)
+      skipTooltip(
+        'GUI_TOOLTIP_TARGET_HIDDEN',
+        `Tooltip target ${targetToken} is hidden in this preview.`,
+      );
+    else {
+      const source = elementsById.get(target.sourceId);
+      const localisationKey =
+        source === undefined ? undefined : scalarString(property(source.attributes, 'pdx_tooltip'));
+      const localised =
+        localisationKey === undefined
+          ? undefined
+          : (scenario.localisation[localisationKey] ?? localisation.get(localisationKey));
+      const tooltipSprite = graph.sprites.find(({ name }) => name.toLowerCase() === 'tooltip');
+      const tooltipFont = catalog.fontDefinition('cg_16b');
+      if (localisationKey === undefined)
+        skipTooltip(
+          'GUI_TOOLTIP_KEY_MISSING',
+          `Tooltip target ${targetToken} has no pdx_tooltip localisation key.`,
+        );
+      else if (localised === undefined)
+        skipTooltip(
+          'GUI_TOOLTIP_LOCALISATION_MISSING',
+          `Tooltip localisation ${localisationKey} is unavailable in ${scenario.language}.`,
+        );
+      else if (tooltipSprite === undefined)
+        skipTooltip(
+          'GUI_TOOLTIP_SPRITE_MISSING',
+          'The declared ToolTip text sprite is unavailable.',
+        );
+      else if (
+        tooltipFont === undefined ||
+        catalog.resolvedFontMetrics('cg_16b').source === 'approximation'
+      )
+        skipTooltip(
+          'GUI_TOOLTIP_FONT_MISSING',
+          'The declared cg_16b tooltip font or its metrics are unavailable.',
+        );
+      else if (x + width > scenario.resolution.width || y >= scenario.resolution.height)
+        skipTooltip(
+          'GUI_TOOLTIP_BOUNDS',
+          'Caller-declared tooltip position and width exceed the viewport.',
+        );
+      else {
+        const spriteFrame = await catalog.loadSpriteFrame(tooltipSprite, 0);
+        if (spriteFrame?.supported !== true || spriteFrame.dataUri === undefined)
+          skipTooltip(
+            'GUI_TOOLTIP_SPRITE_MISSING',
+            spriteFrame?.reason ?? 'The ToolTip texture is unavailable.',
+          );
+        else {
+          const missingEngineText: string[] = [];
+          const suppliedText = replaceTextBounded(
+            localised,
+            /\[![^\]]+\]/gu,
+            (match) => {
+              const token = match[0];
+              const supplied = scenario.values[token] ?? scenario.scriptedGui[token];
+              if (typeof supplied === 'string' && supplied.length > 0) return supplied;
+              missingEngineText.push(token);
+              return token;
+            },
+            'GUI tooltip supplied effect text',
+          );
+          const resolved = resolveTokenText(suppliedText, scenario, localisation);
+          const unresolved = [
+            ...new Set([
+              ...missingEngineText,
+              ...resolved.unresolved,
+              ...[...resolved.text.matchAll(/\[![^\]]+\]/gu)].map(([token]) => token),
+            ]),
+          ];
+          if (unresolved.length > 0)
+            skipTooltip(
+              'GUI_TOOLTIP_TEXT_UNRESOLVED',
+              `Tooltip ${localisationKey} requires supplied values for ${unresolved.join(', ')}.`,
+            );
+          else {
+            const tooltipTextDefinition: GuiElementDefinition = {
+              id: `tooltip-preview:${target.id}:text`,
+              name: `${target.name}_immediate_tooltip_text`,
+              elementType: 'instantTextBoxType',
+              sourcePath: source?.sourcePath ?? target.sourcePath,
+              childIds: [],
+              attributes: {
+                position: { x: (x + padding) / baseScale, y: (y + padding) / baseScale },
+                size: { width: textWidth / baseScale, height: 0 },
+                text: suppliedText,
+                font: 'cg_16b',
+                multiline: true,
+                fixedsize: true,
+              },
+              unsupportedAttributes: [],
+              rawSource: '',
+              definitionOrder: source?.definitionOrder ?? 0,
+            };
+            const tooltipContext: LayoutContext = {
+              ...context,
+              output: [],
+              instancesById: new Map(),
+              geometry: new Map(),
+              fidelity: emptyFidelityReport(),
+              diagnostics: [],
+              work: new GuiSceneWorkBudget(),
+            };
+            await layoutElement(
+              tooltipTextDefinition,
+              viewport,
+              viewport,
+              baseScale,
+              0,
+              tooltipContext,
+            );
+            refreshSceneClips(tooltipContext);
+            const textElement = tooltipContext.output[0];
+            const popupText = textElement?.text;
+            if (
+              textElement === undefined ||
+              popupText === undefined ||
+              popupText.unresolvedTokens.length > 0 ||
+              popupText.metricSource === 'approximation' ||
+              popupText.glyphLines.some(
+                ({ source: glyphSource, missingGlyphs }) =>
+                  glyphSource === 'deterministic-fallback' || missingGlyphs.length > 0,
+              ) ||
+              popupText.inlineIcons?.some(
+                ({ sprite }) => sprite?.supported !== true || sprite.dataUri === undefined,
+              )
+            )
+              skipTooltip(
+                'GUI_TOOLTIP_ASSET_OR_TEXT_UNRESOLVED',
+                `Tooltip ${localisationKey} has unresolved text, glyph, icon, or texture data.`,
+              );
+            else if (
+              popupText.overflowX ||
+              popupText.overflowY ||
+              y + popupText.measuredHeight + 2 * padding > scenario.resolution.height
+            )
+              skipTooltip(
+                'GUI_TOOLTIP_BOUNDS',
+                'Tooltip text does not fit the caller-declared inset or the padded layout exceeds the viewport.',
+              );
+            else {
+              const backgroundDefinition: GuiElementDefinition = {
+                ...tooltipTextDefinition,
+                id: `tooltip-preview:${target.id}`,
+                name: `${target.name}_immediate_tooltip`,
+                elementType: 'iconType',
+                attributes: {
+                  position: { x: x / baseScale, y: y / baseScale },
+                  size: {
+                    width: width / baseScale,
+                    height: (popupText.measuredHeight + 2 * padding) / baseScale,
+                  },
+                  spriteType: tooltipSprite.name,
+                },
+              };
+              await layoutElement(
+                backgroundDefinition,
+                viewport,
+                viewport,
+                baseScale,
+                0,
+                tooltipContext,
+              );
+              const backgroundElement = tooltipContext.instancesById.get(backgroundDefinition.id)!;
+              backgroundElement.zIndex = 0;
+              textElement.zIndex = 1;
+              textElement.depth = 1;
+              textElement.parentId = backgroundElement.id;
+              tooltipPreview = {
+                targetId: target.id,
+                localisationKey,
+                placement: 'caller-declared',
+                element: backgroundElement,
+                textElement,
+              };
+              for (const category of fidelityCategories)
+                fidelity[category].push(...tooltipContext.fidelity[category]);
+              fidelity.ignored = fidelity.ignored.filter(
+                ({ field, elementId }) => field !== 'pdx_tooltip' || elementId !== target.sourceId,
+              );
+              addFidelity(
+                fidelity,
+                'approximated',
+                'immediate_tooltip_preview',
+                `Immediate tooltip ${localisationKey} uses caller-declared viewport position, width, and ${padding}px padding with ToolTip and cg_16b; native placement, padding, and timing remain unverified.`,
+              );
+              addFidelity(
+                fidelity,
+                'approximated',
+                'tooltip_text_sprite_composition',
+                'ToolTip textSpriteType texture is stretched to the measured text height plus caller-declared padding; native frame composition is unverified.',
+              );
+              addFidelity(
+                fidelity,
+                'unsupported',
+                'pdx_tooltip_delayed',
+                'Delayed tooltip timing is not previewed.',
+              );
+              addFidelity(
+                fidelity,
+                'unsupported',
+                'click_to_front',
+                'Tooltip preview does not model click_to_front behavior.',
+              );
+            }
+          }
+        }
+      }
+    }
+  }
   output.sort((left, right) => left.zIndex - right.zIndex || compareCodeUnits(left.id, right.id));
   const bounds = unionRects(
-    output.flatMap((element) => {
-      if (!element.visible) return [];
-      const painted: GuiRect[] =
-        element.sprite === undefined && element.progressColours === undefined ? [] : [element.rect];
-      const text = element.text;
-      if (text !== undefined && text.text.length > 0) {
-        const rect = element.unclippedRect;
-        let textRect: GuiRect | undefined = {
-          x:
-            rect.x +
-            (text.horizontalAlignment === 'center'
-              ? (rect.width - text.measuredWidth) / 2
-              : text.horizontalAlignment === 'right'
-                ? rect.width - text.measuredWidth
-                : 0),
-          y:
-            rect.y +
-            (text.verticalAlignment === 'center'
-              ? (rect.height - text.measuredHeight) / 2
-              : text.verticalAlignment === 'bottom'
-                ? rect.height - text.measuredHeight
-                : 0),
-          width: text.measuredWidth,
-          height: text.measuredHeight,
-        };
-        if (text.fixedSize) textRect = rectIntersection(textRect, rect);
-        if (textRect !== undefined && element.clipRect !== undefined)
-          textRect = rectIntersection(textRect, element.clipRect);
-        if (textRect !== undefined) painted.push(textRect);
-      }
-      return painted;
-    }),
+    [...output, ...(tooltipPreview === undefined ? [] : [tooltipPreview.element])].flatMap(
+      (element) => {
+        if (!element.visible) return [];
+        const painted: GuiRect[] =
+          element.sprite === undefined && element.progressColours === undefined
+            ? []
+            : [element.rect];
+        const text = element.text;
+        if (text !== undefined && text.text.length > 0) {
+          const rect = element.unclippedRect;
+          let textRect: GuiRect | undefined = {
+            x:
+              rect.x +
+              (text.horizontalAlignment === 'center'
+                ? (rect.width - text.measuredWidth) / 2
+                : text.horizontalAlignment === 'right'
+                  ? rect.width - text.measuredWidth
+                  : 0),
+            y:
+              rect.y +
+              (text.verticalAlignment === 'center'
+                ? (rect.height - text.measuredHeight) / 2
+                : text.verticalAlignment === 'bottom'
+                  ? rect.height - text.measuredHeight
+                  : 0),
+            width: text.measuredWidth,
+            height: text.measuredHeight,
+          };
+          if (text.fixedSize) textRect = rectIntersection(textRect, rect);
+          if (textRect !== undefined && element.clipRect !== undefined)
+            textRect = rectIntersection(textRect, element.clipRect);
+          if (textRect !== undefined) painted.push(textRect);
+        }
+        return painted;
+      },
+    ),
   );
   return {
     windowName,
     scenario,
     resolution: scenario.resolution,
     elements: output,
+    ...(tooltipPreview === undefined ? {} : { tooltipPreview }),
     bounds,
     fidelity,
     diagnostics: sortDiagnostics(diagnostics),

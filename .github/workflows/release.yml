@@ -487,6 +487,9 @@ jobs:
         with:
           name: ${{ env.CONTAINER_ARTIFACT_NAME }}
           path: ${{ env.CONTAINER_ARTIFACT_DIR }}
+      - name: Prepare concise notes for the tagged version
+        shell: bash
+        run: node scripts/distribution/release-notes.ts CHANGELOG.md "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-notes.md"
       - name: Classify and verify absent, resumable-draft, or immutable release state
         id: release_state
         shell: bash
@@ -515,7 +518,7 @@ jobs:
           test "$(basename "$TARBALL")" = "$TARBALL"
           STATE="$(node scripts/distribution/github-release-state.ts classify \
             "$STATUS" "$RELEASE_JSON" "$GITHUB_REF_NAME" \
-            CHANGELOG.md \
+            "$RUNNER_TEMP/release-notes.md" \
             "$RELEASE_ARTIFACT_DIR/$TARBALL" \
             "$RELEASE_ARTIFACT_DIR/npm-pack.json" \
             "$RELEASE_ARTIFACT_DIR/release-identity.json" \
@@ -550,7 +553,7 @@ jobs:
         with:
           draft: true
           name: HOI4 Agent Tools ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          body_path: ${{ runner.temp }}/release-notes.md
           fail_on_unmatched_files: true
           overwrite_files: false
           files: |
@@ -589,7 +592,7 @@ jobs:
           test "$(basename "$TARBALL")" = "$TARBALL"
           RELEASE_ID="$(node scripts/distribution/github-release-state.ts draft-exact \
             "$STATUS" "$RELEASE_JSON" "$GITHUB_REF_NAME" \
-            CHANGELOG.md \
+            "$RUNNER_TEMP/release-notes.md" \
             "$RELEASE_ARTIFACT_DIR/$TARBALL" \
             "$RELEASE_ARTIFACT_DIR/npm-pack.json" \
             "$RELEASE_ARTIFACT_DIR/release-identity.json" \
@@ -626,7 +629,7 @@ jobs:
           test "$(basename "$TARBALL")" = "$TARBALL"
           OBSERVED_RELEASE_ID="$(node scripts/distribution/github-release-state.ts draft-exact \
             "$STATUS" "$RELEASE_JSON" "$GITHUB_REF_NAME" \
-            CHANGELOG.md \
+            "$RUNNER_TEMP/release-notes.md" \
             "$RELEASE_ARTIFACT_DIR/$TARBALL" \
             "$RELEASE_ARTIFACT_DIR/npm-pack.json" \
             "$RELEASE_ARTIFACT_DIR/release-identity.json" \
@@ -706,7 +709,7 @@ jobs:
           test "$(basename "$TARBALL")" = "$TARBALL"
           test "$(node scripts/distribution/github-release-state.ts complete-exact \
             "$LIST_STATUS" "$RELEASE_JSON" "$GITHUB_REF_NAME" \
-            CHANGELOG.md \
+            "$RUNNER_TEMP/release-notes.md" \
             "$RELEASE_ARTIFACT_DIR/$TARBALL" \
             "$RELEASE_ARTIFACT_DIR/npm-pack.json" \
             "$RELEASE_ARTIFACT_DIR/release-identity.json" \

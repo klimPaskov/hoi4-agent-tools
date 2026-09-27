@@ -48,8 +48,7 @@ Resume validates the workspace, principal, suite hash, source revision, selected
 Every requested case is reported as completed, failed, unresolved, or pending with a continuation; no case is silently omitted.
 Views retain their source and scenario identity so later visual comparison can match the same inputs exactly.
 
-## Validation and release gate
+## Validation boundary
 
 Synthetic fixtures must include intentional failures, unknown values, unsupported effects, helper cycles, finite and incomplete scope catalogs, malformed manifests, suite tampering, cross-workspace access, and a large suite resumed across multiple batches.
 State traces must be deterministic across runs and process recovery, and the source workspace must remain byte-for-byte unchanged.
-The release requires the full local gate, Windows/Linux and Node 22/24 CI, coverage, official Inspector, exact public publication verification, and independent side-by-side installation.

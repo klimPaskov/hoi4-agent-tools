@@ -1,7 +1,5 @@
 # 31. Modern MCP task adapter
 
-Status: Stage 2 implementation and the Windows/Linux, Node 22/24 release matrix are qualified at commit `b34f042`; publication and installed-package verification are tracked in the [stage ledger](../specs/deeper-analysis-and-agent-integration.md).
-
 ## Protocol and SDK boundary
 
 The current published protocol is [MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28).
@@ -10,7 +8,7 @@ SDK 1.30.0 remains installed for the existing 2025-era entry points and compatib
 SDK instances and transports do not cross generations; shared Zod definitions and JSON operation results are protocol-independent.
 The [official migration guide](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/upgrade-to-v2.md) permits this staged migration, but upgrading dependencies alone is not modern serving.
 
-The modern operation factory is exercised through the official `serveStdio` connection entry and `createMcpHandler` HTTP request entry.
+The modern operation factory serves the production stdio and authenticated HTTP entries through `serveStdio` and `createMcpHandler`.
 It registers the same 23 domain tool names, descriptions, annotations, input schemas, and output schemas as the legacy server.
 The common catalog is the metadata source of truth; legacy task callbacks are installed only by the SDK-v1 adapter.
 The modern task protocol has no `tasks/list` or `tasks/result`; those retired methods are not compatibility aliases on a modern connection.
@@ -139,51 +137,3 @@ The SDK's normal abort controller still performs cancellation; no private SDK st
 
 The published SDK's `RequestMetaEnvelope` declaration is empty despite preserving reserved keys at runtime.
 The adapter therefore parses that boundary as unknown data using the public capability schema instead of using an unchecked type assertion or importing private SDK modules.
-
-## Qualification and remaining integration
-
-The initial 13-case modern suite passed on 2026-09-13 through SDK connection and Fetch-based HTTP serving.
-Its scenarios include durable visibility, reconnects, ordinary-result parity, same-workspace cross-principal isolation, per-request negotiation, alias and retired-method rejection, input validation, cancellation scopes, ignored updates, terminal state, expiry, root exchange, tool-catalog parity, official SDK client calls, and HTTP routing-header validation.
-After correcting the zero-ID cancellation defect, the frozen 12-file matrix passed all 84 tests in 289.47 seconds on 2026-09-13.
-It covers 16 modern integration cases, two focused ID/cancellation regressions, all six legacy domain job/task routes, authenticated legacy HTTP tasks, metadata/context/progress contracts, and package metadata.
-Mixed-era retries retrieve the same committed rewrite receipt without overwriting an independent subsequent source edit.
-
-The local production stdio entry now pins each bounded connection to either the existing 2025 adapter or the modern 2026 serving entry after its first message.
-The local production HTTP entry uses the SDK's public era classifier after the existing authentication, Origin, Host, byte, and admission gates, then invokes the strict modern handler with a principal derived only from the authenticated request.
-Legacy stateful sessions and their transport remain separate.
-The optional ChaosX private tools share their underlying operations between protocol adapters and are enabled only by the existing stdio process flag; HTTP never advertises them.
-At this 2026-09-19 development checkpoint, full transport, platform, Inspector, installation, and release qualification remained open.
-No installed MCP process was restarted or replaced during development.
-The candidate pins Sharp 0.35.4, Hono 4.13.8, and Vitest plus coverage 4.1.11 after the earlier versions were reported by npm as affected by advisories.
-The installed dependency graph reported zero npm audit findings on 2026-09-19; this does not replace rendering, transport, platform, or release qualification.
-The first identifier-hardening matrix passed 50 tests across five files in 86.20 seconds on 2026-09-13, including 20 modern wire cases over connection and Fetch-based HTTP serving.
-It verifies earlier receipt retrieval after an independent source edit, distinct authenticated modern handles for those receipts, reconnection stability, and rejection of unsigned, altered, or cross-job handles before queued work changes state.
-The expanded frozen matrix passed all 113 tests across 13 files in 203.80 seconds on 2026-09-13 using `npm test --`.
-It includes 25 job-store tests, 20 modern integration cases, two zero/empty-ID cancellation regressions, the legacy domain/task transports, and metadata/context/progress contracts.
-The initial direct-Node invocation passed 112 of 113 checks but omitted `npm_execpath`, which the real npm tarball-install regression requires; the supported npm invocation supplied it and passed the complete matrix without a source change.
-
-The expired-mutation regression reproduced the defect on both modern transports before the fix.
-The corrected three-file expiry matrix passed all 55 tests in 76.89 seconds on 2026-09-13, including concurrent/reopened storage, preserved completed/failed/cancelled outcomes, invalid visibility metadata, ordinary/native retries in both protocol generations, and authenticated legacy HTTP retries after an independent source edit.
-The subsequent frozen 15-file resource and cross-domain matrix passed all 133 tests in 327.02 seconds on 2026-09-13.
-It includes exact UTF-8 boundary reconstruction, public manifest parity, workspace-grant isolation, altered-file rejection, HTTP header mismatch rejection, and reconstruction of a 1,601-element GUI inspection through real worker-configured artifact limits.
-The GUI fixture also asserts a complete source inventory, preventing an over-limit or skipped source from masquerading as a successful large-graph test.
-Seven focused compatibility-control, prompt, and complete-catalog tests then passed in 9.67 seconds, including occupied domain and worker slots, completed native-task result retrieval, same-workspace foreign-principal denial, write-cancellation scopes, bounded prompt inputs, and legacy prompt parity.
-The final post-extraction 17-file regression passed all 153 tests in 425.13 seconds on 2026-09-13, including the full modern suite, legacy domain tasks, discovery, weighted-analysis workflow, resource reconstruction, and package metadata/install checks.
-The first expanded run passed 152 of 153 checks and exposed a stale official-client assertion expecting 23 tools instead of the complete 25-tool catalog.
-The corrected official-client test also verifies prompt retrieval through the SDK's decoded result, while raw-wire tests independently enforce the required modern discriminator and cache policy.
-This is local candidate evidence, not full project, platform, Inspector, release, or installation qualification.
-
-The focused progress tranche passed all 19 selected tests in 30.81 seconds on 2026-09-13, including both official client transports, notification failures, missing/falsy tokens, per-request ordering, and nested timer cleanup after success, failure, and cancellation.
-The expanded nine-file progress and legacy-compatibility regression passed all 73 tests in 121.78 seconds on 2026-09-19.
-Production HTTP composition retains the existing authentication, Host, Origin, byte/admission budgets, and legacy sessions while routing modern claims and validation failures to the strict modern entry through the SDK's public classifier.
-The production Node HTTP regression passed all 18 security and streaming cases, including modern official-client calls, mid-call SSE progress, silent JSON results, cross-principal task denial, and legacy sessions.
-A separate raw-header regression rejects duplicate modern method, name, and parameter fields before SDK normalization.
-The real stdio child-process test passed modern discovery, tool calls, task creation, and polling over the shared bounded stream.
-The combined production HTTP security, streaming, limits, and stdio suite passed all 46 cases on 2026-09-19.
-That run exposed a legacy malformed-request error-shape regression and absolute-form modern URL failure; explicit-claim routing and post-authority target normalization corrected both before the 46-case pass.
-The opt-in modern stdio regression separately passed discovery of both private tools and execution of the country-asset operation with the flag enabled, while the unflagged modern catalog retained its 25 public tools.
-After sharing the private implementations and keeping their import behind the stdio flag, the six-file cross-era transport and modern-task matrix passed all 83 tests in 154.31 seconds on 2026-09-19.
-All eight test shards passed separately after two overloaded-shard safety deadlines and one worker-observation assertion were corrected: 1,135 passing tests and one skip on 2026-09-19.
-The built package passed its 267-file dry run and Registry validation, and the official MCP Inspector passed its 25-tool workflow.
-The subsequent committed candidate `b34f042` passed the complete Windows/Linux, Node 22/24 CI matrix, coverage, and official Inspector in run `35467092544`.
-Publication and installed-package verification require separate release evidence.
