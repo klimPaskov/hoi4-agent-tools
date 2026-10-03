@@ -1,0 +1,92 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.7.0/schemas/script-validate-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64000
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "effect",
+        "trigger"
+      ]
+    },
+    "scope": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "documentation": {
+      "default": "game_doc",
+      "type": "string",
+      "enum": [
+        "game_doc",
+        "script_doc"
+      ]
+    },
+    "bindings": {
+      "default": [],
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema1"
+      }
+    },
+    "limit": {
+      "default": 12,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32
+    }
+  },
+  "required": [
+    "source",
+    "kind",
+    "scope"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "enum": [
+        "country",
+        "state",
+        "character",
+        "combatant",
+        "ace",
+        "strategic_region",
+        "operation",
+        "industrial_org",
+        "purchase_contract",
+        "raid_instance",
+        "special_project",
+        "faction"
+      ]
+    },
+    "__schema1": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "scope": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": [
+        "name",
+        "scope"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

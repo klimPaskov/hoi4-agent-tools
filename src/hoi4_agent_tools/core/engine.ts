@@ -280,19 +280,6 @@ export class CoreEngine {
             signal: controller.signal,
           });
           controller.signal.throwIfAborted();
-          const persistentAnalysisCache = await this.persistentAnalysisCache;
-          const analysisScope = {
-            workspaceIdentity: workspace.workspaceIdentity,
-            rootFingerprint: transactionRootFingerprint(workspace),
-            principal: principal ?? null,
-          };
-          await persistentAnalysisCache?.hydrate(
-            analysisScope,
-            files,
-            sourceDocuments,
-            this.indexSegments,
-            controller.signal,
-          );
           const revision = hashCanonical(
             files.map(
               ({
@@ -317,6 +304,19 @@ export class CoreEngine {
           const cacheKey = `${requestKey}:${revision}`;
           const cached = this.#scanCache.get(cacheKey);
           if (cached !== undefined) return cached;
+          const persistentAnalysisCache = await this.persistentAnalysisCache;
+          const analysisScope = {
+            workspaceIdentity: workspace.workspaceIdentity,
+            rootFingerprint: transactionRootFingerprint(workspace),
+            principal: principal ?? null,
+          };
+          await persistentAnalysisCache?.hydrate(
+            analysisScope,
+            files,
+            sourceDocuments,
+            this.indexSegments,
+            controller.signal,
+          );
           const index = await SymbolIndex.buildAsync(files, controller.signal, this.indexSegments);
           await persistentAnalysisCache?.persist(
             analysisScope,

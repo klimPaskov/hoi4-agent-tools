@@ -63,6 +63,11 @@ export class SourceDocumentCache {
     return decodedDocument(encoded);
   }
 
+  /** Availability check without deserialization or cache-hit accounting. */
+  has(key: string): boolean {
+    return this.#entries.has(key);
+  }
+
   put(key: string, document: SourceDocument): void {
     // Avoid allocating a large serialized copy just to discover that it cannot
     // be retained. This conservative estimate affects caching, never parsing.

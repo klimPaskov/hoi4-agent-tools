@@ -32,7 +32,7 @@ describe('MCP local reference tools', () => {
     );
     await writeFile(
       path.join(game, 'documentation', 'effects_documentation.md'),
-      '# Effects\n## country_event\nFires an event.\n',
+      '# Effects\n## country_event\n* Supported Scopes: COUNTRY\nFires an event.\n',
     );
     await writeFile(
       path.join(mod, 'events', 'test.txt'),
@@ -61,6 +61,7 @@ describe('MCP local reference tools', () => {
       'hoi4.reference_read',
       'hoi4.reference_context',
       'hoi4.source_lookup',
+      'hoi4.script_validate',
     ]) {
       expect(listed.tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint).toBe(true);
     }
@@ -107,5 +108,37 @@ describe('MCP local reference tools', () => {
     expect(
       (source.structuredContent as { data: { definitionCount: number } }).data.definitionCount,
     ).toBe(1);
+    const structure = await client.callTool({
+      name: 'hoi4.source_lookup',
+      arguments: {
+        workspaceId: 'fixture',
+        symbol: 'reference.1',
+        view: 'structure',
+        includeReferences: false,
+      },
+    });
+    expect(structure.isError).not.toBe(true);
+    expect(
+      (
+        structure.structuredContent as {
+          data: { definitions: Array<{ navigation: { children: unknown[] } }> };
+        }
+      ).data.definitions[0]?.navigation.children,
+    ).toHaveLength(2);
+    const validation = await client.callTool({
+      name: 'hoi4.script_validate',
+      arguments: {
+        workspaceId: 'fixture',
+        source: 'country_event = example.1',
+        kind: 'effect',
+        scope: 'state',
+      },
+    });
+    expect(validation.isError).not.toBe(true);
+    expect(validation.structuredContent).toMatchObject({
+      validation: { passed: false },
+      diagnostics: [{ code: 'SCRIPT_COMMAND_WRONG_SCOPE' }],
+      data: { valid: false, findings: [{ code: 'SCRIPT_COMMAND_WRONG_SCOPE' }] },
+    });
   });
 });

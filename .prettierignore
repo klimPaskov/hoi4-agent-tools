@@ -1,4 +1,12 @@
 dist/
+.tmp/
+.cache/
+.hoi4-agent/
+artifacts/
+test-results/
+playwright-report/
+*.log
+*.tgz
 coverage/
 node_modules/
 fixtures/generated/

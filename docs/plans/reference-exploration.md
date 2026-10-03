@@ -17,3 +17,21 @@ For example, a GUI task can ask `reference_context` for scripted GUI material, r
 The map editor comparison leaves useful checks for map changes: preserve dated state-history blocks, validate the combined candidate before atomic replacement, reject stale source, verify recovery from later-file failure, and inspect/render the affected area after a rewrite. Sparse province IDs remain a load-sensitivity question: read-only inspection should report exact gaps, while a rewrite should retain its gap error until stronger engine evidence supports another rule. Unusual bitmap dimensions, incomplete region coverage, coastal flags, and missing definition colors also need explicit evidence. These are review cases, not claims that every operation has been engine-verified.
 
 The reference service ships code and schemas without copied wiki pages, installed-game documentation, mod source, or game artwork. It reads only configured, authorized local roots. Future retrieval work should measure section recall, citation correctness, response size, latency, and follow-up reads on real GUI, focus, event, technology, and decision questions before widening the response surface. The [research notes](../research/references_and_open_questions.md) retain open source questions and the [source ledger](../research/source-ledger.md) retains provenance.
+
+## Source-level review and implementation
+
+The five default-branch commits were checked again on 2026-10-03 and still matched the pinned revisions above.
+The review included `src/paradox_script_mcp/tools/structure.py`, `clausewitz_mcp/validate.py`, RHoiScribe's CWT feature guide, HOI4-MCP's learned-rule representation, and the map editor's sparse-ID design and tests description.
+No implementation code from these projects was imported.
+
+| Idea                           | Decision and evidence                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nested source exploration      | Implemented through exact keyed and entry-index navigation, duplicate-key selection, structural pagination, and source-boundary tests. Unlike an unbounded deep expansion, each page retains its budget and continuation. |
+| Native documentation grounding | Implemented through authority-filtered search/read and standalone syntax, command-kind and scope checks, with unknown helpers and parameters explicitly unresolved.                                                       |
+| Warm process state             | Applied to the shared scanner and authenticated analysis cache: resident facts avoid redundant hydration, persistence is bounded, and file I/O overlaps within source/handle ceilings.                                    |
+| Learned-rule memory            | Retained in reviewed project instructions and skills rather than adding a second mutable rules database. Corrections require source evidence and human-readable repository changes.                                       |
+| Map save safety                | Existing atomic candidate validation, dated-history protection, connected edits and recovery remain the foundation. Sparse-ID editor round trips do not establish game loading behavior.                                  |
+
+Richer CWT parameter/type validation and line-to-owner symbol discovery remain useful future candidates.
+They require separate compatibility and performance work rather than being implied by the native-command checker.
+The current tool contract, tests and measured limits are documented in [ADR 0039](../adr/0039-source-navigation-and-native-command-checks.md), [the reference guide](../reference.md), and [the benchmark](../research/reference-benchmark.md).

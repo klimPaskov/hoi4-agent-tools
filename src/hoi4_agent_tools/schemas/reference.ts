@@ -29,6 +29,7 @@ export const referenceReadRequestSchema = z
     workspaceId: workspaceIdSchema,
     id: z.string().regex(/^[a-f0-9]{64}$/u),
     revision: z.string().regex(/^[a-f0-9]{64}$/u),
+    source: referenceSourceSchema.optional(),
     startLine: z.number().int().min(1).optional(),
     startColumn: z.number().int().min(1).optional(),
     maxLines: z.number().int().min(1).max(80).default(40),
@@ -44,6 +45,20 @@ export const referenceContextRequestSchema = z
   })
   .strict();
 
+export const sourceKeyPathSchema = z
+  .array(
+    z.union([
+      z
+        .object({
+          key: z.string().min(1).max(1024),
+          occurrence: z.number().int().min(0).max(100_000).optional(),
+        })
+        .strict(),
+      z.object({ index: z.number().int().min(0).max(100_000) }).strict(),
+    ]),
+  )
+  .max(24);
+
 export const sourceLookupRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
@@ -56,6 +71,10 @@ export const sourceLookupRequestSchema = z
     maxDefinitions: z.number().int().min(1).max(3).default(3),
     maxReferences: z.number().int().min(0).max(20).default(10),
     maxLines: z.number().int().min(1).max(80).default(30),
+    keyPath: sourceKeyPathSchema.optional(),
+    view: z.enum(['source', 'structure']).default('source'),
+    maxChildren: z.number().int().min(1).max(40).default(20),
+    childOffset: z.number().int().min(0).max(100_000).default(0),
     fromLine: z.number().int().min(1).optional(),
     fromColumn: z.number().int().min(1).optional(),
     expectedRevision: z
@@ -73,6 +92,7 @@ const coverage = z
     files: count,
     sections: count,
     unavailable: z.boolean(),
+    included: z.boolean(),
   })
   .strict();
 const coverageBySource = z
@@ -96,6 +116,8 @@ export const referenceSearchDataSchema = z
   .object({
     results: z.array(referenceSectionSchema.extend({ score: z.number() })).max(12),
     total: count,
+    omitted: count,
+    limitedByBytes: z.boolean(),
     coverage: coverageBySource,
     skipped: count,
   })
@@ -115,6 +137,7 @@ export const referenceContextDataSchema = z
     surface: referenceSurfaceSchema,
     sections: z.array(referenceSectionSchema).max(24),
     omitted: count,
+    limitedByBytes: z.boolean(),
     omittedSources: z.array(z.string().max(256)).max(32),
     missing: z.array(z.string().max(256)).max(32),
     coverage: coverageBySource,
@@ -123,10 +146,17 @@ export const referenceContextDataSchema = z
   .strict();
 export const sourceLookupDataSchema = z
   .object({
+    sourceScope: z.enum([
+      'workspace_index',
+      'event_definitions',
+      'event_consumers',
+      'helper_definitions',
+    ]),
     revision: hash,
     complete: z.boolean(),
     skippedSourceCount: count,
     definitionCount: count,
+    definitionsTruncated: z.boolean(),
     referencesIncluded: z.boolean(),
     referenceCount: count,
     referencesTruncated: z.boolean(),
@@ -150,6 +180,36 @@ export const sourceLookupDataSchema = z
             nextLine: line.nullable(),
             nextColumn: line.nullable(),
             text: z.string().max(2000),
+            navigation: z
+              .object({
+                keyPath: sourceKeyPathSchema,
+                startLine: line,
+                startColumn: line,
+                endLine: line,
+                endColumn: line,
+                children: z
+                  .array(
+                    z
+                      .object({
+                        key: z.string().max(1024).nullable(),
+                        index: count,
+                        keyTruncated: z.boolean(),
+                        occurrence: count,
+                        kind: z.enum(['scalar', 'block']),
+                        value: z.string().max(120).nullable(),
+                        valueTruncated: z.boolean(),
+                        startLine: line,
+                        endLine: line,
+                        childCount: count,
+                      })
+                      .strict(),
+                  )
+                  .max(40),
+                omittedChildren: count,
+                nextChildOffset: count.nullable(),
+              })
+              .strict()
+              .optional(),
           })
           .strict(),
       )

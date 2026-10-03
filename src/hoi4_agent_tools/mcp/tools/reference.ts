@@ -14,6 +14,10 @@ import {
   sourceLookupDataSchema,
 } from '../../schemas/reference.js';
 import type { ToolDefinition } from '../server/task-tool-definition.js';
+import {
+  scriptValidateDataSchema,
+  scriptValidateRequestSchema,
+} from '../../schemas/script-validation.js';
 
 const readOnly = {
   readOnlyHint: true,
@@ -52,9 +56,18 @@ export const referenceTools = [
     name: 'hoi4.source_lookup',
     title: 'Look up HOI4 source symbol',
     description:
-      'Find exact Clausewitz definitions, override status, a bounded source block, and indexed usages in the configured game and mod.',
+      'Find exact Clausewitz definitions and usages; navigate nested keyPath blocks or list bounded child structure with view=structure.',
     inputSchema: sourceLookupRequestSchema,
     outputSchema: strictOperationResultSchema(sourceLookupDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.script_validate',
+    title: 'Check HOI4 script commands and scopes',
+    description:
+      'Check effect or trigger snippet syntax, native command kinds and declared scopes against cited installed documentation. Unknown helpers and native argument blocks remain explicit.',
+    inputSchema: scriptValidateRequestSchema,
+    outputSchema: strictOperationResultSchema(scriptValidateDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

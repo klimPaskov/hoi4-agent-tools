@@ -1,16 +1,10 @@
 import { z } from 'zod/v4';
 import { serverConfigurationSchema } from './configuration.js';
 import { CoreEngine } from './engine.js';
-import { JobExecutor, JobOperations } from './job-executor.js';
+import { JobExecutor } from './job-executor.js';
 import { JobService } from './job-service.js';
 import { WorkspaceResolver } from './workspace.js';
-import { registerEventJobs } from '../event/job-operations.js';
-import { registerFocusJobs } from '../focus/job-operations.js';
-import { registerGuiJobs } from '../gui/job-operations.js';
-import { registerMapJobs } from '../map/job-operations.js';
-import { registerProbabilityJobs } from '../probability/job-operations.js';
-import { registerTechnologyJobs } from '../technology/job-operations.js';
-import { registerAnalysisJobs } from './analysis-job-operations.js';
+import { registerWorkerOperations } from './job-operation-registration.js';
 
 // Fixed internal process entry point. It accepts only a trusted host's structured IPC
 // message, never a script path, module name, callback, command, or transport request.
@@ -36,19 +30,16 @@ process.once('message', (value: unknown) => {
   clearTimeout(startup);
   void (async () => {
     const input = inputSchema.parse(value);
+    // The send callback confirms enqueueing, not receipt. Acknowledge before the host
+    // disconnects; losing that channel after receipt never cancels durable execution.
+    if (process.connected) process.send?.({ type: 'accepted' }, () => undefined);
     const resolver = await WorkspaceResolver.create(input.configuration);
     const engine = new CoreEngine(resolver);
     // Recovery is targeted by the job executor. Do not sweep or interfere with
     // unrelated live rewrite journals when a worker starts.
     const jobs = await JobService.create(resolver);
-    const operations = new JobOperations();
-    registerEventJobs(operations, engine);
-    registerAnalysisJobs(operations, engine);
-    registerTechnologyJobs(operations, engine);
-    registerProbabilityJobs(operations, engine);
-    registerMapJobs(operations, engine);
-    registerGuiJobs(operations, engine);
-    registerFocusJobs(operations, engine);
+    const record = await jobs.get(input.workspaceId, input.jobId, input.principal);
+    const operations = await registerWorkerOperations(engine, record.request.toolName);
     await new JobExecutor(engine, jobs, operations).run(
       input.workspaceId,
       input.jobId,

@@ -378,6 +378,7 @@ describe('bounded local HOI4 references', () => {
     expect(result.definitions[0]?.text.split('\n')).toHaveLength(2);
     expect(result.definitions[0]?.nextLine).toBe(3);
     expect(result.referenceCount).toBeGreaterThanOrEqual(1);
+    expect(result.sourceScope).toBe('event_consumers');
     expect(
       result.references.some(({ path: source }) =>
         source.includes('common/on_actions/reference.txt'),
@@ -389,6 +390,194 @@ describe('bounded local HOI4 references', () => {
     await expect(
       sourceLookup(engine, 'fixture', { ...input, expectedRevision: 'a'.repeat(64) }),
     ).rejects.toMatchObject({ code: 'SOURCE_REVISION_STALE' });
+  });
+
+  it('retains event consumers in focus rewards, decisions, helpers and scripted GUI effects', async () => {
+    const { resolver, mod } = await fixture();
+    const sources = [
+      [
+        'common/national_focus/consumer.txt',
+        'focus_tree = { id = consumers focus = { id = consumer_focus x = 0 y = 0 completion_reward = { country_event = { id = reference.1 } } } }',
+      ],
+      [
+        'common/decisions/consumer.txt',
+        'consumer_category = { consumer_decision = { complete_effect = { country_event = { id = reference.1 } } } }',
+      ],
+      [
+        'common/scripted_effects/consumer.txt',
+        'consumer_helper = { country_event = { id = reference.1 } }',
+      ],
+      [
+        'common/scripted_guis/consumer.txt',
+        'scripted_gui = { consumer_gui = { context_type = player_context effects = { consumer_click = { country_event = { id = reference.1 } } } } }',
+      ],
+    ] as const;
+    for (const [relative, text] of sources) {
+      await mkdir(path.dirname(path.join(mod, relative)), { recursive: true });
+      await writeFile(path.join(mod, relative), text);
+    }
+    const result = await sourceLookup(
+      new CoreEngine(resolver),
+      'fixture',
+      sourceLookupRequestSchema.parse({
+        workspaceId: 'fixture',
+        symbol: 'reference.1',
+        kind: 'event',
+        maxReferences: 20,
+      }),
+    );
+    for (const [relative] of sources)
+      expect(result.references.some(({ path: source }) => source.endsWith(relative))).toBe(true);
+    expect(result.sourceScope).toBe('event_consumers');
+  });
+
+  it('scans only explicitly selected authorities and labels unselected coverage', async () => {
+    const { workspace } = await fixture();
+    const result = await new ReferenceService().search(
+      workspace,
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'fixture',
+        query: 'country_event',
+        sources: ['game_doc'],
+      }),
+    );
+    expect(result.results.every(({ source }) => source === 'game_doc')).toBe(true);
+    expect(result.coverage.game_doc.included).toBe(true);
+    expect(result.coverage.wiki).toMatchObject({ included: false, files: 0 });
+  });
+
+  it('uses the citation authority hint without treating another authority as a substitute', async () => {
+    const { workspace } = await fixture();
+    const service = new ReferenceService();
+    const found = await service.search(
+      workspace,
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'fixture',
+        query: 'country_event',
+        sources: ['game_doc'],
+      }),
+    );
+    const section = found.results[0]!;
+    const input = referenceReadRequestSchema.parse({
+      workspaceId: 'fixture',
+      id: section.id,
+      revision: section.revision,
+      source: section.source,
+    });
+    expect((await new ReferenceService().read(workspace, input)).source).toBe('game_doc');
+    await expect(service.read(workspace, { ...input, source: 'wiki' })).rejects.toMatchObject({
+      code: 'REFERENCE_SECTION_UNKNOWN',
+    });
+  });
+
+  it('decodes BOM-marked generated text and recognizes uppercase log filenames', async () => {
+    const { workspace, mod } = await fixture();
+    await mkdir(path.join(mod, 'script_docs'));
+    await writeFile(
+      path.join(mod, 'script_docs', 'EFFECT_DOCS.LOG'),
+      Buffer.concat([
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from('generated_command\n\tSupported Scopes: COUNTRY\n', 'utf16le'),
+      ]),
+    );
+    const service = new ReferenceService();
+    const found = await service.search(
+      workspace,
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'fixture',
+        query: 'generated_command',
+        sources: ['script_doc'],
+      }),
+    );
+    expect(found.results[0]?.heading).toBe('generated_command');
+    const section = found.results[0]!;
+    const read = await service.read(
+      workspace,
+      referenceReadRequestSchema.parse({
+        workspaceId: 'fixture',
+        id: section.id,
+        revision: section.revision,
+      }),
+    );
+    expect(read.text).toContain('Supported Scopes: COUNTRY');
+  });
+
+  it('preserves heavily escaped text across bounded JSON pages', async () => {
+    const { workspace, wiki } = await fixture();
+    const content = `# Event modding\n${'\0'.repeat(12_000)}`;
+    await writeFile(wiki, content);
+    const service = new ReferenceService();
+    const found = await service.search(
+      workspace,
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'fixture',
+        query: 'Event modding',
+        sources: ['wiki'],
+      }),
+    );
+    const section = found.results[0]!;
+    const options = referenceReadRequestSchema.parse({
+      workspaceId: 'fixture',
+      id: section.id,
+      revision: section.revision,
+      source: 'wiki',
+    });
+    const pages: string[] = [];
+    for (let page = 0; page < 30; page++) {
+      const read = await service.read(workspace, options);
+      expect(Buffer.byteLength(JSON.stringify(read.text))).toBeLessThanOrEqual(8192);
+      pages.push(read.text);
+      if (read.nextLine === null) break;
+      options.startLine = read.nextLine;
+      options.startColumn = read.nextColumn!;
+    }
+    expect(pages.join('')).toBe(content);
+  });
+
+  it('reports metadata omitted by byte limits while preserving primary authorities', async () => {
+    const { workspace, mod, game } = await fixture();
+    const heading = '\0'.repeat(512);
+    for (const title of ['Data structures', 'Triggers', 'Effects', 'Modifiers', 'Scopes'])
+      await writeFile(
+        path.join(mod, 'paradox_wiki', `${title} - Hearts of Iron 4 Wiki.md`),
+        `# ${heading}\nNative reference topic.\n`,
+      );
+    const searchFile = path.join(mod, 'paradox_wiki', 'Event modding - Hearts of Iron 4 Wiki.md');
+    await writeFile(
+      searchFile,
+      Array.from({ length: 12 }, () => `## ${heading}\nevent rule\n`).join(''),
+    );
+    for (const name of ['script_concept', 'effects', 'triggers', 'modifiers'])
+      await writeFile(
+        path.join(game, 'documentation', `${name}_documentation.md`),
+        `# ${heading}\nNative documentation.\n`,
+      );
+    const service = new ReferenceService();
+    const search = await service.search(
+      workspace,
+      referenceSearchRequestSchema.parse({
+        workspaceId: 'fixture',
+        query: 'event rule',
+        sources: ['wiki'],
+        limit: 12,
+      }),
+    );
+    expect(search.limitedByBytes).toBe(true);
+    expect(search.omitted).toBeGreaterThan(0);
+    expect(Buffer.byteLength(JSON.stringify(search.results))).toBeLessThanOrEqual(24_000);
+    const context = await service.context(
+      workspace,
+      referenceContextRequestSchema.parse({
+        workspaceId: 'fixture',
+        surface: 'general',
+        limit: 24,
+      }),
+    );
+    expect(context.limitedByBytes).toBe(true);
+    expect(new Set(context.sections.map(({ source }) => source))).toEqual(
+      new Set(['game_doc', 'wiki']),
+    );
+    expect(context.omittedSources.length).toBeGreaterThan(0);
   });
 
   it('accepts a registered external script documentation root and indexes entries separately', async () => {

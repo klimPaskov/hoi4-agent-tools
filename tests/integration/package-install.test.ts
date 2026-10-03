@@ -31,6 +31,7 @@ const expectedToolNames = [
   'hoi4.reference_read',
   'hoi4.reference_context',
   'hoi4.source_lookup',
+  'hoi4.script_validate',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',

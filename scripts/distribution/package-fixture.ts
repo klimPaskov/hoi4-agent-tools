@@ -31,6 +31,7 @@ export const REQUIRED_PACKAGE_FILES = [
   'schemas/reference-read-input.schema.json',
   'schemas/reference-context-input.schema.json',
   'schemas/source-lookup-input.schema.json',
+  'schemas/script-validate-input.schema.json',
   'docs/http.md',
   'docs/development.md',
   'docs/jobs.md',

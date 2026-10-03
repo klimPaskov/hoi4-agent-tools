@@ -61,6 +61,11 @@ export class IndexSegmentCache {
     return JSON.parse(entry.encoded) as FileIndexSegment;
   }
 
+  /** Availability check without decoding or cache-hit accounting. */
+  has(address: string): boolean {
+    return this.#entries.has(address);
+  }
+
   /** Import one authenticated canonical entry without counting it as a process-local hit. */
   importEncoded(address: string, encoded: string): void {
     const segment = JSON.parse(encoded) as unknown;

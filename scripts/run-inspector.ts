@@ -26,6 +26,7 @@ const publicToolNames = [
   'hoi4.reference_read',
   'hoi4.reference_context',
   'hoi4.source_lookup',
+  'hoi4.script_validate',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
@@ -153,9 +154,14 @@ try {
     mkdir(path.join(mod, 'interface'), { recursive: true }),
     mkdir(path.join(mod, 'localisation', 'english'), { recursive: true }),
     mkdir(path.join(mod, 'paradox_wiki'), { recursive: true }),
+    mkdir(path.join(mod, 'script_docs'), { recursive: true }),
     mkdir(storage),
   ]);
   await Promise.all([
+    writeFile(
+      path.join(mod, 'script_docs', 'effect_docs.log'),
+      'add_power\n  Supported Scopes: COUNTRY\n  Fixture command for native scope qualification.\n',
+    ),
     writeFile(
       path.join(mod, 'paradox_wiki', 'Event modding - Hearts of Iron 4 Wiki.md'),
       '# Event modding\n## Events\nUse country_event for an event.\n',
@@ -214,6 +220,27 @@ try {
   if (!exactNames(toolNames, publicToolNames)) {
     throw new Error(`Inspector returned the wrong public tools: ${toolNames.join(', ')}`);
   }
+
+  const commandCheck = successfulToolResult(
+    await runInspector('tools/call', [
+      '--tool-name',
+      'hoi4.script_validate',
+      '--tool-arg',
+      'workspaceId=inspector',
+      '--tool-arg',
+      'source=add_power = 2',
+      '--tool-arg',
+      'kind=effect',
+      '--tool-arg',
+      'scope=country',
+      '--tool-arg',
+      'documentation=script_doc',
+    ]),
+    'Inspector hoi4.script_validate',
+  );
+  const commandData = commandCheck.data as { valid?: boolean; checkedCommands?: number };
+  if (commandData.valid !== true || commandData.checkedCommands !== 1)
+    throw new Error('Inspector command check missed its documented fixture command');
 
   const referenceSearch = successfulToolResult(
     await runInspector('tools/call', [

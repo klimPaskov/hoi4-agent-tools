@@ -45,6 +45,7 @@ export interface PersistentAnalysisCacheStatistics {
   evictions: number;
   invalidEntries: number;
   oversized: number;
+  limitedBatches: number;
 }
 
 interface RetainedEntry {
@@ -91,6 +92,7 @@ export class PersistentAnalysisCache {
   #evictions = 0;
   #invalidEntries = 0;
   #oversized = 0;
+  #limitedBatches = 0;
   readonly #invalidAddresses = new Set<string>();
 
   private constructor(
@@ -99,21 +101,33 @@ export class PersistentAnalysisCache {
     private readonly maxBytes: number,
     private readonly maxEntries: number,
     private readonly maxSingleBytes: number,
+    private readonly batchMaxWrites: number,
+    private readonly batchMaxPayloadBytes: number,
   ) {
     this.#lock = new SharedRequestCapacity(root, 1);
   }
 
   static async create(
     state: ServerState,
-    options: { maxBytes?: number; maxEntries?: number; maxSingleBytes?: number } = {},
+    options: {
+      maxBytes?: number;
+      maxEntries?: number;
+      maxSingleBytes?: number;
+      batchMaxWrites?: number;
+      batchMaxPayloadBytes?: number;
+    } = {},
   ): Promise<PersistentAnalysisCache> {
     const maxBytes = options.maxBytes ?? 268_435_456;
     const maxEntries = options.maxEntries ?? 50_000;
     const maxSingleBytes = options.maxSingleBytes ?? 16_777_216;
+    const batchMaxWrites = options.batchMaxWrites ?? 16;
+    const batchMaxPayloadBytes = options.batchMaxPayloadBytes ?? 1_048_576;
     for (const [name, value] of [
       ['byte budget', maxBytes],
       ['entry budget', maxEntries],
       ['single-entry budget', maxSingleBytes],
+      ['batch write budget', batchMaxWrites],
+      ['batch payload budget', batchMaxPayloadBytes],
     ] as const) {
       if (!Number.isSafeInteger(value) || value < 0)
         throw new RangeError(`Persistent analysis cache ${name} must be a non-negative integer`);
@@ -122,7 +136,15 @@ export class PersistentAnalysisCache {
     const root = await containedGeneratedPath(state.root, 'analysis-cache');
     await mkdir(root, { recursive: true, mode: 0o700 });
     await assertUnlinked(root);
-    return new PersistentAnalysisCache(state, root, maxBytes, maxEntries, maxSingleBytes);
+    return new PersistentAnalysisCache(
+      state,
+      root,
+      maxBytes,
+      maxEntries,
+      maxSingleBytes,
+      batchMaxWrites,
+      batchMaxPayloadBytes,
+    );
   }
 
   async hydrate(
@@ -142,7 +164,7 @@ export class PersistentAnalysisCache {
       signal?.throwIfAborted();
       const key = sourceDocumentCacheKey(file.bytes, file.displayPath);
       const documentAddress = sourceAddress(key);
-      if (sourceEntries.has(documentAddress)) {
+      if (!documents.has(key) && sourceEntries.has(documentAddress)) {
         const payload = await this.read(scopeHash, 'source-document', documentAddress, signal);
         if (payload !== undefined) {
           try {
@@ -158,7 +180,7 @@ export class PersistentAnalysisCache {
       }
       for (const provinceDefinition of [false, true]) {
         const address = indexSegmentAddress(file, provinceDefinition);
-        if (!indexEntries.has(address)) continue;
+        if (segments.has(address) || !indexEntries.has(address)) continue;
         const payload = await this.read(scopeHash, 'index-segment', address, signal);
         if (payload === undefined) continue;
         try {
@@ -184,8 +206,35 @@ export class PersistentAnalysisCache {
         this.inventory(scopeHash, 'source-document', signal),
         this.inventory(scopeHash, 'index-segment', signal),
       ]);
+      const batch = { writes: 0, payloadBytes: 0, limited: false };
+      const retain = async (
+        kind: EntryKind,
+        address: string,
+        payload: Buffer,
+      ): Promise<boolean> => {
+        if (
+          batch.writes >= this.batchMaxWrites ||
+          payload.length > this.batchMaxPayloadBytes - batch.payloadBytes
+        ) {
+          batch.limited = true;
+          return false;
+        }
+        const written = await this.write(scopeHash, kind, address, payload, signal);
+        if (written) {
+          batch.writes++;
+          batch.payloadBytes += payload.length;
+        }
+        return written;
+      };
       for (const file of files) {
         signal.throwIfAborted();
+        if (
+          batch.writes >= this.batchMaxWrites ||
+          batch.payloadBytes >= this.batchMaxPayloadBytes
+        ) {
+          batch.limited = true;
+          break;
+        }
         const key = sourceDocumentCacheKey(file.bytes, file.displayPath);
         const documentAddress = sourceAddress(key);
         const document = documents.exportEncoded(key);
@@ -194,7 +243,7 @@ export class PersistentAnalysisCache {
           (!sourceEntries.has(documentAddress) ||
             this.#invalidAddresses.has(`${scopeHash}\0source-document\0${documentAddress}`))
         ) {
-          if (await this.write(scopeHash, 'source-document', documentAddress, document, signal)) {
+          if (await retain('source-document', documentAddress, document)) {
             sourceEntries.add(documentAddress);
           }
         }
@@ -207,11 +256,12 @@ export class PersistentAnalysisCache {
               !this.#invalidAddresses.has(`${scopeHash}\0index-segment\0${address}`))
           )
             continue;
-          if (await this.write(scopeHash, 'index-segment', address, Buffer.from(segment), signal)) {
+          if (await retain('index-segment', address, Buffer.from(segment))) {
             indexEntries.add(address);
           }
         }
       }
+      if (batch.limited) this.#limitedBatches++;
       await this.prune(signal);
     });
   }
@@ -226,6 +276,7 @@ export class PersistentAnalysisCache {
       evictions: this.#evictions,
       invalidEntries: this.#invalidEntries,
       oversized: this.#oversized,
+      limitedBatches: this.#limitedBatches,
     };
   }
 

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.6.0/schemas/source-lookup-input.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.7.0/schemas/source-lookup-input.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -39,6 +39,33 @@
       "minimum": 1,
       "maximum": 80
     },
+    "keyPath": {
+      "maxItems": 24,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
+    "view": {
+      "default": "source",
+      "type": "string",
+      "enum": [
+        "source",
+        "structure"
+      ]
+    },
+    "maxChildren": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 40
+    },
+    "childOffset": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000
+    },
     "fromLine": {
       "type": "integer",
       "minimum": 1,
@@ -57,5 +84,44 @@
   "required": [
     "symbol"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          "required": [
+            "index"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
 }

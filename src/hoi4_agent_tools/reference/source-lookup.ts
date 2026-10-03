@@ -1,10 +1,14 @@
-import type { CoreEngine } from '../core/engine.js';
+import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import { ServiceError } from '../core/result.js';
 import { decodeSource } from '../core/source/encoding.js';
 import type { z } from 'zod/v4';
 import type { sourceLookupRequestSchema, sourceLookupDataSchema } from '../schemas/reference.js';
-import { readBoundedLines } from './lines.js';
+import { readBoundedJsonLines } from './lines.js';
 import { scanImpactSemanticReferences } from '../core/impact-semantic.js';
+import { parseClausewitz } from '../core/source/parser.js';
+import { navigateSource } from './source-navigation.js';
+
+const semanticCache = new WeakMap<ScanSnapshot, ReturnType<typeof scanImpactSemanticReferences>>();
 
 type Input = z.infer<typeof sourceLookupRequestSchema>;
 export type SourceLookupResult = z.infer<typeof sourceLookupDataSchema>;
@@ -17,7 +21,34 @@ export async function sourceLookup(
   principal?: string,
   signal?: AbortSignal,
 ): Promise<SourceLookupResult> {
-  const snapshot = await engine.scan(workspaceId, {}, principal, signal);
+  const narrowPatterns: Readonly<Record<string, string[]>> = {
+    event: ['events/**/*.txt'],
+    scripted_effect: ['common/scripted_effects/**/*.txt'],
+    scripted_trigger: ['common/scripted_triggers/**/*.txt'],
+  };
+  const patterns =
+    input.kind === 'event' && input.includeReferences
+      ? [
+          'events/**/*.txt',
+          'common/national_focus/**/*.txt',
+          'common/continuous_focus/**/*.txt',
+          'common/decisions/**/*.txt',
+          'common/ideas/**/*.txt',
+          'common/technologies/**/*.txt',
+          'common/scripted_effects/**/*.txt',
+          'common/scripted_triggers/**/*.txt',
+          'common/scripted_guis/**/*.txt',
+          'common/on_actions/**/*.txt',
+        ]
+      : input.includeReferences || input.kind === undefined
+        ? undefined
+        : narrowPatterns[input.kind];
+  const snapshot = await engine.scan(
+    workspaceId,
+    patterns === undefined ? {} : { patterns },
+    principal,
+    signal,
+  );
   if (input.expectedRevision !== undefined && input.expectedRevision !== snapshot.revision) {
     throw new ServiceError(
       'SOURCE_REVISION_STALE',
@@ -25,7 +56,8 @@ export async function sourceLookup(
       { currentRevision: snapshot.revision },
     );
   }
-  const definitions = snapshot.index.symbols
+  const navigating = input.keyPath !== undefined || input.view === 'structure';
+  const matchedDefinitions = snapshot.index.symbols
     .filter(
       (entry) =>
         entry.id === input.symbol && (input.kind === undefined || entry.kind === input.kind),
@@ -33,12 +65,51 @@ export async function sourceLookup(
     .sort(
       (left, right) =>
         Number(left.overridden) - Number(right.overridden) || right.loadOrder - left.loadOrder,
-    )
-    .slice(0, input.maxDefinitions)
+    );
+  if (navigating && new Set(matchedDefinitions.map(({ kind }) => kind)).size > 1)
+    throw new ServiceError(
+      'SOURCE_KIND_AMBIGUOUS',
+      'Nested navigation requires kind when the identifier has multiple symbol kinds',
+    );
+  const definitions = matchedDefinitions
+    .slice(0, navigating ? 1 : input.maxDefinitions)
     .map((entry, index) => {
       const source = snapshot.index.files.get(entry.path);
       const start = entry.location?.start.line;
       const end = entry.location?.end.line;
+      const navigation = navigating
+        ? (() => {
+            if (
+              source === undefined ||
+              entry.location === undefined ||
+              /\.ya?ml$/iu.test(entry.path)
+            )
+              throw new ServiceError(
+                'SOURCE_STRUCTURE_UNAVAILABLE',
+                'Nested navigation requires an indexed Clausewitz definition',
+              );
+            return navigateSource(
+              parseClausewitz(source.bytes, source.displayPath),
+              {
+                start: entry.location.start.offset,
+                end: entry.location.end.offset,
+              },
+              input.keyPath ?? [],
+              {
+                structure: input.view === 'structure',
+                maxChildren: input.maxChildren,
+                childOffset: input.childOffset,
+                maxLines: input.maxLines,
+                ...(index === 0 && input.fromLine !== undefined
+                  ? { fromLine: input.fromLine }
+                  : {}),
+                ...(index === 0 && input.fromColumn !== undefined
+                  ? { fromColumn: input.fromColumn }
+                  : {}),
+              },
+            );
+          })()
+        : undefined;
       const fromLine = index === 0 ? (input.fromLine ?? start) : start;
       if (
         fromLine !== undefined &&
@@ -60,13 +131,14 @@ export async function sourceLookup(
       const selected =
         fromLine === undefined || lines.length === 0
           ? null
-          : readBoundedLines(
+          : readBoundedJsonLines(
               lines,
               start ?? fromLine,
               fromLine,
               index === 0 ? (input.fromColumn ?? 1) : 1,
               input.maxLines,
               2_000,
+              4_096,
             );
       return {
         kind: entry.kind,
@@ -78,16 +150,20 @@ export async function sourceLookup(
         sourceShadowed: entry.sourceShadowed,
         startLine: start ?? null,
         endLine: end ?? null,
-        fromLine: fromLine ?? null,
-        toLine: selected?.endLine ?? null,
-        nextLine: selected?.nextLine ?? null,
-        nextColumn: selected?.nextColumn ?? null,
-        text: selected?.text ?? '',
+        fromLine: navigation?.fromLine ?? fromLine ?? null,
+        toLine: navigation?.endLine ?? selected?.endLine ?? null,
+        nextLine: navigation === undefined ? (selected?.nextLine ?? null) : navigation.nextLine,
+        nextColumn:
+          navigation === undefined ? (selected?.nextColumn ?? null) : navigation.nextColumn,
+        text: navigation?.text ?? selected?.text ?? '',
+        ...(navigation === undefined ? {} : { navigation: navigation.navigation }),
       };
     });
-  const semantic = input.includeReferences
-    ? scanImpactSemanticReferences(snapshot, 200_000, { includeOnActions: true })
-    : undefined;
+  let semantic = input.includeReferences ? semanticCache.get(snapshot) : undefined;
+  if (input.includeReferences && semantic === undefined) {
+    semantic = scanImpactSemanticReferences(snapshot, 200_000, { includeOnActions: true });
+    semanticCache.set(snapshot, semantic);
+  }
   const referenceIdentities = new Set<string>();
   const matchedReferences = input.includeReferences
     ? [...snapshot.index.references, ...(semantic?.references ?? [])]
@@ -109,7 +185,15 @@ export async function sourceLookup(
     path: entry.path,
     line: entry.location?.start.line ?? null,
   }));
-  return {
+  const result: SourceLookupResult = {
+    sourceScope:
+      input.kind === 'event'
+        ? input.includeReferences
+          ? 'event_consumers'
+          : 'event_definitions'
+        : patterns === undefined
+          ? 'workspace_index'
+          : 'helper_definitions',
     revision: snapshot.revision,
     complete: snapshot.complete,
     skippedSourceCount: snapshot.skippedSourceCount,
@@ -117,6 +201,7 @@ export async function sourceLookup(
       (entry) =>
         entry.id === input.symbol && (input.kind === undefined || entry.kind === input.kind),
     ).length,
+    definitionsTruncated: matchedDefinitions.length > definitions.length,
     definitions,
     references,
     referencesIncluded: input.includeReferences,
@@ -130,4 +215,25 @@ export async function sourceLookup(
       matchedReferences.length <= references.length,
     unresolvedReferenceCount: semantic?.unresolved.length ?? 0,
   };
+  while (
+    Buffer.byteLength(JSON.stringify(result), 'utf8') > 24_000 &&
+    result.references.length > 0
+  ) {
+    result.references.pop();
+    result.referencesTruncated = true;
+    result.referencesComplete = false;
+  }
+  while (
+    Buffer.byteLength(JSON.stringify(result), 'utf8') > 24_000 &&
+    result.definitions.length > 1
+  ) {
+    result.definitions.pop();
+    result.definitionsTruncated = true;
+  }
+  if (Buffer.byteLength(JSON.stringify(result), 'utf8') > 24_000)
+    throw new ServiceError(
+      'REFERENCE_RESPONSE_TOO_LARGE',
+      'Selected source metadata exceeds the bounded reply; use entry-index selectors for long nested keys',
+    );
+  return result;
 }

@@ -171,7 +171,7 @@ describe('probability MCP workflow', () => {
         scenarioSet,
       },
     });
-    expect(evaluated.structuredContent).toMatchObject({
+    expect(evaluated.structuredContent, JSON.stringify(evaluated.structuredContent)).toMatchObject({
       status: 'ok',
       code: 'PROBABILITY_ANALYZED',
       data: {
@@ -657,7 +657,7 @@ describe('probability MCP workflow', () => {
         },
       },
     });
-    expect(evaluated.structuredContent).toMatchObject({
+    expect(evaluated.structuredContent, JSON.stringify(evaluated.structuredContent)).toMatchObject({
       status: 'ok',
       data: {
         operation: 'evaluate',

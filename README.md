@@ -22,7 +22,7 @@ The examples below show the results.
 
 ## Examples
 
-[Focus trees](#focus-trees-and-alternative-prerequisites) · [Technology folders](#technology-folders-and-card-artwork) · [Interfaces](#scripted-interfaces) · [Maps and events](#maps-and-event-chains) · [Local rules and AI](#local-rules-and-ai-weights) · [All 34 tools](#complete-tool-list)
+[Focus trees](#focus-trees-and-alternative-prerequisites) · [Technology folders](#technology-folders-and-card-artwork) · [Interfaces](#scripted-interfaces) · [Maps and events](#maps-and-event-chains) · [Local rules and AI](#local-rules-and-ai-weights) · [All tools](#complete-tool-list)
 
 ### Focus trees and alternative prerequisites
 
@@ -98,45 +98,46 @@ The [examples guide](docs/examples.md) has more prompt details.
 
 ## Complete tool list
 
-The default server exposes 34 tools.
+The default server exposes 35 tools.
 Your agent can select them from ordinary language; use the live tool schema for call parameters.
 
-| Tool                        | Purpose                                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| `hoi4.focus_inspect`        | Read focus trees, continuous-focus placement, and structural or reference problems.       |
-| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                         |
-| `hoi4.focus_raster`         | Produce a PNG preview with decoded source icons.                                          |
-| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                            |
-| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                      |
-| `hoi4.gui_render`           | Render generated and explicit GUI scenarios, states, resolutions, and layout diagnostics. |
-| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                    |
-| `hoi4.map_inspect`          | Search, click, navigate, and inspect the complete rendered map and its linked data.       |
-| `hoi4.map_render`           | Render full-map layers, overlays, names, IDs, coordinates, and source-linked catalogs.    |
-| `hoi4.map_rewrite`          | Create or update states, provinces, IDs, networks, positions, and connected map data.     |
-| `hoi4.reference_context`    | Get compact, cited wiki and installed documentation pointers for a modding surface.       |
-| `hoi4.reference_search`     | Search bounded local documentation sections.                                              |
-| `hoi4.reference_read`       | Read one revision-bound section, with line continuation.                                  |
-| `hoi4.source_lookup`        | Find exact definitions, overrides, usages, and narrow source blocks.                      |
-| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                  |
-| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.   |
-| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                           |
-| `hoi4.impact_inspect`       | Trace symbol and changed-file consumers across source systems and compare proposals.      |
-| `hoi4.decision_inspect`     | Inventory and evaluate decisions or missions under declared scenarios and source changes. |
-| `hoi4.mechanic_test`        | Execute bounded source effects on a copied declared scenario and check assertions.        |
-| `hoi4.package_check`        | Check declarative package definitions, calls, registrations, assets, and case links.      |
-| `hoi4.scenario_test`        | Run named source and domain cases in resumable, revision-bound batches.                   |
-| `hoi4.job_inspect`          | Inspect durable background work or retrieve its completed tool result.                    |
-| `hoi4.job_cancel`           | Durably request cancellation of authorized background work.                               |
-| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                   |
-| `hoi4.tech_render`          | Render source layouts with real item sizes and year guides, plus dependencies and assets. |
-| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.      |
-| `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs.  |
-| `hoi4.probability_evaluate` | Evaluate supported weights, probability and timing models, and missing inputs.            |
-| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.         |
-| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                  |
-| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.          |
-| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                     |
-| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.         |
+| Tool                        | Purpose                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `hoi4.focus_inspect`        | Read focus trees, continuous-focus placement, and structural or reference problems.          |
+| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                            |
+| `hoi4.focus_raster`         | Produce a PNG preview with decoded source icons.                                             |
+| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                               |
+| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                         |
+| `hoi4.gui_render`           | Render generated and explicit GUI scenarios, states, resolutions, and layout diagnostics.    |
+| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                       |
+| `hoi4.map_inspect`          | Search, click, navigate, and inspect the complete rendered map and its linked data.          |
+| `hoi4.map_render`           | Render full-map layers, overlays, names, IDs, coordinates, and source-linked catalogs.       |
+| `hoi4.map_rewrite`          | Create or update states, provinces, IDs, networks, positions, and connected map data.        |
+| `hoi4.reference_context`    | Get compact, cited wiki and installed documentation pointers for a modding surface.          |
+| `hoi4.reference_search`     | Search bounded local documentation sections.                                                 |
+| `hoi4.reference_read`       | Read one revision-bound section, with line continuation.                                     |
+| `hoi4.source_lookup`        | Find exact definitions, overrides, usages, and narrow source blocks.                         |
+| `hoi4.script_validate`      | Check snippet syntax, native command kinds, and declared scopes against local documentation. |
+| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                     |
+| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.      |
+| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                              |
+| `hoi4.impact_inspect`       | Trace symbol and changed-file consumers across source systems and compare proposals.         |
+| `hoi4.decision_inspect`     | Inventory and evaluate decisions or missions under declared scenarios and source changes.    |
+| `hoi4.mechanic_test`        | Execute bounded source effects on a copied declared scenario and check assertions.           |
+| `hoi4.package_check`        | Check declarative package definitions, calls, registrations, assets, and case links.         |
+| `hoi4.scenario_test`        | Run named source and domain cases in resumable, revision-bound batches.                      |
+| `hoi4.job_inspect`          | Inspect durable background work or retrieve its completed tool result.                       |
+| `hoi4.job_cancel`           | Durably request cancellation of authorized background work.                                  |
+| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                      |
+| `hoi4.tech_render`          | Render source layouts with real item sizes and year guides, plus dependencies and assets.    |
+| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.         |
+| `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs.     |
+| `hoi4.probability_evaluate` | Evaluate supported weights, probability and timing models, and missing inputs.               |
+| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.            |
+| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                     |
+| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.             |
+| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                        |
+| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.            |
 
 Set `HOI4_AGENT_TOOLS_CHAOSX=1` to expose two optional Chaos Redux workflow tools: `chaosx.focus_country_assets` and `chaosx.visual_revision`.
 The [tool guide](docs/tools.md) explains results, linked artifacts and long operations.

@@ -14,12 +14,18 @@ import {
 } from '../schemas/reference.js';
 import { ReferenceService } from './service.js';
 import { sourceLookup } from './source-lookup.js';
+import {
+  scriptValidateDataSchema,
+  scriptValidateRequestSchema,
+} from '../schemas/script-validation.js';
+import { validateScript } from './script-validation.js';
 
 const schemas = {
   'hoi4.reference_search': referenceSearchRequestSchema,
   'hoi4.reference_read': referenceReadRequestSchema,
   'hoi4.reference_context': referenceContextRequestSchema,
   'hoi4.source_lookup': sourceLookupRequestSchema,
+  'hoi4.script_validate': scriptValidateRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -67,13 +73,61 @@ export class ReferenceToolService {
                 referenceContextRequestSchema.parse(parsed),
                 signal,
               )
-            : await sourceLookup(
-                this.engine,
-                workspaceId,
-                sourceLookupRequestSchema.parse(parsed),
-                context.principal,
-                signal,
-              );
-    return toolResult(emptyServiceResult(workspaceId, data));
+            : name === 'hoi4.script_validate'
+              ? await validateScript(
+                  this.references,
+                  workspace,
+                  scriptValidateRequestSchema.parse(parsed),
+                  signal,
+                )
+              : await sourceLookup(
+                  this.engine,
+                  workspaceId,
+                  sourceLookupRequestSchema.parse(parsed),
+                  context.principal,
+                  signal,
+                );
+    const result = emptyServiceResult(workspaceId, data);
+    if (name === 'hoi4.script_validate') {
+      const checked = scriptValidateDataSchema.parse(data);
+      result.code = checked.valid === null ? 'SCRIPT_CHECK_PARTIAL' : 'SCRIPT_CHECKED';
+      result.validation = {
+        passed: checked.valid === true,
+        checks: [
+          {
+            id: 'script-command-checks',
+            passed: checked.valid === true,
+            message:
+              checked.valid === true
+                ? 'Syntax, native command kinds and declared scopes match the selected documentation'
+                : checked.valid === false
+                  ? 'Script checks found an error'
+                  : 'Script checks have unresolved coverage',
+          },
+        ],
+      };
+      result.diagnostics = checked.findings
+        .filter(({ status }) => status !== 'supported')
+        .slice(0, 20)
+        .map((finding) => ({
+          code: finding.code,
+          severity: finding.status === 'error' ? ('error' as const) : ('warning' as const),
+          category: 'validation' as const,
+          message: finding.message,
+          details: {
+            command: finding.command,
+            kind: finding.kind,
+            scope: finding.scope,
+            line: finding.line,
+            column: finding.column,
+          },
+        }));
+      while (
+        Buffer.byteLength(JSON.stringify(result.diagnostics), 'utf8') > 4096 &&
+        result.diagnostics.length > 1
+      )
+        result.diagnostics.pop();
+    }
+    return toolResult(result);
   }
 }

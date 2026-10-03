@@ -139,7 +139,7 @@ describe('MCP Technology Tree Viewer workflow', () => {
           arguments: { workspaceId: 'technology_workflow', ...call.arguments },
         }),
       );
-      expect(response.status, call.name).toBe('ok');
+      expect(response.status, `${call.name}: ${JSON.stringify(response)}`).toBe('ok');
       expect(response.code, call.name).toBe(call.code);
       expect(response.changedFiles, call.name).toEqual([]);
       expect(response.proposedFiles, call.name).toEqual([]);

@@ -198,13 +198,15 @@ export class JobWorkerHost {
         windowsHide: true,
       },
     );
+    let phase = 'waiting_for_ready';
+    let acknowledgmentTimer: NodeJS.Timeout | undefined;
     const initialized = new Promise<void>((resolve, reject) => {
       child.once('error', reject);
-      child.once('exit', () =>
+      child.once('exit', (code, signal) =>
         reject(
           new ServiceError(
             'JOB_WORKER_STARTUP_EXIT',
-            'The worker exited before completing its readiness handshake',
+            `The worker exited before completing its startup handshake (phase ${phase}, exit ${code ?? 'none'}, signal ${signal ?? 'none'})`,
           ),
         ),
       );
@@ -223,7 +225,38 @@ export class JobWorkerHost {
             );
           await lease.handoffToProcess(child.pid);
           await new Promise<void>((resolve, reject) => {
-            child.once('disconnect', resolve);
+            phase = 'waiting_for_acceptance';
+            acknowledgmentTimer = setTimeout(
+              () =>
+                reject(
+                  new ServiceError(
+                    'JOB_WORKER_ACCEPT_TIMEOUT',
+                    'The worker did not acknowledge receipt within its startup window',
+                  ),
+                ),
+              30_000,
+            );
+            child.once('message', (accepted: unknown) => {
+              if (
+                typeof accepted !== 'object' ||
+                accepted === null ||
+                !('type' in accepted) ||
+                accepted.type !== 'accepted'
+              ) {
+                reject(
+                  new ServiceError(
+                    'JOB_WORKER_PROTOCOL',
+                    'The worker did not acknowledge the dispatched job',
+                  ),
+                );
+                return;
+              }
+              phase = 'accepted';
+              // Only close IPC after the child confirms receipt. The persistent job,
+              // rather than the launcher's lifetime, owns execution after this point.
+              if (child.connected) child.disconnect();
+              resolve();
+            });
             child.send(
               {
                 configuration: {
@@ -241,12 +274,7 @@ export class JobWorkerHost {
                 ...(principal === undefined ? {} : { principal }),
               },
               (error) => {
-                if (error === null) {
-                  // IPC is startup-only. Closing it after dispatch prevents launcher
-                  // lifetime from becoming an implicit cancellation channel.
-                  if (child.connected) child.disconnect();
-                  resolve();
-                } else reject(error);
+                if (error !== null) reject(error);
               },
             );
           });
@@ -261,7 +289,11 @@ export class JobWorkerHost {
         });
       });
     });
-    await initialized;
+    try {
+      await initialized;
+    } finally {
+      clearTimeout(acknowledgmentTimer);
+    }
     for (;;) {
       const record = await this.jobs.get(workspaceId, id, principal);
       if (['completed', 'failed', 'cancelled'].includes(record.status)) return;

@@ -141,19 +141,25 @@ describe('worker startup failure boundaries', () => {
         await jobs.store.claim(jobs.scope('test'), record.id, { ...currentJobOwner(), pid });
       }
       const script = ready
-        ? 'process.once("message", () => process.once("disconnect", () => process.exit(1))); process.send({ type: "ready" });'
+        ? 'let accepted = false; process.once("message", () => setTimeout(() => { accepted = true; process.send({ type: "accepted" }); }, 50)); process.once("disconnect", () => process.exit(accepted ? 1 : 2)); process.send({ type: "ready" });'
         : 'process.exit(1);';
       // Fault injection exists only in this test's spawn boundary. The production host
       // still chooses its fixed internal entry point and accepts no executable selector.
-      vi.mocked(spawn).mockImplementation((_command, _arguments, options) =>
-        actualSpawn(process.execPath, ['-e', script], options),
-      );
+      let exitCode: number | null | undefined;
+      vi.mocked(spawn).mockImplementation((_command, _arguments, options) => {
+        const child = actualSpawn(process.execPath, ['-e', script], options);
+        child.once('exit', (code) => {
+          exitCode = code;
+        });
+        return child;
+      });
       const host = await JobWorkerHost.create(engine, jobs);
       await expect(host.run('test', record.id)).resolves.toMatchObject({
         status: 'failed',
         failure: { code: ready ? 'JOB_WORKER_EXIT' : 'JOB_WORKER_STARTUP_EXIT' },
       });
       expect(spawn).toHaveBeenCalledTimes(1);
+      expect(exitCode).toBe(1);
       expect(vi.mocked(spawn).mock.calls[0]![1]).toContainEqual(
         expect.stringMatching(/job-worker\.ts$/u),
       );

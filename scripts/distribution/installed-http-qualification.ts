@@ -21,6 +21,7 @@ const publicToolNames = [
   'hoi4.reference_read',
   'hoi4.reference_context',
   'hoi4.source_lookup',
+  'hoi4.script_validate',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.event_compare',
@@ -296,6 +297,24 @@ export async function qualifyInstalledHttpBinary(
     requireCondition(
       referenceContext.isError !== true,
       'Installed HTTP reference context returned an error',
+    );
+    const commandCheck = await client.callTool({
+      name: 'hoi4.script_validate',
+      arguments: {
+        workspaceId: options.workspaceId,
+        source: 'public_qualification_unknown_helper = yes',
+        kind: 'effect',
+        scope: 'country',
+      },
+    });
+    const commandResult = commandCheck.structuredContent as
+      { code?: string; data?: { valid?: boolean | null; unresolvedCount?: number } } | undefined;
+    requireCondition(
+      commandCheck.isError !== true &&
+        commandResult?.code === 'SCRIPT_CHECK_PARTIAL' &&
+        commandResult.data?.valid === null &&
+        commandResult.data.unresolvedCount === 1,
+      'Installed HTTP command check did not retain unresolved helper coverage',
     );
     const sourceLookup = await client.callTool({
       name: 'hoi4.source_lookup',

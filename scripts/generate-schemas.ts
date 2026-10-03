@@ -33,6 +33,7 @@ import {
   referenceSearchRequestSchema,
   sourceLookupRequestSchema,
 } from '../src/hoi4_agent_tools/schemas/reference.js';
+import { scriptValidateRequestSchema } from '../src/hoi4_agent_tools/schemas/script-validation.js';
 import {
   helperExpansionRequestSchema,
   helperExpansionSummarySchema,
@@ -79,6 +80,7 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['reference-read-input.schema.json', referenceReadRequestSchema],
   ['reference-search-input.schema.json', referenceSearchRequestSchema],
   ['source-lookup-input.schema.json', sourceLookupRequestSchema],
+  ['script-validate-input.schema.json', scriptValidateRequestSchema],
   ['helper-expansion-request.schema.json', helperExpansionRequestSchema],
   ['helper-expansion-summary.schema.json', helperExpansionSummarySchema],
   ['probability-scenario-set.schema.json', probabilityScenarioSetSchema],

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import fg from 'fast-glob';
+import { escapeFileGlob } from '../core/file-glob.js';
 import {
   ArtifactStore,
   boundedSourceHashEvidence,
@@ -627,7 +627,7 @@ function provinceBitmapPatterns(
       const selectedPath = path.posix.normalize(path.posix.join(normalizedRoot, normalizedName));
       if (selectedPath !== normalizedRoot && !selectedPath.startsWith(`${normalizedRoot}/`))
         continue;
-      patterns.add(fg.posix.escapePath(selectedPath));
+      patterns.add(escapeFileGlob(selectedPath));
     }
   }
   return [...patterns].sort((left, right) => compareCodeUnits(left, right));

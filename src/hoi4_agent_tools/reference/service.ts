@@ -1,6 +1,6 @@
-import { open, realpath, stat } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
-import fg from 'fast-glob';
+import { globFiles } from '../core/file-glob.js';
 import { compareCodeUnits, sha256Bytes } from '../core/canonical.js';
 import { ServiceError } from '../core/result.js';
 import { isWithin, type ResolvedWorkspace } from '../core/workspace.js';
@@ -14,8 +14,14 @@ import type {
   referenceReadDataSchema,
   referenceContextDataSchema,
 } from '../schemas/reference.js';
-import { readBoundedLines } from './lines.js';
-import { readBoundedFile } from '../core/scanner.js';
+import {
+  prepareSource,
+  verifySource,
+  readBoundedFile,
+  type PreparedSource,
+} from '../core/scanner.js';
+import { decodeSource } from '../core/source/encoding.js';
+import { readBoundedJsonLines } from './lines.js';
 
 type SourceKind = z.infer<typeof referenceSourceSchema>;
 type SearchInput = z.infer<typeof referenceSearchRequestSchema>;
@@ -29,6 +35,24 @@ const MAX_FILES = 512;
 const MAX_FILE_BYTES = 2_000_000;
 const MAX_TOTAL_BYTES = 32_000_000;
 const MAX_SECTIONS = 20_000;
+const MAX_REFERENCE_METADATA_BYTES = 24_000;
+
+function referenceText(bytes: Buffer): string {
+  if (
+    bytes.length >= 2 &&
+    ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))
+  ) {
+    const payload = Buffer.from(bytes.subarray(2));
+    if (payload.length % 2 !== 0)
+      throw new ServiceError(
+        'REFERENCE_ENCODING_INVALID',
+        'UTF-16 reference text has an incomplete code unit',
+      );
+    if (bytes[0] === 0xfe) payload.swap16();
+    return payload.toString('utf16le');
+  }
+  return decodeSource(bytes).text;
+}
 
 export interface ReferenceSection {
   id: string;
@@ -62,7 +86,10 @@ interface SourceRoot {
 
 interface ReferenceInventory {
   sections: IndexedSection[];
-  coverage: Record<SourceKind, { files: number; sections: number; unavailable: boolean }>;
+  coverage: Record<
+    SourceKind,
+    { files: number; sections: number; unavailable: boolean; included: boolean }
+  >;
   skipped: number;
 }
 
@@ -141,7 +168,7 @@ function sectionize(
   const relative = path.relative(root.root, filePath).replaceAll('\\', '/');
   const title = path
     .basename(filePath)
-    .replace(/\.(md|log)$/u, '')
+    .replace(/\.(md|log)$/iu, '')
     .replaceAll('_', ' ')
     .replace(/ - Hearts of Iron 4 Wiki$/u, '');
   const headings: Array<{ heading: string; start: number }> = [];
@@ -158,7 +185,7 @@ function sectionize(
       headings.push({ heading: match[2]!.replace(/<a\b[^>]*><\/a>/gu, '').trim(), start: index });
     else if (
       root.kind === 'script_doc' &&
-      filePath.endsWith('.log') &&
+      filePath.toLowerCase().endsWith('.log') &&
       /^[A-Za-z_][A-Za-z0-9_.:-]*$/u.test(line.trim()) &&
       !/^\s/u.test(line) &&
       /^\s+\S/u.test(lines[index + 1] ?? '')
@@ -293,16 +320,36 @@ export class ReferenceService {
     }
   }
 
-  async inventory(workspace: ResolvedWorkspace, signal?: AbortSignal): Promise<ReferenceInventory> {
+  async inventory(
+    workspace: ResolvedWorkspace,
+    signal?: AbortSignal,
+    sources?: readonly SourceKind[],
+  ): Promise<ReferenceInventory> {
     const sections: IndexedSection[] = [];
     const coverage: ReferenceInventory['coverage'] = {
-      game_doc: { files: 0, sections: 0, unavailable: true },
-      wiki: { files: 0, sections: 0, unavailable: true },
-      script_doc: { files: 0, sections: 0, unavailable: true },
+      game_doc: {
+        files: 0,
+        sections: 0,
+        unavailable: true,
+        included: sources === undefined || sources.includes('game_doc'),
+      },
+      wiki: {
+        files: 0,
+        sections: 0,
+        unavailable: true,
+        included: sources === undefined || sources.includes('wiki'),
+      },
+      script_doc: {
+        files: 0,
+        sections: 0,
+        unavailable: true,
+        included: sources === undefined || sources.includes('script_doc'),
+      },
     };
     let skipped = 0;
     let bytes = 0;
     for (const root of sourceRoots(workspace)) {
+      if (sources !== undefined && !sources.includes(root.kind)) continue;
       signal?.throwIfAborted();
       let canonicalRoot: string;
       try {
@@ -324,73 +371,94 @@ export class ReferenceService {
         );
       }
       coverage[root.kind].unavailable = false;
-      const names = await fg(root.patterns, {
+      const names = await globFiles(root.patterns, {
         cwd: canonicalRoot,
-        onlyFiles: true,
-        followSymbolicLinks: false,
-        dot: false,
+        caseSensitive: false,
+        ...(signal === undefined ? {} : { signal }),
       });
       names.sort(compareCodeUnits);
-      for (const name of names) {
+      for (let offset = 0; offset < names.length; offset += 8) {
         signal?.throwIfAborted();
         if (coverage[root.kind].files >= MAX_FILES || sections.length >= MAX_SECTIONS) {
-          skipped++;
-          continue;
+          skipped += names.length - offset;
+          break;
         }
-        const candidate = path.join(canonicalRoot, name);
-        const canonical = await realpath(candidate);
-        if (!isWithin(canonicalRoot, canonical)) {
-          skipped++;
-          continue;
-        }
-        const metadata = await stat(canonical);
-        if (metadata.size > MAX_FILE_BYTES || bytes + metadata.size > MAX_TOTAL_BYTES) {
-          skipped++;
-          continue;
-        }
-        bytes += metadata.size;
-        coverage[root.kind].files++;
-        const key = `${root.kind}:${canonicalRoot}:${canonical}`;
-        const handle = await open(canonical, 'r');
-        let content: Buffer;
+        const readRoot = { path: canonicalRoot };
+        const prepared = await Promise.allSettled(
+          names.slice(offset, offset + 8).map((name) => prepareSource(readRoot, name, signal)),
+        );
+        const opened = prepared.flatMap((entry) =>
+          entry.status === 'fulfilled' ? [entry.value] : [],
+        );
         try {
-          const opened = await handle.stat();
-          const resolvedAfterOpen = await realpath(canonical);
-          const current = await stat(resolvedAfterOpen);
-          if (
-            !opened.isFile() ||
-            !isWithin(canonicalRoot, resolvedAfterOpen) ||
-            opened.dev !== current.dev ||
-            opened.ino !== current.ino
-          ) {
+          signal?.throwIfAborted();
+          for (const entry of prepared) {
+            if (entry.status !== 'rejected') continue;
+            if (entry.reason instanceof ServiceError && entry.reason.code === 'SCAN_ROOT_ESCAPE') {
+              skipped++;
+              continue;
+            }
             throw new ServiceError(
               'REFERENCE_SOURCE_CHANGED',
               'Reference path changed while opening it; retry the request',
             );
           }
-          content = await readBoundedFile(
-            handle,
-            Math.min(MAX_FILE_BYTES, MAX_TOTAL_BYTES - bytes + metadata.size),
-            signal,
+          const admittedSources: PreparedSource[] = [];
+          for (const source of opened) {
+            if (
+              !source.metadata.isFile() ||
+              source.metadata.size > MAX_FILE_BYTES ||
+              bytes + source.metadata.size > MAX_TOTAL_BYTES ||
+              coverage[root.kind].files >= MAX_FILES
+            ) {
+              skipped++;
+              continue;
+            }
+            bytes += source.metadata.size;
+            coverage[root.kind].files++;
+            admittedSources.push(source);
+          }
+          const reads = await Promise.allSettled(
+            admittedSources.map(async (source) => {
+              const content = await readBoundedFile(source.handle, source.metadata.size, signal);
+              await verifySource(readRoot, source);
+              if (content.length !== source.metadata.size)
+                throw new ServiceError(
+                  'REFERENCE_SOURCE_CHANGED',
+                  'Reference changed while it was being read; retry the request',
+                );
+              return content;
+            }),
           );
+          signal?.throwIfAborted();
+          const failed = reads.find((entry) => entry.status === 'rejected');
+          if (failed?.status === 'rejected')
+            throw new ServiceError(
+              'REFERENCE_SOURCE_CHANGED',
+              'Reference changed while it was being read; retry the request',
+            );
+          for (const [index, read] of reads.entries()) {
+            if (read.status !== 'fulfilled') continue;
+            const canonical = admittedSources[index]!.canonicalPath;
+            const content = read.value;
+            const key = `${root.kind}:${canonicalRoot}:${canonical}`;
+            const revision = sha256Bytes(content);
+            let cached = this.#cache.get(key);
+            if (cached?.revision !== revision)
+              cached = {
+                revision,
+                bytes: content.length,
+                sections: sectionize(root, canonical, referenceText(content), revision),
+              };
+            this.retain(key, cached);
+            const admitted = cached.sections.slice(0, MAX_SECTIONS - sections.length);
+            if (admitted.length < cached.sections.length) skipped++;
+            sections.push(...admitted);
+            coverage[root.kind].sections += admitted.length;
+          }
         } finally {
-          await handle.close();
+          await Promise.all(opened.map(({ handle }) => handle.close()));
         }
-        bytes += content.length - metadata.size;
-        const revision = sha256Bytes(content);
-        let cached = this.#cache.get(key);
-        if (cached?.revision !== revision) {
-          cached = {
-            revision,
-            bytes: content.length,
-            sections: sectionize(root, canonical, content.toString('utf8'), revision),
-          };
-        }
-        this.retain(key, cached);
-        const admitted = cached.sections.slice(0, MAX_SECTIONS - sections.length);
-        if (admitted.length < cached.sections.length) skipped++;
-        sections.push(...admitted);
-        coverage[root.kind].sections += admitted.length;
       }
     }
     return { sections, coverage, skipped };
@@ -401,15 +469,29 @@ export class ReferenceService {
     input: SearchInput,
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
-    const inventory = await this.inventory(workspace, signal);
+    const inventory = await this.inventory(workspace, signal, input.sources);
     const matches = this.rank(inventory.sections, input.query, input.sources);
+    const results = matches.slice(0, input.limit).map(({ section, score, excerpt }) => ({
+      ...this.publicSection(section),
+      score,
+      excerpt,
+    }));
+    const requested = results.length;
+    while (
+      Buffer.byteLength(JSON.stringify(results), 'utf8') > MAX_REFERENCE_METADATA_BYTES &&
+      results.length > 1
+    )
+      results.pop();
+    if (Buffer.byteLength(JSON.stringify(results), 'utf8') > MAX_REFERENCE_METADATA_BYTES)
+      throw new ServiceError(
+        'REFERENCE_RESPONSE_TOO_LARGE',
+        'Reference metadata exceeds the bounded reply',
+      );
     return {
-      results: matches.slice(0, input.limit).map(({ section, score, excerpt }) => ({
-        ...this.publicSection(section),
-        score,
-        excerpt,
-      })),
+      results,
       total: matches.length,
+      omitted: matches.length - results.length,
+      limitedByBytes: results.length < requested,
       coverage: inventory.coverage,
       skipped: inventory.skipped,
     };
@@ -457,7 +539,21 @@ export class ReferenceService {
     input: ReadInput,
     signal?: AbortSignal,
   ): Promise<ReferenceReadResult> {
-    const inventory = await this.inventory(workspace, signal);
+    let source = input.source;
+    if (source === undefined) {
+      for (const cached of this.#cache.values()) {
+        const section = cached.sections.find(({ id }) => id === input.id);
+        if (section !== undefined) {
+          source = section.source;
+          break;
+        }
+      }
+    }
+    const inventory = await this.inventory(
+      workspace,
+      signal,
+      source === undefined ? undefined : [source],
+    );
     const section = inventory.sections.find(({ id }) => id === input.id);
     if (section === undefined)
       throw new ServiceError(
@@ -469,13 +565,14 @@ export class ReferenceService {
         currentRevision: section.revision,
       });
     const startLine = input.startLine ?? section.startLine;
-    const selected = readBoundedLines(
+    const selected = readBoundedJsonLines(
       section.lines,
       section.startLine,
       startLine,
       input.startColumn ?? 1,
       input.maxLines,
       8_000,
+      8_192,
     );
     return {
       ...this.publicSection(section),
@@ -540,6 +637,25 @@ export class ReferenceService {
       return true;
     });
     const selected = prioritized.slice(0, input.limit);
+    const requestedCount = selected.length;
+    while (
+      Buffer.byteLength(
+        JSON.stringify(selected.map((section) => this.publicSection(section))),
+        'utf8',
+      ) > MAX_REFERENCE_METADATA_BYTES &&
+      selected.length > 1
+    )
+      selected.pop();
+    if (
+      Buffer.byteLength(
+        JSON.stringify(selected.map((section) => this.publicSection(section))),
+        'utf8',
+      ) > MAX_REFERENCE_METADATA_BYTES
+    )
+      throw new ServiceError(
+        'REFERENCE_RESPONSE_TOO_LARGE',
+        'Reference metadata exceeds the bounded reply',
+      );
     return {
       surface: input.surface,
       sections: selected.map((section) => ({
@@ -547,7 +663,8 @@ export class ReferenceService {
         excerpt:
           ranked.find((entry) => entry.section.id === section.id)?.excerpt ?? section.excerpt,
       })),
-      omitted: Math.max(0, prioritized.length - input.limit),
+      omitted: Math.max(0, prioritized.length - selected.length),
+      limitedByBytes: selected.length < requestedCount,
       omittedSources: required
         .filter(
           ({ section }) =>

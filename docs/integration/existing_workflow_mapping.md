@@ -17,3 +17,11 @@ A modding workflow can call `hoi4.reference_context` for its current surface, se
 For a scripted GUI change, start with the relevant context bundle, open the installed control documentation and matching offline wiki section, and use `source_lookup` for one vanilla example. Then inspect and render the actual layout with the GUI tools. The references explain syntax; the render checks the selected window and scenario.
 
 Reference retrieval supplies syntax and precedent. Focus, event, technology, weighted-logic, GUI, and map workflows still use their domain inspectors, renders, comparisons, and declared scenarios for implementation evidence. Repository skills remain responsible for design, source edits, validation, and acceptance.
+
+When the live `hoi4.source_lookup` schema exposes `view` and `keyPath`, request bounded child structure and navigate directly to the relevant block.
+Select repeated keys with their zero-based `occurrence`, follow `nextChildOffset` for more children, and retain the scan revision and query settings for continuation.
+Disable references for a focused event or scripted-helper definition read; enable them when investigating consumers.
+
+When exposed, `hoi4.script_validate` checks an effect or trigger body under its declared scope against one selected native documentation authority.
+Treat `valid: null`, unresolved helpers, uninspected argument blocks, and omitted findings as remaining evidence gaps.
+A true result covers only the returned checks; parameter semantics and in-game behavior still need their own evidence.

@@ -365,6 +365,56 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
         await wire.request(
           'tools/call',
           {
+            name: 'hoi4.source_lookup',
+            arguments: { workspaceId: 'alpha', symbol: 'modern.1', view: 'structure' },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({
+      structuredContent: {
+        data: { definitions: [{ navigation: { children: expect.any(Array) } }] },
+      },
+    });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          {
+            name: 'hoi4.script_validate',
+            arguments: {
+              workspaceId: 'alpha',
+              source: 'unknown_helper = yes',
+              kind: 'effect',
+              scope: 'country',
+            },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ structuredContent: { data: { valid: null } } });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          {
+            name: 'hoi4.script_validate',
+            arguments: {
+              workspaceId: 'beta',
+              source: 'unknown_helper = yes',
+              kind: 'effect',
+              scope: 'country',
+            },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ isError: true, structuredContent: { code: 'WORKSPACE_INACCESSIBLE' } });
+    expect(
+      result(
+        await wire.request(
+          'tools/call',
+          {
             name: 'hoi4.reference_search',
             arguments: { workspaceId: 'beta', query: 'country_event' },
           },
@@ -373,6 +423,23 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       ),
     ).toMatchObject({ isError: true, structuredContent: { code: 'WORKSPACE_INACCESSIBLE' } });
     const denied = await connect(mode, 'alpha-user', []);
+    expect(
+      result(
+        await denied.request(
+          'tools/call',
+          {
+            name: 'hoi4.script_validate',
+            arguments: {
+              workspaceId: 'alpha',
+              source: 'unknown_helper = yes',
+              kind: 'effect',
+              scope: 'country',
+            },
+          },
+          {},
+        ),
+      ),
+    ).toMatchObject({ isError: true, structuredContent: { code: 'AUTH_SCOPE_REQUIRED' } });
     expect(
       result(
         await denied.request(
@@ -1401,7 +1468,7 @@ it('retains all shared tool names, descriptions, annotations, and schemas across
   expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   const listed = await client.listTools();
   const operations = listed.tools.map(({ execution: _execution, ...definition }) => definition);
-  expect(operations).toHaveLength(34);
+  expect(operations).toHaveLength(35);
   expect(modern.tools).toEqual(operations);
 });
 
@@ -1422,7 +1489,7 @@ it('supports the official SDK v2 ordinary-call client without requiring the Task
   });
   await client.connect(clientTransport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools).toHaveLength(34);
+  expect((await client.listTools()).tools).toHaveLength(35);
   expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
     'hoi4.probability_analysis',
   ]);

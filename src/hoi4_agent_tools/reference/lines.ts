@@ -70,3 +70,23 @@ export function readBoundedLines(
     nextColumn: lineIndex < lines.length ? columnIndex + 1 : null,
   };
 }
+
+/** Preserve continuation while bounding JSON escaping as well as raw UTF-8 text. */
+export function readBoundedJsonLines(
+  lines: readonly string[],
+  firstLine: number,
+  startLine: number,
+  startColumn: number,
+  maxLines: number,
+  maxBytes: number,
+  maxJsonBytes: number,
+): BoundedLineRead {
+  let budget = maxBytes;
+  for (;;) {
+    const result = readBoundedLines(lines, firstLine, startLine, startColumn, maxLines, budget);
+    if (Buffer.byteLength(JSON.stringify(result.text), 'utf8') <= maxJsonBytes) return result;
+    budget = Math.max(4, Math.floor(budget / 2));
+    if (budget === 4 && maxJsonBytes < 26)
+      throw new RangeError('JSON text budget cannot retain a source character');
+  }
+}

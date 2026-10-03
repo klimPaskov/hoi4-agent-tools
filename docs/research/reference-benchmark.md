@@ -40,3 +40,44 @@ For the GUI question “Where are scripted GUI click effects and triggers define
 | 8              | Installed documentation and wiki |                        0 |      5,926 |          339 |
 
 The default six-surface context bundles used 3,545–5,556 bytes including omission metadata. A smaller response is not sufficient evidence when `omittedSources` is nonempty: increase the limit or search and read those sources directly. The evaluation script fails when a compact budget drops a required source kind or silently omits its required-source pointers.
+
+## Source navigation and scan measurements
+
+On 2026-10-03, `scripts/evaluate-source-tools.ts --game-only` selected the installed `political.1` definition, listed its options, read exactly `add_political_power = -100` from its first option, and checked that command against installed documentation.
+The country-scope check succeeded and the state-scope check reported the documented mismatch.
+The evaluation retained source and documentation revisions and compared repeated reference results for equality.
+
+| Operation                      | Initial cache-enabled run | Scoped-cache run | Reply bytes |
+| ------------------------------ | ------------------------: | ---------------: | ----------: |
+| Cold event structure           |                 55,550 ms |        24,723 ms |       2,258 |
+| Repeated nested read           |                 20,936 ms |         3,565 ms |         862 |
+| Installed command check        |                  1,471 ms |        10,804 ms |       1,152 |
+| Event-consumer lookup          |   Timed out at 180,002 ms |       145,532 ms |       1,363 |
+| Repeated event-consumer lookup | Not completed in that run |        16,233 ms |       1,363 |
+
+A separate run with persistent caching disabled completed the broader lookup in 102,437 ms and its repeated lookup in 122,023 ms.
+This helped identify filesystem and cache costs; it is not a causal comparison under identical machine load.
+The candidate bounds optional cache writes, skips resident hydration, overlaps source verification, and scopes event queries to the analyser's supported owner sources.
+Its persistent cache recorded 32 writes across two bounded batches, with no invalid entries or evictions.
+The process recorded 616–625 MiB resident memory during the consumer lookups; these are sampled values, not peak-memory guarantees.
+
+Other work was running on the host, and latency varied materially.
+The command-document check was slower in the scoped-cache run, so these measurements must not be presented as an improvement for every operation or as a latency guarantee.
+The selected source index was complete, while reference completeness remained false because 2,379 dynamic references were unresolved.
+Static retrieval does not resolve those engine-dependent dispatches or establish runtime behavior.
+
+These source timings preceded the subsequent batched reference reader and glob-library replacement.
+A separate 2026-10-03 reference evaluation found all nine expected pages and answer-bearing sections and passed all eighteen compact-context cases, with no missing required sources or budget failures.
+Its six context replies used 3,616–5,627 JSON bytes.
+The candidate's complete MCP discovery list contains 35 tools and is tested against a 75 KiB ceiling.
+
+## Worker startup
+
+Five isolated readiness handshakes on 2026-10-03 averaged 2,163 ms with eager imports and 1,408 ms with authenticated domain loading.
+The individual samples were 2,056/2,570/2,349/1,857/1,985 ms and 3,213/930/995/960/942 ms respectively.
+The first changed-worker sample includes a cold TypeScript loader cache.
+These samples measure the readiness handshake without running a job, and do not establish complete request latency or throughput.
+Concurrent HTTP qualification keeps its original four-minute total request ceiling.
+Two earlier 64-request runs exceeded that ceiling for 23 and five requests respectively.
+The isolated run after domain loading passed all 64 requests in a 124.49-second test, including fixture setup and cleanup.
+Shared-host load varied between runs, so these are qualification receipts rather than a controlled throughput comparison.

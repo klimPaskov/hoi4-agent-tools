@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.6.0/schemas/reference-read-input.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.7.0/schemas/reference-read-input.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -15,6 +15,14 @@
     "revision": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "game_doc",
+        "wiki",
+        "script_doc"
+      ]
     },
     "startLine": {
       "type": "integer",

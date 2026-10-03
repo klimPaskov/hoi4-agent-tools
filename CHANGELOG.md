@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 3.7.0 - 2026-10-03
+
+- Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
+- Limit definition-only event/helper lookups to their source family and reuse semantic reference analysis for unchanged snapshots.
+- Check snippet syntax, native command kinds, and declared scopes against cited installed or explicitly selected generated documentation, with unresolved coverage reported separately.
+- Verify source files in bounded parallel batches, reject changing or replaced paths, and bound optional cache persistence without truncating analysis.
+- Load isolated workers' domain modules after authenticating the job, preserving exact operation admission and recorded write policies.
+- Filter reference scans by authority, reuse citation hints, decode supported reference encodings, and preserve byte-bounded continuations and explicit omission counts.
+- Replace the unpatched globbing dependency chain and update vulnerable transitive pins, preserving relative-path, symlink, literal-filename and pattern-complexity checks.
+
 ## 3.6.0 - 2026-09-27
 
 - Preview immediate tooltip text from source localisation with declared position, width and padding, using the source tooltip sprite and font.

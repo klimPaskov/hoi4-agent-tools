@@ -68,6 +68,23 @@ async function analysisFiles(root: string): Promise<string[]> {
 }
 
 describe('persistent content-addressed analysis cache', () => {
+  it('revalidates current bytes while avoiding persistent reads for a resident unchanged snapshot', async () => {
+    const { resolver, source } = await fixture();
+    const engine = new CoreEngine(await resolver());
+    const first = await engine.scan('test');
+    const before = await engine.persistentAnalysisCacheStatistics();
+    const repeated = await engine.scan('test');
+    expect(repeated).toBe(first);
+    expect(await engine.persistentAnalysisCacheStatistics()).toEqual(before);
+    await writeFile(
+      source,
+      (await readFile(source, 'utf8')).replace('persistent_focus', 'replacement_focus'),
+    );
+    const changed = await engine.scan('test');
+    expect(changed.revision).not.toBe(first.revision);
+    expect(changed.index.find('focus', 'replacement_focus')).toBeDefined();
+  });
+
   it('reopens exact parsed and indexed facts across independent engines', async () => {
     const { resolver } = await fixture();
     const first = new CoreEngine(await resolver());
@@ -173,5 +190,32 @@ describe('persistent content-addressed analysis cache', () => {
     });
     expect(await analysisFiles(root)).toHaveLength(1);
     expect(snapshot.index.find('focus', 'persistent_focus')).toBeDefined();
+  });
+
+  it('bounds optional cache writes per scan without truncating indexed facts', async () => {
+    const { root, resolver } = await fixture();
+    const state = await ServerState.create(path.join(root, 'state'));
+    const cache = await PersistentAnalysisCache.create(state, { batchMaxWrites: 1 });
+    const engine = new CoreEngine(await resolver(), { persistentAnalysisCache: cache });
+    const first = await engine.scan('test');
+    expect(cache.statistics()).toMatchObject({ writes: 1, limitedBatches: 1 });
+    expect(first.complete).toBe(true);
+    expect(first.index.find('focus', 'persistent_focus')).toBeDefined();
+    engine.invalidate('test');
+    const repeated = await engine.scan('test');
+    expect(snapshotEvidence(repeated)).toBe(snapshotEvidence(first));
+    expect(cache.statistics()).toMatchObject({ writes: 2, hits: 0 });
+  });
+
+  it('respects a small cache payload budget while retaining complete analysis', async () => {
+    const { root, resolver } = await fixture();
+    const state = await ServerState.create(path.join(root, 'state'));
+    const cache = await PersistentAnalysisCache.create(state, { batchMaxPayloadBytes: 32 });
+    const engine = new CoreEngine(await resolver(), { persistentAnalysisCache: cache });
+    const result = await engine.scan('test');
+    expect(result.complete).toBe(true);
+    expect(result.index.find('focus', 'persistent_focus')).toBeDefined();
+    expect(cache.statistics()).toMatchObject({ writes: 0, limitedBatches: 1 });
+    expect(await analysisFiles(root)).toEqual([]);
   });
 });
