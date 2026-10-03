@@ -14,6 +14,7 @@ export const REQUIRED_PACKAGE_FILES = [
   'CHANGELOG.md',
   'LICENSE',
   'README.md',
+  'npm-shrinkwrap.json',
   'SECURITY.md',
   'docs/README.md',
   'docs/setup.md',

@@ -4,6 +4,7 @@
 
 ## 3.7.0 - 2026-10-03
 
+- Publish an `npm-shrinkwrap.json` so every install reproduces the reviewed dependency closure, including all platforms' optional Sharp binaries (about 300 MB installed).
 - Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
 - Limit definition-only event/helper lookups to their source family and reuse semantic reference analysis for unchanged snapshots.
 - Check snippet syntax, native command kinds, and declared scopes against cited installed or explicitly selected generated documentation, with unresolved coverage reported separately.
