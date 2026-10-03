@@ -64,7 +64,8 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "npm-shrinkwrap.json"
   ],
   "bin": {
     "hoi4-agent-tools": "./dist/bin/stdio.js",
