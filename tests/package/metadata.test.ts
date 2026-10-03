@@ -13,17 +13,19 @@ const projectRoot = path.resolve(import.meta.dirname, '../..');
 
 interface PackageJson {
   bin: Record<string, string>;
+  dependencies: Record<string, string>;
   engines: { node: string };
   files: string[];
   mcpName: string;
   name: string;
+  overrides: Record<string, string>;
   publishConfig: { access: string; provenance: boolean };
   version: string;
 }
 
 interface PackageLock {
   name: string;
-  packages: Record<string, { name?: string; version?: string }>;
+  packages: Record<string, { name?: string; version?: string; dev?: boolean }>;
   version: string;
 }
 
@@ -67,9 +69,30 @@ async function sourceFiles(current: string): Promise<string[]> {
 }
 
 describe('offline package and Registry metadata', () => {
+  it('publishes an enforced shrinkwrap that matches every exact dependency and override pin', async () => {
+    const packageJson = await json<PackageJson>('package.json');
+    const shrinkwrap = await json<PackageLock>('npm-shrinkwrap.json');
+
+    expect(packageJson.files).toContain('npm-shrinkwrap.json');
+    await expect(readFile(path.join(projectRoot, 'package-lock.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    for (const [name, version] of Object.entries(packageJson.dependencies)) {
+      expect(version, name).toMatch(/^\d+\.\d+\.\d+$/u);
+      expect(shrinkwrap.packages[`node_modules/${name}`], name).toMatchObject({ version });
+      expect(shrinkwrap.packages[`node_modules/${name}`]?.dev, name).toBeUndefined();
+    }
+    for (const [name, version] of Object.entries(packageJson.overrides)) {
+      const installed = Object.entries(shrinkwrap.packages).filter(
+        ([location, entry]) => location.endsWith(`node_modules/${name}`) && entry.dev === undefined,
+      );
+      for (const [location, entry] of installed) expect(entry.version, location).toBe(version);
+    }
+  });
+
   it('keeps package, Registry, source, schemas, README, lock, and changelog versions aligned', async () => {
     const packageJson = await json<PackageJson>('package.json');
-    const packageLock = await json<PackageLock>('package-lock.json');
+    const packageLock = await json<PackageLock>('npm-shrinkwrap.json');
     const server = await json<ServerJson>('server.json');
     const versionSource = await readFile(
       path.join(projectRoot, 'src', 'hoi4_agent_tools', 'version.ts'),
@@ -182,10 +205,12 @@ describe('offline package and Registry metadata', () => {
       'CHANGELOG.md',
       'LICENSE',
       'SECURITY.md',
+      'npm-shrinkwrap.json',
     ]);
     expect(packageJson.engines.node).toBe('^22.19.0 || ^24.0.0');
     expect(packageJson.publishConfig).toEqual({ access: 'public', provenance: true });
     expect(REQUIRED_PACKAGE_FILES).toContain('server.json');
+    expect(REQUIRED_PACKAGE_FILES).toContain('npm-shrinkwrap.json');
   });
 
   it('pins and verifies the Registry publisher before immutable publication', async () => {

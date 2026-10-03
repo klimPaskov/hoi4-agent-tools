@@ -16,4 +16,4 @@ schemas/*.json
 *.png
 *.svg
 *.html
-package-lock.json
+npm-shrinkwrap.json
