@@ -16,9 +16,9 @@ Use [Local references](reference.md) to configure an offline wiki snapshot or na
 
 ## Review a large tree
 
-> Render the Utopia Manifesto focus tree. Check its branch connections, alternative prerequisites, missing references and crowded areas before suggesting edits.
+> Render the mod's largest branching focus tree. Check its branch connections, alternative prerequisites, missing references and crowded areas before suggesting edits.
 
-[![Utopia Manifesto focus tree](images/comparisons/utopia-mcp.png)](images/comparisons/utopia-mcp.png)
+[![Branching focus tree preview](images/comparisons/utopia-mcp.png)](images/comparisons/utopia-mcp.png)
 
 Open the image at full size for the complete layout.
 This example contains 124 focuses in the recorded source version.
@@ -31,7 +31,7 @@ The [focus guide](focus.md) covers inspecting, rendering and reorganizing trees.
 [![Infantry technology folder](images/comparisons/infantry-mcp.png)](images/comparisons/infantry-mcp.png)
 
 The preview follows the loaded technology and GUI definitions, including wide equipment cards.
-The [technology comparisons](visual-comparisons.md#technology-folders) also show a chemical folder rendered from a matching recorded source revision.
+The [technology comparisons](visual-comparisons.md#technology-folders) also show a mod folder with wide equipment cards rendered from a matching recorded source revision.
 See the [technology guide](technology.md) for grants, bonuses and doctrine paths.
 
 ## Inspect an interface before editing it

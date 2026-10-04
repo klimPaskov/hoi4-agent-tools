@@ -1,26 +1,26 @@
 # Interface examples
 
-These previews use actual vanilla and Chaos Redux interface files, artwork and fonts.
+These previews use actual vanilla and mod interface files, artwork and fonts.
 Supplied in-game screenshots appear beside the MCP results where available.
 
 ## Compare with the game
 
-| View                    | In game                                                               | MCP preview                                                        |
-| ----------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Video options           | ![Options in game](images/comparisons/gui/options-video-ingame.png)   | ![Options preview](images/comparisons/gui/options-video-mcp.png)   |
-| Škoda Priority          | ![Škoda in game](images/comparisons/gui/skoda-priority-ingame.png)    | ![Škoda preview](images/comparisons/gui/skoda-priority-mcp.png)    |
-| Chaos Redux Tag Manager | ![Tag Manager in game](images/comparisons/gui/tag-manager-ingame.png) | ![Tag Manager preview](images/comparisons/gui/tag-manager-mcp.png) |
+| View                   | In game                                                                     | MCP preview                                                              |
+| ---------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Vanilla video options  | ![Options in game](images/comparisons/gui/options-video-ingame.png)         | ![Options preview](images/comparisons/gui/options-video-mcp.png)         |
+| Vanilla priority panel | ![Priority panel in game](images/comparisons/gui/skoda-priority-ingame.png) | ![Priority panel preview](images/comparisons/gui/skoda-priority-mcp.png) |
+| Mod management window  | ![Management window in game](images/comparisons/gui/tag-manager-ingame.png) | ![Management window preview](images/comparisons/gui/tag-manager-mcp.png) |
 
 The Options preview uses the captured values except gamma, whose value is unknown.
-Škoda's full source background and the game's capture framing differ.
-The Tag Manager screenshot uses an older layout than the loaded source, which has +5/−5 controls and wider buttons.
+The priority panel's full source background and the game's capture framing differ.
+The management window screenshot uses an older layout than the loaded source, which has +5/−5 controls and wider buttons.
 These differences prevent a whole-image accuracy percentage.
 
 ## Other interfaces
 
-| Event Log                                              | Chaos Meter: Status                                                      | Chaos Meter: Deaths                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| ![Event Log](images/comparisons/gui/event-log-mcp.png) | ![Chaos Meter Status](images/comparisons/gui/chaos-meter-status-mcp.png) | ![Chaos Meter Deaths](images/comparisons/gui/chaos-meter-deaths-mcp.png) |
+| Mod event log                                              | Mod status panel                                                       | Mod status panel, second tab                                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| ![Mod event log](images/comparisons/gui/event-log-mcp.png) | ![Mod status panel](images/comparisons/gui/chaos-meter-status-mcp.png) | ![Mod status panel, second tab](images/comparisons/gui/chaos-meter-deaths-mcp.png) |
 
 These views use declared empty or zero states for layout review.
 They are not captures from an observed campaign.
@@ -45,7 +45,8 @@ Offline previews do not execute native clicks, tooltip timing or engine effects.
 <details>
 <summary>Source details and reproduction</summary>
 
-The images were produced by the production GUI renderer in 3.5.0; the GUI rendering implementation is unchanged in 3.5.1.
+The images were produced by the production GUI renderer in 3.5.0.
+On 4 October 2026 the 3.7.0 renderer reproduced every full-window PNG, including the decision and occupation views, byte for byte from the recorded scenarios.
 Each general-system crop is unscaled from the full 1920×1080 output at UI scale 1.
 Its full-window PNG accompanies the crop.
 The [GUI manifest](images/comparisons/gui/manifest.json) records exact scenarios, source revisions, implementation and PNG hashes, diagnostics and fidelity limits.

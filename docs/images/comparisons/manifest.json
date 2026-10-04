@@ -1,6 +1,6 @@
 {
-  "toolVersion": "3.5.0",
-  "focusSourceRevision": "f0a4a1e0f0e05d124bcaa8f673193e7e55962e306b6be11f3528e7d3fccfc399",
+  "toolVersion": "3.7.0",
+  "focusSourceRevision": "8ab89e1a440939aee092e50c9516def570f98fd71f5a1c9e6e693fe91a055f19",
   "focus": [
     {
       "treeId": "fury_focus_tree",
@@ -12,7 +12,7 @@
     {
       "treeId": "THR_focus",
       "sourcePath": "common/national_focus/003_holy_realm.txt",
-      "sourceSha256": "1e29143c43c5867e920826c4fed3325f51716edafaecac0e06dc6bc69b27c6ef",
+      "sourceSha256": "2fc00143958dd042884832f922055c00ac859eebefc19dd4d1dd2146acfbd7ad",
       "nodes": 111,
       "alternativePrerequisiteGroups": 1
     },
@@ -27,7 +27,7 @@
   "technology": [
     {
       "folderId": "infantry_folder",
-      "graphRevision": "573d29165230fe249a2161f7bc40f7ea3f02b81d9176acd9c447308287cf99eb",
+      "graphRevision": "b02d33e4ec43dcc67d4759093e047b99a374485d8fff7885895415d85489f7ed",
       "nodes": 43,
       "omitted": 0,
       "sourceAccurate": true,
@@ -49,7 +49,7 @@
       "common/technologies/chaosx_technologies.txt",
       "interface/countrytechtreeview.gui"
     ],
-    "graphRevision": "78866e57c410bba0c4d1d4ef6587ebf7e3ebd26f659b65ffdeef3bd9e3431411",
+    "graphRevision": "1c338ddc2e81b687838b1777ea0dab76ca7930a66d1688399525a8baa4127f83",
     "nodes": 30,
     "omitted": 0,
     "sourceAccurate": true,
