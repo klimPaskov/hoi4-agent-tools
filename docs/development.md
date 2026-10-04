@@ -42,3 +42,9 @@ Add `HOI4_DEPENDENCY_ROOTS` as the platform path-delimited list when the externa
 The installed-game qualification also parses every shipped bitmap-font descriptor, resolves every atlas page, shapes native and enlarged glyphs, verifies deterministic raster output, and checks HOI4 localisation colours across base fonts and language overrides.
 
 See the package [Security Policy](../SECURITY.md) for private vulnerability reporting.
+
+## Dependencies
+
+`npm-shrinkwrap.json` is published and fixes the complete production dependency tree for every consumer, who no longer receive newer transitive releases on their own.
+Run `npm audit --omit=dev` and `npm audit signatures` before each release, and publish a new version with a refreshed shrinkwrap when a production advisory is fixed upstream.
+Keep `overrides` inside every dependent's declared range; consumers do not apply this package's overrides, and `tests/package/metadata.test.ts` checks each production dependency edge in the shrinkwrap against its range.

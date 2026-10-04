@@ -9,6 +9,9 @@ Keep an installed copy of Hearts of Iron IV available for vanilla references, ar
 npm install --global hoi4-agent-tools
 ```
 
+The package publishes an `npm-shrinkwrap.json`, so every registry or `npx` install receives the same reviewed dependency versions.
+npm installs the image library's prebuilt binaries for every supported platform from it, about 280 MiB in total; the server loads only the one for your system.
+
 Source inspection can work without an installed game.
 Previews need the assets and fonts referenced by the mod; missing files are reported in the result.
 

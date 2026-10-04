@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import {
   PACKAGE_BIN_TARGETS,
@@ -25,9 +26,24 @@ interface PackageJson {
 
 interface PackageLock {
   name: string;
-  packages: Record<string, { name?: string; version?: string; dev?: boolean }>;
+  packages: Record<
+    string,
+    {
+      name?: string;
+      version?: string;
+      dev?: boolean;
+      optional?: boolean;
+      dependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    }
+  >;
   version: string;
 }
+
+const semver = createRequire(import.meta.url)('semver') as {
+  satisfies(version: string, range: string, options?: { includePrerelease?: boolean }): boolean;
+  validRange(range: string): string | null;
+};
 
 interface ServerJson {
   $schema: string;
@@ -88,6 +104,48 @@ describe('offline package and Registry metadata', () => {
       );
       for (const [location, entry] of installed) expect(entry.version, location).toBe(version);
     }
+  });
+
+  it('resolves every production dependency inside its declared range without overrides', async () => {
+    // Consumers do not apply this package's overrides; the shrinkwrap alone decides their tree,
+    // so an override outside a dependent's range would ship an invalid tree.
+    const { packages } = await json<PackageLock>('npm-shrinkwrap.json');
+    const resolve = (from: string, name: string): string | undefined => {
+      for (let base = from; ;) {
+        const candidate = `${base === '' ? '' : `${base}/`}node_modules/${name}`;
+        if (packages[candidate] !== undefined) return candidate;
+        if (base === '') return undefined;
+        const parent = base.lastIndexOf('/node_modules/');
+        base = parent < 0 ? '' : base.slice(0, parent);
+      }
+    };
+    const problems: string[] = [];
+    let edges = 0;
+    for (const [location, entry] of Object.entries(packages)) {
+      if (entry.dev === true) continue;
+      const declared = [
+        ...Object.entries(entry.dependencies ?? {}).map(([name, range]) => [name, range, false]),
+        ...Object.entries(entry.optionalDependencies ?? {}).map(([name, range]) => [
+          name,
+          range,
+          true,
+        ]),
+      ] as Array<[string, string, boolean]>;
+      for (const [name, range, optional] of declared) {
+        if (semver.validRange(range) === null) continue;
+        const resolved = resolve(location, name);
+        if (resolved === undefined) {
+          if (!optional) problems.push(`${location || '(root)'} -> ${name}@${range}: missing`);
+          continue;
+        }
+        edges += 1;
+        const version = packages[resolved]!.version!;
+        if (!semver.satisfies(version, range, { includePrerelease: true }))
+          problems.push(`${location || '(root)'} -> ${name}@${range}: ${version}`);
+      }
+    }
+    expect(edges).toBeGreaterThan(100);
+    expect(problems).toEqual([]);
   });
 
   it('keeps package, Registry, source, schemas, README, lock, and changelog versions aligned', async () => {
