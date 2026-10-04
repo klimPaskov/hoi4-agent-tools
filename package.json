@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "description": "HOI4 modding tools for agents: local references, visual previews, focus trees, interfaces and maps.",
   "type": "module",
   "license": "Apache-2.0",

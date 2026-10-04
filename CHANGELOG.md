@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 3.8.1 - 2026-10-05
+
+- Start normally when finished rewrite journals were recorded before the workspace roots changed, such as before installed DLC folders became source layers, and let them expire; an interrupted rewrite under changed roots is still refused.
+
 ## 3.8.0 - 2026-10-04
 
 - Rank documentation with field-weighted BM25 over identifier-aware terms, cite identifier table rows as exact one-line sections, return each result's best-matching `matchLine`, and split sections by CommonMark fences.

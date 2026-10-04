@@ -970,10 +970,22 @@ export class TransactionManager {
       if (!transactionIdPattern.test(entry.name)) continue;
       const manifest = await this.load(workspace, entry.name, {
         headMode: 'none',
+        rootBinding: 'ignored',
         ...(signal === undefined ? {} : { signal }),
       });
       this.assertRecoveryPrincipal(manifest, principal);
       const interrupted = manifest.state === 'applying' || manifest.state === 'rolling_back';
+      if (manifest.rootFingerprint !== this.rootFingerprint(workspace)) {
+        // A finished journal recorded before the roots changed, for example before an
+        // installed DLC folder became a source layer, needs no recovery and must not stop
+        // the server. An interrupted one still cannot be replayed against changed roots.
+        if (interrupted)
+          throw new ServiceError(
+            'TRANSACTION_ROOT_CHANGED',
+            'Workspace root configuration changed after planning',
+          );
+        continue;
+      }
       if (!interrupted) {
         try {
           // Ordinary startup must not contend with a live writer just to read terminal journals.
@@ -1328,6 +1340,26 @@ export class TransactionManager {
       }
       let manifest: TransactionManifest;
       try {
+        const recorded = await this.load(workspace, entry.name, {
+          headMode: 'none',
+          rootBinding: 'ignored',
+        });
+        if (recorded.rootFingerprint !== this.rootFingerprint(workspace)) {
+          // Journals from earlier roots can no longer be applied or rolled back here. Once a
+          // finished one expires, remove it so it stops counting against the journal quota.
+          if (
+            ['planned', 'applied', 'rolled_back', 'failed'].includes(recorded.state) &&
+            Date.parse(recorded.expiresAt) <= now
+          ) {
+            this.removeManifestByteCache(this.manifestCacheKey(workspace, entry.name));
+            await rm(directory, { recursive: true, force: true });
+          }
+          continue;
+        }
+      } catch {
+        // Unreadable journals keep their previous handling below.
+      }
+      try {
         manifest = await this.load(workspace, entry.name, { headMode: 'reconcile' });
       } catch (error) {
         if (error instanceof ServiceError && error.code === 'TRANSACTION_HEAD_MISSING') {
@@ -1662,9 +1694,15 @@ export class TransactionManager {
   private async load(
     workspace: ResolvedWorkspace,
     transactionId: string,
-    options: { headMode?: ManifestHeadMode; signal?: AbortSignal; cacheBytes?: boolean } = {},
+    options: {
+      headMode?: ManifestHeadMode;
+      signal?: AbortSignal;
+      cacheBytes?: boolean;
+      /** Read an authenticated journal whose workspace roots changed, to classify it. */
+      rootBinding?: 'required' | 'ignored';
+    } = {},
   ): Promise<TransactionManifest> {
-    const { headMode = 'verify', signal, cacheBytes = false } = options;
+    const { headMode = 'verify', signal, cacheBytes = false, rootBinding = 'required' } = options;
     signal?.throwIfAborted();
     let manifestText: string;
     let manifestPath: string;
@@ -1732,7 +1770,10 @@ export class TransactionManager {
         'Transaction manifest identity does not match its workspace or journal directory',
       );
     }
-    if (manifest.rootFingerprint !== this.rootFingerprint(workspace)) {
+    if (
+      rootBinding === 'required' &&
+      manifest.rootFingerprint !== this.rootFingerprint(workspace)
+    ) {
       throw new ServiceError(
         'TRANSACTION_ROOT_CHANGED',
         'Workspace root configuration changed after planning',
