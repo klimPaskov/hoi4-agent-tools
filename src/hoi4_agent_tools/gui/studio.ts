@@ -21,6 +21,7 @@ import { sortDiagnostics } from '../core/diagnostics.js';
 import { CoreEngine } from '../core/engine.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
+import { escapeFileGlob } from '../core/file-glob.js';
 import { ServiceError, type ArtifactLink } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { WorkspaceScanner } from '../core/scanner.js';
@@ -348,6 +349,8 @@ function referenceVariants(value: string): string[] {
   return candidates;
 }
 
+const FALLBACK_NAMES_PER_PATTERN = 100;
+
 function basenameFallbackPatterns(
   exactPaths: readonly string[],
   exactFiles: readonly ScannedFile[],
@@ -357,15 +360,26 @@ function basenameFallbackPatterns(
       .filter(({ shadowedBy }) => shadowedBy === undefined)
       .map(({ relativePath }) => relativePath.replaceAll('\\', '/').toLowerCase()),
   );
-  return [
+  const names = [
     ...new Set(
       exactPaths
         .filter(
           (candidate) => !/[*?[\]{}!]/u.test(candidate) && !resolved.has(candidate.toLowerCase()),
         )
-        .map((candidate) => `**/${path.posix.basename(candidate)}`),
+        .map((candidate) => path.posix.basename(candidate)),
     ),
   ].sort((left, right) => compareCodeUnits(left, right));
+  // One brace group searches many names in a single bounded wildcard pattern, so a window
+  // with hundreds of unresolved assets stays inside the scanner's wildcard-pattern ceiling.
+  const grouped = names.filter((name) => !/[,{}]/u.test(name));
+  const patterns = names
+    .filter((name) => /[,{}]/u.test(name))
+    .map((name) => `**/${escapeFileGlob(name)}`);
+  for (let start = 0; start < grouped.length; start += FALLBACK_NAMES_PER_PATTERN) {
+    const chunk = grouped.slice(start, start + FALLBACK_NAMES_PER_PATTERN).map(escapeFileGlob);
+    patterns.push(chunk.length === 1 ? `**/${chunk[0]!}` : `**/{${chunk.join(',')}}`);
+  }
+  return patterns.sort((left, right) => compareCodeUnits(left, right));
 }
 
 function selectedElements(

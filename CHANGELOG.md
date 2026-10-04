@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-## 3.7.0 - 2026-10-03
+## 3.7.0 - 2026-10-04
 
 - Layer installed `dlc/` and `integrated_dlc/` folders between the base game and mods in internal-ID order, so source lookups, renders, and analyses find DLC sprites, interfaces, and portraits; `includeGameDlc: false` opts out.
 - Apply `replace_path` entries from mod and dependency descriptors in addition to configured replace paths.
 - Check province terrain and continents against the active `common/terrain` categories and `continent.txt`, accept any water terrain for seas and lakes, check strategic-region `naval_terrain`, and report adjacency rows after the `-1` terminator or a missing terminator.
+- Search unresolved GUI asset names in grouped wildcard patterns, so windows with hundreds of missing textures render within the wildcard-pattern ceiling.
 - Locate a source position with `hoi4.source_lookup` `path` and `line`: return its layer, the containing definitions, the enclosing assignment chain, and a `keyPath` that navigates back to it.
 - Publish an `npm-shrinkwrap.json`, so a registry or `npx` install reproduces the reviewed dependency closure exactly; npm then installs every platform's optional Sharp binaries, about 280 MiB in total.
 - Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
