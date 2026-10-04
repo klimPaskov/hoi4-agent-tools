@@ -10,7 +10,11 @@ import { ScriptedGuiStudio } from '../../src/hoi4_agent_tools/gui/studio.js';
 
 const roots: string[] = [];
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })),
+  );
 });
 
 async function write(file: string, content: string | Buffer) {
@@ -53,17 +57,17 @@ describe('GUI asset basename fallback', () => {
         .png()
         .toBuffer(),
     );
-    const studio = new ScriptedGuiStudio(
-      new CoreEngine(
-        await WorkspaceResolver.create(
-          serverConfigurationSchema.parse({
-            version: 1,
-            serverStateRoot: path.join(root, 'state'),
-            workspaces: [{ id: 'fallback', name: 'Fallback', root: mod }],
-          }),
-        ),
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          workspaces: [{ id: 'fallback', name: 'Fallback', root: mod }],
+        }),
       ),
     );
+    await engine.persistentAnalysisCache;
+    const studio = new ScriptedGuiStudio(engine);
     const result = await studio.lint({
       workspaceId: 'fallback',
       windowName: 'many_window',

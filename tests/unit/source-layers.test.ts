@@ -11,7 +11,11 @@ import {
 
 const roots: string[] = [];
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })),
+  );
 });
 
 async function write(file: string, content: string) {
@@ -82,7 +86,10 @@ async function fixture(
       workspaces: [workspace],
     }),
   );
-  return { root, game, mod, resolver, engine: new CoreEngine(resolver) };
+  const engine = new CoreEngine(resolver);
+  // The persistent analysis cache initializes in server state; finish before cleanup.
+  await engine.persistentAnalysisCache;
+  return { root, game, mod, resolver, engine };
 }
 
 const sourceLayers = (resolver: WorkspaceResolver) =>

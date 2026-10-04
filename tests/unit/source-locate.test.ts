@@ -14,7 +14,11 @@ import {
 
 const roots: string[] = [];
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })),
+  );
 });
 
 const events = [
@@ -52,7 +56,9 @@ async function fixture() {
       workspaces: [{ id: 'locate', name: 'Locate', root: mod, gameRoot: game }],
     }),
   );
-  return { mod, engine: new CoreEngine(resolver) };
+  const engine = new CoreEngine(resolver);
+  await engine.persistentAnalysisCache;
+  return { mod, engine };
 }
 
 const request = (input: Record<string, unknown>) =>
