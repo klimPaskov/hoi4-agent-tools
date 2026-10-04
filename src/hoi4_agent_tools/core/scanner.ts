@@ -109,6 +109,7 @@ function normalizeRelative(value: string): string {
 }
 
 function rootLabel(root: ResolvedRoot): string {
+  if (root.kind === 'dlc' && root.label !== undefined) return root.label;
   return root.kind === 'dependency' ? `dependency-${root.loadOrder}` : root.kind;
 }
 
@@ -211,6 +212,7 @@ export class WorkspaceScanner {
       .filter(
         (root) =>
           (root.kind === 'game' ||
+            root.kind === 'dlc' ||
             root.kind === 'dependency' ||
             root.kind === 'mod' ||
             root.kind === 'fixture') &&

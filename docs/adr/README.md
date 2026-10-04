@@ -42,5 +42,6 @@ Implementation rationale for contributors. For using the server, start with the 
 37. [GUI dates, controllers and shown positions](0037-gui-date-control-and-shown-position.md)
 38. [Frozen probability source comparisons](0038-frozen-probability-source-operands.md)
 39. [Source navigation and native command checks](0039-source-navigation-and-native-command-checks.md)
+40. [DLC source layers and descriptor replace paths](0041-dlc-source-layers-and-descriptor-replace-paths.md)
 
 [Progress heartbeats](0024-long-running-progress-heartbeats.md) describes progress reporting for long operations.

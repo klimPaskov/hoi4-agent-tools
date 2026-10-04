@@ -49,7 +49,7 @@ const transactionOperationSchema = z
 
 const transactionReadDependencySchema = z
   .object({
-    rootKind: z.enum(['mod', 'game', 'dependency', 'artifact', 'cache', 'fixture']),
+    rootKind: z.enum(['mod', 'game', 'dlc', 'dependency', 'artifact', 'cache', 'fixture']),
     loadOrder: z.number().int().min(0),
     relativePath: workspaceRelativePathSchema,
     sha256: sha256Schema,

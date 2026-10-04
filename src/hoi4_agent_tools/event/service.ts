@@ -381,7 +381,7 @@ async function scanEventSources(
     files.push(
       ...(await engine.scanner.scan(workspace, {
         patterns: gamePatterns,
-        rootKinds: ['game'],
+        rootKinds: ['game', 'dlc'],
         ...(signal === undefined ? {} : { signal }),
       })),
     );

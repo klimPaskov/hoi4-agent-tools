@@ -1,4 +1,4 @@
-import { lstat, mkdir, opendir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, opendir, readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import {
   WORKSPACE_MAX_REGISTRATIONS,
@@ -9,9 +9,10 @@ import {
 import { compareCodeUnits, hashCanonical, sha256Bytes } from './canonical.js';
 import { ServiceError } from './result.js';
 import { ServerState } from './server-state.js';
+import { parseClausewitz } from './source/parser.js';
 
 export type RootAccess = 'read' | 'write';
-export type RootKind = 'mod' | 'game' | 'dependency' | 'artifact' | 'cache' | 'fixture';
+export type RootKind = 'mod' | 'game' | 'dlc' | 'dependency' | 'artifact' | 'cache' | 'fixture';
 
 /** Omitted MCP workspace arguments resolve to the mod containing the server cwd. */
 export const CURRENT_WORKSPACE_ID = 'current';
@@ -22,6 +23,15 @@ export interface ResolvedRoot {
   writable: boolean;
   loadOrder: number;
   replacePaths: string[];
+  /** Display label for a DLC layer: its installed folder name. */
+  label?: string;
+}
+
+/** An installed DLC data folder layered between the base game and mods. */
+export interface DlcLayer {
+  id: number;
+  folder: string;
+  path: string;
 }
 
 export interface ResolvedWorkspace {
@@ -32,6 +42,7 @@ export interface ResolvedWorkspace {
   modRoot: string;
   gameRoot?: string;
   dependencyRoots: string[];
+  dlcLayers: DlcLayer[];
   artifactRoot: string;
   cacheRoot: string;
   fixtureRoot?: string;
@@ -42,6 +53,91 @@ export interface ResolvedWorkspace {
   workspaceIdentity: string;
   /** Configured-workspace identity used to isolate generated artifacts. */
   ownerIdentity: string;
+}
+
+const DLC_CONTAINERS = ['dlc', 'integrated_dlc'] as const;
+const MAX_DLC_LAYERS = 256;
+const MAX_DESCRIPTOR_BYTES = 64 * 1024;
+
+/**
+ * Installed DLC data folders in the order the engine loads them: after the base game and
+ * before mods, sorted by the internal ID in each folder's `dlcNNN.dlc` descriptor. Only real
+ * directories inside the game root are admitted; archives are not unpacked.
+ */
+async function discoverDlcLayers(gameRoot: string): Promise<DlcLayer[]> {
+  const layers: DlcLayer[] = [];
+  for (const container of DLC_CONTAINERS) {
+    let entries;
+    try {
+      entries = await readdir(path.join(gameRoot, container), { withFileTypes: true });
+    } catch (error) {
+      if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !/^[A-Za-z0-9_.-]{1,128}$/u.test(entry.name)) continue;
+      const folder = path.join(gameRoot, container, entry.name);
+      let names: string[];
+      try {
+        names = await readdir(folder);
+      } catch {
+        continue;
+      }
+      const descriptor = names
+        .map((name) => /^dlc(\d{1,6})\.dlc$/iu.exec(name))
+        .find((match): match is RegExpExecArray => match !== null);
+      if (descriptor === undefined) continue;
+      const canonical = await canonicalPath(folder);
+      if (!isWithin(gameRoot, canonical) || canonical === gameRoot) continue;
+      layers.push({ id: Number(descriptor[1]), folder: entry.name, path: canonical });
+    }
+  }
+  if (layers.length > MAX_DLC_LAYERS)
+    throw new ServiceError(
+      'WORKSPACE_DLC_LIMIT',
+      `The game root lists more than ${MAX_DLC_LAYERS} DLC folders`,
+    );
+  return layers.sort(
+    (left, right) => left.id - right.id || compareCodeUnits(left.folder, right.folder),
+  );
+}
+
+/**
+ * `replace_path` entries from a mod descriptor. The engine unloads earlier-loaded files
+ * under each path. Entries that are not safe relative folders are ignored.
+ */
+export async function descriptorReplacePaths(root: string): Promise<string[]> {
+  const descriptor = path.join(root, 'descriptor.mod');
+  let bytes: Buffer;
+  try {
+    const metadata = await lstat(descriptor);
+    if (!metadata.isFile() || metadata.size > MAX_DESCRIPTOR_BYTES) return [];
+    bytes = await readFile(descriptor);
+  } catch {
+    return [];
+  }
+  const document = parseClausewitz(bytes, descriptor);
+  const paths: string[] = [];
+  for (const entry of document.root.entries) {
+    if (
+      entry.type !== 'assignment' ||
+      entry.key.value.toLowerCase() !== 'replace_path' ||
+      entry.value.type !== 'scalar'
+    )
+      continue;
+    const normalized = entry.value.value.replaceAll('\\', '/').replace(/\/+$/u, '');
+    if (
+      normalized.length === 0 ||
+      normalized.length > 1024 ||
+      normalized.startsWith('/') ||
+      normalized.includes(':') ||
+      /[*?[\]{}!\0]/u.test(normalized) ||
+      normalized.split('/').some((segment) => segment === '..' || segment === '.' || segment === '')
+    )
+      continue;
+    if (!paths.includes(normalized)) paths.push(normalized);
+  }
+  return paths;
 }
 
 async function exists(value: string, signal?: AbortSignal): Promise<boolean> {
@@ -655,7 +751,7 @@ export class WorkspaceResolver {
 
   private assertWorkspaceIsolation(workspace: ResolvedWorkspace): void {
     const readRoots = workspace.roots.filter((root) =>
-      ['game', 'dependency', 'fixture'].includes(root.kind),
+      ['game', 'dlc', 'dependency', 'fixture'].includes(root.kind),
     );
     const ownedRoots = workspace.roots.filter((root) =>
       ['mod', 'artifact', 'cache'].includes(root.kind),
@@ -714,6 +810,17 @@ export class WorkspaceResolver {
         : registration.dependencyRoots.map((root) => ({ root, replacePaths: [] }));
     const dependencyRoots = await Promise.all(
       dependencyRegistrations.map(({ root }) => canonicalPath(root)),
+    );
+    // Descriptor `replace_path` entries join any configured ones, as the engine applies them.
+    const replacePathsFor = async (root: string, configured: readonly string[]) => [
+      ...new Set([...configured, ...(await descriptorReplacePaths(root))]),
+    ];
+    const modReplacePaths =
+      registration.kind === 'game' ? [] : await replacePathsFor(modRoot, registration.replacePaths);
+    const dependencyReplacePaths = await Promise.all(
+      dependencyRoots.map((root, index) =>
+        replacePathsFor(root, dependencyRegistrations[index]!.replacePaths),
+      ),
     );
     if (
       registration.kind !== 'mod' &&
@@ -828,20 +935,37 @@ export class WorkspaceResolver {
     await mkdir(artifactRoot, { recursive: true });
     await mkdir(cacheRoot, { recursive: true });
 
+    // Load order follows the engine: base game, DLC by internal ID, dependencies, then the
+    // workspace's own root. A game workspace is itself the base, so its DLC follow it.
+    const dlcBase = registration.kind === 'game' ? modRoot : gameRoot;
+    const dlcLayers =
+      dlcBase === undefined || !registration.includeGameDlc ? [] : await discoverDlcLayers(dlcBase);
+    const dependencyOffset = registration.kind === 'game' ? 0 : dlcLayers.length;
+    const primaryOrder = dependencyRoots.length + dependencyOffset + 1;
+    const firstDlcOrder = registration.kind === 'game' ? primaryOrder + 1 : 1;
+    const generatedOrder = dependencyRoots.length + dlcLayers.length + 2;
     const roots: ResolvedRoot[] = [
       {
         kind: registration.kind,
         path: modRoot,
         writable: registration.kind === 'mod',
-        loadOrder: dependencyRoots.length + 1,
-        replacePaths: [...registration.replacePaths],
+        loadOrder: primaryOrder,
+        replacePaths: modReplacePaths,
       },
       ...dependencyRoots.map((dependency, index) => ({
         kind: 'dependency' as const,
         path: dependency,
         writable: false,
-        loadOrder: index + 1,
-        replacePaths: [...dependencyRegistrations[index]!.replacePaths],
+        loadOrder: index + 1 + dependencyOffset,
+        replacePaths: dependencyReplacePaths[index]!,
+      })),
+      ...dlcLayers.map((layer, index) => ({
+        kind: 'dlc' as const,
+        path: layer.path,
+        writable: false,
+        loadOrder: firstDlcOrder + index,
+        replacePaths: [],
+        label: layer.folder,
       })),
       ...(gameRoot === undefined
         ? []
@@ -858,14 +982,14 @@ export class WorkspaceResolver {
         kind: 'artifact',
         path: artifactRoot,
         writable: true,
-        loadOrder: dependencyRoots.length + 2,
+        loadOrder: generatedOrder,
         replacePaths: [],
       },
       {
         kind: 'cache',
         path: cacheRoot,
         writable: true,
-        loadOrder: dependencyRoots.length + 2,
+        loadOrder: generatedOrder,
         replacePaths: [],
       },
       ...(fixtureRoot === undefined
@@ -892,6 +1016,7 @@ export class WorkspaceResolver {
       modRoot,
       ...(gameRoot === undefined ? {} : { gameRoot }),
       dependencyRoots,
+      dlcLayers,
       artifactRoot,
       cacheRoot,
       ...(fixtureRoot === undefined ? {} : { fixtureRoot }),

@@ -1362,7 +1362,7 @@ export class ScriptedGuiStudio {
     if ([...requiredNames].some((name) => !availableNames.has(name))) {
       const gameLayouts = await this.engine.scan(
         workspaceId,
-        { patterns: layoutPatterns, rootKinds: ['game'] },
+        { patterns: layoutPatterns, rootKinds: ['game', 'dlc'] },
         principal,
         signal,
       );

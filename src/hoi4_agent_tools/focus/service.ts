@@ -251,7 +251,7 @@ export class FocusWorkbench {
       workspaceId,
       relativePath,
       'read',
-      ['mod', 'dependency', 'game', 'fixture'],
+      ['mod', 'dependency', 'game', 'dlc', 'fixture'],
       principal,
     );
     const document = parseClausewitz(
@@ -278,7 +278,7 @@ export class FocusWorkbench {
       workspaceId,
       relativePath,
       'read',
-      ['mod', 'dependency', 'game', 'fixture'],
+      ['mod', 'dependency', 'game', 'dlc', 'fixture'],
       principal,
     );
     const document = parseClausewitz(

@@ -126,7 +126,7 @@ export class PackageAnalyzer {
         input.workspaceId,
         relativePath,
         'read',
-        ['mod', 'game', 'dependency', 'fixture'],
+        ['mod', 'game', 'dlc', 'dependency', 'fixture'],
         input.principal,
       );
       const metadata = await stat(resolved.path);
