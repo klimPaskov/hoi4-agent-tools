@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 3.7.0 - 2026-10-03
+## 3.7.0 - 2026-10-04
 
 - Publish an `npm-shrinkwrap.json` so every install reproduces the reviewed dependency closure, including all platforms' optional Sharp binaries (about 300 MB installed).
 - Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
