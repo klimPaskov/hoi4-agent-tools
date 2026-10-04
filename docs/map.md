@@ -18,6 +18,16 @@ Pass `tile: { x, y, width, height }` to `hoi4.map_render` for a reusable bounded
 
 Pass `area: { provinceIds, stateIds, regionIds, padding }` to render the exact bounding area of those map entities with optional pixel padding. The result reports the resolved tile coordinates. An unknown ID or an area larger than 2,048 pixels in either direction is explicit, so a narrower selection can be requested.
 
+## Catalog consistency
+
+Validation reads the active `common/terrain/*.txt` categories and `map/continent.txt` (or the continent file `default.map` names) along with the map files.
+A province whose terrain no category defines reports `MAP_TERRAIN_UNKNOWN`, and a land province with a continent number beyond the continents listed reports `MAP_CONTINENT_UNKNOWN`; continent IDs follow their order in the file.
+Seas and lakes must use a category with `is_water = yes` (`MAP_SEA_TERRAIN_INVALID`, `MAP_LAKE_TERRAIN_INVALID`), land provinces must not (`MAP_LAND_TERRAIN_WATER`), and a strategic region's `naval_terrain` must name a category with `naval_terrain = yes` (`MAP_REGION_NAVAL_TERRAIN_INVALID`).
+When no terrain category file is available, seas and lakes are checked against the base game's `ocean` and `lakes` names instead, and unknown terrain is not reported.
+
+The engine stops reading `adjacencies.csv` at its first `-1` row.
+Rows after it are not read and report `MAP_ADJACENCY_AFTER_TERMINATOR`; a file without that row reports `MAP_ADJACENCY_TERMINATOR_MISSING` as a warning, because the offline wiki describes it as required although at least one published mod omits it.
+
 ## Create states
 
 The compact `create_state` form needs selected provinces and a display name:

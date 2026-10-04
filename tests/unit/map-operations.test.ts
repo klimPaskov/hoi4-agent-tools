@@ -3561,3 +3561,105 @@ describe('Agent Nudger map model and operations', () => {
     });
   });
 });
+
+describe('map catalog consistency', () => {
+  const terrain = [
+    'categories = {',
+    '\tplains = { color = { 1 1 1 } }',
+    '\tforest = { color = { 2 2 2 } }',
+    '\tocean = { is_water = yes color = { 3 3 3 } }',
+    '\tlakes = { is_water = yes color = { 4 4 4 } }',
+    '\twater_deep = { is_water = yes naval_terrain = yes color = { 5 5 5 } }',
+    '}',
+    '',
+  ].join('\n');
+  const region = (naval: string) =>
+    `strategic_region = {\n\tid = 1\n\tname = "STRATEGICREGION_1"\n\tprovinces = { 1 2 3 4 }\n\tnaval_terrain = ${naval}\n}\n`;
+  const codes = async (overrides: Readonly<Record<string, string | Buffer | null>>) => {
+    const { snapshot } = await setup(overrides);
+    return validateMap(snapshot.index).diagnostics.map(({ code }) => code);
+  };
+  const newCodes = [
+    'MAP_TERRAIN_UNKNOWN',
+    'MAP_CONTINENT_UNKNOWN',
+    'MAP_LAND_TERRAIN_WATER',
+    'MAP_SEA_TERRAIN_INVALID',
+    'MAP_REGION_NAVAL_TERRAIN_INVALID',
+    'MAP_ADJACENCY_AFTER_TERMINATOR',
+    'MAP_ADJACENCY_TERMINATOR_MISSING',
+  ];
+
+  it('accepts provinces, continents and naval terrain that the catalogs define', async () => {
+    const { snapshot } = await setup({
+      'common/terrain/00_terrain.txt': terrain,
+      'map/continent.txt': 'continents = {\n\teurope\n}\n',
+      'map/strategicregions/1-REGION.txt': region('water_deep'),
+    });
+    expect(snapshot.index.continents).toEqual(['europe']);
+    expect([...snapshot.index.terrainCategories!.keys()]).toEqual([
+      'plains',
+      'forest',
+      'ocean',
+      'lakes',
+      'water_deep',
+    ]);
+    const found = validateMap(snapshot.index).diagnostics.map(({ code }) => code);
+    expect(found.filter((code) => newCodes.includes(code))).toEqual([]);
+  });
+
+  it('reports unknown terrain, out-of-range continents, misplaced water and land terrain', async () => {
+    const found = await codes({
+      'common/terrain/00_terrain.txt': terrain,
+      'map/continent.txt': 'continents = {\n\teurope\n}\n',
+      'map/definition.csv': [
+        '0;0;0;0;sea;false;water_deep;0',
+        '1;10;0;0;land;true;tundra;1',
+        '2;0;0;200;land;true;plains;2',
+        '3;0;160;220;sea;true;forest;0',
+        '4;0;180;0;land;false;ocean;1',
+        '',
+      ].join('\n'),
+      'map/strategicregions/1-REGION.txt': region('plains'),
+    });
+    expect(found.filter((code) => newCodes.includes(code)).sort()).toEqual([
+      'MAP_CONTINENT_UNKNOWN',
+      'MAP_LAND_TERRAIN_WATER',
+      'MAP_REGION_NAVAL_TERRAIN_INVALID',
+      'MAP_SEA_TERRAIN_INVALID',
+      'MAP_TERRAIN_UNKNOWN',
+    ]);
+  });
+
+  it('keeps the base-game water names when no terrain catalog is available', async () => {
+    const found = await codes({
+      'map/definition.csv': [
+        '0;0;0;0;sea;false;water_deep;0',
+        '1;10;0;0;land;true;tundra;9',
+        '2;0;0;200;land;true;plains;1',
+        '3;0;160;220;sea;true;ocean;0',
+        '4;0;180;0;land;false;forest;1',
+        '',
+      ].join('\n'),
+      'map/strategicregions/1-REGION.txt': region('anything'),
+    });
+    expect(found.filter((code) => newCodes.includes(code))).toEqual(['MAP_SEA_TERRAIN_INVALID']);
+  });
+
+  it('reports adjacency rows after the terminator and a missing terminator', async () => {
+    const header = 'From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment';
+    const after = await setup({
+      'map/adjacencies.csv': `${header}\n-1;-1;;-1;-1;-1;-1;-1;;\n1;2;impassable;-1;-1;-1;-1;-1;;Late\n# a comment is fine\n\n`,
+    });
+    expect(after.snapshot.index.adjacencies).toEqual([]);
+    const ignored = validateMap(after.snapshot.index).diagnostics.find(
+      ({ code }) => code === 'MAP_ADJACENCY_AFTER_TERMINATOR',
+    );
+    expect(ignored).toMatchObject({ severity: 'warning', details: { ignoredRows: 1 } });
+    expect(ignored?.location?.start.line).toBe(3);
+    const missing = await codes({
+      'map/adjacencies.csv': `${header}\n1;2;impassable;-1;-1;-1;-1;-1;;Kept\n`,
+    });
+    expect(missing).toContain('MAP_ADJACENCY_TERMINATOR_MISSING');
+    expect(missing).not.toContain('MAP_ADJACENCY_AFTER_TERMINATOR');
+  });
+});
