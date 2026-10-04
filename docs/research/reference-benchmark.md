@@ -27,6 +27,45 @@ The retrieval benchmark used the local service directly. A separate real-workspa
 
 The four additional public tool definitions add approximately 6.5 KB to the one-time MCP tool discovery response. The complete list is about 72 KB in the discovery fixture and is tested against a 72 KiB ceiling. The context reduction above applies to reference retrieval after discovery.
 
+## Held-out discovery questions
+
+Measured on 2026-10-04 against the same local Chaos Redux wiki snapshot and installed documentation.
+The nine questions above were assembled alongside the previous ranking, so they cannot show whether a ranking change generalizes.
+Two further sets in `scripts/reference-discovery-cases.ts` phrase tasks the way an agent asks them, mostly without the script name.
+Every expected answer was checked by hand in the local files, and a case may list several acceptable sections.
+A result answers a question when its cited section contains an expected answer line; it lands when its cited line is within eight lines of that answer.
+
+The discovery set has 32 plain-word questions, five exact identifiers, and two unrelated negative queries.
+The validation set has 24 plain-word questions written before any ranking adjustment and was never used to tune it.
+
+| Set and ranking                | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| ------------------------------ | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Discovery, previous ranking    |         7/37 |        19/37 |       22/37 |              18/37 |                0.342 |
+| Discovery, field-weighted BM25 |        19/37 |        28/37 |       29/37 |              26/37 |                0.628 |
+| Validation, previous ranking   |         4/24 |         7/24 |       12/24 |               7/24 |                0.272 |
+| Validation, field-weighted     |        11/24 |        16/24 |       20/24 |              16/24 |                0.588 |
+
+The previous ranking placed four of the five exact identifiers first and did not return the `on_startup` wiki entry at all; the current one places each first, with installed documentation ahead of the wiki.
+Both returned no results for the two negative queries.
+On the original nine questions, all nine stay within five results, three rank first rather than five, and one moves from fourth to fifth.
+
+In three repeated runs, the first query after a source change took 370–386 ms to index about twelve thousand sections, compared with 147–159 ms with the previous ranking.
+Later queries took a median of 37 ms, compared with 49–63 ms, and the median ranked reply was about 3.7 KB in both.
+
+Twelve plain-word questions across both sets still miss the top five.
+Most use vocabulary the documentation does not: "national spirit" where script says `ideas`, "give a state" for `transfer_state`, "repeat effects" for `for_loop_effect`, and "build a factory" for `add_building_construction`.
+Search the script name when it is known; the ranking does not add synonyms for individual questions.
+These are 61 task questions over one documentation snapshot, not a general precision guarantee.
+
+Run both sets with:
+
+```bash
+npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT
+npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --validation
+```
+
+The script exits with a failure when a case has no expected answer in the supplied sources.
+
 ## Compact context budgets
 
 A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.

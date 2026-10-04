@@ -10,6 +10,7 @@
 - Verify source files in bounded parallel batches, reject changing or replaced paths, and bound optional cache persistence without truncating analysis.
 - Load isolated workers' domain modules after authenticating the job, preserving exact operation admission and recorded write policies.
 - Filter reference scans by authority, reuse citation hints, decode supported reference encodings, and preserve byte-bounded continuations and explicit omission counts.
+- Rank documentation with field-weighted BM25 over identifier-aware terms, cite identifier table rows as exact one-line sections, return each result's best-matching `matchLine`, and split sections by CommonMark fences.
 - Replace the unpatched globbing dependency chain and update vulnerable transitive pins, preserving relative-path, symlink, literal-filename and pattern-complexity checks.
 
 ## 3.6.0 - 2026-09-27

@@ -39,9 +39,19 @@ const cases = [
   },
   { query: 'state history dated owner at bookmark', expected: 'State modding', heading: 'History' },
   { query: 'UTF-8 BOM localisation', expected: 'Localisation', heading: 'Quick checklist' },
-  { query: 'AI focus weights', expected: 'AI focuses', heading: 'Focus factors' },
+  // Both sections of the AI focuses page describe the weights: per-country factor
+  // modifiers and the research and focus weights each AI focus applies.
+  {
+    query: 'AI focus weights',
+    expected: 'AI focuses',
+    heading: ['Focus factors', 'Research weights'],
+  },
   { query: 'event option ai_chance', expected: 'Event modding', heading: 'Options' },
-] as const;
+] as const satisfies ReadonlyArray<{
+  query: string;
+  expected: string;
+  heading: string | readonly string[];
+}>;
 
 const resolver = await WorkspaceResolver.create(
   serverConfigurationSchema.parse({
@@ -131,7 +141,11 @@ for (const item of cases) {
   );
   const pageRank = response.results.findIndex(({ path: source }) => source.includes(item.expected));
   const sectionRank = response.results.findIndex(
-    ({ path: source, heading }) => source.includes(item.expected) && heading.includes(item.heading),
+    ({ path: source, heading }) =>
+      source.includes(item.expected) &&
+      (typeof item.heading === 'string' ? [item.heading] : item.heading).some((name) =>
+        heading.includes(name),
+      ),
   );
   results.push({
     query: item.query,

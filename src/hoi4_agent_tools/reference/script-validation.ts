@@ -13,7 +13,7 @@ import type {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
-import type { ReferenceService, ReferenceSection } from './service.js';
+import { publicReferenceSection, type ReferenceService, type ReferenceSection } from './service.js';
 
 type Input = z.infer<typeof scriptValidateRequestSchema>;
 type Output = z.infer<typeof scriptValidateDataSchema>;
@@ -88,7 +88,7 @@ export async function validateScript(
     ].sort();
     const kind: Kind = match[1]!.startsWith('effect') ? 'effect' : 'trigger';
     const previous = catalogs[kind].get(section.heading);
-    const { lines: _lines, ...reference } = section;
+    const reference = publicReferenceSection(section);
     if (previous !== undefined) {
       previous.conflict ||= previous.scopes.join(',') !== scopes.join(',');
     } else catalogs[kind].set(section.heading, { reference, scopes, conflict: false });

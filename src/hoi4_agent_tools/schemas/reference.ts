@@ -110,6 +110,8 @@ export const referenceSectionSchema = z
     endLine: line,
     excerpt: z.string().max(300),
     authority: z.string().max(80),
+    /** The cited line that best matches the query; start a bounded read here. */
+    matchLine: line.optional(),
   })
   .strict();
 export const referenceSearchDataSchema = z

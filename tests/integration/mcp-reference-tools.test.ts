@@ -69,7 +69,7 @@ describe('MCP local reference tools', () => {
       name: 'hoi4.reference_search',
       arguments: { workspaceId: 'fixture', query: 'country_event' },
     });
-    expect(search.isError).not.toBe(true);
+    expect(search.isError, JSON.stringify(search.content)).not.toBe(true);
     const searchData = (
       search.structuredContent as {
         data: {
