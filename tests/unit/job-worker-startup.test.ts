@@ -26,6 +26,54 @@ afterEach(async () => {
 });
 
 describe('worker startup failure boundaries', () => {
+  it.each(['EBUSY', 'EPERM', 'PRIVATE_SOURCE_TOKEN'])(
+    'reports only recognized native coordination codes without exposing error text: %s',
+    async (code) => {
+      const root = await mkdtemp(path.join(tmpdir(), 'hoi4-worker-native-failure-'));
+      roots.push(root);
+      const mod = path.join(root, 'mod');
+      await mkdir(mod);
+      const engine = new CoreEngine(
+        await WorkspaceResolver.create(
+          serverConfigurationSchema.parse({
+            version: 1,
+            serverStateRoot: path.join(root, 'state'),
+            workspaces: [{ id: 'test', name: 'Native failure fixture', root: mod }],
+          }),
+        ),
+      );
+      await engine.persistentAnalysisCache;
+      const jobs = await JobService.create(engine.resolver);
+      const record = (
+        await jobs.submit('test', {
+          toolName: 'hoi4.event_inspect',
+          arguments: { workspaceId: 'test', mode: 'lint' },
+          mutation: false,
+        })
+      ).record;
+      const host = await JobWorkerHost.create(engine, jobs);
+      const capacity = (host as unknown as { capacity: SharedRequestCapacity }).capacity;
+      const capacityRun = vi
+        .spyOn(capacity, 'run')
+        .mockRejectedValue(Object.assign(new Error('private-path-and-source-sentinel'), { code }));
+      try {
+        const failed = await host.run('test', record.id);
+        expect(failed).toMatchObject({
+          status: 'failed',
+          failure: {
+            code: code === 'PRIVATE_SOURCE_TOKEN' ? 'JOB_WORKER_FAILED' : `JOB_WORKER_${code}`,
+          },
+        });
+        expect(failed.failure?.message).toContain('stage admission');
+        expect(JSON.stringify(failed.failure)).not.toContain('private-path-and-source-sentinel');
+        expect(JSON.stringify(failed.failure)).not.toContain('PRIVATE_SOURCE_TOKEN');
+        expect(spawn).not.toHaveBeenCalled();
+      } finally {
+        capacityRun.mockRestore();
+      }
+    },
+  );
+
   it('retries a lost pre-dispatch lease without executing the job twice', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-worker-handoff-'));
     roots.push(root);

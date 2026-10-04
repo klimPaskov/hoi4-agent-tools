@@ -1,10 +1,10 @@
 import { lstat, mkdir, open, opendir, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { hostname } from 'node:os';
-import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod/v4';
 import { canonicalJson, hashCanonical, secureId } from './canonical.js';
 import { ServiceError } from './result.js';
+import { retryWindowsSharing, type SharingRetryOptions } from './windows-sharing.js';
 import type { ServerState } from './server-state.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
 import { containedGeneratedPath } from './workspace.js';
@@ -291,11 +291,8 @@ async function assertUnlinked(file: string): Promise<void> {
   }
 }
 
-interface JobRecordPublishOptions {
-  platform?: NodeJS.Platform;
+interface JobRecordPublishOptions extends Omit<SharingRetryOptions, 'signal'> {
   publish?: (temporary: string, target: string) => Promise<void>;
-  wait?: (milliseconds: number) => Promise<unknown>;
-  maxAttempts?: number;
 }
 
 /** Atomic replacement with a finite retry for Windows sharing violations. */
@@ -304,27 +301,8 @@ export async function publishJobRecord(
   target: string,
   options: JobRecordPublishOptions = {},
 ): Promise<void> {
-  const platform = options.platform ?? process.platform;
-  const publish = options.publish ?? rename;
-  const wait = options.wait ?? delay;
-  const maxAttempts = options.maxAttempts ?? 100;
-  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1)
-    throw new RangeError('Job record publication attempts must be a positive integer');
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await publish(temporary, target);
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? '';
-      if (
-        platform !== 'win32' ||
-        !['EPERM', 'EBUSY', 'EACCES'].includes(code) ||
-        attempt >= maxAttempts
-      )
-        throw error;
-      await wait(10);
-    }
-  }
+  const { publish = rename, ...retry } = options;
+  await retryWindowsSharing(() => publish(temporary, target), retry);
 }
 
 /** Internal durable job records. Callers must obtain scopes from the authorized workspace resolver. */
@@ -457,22 +435,12 @@ export class JobStore {
           'Only a terminal job record can be removed by retention cleanup',
         );
       const file = await this.recordPath(scope, id);
-      for (let attempt = 1; ; attempt += 1) {
-        signal.throwIfAborted();
-        try {
-          await unlink(file);
-          return true;
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code ?? '';
-          if (code === 'ENOENT') return false;
-          if (
-            process.platform !== 'win32' ||
-            !['EPERM', 'EBUSY', 'EACCES'].includes(code) ||
-            attempt >= 100
-          )
-            throw error;
-          await delay(10);
-        }
+      try {
+        await retryWindowsSharing(() => unlink(file), { signal });
+        return true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw error;
       }
     });
   }
@@ -721,14 +689,19 @@ export class JobStore {
   ): Promise<JobRecord | undefined> {
     let handle;
     try {
-      handle = await open(file, 'r');
+      // A record being replaced is briefly delete-pending on Windows. Release the
+      // handle before parsing so a slow reader never blocks a concurrent publication.
+      handle = await retryWindowsSharing(() => open(file, 'r'));
       const metadata = await handle.stat();
       if (!metadata.isFile() || metadata.size > this.maxRecordBytes)
         throw new ServiceError(
           'JOB_RECORD_INVALID',
           'Persistent job record exceeds its storage budget or is not a file',
         );
-      const parsed = envelopeSchema.safeParse(JSON.parse(await handle.readFile('utf8')) as unknown);
+      const text = await handle.readFile('utf8');
+      await handle.close();
+      handle = undefined;
+      const parsed = envelopeSchema.safeParse(JSON.parse(text) as unknown);
       if (
         !parsed.success ||
         parsed.data.record.id !== id ||
@@ -792,7 +765,7 @@ export class JobStore {
       }
     } finally {
       await handle?.close();
-      await unlink(temporary).catch((error: unknown) => {
+      await retryWindowsSharing(() => unlink(temporary)).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       });
     }

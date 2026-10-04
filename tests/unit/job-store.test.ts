@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -92,7 +92,7 @@ describe('persistent job records', () => {
       },
     });
     expect(attempts).toBe(3);
-    expect(waits).toEqual([10, 10]);
+    expect(waits).toEqual([5, 10]);
 
     const busy = Object.assign(new Error('still busy'), { code: 'EBUSY' });
     await expect(
@@ -119,6 +119,30 @@ describe('persistent job records', () => {
     ).rejects.toThrow('permission denied');
     expect(nonWindowsAttempts).toBe(1);
   });
+
+  it.runIf(process.platform === 'win32')(
+    'publishes an update while another handle holds the record open for three seconds',
+    async () => {
+      const { state, store } = await fixture();
+      const { record } = await store.submit(scope, request);
+      const file = path.join(state.root, 'jobs', hashCanonical(scope), `${record.id}.json`);
+      const reader = await open(file, 'r');
+      const started = performance.now();
+      const released = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          void reader.close().then(resolve);
+        }, 3_000);
+      });
+      try {
+        const updated = await store.update(scope, record.id, 1, { status: 'running' });
+        expect(updated.revision).toBe(2);
+        expect(performance.now() - started).toBeGreaterThan(2_500);
+      } finally {
+        await released;
+      }
+      expect((await store.get(scope, record.id)).status).toBe('running');
+    },
+  );
 
   it('admits one execution owner and fences other attempts even when they share a PID', async () => {
     const { state, store } = await fixture();
