@@ -642,6 +642,38 @@ function* validateDefinitions(
   }
   for (const [definitionIndex, definition] of index.definitions.entries()) {
     yield* cancellationCheckpoint(options.signal, definitionIndex, 256);
+    const terrain = index.terrainCategories?.get(definition.terrain);
+    if (index.terrainCategories !== undefined && terrain === undefined) {
+      addDiagnostic(diagnostics, options, {
+        code: 'MAP_TERRAIN_UNKNOWN',
+        severity: 'error',
+        category: 'map',
+        message: `Province ${definition.id} uses terrain ${definition.terrain}, which no common/terrain category defines`,
+        location: definitionLocation(definition),
+      });
+    }
+    if (
+      definition.type === 'land' &&
+      index.continents !== undefined &&
+      definition.continent > index.continents.length
+    ) {
+      addDiagnostic(diagnostics, options, {
+        code: 'MAP_CONTINENT_UNKNOWN',
+        severity: 'error',
+        category: 'map',
+        message: `Land province ${definition.id} uses continent ${definition.continent}, but continent.txt defines ${index.continents.length}`,
+        location: definitionLocation(definition),
+      });
+    }
+    if (definition.type === 'land' && terrain?.water === true) {
+      addDiagnostic(diagnostics, options, {
+        code: 'MAP_LAND_TERRAIN_WATER',
+        severity: 'error',
+        category: 'map',
+        message: `Land province ${definition.id} uses water terrain ${definition.terrain}`,
+        location: definitionLocation(definition),
+      });
+    }
     if (definition.type === 'land' && definition.continent === 0) {
       addDiagnostic(diagnostics, options, {
         code: 'MAP_LAND_CONTINENT_MISSING',
@@ -651,21 +683,33 @@ function* validateDefinitions(
         location: definitionLocation(definition),
       });
     }
-    if (definition.type === 'sea' && definition.terrain !== 'ocean') {
+    // With terrain categories available, any is_water category suits seas and lakes; without
+    // them, the base game's ocean and lakes categories are the only known water terrains.
+    const water = (fallback: string) =>
+      index.terrainCategories === undefined
+        ? definition.terrain === fallback
+        : terrain === undefined || terrain.water;
+    if (definition.type === 'sea' && !water('ocean')) {
       addDiagnostic(diagnostics, options, {
         code: 'MAP_SEA_TERRAIN_INVALID',
         severity: 'error',
         category: 'map',
-        message: `Sea province ${definition.id} must use ocean terrain`,
+        message:
+          index.terrainCategories === undefined
+            ? `Sea province ${definition.id} must use ocean terrain`
+            : `Sea province ${definition.id} must use a water terrain (is_water = yes)`,
         location: definitionLocation(definition),
       });
     }
-    if (definition.type === 'lake' && definition.terrain !== 'lakes') {
+    if (definition.type === 'lake' && !water('lakes')) {
       addDiagnostic(diagnostics, options, {
         code: 'MAP_LAKE_TERRAIN_INVALID',
         severity: 'error',
         category: 'map',
-        message: `Lake province ${definition.id} must use lakes terrain`,
+        message:
+          index.terrainCategories === undefined
+            ? `Lake province ${definition.id} must use lakes terrain`
+            : `Lake province ${definition.id} must use a water terrain (is_water = yes)`,
         location: definitionLocation(definition),
       });
     }
@@ -812,6 +856,22 @@ function* validateStatesAndRegions(
       });
     }
   }
+  if (index.terrainCategories !== undefined)
+    for (const region of index.regions) {
+      if (region.navalTerrain === undefined) continue;
+      const category = index.terrainCategories.get(region.navalTerrain);
+      if (category?.naval === true) continue;
+      addDiagnostic(diagnostics, options, {
+        code: 'MAP_REGION_NAVAL_TERRAIN_INVALID',
+        severity: 'error',
+        category: 'map',
+        message:
+          category === undefined
+            ? `Strategic region ${region.id} names naval terrain ${region.navalTerrain}, which no common/terrain category defines`
+            : `Strategic region ${region.id} names ${region.navalTerrain}, which is not a naval terrain (naval_terrain = yes)`,
+        location: regionLocation(region),
+      });
+    }
   for (const [id, regions] of duplicateValues(index.regions, (region) => String(region.id))) {
     const firstRegion = regions[0];
     if (firstRegion === undefined) continue;

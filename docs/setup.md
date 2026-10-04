@@ -53,6 +53,18 @@ For a custom configuration location, add `--config PATH` to both setup commands.
 `--workspace-storage-root PATH` chooses where generated indexes and images are saved.
 Linked mod directories are not followed; configure their real parent directory instead.
 
+### How sources are layered
+
+Sources load in the engine's order: the base game, then each installed folder under `dlc/` and `integrated_dlc/` in order of its internal DLC ID, then dependencies, then the mod.
+A later layer replaces a file with the same path from an earlier one, so a DLC's version of an interface file is the active one and the base game's copy is reported as shadowed.
+Results name a DLC layer by its folder, for example `dlc023_man_the_guns:interface/mtg_leaders.gfx`.
+Only folders that contain a `dlcNNN.dlc` descriptor and resolve inside the game root are layers; archives inside a DLC folder are not unpacked.
+An installed DLC folder is not proof that the DLC is enabled in a particular playset; check `has_dlc` where content depends on it.
+Set `"includeGameDlc": false` on a configured workspace to analyze the base game alone.
+
+`replace_path` entries in a mod's or dependency's `descriptor.mod` unload earlier-loaded files under that folder, as the engine does, and join any `replacePaths` configured for the workspace.
+Entries that are not plain relative folders, such as `../outside` or wildcard paths, are ignored.
+
 ## Add local reference material
 
 Place an offline wiki snapshot in `paradox_wiki/` inside the mod.

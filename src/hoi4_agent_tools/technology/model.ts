@@ -1,3 +1,4 @@
+import type { RootKind } from '../core/workspace.js';
 import type { JsonValue } from '../core/canonical.js';
 import type { Diagnostic, DiagnosticSeverity, SourceLocation } from '../core/diagnostics.js';
 import type { IndexSkippedSource } from '../core/index.js';
@@ -12,7 +13,7 @@ export type TechnologyDefectClass =
 
 export interface TechnologySourceProvenance {
   path: string;
-  rootKind: 'game' | 'dependency' | 'mod' | 'fixture' | 'artifact' | 'cache';
+  rootKind: RootKind;
   loadOrder: number;
   location: SourceLocation;
   sourceHash: string;

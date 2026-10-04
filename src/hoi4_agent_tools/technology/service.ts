@@ -287,7 +287,7 @@ async function scanTechnologySources(
       signal,
     ),
     ...(workspace.roots.some(({ kind }) => kind === 'game')
-      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game'] }, principal, signal)]
+      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game', 'dlc'] }, principal, signal)]
       : []),
   ]);
   const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));

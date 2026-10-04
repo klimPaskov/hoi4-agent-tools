@@ -121,7 +121,7 @@ const unresolvedKinds = new Set([
   'state',
   'partial_source',
 ]);
-const rootKinds = new Set(['mod', 'game', 'dependency', 'artifact', 'cache', 'fixture']);
+const rootKinds = new Set(['mod', 'game', 'dlc', 'dependency', 'artifact', 'cache', 'fixture']);
 const symbolKinds = new Set([
   'focus_tree',
   'focus',

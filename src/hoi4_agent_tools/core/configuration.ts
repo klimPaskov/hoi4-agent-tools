@@ -94,6 +94,8 @@ export const workspaceRegistrationSchema = z
     root: z.string().min(1),
     kind: z.enum(['mod', 'game', 'dependency']).default('mod'),
     gameRoot: z.string().min(1).optional(),
+    /** Layer installed `dlc/` and `integrated_dlc/` folders between the game and mods. */
+    includeGameDlc: z.boolean().default(true),
     dependencyRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     dependencies: z.array(dependencyRegistrationSchema).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     replacePaths: z.array(relativeRootPathSchema).max(WORKSPACE_MAX_PATHS).default([]),

@@ -740,6 +740,59 @@ export function parseState(
   };
 }
 
+/** A provincial terrain category from `common/terrain/*.txt` `categories`. */
+export interface TerrainCategory {
+  name: string;
+  water: boolean;
+  naval: boolean;
+  file: ScannedFile;
+}
+
+/**
+ * Provincial terrain categories from the active `common/terrain` files. Files are read in
+ * ASCII path order, so a later file's category replaces an earlier one of the same name.
+ */
+export function parseTerrainCategories(
+  files: readonly ScannedFile[],
+  diagnostics: Diagnostic[],
+): Map<string, TerrainCategory> {
+  const categories = new Map<string, TerrainCategory>();
+  for (const file of [...files].sort((left, right) =>
+    compareCodeUnits(normalizedPath(left.relativePath), normalizedPath(right.relativePath)),
+  )) {
+    const document = parseClausewitz(file.bytes, file.displayPath);
+    addMapDiagnostics(diagnostics, document.diagnostics);
+    for (const entry of document.root.entries) {
+      if (entry.type !== 'assignment' || entry.key.value !== 'categories') continue;
+      if (entry.value.type !== 'block') continue;
+      for (const category of entry.value.entries) {
+        if (category.type !== 'assignment' || category.value.type !== 'block') continue;
+        const flag = (key: string) =>
+          firstScalar(category.value as BlockNode, key)?.value === 'yes';
+        categories.set(category.key.value, {
+          name: category.key.value,
+          water: flag('is_water'),
+          naval: flag('naval_terrain'),
+          file,
+        });
+      }
+    }
+  }
+  return categories;
+}
+
+/** Continent names in `continent.txt`; their one-based positions are the continent IDs. */
+export function parseContinents(
+  file: ScannedFile,
+  diagnostics: Diagnostic[],
+): string[] | undefined {
+  const document = parseClausewitz(file.bytes, file.displayPath);
+  addMapDiagnostics(diagnostics, document.diagnostics);
+  const assignment = firstTopLevelAssignment(document, 'continents');
+  if (assignment?.value.type !== 'block') return undefined;
+  return scalarList(assignment.value);
+}
+
 export function parseStrategicRegion(
   file: ScannedFile,
   diagnostics: Diagnostic[],
@@ -788,11 +841,21 @@ export function parseAdjacencies(file: ScannedFile, diagnostics: Diagnostic[]): 
   const document = parseTextDocument(file);
   const result: AdjacencyRecord[] = [];
   let dataIndex = 0;
+  let terminator: TextLine | undefined;
+  const ignored: TextLine[] = [];
   for (const line of document.lines) {
     const trimmed = line.text.trim();
     if (line.index === 0 || trimmed === '' || trimmed.startsWith('#')) continue;
+    // The engine stops reading at the first -1 row; later rows have no effect.
+    if (terminator !== undefined) {
+      ignored.push(line);
+      continue;
+    }
     const parts = splitDelimitedRow(line.text, 10);
-    if (parts[0] === '-1') break;
+    if (parts[0] === '-1') {
+      terminator = line;
+      continue;
+    }
     if (parts.length < 9) {
       addMapDiagnostic(diagnostics, {
         code: 'MAP_ADJACENCY_ROW_MALFORMED',
@@ -840,6 +903,23 @@ export function parseAdjacencies(file: ScannedFile, diagnostics: Diagnostic[]): 
     });
     dataIndex += 1;
   }
+  if (ignored.length > 0)
+    addMapDiagnostic(diagnostics, {
+      code: 'MAP_ADJACENCY_AFTER_TERMINATOR',
+      severity: 'warning',
+      category: 'map',
+      message: `${ignored.length} adjacency row(s) follow the -1 terminator row and are not read`,
+      location: lineLocation(document, ignored[0]!),
+      details: { ignoredRows: ignored.length },
+    });
+  if (terminator === undefined)
+    addMapDiagnostic(diagnostics, {
+      code: 'MAP_ADJACENCY_TERMINATOR_MISSING',
+      severity: 'warning',
+      category: 'map',
+      message: 'Adjacency file has no -1;-1;-1;-1;-1;-1;-1;-1;-1 terminator row',
+      location: lineLocation(document, document.lines.at(-1) ?? document.lines[0]!),
+    });
   return result;
 }
 
@@ -1355,6 +1435,11 @@ export class MapWorkspaceIndex {
   readonly defaultMapFile: ScannedFile | undefined;
   readonly definitionFile: ScannedFile | undefined;
   readonly adjacencyFile: ScannedFile | undefined;
+  readonly continentFile: ScannedFile | undefined;
+  /** Continent names when `continent.txt` was read; its positions are the IDs. */
+  readonly continents: readonly string[] | undefined;
+  /** Terrain categories when any `common/terrain` file was read. */
+  readonly terrainCategories: ReadonlyMap<string, TerrainCategory> | undefined;
   readonly supplyNodeFile: ScannedFile | undefined;
   readonly railwayFile: ScannedFile | undefined;
 
@@ -1537,6 +1622,22 @@ export class MapWorkspaceIndex {
         this.regionsByProvince.set(provinceId, memberships);
       }
     }
+    this.continentFile = mapFile(
+      this.activeFiles,
+      defaultMapSelectorValue(this.defaultMapFile, 'continent', 'continent.txt'),
+      this.sourceRoots.map,
+    );
+    this.continents =
+      this.continentFile === undefined
+        ? undefined
+        : parseContinents(this.continentFile, this.diagnostics);
+    const terrainFiles = this.activeFiles.all.filter((file) =>
+      /^common\/terrain\/[^/]+\.txt$/iu.test(normalizedPath(file.relativePath)),
+    );
+    this.terrainCategories =
+      terrainFiles.length === 0
+        ? undefined
+        : parseTerrainCategories(terrainFiles, this.diagnostics);
     this.adjacencyFile = mapFile(
       this.activeFiles,
       defaultMapSelectorValue(this.defaultMapFile, 'adjacencies', 'adjacencies.csv'),

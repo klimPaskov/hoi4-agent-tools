@@ -4,6 +4,10 @@
 
 ## 3.7.0 - 2026-10-03
 
+- Layer installed `dlc/` and `integrated_dlc/` folders between the base game and mods in internal-ID order, so source lookups, renders, and analyses find DLC sprites, interfaces, and portraits; `includeGameDlc: false` opts out.
+- Apply `replace_path` entries from mod and dependency descriptors in addition to configured replace paths.
+- Check province terrain and continents against the active `common/terrain` categories and `continent.txt`, accept any water terrain for seas and lakes, check strategic-region `naval_terrain`, and report adjacency rows after the `-1` terminator or a missing terminator.
+- Locate a source position with `hoi4.source_lookup` `path` and `line`: return its layer, the containing definitions, the enclosing assignment chain, and a `keyPath` that navigates back to it.
 - Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
 - Limit definition-only event/helper lookups to their source family and reuse semantic reference analysis for unchanged snapshots.
 - Check snippet syntax, native command kinds, and declared scopes against cited installed or explicitly selected generated documentation, with unresolved coverage reported separately.
