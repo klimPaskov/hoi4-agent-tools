@@ -62,7 +62,11 @@ export const sourceKeyPathSchema = z
 export const sourceLookupRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
-    symbol: z.string().trim().min(1).max(256),
+    symbol: z.string().trim().min(1).max(256).optional(),
+    /** Locate mode: a scanned source path (`mod:events/a.txt`, `events/a.txt`, or absolute). */
+    path: z.string().trim().min(1).max(4096).optional(),
+    line: z.number().int().min(1).optional(),
+    column: z.number().int().min(1).optional(),
     kind: z
       .string()
       .regex(/^[a-z][a-z0-9_]{0,63}$/u)
@@ -82,7 +86,41 @@ export const sourceLookupRequestSchema = z
       .regex(/^[a-f0-9]{64}$/u)
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const locating = value.path !== undefined || value.line !== undefined;
+    if (locating === (value.symbol !== undefined))
+      context.addIssue({
+        code: 'custom',
+        path: ['symbol'],
+        message: 'Provide either symbol, or path and line to locate a source position',
+      });
+    if (locating && (value.path === undefined || value.line === undefined))
+      context.addIssue({
+        code: 'custom',
+        path: ['line'],
+        message: 'Locating a source position requires both path and line',
+      });
+    if (!locating && value.column !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['column'],
+        message: 'column applies only with path and line',
+      });
+    if (
+      locating &&
+      (value.keyPath !== undefined ||
+        value.view === 'structure' ||
+        value.fromLine !== undefined ||
+        value.fromColumn !== undefined ||
+        value.expectedRevision !== undefined)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['path'],
+        message: 'Navigation options apply to a symbol lookup; locate first, then pass its keyPath',
+      });
+  });
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const line = z.number().int().min(1);
@@ -151,6 +189,7 @@ export const sourceLookupDataSchema = z
       'event_definitions',
       'event_consumers',
       'helper_definitions',
+      'source_location',
     ]),
     revision: hash,
     complete: z.boolean(),
@@ -162,6 +201,47 @@ export const sourceLookupDataSchema = z
     referencesTruncated: z.boolean(),
     referencesComplete: z.boolean(),
     unresolvedReferenceCount: count,
+    location: z
+      .object({
+        path: z.string().max(4096),
+        rootKind: z.string().max(32),
+        loadOrder: count,
+        shadowed: z.boolean(),
+        line,
+        column: line,
+        text: z.string().max(300),
+        owners: z
+          .array(
+            z
+              .object({
+                kind: z.string().max(64),
+                id: z.string().max(1024),
+                startLine: line,
+                endLine: line,
+                overridden: z.boolean(),
+              })
+              .strict(),
+          )
+          .max(8),
+        chain: z
+          .array(
+            z
+              .object({
+                key: z.string().max(128).nullable(),
+                occurrence: count,
+                index: count,
+                startLine: line,
+                endLine: line,
+              })
+              .strict(),
+          )
+          .max(24),
+        chainTruncated: z.boolean(),
+        keyPath: sourceKeyPathSchema.nullable(),
+        structureAvailable: z.boolean(),
+      })
+      .strict()
+      .optional(),
     definitions: z
       .array(
         z

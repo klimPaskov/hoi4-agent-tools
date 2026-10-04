@@ -4,89 +4,118 @@
   "type": "object",
   "properties": {
     "workspaceId": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "symbol": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "path": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "line": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "column": {
+      "$ref": "#/$defs/__schema4"
+    },
+    "kind": {
+      "$ref": "#/$defs/__schema5"
+    },
+    "includeReferences": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "maxDefinitions": {
+      "$ref": "#/$defs/__schema7"
+    },
+    "maxReferences": {
+      "$ref": "#/$defs/__schema8"
+    },
+    "maxLines": {
+      "$ref": "#/$defs/__schema9"
+    },
+    "keyPath": {
+      "$ref": "#/$defs/__schema10"
+    },
+    "view": {
+      "$ref": "#/$defs/__schema12"
+    },
+    "maxChildren": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "childOffset": {
+      "$ref": "#/$defs/__schema14"
+    },
+    "fromLine": {
+      "$ref": "#/$defs/__schema15"
+    },
+    "fromColumn": {
+      "$ref": "#/$defs/__schema16"
+    },
+    "expectedRevision": {
+      "$ref": "#/$defs/__schema17"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
       "default": "current",
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]{0,63}$"
     },
-    "symbol": {
+    "__schema1": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "kind": {
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "__schema3": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "__schema4": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "__schema5": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{0,63}$"
     },
-    "includeReferences": {
+    "__schema6": {
       "default": true,
       "type": "boolean"
     },
-    "maxDefinitions": {
+    "__schema7": {
       "default": 3,
       "type": "integer",
       "minimum": 1,
       "maximum": 3
     },
-    "maxReferences": {
+    "__schema8": {
       "default": 10,
       "type": "integer",
       "minimum": 0,
       "maximum": 20
     },
-    "maxLines": {
+    "__schema9": {
       "default": 30,
       "type": "integer",
       "minimum": 1,
       "maximum": 80
     },
-    "keyPath": {
+    "__schema10": {
       "maxItems": 24,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema0"
+        "$ref": "#/$defs/__schema11"
       }
     },
-    "view": {
-      "default": "source",
-      "type": "string",
-      "enum": [
-        "source",
-        "structure"
-      ]
-    },
-    "maxChildren": {
-      "default": 20,
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 40
-    },
-    "childOffset": {
-      "default": 0,
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 100000
-    },
-    "fromLine": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
-    },
-    "fromColumn": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 9007199254740991
-    },
-    "expectedRevision": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    }
-  },
-  "required": [
-    "symbol"
-  ],
-  "additionalProperties": false,
-  "$defs": {
-    "__schema0": {
+    "__schema11": {
       "anyOf": [
         {
           "type": "object",
@@ -122,6 +151,40 @@
           "additionalProperties": false
         }
       ]
+    },
+    "__schema12": {
+      "default": "source",
+      "type": "string",
+      "enum": [
+        "source",
+        "structure"
+      ]
+    },
+    "__schema13": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 40
+    },
+    "__schema14": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000
+    },
+    "__schema15": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "__schema16": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "__schema17": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     }
   }
 }

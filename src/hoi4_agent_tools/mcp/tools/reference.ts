@@ -56,7 +56,7 @@ export const referenceTools = [
     name: 'hoi4.source_lookup',
     title: 'Look up HOI4 source symbol',
     description:
-      'Find exact Clausewitz definitions and usages; navigate nested keyPath blocks or list bounded child structure with view=structure.',
+      'Find exact Clausewitz definitions and usages; navigate nested keyPath blocks or list bounded child structure with view=structure. Or pass path and line to get the definitions and keyPath containing that line.',
     inputSchema: sourceLookupRequestSchema,
     outputSchema: strictOperationResultSchema(sourceLookupDataSchema),
     annotations: readOnly,

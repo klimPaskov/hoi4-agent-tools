@@ -7,6 +7,7 @@ import { readBoundedJsonLines } from './lines.js';
 import { scanImpactSemanticReferences } from '../core/impact-semantic.js';
 import { parseClausewitz } from '../core/source/parser.js';
 import { navigateSource } from './source-navigation.js';
+import { locatePatterns, locateSource } from './source-locate.js';
 
 const semanticCache = new WeakMap<ScanSnapshot, ReturnType<typeof scanImpactSemanticReferences>>();
 
@@ -40,15 +41,37 @@ export async function sourceLookup(
           'common/scripted_guis/**/*.txt',
           'common/on_actions/**/*.txt',
         ]
-      : input.includeReferences || input.kind === undefined
-        ? undefined
-        : narrowPatterns[input.kind];
+      : input.path !== undefined
+        ? locatePatterns(engine, workspaceId, input.path, principal)
+        : input.includeReferences || input.kind === undefined
+          ? undefined
+          : narrowPatterns[input.kind];
   const snapshot = await engine.scan(
     workspaceId,
     patterns === undefined ? {} : { patterns },
     principal,
     signal,
   );
+  if (input.path !== undefined && input.line !== undefined)
+    return {
+      sourceScope: 'source_location',
+      revision: snapshot.revision,
+      complete: snapshot.complete,
+      skippedSourceCount: snapshot.skippedSourceCount,
+      definitionCount: 0,
+      definitionsTruncated: false,
+      referencesIncluded: false,
+      referenceCount: 0,
+      referencesTruncated: false,
+      referencesComplete: false,
+      unresolvedReferenceCount: 0,
+      location: locateSource(snapshot, input.path, input.line, input.column),
+      definitions: [],
+      references: [],
+    };
+  const symbol = input.symbol;
+  if (symbol === undefined)
+    throw new ServiceError('SOURCE_LOOKUP_TARGET_REQUIRED', 'Provide a symbol, or path and line');
   if (input.expectedRevision !== undefined && input.expectedRevision !== snapshot.revision) {
     throw new ServiceError(
       'SOURCE_REVISION_STALE',
@@ -59,8 +82,7 @@ export async function sourceLookup(
   const navigating = input.keyPath !== undefined || input.view === 'structure';
   const matchedDefinitions = snapshot.index.symbols
     .filter(
-      (entry) =>
-        entry.id === input.symbol && (input.kind === undefined || entry.kind === input.kind),
+      (entry) => entry.id === symbol && (input.kind === undefined || entry.kind === input.kind),
     )
     .sort(
       (left, right) =>
@@ -169,7 +191,7 @@ export async function sourceLookup(
     ? [...snapshot.index.references, ...(semantic?.references ?? [])]
         .filter(
           (entry) =>
-            entry.to === input.symbol && (input.kind === undefined || entry.toKind === input.kind),
+            entry.to === symbol && (input.kind === undefined || entry.toKind === input.kind),
         )
         .filter((entry) => {
           const key = `${entry.path}:${entry.location?.start.offset ?? 0}:${entry.toKind}:${entry.to}:${entry.kind}`;
@@ -198,8 +220,7 @@ export async function sourceLookup(
     complete: snapshot.complete,
     skippedSourceCount: snapshot.skippedSourceCount,
     definitionCount: snapshot.index.symbols.filter(
-      (entry) =>
-        entry.id === input.symbol && (input.kind === undefined || entry.kind === input.kind),
+      (entry) => entry.id === symbol && (input.kind === undefined || entry.kind === input.kind),
     ).length,
     definitionsTruncated: matchedDefinitions.length > definitions.length,
     definitions,
