@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -23,7 +23,7 @@ const docs = (entries: Array<[string, string]>) =>
     )
     .join('\n');
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'hoi4-script-check-'));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'hoi4-script-check-')));
   roots.push(root);
   const mod = path.join(root, 'mod');
   const game = path.join(root, 'game');
