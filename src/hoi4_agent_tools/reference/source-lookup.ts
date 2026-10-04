@@ -8,6 +8,7 @@ import { scanImpactSemanticReferences } from '../core/impact-semantic.js';
 import { parseClausewitz } from '../core/source/parser.js';
 import { navigateSource } from './source-navigation.js';
 import { locatePatterns, locateSource } from './source-locate.js';
+import { nearestNames } from './suggestions.js';
 
 const semanticCache = new WeakMap<ScanSnapshot, ReturnType<typeof scanImpactSemanticReferences>>();
 
@@ -223,6 +224,18 @@ export async function sourceLookup(
       (entry) => entry.id === symbol && (input.kind === undefined || entry.kind === input.kind),
     ).length,
     definitionsTruncated: matchedDefinitions.length > definitions.length,
+    ...(matchedDefinitions.length === 0
+      ? {
+          suggestions: nearestNames(
+            symbol,
+            new Set(
+              snapshot.index.symbols
+                .filter((entry) => input.kind === undefined || entry.kind === input.kind)
+                .map(({ id }) => id),
+            ),
+          ),
+        }
+      : {}),
     definitions,
     references,
     referencesIncluded: input.includeReferences,

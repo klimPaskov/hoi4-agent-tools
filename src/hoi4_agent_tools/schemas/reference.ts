@@ -203,6 +203,8 @@ export const sourceLookupDataSchema = z
     referencesTruncated: z.boolean(),
     referencesComplete: z.boolean(),
     unresolvedReferenceCount: count,
+    /** Indexed identifiers within three edits of a symbol that has no definition. */
+    suggestions: z.array(z.string().max(1024)).max(5).optional(),
     location: z
       .object({
         path: z.string().max(4096),

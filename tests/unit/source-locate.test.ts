@@ -6,6 +6,7 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { sourceLookup } from '../../src/hoi4_agent_tools/reference/source-lookup.js';
+import { editDistance, nearestNames } from '../../src/hoi4_agent_tools/reference/suggestions.js';
 import {
   sourceLookupDataSchema,
   sourceLookupRequestSchema,
@@ -177,5 +178,38 @@ describe('source position lookup', () => {
         sourceLookupRequestSchema.safeParse({ workspaceId: 'locate', ...input }).success,
         JSON.stringify(input),
       ).toBe(false);
+  });
+});
+
+describe('near-miss identifier suggestions', () => {
+  it('suggests indexed identifiers within three edits when a symbol has no definition', async () => {
+    const { engine } = await fixture();
+    const missing = await sourceLookup(
+      engine,
+      'locate',
+      request({ symbol: 'locate.2', kind: 'event', includeReferences: false }),
+    );
+    expect(missing.definitionCount).toBe(0);
+    expect(missing.suggestions).toEqual(['locate.1']);
+    const found = await sourceLookup(
+      engine,
+      'locate',
+      request({ symbol: 'locate.1', kind: 'event', includeReferences: false }),
+    );
+    expect(found.suggestions).toBeUndefined();
+  });
+
+  it('orders by distance, bounds work and skips distant or oversized names', () => {
+    expect(nearestNames('add_politcal_power', ['add_political_power', 'add_power', 'x'])).toEqual([
+      'add_political_power',
+    ]);
+    expect(nearestNames('abcd', ['abce', 'abxe', 'abcde', 'zzzz'], { limit: 2 })).toEqual([
+      'abcde',
+      'abce',
+    ]);
+    expect(nearestNames('abcd', ['abce', 'abcf'], { budget: 1 })).toEqual(['abce']);
+    expect(nearestNames('a'.repeat(129), ['a'.repeat(129)])).toEqual([]);
+    expect(editDistance('kitten', 'sitting')).toBe(3);
+    expect(editDistance('abcdefgh', 'zyxwvuts')).toBe(4);
   });
 });

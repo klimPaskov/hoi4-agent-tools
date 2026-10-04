@@ -13,6 +13,7 @@ import type {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
+import { editDistance } from './suggestions.js';
 import { publicReferenceSection, type ReferenceService, type ReferenceSection } from './service.js';
 
 type Input = z.infer<typeof scriptValidateRequestSchema>;
@@ -43,18 +44,6 @@ const iteratorParameters = new Set([
   'display_individual_scopes',
   'count',
 ]);
-
-function editDistance(a: string, b: string): number {
-  let row = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 0; i < a.length; i++) {
-    const next = [i + 1];
-    for (let j = 0; j < b.length; j++)
-      next.push(Math.min(next[j]! + 1, row[j + 1]! + 1, row[j]! + Number(a[i] !== b[j])));
-    if (Math.min(...next) > 3) return 4;
-    row = next;
-  }
-  return row[b.length]!;
-}
 
 /** Check only rules explicitly available from one selected documentation authority. */
 export async function validateScript(
