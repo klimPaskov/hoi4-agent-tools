@@ -46,19 +46,24 @@ describe.runIf(process.platform === 'win32')('Windows delete-pending capacity sl
     }
   });
 
-  it('keeps persistent permission failures bounded and never starts the action', async () => {
+  it('bounds a persistently delete-pending slot by elapsed time and never starts the action', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-permission-failure-'));
-    injected.remaining = 100;
+    injected.remaining = 1_000;
     injected.failures = 0;
+    let clock = 0;
     let executed = false;
     try {
       await expect(
-        new SharedRequestCapacity(root, 1).run(new AbortController().signal, async () => {
+        new SharedRequestCapacity(root, 1, {
+          deletePendingLimitMs: 5_000,
+          now: () => (clock += 1_000),
+        }).run(new AbortController().signal, async () => {
           executed = true;
         }),
-      ).rejects.toMatchObject({ code: 'EPERM' });
+      ).rejects.toMatchObject({ code: 'REQUEST_CAPACITY_UNAVAILABLE' });
       expect(executed).toBe(false);
-      expect(injected.failures).toBe(50);
+      expect(injected.failures).toBeGreaterThan(1);
+      expect(injected.failures).toBeLessThan(10);
     } finally {
       injected.remaining = 0;
       await rm(root, { recursive: true, force: true });

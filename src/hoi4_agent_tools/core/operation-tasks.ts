@@ -48,7 +48,7 @@ import {
   type JobRequest,
 } from './job-store.js';
 import { JobService } from './job-service.js';
-import { JobWorkerHost } from './job-worker-host.js';
+import { JobWorkerHost, workerFailure } from './job-worker-host.js';
 import { compareCodeUnits, hashCanonical, secureId } from './canonical.js';
 import { ServiceError } from './result.js';
 import { errorResult } from './operation-result.js';
@@ -535,13 +535,7 @@ export class OperationTaskService {
         await jobs.failInterrupted(
           record.scope.workspaceId,
           record.id,
-          {
-            code: error instanceof ServiceError ? error.code : 'JOB_WORKER_FAILED',
-            message:
-              error instanceof ServiceError
-                ? error.message
-                : 'The isolated worker could not be started',
-          },
+          workerFailure(error, 'admission'),
           principal,
         );
       })

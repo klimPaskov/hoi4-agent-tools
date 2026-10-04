@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { sha256Bytes } from './canonical.js';
 import { canonicalPath, containedGeneratedPath } from './workspace.js';
 import { ServiceError } from './result.js';
+import { retryWindowsSharing, sharingRetryDelay } from './windows-sharing.js';
 
 function processAlive(pid: number): boolean {
   try {
@@ -22,11 +23,24 @@ export interface SharedCapacityLease {
   handoffToProcess(pid: number): Promise<void>;
 }
 
+export interface SharedCapacityOptions {
+  /** How long one slot may stay delete-pending on Windows before admission fails. */
+  deletePendingLimitMs?: number;
+  now?: () => number;
+}
+
 export class SharedRequestCapacity {
+  private readonly deletePendingLimitMs: number;
+  private readonly now: () => number;
+
   constructor(
     private readonly stateRoot: string | undefined,
     private readonly capacity = 4,
-  ) {}
+    options: SharedCapacityOptions = {},
+  ) {
+    this.deletePendingLimitMs = options.deletePendingLimitMs ?? 60_000;
+    this.now = options.now ?? Date.now;
+  }
 
   async run<T>(
     signal: AbortSignal,
@@ -51,7 +65,9 @@ export class SharedRequestCapacity {
     );
     await mkdir(root, { recursive: true });
     const lease = `${process.pid}-${randomUUID()}.lease`;
-    const pendingDeletionFailures = new Map<number, number>();
+    // First observation time of each slot that Windows still reports as delete-pending.
+    const pendingDeletionSince = new Map<number, number>();
+    let waits = 0;
     for (;;) {
       signal.throwIfAborted();
       for (let index = 0; index < this.capacity; index += 1) {
@@ -61,28 +77,36 @@ export class SharedRequestCapacity {
         const slot = path.join(root, String(index));
         try {
           await mkdir(slot);
-          pendingDeletionFailures.delete(index);
+          pendingDeletionSince.delete(index);
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
           // Windows can retain a delete-pending directory handle after rmdir
           // returns. Recreating that slot reports EPERM/EBUSY, not EEXIST.
-          // No work is admitted until a later mkdir actually succeeds.
+          // Contending waiters keep such a slot pending while they inspect it, so the
+          // bound is elapsed time rather than a count of observations. No work is
+          // admitted until a later mkdir actually succeeds.
           if (process.platform === 'win32' && ['EPERM', 'EBUSY'].includes(code ?? '')) {
-            const failures = (pendingDeletionFailures.get(index) ?? 0) + 1;
-            pendingDeletionFailures.set(index, failures);
-            if (failures >= 50) throw error;
+            const since = pendingDeletionSince.get(index) ?? this.now();
+            pendingDeletionSince.set(index, since);
+            if (this.now() - since >= this.deletePendingLimitMs)
+              throw new ServiceError(
+                'REQUEST_CAPACITY_UNAVAILABLE',
+                `An execution capacity slot stayed unavailable (${code}) beyond its admission window`,
+              );
             await this.reap(slot);
             continue;
           }
           if (code !== 'EEXIST') throw error;
-          pendingDeletionFailures.delete(index);
+          pendingDeletionSince.delete(index);
           await this.reap(slot);
           continue;
         }
         let owner: string;
         try {
           owner = path.join(slot, lease);
-          await writeFile(owner, '', { flag: 'wx', mode: 0o600 });
+          await retryWindowsSharing(() => writeFile(owner, '', { flag: 'wx', mode: 0o600 }), {
+            signal,
+          });
         } catch (error) {
           // A competing stale-owner cleanup can remove an empty slot before our
           // owner file is published. No work starts until the owner exists.
@@ -112,7 +136,7 @@ export class SharedRequestCapacity {
                 );
               const next = path.join(slot, `${pid}-${randomUUID()}.lease`);
               try {
-                await rename(owner, next);
+                await retryWindowsSharing(() => rename(owner, next));
               } catch (error) {
                 if ((error as NodeJS.ErrnoException).code === 'ENOENT')
                   throw new ServiceError(
@@ -129,7 +153,7 @@ export class SharedRequestCapacity {
           // A launcher can fail while its admitted child still runs. Keep that child's
           // lease until process-exit evidence permits a later reaper to reclaim it.
           if (transferredPid === undefined || !processAlive(transferredPid)) {
-            await unlink(owner).catch((error: unknown) => {
+            await retryWindowsSharing(() => unlink(owner)).catch((error: unknown) => {
               if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
             });
             await rmdir(slot).catch((error: unknown) => {
@@ -143,7 +167,10 @@ export class SharedRequestCapacity {
           }
         }
       }
-      await delay(100, undefined, { signal });
+      // Short first waits keep a briefly held lock responsive; the cap and jitter keep
+      // many contending processes from polling the shared directory in lockstep.
+      waits += 1;
+      await delay(sharingRetryDelay(waits) * (0.75 + Math.random() / 2), undefined, { signal });
     }
   }
 

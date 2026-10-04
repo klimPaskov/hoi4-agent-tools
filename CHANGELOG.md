@@ -9,6 +9,7 @@
 - Check snippet syntax, native command kinds, and declared scopes against cited installed or explicitly selected generated documentation, with unresolved coverage reported separately.
 - Verify source files in bounded parallel batches, reject changing or replaced paths, and bound optional cache persistence without truncating analysis.
 - Load isolated workers' domain modules after authenticating the job, preserving exact operation admission and recorded write policies.
+- Retry transient Windows sharing violations on job records and capacity leases, release record handles before parsing, bound delete-pending capacity slots by elapsed time, and report worker coordination failures with a fixed stage and allowlisted native code.
 - Filter reference scans by authority, reuse citation hints, decode supported reference encodings, and preserve byte-bounded continuations and explicit omission counts.
 - Replace the unpatched globbing dependency chain and update vulnerable transitive pins, preserving relative-path, symlink, literal-filename and pattern-complexity checks.
 

@@ -12,6 +12,59 @@ import { ServiceError } from './result.js';
 
 const maximumCheckpointRecoveries = 2;
 const maximumPreDispatchRecoveries = 2;
+// Native and IPC codes are fixed vocabulary. Error messages can contain paths or source
+// text, so only an allowlisted code and the fixed coordination stage are reported.
+const nativeFailureCodes = new Set([
+  'EACCES',
+  'EAGAIN',
+  'EBADF',
+  'EBUSY',
+  'ECHILD',
+  'ECONNRESET',
+  'EEXIST',
+  'EIO',
+  'EMFILE',
+  'ENFILE',
+  'ENOENT',
+  'ENOMEM',
+  'ENOSPC',
+  'ENOTDIR',
+  'ENOTEMPTY',
+  'EPERM',
+  'EPIPE',
+  'ESRCH',
+  'ETIMEDOUT',
+  'ERR_IPC_CHANNEL_CLOSED',
+  'ERR_IPC_DISCONNECTED',
+]);
+
+/** Fixed coordination steps between job admission and a terminal record. */
+export type WorkerStage = 'admission' | 'startup' | 'handoff' | 'dispatch' | 'supervision';
+
+function nativeFailureCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' && nativeFailureCodes.has(error.code)
+    ? error.code
+    : undefined;
+}
+
+/** Map a launcher failure to a stable, path-free job failure. */
+export function workerFailure(
+  error: unknown,
+  stage: WorkerStage,
+): { code: string; message: string } {
+  if (error instanceof ServiceError) return { code: error.code, message: error.message };
+  const nativeCode = nativeFailureCode(error);
+  return nativeCode === undefined
+    ? {
+        code: 'JOB_WORKER_FAILED',
+        message: `The isolated worker stopped without publishing a result (stage ${stage})`,
+      }
+    : {
+        code: `JOB_WORKER_${nativeCode}`,
+        message: `Worker coordination could not complete (${nativeCode}, stage ${stage}); inspect the retained job outcome`,
+      };
+}
 
 /** Bounded, fixed-entry child execution; client cancellation/disconnection never kills a worker. */
 export class JobWorkerHost {
@@ -79,12 +132,17 @@ export class JobWorkerHost {
       );
     const signal = new AbortController().signal;
     const recovered = new Set<string>();
+    const progress: { stage: WorkerStage } = { stage: 'admission' };
     let preDispatchRecoveries = 0;
     for (;;) {
       try {
+        progress.stage = 'admission';
         await this.scheduler.run(this.owner, 1024, signal, () =>
-          this.capacity.run(signal, (lease) => this.launch(workspaceId, id, lease, principal)),
+          this.capacity.run(signal, (lease) =>
+            this.launch(workspaceId, id, lease, progress, principal),
+          ),
         );
+        progress.stage = 'supervision';
         const current = await this.jobs.get(workspaceId, id, principal);
         if (['completed', 'cancelled', 'failed'].includes(current.status)) return current;
         if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive')
@@ -124,13 +182,7 @@ export class JobWorkerHost {
         return await this.jobs.failInterrupted(
           workspaceId,
           id,
-          {
-            code: error instanceof ServiceError ? error.code : 'JOB_WORKER_FAILED',
-            message:
-              error instanceof ServiceError
-                ? error.message
-                : 'The isolated worker stopped without publishing a result',
-          },
+          workerFailure(error, progress.stage),
           principal,
         );
       }
@@ -161,6 +213,7 @@ export class JobWorkerHost {
     workspaceId: string,
     id: string,
     lease: SharedCapacityLease,
+    progress: { stage: WorkerStage },
     principal?: string,
   ): Promise<void> {
     // Resolve the same configured workspace and grants again immediately before dispatch.
@@ -188,6 +241,7 @@ export class JobWorkerHost {
             workspaceIds: [...new Set([...grant.workspaceIds, ...discoveredWorkspaceIds])],
           }
         : grant;
+    progress.stage = 'startup';
     const child = spawn(
       process.execPath,
       [...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []), entry],
@@ -223,7 +277,9 @@ export class JobWorkerHost {
               'JOB_WORKER_PROTOCOL',
               'The worker did not provide its readiness handshake',
             );
+          progress.stage = 'handoff';
           await lease.handoffToProcess(child.pid);
+          progress.stage = 'dispatch';
           await new Promise<void>((resolve, reject) => {
             phase = 'waiting_for_acceptance';
             acknowledgmentTimer = setTimeout(
@@ -294,6 +350,7 @@ export class JobWorkerHost {
     } finally {
       clearTimeout(acknowledgmentTimer);
     }
+    progress.stage = 'supervision';
     for (;;) {
       const record = await this.jobs.get(workspaceId, id, principal);
       if (['completed', 'failed', 'cancelled'].includes(record.status)) return;

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -92,7 +92,7 @@ describe('documentation-backed script checks', () => {
     expect(good.parametersChecked).toBe(false);
     expect(good.findings[0]).toMatchObject({
       code: 'SCRIPT_COMMAND_SUPPORTED',
-      reference: { path: effects, heading: 'add_power', startLine: 1 },
+      reference: { path: await realpath(effects), heading: 'add_power', startLine: 1 },
     });
     const wrongScope = await check('add_power = 2', { scope: 'state' });
     expect(wrongScope.valid).toBe(false);
