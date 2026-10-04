@@ -22,6 +22,7 @@ import {
 } from '../core/scanner.js';
 import { decodeSource } from '../core/source/encoding.js';
 import { readBoundedJsonLines } from './lines.js';
+import { RankingIndex, sectionTerms, type SectionTerms } from './ranking.js';
 
 type SourceKind = z.infer<typeof referenceSourceSchema>;
 type SearchInput = z.infer<typeof referenceSearchRequestSchema>;
@@ -36,6 +37,9 @@ const MAX_FILE_BYTES = 2_000_000;
 const MAX_TOTAL_BYTES = 32_000_000;
 const MAX_SECTIONS = 20_000;
 const MAX_REFERENCE_METADATA_BYTES = 24_000;
+const PHRASE_CANDIDATES = 60;
+const EXACT_HEADING_SCORE = 1000;
+const sourceOrder: Record<SourceKind, number> = { game_doc: 0, wiki: 1, script_doc: 2 };
 
 function referenceText(bytes: Buffer): string {
   if (
@@ -69,6 +73,22 @@ export interface ReferenceSection {
 
 interface IndexedSection extends ReferenceSection {
   lines: string[];
+  terms: SectionTerms;
+}
+
+/** The citation fields of a section, without its indexed text or term statistics. */
+export function publicReferenceSection(
+  section: ReferenceSection & { lines?: unknown; terms?: unknown },
+): ReferenceSection {
+  const { lines: _lines, terms: _terms, ...citation } = section;
+  return citation;
+}
+
+interface RankedSection {
+  section: IndexedSection;
+  score: number;
+  excerpt: string;
+  matchLine: number;
 }
 
 interface CachedFile {
@@ -93,69 +113,32 @@ interface ReferenceInventory {
   skipped: number;
 }
 
-const searchStopWords = new Set([
-  'a',
-  'an',
-  'and',
-  'at',
-  'be',
-  'can',
-  'come',
-  'do',
-  'does',
-  'for',
-  'from',
-  'how',
-  'in',
-  'is',
-  'of',
-  'the',
-  'to',
-  'where',
-  'with',
-  'work',
-]);
-
-function normalizeTerm(term: string): string {
-  if (term === 'dated') return 'date';
-  if (term.endsWith('ies') && term.length > 5) return `${term.slice(0, -3)}y`;
-  if (term.endsWith('ses') && term.length > 5) return term.slice(0, -2);
-  if (term.endsWith('s') && term.length > 4) return term.slice(0, -1);
-  return term;
-}
-
-function queryTerms(query: string): string[] {
-  return [
-    ...new Set(
-      (query.toLowerCase().match(/[a-z0-9_.:-]+/gu) ?? [])
-        .map(normalizeTerm)
-        .filter((term) => /[a-z0-9]/u.test(term) && !searchStopWords.has(term)),
-    ),
-  ];
-}
-
-function containsTerm(text: string, term: string): boolean {
-  if (term.length > 2) return text.includes(term);
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return new RegExp(`(^|[^a-z0-9_])${escaped}($|[^a-z0-9_])`, 'u').test(text);
-}
-
-function snippet(lines: readonly string[], terms: readonly string[] = []): string {
-  let matching = -1;
-  let best = -1;
-  for (const [index, line] of lines.entries()) {
-    const count = terms.filter((term) => containsTerm(line.toLowerCase(), term)).length;
-    if (count > best) {
-      matching = index;
-      best = count;
-    }
-  }
-  const selected = lines
-    .slice(Math.max(0, matching), Math.max(0, matching) + 3)
+/** Up to three non-empty lines from `first`, trimmed to the 300-character excerpt bound. */
+function snippet(lines: readonly string[], first = 0): string {
+  return lines
+    .slice(first, first + 3)
     .map((line) => line.trim())
     .filter(Boolean)
-    .join(' ');
-  return selected.slice(0, 300);
+    .join(' ')
+    .slice(0, 300);
+}
+
+// A Markdown table row whose first cell names a command, trigger, modifier, or on action.
+const identifierRow = /^\|\s*`?([A-Za-z_][A-Za-z0-9_@.:]*)`?\s*\|/u;
+const tableSeparator = /^\|\s*:?-{3,}/u;
+
+interface Fence {
+  character: string;
+  length: number;
+  info: string;
+}
+
+/** A closing fence repeats the opening character at least as often and has no info string. */
+function fenceMarker(line: string): Fence | undefined {
+  const match = /^\s*(`{3,}|~{3,})(.*)$/u.exec(line);
+  if (match === null) return undefined;
+  const marker = match[1]!;
+  return { character: marker[0]!, length: marker.length, info: match[2]!.trim() };
 }
 
 function sectionize(
@@ -172,14 +155,27 @@ function sectionize(
     .replaceAll('_', ' ')
     .replace(/ - Hearts of Iron 4 Wiki$/u, '');
   const headings: Array<{ heading: string; start: number }> = [];
-  let inFence = false;
+  const rows: Array<{ heading: string; start: number }> = [];
+  let fence: Fence | undefined;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
-    if (/^\s*(```|~~~)/u.test(line)) {
-      inFence = !inFence;
+    const marker = fenceMarker(line);
+    if (fence === undefined && marker !== undefined) {
+      fence = marker;
       continue;
     }
-    if (inFence) continue;
+    if (fence !== undefined) {
+      if (
+        marker?.character === fence.character &&
+        marker.length >= fence.length &&
+        marker.info === ''
+      )
+        fence = undefined;
+      continue;
+    }
+    const row = identifierRow.exec(line);
+    if (row !== null && !tableSeparator.test(lines[index + 1] ?? ''))
+      rows.push({ heading: row[1]!, start: index });
     const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/u.exec(line);
     if (match)
       headings.push({ heading: match[2]!.replace(/<a\b[^>]*><\/a>/gu, '').trim(), start: index });
@@ -195,26 +191,34 @@ function sectionize(
   }
   if (headings.length === 0 || headings[0]!.start > 0)
     headings.unshift({ heading: title, start: 0 });
-  return headings.map((current, index) => {
-    const end = headings[index + 1]?.start ?? lines.length;
-    const sectionLines = lines.slice(current.start, end);
+  const section = (heading: string, start: number, end: number): IndexedSection => {
+    const sectionLines = lines.slice(start, end);
     const id = sha256Bytes(
-      Buffer.from(`${root.kind}\0${relative}\0${current.start + 1}\0${current.heading}`, 'utf8'),
+      Buffer.from(`${root.kind}\0${relative}\0${start + 1}\0${heading}`, 'utf8'),
     );
     return {
       id,
       revision,
       source: root.kind,
       title,
-      heading: current.heading.slice(0, 512),
+      heading: heading.slice(0, 512),
       path: filePath,
-      startLine: current.start + 1,
+      startLine: start + 1,
       endLine: end,
       excerpt: snippet(sectionLines),
       authority: root.authority,
       lines: sectionLines,
+      terms: sectionTerms(title, heading, sectionLines),
     };
-  });
+  };
+  // Heading sections come first, so a page's opening section still names the page. Table
+  // rows follow as one-line sections that cite one exact command or modifier entry.
+  return [
+    ...headings.map((current, index) =>
+      section(current.heading, current.start, headings[index + 1]?.start ?? lines.length),
+    ),
+    ...rows.map((row) => section(row.heading, row.start, row.start + 1)),
+  ];
 }
 
 function sourceRoots(workspace: ResolvedWorkspace): SourceRoot[] {
@@ -305,6 +309,7 @@ const gameDocNames: Record<ContextInput['surface'], string[]> = {
 /** A workspace-private, read-only reference index over explicitly known local roots. */
 export class ReferenceService {
   readonly #cache = new Map<string, CachedFile>();
+  readonly #indexes = new Map<string, RankingIndex>();
   #cacheBytes = 0;
 
   private retain(key: string, value: CachedFile): void {
@@ -470,12 +475,11 @@ export class ReferenceService {
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
     const inventory = await this.inventory(workspace, signal, input.sources);
-    const matches = this.rank(inventory.sections, input.query, input.sources);
-    const results = matches.slice(0, input.limit).map(({ section, score, excerpt }) => ({
-      ...this.publicSection(section),
-      score,
-      excerpt,
-    }));
+    const { ranked: matches, describe } = this.rank(inventory.sections, input.query);
+    const results = matches.slice(0, input.limit).map((match) => {
+      const { section, score, excerpt, matchLine } = describe(match);
+      return { ...this.publicSection(section), score, excerpt, matchLine };
+    });
     const requested = results.length;
     while (
       Buffer.byteLength(JSON.stringify(results), 'utf8') > MAX_REFERENCE_METADATA_BYTES &&
@@ -497,41 +501,90 @@ export class ReferenceService {
     };
   }
 
-  private rank(
-    sections: readonly IndexedSection[],
-    question: string,
-    sources?: readonly SourceKind[],
-  ) {
-    const query = question.toLowerCase();
-    const terms = queryTerms(query);
-    return sections
-      .flatMap((section) => {
-        if (sources !== undefined && !sources.includes(section.source)) return [];
-        const title = section.title.toLowerCase();
-        const heading = section.heading.toLowerCase();
-        const body = section.lines.join('\n').toLowerCase();
-        let matched = 0;
-        let score = 0;
-        for (const term of terms) {
-          const inTitle = containsTerm(title, term);
-          const inHeading = containsTerm(heading, term);
-          const inBody = containsTerm(body, term);
-          if (!inTitle && !inHeading && !inBody) continue;
-          matched++;
-          score += (inTitle ? 24 : 0) + (inHeading ? 18 : 0) + (inBody ? 3 : 0);
-        }
-        if (matched < Math.max(1, Math.ceil(terms.length * 0.6))) return [];
-        if (heading === query) score += 100;
-        else if (heading.includes(query)) score += 70;
-        if (body.includes(query)) score += 30;
-        return [{ section, score, excerpt: snippet(section.lines, terms) }];
-      })
-      .sort(
-        (left, right) =>
-          right.score - left.score ||
-          compareCodeUnits(left.section.path, right.section.path) ||
-          left.section.startLine - right.section.startLine,
-      );
+  /** One index per distinct set of section revisions; IDF depends on the whole inventory. */
+  private rankingIndex(sections: readonly IndexedSection[]): RankingIndex {
+    const parts: string[] = [];
+    let previous: IndexedSection | undefined;
+    for (const section of sections) {
+      if (previous?.path !== section.path || previous.revision !== section.revision)
+        parts.push(`${section.source}\0${section.path}\0${section.revision}`);
+      previous = section;
+    }
+    const key = sha256Bytes(Buffer.from(parts.join('\n'), 'utf8'));
+    const cached = this.#indexes.get(key);
+    if (cached !== undefined) {
+      this.#indexes.delete(key);
+      this.#indexes.set(key, cached);
+      return cached;
+    }
+    const index = new RankingIndex(sections.map(({ terms }) => terms));
+    this.#indexes.set(key, index);
+    while (this.#indexes.size > 4) {
+      const oldest = this.#indexes.keys().next().value;
+      if (oldest === undefined) break;
+      this.#indexes.delete(oldest);
+    }
+    return index;
+  }
+
+  private rank(sections: readonly IndexedSection[], question: string) {
+    const index = this.rankingIndex(sections);
+    const plan = index.plan(question);
+    const scored: Array<{ section: IndexedSection; score: number }> = [];
+    for (const section of sections) {
+      const score = index.score(plan, section.terms, section.heading);
+      if (score !== undefined) scored.push({ section, score: Math.round(score * 1000) / 1000 });
+    }
+    // Installed documentation precedes the wiki when both describe a command equally well.
+    const order = (left: (typeof scored)[number], right: (typeof scored)[number]) =>
+      right.score - left.score ||
+      sourceOrder[left.section.source] - sourceOrder[right.section.source] ||
+      compareCodeUnits(left.section.path, right.section.path) ||
+      left.section.startLine - right.section.startLine;
+    scored.sort(order);
+    // Phrase adjacency is costlier to measure, so it only reorders the leading candidates.
+    const leading = scored.slice(0, PHRASE_CANDIDATES);
+    for (const entry of leading)
+      entry.score =
+        Math.round((entry.score + index.phraseBonus(plan, entry.section.lines)) * 1000) / 1000;
+    leading.sort(order);
+    scored.splice(0, leading.length, ...leading);
+    // An exact table row ranked above the section containing it is the sharper citation.
+    const rows = new Map<string, number[]>();
+    const ranked = scored.filter(({ section }) => {
+      const above = rows.get(section.path) ?? [];
+      if (
+        section.lines.length > 1 &&
+        above.some((line) => line > section.startLine && line < section.endLine + 1)
+      )
+        return false;
+      if (section.lines.length === 1) rows.set(section.path, [...above, section.startLine]);
+      return true;
+    });
+    // The same command documented in several sources says little new after its first
+    // citation. Later copies wait behind distinct answers unless they match exactly.
+    const named = new Set<string>();
+    const distinct: typeof ranked = [];
+    const repeated: typeof ranked = [];
+    for (const entry of ranked) {
+      const key = entry.section.heading.toLowerCase();
+      if (named.has(key) && entry.score < EXACT_HEADING_SCORE) repeated.push(entry);
+      else distinct.push(entry);
+      named.add(key);
+    }
+    ranked.splice(0, ranked.length, ...distinct, ...repeated);
+    return {
+      ranked,
+      describe: ({ section, score }: { section: IndexedSection; score: number }): RankedSection => {
+        const offset = index.bestLine(plan, section.lines);
+        return {
+          section,
+          score,
+          excerpt: snippet(section.lines, offset),
+          matchLine: section.startLine + offset,
+        };
+      },
+    };
   }
 
   async read(
@@ -591,8 +644,9 @@ export class ReferenceService {
   ): Promise<ReferenceContextResult> {
     const inventory = await this.inventory(workspace, signal);
     const wanted = surfaceNames[input.surface];
-    const ranked =
-      input.question === undefined ? [] : this.rank(inventory.sections, input.question);
+    const ranking =
+      input.question === undefined ? undefined : this.rank(inventory.sections, input.question);
+    const ranked = ranking?.ranked ?? [];
     const required: Array<{ name: string; section: IndexedSection }> = [];
     const missing: string[] = [];
     const includeRequired = (name: string, section: IndexedSection | undefined) => {
@@ -658,11 +712,12 @@ export class ReferenceService {
       );
     return {
       surface: input.surface,
-      sections: selected.map((section) => ({
-        ...this.publicSection(section),
-        excerpt:
-          ranked.find((entry) => entry.section.id === section.id)?.excerpt ?? section.excerpt,
-      })),
+      sections: selected.map((section) => {
+        const match = ranked.find((entry) => entry.section.id === section.id);
+        if (match === undefined || ranking === undefined) return this.publicSection(section);
+        const { excerpt, matchLine } = ranking.describe(match);
+        return { ...this.publicSection(section), excerpt, matchLine };
+      }),
       omitted: Math.max(0, prioritized.length - selected.length),
       limitedByBytes: selected.length < requestedCount,
       omittedSources: required
@@ -680,7 +735,6 @@ export class ReferenceService {
   }
 
   private publicSection(section: IndexedSection): ReferenceSection {
-    const { lines: _lines, ...publicSection } = section;
-    return publicSection;
+    return publicReferenceSection(section);
   }
 }

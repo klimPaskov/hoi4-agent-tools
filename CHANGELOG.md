@@ -11,6 +11,7 @@
 - Load isolated workers' domain modules after authenticating the job, preserving exact operation admission and recorded write policies.
 - Retry transient Windows sharing violations on job records and capacity leases, release record handles before parsing, bound delete-pending capacity slots by elapsed time, and report worker coordination failures with a fixed stage and allowlisted native code.
 - Filter reference scans by authority, reuse citation hints, decode supported reference encodings, and preserve byte-bounded continuations and explicit omission counts.
+- Rank documentation with field-weighted BM25 over identifier-aware terms, cite identifier table rows as exact one-line sections, return each result's best-matching `matchLine`, and split sections by CommonMark fences.
 - Replace the unpatched globbing dependency chain and update vulnerable transitive pins, preserving relative-path, symlink, literal-filename and pattern-complexity checks.
 
 ## 3.6.0 - 2026-09-27
