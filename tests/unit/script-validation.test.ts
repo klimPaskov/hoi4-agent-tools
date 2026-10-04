@@ -23,7 +23,7 @@ const docs = (entries: Array<[string, string]>) =>
     )
     .join('\n');
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'hoi4-script-check-'));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'hoi4-script-check-')));
   roots.push(root);
   const mod = path.join(root, 'mod');
   const game = path.join(root, 'game');
@@ -92,7 +92,7 @@ describe('documentation-backed script checks', () => {
     expect(good.parametersChecked).toBe(false);
     expect(good.findings[0]).toMatchObject({
       code: 'SCRIPT_COMMAND_SUPPORTED',
-      reference: { path: await realpath(effects), heading: 'add_power', startLine: 1 },
+      reference: { path: effects, heading: 'add_power', startLine: 1 },
     });
     const wrongScope = await check('add_power = 2', { scope: 'state' });
     expect(wrongScope.valid).toBe(false);

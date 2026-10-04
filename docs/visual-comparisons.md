@@ -45,7 +45,7 @@ Use the [examples guide](examples.md) for practical prompts and the [interface g
 
 The [manifest](images/comparisons/manifest.json) records tool version, source revisions, folder/tree coverage, layouts and sprite resolution.
 Captures were supplied in September 2026.
-On 4 October 2026 the 3.7.0 renderer reproduced all three focus previews and the historical mod-folder preview byte for byte.
+On 4 October 2026 the 3.8.0 renderer reproduced all three focus previews and the historical mod-folder preview byte for byte.
 The infantry preview changed only where DLC-provided armored-car artwork replaced missing silhouettes.
 The captures lack complete zoom, viewport, country, research-state and DLC metadata.
 

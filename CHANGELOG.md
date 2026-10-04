@@ -2,23 +2,27 @@
 
 ## Unreleased
 
-## 3.7.0 - 2026-10-04
+## 3.8.0 - 2026-10-04
 
+- Rank documentation with field-weighted BM25 over identifier-aware terms, cite identifier table rows as exact one-line sections, return each result's best-matching `matchLine`, and split sections by CommonMark fences.
+- Locate a source position with `hoi4.source_lookup` `path` and `line`: return its layer, the containing definitions, the enclosing assignment chain, and a `keyPath` that navigates back to it.
+- Suggest indexed identifiers within three edits when `hoi4.source_lookup` finds no definition.
 - Layer installed `dlc/` and `integrated_dlc/` folders between the base game and mods in internal-ID order, so source lookups, renders, and analyses find DLC sprites, interfaces, and portraits; `includeGameDlc: false` opts out.
 - Apply `replace_path` entries from mod and dependency descriptors in addition to configured replace paths.
 - Check province terrain and continents against the active `common/terrain` categories and `continent.txt`, accept any water terrain for seas and lakes, check strategic-region `naval_terrain`, and report adjacency rows after the `-1` terminator or a missing terminator.
 - Search unresolved GUI asset names in grouped wildcard patterns, so windows with hundreds of missing textures render within the wildcard-pattern ceiling.
-- Suggest indexed identifiers within three edits when `hoi4.source_lookup` finds no definition.
-- Locate a source position with `hoi4.source_lookup` `path` and `line`: return its layer, the containing definitions, the enclosing assignment chain, and a `keyPath` that navigates back to it.
-- Publish an `npm-shrinkwrap.json`, so a registry or `npx` install reproduces the reviewed dependency closure exactly; npm then installs every platform's optional Sharp binaries, about 280 MiB in total.
+- Retry transient Windows sharing violations on job records and capacity leases, release record handles before parsing, bound delete-pending capacity slots by elapsed time, and report worker coordination failures with a fixed stage and allowlisted native code.
+- Keep every production dependency inside its declared range in the published shrinkwrap, so `npm ls` succeeds in consumer installs; the `@hono/node-server` override is no longer needed.
+
+## 3.7.0 - 2026-10-04
+
+- Publish an `npm-shrinkwrap.json` so every install reproduces the reviewed dependency closure, including all platforms' optional Sharp binaries (about 300 MB installed).
 - Navigate exact nested source assignments and page through bounded child structure, including repeated keys and same-line blocks.
 - Limit definition-only event/helper lookups to their source family and reuse semantic reference analysis for unchanged snapshots.
 - Check snippet syntax, native command kinds, and declared scopes against cited installed or explicitly selected generated documentation, with unresolved coverage reported separately.
 - Verify source files in bounded parallel batches, reject changing or replaced paths, and bound optional cache persistence without truncating analysis.
 - Load isolated workers' domain modules after authenticating the job, preserving exact operation admission and recorded write policies.
-- Retry transient Windows sharing violations on job records and capacity leases, release record handles before parsing, bound delete-pending capacity slots by elapsed time, and report worker coordination failures with a fixed stage and allowlisted native code.
 - Filter reference scans by authority, reuse citation hints, decode supported reference encodings, and preserve byte-bounded continuations and explicit omission counts.
-- Rank documentation with field-weighted BM25 over identifier-aware terms, cite identifier table rows as exact one-line sections, return each result's best-matching `matchLine`, and split sections by CommonMark fences.
 - Replace the unpatched globbing dependency chain and update vulnerable transitive pins, preserving relative-path, symlink, literal-filename and pattern-complexity checks.
 
 ## 3.6.0 - 2026-09-27

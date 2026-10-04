@@ -46,7 +46,7 @@ Offline previews do not execute native clicks, tooltip timing or engine effects.
 <summary>Source details and reproduction</summary>
 
 The images were produced by the production GUI renderer in 3.5.0.
-On 4 October 2026 the 3.7.0 renderer reproduced every full-window PNG, including the decision and occupation views, byte for byte from the recorded scenarios.
+On 4 October 2026 the 3.8.0 renderer reproduced every full-window PNG, including the decision and occupation views, byte for byte from the recorded scenarios.
 Each general-system crop is unscaled from the full 1920×1080 output at UI scale 1.
 Its full-window PNG accompanies the crop.
 The [GUI manifest](images/comparisons/gui/manifest.json) records exact scenarios, source revisions, implementation and PNG hashes, diagnostics and fidelity limits.
