@@ -22,6 +22,7 @@ import {
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
 import type { LocalisedText, PlayerTextContext } from './player-text.js';
+import { eventPopupDefinitions, type EventPopupDefinition } from './event-popups.js';
 import { locatePatterns, selectFile } from './source-locate.js';
 import type { ResolvedWorkspace } from '../core/workspace.js';
 import type { z } from 'zod/v4';
@@ -166,6 +167,11 @@ export class ReferenceToolService {
     return toolResult(result);
   }
 
+  readonly #eventPopups = new Map<
+    string,
+    { key: string; events: ReadonlyMap<string, EventPopupDefinition> }
+  >();
+
   /** The latest player-text context of each workspace, keyed by its source files' hashes. */
   readonly #playerText = new Map<string, { key: string; context: PlayerTextContext }>();
 
@@ -189,6 +195,7 @@ export class ReferenceToolService {
           ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
           // One scan serves every check: the engine keeps one snapshot per workspace.
           ...playerTextPatterns,
+          'events/**/*.txt',
         ],
       },
       principal,
@@ -207,7 +214,30 @@ export class ReferenceToolService {
       helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
       implicitTriggers: implicitTriggerNames(snapshot),
       ...(playerText === undefined ? {} : { playerText }),
+      eventPopups: this.eventPopupContext(workspaceId, snapshot),
     });
+  }
+
+  /** Every active event definition, cached by the hashes of the events files. */
+  private eventPopupContext(
+    workspaceId: string,
+    snapshot: ScanSnapshot,
+  ): ReadonlyMap<string, EventPopupDefinition> {
+    const sources = [...snapshot.index.files.values()]
+      .filter(
+        ({ relativePath, shadowedBy }) =>
+          shadowedBy === undefined && relativePath.startsWith('events/'),
+      )
+      .sort((left, right) => left.loadOrder - right.loadOrder);
+    const cacheKey = hashCanonical(sources.map(({ displayPath, sha256 }) => [displayPath, sha256]));
+    const cached = this.#eventPopups.get(workspaceId);
+    if (cached?.key === cacheKey) return cached.events;
+    const events = new Map<string, EventPopupDefinition>();
+    for (const file of sources)
+      for (const [id, definition] of eventPopupDefinitions(file.bytes, file.displayPath))
+        events.set(id, definition);
+    this.#eventPopups.set(workspaceId, { key: cacheKey, events });
+    return events;
   }
 
   /** English localisation as the game resolves it, and the branches of scripted localisation. */

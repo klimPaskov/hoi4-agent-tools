@@ -106,6 +106,29 @@ async function client() {
     ].join('\n'),
   );
   await writeFile(
+    path.join(mod, 'events', 'loops.txt'),
+    [
+      'news_event = { id = loop.major major = yes option = { name = loop.a } }',
+      'country_event = { id = loop.visible option = { name = loop.a } }',
+      'country_event = { id = loop.hidden hidden = yes }',
+      'country_event = {',
+      '\tid = loop.1',
+      '\timmediate = {',
+      '\t\tevery_country = {',
+      '\t\t\tlimit = { has_flag = ready }',
+      '\t\t\tnews_event = { id = loop.major }',
+      '\t\t\tcountry_event = loop.visible',
+      '\t\t\tROOT = { country_event = { id = loop.visible days = 1 } }',
+      '\t\t\tROOT = { country_event = loop.hidden }',
+      '\t\t}',
+      '\t\tnews_event = loop.major',
+      '\t}',
+      '\toption = { name = loop.a }',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
     path.join(mod, 'common', 'decisions', 'checks.txt'),
     [
       'check_category = {',
@@ -221,6 +244,28 @@ describe('script_validate file mode', () => {
     expect(decisions.findings.map(({ code, command, line }) => ({ code, command, line }))).toEqual([
       { code: 'SCRIPT_TEXT_IMPLEMENTATION_WORDING', command: 'check_decision', line: 2 },
       { code: 'SCRIPT_FLAG_TOOLTIP_UNLOCALISED', command: 'has_country_flag', line: 5 },
+    ]);
+  });
+
+  it('reports visible events that reach one player once per loop member', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: { workspaceId: 'fixture', path: 'events/loops.txt', limit: 32 },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+    const data = (
+      result.structuredContent as {
+        data: { checksPerformed: string[]; findings: Array<Finding & { status: string }> };
+      }
+    ).data;
+    expect(data.checksPerformed).toContain('event_popups');
+    const repeated = data.findings.filter(({ code }) => code === 'SCRIPT_EVENT_POPUP_REPEATED');
+    expect(
+      repeated.map(({ line, message }) => ({ line, major: message.includes('major') })),
+    ).toEqual([
+      { line: 9, major: true },
+      { line: 11, major: false },
     ]);
   });
 

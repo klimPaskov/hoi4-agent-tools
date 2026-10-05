@@ -60,7 +60,9 @@ export const scriptValidateRequestSchema = z
 export const scriptValidateDataSchema = z
   .object({
     valid: z.boolean().nullable(),
-    checksPerformed: z.array(z.enum(['syntax', 'command_kind', 'declared_scope', 'player_text'])),
+    checksPerformed: z.array(
+      z.enum(['syntax', 'command_kind', 'declared_scope', 'player_text', 'event_popups']),
+    ),
     parametersChecked: z.literal(false),
     documentation: z
       .object({

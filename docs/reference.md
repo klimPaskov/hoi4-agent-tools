@@ -89,6 +89,13 @@ These findings have `status: "warning"` and never change `valid`:
 - `SCRIPT_FLAG_TOOLTIP_UNLOCALISED`: a `has_country_flag`, `has_global_flag`, or `has_state_flag` check in a decision's `available` block or a focus's `available` or `bypass` block whose flag has no localisation key, so the requirement tooltip prints the raw flag name. Checks inside `hidden_trigger` and `custom_trigger_tooltip` are skipped, and scripted triggers called from those blocks are not expanded.
 
 Each message names the localisation file and line that carries the text.
+
+### Repeated event windows
+
+File mode reports `SCRIPT_EVENT_POPUP_REPEATED` warnings for any family and adds `event_popups` to `checksPerformed`.
+A visible event fired inside an `every_*` loop reaches one player once per loop member when it is sent to a fixed recipient (`ROOT`, `FROM`, `PREV`, `global`, a tag, an `event_target:` or a `var:` scope), or when it is `major = yes` without `fire_only_once`, because a major event is shown to every country.
+An event sent to each loop member in turn, a hidden event, and an event the scanned sources do not define are not reported.
+Scripted effects called inside a loop are checked in their own file, not followed from the caller.
 Search and context replies also report `limitedByBytes` when metadata exceeds their reply budget.
 Read omitted required sources with targeted calls rather than repeatedly requesting the same oversized bundle.
 Reference text supports UTF-8, Windows-1252, and explicitly BOM-marked UTF-16; native engine source encoding rules remain separate.

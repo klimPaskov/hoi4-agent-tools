@@ -13,6 +13,7 @@ import type {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
+import { repeatedPopupFindings, type EventPopupDefinition } from './event-popups.js';
 import { playerTextFindings, playerTextPosition, type PlayerTextContext } from './player-text.js';
 import { editDistance } from './suggestions.js';
 import { publicReferenceSection, type ReferenceService, type ReferenceSection } from './service.js';
@@ -44,6 +45,8 @@ export interface ScriptFileContext {
   implicitTriggers: ReadonlyMap<string, string>;
   /** Localisation for player-text checks of event, decision and focus files. */
   playerText?: PlayerTextContext;
+  /** Event definitions of every source layer, for repeated popup checks. */
+  eventPopups?: ReadonlyMap<string, EventPopupDefinition>;
 }
 
 /**
@@ -562,21 +565,30 @@ export async function validateScript(
     }
   const playerText = plan.family === 'snippet' ? undefined : file?.playerText;
   const playerTextChecked = playerText !== undefined;
-  if (playerText !== undefined)
-    for (const finding of playerTextFindings(plan.family, document, playerText)) {
-      const position = playerTextPosition(documentPath, document.lineIndex, finding);
-      findings.push({
-        code: finding.code,
-        status: 'warning',
-        command: finding.command.slice(0, 256),
-        kind: finding.code === 'SCRIPT_FLAG_TOOLTIP_UNLOCALISED' ? 'trigger' : 'text',
-        scope: UNKNOWN_SCOPE,
-        line: position.line,
-        column: position.column,
-        message: finding.message,
-        suggestions: [],
-      });
-    }
+  const eventPopups = plan.family === 'snippet' ? undefined : file?.eventPopups;
+  const warnings = [
+    ...(playerText === undefined ? [] : playerTextFindings(plan.family, document, playerText)),
+    ...(eventPopups === undefined ? [] : repeatedPopupFindings(document, eventPopups)),
+  ];
+  for (const finding of warnings) {
+    const position = playerTextPosition(documentPath, document.lineIndex, finding);
+    findings.push({
+      code: finding.code,
+      status: 'warning',
+      command: finding.command.slice(0, 256),
+      kind:
+        finding.code === 'SCRIPT_FLAG_TOOLTIP_UNLOCALISED'
+          ? 'trigger'
+          : finding.code === 'SCRIPT_EVENT_POPUP_REPEATED'
+            ? 'effect'
+            : 'text',
+      scope: UNKNOWN_SCOPE,
+      line: position.line,
+      column: position.column,
+      message: finding.message,
+      suggestions: [],
+    });
+  }
   const unresolvedCount = findings.filter(({ status }) => status === 'unresolved').length;
   const invalid = findings.some(({ status }) => status === 'error');
   const truncated = visited > commandLimit;
@@ -602,6 +614,7 @@ export async function validateScript(
       'command_kind',
       'declared_scope',
       ...(playerTextChecked ? (['player_text'] as const) : []),
+      ...(eventPopups === undefined ? [] : (['event_popups'] as const)),
     ],
     parametersChecked: false,
     documentation: {
