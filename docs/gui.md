@@ -184,6 +184,28 @@ Source or scenario `enabled = false` selects disabled appearance and removes the
 
 The renderer does not run the game engine. Each render includes a fidelity report that separates fields it models from fields it approximates, ignores, cannot resolve, or does not support. Treat that report as part of the review.
 
+### Scenario fields
+
+Every `scenario` needs an `id`, a short label such as `"usa_1936"`. The other fields describe the game state the window is drawn under:
+
+| Field                                        | Meaning                                                                                                                                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `date`                                       | Game date, `"1936.1.1"`.                                                                                                                                                                       |
+| `controls`                                   | State controllers, `{"64": "GER"}`.                                                                                                                                                            |
+| `flags`                                      | Flags on the viewing country, `{"show_settings_page": true}`.                                                                                                                                  |
+| `closedFlags`                                | `true` treats every flag not listed in `flags` as unset, as on a country that never received it. Without it, an undeclared flag is unknown and every condition that reads it stays unresolved. |
+| `variables`                                  | Variables on the viewing country, `{"settings_page": 1}`.                                                                                                                                      |
+| `values`                                     | Exact runtime values for localisation tokens and scripted GUI properties, keyed as they appear in source.                                                                                      |
+| `visibility`                                 | Forced visibility by element or scripted GUI name, `{"settings_page_events": false}`; it overrides evaluated triggers.                                                                         |
+| `scopes`                                     | Named scope bindings such as `FROM` with their own state.                                                                                                                                      |
+| `resolution`, `uiScale`, `state`, `language` | Screen size, in-game UI scale, preview element state, and localisation language.                                                                                                               |
+
+A scripted GUI `visible` or `<element>_visible` trigger that the scenario decides hides or shows its element exactly.
+A trigger the scenario cannot decide leaves the element drawn and lists it in the fidelity report as unresolved, so pages that the game shows one at a time can overlap in the preview.
+For tabbed windows, set the flags or variables of the page to show and `closedFlags: true`, then render each page as its own scenario through `relatedScenarios`.
+`GUI_UNRESOLVED_VISIBILITY_OVERLAP` names each overlapping pair drawn together for that reason.
+Scripted localisation (`defined_text`) used by the window resolves to its first branch whose trigger the scenario decides as true, as long as every earlier branch is decided false; otherwise the token renders as `[dynamic_loc]`. A value in `values` always takes precedence.
+
 The generated primary view replaces discovered numeric and text runtime tokens with plausible values. Set `generatedScenarios.preservePlaceholder` to `true`, or disable generation, when the same run should also show unresolved numeric values such as `[?variable|format]` as `[X]` and unresolved text-returning scripted or scoped localisation such as `[GetStatusText]`, `[FROM.GetName]`, and `[?leader_scope.GetName]` as `[dynamic_loc]`. Put `variable` or `GetStatusText` in the supplied scenario's `values` object when an exact value matters; explicit values always take precedence over generated ones and can drive the related meter or state-dependent controls. Supported HOI4 `§` localisation colour controls use the active font's palette and `§!` restores the face colour.
 
 A rewrite stops if malformed or unsupported GUI script makes the requested change ambiguous. Frame-sheet animation, nine-slice tiling, progress composition, masking, and the primary and secondary textures referenced by vanilla GFX definitions render offline. Font selection follows mod/game load order and preview language, accepts Paradox hex and numeric color declarations, and uses the supplied HOI4 bitmap or outline font assets without requiring host font installation. Shader operations outside the supported colour subset, hardcoded controls, and dynamic values that are not supplied by a scenario remain fidelity-report entries; an unexecuted shader never hides its resolved base texture.

@@ -80,7 +80,7 @@ export function scenarioFromGui(base: GuiPreviewScenario, values = base.values):
     ...(base.controls === undefined ? {} : { controls: { ...base.controls } }),
     state,
     scopes,
-    closedFlags: false,
+    closedFlags: base.closedFlags === true,
     ...(typeof actor === 'string' ? { actor } : {}),
   };
 }

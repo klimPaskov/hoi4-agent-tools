@@ -309,6 +309,8 @@ export interface GuiPreviewScenario {
   }[];
   variables: Record<string, number>;
   flags: Record<string, boolean>;
+  /** Undeclared flags are unset, as on a country that never received them, instead of unknown. */
+  closedFlags?: boolean;
   lists: Record<string, Record<string, string | number | boolean>[]>;
   localisation: Record<string, string>;
   values: Record<string, string | number | boolean>;

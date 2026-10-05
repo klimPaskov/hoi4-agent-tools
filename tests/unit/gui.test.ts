@@ -38,6 +38,7 @@ import {
   parsePreviewScenario,
   planGuiHelperCompilation,
   renderGuiScene,
+  resolveScenarioScriptedLocalisation,
   validateGuiScene,
   type GuiHelperNode,
   type GuiScene,
@@ -882,6 +883,94 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(scene.fidelity.modelled).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: 'scripted_gui_dynamic_list' })]),
     );
+  });
+
+  it('decides flag-driven tab pages with closedFlags and warns when undecided pages overlap', async () => {
+    const files = [
+      scanned(
+        'interface/tab-pages.gui',
+        'guiTypes = { containerWindowType = { name = "tab_window" size = { width = 400 height = 200 } containerWindowType = { name = "page_events" position = { x = 20 y = 20 } size = { width = 300 height = 150 } instantTextBoxType = { name = "page_title" size = { width = 280 height = 20 } text = "PAGE_TITLE" } } containerWindowType = { name = "page_timer" position = { x = 20 y = 20 } size = { width = 300 height = 150 } } } }',
+      ),
+      scanned(
+        'common/scripted_guis/tab-pages.txt',
+        'scripted_gui = { tab_gui = { context_type = player_context window_name = tab_window triggers = { page_events_visible = { has_country_flag = show_events_page } page_timer_visible = { has_country_flag = show_timer_page } } } }',
+      ),
+      scanned(
+        'common/scripted_localisation/tab-pages.txt',
+        'defined_text = { name = GetPageTitle text = { trigger = { has_country_flag = show_timer_page } localization_key = PAGE_TIMER } text = { trigger = { always = yes } localization_key = PAGE_EVENTS } }',
+      ),
+      scanned(
+        'localisation/english/tab_pages_l_english.yml',
+        '\uFEFFl_english:\nPAGE_TITLE: "Page: [GetPageTitle]"\nPAGE_TIMER: "Timer"\nPAGE_EVENTS: "Events"\n',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const status = (scene: GuiScene, name: string) => {
+      const element = scene.elements.find((candidate) => candidate.name === name);
+      return { visible: element?.visible, status: element?.visibilityStatus };
+    };
+    const open = await buildGuiScene(
+      graph,
+      files,
+      'tab_window',
+      parsePreviewScenario({ id: 'open', resolution: { width: 640, height: 360 } }),
+    );
+    expect(status(open, 'page_timer').status).toBe('unresolved');
+    const openValidation = await validateGuiScene(graph, open, files);
+    expect(
+      openValidation.diagnostics.filter(({ code }) => code === 'GUI_UNRESOLVED_VISIBILITY_OVERLAP'),
+    ).toHaveLength(1);
+
+    const declaredOnly = await buildGuiScene(
+      graph,
+      files,
+      'tab_window',
+      parsePreviewScenario({
+        id: 'declared-only',
+        resolution: { width: 640, height: 360 },
+        flags: { show_events_page: true },
+      }),
+    );
+    expect(status(declaredOnly, 'page_events')).toEqual({ visible: true, status: 'shown' });
+    expect(status(declaredOnly, 'page_timer').status).toBe('unresolved');
+
+    const closed = await buildGuiScene(
+      graph,
+      files,
+      'tab_window',
+      parsePreviewScenario({
+        id: 'events-page',
+        resolution: { width: 640, height: 360 },
+        flags: { show_events_page: true },
+        closedFlags: true,
+      }),
+    );
+    expect(status(closed, 'page_events')).toEqual({ visible: true, status: 'shown' });
+    expect(status(closed, 'page_timer')).toEqual({ visible: false, status: 'hidden' });
+    const title = (scene: GuiScene) =>
+      scene.elements.find(({ name }) => name === 'page_title')?.text?.text;
+    expect(title(closed)).toBe('Page: [dynamic_loc]');
+    const resolved = resolveScenarioScriptedLocalisation(
+      graph,
+      'tab_window',
+      parsePreviewScenario({
+        id: 'events-page',
+        flags: { show_events_page: true },
+        closedFlags: true,
+      }),
+    );
+    expect(resolved.values.GetPageTitle).toBe('Events');
+    expect(title(await buildGuiScene(graph, files, 'tab_window', resolved))).toBe('Page: Events');
+    const undecided = resolveScenarioScriptedLocalisation(
+      graph,
+      'tab_window',
+      parsePreviewScenario({ id: 'open' }),
+    );
+    expect(undecided.values.GetPageTitle).toBeUndefined();
+    const closedValidation = await validateGuiScene(graph, closed, files);
+    expect(
+      closedValidation.diagnostics.some(({ code }) => code === 'GUI_UNRESOLVED_VISIBILITY_OVERLAP'),
+    ).toBe(false);
   });
 
   it('distinguishes numeric and text dynamic placeholders and renders HOI4 localisation colour runs', async () => {

@@ -18,10 +18,23 @@ function compact<T extends z.ZodType>(schema: T, description: string): z.ZodPipe
   return z.unknown().describe(description).pipe(schema);
 }
 
-const compactGuiScenarioSchema = compact(
-  GuiPreviewScenarioSchema,
-  'GUI preview scenario; optional date and controls {stateId: controllerTag}.',
-);
+/**
+ * Published scenario shape: the required `id` and the fields that decide visibility, with the
+ * rest named in the description. Every field is validated by the full scenario schema.
+ */
+const compactGuiScenarioSchema = z
+  .looseObject({
+    id: z.string(),
+    date: z.string().optional(),
+    closedFlags: z.boolean().optional(),
+  })
+  .describe(
+    'Also flags {name: bool}, variables {name: number}, controls {stateId: tag}, values, visibility (docs/gui.md). closedFlags: undeclared flags are unset.',
+  )
+  .transform((value): unknown => value)
+  .pipe(GuiPreviewScenarioSchema);
+/** Related and comparison scenarios repeat the primary scenario's published shape. */
+const compactRelatedScenarioSchema = compact(GuiPreviewScenarioSchema, 'Same shape as scenario.');
 const compactGeneratedScenarioOptionsSchema = compact(
   GuiGeneratedScenarioOptionsSchema,
   'GUI generated-scenario options.',
@@ -50,7 +63,7 @@ export const guiInspectRequestSchema = z
     workspaceId: workspaceIdSchema,
     windowName: z.string().min(1).max(256).optional(),
     scenario: compactGuiScenarioSchema.optional(),
-    relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
+    relatedScenarios: z.array(compactRelatedScenarioSchema).max(32).optional(),
     generatedScenarios: compactGeneratedScenarioOptionsSchema.optional(),
   })
   .strict()
@@ -101,9 +114,9 @@ export const guiRenderRequestSchema = z
     scenario: compactGuiScenarioSchema,
     states: z.array(guiPreviewStateSchema).max(14).optional(),
     resolutions: z.array(guiResolutionSchema).min(1).max(16).optional(),
-    relatedScenarios: z.array(compactGuiScenarioSchema).max(32).optional(),
+    relatedScenarios: z.array(compactRelatedScenarioSchema).max(32).optional(),
     generatedScenarios: compactGeneratedScenarioOptionsSchema.optional(),
-    comparisonScenario: compactGuiScenarioSchema.optional(),
+    comparisonScenario: compactRelatedScenarioSchema.optional(),
     sourceBaseline: z
       .object({
         relativePath: workspaceRelativePathSchema,

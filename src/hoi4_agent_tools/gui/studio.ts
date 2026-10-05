@@ -55,7 +55,10 @@ import {
   renderGuiScene,
   type GalleryItem,
 } from './renderer.js';
-import { generateGuiPreviewScenarios } from './scenario-generator.js';
+import {
+  generateGuiPreviewScenarios,
+  resolveScenarioScriptedLocalisation,
+} from './scenario-generator.js';
 import { parseGeneratedScenarioOptions, parsePreviewScenario } from './scenario.js';
 import { buildGuiSourceGraph } from './source-graph.js';
 import { assertGuiSourcePatchesSafe } from './source-patch.js';
@@ -1501,6 +1504,15 @@ export class ScriptedGuiStudio {
         ({ tooltip }) => tooltip !== undefined,
       ),
     );
+    const evaluationDefinitions = ClausewitzEvaluationDefinitions.build(scanned);
+    const resolveLocalisation = (target: GuiPreviewScenario) =>
+      resolveScenarioScriptedLocalisation(
+        scanned.graph,
+        input.windowName,
+        target,
+        evaluationDefinitions,
+      );
+    const suppliedScenario = resolveLocalisation(placeholderScenario);
     const generatedScenarios =
       generatedOptions === undefined
         ? []
@@ -1509,15 +1521,15 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
-            ClausewitzEvaluationDefinitions.build(scanned),
+            evaluationDefinitions,
           );
-    const scenario = generatedScenarios[0] ?? placeholderScenario;
+    const scenario = generatedScenarios[0] ?? suppliedScenario;
     const relatedScenarios = [
       ...(generatedOptions?.preservePlaceholder === true && generatedScenarios.length > 0
-        ? [placeholderScenario]
+        ? [suppliedScenario]
         : []),
       ...generatedScenarios.slice(1),
-      ...explicitRelatedScenarios,
+      ...explicitRelatedScenarios.map(resolveLocalisation),
     ];
     assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const budget = new RenderBudget();
@@ -1673,6 +1685,15 @@ export class ScriptedGuiStudio {
         ...explicitRelatedScenarios,
       ].some(({ tooltip }) => tooltip !== undefined),
     );
+    const evaluationDefinitions = ClausewitzEvaluationDefinitions.build(scanned);
+    const resolveLocalisation = (target: GuiPreviewScenario) =>
+      resolveScenarioScriptedLocalisation(
+        scanned.graph,
+        input.windowName,
+        target,
+        evaluationDefinitions,
+      );
+    const suppliedScenario = resolveLocalisation(placeholderScenario);
     const generatedScenarios =
       generatedOptions === undefined
         ? []
@@ -1681,15 +1702,15 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
-            ClausewitzEvaluationDefinitions.build(scanned),
+            evaluationDefinitions,
           );
-    const scenario = generatedScenarios[0] ?? placeholderScenario;
+    const scenario = generatedScenarios[0] ?? suppliedScenario;
     const relatedScenarios = [
       ...(generatedOptions?.preservePlaceholder === true && generatedScenarios.length > 0
-        ? [placeholderScenario]
+        ? [suppliedScenario]
         : []),
       ...generatedScenarios.slice(1),
-      ...explicitRelatedScenarios,
+      ...explicitRelatedScenarios.map(resolveLocalisation),
     ];
     assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const baselineScenario =

@@ -609,6 +609,68 @@ function generatedRows(
   });
 }
 
+/** Sprite tokens read by scripted GUI `image` properties of the window. */
+function scriptedImageTokens(scripted: readonly ScriptedGuiDefinition[]): Set<string> {
+  const tokens = new Set<string>();
+  for (const definition of scripted)
+    for (const property of definition.propertyDefinitions)
+      for (const [attribute, expression] of Object.entries(property.attributes)) {
+        const token = expressionToken(expression);
+        if (token !== undefined && attribute.toLocaleLowerCase('en-US') === 'image')
+          tokens.add(token);
+      }
+  return tokens;
+}
+
+/**
+ * Resolve the window's scripted localisation exactly under a supplied scenario: a text or
+ * sprite token whose `defined_text` branch the scenario's flags, variables and values decide
+ * takes that branch. A token the scenario cannot decide is left out, so it still renders as
+ * `[dynamic_loc]`, and caller-supplied values always win.
+ */
+export function resolveScenarioScriptedLocalisation(
+  graph: GuiSourceGraph,
+  windowName: string,
+  base: GuiPreviewScenario,
+  definitions = new ClausewitzEvaluationDefinitions(),
+): GuiPreviewScenario {
+  if (graph.scriptedLocalisation.length === 0) return base;
+  const scripted = relatedScriptedGuis(graph, windowName);
+  const elements = relevantElements(graph, windowName, scripted);
+  const textual = tokensIn(sourceTexts(graph, elements, base.language, scripted)).textual;
+  const explicitValues = guiExplicitConditionValues(base);
+  const values = { ...base.values };
+  const templates = new Map<string, string>();
+  const evaluate = (key: string, kind: 'image' | 'text') =>
+    explicitValues[key] !== undefined
+      ? undefined
+      : scriptedLocalisationValue(
+          graph,
+          key,
+          base.language,
+          kind,
+          explicitValues,
+          base,
+          definitions,
+          [],
+        );
+  for (const key of textual) {
+    const template = evaluate(key, 'text');
+    if (template !== undefined) templates.set(key, template);
+  }
+  for (const key of scriptedImageTokens(scripted)) {
+    const sprite = evaluate(key, 'image');
+    if (sprite !== undefined) values[key] = sprite;
+  }
+  // Branch texts can embed further tokens, including other resolved branches.
+  for (let pass = 0; pass < 3; pass += 1)
+    for (const [key, template] of templates)
+      values[key] = materializeDynamicText(template, { ...explicitValues, ...values });
+  return Object.keys(values).length === Object.keys(base.values).length
+    ? base
+    : { ...base, values };
+}
+
 export function generateGuiPreviewScenarios(
   graph: GuiSourceGraph,
   windowName: string,
