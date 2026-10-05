@@ -84,6 +84,16 @@ See [Local references](reference.md) for source selection and missing-source rep
 | A render lacks icons or fonts       | Confirm `--game-root` and the mod's asset paths. Read the missing-file findings.                                            |
 | A control's state is unresolved     | Supply the scenario's required country, state, controller or variable inputs; do not assume a visible control is available. |
 | A large query takes several minutes | Start with the specific tree, window or source area you need. Use [background jobs](jobs.md) when supported by your client. |
+| Idle server processes accumulate    | Set an idle limit as described in [Server lifetime](#server-lifetime).                                                      |
 
 The supplied Codex registration allows 120 seconds for startup and 600 seconds per tool call.
+
 For remote or shared deployments, use the [HTTP guide](http.md).
+
+### Server lifetime
+
+A stdio server exits when its client closes stdin, and when the process that launched it, such as a `cmd.exe` shim, has exited.
+Some clients start a server for every subagent and keep each connection open after the subagent finishes, so idle servers accumulate and each holds its own index in memory.
+A server with no client traffic and no open request for `stdioIdleExitMinutes` minutes exits.
+That setting applies to every client sharing the server configuration, so prefer the `HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES` environment variable in the affected client's registration; the Codex registrations printed by `hoi4-agent-tools-setup --print-client-config` set it to 30.
+A client that later calls an exited server reports it as disconnected, so leave the limit at `0` (never) for a single long-lived session.

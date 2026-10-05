@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Exit a stdio server whose launching process has exited, and add `stdioIdleExitMinutes` so clients that keep idle per-subagent connections no longer accumulate servers.
+- Stop an orphaned read-only job worker at `jobDeadlineSeconds` even after its dispatching server has exited, and add `jobWorkerMaxHeapMiB` to bound each worker's heap.
 - Publish the GUI scenario shape on `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`, with `id` required, so clients can build a valid scenario from discovery.
 - Add `closedFlags` to GUI scenarios: undeclared flags are unset, as in the game, so flag-driven tab pages and panels render one at a time.
 - Resolve a window's scripted localisation exactly under the supplied scenario wherever its flags, variables, and values decide the branch; undecided tokens still render as `[dynamic_loc]`.

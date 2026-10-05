@@ -39,6 +39,25 @@ process.once('message', (value: unknown) => {
     // unrelated live rewrite journals when a worker starts.
     const jobs = await JobService.create(resolver);
     const record = await jobs.get(input.workspaceId, input.jobId, input.principal);
+    if (!record.request.mutation) {
+      // The host enforces the deadline while it lives; a worker whose host has gone stops
+      // itself, so an orphaned read-only analysis never holds memory indefinitely.
+      const { jobDeadlineSeconds } = resolver.config();
+      setTimeout(() => {
+        void jobs
+          .failInterrupted(
+            input.workspaceId,
+            input.jobId,
+            {
+              code: 'JOB_DEADLINE_EXCEEDED',
+              message: `The job ran longer than ${jobDeadlineSeconds} seconds and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds`,
+            },
+            input.principal,
+          )
+          .catch(() => undefined)
+          .finally(() => process.exit(1));
+      }, jobDeadlineSeconds * 1000).unref();
+    }
     const operations = await registerWorkerOperations(engine, record.request.toolName);
     await new JobExecutor(engine, jobs, operations).run(
       input.workspaceId,

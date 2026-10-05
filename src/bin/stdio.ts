@@ -6,7 +6,22 @@ import {
   StdioInvalidUtf8Error,
 } from '../hoi4_agent_tools/mcp/transports/bounded-stdio.js';
 import { serveNegotiatedStdio } from '../hoi4_agent_tools/mcp/transports/negotiated-stdio.js';
+import { StdioLifetime } from '../hoi4_agent_tools/mcp/transports/stdio-lifetime.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
+
+/**
+ * A client registration can set its own idle limit, because the server configuration is shared
+ * by every client: clients that keep idle per-subagent connections opt in without affecting a
+ * long-lived interactive session.
+ */
+function idleExitMinutes(configured: number): number {
+  const override = process.env.HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES;
+  if (override === undefined || override.trim() === '') return configured;
+  const minutes = Number(override);
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 10_080)
+    throw new Error('HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES must be a whole number from 0 to 10080');
+  return minutes;
+}
 
 async function main(): Promise<void> {
   const engine = await createEngine();
@@ -28,8 +43,17 @@ async function main(): Promise<void> {
       })}\n`,
     );
   };
-  await serveNegotiatedStdio(engine, {
+  let closeTransport = (): Promise<void> => Promise.resolve();
+  const lifetime = new StdioLifetime({
+    idleExitMinutes: idleExitMinutes(engine.resolver.config().stdioIdleExitMinutes),
+    onExit: (reason) => {
+      process.stderr.write(`${canonicalJson({ level: 'info', event: 'stdio_exit', reason })}\n`);
+      void closeTransport().finally(() => setTimeout(() => process.exit(0), 250).unref());
+    },
+  });
+  const transport = await serveNegotiatedStdio(engine, {
     onerror,
+    observer: lifetime,
     onFailure: (error) => {
       process.exitCode = 1;
       process.stderr.write(
@@ -48,6 +72,8 @@ async function main(): Promise<void> {
             chaosxTools.registerChaosxTools(server, engine, {}),
         }),
   });
+  closeTransport = () => transport.close();
+  lifetime.start();
 }
 
 main().catch((error: unknown) => {

@@ -55,7 +55,9 @@ A worker busy in long synchronous analysis cannot observe its own cancellation, 
 A read-only job still running `jobCancelGraceSeconds` (default 10) after cancellation is stopped and settles as cancelled.
 A read-only job still running `jobDeadlineSeconds` (default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
 Rewrite jobs are never stopped this way, because their transaction journal owns write recovery; they keep cooperative cancellation and reconciliation.
-Supervision belongs to the server process that dispatched the worker; a worker whose dispatching server has exited keeps running until it finishes.
+Supervision belongs to the server process that dispatched the worker. A read-only worker whose dispatching server has exited enforces the same deadline itself and then exits; a rewrite worker keeps running until it finishes.
+`jobWorkerMaxHeapMiB` sets a V8 heap ceiling for each worker; without it, workers use Node's default.
+At most `maxSharedTools` (default 4) workers and expensive calls run at once across every server process that shares a `serverStateRoot`; further work waits for capacity.
 
 Read-only jobs stage a source-revision-bound result checkpoint before terminal publication.
 If a worker or server stops after that checkpoint, a later authorized process publishes the retained result without rerunning the operation.

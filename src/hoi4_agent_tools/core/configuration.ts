@@ -167,6 +167,10 @@ export const serverConfigurationSchema = z
     jobDeadlineSeconds: z.number().int().min(1).max(86_400).default(1_800),
     /** A read-only job that has not stopped this long after cancellation is stopped. */
     jobCancelGraceSeconds: z.number().int().min(1).max(600).default(10),
+    /** A stdio server with no client traffic or open request for this long exits; 0 never. */
+    stdioIdleExitMinutes: z.number().int().min(0).max(10_080).default(0),
+    /** V8 heap ceiling for each job worker in MiB; unset keeps Node's default. */
+    jobWorkerMaxHeapMiB: z.number().int().min(256).max(65_536).optional(),
     scanMaxBytes: z
       .number()
       .int()

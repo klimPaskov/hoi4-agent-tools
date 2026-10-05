@@ -255,7 +255,13 @@ export class JobWorkerHost {
     progress.stage = 'startup';
     const child = spawn(
       process.execPath,
-      [...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []), entry],
+      [
+        ...(configuration.jobWorkerMaxHeapMiB === undefined
+          ? []
+          : [`--max-old-space-size=${configuration.jobWorkerMaxHeapMiB}`]),
+        ...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []),
+        entry,
+      ],
       {
         detached: true,
         cwd: process.cwd(),

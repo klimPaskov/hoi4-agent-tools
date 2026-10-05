@@ -88,6 +88,8 @@ export interface NegotiatedStdioOptions {
   registerLegacy?: (server: McpServer) => void;
   onerror: (error: Error) => void;
   onFailure: (error: unknown) => void;
+  /** Observes every message in both directions, for example to track client activity. */
+  observer?: { received(message: unknown): void; sent(message: unknown): void };
 }
 
 /** Pin the protocol generation on the first message while retaining the old bounded wire. */
@@ -106,12 +108,21 @@ export async function serveNegotiatedStdio(
     reportedErrors.add(error);
     options.onerror(error);
   };
+  const observer = options.observer;
+  if (observer !== undefined) {
+    const send = physical.send.bind(physical);
+    physical.send = (message) => {
+      observer.sent(message);
+      return send(message);
+    };
+  }
   physical.onclose = () => pinned?.onclose();
   physical.onerror = (error) => {
     reportError(error);
     pinned?.onerror(error);
   };
   physical.onmessage = (message) => {
+    observer?.received(message);
     if (pinned === undefined) {
       pinned = new PinnedStdioTransport(physical, reportError);
       try {
