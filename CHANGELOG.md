@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop a read-only job whose worker outlives `jobDeadlineSeconds` (`JOB_DEADLINE_EXCEEDED`) or ignores cancellation for `jobCancelGraceSeconds`, so a blocked worker can no longer hang a workflow.
+
 ## 3.8.1 - 2026-10-05
 
 - Start normally when finished rewrite journals were recorded before the workspace roots changed, such as before installed DLC folders became source layers, and let them expire; an interrupted rewrite under changed roots is still refused.

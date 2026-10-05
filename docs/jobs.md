@@ -51,6 +51,12 @@ A running cancellation is observed by the isolated worker; if a rewrite has alre
 Cancelling an ordinary synchronous call prevents admission when possible and otherwise requests cooperative cancellation of its durable job.
 Closing the originating connection does not cancel an accepted native task.
 
+A worker busy in long synchronous analysis cannot observe its own cancellation, so the server that started it also supervises read-only jobs.
+A read-only job still running `jobCancelGraceSeconds` (default 10) after cancellation is stopped and settles as cancelled.
+A read-only job still running `jobDeadlineSeconds` (default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
+Rewrite jobs are never stopped this way, because their transaction journal owns write recovery; they keep cooperative cancellation and reconciliation.
+Supervision belongs to the server process that dispatched the worker; a worker whose dispatching server has exited keeps running until it finishes.
+
 Read-only jobs stage a source-revision-bound result checkpoint before terminal publication.
 If a worker or server stops after that checkpoint, a later authorized process publishes the retained result without rerunning the operation.
 Event and technology helper expansion also saves an authenticated intermediate frontier with its exact source revision and traversal contract.

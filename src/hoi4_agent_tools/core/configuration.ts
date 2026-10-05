@@ -163,6 +163,10 @@ export const serverConfigurationSchema = z
     scanMaxFiles: z.number().int().min(1).max(1_000_000).default(DEFAULT_SCAN_MAX_FILES),
     maxConcurrentTools: z.number().int().min(1).max(32).default(2),
     maxSharedTools: z.number().int().min(1).max(128).default(4),
+    /** A read-only job still running after this many seconds is stopped and fails. */
+    jobDeadlineSeconds: z.number().int().min(1).max(86_400).default(1_800),
+    /** A read-only job that has not stopped this long after cancellation is stopped. */
+    jobCancelGraceSeconds: z.number().int().min(1).max(600).default(10),
     scanMaxBytes: z
       .number()
       .int()

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -66,7 +66,18 @@ export function workerFailure(
       };
 }
 
-/** Bounded, fixed-entry child execution; client cancellation/disconnection never kills a worker. */
+/** Stop a supervised worker and wait, bounded, until the operating system reports its exit. */
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  child.kill('SIGKILL');
+  await Promise.race([exited, delay(10_000)]);
+}
+
+/**
+ * Bounded, fixed-entry child execution. Client disconnection never kills a worker; an
+ * overdue or unresponsive cancelled read-only worker is stopped by its supervising host.
+ */
 export class JobWorkerHost {
   private readonly owner = {};
   private constructor(
@@ -351,11 +362,37 @@ export class JobWorkerHost {
       clearTimeout(acknowledgmentTimer);
     }
     progress.stage = 'supervision';
+    const { jobDeadlineSeconds, jobCancelGraceSeconds } = this.engine.resolver.config();
+    const supervisedSince = Date.now();
+    let cancellationSeenAt: number | undefined;
     for (;;) {
       const record = await this.jobs.get(workspaceId, id, principal);
       if (['completed', 'failed', 'cancelled'].includes(record.status)) return;
       if (record.owner !== undefined && record.owner.pid !== child.pid) {
         if (jobOwnerLiveness(record.owner) === 'alive') return;
+      }
+      // A worker blocked in synchronous analysis never reaches its own cancellation check,
+      // so this process enforces the deadline and cancellation through the child handle.
+      // Rewrites are never stopped here: their transaction journal owns write recovery.
+      if (!record.request.mutation) {
+        if (record.cancelRequested) cancellationSeenAt ??= Date.now();
+        const overdue = Date.now() - supervisedSince > jobDeadlineSeconds * 1000;
+        const unresponsive =
+          cancellationSeenAt !== undefined &&
+          Date.now() - cancellationSeenAt > jobCancelGraceSeconds * 1000;
+        if (overdue || unresponsive) {
+          await stopChild(child);
+          await this.jobs.failInterrupted(
+            workspaceId,
+            id,
+            {
+              code: 'JOB_DEADLINE_EXCEEDED',
+              message: `The job ran longer than ${jobDeadlineSeconds} seconds and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds`,
+            },
+            principal,
+          );
+          return;
+        }
       }
       if (child.pid !== undefined) {
         try {
