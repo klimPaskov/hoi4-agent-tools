@@ -119,7 +119,7 @@ Your agent can select them from ordinary language; use the live tool schema for 
 | `hoi4.reference_search`     | Search local documentation in plain words or script names; each result names its answering line.                 |
 | `hoi4.reference_read`       | Read one revision-bound section, with line continuation.                                                         |
 | `hoi4.source_lookup`        | Find exact definitions, overrides and usages across game, DLC and mod, or the definition containing a file line. |
-| `hoi4.script_validate`      | Check snippet syntax, native command kinds, and declared scopes against local documentation.                     |
+| `hoi4.script_validate`      | Check a snippet or a whole mod file for syntax, command kinds, and scopes against local documentation.           |
 | `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                                         |
 | `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.                          |
 | `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                                                  |

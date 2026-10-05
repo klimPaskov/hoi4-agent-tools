@@ -137,6 +137,19 @@ describe('documentation-backed script checks', () => {
     ).rejects.toMatchObject({ code: 'SCRIPT_BINDING_RESERVED' });
   });
 
+  it('enters documented scope links and rejects them outside their source scopes', async () => {
+    const { check } = await fixture();
+    const linked = await check('capital_scope = { add_population = 1 OWNER = { add_power = 1 } }');
+    expect(linked.valid).toBe(true);
+    expect(linked.checkedCommands).toBe(4);
+    const misplaced = await check('controller = { add_power = 1 }');
+    expect(misplaced.valid).toBe(false);
+    expect(misplaced.findings[0]).toMatchObject({
+      code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
+      command: 'controller',
+    });
+  });
+
   it('keeps undocumented helpers unresolved and suggests close documented names', async () => {
     const { check } = await fixture();
     const result = await check('add_powre = 1 custom_helper = yes wiki_only_command = yes');

@@ -21,6 +21,7 @@ Markdown headings and recognizable standalone names in generated `.log` files fo
 - When `hoi4.source_lookup` finds no definition, `suggestions` lists up to five indexed identifiers within three edits of the requested symbol, nearest first, which catches typos and near-miss names.
 - `hoi4.source_lookup` with `path` and `line` instead of `symbol` locates a source position, such as a diagnostic or a changed line in a diff. `path` may be a result path such as `mod:events/example.txt`, a path relative to a source root, or an absolute path inside one. The result names the file's layer and whether a later layer shadows it, the indexed definitions that contain the line, innermost first, and the chain of enclosing assignments with zero-based occurrences for repeated keys. Its `keyPath` starts inside the innermost definition: pass that definition's `id` as `symbol`, its `kind`, and the `keyPath` to read or list that exact block. Without `column`, the first non-blank character of the line is used. A file with parse errors returns its definitions but no structural chain. Only the requested file's folder is scanned, in every layer.
 - `hoi4.script_validate`: check a bounded effect or trigger body against installed native-command documentation. Supply the body in `source`, its `kind`, and its current `scope`. Results cover syntax, command kind, and declared scope, with exact documentation citations. They do not validate command parameters or prove game execution.
+- `hoi4.script_validate` with `path` instead of `source` checks a whole mod file: every effect and trigger body of an event, decision, national focus, scripted effect, scripted trigger, or on-action file, with the scope the file's structure fixes. It is meant to catch the game's own load errors before launch.
 
 ## Navigate a definition
 
@@ -58,6 +59,25 @@ It reads supported scopes from `effects_documentation.md`, `triggers_documentati
 `valid: true` applies only to `checksPerformed`; `parametersChecked` remains false.
 Inspect the cited parameter syntax and use the relevant domain tools for broader validation.
 Replies prioritize problems, bound `findings`, and report `omittedFindings`; execution is bounded to 256 visited entries and 64,000 UTF-8 source bytes.
+
+### Check a whole file
+
+Pass `path` (a result path, a path relative to a source root, or an absolute path inside one) without `source`, `kind`, `scope`, or `bindings`.
+The file's folder decides its family and root scopes: event `trigger`, `immediate`, `after`, and option bodies use the event type's scope; decision and focus triggers and effects use country scope; scripted effects, scripted triggers, on actions, and decision `target_trigger` bodies have no fixed scope, so their command kinds are checked and scope rules are skipped.
+`file` reports the family, the number of checked bodies, and how many had no fixed scope; a body without a fixed scope keeps `valid` at `null`.
+File mode lists only problems: matching commands are counted in `checkedCommands`, and unchecked native argument blocks are counted in `argumentBlocksUnchecked`.
+It is bounded to 50,000 visited entries.
+
+The mod's scripted effects and triggers count as known commands of their kind.
+Building, ideology, and resource names count as the documented generic triggers that take them as keys (`arms_factory > 2`, `communism > 0.4`), from the documentation's supported lists and from the `common/buildings`, `common/ideologies`, and `common/resources` databases of every source layer.
+`FROM`, chained keywords, `event_target:`, `var:`, `mio:`, and `sp:` blocks are checked for command kinds without scope rules.
+
+Two checks predict load errors the game reports:
+
+- `SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER`: a dynamic variable from `dynamic_variables_documentation.md` compared directly as a trigger, such as `num_owned_states > 1`; compare it with `check_variable` instead.
+- `SCRIPT_SCOPE_LINK_WRONG_SCOPE`: a scope link used outside the scopes the wiki's Scopes page allows, such as `controller` in country scope.
+
+The scope links `owner`, `controller`, `capital_scope`, `overlord`, and `faction_leader` are recognized in any letter case in both modes.
 Search and context replies also report `limitedByBytes` when metadata exceeds their reply budget.
 Read omitted required sources with targeted calls rather than repeatedly requesting the same oversized bundle.
 Reference text supports UTF-8, Windows-1252, and explicitly BOM-marked UTF-16; native engine source encoding rules remain separate.

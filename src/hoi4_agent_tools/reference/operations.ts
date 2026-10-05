@@ -1,4 +1,5 @@
-import type { CoreEngine } from '../core/engine.js';
+import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
+import { parseClausewitz } from '../core/source/index.js';
 import {
   requireOperationScope,
   resolveOperationWorkspaceId,
@@ -19,6 +20,37 @@ import {
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
+import { locatePatterns, selectFile } from './source-locate.js';
+import type { ResolvedWorkspace } from '../core/workspace.js';
+import type { z } from 'zod/v4';
+
+/**
+ * Database folders whose entry names are trigger keys: `<folder> = { <name> = { ... } }` in
+ * each file, checked as the documented generic trigger.
+ */
+const implicitTriggerSources: Readonly<Record<string, string>> = {
+  buildings: 'building_count_trigger',
+  ideologies: 'ideology_support_trigger',
+  resources: 'resource_count_trigger',
+};
+
+/** Building, ideology and resource names from every scanned source layer. */
+function implicitTriggerNames(snapshot: ScanSnapshot): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const file of snapshot.index.files.values()) {
+    const folder = /^common\/([a-z_]+)\/[^/]+\.txt$/u.exec(file.relativePath)?.[1];
+    const heading = folder === undefined ? undefined : implicitTriggerSources[folder];
+    if (heading === undefined) continue;
+    for (const top of parseClausewitz(file.bytes, file.displayPath).root.entries) {
+      if (top.type !== 'assignment' || top.key.value !== folder || top.value.type !== 'block')
+        continue;
+      for (const entry of top.value.entries)
+        if (entry.type === 'assignment' && entry.value.type === 'block')
+          names.set(entry.key.value, heading);
+    }
+  }
+  return names;
+}
 
 const schemas = {
   'hoi4.reference_search': referenceSearchRequestSchema,
@@ -74,10 +106,11 @@ export class ReferenceToolService {
                 signal,
               )
             : name === 'hoi4.script_validate'
-              ? await validateScript(
-                  this.references,
+              ? await this.validateScript(
+                  workspaceId,
                   workspace,
                   scriptValidateRequestSchema.parse(parsed),
+                  context.principal,
                   signal,
                 )
               : await sourceLookup(
@@ -129,5 +162,40 @@ export class ReferenceToolService {
         result.diagnostics.pop();
     }
     return toolResult(result);
+  }
+
+  /** File mode reads the scanned file and the mod's scripted helper names from one scan. */
+  private async validateScript(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof scriptValidateRequestSchema>,
+    principal?: string,
+    signal?: AbortSignal,
+  ) {
+    if (request.path === undefined)
+      return validateScript(this.references, workspace, request, signal);
+    const snapshot = await this.engine.scan(
+      workspaceId,
+      {
+        patterns: [
+          ...(locatePatterns(this.engine, workspaceId, request.path, principal) ?? []),
+          'common/scripted_effects/**/*.txt',
+          'common/scripted_triggers/**/*.txt',
+          ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
+        ],
+      },
+      principal,
+      signal,
+    );
+    const file = selectFile(snapshot, request.path);
+    const helpers = (kind: string) =>
+      new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
+    return validateScript(this.references, workspace, request, signal, {
+      path: file.displayPath,
+      relativePath: file.relativePath,
+      bytes: file.bytes,
+      helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
+      implicitTriggers: implicitTriggerNames(snapshot),
+    });
   }
 }

@@ -51,7 +51,7 @@ function samePath(left: string, right: string): boolean {
 }
 
 /** Resolve a display, relative, or absolute path to one scanned file, preferring the active layer. */
-function selectFile(snapshot: ScanSnapshot, requested: string): ScannedFile {
+export function selectFile(snapshot: ScanSnapshot, requested: string): ScannedFile {
   const normalized = requested.replaceAll('\\', '/').replace(/^\.\//u, '');
   const absolute = path.isAbsolute(requested) ? path.resolve(requested) : undefined;
   const candidates = [...snapshot.index.files.values()].filter(

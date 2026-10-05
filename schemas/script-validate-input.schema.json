@@ -4,56 +4,58 @@
   "type": "object",
   "properties": {
     "workspaceId": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "source": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "path": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "kind": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "scope": {
+      "$ref": "#/$defs/__schema4"
+    },
+    "documentation": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "bindings": {
+      "$ref": "#/$defs/__schema7"
+    },
+    "limit": {
+      "$ref": "#/$defs/__schema9"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
       "default": "current",
       "type": "string",
       "pattern": "^[a-z][a-z0-9_-]{0,63}$"
     },
-    "source": {
+    "__schema1": {
       "type": "string",
       "minLength": 1,
       "maxLength": 64000
     },
-    "kind": {
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "__schema3": {
       "type": "string",
       "enum": [
         "effect",
         "trigger"
       ]
     },
-    "scope": {
-      "$ref": "#/$defs/__schema0"
+    "__schema4": {
+      "$ref": "#/$defs/__schema5"
     },
-    "documentation": {
-      "default": "game_doc",
-      "type": "string",
-      "enum": [
-        "game_doc",
-        "script_doc"
-      ]
-    },
-    "bindings": {
-      "default": [],
-      "maxItems": 16,
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/__schema1"
-      }
-    },
-    "limit": {
-      "default": 12,
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 32
-    }
-  },
-  "required": [
-    "source",
-    "kind",
-    "scope"
-  ],
-  "additionalProperties": false,
-  "$defs": {
-    "__schema0": {
+    "__schema5": {
       "type": "string",
       "enum": [
         "country",
@@ -70,7 +72,23 @@
         "faction"
       ]
     },
-    "__schema1": {
+    "__schema6": {
+      "default": "game_doc",
+      "type": "string",
+      "enum": [
+        "game_doc",
+        "script_doc"
+      ]
+    },
+    "__schema7": {
+      "default": [],
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema8"
+      }
+    },
+    "__schema8": {
       "type": "object",
       "properties": {
         "name": {
@@ -79,7 +97,7 @@
           "maxLength": 256
         },
         "scope": {
-          "$ref": "#/$defs/__schema0"
+          "$ref": "#/$defs/__schema5"
         }
       },
       "required": [
@@ -87,6 +105,12 @@
         "scope"
       ],
       "additionalProperties": false
+    },
+    "__schema9": {
+      "default": 12,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32
     }
   }
 }

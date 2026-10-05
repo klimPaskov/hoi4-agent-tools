@@ -19,9 +19,12 @@ const scope = z.enum([
 export const scriptValidateRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
-    source: z.string().min(1).max(64_000),
-    kind: z.enum(['effect', 'trigger']),
-    scope,
+    /** Snippet mode: an effect or trigger body checked under `kind` and `scope`. */
+    source: z.string().min(1).max(64_000).optional(),
+    /** File mode: a scanned mod file whose blocks are checked under the scope its structure fixes. */
+    path: z.string().trim().min(1).max(4096).optional(),
+    kind: z.enum(['effect', 'trigger']).optional(),
+    scope: scope.optional(),
     documentation: z.enum(['game_doc', 'script_doc']).default('game_doc'),
     bindings: z
       .array(z.object({ name: z.string().min(1).max(256), scope }).strict())
@@ -29,7 +32,30 @@ export const scriptValidateRequestSchema = z
       .default([]),
     limit: z.number().int().min(1).max(32).default(12),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.source === undefined) === (value.path === undefined))
+      context.addIssue({
+        code: 'custom',
+        path: ['source'],
+        message: 'Provide either source with kind and scope, or a mod file path',
+      });
+    if (value.source !== undefined && (value.kind === undefined || value.scope === undefined))
+      context.addIssue({
+        code: 'custom',
+        path: ['kind'],
+        message: 'A snippet check requires kind and scope',
+      });
+    if (
+      value.path !== undefined &&
+      (value.kind !== undefined || value.scope !== undefined || value.bindings.length > 0)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['path'],
+        message: 'A file check infers kinds and scopes from the file structure',
+      });
+  });
 
 export const scriptValidateDataSchema = z
   .object({
@@ -69,5 +95,14 @@ export const scriptValidateDataSchema = z
     unresolvedCount: z.number().int().min(0),
     truncated: z.boolean(),
     argumentBlocksUnchecked: z.number().int().min(0),
+    file: z
+      .object({
+        path: z.string().max(4096),
+        family: z.string().max(64),
+        roots: z.number().int().min(0),
+        unknownScopeRoots: z.number().int().min(0),
+      })
+      .strict()
+      .optional(),
   })
   .strict();

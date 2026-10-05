@@ -65,7 +65,7 @@ export const referenceTools = [
     name: 'hoi4.script_validate',
     title: 'Check HOI4 script commands and scopes',
     description:
-      'Check effect or trigger snippet syntax, native command kinds and declared scopes against cited installed documentation. Unknown helpers and native argument blocks remain explicit.',
+      'Check an effect or trigger snippet (source, kind, scope) or a whole mod file (path) for syntax, native command kinds and scopes against cited installed documentation. Unknown helpers and native argument blocks remain explicit.',
     inputSchema: scriptValidateRequestSchema,
     outputSchema: strictOperationResultSchema(scriptValidateDataSchema),
     annotations: readOnly,
