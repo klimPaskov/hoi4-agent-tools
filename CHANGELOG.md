@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Check player-facing text in `hoi4.script_validate` file mode: colour codes in news and report events, including through scripted localisation, development wording in shown text, and unlocalised flags in decision and focus requirement tooltips.
 - Exit a stdio server whose launching process has exited, and add `stdioIdleExitMinutes` so clients that keep idle per-subagent connections no longer accumulate servers.
 - Stop an orphaned read-only job worker at `jobDeadlineSeconds` even after its dispatching server has exited, and add `jobWorkerMaxHeapMiB` to bound each worker's heap.
 - Publish the GUI scenario shape on `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`, with `id` required, so clients can build a valid scenario from discovery.

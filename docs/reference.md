@@ -78,6 +78,17 @@ Two checks predict load errors the game reports:
 - `SCRIPT_SCOPE_LINK_WRONG_SCOPE`: a scope link used outside the scopes the wiki's Scopes page allows, such as `controller` in country scope.
 
 The scope links `owner`, `controller`, `capital_scope`, `overlord`, and `faction_leader` are recognized in any letter case in both modes.
+
+### Player-facing text
+
+For event, decision, and national focus files, file mode also checks English text as the game resolves it, from the last loaded definition of each key, and adds `player_text` to `checksPerformed`.
+These findings have `status: "warning"` and never change `valid`:
+
+- `SCRIPT_NEWS_TEXT_COLOUR_CODE`: a news event, or an event with a `GFX_report_event` picture, whose title, description, or option text contains a `§` or `£` code, directly or through a `defined_text` branch it shows.
+- `SCRIPT_TEXT_IMPLEMENTATION_WORDING`: event text, or a decision's or focus's name or description, containing development wording such as TODO, placeholder, hardcoded, newly added, or reworked.
+- `SCRIPT_FLAG_TOOLTIP_UNLOCALISED`: a `has_country_flag`, `has_global_flag`, or `has_state_flag` check in a decision's `available` block or a focus's `available` or `bypass` block whose flag has no localisation key, so the requirement tooltip prints the raw flag name. Checks inside `hidden_trigger` and `custom_trigger_tooltip` are skipped, and scripted triggers called from those blocks are not expanded.
+
+Each message names the localisation file and line that carries the text.
 Search and context replies also report `limitedByBytes` when metadata exceeds their reply budget.
 Read omitted required sources with targeted calls rather than repeatedly requesting the same oversized bundle.
 Reference text supports UTF-8, Windows-1252, and explicitly BOM-marked UTF-16; native engine source encoding rules remain separate.

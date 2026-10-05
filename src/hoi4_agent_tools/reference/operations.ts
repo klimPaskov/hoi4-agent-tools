@@ -1,4 +1,5 @@
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
+import { hashCanonical } from '../core/canonical.js';
 import { parseClausewitz } from '../core/source/index.js';
 import {
   requireOperationScope,
@@ -20,6 +21,7 @@ import {
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
+import type { LocalisedText, PlayerTextContext } from './player-text.js';
 import { locatePatterns, selectFile } from './source-locate.js';
 import type { ResolvedWorkspace } from '../core/workspace.js';
 import type { z } from 'zod/v4';
@@ -164,6 +166,9 @@ export class ReferenceToolService {
     return toolResult(result);
   }
 
+  /** The latest player-text context of each workspace, keyed by its source files' hashes. */
+  readonly #playerText = new Map<string, { key: string; context: PlayerTextContext }>();
+
   /** File mode reads the scanned file and the mod's scripted helper names from one scan. */
   private async validateScript(
     workspaceId: string,
@@ -182,12 +187,17 @@ export class ReferenceToolService {
           'common/scripted_effects/**/*.txt',
           'common/scripted_triggers/**/*.txt',
           ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
+          // One scan serves every check: the engine keeps one snapshot per workspace.
+          ...playerTextPatterns,
         ],
       },
       principal,
       signal,
     );
     const file = selectFile(snapshot, request.path);
+    const playerText = playerTextFamily(file.relativePath)
+      ? this.playerTextContext(workspaceId, snapshot)
+      : undefined;
     const helpers = (kind: string) =>
       new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
     return validateScript(this.references, workspace, request, signal, {
@@ -196,6 +206,83 @@ export class ReferenceToolService {
       bytes: file.bytes,
       helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
       implicitTriggers: implicitTriggerNames(snapshot),
+      ...(playerText === undefined ? {} : { playerText }),
     });
   }
+
+  /** English localisation as the game resolves it, and the branches of scripted localisation. */
+  private playerTextContext(workspaceId: string, snapshot: ScanSnapshot): PlayerTextContext {
+    const sources = [...snapshot.index.files.values()].filter(({ relativePath }) =>
+      playerTextSource(relativePath),
+    );
+    const cacheKey = hashCanonical(sources.map(({ displayPath, sha256 }) => [displayPath, sha256]));
+    const cached = this.#playerText.get(workspaceId);
+    if (cached?.key === cacheKey) return cached.context;
+    const localisation = new Map<string, LocalisedText & { loadOrder: number }>();
+    for (const symbol of snapshot.index.symbols) {
+      if (symbol.kind !== 'localisation' || !symbol.id.startsWith('l_english:')) continue;
+      const key = symbol.id.slice('l_english:'.length);
+      const previous = localisation.get(key);
+      if (previous !== undefined && previous.loadOrder > symbol.loadOrder) continue;
+      localisation.set(key, {
+        value: typeof symbol.metadata.value === 'string' ? symbol.metadata.value : '',
+        path: symbol.path,
+        line: symbol.location?.start.line ?? 1,
+        loadOrder: symbol.loadOrder,
+      });
+    }
+    const scriptedLocalisation = new Map<string, string[]>();
+    for (const file of sources) {
+      if (!file.relativePath.startsWith('common/scripted_localisation/')) continue;
+      for (const definition of parseClausewitz(file.bytes, file.displayPath).root.entries) {
+        if (
+          definition.type !== 'assignment' ||
+          definition.key.value !== 'defined_text' ||
+          definition.value.type !== 'block'
+        )
+          continue;
+        let name: string | undefined;
+        const keys: string[] = [];
+        for (const entry of definition.value.entries) {
+          if (entry.type !== 'assignment') continue;
+          if (entry.key.value === 'name' && entry.value.type === 'scalar') name = entry.value.value;
+          if (entry.key.value !== 'text' || entry.value.type !== 'block') continue;
+          for (const branch of entry.value.entries)
+            if (
+              branch.type === 'assignment' &&
+              /^locali[sz]ation_key$/u.test(branch.key.value) &&
+              branch.value.type === 'scalar'
+            )
+              keys.push(branch.value.value);
+        }
+        if (name !== undefined) scriptedLocalisation.set(name, keys);
+      }
+    }
+    const context = { localisation, scriptedLocalisation };
+    this.#playerText.set(workspaceId, { key: cacheKey, context });
+    return context;
+  }
+}
+
+const playerTextPatterns = [
+  'localisation/**/*_l_english.yml',
+  'common/scripted_localisation/**/*.txt',
+] as const;
+
+function playerTextSource(relativePath: string): boolean {
+  const file = relativePath.replaceAll('\\', '/').toLowerCase();
+  return (
+    (file.startsWith('localisation/') && file.endsWith('_l_english.yml')) ||
+    file.startsWith('common/scripted_localisation/')
+  );
+}
+
+/** Files whose player-facing text and requirement tooltips file mode checks. */
+function playerTextFamily(relativePath: string): boolean {
+  const file = relativePath.replaceAll('\\', '/').toLowerCase();
+  return (
+    file.startsWith('events/') ||
+    file.startsWith('common/national_focus/') ||
+    (file.startsWith('common/decisions/') && !file.startsWith('common/decisions/categories/'))
+  );
 }

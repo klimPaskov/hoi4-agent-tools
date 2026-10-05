@@ -13,6 +13,7 @@ import type {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
+import { playerTextFindings, playerTextPosition, type PlayerTextContext } from './player-text.js';
 import { editDistance } from './suggestions.js';
 import { publicReferenceSection, type ReferenceService, type ReferenceSection } from './service.js';
 
@@ -41,6 +42,8 @@ export interface ScriptFileContext {
    * generic trigger (such as `building_count_trigger`) that accepts the name as its key.
    */
   implicitTriggers: ReadonlyMap<string, string>;
+  /** Localisation for player-text checks of event, decision and focus files. */
+  playerText?: PlayerTextContext;
 }
 
 /**
@@ -557,6 +560,23 @@ export async function validateScript(
       rootScope = root.scope;
       walk(root.block, root.kind, root.scope);
     }
+  const playerText = plan.family === 'snippet' ? undefined : file?.playerText;
+  const playerTextChecked = playerText !== undefined;
+  if (playerText !== undefined)
+    for (const finding of playerTextFindings(plan.family, document, playerText)) {
+      const position = playerTextPosition(documentPath, document.lineIndex, finding);
+      findings.push({
+        code: finding.code,
+        status: 'warning',
+        command: finding.command.slice(0, 256),
+        kind: finding.code === 'SCRIPT_FLAG_TOOLTIP_UNLOCALISED' ? 'trigger' : 'text',
+        scope: UNKNOWN_SCOPE,
+        line: position.line,
+        column: position.column,
+        message: finding.message,
+        suggestions: [],
+      });
+    }
   const unresolvedCount = findings.filter(({ status }) => status === 'unresolved').length;
   const invalid = findings.some(({ status }) => status === 'error');
   const truncated = visited > commandLimit;
@@ -567,7 +587,7 @@ export async function validateScript(
     inventory.skipped > 0 ||
     (file === undefined ? catalogs[input.kind!].size === 0 : plan.roots.length === 0) ||
     unknownScopeRoots > 0;
-  const order = { error: 0, unresolved: 1, supported: 2 };
+  const order = { error: 0, unresolved: 1, warning: 2, supported: 3 };
   findings.sort(
     (a, b) =>
       order[a.status] - order[b.status] ||
@@ -577,7 +597,12 @@ export async function validateScript(
   );
   const result: Output = {
     valid: invalid ? false : incomplete ? null : true,
-    checksPerformed: ['syntax', 'command_kind', 'declared_scope'],
+    checksPerformed: [
+      'syntax',
+      'command_kind',
+      'declared_scope',
+      ...(playerTextChecked ? (['player_text'] as const) : []),
+    ],
     parametersChecked: false,
     documentation: {
       source: input.documentation,

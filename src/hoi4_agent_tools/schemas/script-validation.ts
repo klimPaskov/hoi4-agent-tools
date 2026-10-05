@@ -60,7 +60,7 @@ export const scriptValidateRequestSchema = z
 export const scriptValidateDataSchema = z
   .object({
     valid: z.boolean().nullable(),
-    checksPerformed: z.array(z.enum(['syntax', 'command_kind', 'declared_scope'])),
+    checksPerformed: z.array(z.enum(['syntax', 'command_kind', 'declared_scope', 'player_text'])),
     parametersChecked: z.literal(false),
     documentation: z
       .object({
@@ -76,9 +76,9 @@ export const scriptValidateDataSchema = z
         z
           .object({
             code: z.string().max(80),
-            status: z.enum(['supported', 'error', 'unresolved']),
+            status: z.enum(['supported', 'error', 'unresolved', 'warning']),
             command: z.string().max(256),
-            kind: z.enum(['effect', 'trigger']),
+            kind: z.enum(['effect', 'trigger', 'text']),
             scope: z.string().max(64),
             line: z.number().int().min(1),
             column: z.number().int().min(1),
