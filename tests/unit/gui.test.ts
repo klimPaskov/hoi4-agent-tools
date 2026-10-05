@@ -885,6 +885,36 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     );
   });
 
+  it('renders without the preview backdrop for a transparent scenario', async () => {
+    const files = [
+      scanned(
+        'interface/transparent-probe.gui',
+        'guiTypes = { containerWindowType = { name = "transparent_window" position = { x = 100 y = 100 } size = { width = 50 height = 50 } } }',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const alphaAt = async (background: 'scene' | 'transparent') => {
+      const scene = await buildGuiScene(
+        graph,
+        files,
+        'transparent_window',
+        parsePreviewScenario({
+          id: background,
+          resolution: { width: 320, height: 200 },
+          background,
+        }),
+      );
+      const png = (await renderGuiScene(scene, ['full'])).images[0]!.png;
+      const { data, info } = await sharp(png)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      return data[(10 * info.width + 10) * info.channels + 3];
+    };
+    expect(await alphaAt('scene')).toBe(255);
+    expect(await alphaAt('transparent')).toBe(0);
+  });
+
   it('flags elements a few pixels from their parent centre and leaves deliberate offsets', async () => {
     const files = [
       scanned(

@@ -199,8 +199,10 @@ Every `scenario` needs an `id`, a short label such as `"usa_1936"`. The other fi
 | `visibility`                                 | Forced visibility by element or scripted GUI name, `{"settings_page_events": false}`; it overrides evaluated triggers.                                                                         |
 | `scopes`                                     | Named scope bindings such as `FROM` with their own state.                                                                                                                                      |
 | `resolution`, `uiScale`, `state`, `language` | Screen size, in-game UI scale, preview element state, and localisation language.                                                                                                               |
+| `background`                                 | `"transparent"` renders without the preview backdrop, so pixels the window does not cover are fully transparent in every PNG.                                                                  |
 
 A scripted GUI `visible` or `<element>_visible` trigger that the scenario decides hides or shows its element exactly.
+For compositing, each visible element is its own `<g>` group in the full SVG, with an `id` that matches the element in `layout.json`, which also records every element's box.
 A trigger the scenario cannot decide leaves the element drawn and lists it in the fidelity report as unresolved, so pages that the game shows one at a time can overlap in the preview.
 For tabbed windows, set the flags or variables of the page to show and `closedFlags: true`, then render each page as its own scenario through `relatedScenarios`.
 `GUI_UNRESOLVED_VISIBILITY_OVERLAP` names each overlapping pair drawn together for that reason.

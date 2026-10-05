@@ -572,6 +572,13 @@ function overlayToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.resolution.width}" height="${scene.resolution.height}" viewBox="0 0 ${scene.resolution.width} ${scene.resolution.height}"><defs>${toolText.definitions()}</defs>${overlays}</svg>`;
 }
 
+/** The preview backdrop; a transparent scenario leaves uncovered pixels fully transparent. */
+function backdrop(scene: GuiScene, viewBox: GuiRect): string {
+  return scene.scenario.background === 'transparent'
+    ? ''
+    : `<rect ${rectAttributes(viewBox)} fill="#17202a"/>`;
+}
+
 export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
   const view = viewFor(scene, variant);
   assertRenderDimensions(view.width, view.height, `GUI ${variant} SVG`);
@@ -595,7 +602,7 @@ export function sceneToSvg(scene: GuiScene, variant: GuiRenderVariant): string {
     .map((element) => renderOverlay(element, variant, toolText))
     .join('');
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions.join('')}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
 }
 
 async function cooperativeParts<T>(
@@ -648,7 +655,7 @@ async function sceneToSvgCooperative(
     signal,
   );
   const fidelity = escapeXml(canonicalJson(scene.fidelity));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs><rect ${rectAttributes(view.viewBox)} fill="#17202a"/>${body}${overlays}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${view.width}" height="${view.height}" viewBox="${finite(view.viewBox.x)} ${finite(view.viewBox.y)} ${finite(view.viewBox.width)} ${finite(view.viewBox.height)}"><metadata data-renderer="hoi4-agent-tools" data-mode="offline">${fidelity}</metadata><defs>${clipDefinitions}${sceneGlyphDefinitions(scene)}${toolText.definitions()}</defs>${backdrop(scene, view.viewBox)}${body}${overlays}</svg>`;
 }
 
 export function hierarchyToSvg(scene: GuiScene): string {

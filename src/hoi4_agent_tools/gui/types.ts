@@ -311,6 +311,8 @@ export interface GuiPreviewScenario {
   flags: Record<string, boolean>;
   /** Undeclared flags are unset, as on a country that never received them, instead of unknown. */
   closedFlags?: boolean;
+  /** `transparent` renders without the preview backdrop, for compositing. */
+  background?: 'scene' | 'transparent';
   lists: Record<string, Record<string, string | number | boolean>[]>;
   localisation: Record<string, string>;
   values: Record<string, string | number | boolean>;

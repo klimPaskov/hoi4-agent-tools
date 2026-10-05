@@ -184,6 +184,7 @@ const GuiPreviewScenarioBodySchema = z
     variables: z.record(z.string(), z.number()).default({}),
     flags: z.record(z.string(), z.boolean()).default({}),
     closedFlags: z.boolean().optional(),
+    background: z.enum(['scene', 'transparent']).optional(),
     lists: z.record(z.string(), z.array(objectSchema).max(10_000)).default({}),
     localisation: z.record(z.string(), z.string()).default({}),
     values: objectSchema.default({}),

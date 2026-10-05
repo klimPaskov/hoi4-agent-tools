@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `background: "transparent"` to GUI scenarios for renders without the preview backdrop.
 - Warn with `GUI_NEAR_CENTRE_OFFSET` when an element sits a few pixels from its parent's horizontal centre.
 - Report visible events fired inside `every_*` loops that reach one player once per iteration, either through a fixed recipient or as a major event (`SCRIPT_EVENT_POPUP_REPEATED`).
 - Check player-facing text in `hoi4.script_validate` file mode: colour codes in news and report events, including through scripted localisation, development wording in shown text, and unlocalised flags in decision and focus requirement tooltips.
