@@ -1,20 +1,20 @@
 # Changelog
 
-## Unreleased
+## 3.9.0 - 2026-10-06
 
-- Add `background: "transparent"` to GUI scenarios for renders without the preview backdrop.
-- Warn with `GUI_NEAR_CENTRE_OFFSET` when an element sits a few pixels from its parent's horizontal centre.
-- Report visible events fired inside `every_*` loops that reach one player once per iteration, either through a fixed recipient or as a major event (`SCRIPT_EVENT_POPUP_REPEATED`).
-- Check player-facing text in `hoi4.script_validate` file mode: colour codes in news and report events, including through scripted localisation, development wording in shown text, and unlocalised flags in decision and focus requirement tooltips.
 - Exit a stdio server whose launching process has exited, and add `stdioIdleExitMinutes` so clients that keep idle per-subagent connections no longer accumulate servers.
+- Stop a read-only job whose worker outlives `jobDeadlineSeconds` (`JOB_DEADLINE_EXCEEDED`) or ignores cancellation for `jobCancelGraceSeconds`, so a blocked worker can no longer hang a workflow.
 - Stop an orphaned read-only job worker at `jobDeadlineSeconds` even after its dispatching server has exited, and add `jobWorkerMaxHeapMiB` to bound each worker's heap.
+- Check a whole mod file with `hoi4.script_validate` `path`: every event, decision, focus, scripted helper, and on-action body with the scope its structure fixes, the mod's own scripted helpers as known commands, and building, ideology, and resource trigger keys.
+- Report a dynamic variable compared as a trigger (`SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER`) and a scope link outside its documented source scopes (`SCRIPT_SCOPE_LINK_WRONG_SCOPE`), and enter `owner`, `controller`, `capital_scope`, `overlord`, and `faction_leader` blocks with their target scope.
+- Check player-facing text in `hoi4.script_validate` file mode: colour codes in news and report events, including through scripted localisation, development wording in shown text, and unlocalised flags in decision and focus requirement tooltips.
+- Report visible events fired inside `every_*` loops that reach one player once per iteration, either through a fixed recipient or as a major event (`SCRIPT_EVENT_POPUP_REPEATED`).
 - Publish the GUI scenario shape on `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`, with `id` required, so clients can build a valid scenario from discovery.
 - Add `closedFlags` to GUI scenarios: undeclared flags are unset, as in the game, so flag-driven tab pages and panels render one at a time.
 - Resolve a window's scripted localisation exactly under the supplied scenario wherever its flags, variables, and values decide the branch; undecided tokens still render as `[dynamic_loc]`.
 - Warn with `GUI_UNRESOLVED_VISIBILITY_OVERLAP` when overlapping elements are drawn together because the scenario does not decide which one is visible.
-- Check a whole mod file with `hoi4.script_validate` `path`: every event, decision, focus, scripted helper, and on-action body with the scope its structure fixes, the mod's own scripted helpers as known commands, and building, ideology, and resource trigger keys.
-- Report a dynamic variable compared as a trigger (`SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER`) and a scope link outside its documented source scopes (`SCRIPT_SCOPE_LINK_WRONG_SCOPE`), and enter `owner`, `controller`, `capital_scope`, `overlord`, and `faction_leader` blocks with their target scope.
-- Stop a read-only job whose worker outlives `jobDeadlineSeconds` (`JOB_DEADLINE_EXCEEDED`) or ignores cancellation for `jobCancelGraceSeconds`, so a blocked worker can no longer hang a workflow.
+- Warn with `GUI_NEAR_CENTRE_OFFSET` when an element sits a few pixels from its parent's horizontal centre.
+- Add `background: "transparent"` to GUI scenarios for renders without the preview backdrop.
 
 ## 3.8.1 - 2026-10-05
 
