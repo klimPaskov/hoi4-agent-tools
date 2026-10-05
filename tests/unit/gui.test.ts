@@ -885,6 +885,27 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     );
   });
 
+  it('flags elements a few pixels from their parent centre and leaves deliberate offsets', async () => {
+    const files = [
+      scanned(
+        'interface/centre-probe.gui',
+        'guiTypes = { containerWindowType = { name = "centre_window" size = { width = 200 height = 100 } iconType = { name = "nearly_centred" position = { x = 52 y = 10 } size = { width = 100 height = 20 } } iconType = { name = "centred" position = { x = 50 y = 40 } size = { width = 100 height = 20 } } iconType = { name = "offset" position = { x = 70 y = 70 } size = { width = 100 height = 20 } } } }',
+      ),
+    ];
+    const graph = sourceGraph(files);
+    const scene = await buildGuiScene(
+      graph,
+      files,
+      'centre_window',
+      parsePreviewScenario({ id: 'centre', resolution: { width: 640, height: 360 } }),
+    );
+    const validation = await validateGuiScene(graph, scene, files);
+    const flagged = validation.diagnostics
+      .filter(({ code }) => code === 'GUI_NEAR_CENTRE_OFFSET')
+      .map(({ message }) => message.split(' ')[0]);
+    expect(flagged).toEqual(['nearly_centred']);
+  });
+
   it('decides flag-driven tab pages with closedFlags and warns when undecided pages overlap', async () => {
     const files = [
       scanned(

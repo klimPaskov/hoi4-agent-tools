@@ -463,10 +463,13 @@ describe('generated scenario to production GUI render', () => {
       expect(render.images[0]?.png).toEqual(repeat.images[0]?.png);
       expect(render.images[0]?.svg).toContain('fill="#ff3232"');
       expect(render.images[0]?.svg).toContain('data-hoi4-colour-runs="true"');
+      // Without generation, the supplied scenario still resolves every branch it decides and
+      // leaves the undecidable one visibly unresolved.
       const placeholder = await studio.lint({ ...input, generatedScenarios: { enabled: false } });
-      expect(placeholder.scene.elements.find(({ name }) => name === 'inclusive')?.text?.text).toBe(
-        'Inclusive: [dynamic_loc]',
-      );
+      const placeholderText = (name: string) =>
+        placeholder.scene.elements.find((element) => element.name === name)?.text?.text;
+      expect(placeholderText('inclusive')).toBe('Inclusive: TRUE');
+      expect(placeholderText('unknown')).toBe('Unknown: [dynamic_loc]');
     },
   );
 

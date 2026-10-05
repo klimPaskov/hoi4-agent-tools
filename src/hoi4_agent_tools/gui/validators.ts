@@ -25,6 +25,10 @@ import type {
   GuiSpriteDefinition,
 } from './types.js';
 
+/** Horizontal offsets from a parent's centre above rounding and up to a few pixels look accidental. */
+const NEAR_CENTRE_TOLERANCE_PX = 0.5;
+const NEAR_CENTRE_MAX_PX = 3;
+
 const allStates: readonly GuiPreviewState[] = [
   'normal',
   'hover',
@@ -587,6 +591,31 @@ function validateOverlapAndGeometry(
   const visible = scene.elements.filter((element) => element.visible && area(element.rect) > 0);
   const byId = new Map(scene.elements.map((element) => [element.id, element]));
   for (const element of scene.elements) {
+    // An element a few pixels from its parent's horizontal centre was almost always meant
+    // to be centred; larger offsets are deliberate placement.
+    const parent = element.parentId === undefined ? undefined : byId.get(element.parentId);
+    if (
+      element.visible &&
+      parent?.visible === true &&
+      element.unclippedRect.width > 0 &&
+      element.unclippedRect.width < parent.unclippedRect.width - 2
+    ) {
+      const offset =
+        element.unclippedRect.x +
+        element.unclippedRect.width / 2 -
+        (parent.unclippedRect.x + parent.unclippedRect.width / 2);
+      if (Math.abs(offset) > NEAR_CENTRE_TOLERANCE_PX && Math.abs(offset) <= NEAR_CENTRE_MAX_PX)
+        diagnostics.push(
+          issue(
+            'GUI_NEAR_CENTRE_OFFSET',
+            'warning',
+            'layout',
+            `${element.name} sits ${Math.abs(offset).toFixed(1)} px ${offset > 0 ? 'right' : 'left'} of the centre of ${parent.name}; centre it exactly or offset it clearly.`,
+            element,
+            { parent: parent.id, offset },
+          ),
+        );
+    }
     if (element.unclippedRect.width <= 0 || element.unclippedRect.height <= 0) {
       diagnostics.push(
         issue(

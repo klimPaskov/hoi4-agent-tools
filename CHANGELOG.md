@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Warn with `GUI_NEAR_CENTRE_OFFSET` when an element sits a few pixels from its parent's horizontal centre.
+- Report visible events fired inside `every_*` loops that reach one player once per iteration, either through a fixed recipient or as a major event (`SCRIPT_EVENT_POPUP_REPEATED`).
 - Check player-facing text in `hoi4.script_validate` file mode: colour codes in news and report events, including through scripted localisation, development wording in shown text, and unlocalised flags in decision and focus requirement tooltips.
 - Exit a stdio server whose launching process has exited, and add `stdioIdleExitMinutes` so clients that keep idle per-subagent connections no longer accumulate servers.
 - Stop an orphaned read-only job worker at `jobDeadlineSeconds` even after its dispatching server has exited, and add `jobWorkerMaxHeapMiB` to bound each worker's heap.
