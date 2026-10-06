@@ -26,11 +26,18 @@ export interface SharedCapacityLease {
 export interface SharedCapacityOptions {
   /** How long one slot may stay delete-pending on Windows before admission fails. */
   deletePendingLimitMs?: number;
+  /**
+   * Treat a lease older than this as abandoned even when a process with its pid is alive.
+   * Only for locks whose holders finish quickly: a crashed holder's pid can be reused by an
+   * unrelated process, which would otherwise keep the slot held until that process exits.
+   */
+  leaseMaxAgeMs?: number;
   now?: () => number;
 }
 
 export class SharedRequestCapacity {
   private readonly deletePendingLimitMs: number;
+  private readonly leaseMaxAgeMs: number | undefined;
   private readonly now: () => number;
 
   constructor(
@@ -39,6 +46,7 @@ export class SharedRequestCapacity {
     options: SharedCapacityOptions = {},
   ) {
     this.deletePendingLimitMs = options.deletePendingLimitMs ?? 60_000;
+    this.leaseMaxAgeMs = options.leaseMaxAgeMs;
     this.now = options.now ?? Date.now;
   }
 
@@ -174,6 +182,16 @@ export class SharedRequestCapacity {
     }
   }
 
+  private async leaseExpired(lease: string): Promise<boolean> {
+    if (this.leaseMaxAgeMs === undefined) return false;
+    try {
+      return this.now() - (await lstat(lease)).mtimeMs > this.leaseMaxAgeMs;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+
   private async reap(slot: string): Promise<void> {
     try {
       const metadata = await lstat(slot);
@@ -188,7 +206,9 @@ export class SharedRequestCapacity {
       } else {
         for (const name of owners) {
           const match = /^([1-9][0-9]*)-[0-9a-f-]{36}\.lease$/u.exec(name);
-          if (match === null || processAlive(Number(match[1]))) return;
+          if (match === null) return;
+          if (processAlive(Number(match[1])) && !(await this.leaseExpired(path.join(slot, name))))
+            return;
           // Unique owner names prevent a concurrent reaper from deleting a new lease.
           await unlink(path.join(slot, name)).catch((error: unknown) => {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;

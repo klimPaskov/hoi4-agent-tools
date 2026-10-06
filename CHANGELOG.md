@@ -29,7 +29,7 @@
 - Refuse reads, not only writes, of server storage (`.hoi4-agent`, artifact and cache roots) through workspace paths.
 - Keep artifact listings from removing a folder that a concurrent write is filling.
 - Evict a chunked artifact by the age of its newest member, index first, and protect all its pieces when any of them is protected, so a large result's index never points at evicted pieces.
-- Wait at most two minutes for the job store lock and then fail with `JOB_STORE_BUSY`, so a lock left by a crashed process cannot hang every job.
+- Treat a job store lock held for more than ten minutes as abandoned even when its process ID now belongs to another process, and wait at most two minutes for the lock before failing with `JOB_STORE_BUSY`, so a lock left by a crashed process cannot hang every job.
 - Sweep expired finished job results on first use, and keep the record of a refused task call for five minutes.
 - Bound retained scan snapshots by bytes, remove temporary files from failed heartbeat writes, and drop server records silent for two hours.
 - Release a foreground task's cancellation listener when the task finishes.

@@ -306,6 +306,7 @@ export async function publishJobRecord(
 }
 
 const JOB_STORE_LOCK_WAIT_MS = 120_000;
+const JOB_STORE_LEASE_MAX_AGE_MS = 600_000;
 
 /** Internal durable job records. Callers must obtain scopes from the authorized workspace resolver. */
 export class JobStore {
@@ -343,7 +344,14 @@ export class JobStore {
     await mkdir(root, { recursive: true, mode: 0o700 });
     await assertUnlinked(path.join(state.root, 'jobs'));
     await containedGeneratedPath(state.root, 'jobs');
-    return new JobStore(state, root, new SharedRequestCapacity(root, 1), maxRecordBytes);
+    return new JobStore(
+      state,
+      root,
+      // Store operations hold the lock briefly, so an old lease is a crashed holder's even
+      // when its pid now belongs to another process.
+      new SharedRequestCapacity(root, 1, { leaseMaxAgeMs: JOB_STORE_LEASE_MAX_AGE_MS }),
+      maxRecordBytes,
+    );
   }
 
   async submit(
