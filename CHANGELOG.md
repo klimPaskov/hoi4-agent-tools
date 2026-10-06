@@ -1,5 +1,44 @@
 # Changelog
 
+## 4.0.0 - 2026-10-06
+
+### Breaking changes
+
+- The HTTP server verifies the bearer token before it reads a request body, so an unauthenticated `POST /mcp` receives `401` without its body being parsed; body-dependent scopes such as `hoi4:write` for rewrites are checked again afterwards.
+- Behind a trusted proxy, rate limiting uses the rightmost `X-Forwarded-For` hop that is not a trusted proxy instead of the leftmost, client-supplied entry.
+- A rewrite journal that cannot be recovered no longer stops startup: the server starts, and rewrites of that workspace fail with `TRANSACTION_RECOVERY_REQUIRED` until recovery succeeds. A journal folder without a manifest is skipped.
+- Rolling back a transaction keeps a planned file that was never replaced and has no backup, instead of refusing the whole rollback; a replaced file that changed since still reports `TRANSACTION_STALE`.
+- `tools/list` omits the JSON Schema dialect and the safe-integer bounds that every integer field repeated; field types, ranges and descriptions are unchanged.
+
+### Tools
+
+- Add `hoi4.error_log`: read the game's `logs/error.log` from its last launch, grouped by category, with each entry's source file, line and layer, whether that file changed since the log was written, and `scope`, `category` and text filters. Set `gameUserRoot` when the game's user folder is not found automatically.
+- Add `hoi4.mod_index`: summarize a mod's descriptor, definitions by kind, folders and event namespace ranges, or find the next free numbered ID for an event namespace or prefix across every source layer, with the first unused gap.
+- Name the tool and up to five failing fields with their reasons when the 2026-07-28 server rejects tool arguments.
+- Check every supported family of `hoi4.script_validate` file mode from one shared scan, skip localisation from shadowed files in player-text checks, and report only `§` colour codes in news text.
+- Report an overlapping pair whose visibility the GUI scenario does not decide only as `GUI_UNRESOLVED_VISIBILITY_OVERLAP`, without a generic overlap or click-region conflict.
+- Print `startup_timeout_sec = 120` and `tool_timeout_sec = 600` in the Codex registrations from `hoi4-agent-tools-setup --print-client-config`.
+
+### Fixes
+
+- Keep each file's own diagnostics when an index is rebuilt incrementally after an edit; a rebuild could copy other files' errors and lose real ones.
+- Close a cancelled stdio request so the idle limit still applies, count a request open for twice the idle limit as abandoned, and finish open requests before exiting after the launching process exits.
+- Record an orphaned worker's own deadline as `JOB_DEADLINE_EXCEEDED` instead of leaving the job running.
+- Start one worker launcher per job across HTTP requests and polls, and spawn nothing when the job has finished or a live worker runs it.
+- Re-check a rewrite's journal under the workspace lock before applying it, re-hash the backup it moves aside, and take over a stale workspace lock only through an atomic rename that one process can win.
+- Refuse reads, not only writes, of server storage (`.hoi4-agent`, artifact and cache roots) through workspace paths.
+- Keep artifact listings from removing a folder that a concurrent write is filling.
+- Wait at most two minutes for the job store lock and then fail with `JOB_STORE_BUSY`, so a lock left by a crashed process cannot hang every job.
+- Sweep expired finished job results on first use, and keep the record of a refused task call for five minutes.
+- Bound retained scan snapshots by bytes, remove temporary files from failed heartbeat writes, and drop server records silent for two hours.
+- Release a foreground task's cancellation listener when the task finishes.
+
+### Documentation
+
+- Restructure the README around what the server does, a four-step quick start, a grouped tool table with what each area writes, and safety notes.
+- Add a configuration reference with every key, range, default location and environment variable.
+- Complete the GUI scenario and request field tables, and document the prompt, resources, task-capable tools and setup troubleshooting commands.
+
 ## 3.10.0 - 2026-10-06
 
 - Rebuild a workspace index after an edit from the previous index, parsing and indexing only changed files, and keep the latest scan of each pattern set and each GUI graph scope instead of one per workspace. A repeated GUI preview of a large, actively edited mod took 64 s instead of 244 s.
