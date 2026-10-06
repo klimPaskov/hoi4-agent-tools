@@ -55,7 +55,7 @@ describe('server registry', () => {
     const registry = new ServerRegistry(shared, 'stdio', () => Date.parse('2026-10-06T00:00:00Z'));
     registry.start();
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      if ((await readdir(servers).catch(() => [])).includes(`${process.pid}.json`)) break;
+      if ((await readdir(servers).catch((): string[] => [])).includes(`${process.pid}.json`)) break;
       await delay(50);
     }
     expect(await readdir(servers)).toContain(`${process.pid}.json`);

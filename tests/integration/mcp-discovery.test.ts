@@ -198,15 +198,12 @@ describe('MCP discovery', () => {
     expect((await client.listResources()).resources).toEqual([
       expect.objectContaining({ uri: 'hoi4-agent://server/status', mimeType: 'application/json' }),
     ]);
-    const status = JSON.parse(
-      String(
-        (
-          (await client.readResource({ uri: 'hoi4-agent://server/status' })).contents[0] as {
-            text: string;
-          }
-        ).text,
-      ),
-    ) as { current: { pid: number }; servers: Array<{ pid: number }> };
+    const statusContent = (await client.readResource({ uri: 'hoi4-agent://server/status' }))
+      .contents[0] as { text: string };
+    const status = JSON.parse(statusContent.text) as {
+      current: { pid: number };
+      servers: Array<{ pid: number }>;
+    };
     expect(status.current.pid).toBe(process.pid);
     expect(status.servers.map(({ pid }) => pid)).toContain(process.pid);
     const resourceTemplates = (await client.listResourceTemplates()).resourceTemplates;
