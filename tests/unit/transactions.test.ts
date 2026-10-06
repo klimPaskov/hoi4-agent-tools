@@ -616,6 +616,32 @@ describe('transaction manager', () => {
     });
   });
 
+  it('applies a plan once when two applies of it race', async () => {
+    const { mod, manager } = await setup();
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        { relativePath: 'common/one.txt', content: Buffer.from('raced\n'), operationIds: ['op-1'] },
+      ],
+    });
+    const results = await Promise.allSettled([
+      manager.apply('test', plan.transactionId, plan.planHash, {}),
+      manager.apply('test', plan.transactionId, plan.planHash, {}),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find(({ status }) => status === 'rejected') as PromiseRejectedResult;
+    // The loser is refused, either by the held lock or by the applied journal it reloads.
+    expect(['TRANSACTION_LOCKED', 'TRANSACTION_STATE_INVALID']).toContain(
+      (rejected.reason as { code: string }).code,
+    );
+    expect(await readFile(path.join(mod, 'common', 'one.txt'), 'utf8')).toBe('raced\n');
+    await expect(manager.status('test', plan.transactionId)).resolves.toMatchObject({
+      state: 'applied',
+    });
+  });
+
   it('rolls back replaced files when another planned file was edited during apply', async () => {
     const { mod, manager } = await setup();
     const text = path.join(mod, 'common', 'one.txt');

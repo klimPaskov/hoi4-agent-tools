@@ -634,21 +634,28 @@ export class TransactionManager {
     if (!workspace.writeEnabled)
       throw new ServiceError('WRITE_POLICY_DISABLED', 'Workspace writes are not enabled');
     await this.assertRecovered(workspaceId, options.signal);
-    const manifest = await this.load(workspace, transactionId, {
-      headMode: 'reconcile',
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-    this.assertBinding(manifest, workspace, expectedPlanHash, options.principal);
-    if (!manifest.planPayload.validation.passed)
-      throw new ServiceError('TRANSACTION_VALIDATION_BLOCKED', 'Dry-run validation did not pass');
-    if (manifest.files.length === 0)
-      throw new ServiceError('TRANSACTION_NO_CHANGES', 'Transaction contains no file changes');
-    if (manifest.state !== 'planned')
-      throw new ServiceError('TRANSACTION_STATE_INVALID', `Transaction is ${manifest.state}`);
-    if (Date.parse(manifest.expiresAt) <= Date.now())
-      throw new ServiceError('TRANSACTION_EXPIRED', 'Transaction has expired');
+    const loadApplicable = async (): Promise<TransactionManifest> => {
+      const loaded = await this.load(workspace, transactionId, {
+        headMode: 'reconcile',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+      this.assertBinding(loaded, workspace, expectedPlanHash, options.principal);
+      if (!loaded.planPayload.validation.passed)
+        throw new ServiceError('TRANSACTION_VALIDATION_BLOCKED', 'Dry-run validation did not pass');
+      if (loaded.files.length === 0)
+        throw new ServiceError('TRANSACTION_NO_CHANGES', 'Transaction contains no file changes');
+      if (loaded.state !== 'planned')
+        throw new ServiceError('TRANSACTION_STATE_INVALID', `Transaction is ${loaded.state}`);
+      if (Date.parse(loaded.expiresAt) <= Date.now())
+        throw new ServiceError('TRANSACTION_EXPIRED', 'Transaction has expired');
+      return loaded;
+    };
+    // Refuse early without the lock, then decide on the journal as it is once the lock is
+    // held: a concurrent apply of the same plan may have finished in between.
+    await loadApplicable();
 
     return this.withWorkspaceLock(workspace, transactionId, async () => {
+      const manifest = await loadApplicable();
       await this.verifyReadDependencies(workspace, manifest, options.principal, options.signal);
       await this.verifyCurrentFiles(
         workspace,
