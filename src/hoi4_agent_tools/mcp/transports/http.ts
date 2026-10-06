@@ -106,9 +106,16 @@ export function rateLimitClientAddress(
   if (!trusted.has(socketAddress)) return socketAddress;
   const forwarded = request.headers['x-forwarded-for'];
   if (typeof forwarded !== 'string') return undefined;
-  const client = forwarded.split(',')[0]?.trim();
-  if (client === undefined || isIP(client) === 0) return undefined;
-  return normalizeIpAddress(client);
+  // Proxies append to the right, so only the entries after the last untrusted hop are
+  // trustworthy; the leftmost entry is whatever the client sent.
+  const hops = forwarded.split(',').map((hop) => hop.trim());
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    const hop = hops[index]!;
+    if (isIP(hop) === 0) return undefined;
+    const normalized = normalizeIpAddress(hop);
+    if (!trusted.has(normalized)) return normalized;
+  }
+  return undefined;
 }
 
 export function requiredScopesForMcpRequest(
