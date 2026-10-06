@@ -572,9 +572,15 @@ async function withArtifactQueue<T>(
   }
 }
 
+/**
+ * Measure artifact storage. With `cleanup`, also remove aged temporary files and empty
+ * folders; only the serialized write path may do that, since a listing running beside a
+ * write could remove the folder a new artifact is about to be written into.
+ */
 async function artifactUsage(
   root: string,
   signal?: AbortSignal,
+  cleanup = false,
 ): Promise<{ bytes: number; entries: number }> {
   let bytes = 0;
   let entries = 0;
@@ -624,7 +630,8 @@ async function artifactUsage(
               'ARTIFACT_STORAGE_UNSAFE',
               'Artifact storage contains a symbolic link or junction',
             );
-          if (Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs) await unlink(temporary);
+          if (cleanup && Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs)
+            await unlink(temporary);
         } catch (error) {
           if (!['ENOENT', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? ''))
             throw error;
@@ -649,7 +656,7 @@ async function artifactUsage(
         }
       }
     }
-    if (directory !== canonicalRoot) {
+    if (cleanup && directory !== canonicalRoot) {
       try {
         await rmdir(directory);
       } catch (error) {
@@ -1869,7 +1876,7 @@ export class ArtifactStore {
         if (!Number.isSafeInteger(additionalBytes)) {
           throw new ServiceError('ARTIFACT_STORAGE_LIMIT', 'Artifact batch size is unsafe');
         }
-        const usage = await artifactUsage(workspace.artifactRoot, signal);
+        const usage = await artifactUsage(workspace.artifactRoot, signal, true);
         const additionalEntries = [...uniqueManifests.values()].filter(
           (artifact) => !artifact.exists,
         ).length;
