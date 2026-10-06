@@ -14,6 +14,7 @@ const HEARTBEAT_MS = 60_000;
 /** A record this old without an update belongs to a process that is blocked or gone. */
 const STALE_MS = 5 * HEARTBEAT_MS;
 const MAX_RECORDS = 512;
+const ABANDONED_MS = 24 * STALE_MS;
 
 const recordSchema = z
   .object({
@@ -94,8 +95,12 @@ export class ServerRegistry {
       void mkdir(root, { recursive: true })
         .then(async () => {
           const temporary = `${file}.${Date.now()}.tmp`;
-          await writeFile(temporary, `${JSON.stringify(this.current())}\n`);
-          await rename(temporary, file);
+          try {
+            await writeFile(temporary, `${JSON.stringify(this.current())}\n`);
+            await rename(temporary, file);
+          } catch {
+            await unlink(temporary).catch(() => undefined);
+          }
         })
         .catch(() => undefined);
     beat();
@@ -125,9 +130,14 @@ export class ServerRegistry {
     const servers: ServerStatus['servers'] = [];
     let removed = 0;
     if (root !== undefined) {
-      const names = (await readdir(root).catch(() => [] as string[]))
-        .filter((name) => /^\d+\.json$/u.test(name))
-        .slice(0, MAX_RECORDS);
+      const entries = await readdir(root).catch(() => [] as string[]);
+      // Temporary heartbeat files left by a failed rename.
+      for (const name of entries) {
+        const temporary = /^\d+\.json\.(\d+)\.tmp$/u.exec(name);
+        if (temporary !== null && Date.now() - Number(temporary[1]) > STALE_MS)
+          await unlink(path.join(root, name)).catch(() => undefined);
+      }
+      const names = entries.filter((name) => /^\d+\.json$/u.test(name)).slice(0, MAX_RECORDS);
       for (const name of names) {
         const file = path.join(root, name);
         const parsed = recordSchema.safeParse(
@@ -144,6 +154,12 @@ export class ServerRegistry {
           continue;
         }
         const age = Date.now() - Date.parse(record.updatedAt);
+        // A record silent for this long belongs to an exited process whose pid was reused.
+        if (age > ABANDONED_MS) {
+          removed += 1;
+          await unlink(file).catch(() => undefined);
+          continue;
+        }
         servers.push({ ...record, state: age > STALE_MS ? 'stale' : 'live' });
       }
     }

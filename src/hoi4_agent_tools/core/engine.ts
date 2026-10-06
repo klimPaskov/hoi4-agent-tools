@@ -369,6 +369,20 @@ export class CoreEngine {
             );
             for (const key of retained.slice(0, -SCAN_CACHE_ENTRIES_PER_WORKSPACE))
               this.#scanCache.delete(key);
+            // Snapshots hold every file's bytes; keep all of them within twice one scan's limit.
+            const limit = this.resolver.config().scanMaxBytes * 2;
+            const bytes = (cached: ScanSnapshot) =>
+              cached.files.reduce((sum, { size }) => sum + size, 0);
+            let retainedBytes = [...this.#scanCache.values()].reduce(
+              (sum, cached) => sum + bytes(cached),
+              0,
+            );
+            for (const [key, cached] of this.#scanCache) {
+              if (retainedBytes <= limit) break;
+              if (key === cacheKey) continue;
+              this.#scanCache.delete(key);
+              retainedBytes -= bytes(cached);
+            }
           }
           return snapshot;
         });
