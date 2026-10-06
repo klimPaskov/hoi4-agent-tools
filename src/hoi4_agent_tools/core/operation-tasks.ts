@@ -205,6 +205,8 @@ interface EngineTaskState {
 }
 const engineTaskStates = new WeakMap<CoreEngine, EngineTaskState>();
 
+const REJECTED_TASK_RETENTION_MS = 300_000;
+
 export class OperationTaskService {
   private readonly state: EngineTaskState;
 
@@ -219,7 +221,11 @@ export class OperationTaskService {
   }
 
   private jobs(): Promise<JobService> {
-    this.state.jobs ??= JobService.create(this.engine.resolver);
+    // The first use per engine also sweeps results nobody will read again.
+    this.state.jobs ??= JobService.create(this.engine.resolver).then(async (jobs) => {
+      await jobs.store.sweepExpired().catch(() => 0);
+      return jobs;
+    });
     return this.state.jobs;
   }
 
@@ -515,7 +521,8 @@ export class OperationTaskService {
         mutation: false,
         requestKey: `rejected:${secureId('request')}`,
         protocolTask: {
-          ttl: taskRetention(options.ttlMs),
+          // A refusal is read once; it need not outlive a short retry window.
+          ttl: Math.min(taskRetention(options.ttlMs), REJECTED_TASK_RETENTION_MS),
           pollInterval: TASK_POLL_INTERVAL,
         },
       },

@@ -637,6 +637,55 @@ export class JobStore {
   }
 
   /** Operator-internal eviction guard; never returns another principal's job data. */
+  /**
+   * Remove expired, finished read-only records across every scope, inspecting at most
+   * `limit` directory entries. Records are otherwise removed only when they are read again,
+   * so results nobody polls would accumulate without bound.
+   */
+  async sweepExpired(limit = 5_000, signal = new AbortController().signal): Promise<number> {
+    let inspected = 0;
+    let removed = 0;
+    const terminal = (record: JobRecord | undefined): record is JobRecord =>
+      record !== undefined &&
+      !record.request.mutation &&
+      ['completed', 'cancelled', 'failed'].includes(record.status) &&
+      jobRetentionExpired(record);
+    await assertUnlinked(this.root);
+    for await (const directory of await opendir(this.root)) {
+      if (++inspected > limit) break;
+      signal.throwIfAborted();
+      if (
+        directory.name === 'request-capacity' ||
+        directory.isSymbolicLink() ||
+        !directory.isDirectory() ||
+        !digest.safeParse(directory.name).success
+      )
+        continue;
+      const scopeRoot = await containedGeneratedPath(this.root, directory.name);
+      for await (const entry of await opendir(scopeRoot)) {
+        if (++inspected > limit) break;
+        const id = entry.name.replace(/\.json$/u, '');
+        if (!entry.isFile() || !entry.name.endsWith('.json') || !jobId.safeParse(id).success)
+          continue;
+        const file = await containedGeneratedPath(scopeRoot, entry.name);
+        const read = () => this.readEnvelope(file, id, directory.name).catch(() => undefined);
+        if (!terminal(await read())) continue;
+        const deleted = await this.locked(signal, async () => {
+          if (!terminal(await read())) return false;
+          try {
+            await retryWindowsSharing(() => unlink(file), { signal });
+            return true;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+            throw error;
+          }
+        });
+        if (deleted) removed += 1;
+      }
+    }
+    return removed;
+  }
+
   async checkpointResources(
     workspace: Pick<JobScope, 'workspaceId' | 'workspaceIdentity' | 'rootFingerprint'>,
     signal?: AbortSignal,
