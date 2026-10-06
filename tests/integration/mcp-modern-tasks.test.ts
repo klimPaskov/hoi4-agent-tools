@@ -887,7 +887,9 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       await client.close();
       await legacy.close();
     });
-    expect(result(await wire.request('resources/list')).resources).toEqual([]);
+    expect(result(await wire.request('resources/list')).resources).toEqual(
+      (await client.listResources()).resources,
+    );
     expect(result(await wire.request('resources/templates/list')).resourceTemplates).toEqual(
       (await client.listResourceTemplates()).resourceTemplates,
     );

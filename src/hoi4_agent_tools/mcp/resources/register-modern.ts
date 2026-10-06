@@ -6,6 +6,7 @@ import {
 } from '@modelcontextprotocol/server';
 import { artifactResourceDefinition, readArtifactResource } from '../../core/artifact-resource.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { readServerStatus, serverStatusResource } from '../../core/server-status-resource.js';
 import type { OperationContext } from '../../core/operation-context.js';
 import { ServiceError } from '../../core/result.js';
 import type { ModernTaskRoutingServer } from '../transports/modern-task-routing.js';
@@ -16,11 +17,18 @@ export function registerModernResources(
   engine: CoreEngine,
   context: OperationContext,
 ): void {
-  server.setRequestHandler('resources/list', () => ({ resources: [] }));
+  server.setRequestHandler('resources/list', () => ({ resources: [serverStatusResource] }));
   server.setRequestHandler('resources/templates/list', () => ({
     resourceTemplates: [artifactResourceDefinition],
   }));
   server.setRequestHandler('resources/read', async (request, extra) => {
+    if (request.params.uri === serverStatusResource.uri)
+      return ReadResourceResultSchema.parse({
+        ...(await readServerStatus(engine)),
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+      });
     try {
       return ReadResourceResultSchema.parse({
         ...(await readArtifactResource(engine, request.params.uri, context, extra.mcpReq.signal)),

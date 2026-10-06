@@ -6,6 +6,7 @@ import {
   StdioInvalidUtf8Error,
 } from '../hoi4_agent_tools/mcp/transports/bounded-stdio.js';
 import { serveNegotiatedStdio } from '../hoi4_agent_tools/mcp/transports/negotiated-stdio.js';
+import { ServerRegistry } from '../hoi4_agent_tools/core/server-registry.js';
 import { StdioLifetime } from '../hoi4_agent_tools/mcp/transports/stdio-lifetime.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
 
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
   });
   closeTransport = () => transport.close();
   lifetime.start();
+  new ServerRegistry(engine.resolver, 'stdio', () => lifetime.lastActivity()).start();
 }
 
 main().catch((error: unknown) => {

@@ -97,3 +97,4 @@ Some clients start a server for every subagent and keep each connection open aft
 A server with no client traffic and no open request for `stdioIdleExitMinutes` minutes exits.
 That setting applies to every client sharing the server configuration, so prefer the `HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES` environment variable in the affected client's registration; the Codex registrations printed by `hoi4-agent-tools-setup --print-client-config` set it to 30.
 A client that later calls an exited server reports it as disconnected, so leave the limit at `0` (never) for a single long-lived session.
+Read the `hoi4-agent://server/status` resource to see every server process that shares the server state root, with its transport, memory, last client activity and the execution limits in effect. Records of exited processes are removed on read; a server that has not updated its record for five minutes is listed as stale.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- List every server process sharing a server state root, with its memory, last client activity and execution limits, in the `hoi4-agent://server/status` resource.
+
 ## 3.9.0 - 2026-10-06
 
 - Exit a stdio server whose launching process has exited, and add `stdioIdleExitMinutes` so clients that keep idle per-subagent connections no longer accumulate servers.

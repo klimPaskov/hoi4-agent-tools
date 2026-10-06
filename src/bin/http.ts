@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { canonicalJson } from '../hoi4_agent_tools/core/canonical.js';
+import { ServerRegistry } from '../hoi4_agent_tools/core/server-registry.js';
 import { createMcpServer } from '../hoi4_agent_tools/mcp/server/create.js';
 import { startHttpServer } from '../hoi4_agent_tools/mcp/transports/http.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
@@ -7,6 +8,7 @@ import { createEngine } from '../hoi4_agent_tools/runtime.js';
 async function main(): Promise<void> {
   const engine = await createEngine();
   const handle = await startHttpServer(engine, engine.resolver.config(), createMcpServer);
+  new ServerRegistry(engine.resolver, 'http').start();
   const shutdown = async (): Promise<void> => {
     await handle.close();
     process.exit(0);

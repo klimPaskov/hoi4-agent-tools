@@ -1,6 +1,7 @@
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { artifactResourceDefinition, readArtifactResource } from '../../core/artifact-resource.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { readServerStatus, serverStatusResource } from '../../core/server-status-resource.js';
 import type { ServerContext } from '../server/base-tools.js';
 
 /** SDK-v1 registration only; ownership and byte-range behavior live in the shared core. */
@@ -16,4 +17,6 @@ export function registerMcpResources(
     metadata,
     (uri, _variables, extra) => readArtifactResource(engine, uri.href, context, extra.signal),
   );
+  const { name: statusName, uri: statusUri, ...statusMetadata } = serverStatusResource;
+  server.registerResource(statusName, statusUri, statusMetadata, () => readServerStatus(engine));
 }

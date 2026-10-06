@@ -195,7 +195,20 @@ describe('MCP discovery', () => {
       expect(JSON.stringify(tool?.inputSchema)).toContain('national');
     }
 
-    expect((await client.listResources()).resources).toEqual([]);
+    expect((await client.listResources()).resources).toEqual([
+      expect.objectContaining({ uri: 'hoi4-agent://server/status', mimeType: 'application/json' }),
+    ]);
+    const status = JSON.parse(
+      String(
+        (
+          (await client.readResource({ uri: 'hoi4-agent://server/status' })).contents[0] as {
+            text: string;
+          }
+        ).text,
+      ),
+    ) as { current: { pid: number }; servers: Array<{ pid: number }> };
+    expect(status.current.pid).toBe(process.pid);
+    expect(status.servers.map(({ pid }) => pid)).toContain(process.pid);
     const resourceTemplates = (await client.listResourceTemplates()).resourceTemplates;
     expect(resourceTemplates.map(({ uriTemplate }) => uriTemplate)).toEqual([
       'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}',

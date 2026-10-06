@@ -6,6 +6,8 @@
  * by polling the parent process; the second by an optional idle limit.
  */
 
+import { processAlive } from '../../core/server-registry.js';
+
 const PARENT_POLL_MS = 5_000;
 
 export type StdioExitReason = 'parent_exited' | 'idle';
@@ -20,15 +22,7 @@ export interface StdioLifetimeOptions {
   pollMs?: number;
 }
 
-/** Whether a process exists; a permission refusal still proves it exists. */
-export function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
+export { processAlive };
 
 export class StdioLifetime {
   readonly #options: Required<Omit<StdioLifetimeOptions, 'parentPid'>> & { parentPid: number };
@@ -72,6 +66,11 @@ export class StdioLifetime {
     this.#lastActivity = this.#options.now();
     const id = requestId(message, 'result') ?? requestId(message, 'error');
     if (id !== undefined) this.#open.delete(id);
+  }
+
+  /** When the client last sent or received a message, in epoch milliseconds. */
+  lastActivity(): number {
+    return this.#lastActivity;
   }
 
   check(): void {
