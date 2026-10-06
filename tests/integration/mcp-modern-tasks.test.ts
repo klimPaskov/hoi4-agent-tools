@@ -781,7 +781,11 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
             arguments: { workspaceId: 'alpha', jobId: queued.id, principal: 'beta-user' },
           })
         ).error,
-      ).toMatchObject({ code: -32602 });
+      ).toMatchObject({
+        code: -32602,
+        // The rejection names the tool and the offending field.
+        message: expect.stringMatching(new RegExp(`${name.replace('.', '\\.')}:.*principal`, 'u')),
+      });
     }
     expect(
       result(

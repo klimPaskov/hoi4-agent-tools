@@ -119,7 +119,17 @@ export function createModernOperationServer(
       throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Unknown tool');
     const input = definition.inputSchema.safeParse(request.params.arguments ?? {});
     if (!input.success)
-      throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Invalid tool arguments');
+      // Name each failing field so the caller can correct its arguments.
+      throw new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
+        `Invalid arguments for tool ${definition.name}: ${input.error.issues
+          .slice(0, 5)
+          .map(
+            ({ path, message }) => `${path.length === 0 ? '(input)' : path.map(String).join('.')}: ${message}`,
+          )
+          .join('; ')
+          .slice(0, 1000)}`,
+      );
     const capabilities = clientCapabilities(extra.mcpReq.envelope);
     const arguments_ = z.record(z.string(), z.json()).parse(input.data);
     let operationContext = context;
