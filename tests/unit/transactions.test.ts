@@ -468,7 +468,7 @@ describe('transaction manager', () => {
           afterStage: async () => writeFile(target, 'edit during staging\n'),
         },
       }),
-    ).rejects.toMatchObject({ code: 'TRANSACTION_ROLLBACK_STALE' });
+    ).rejects.toMatchObject({ code: 'TRANSACTION_STALE' });
     expect(await readFile(target, 'utf8')).toBe('edit during staging\n');
   });
 
@@ -613,6 +613,47 @@ describe('transaction manager', () => {
       state: 'rolled_back',
       rollbackStatus: 'applied',
       failure: { code: 'TRANSACTION_APPLY_FAILED', message: 'Transaction apply failed' },
+    });
+  });
+
+  it('rolls back replaced files when another planned file was edited during apply', async () => {
+    const { mod, manager } = await setup();
+    const text = path.join(mod, 'common', 'one.txt');
+    const bitmap = path.join(mod, 'map.bmp');
+    const originalText = await readFile(text);
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'test',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('changed\n'),
+          operationIds: ['op-1'],
+        },
+        { relativePath: 'map.bmp', content: Buffer.from([0x42, 0x4d, 5]), operationIds: ['op-1'] },
+      ],
+    });
+    const edit = Buffer.from([0x42, 0x4d, 9, 9]);
+    await expect(
+      manager.apply('test', plan.transactionId, plan.planHash, {
+        hooks: {
+          afterReplace: async (_relativePath, index) => {
+            if (index === 0) await writeFile(bitmap, edit);
+          },
+        },
+      }),
+    ).rejects.toBeDefined();
+    // The replaced file is restored, and the edited file keeps the edit.
+    expect(await readFile(text)).toEqual(originalText);
+    expect(await readFile(bitmap)).toEqual(edit);
+    const leftovers = (await readdir(mod, { recursive: true })).filter((name) =>
+      /\.hoi4-agent-.*\.(?:backup|stage)$/u.test(name),
+    );
+    expect(leftovers).toEqual([]);
+    await expect(manager.status('test', plan.transactionId)).resolves.toMatchObject({
+      state: 'rolled_back',
+      rollbackStatus: 'applied',
     });
   });
 
@@ -1309,9 +1350,27 @@ describe('transaction manager', () => {
       workspaces: [{ id: 'test', name: 'Test', root: mod }],
     });
     const restarted = new CoreEngine(await WorkspaceResolver.create(configuration));
-    await expect(restarted.initialize()).rejects.toMatchObject({
+    // The server starts; recovery still refuses the tampered journal, and rewrites of this
+    // workspace are blocked with that reason until it can be recovered.
+    await expect(restarted.initialize()).resolves.toBeUndefined();
+    await expect(restarted.transactions.recover('test')).rejects.toMatchObject({
       code: 'TRANSACTION_MANIFEST_AUTHENTICATION_FAILED',
     });
+    await expect(
+      restarted.transactions.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('after tampering\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+        validate: validDryRun,
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_RECOVERY_REQUIRED' });
     expect(await readFile(target, 'utf8')).toBe('tampered-recovery\n');
   });
 

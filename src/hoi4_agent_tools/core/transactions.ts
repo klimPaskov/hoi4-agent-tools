@@ -695,7 +695,18 @@ export class TransactionManager {
               'Source changed while transaction output was being staged',
             );
           }
-          if (existsBeforeReplace) await rename(target.target, target.backup);
+          if (existsBeforeReplace) {
+            await rename(target.target, target.backup);
+            // An edit between the hash check and the rename would otherwise be discarded with
+            // the backup after a successful apply.
+            if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
+              await rename(target.backup, target.target);
+              throw new ServiceError(
+                'TRANSACTION_STALE',
+                'Source changed while transaction output was being staged',
+              );
+            }
+          }
           await options.hooks?.afterBackup?.(file.relativePath, index);
           if (target.staged !== null) {
             if (await fileExists(target.target)) {
@@ -1090,7 +1101,10 @@ export class TransactionManager {
         }
         backupValid = true;
       }
-      if (currentHash === file.beforeSha256) {
+      // A file this transaction never replaced keeps whatever it holds now, including an
+      // edit made while the transaction ran; it does not block restoring the others.
+      const untouched = !manifest.appliedFiles.includes(file.relativePath) && !backupExists;
+      if (currentHash === file.beforeSha256 || untouched) {
         restorations.push({ file, target, backup, staged, mode: 'keep' });
         continue;
       }
@@ -1151,7 +1165,16 @@ export class TransactionManager {
       }
       if (await fileExists(restoration.staged)) await unlink(restoration.staged);
     }
-    await this.verifyCurrentFiles(workspace, manifest, 'before', principal);
+    await this.verifyCurrentFiles(
+      workspace,
+      manifest,
+      'before',
+      principal,
+      undefined,
+      new Set(
+        restorations.filter(({ mode }) => mode !== 'keep').map(({ file }) => file.relativePath),
+      ),
+    );
     manifest.rollbackStatus = 'applied';
   }
 
@@ -1200,9 +1223,11 @@ export class TransactionManager {
     phase: 'before' | 'after',
     principal?: string,
     signal?: AbortSignal,
+    only?: ReadonlySet<string>,
   ): Promise<void> {
     for (const file of manifest.files) {
       signal?.throwIfAborted();
+      if (only !== undefined && !only.has(file.relativePath)) continue;
       const { path: target } = await this.resolver.resolvePath(
         workspace.id,
         file.relativePath,
