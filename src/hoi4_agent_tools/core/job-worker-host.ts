@@ -227,8 +227,12 @@ export class JobWorkerHost {
     progress: { stage: WorkerStage },
     principal?: string,
   ): Promise<void> {
-    // Resolve the same configured workspace and grants again immediately before dispatch.
-    await this.jobs.get(workspaceId, id, principal);
+    // Resolve the same configured workspace and grants again immediately before dispatch. A
+    // job that finished, or that a live worker already runs, needs no new worker: another
+    // launcher may have run it while this one waited for capacity.
+    const current = await this.jobs.get(workspaceId, id, principal);
+    if (['completed', 'failed', 'cancelled'].includes(current.status)) return;
+    if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive') return;
     const sourceMode = import.meta.url.endsWith('.ts');
     const entry = fileURLToPath(
       new URL(sourceMode ? './job-worker.ts' : './job-worker.js', import.meta.url),

@@ -193,21 +193,39 @@ export function operationTaskMessage(record: JobRecord): string | undefined {
 }
 
 /** Protocol-independent task execution, ownership, retention, and recovery over durable jobs. */
-export class OperationTaskService {
-  private jobsPromise?: Promise<JobService>;
-  private workerPromise?: Promise<JobWorkerHost>;
-  private readonly launches = new Map<string, Promise<void>>();
+/**
+ * One job service, worker host and launch registry per engine. A service is created per HTTP
+ * request or session, and polling a queued task from each would otherwise start another
+ * launcher for the same job every time.
+ */
+interface EngineTaskState {
+  jobs?: Promise<JobService>;
+  worker?: Promise<JobWorkerHost>;
+  launches: Map<string, Promise<void>>;
+}
+const engineTaskStates = new WeakMap<CoreEngine, EngineTaskState>();
 
-  constructor(private readonly engine: CoreEngine) {}
+export class OperationTaskService {
+  private readonly state: EngineTaskState;
+
+  constructor(private readonly engine: CoreEngine) {
+    const state = engineTaskStates.get(engine) ?? { launches: new Map() };
+    engineTaskStates.set(engine, state);
+    this.state = state;
+  }
+
+  private get launches(): Map<string, Promise<void>> {
+    return this.state.launches;
+  }
 
   private jobs(): Promise<JobService> {
-    this.jobsPromise ??= JobService.create(this.engine.resolver);
-    return this.jobsPromise;
+    this.state.jobs ??= JobService.create(this.engine.resolver);
+    return this.state.jobs;
   }
 
   private worker(): Promise<JobWorkerHost> {
-    this.workerPromise ??= this.jobs().then((jobs) => JobWorkerHost.create(this.engine, jobs));
-    return this.workerPromise;
+    this.state.worker ??= this.jobs().then((jobs) => JobWorkerHost.create(this.engine, jobs));
+    return this.state.worker;
   }
 
   async submit(
@@ -301,7 +319,7 @@ export class OperationTaskService {
       };
       requestSignal.addEventListener('abort', cancel, { once: true });
     }
-    await this.ensureExecution(record, context.principal);
+    this.ensureExecution(record, context.principal);
     return record;
   }
 
@@ -341,11 +359,11 @@ export class OperationTaskService {
     return this.resume(record, context, options);
   }
 
-  private async resume(
+  private resume(
     record: JobRecord | null,
     context: OperationContext,
     options: { resume?: boolean },
-  ): Promise<JobRecord | null> {
+  ): JobRecord | null {
     if (record?.request.protocolTask === undefined) return null;
     if (options.resume === false) return record;
     // Reading a retained rewrite must not resume it under a credential that lost write scope.
@@ -355,7 +373,7 @@ export class OperationTaskService {
       !context.scopes.includes('hoi4:write')
     )
       return record;
-    await this.ensureExecution(record, context.principal);
+    this.ensureExecution(record, context.principal);
     return record;
   }
 
@@ -517,7 +535,7 @@ export class OperationTaskService {
     return completed;
   }
 
-  private async ensureExecution(record: JobRecord, principal?: string): Promise<void> {
+  private ensureExecution(record: JobRecord, principal?: string): void {
     if (['completed', 'failed', 'cancelled'].includes(record.status)) return;
     if (
       record.status !== 'queued' &&
@@ -526,9 +544,9 @@ export class OperationTaskService {
       return;
     const key = operationTaskId(record);
     if (this.launches.has(key)) return;
-    const worker = await this.worker();
-    const launched = worker
-      .run(record.scope.workspaceId, record.id, principal)
+    // Registered before any await, so a concurrent poll cannot start a second launcher.
+    const launched = this.worker()
+      .then((worker) => worker.run(record.scope.workspaceId, record.id, principal))
       .then(() => undefined)
       .catch(async (error: unknown) => {
         const jobs = await this.jobs();
