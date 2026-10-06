@@ -45,4 +45,4 @@ Implementation rationale for contributors. For using the server, start with the 
 40. [Reference ranking and row citations](0040-reference-ranking-and-row-citations.md)
 41. [DLC source layers and descriptor replace paths](0041-dlc-source-layers-and-descriptor-replace-paths.md)
 
-[Progress heartbeats](0024-long-running-progress-heartbeats.md) describes progress reporting for long operations.
+[Progress heartbeats](0042-long-running-progress-heartbeats.md) describes progress reporting for long operations.

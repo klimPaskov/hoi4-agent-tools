@@ -1,0 +1,55 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.0.0/schemas/error-log-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "scope": {
+      "default": "all",
+      "type": "string",
+      "enum": [
+        "all",
+        "mod",
+        "unlocated"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "syntax",
+        "duplicate",
+        "localisation",
+        "effect",
+        "trigger",
+        "scope",
+        "graphics",
+        "interface",
+        "map",
+        "missing_reference",
+        "other"
+      ]
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "limit": {
+      "default": 20,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "offset": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    }
+  },
+  "additionalProperties": false
+}

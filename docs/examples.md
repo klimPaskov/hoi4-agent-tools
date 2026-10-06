@@ -2,7 +2,7 @@
 
 Start with a task you would normally give your coding agent.
 The agent chooses the MCP tools and opens the resulting images or source references.
-The renders below use actual Chaos Redux and installed HOI4 files; use names from your own mod when trying the prompts.
+The renders below use real mod and installed HOI4 files; use names from your own mod when trying the prompts.
 
 ## Find a rule without reading a whole wiki
 
@@ -31,7 +31,7 @@ The [focus guide](focus.md) covers inspecting, rendering and reorganizing trees.
 [![Infantry technology folder](images/comparisons/infantry-mcp.png)](images/comparisons/infantry-mcp.png)
 
 The preview follows the loaded technology and GUI definitions, including wide equipment cards.
-The [technology comparisons](visual-comparisons.md#technology-folders) also show a mod folder with wide equipment cards rendered from a matching recorded source revision.
+The [technology comparisons](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md#technology-folders) also show a mod folder with wide equipment cards rendered from a matching recorded source revision.
 See the [technology guide](technology.md) for grants, bonuses and doctrine paths.
 
 ## Inspect an interface before editing it
@@ -44,7 +44,7 @@ See the [technology guide](technology.md) for grants, bonuses and doctrine paths
 
 For a mod window, ask for the same view at 100% and 125% UI scale and supply the state values needed by its controls.
 Unknown state values must stay unresolved; a visible button alone does not establish that it is enabled in the game.
-The [interface gallery](gui-comparisons.md) includes Škoda Priority, Chaos Redux Settings, Event Log, Chaos Meter, decisions and occupation views.
+The [interface gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md) includes a vanilla priority panel, a mod settings window, an event log, a status panel, and the decision and occupation views.
 
 ## Locate map data and plan an edit
 
@@ -60,7 +60,7 @@ See [Maps](map.md) for supported edits.
 
 > Trace this event's options and follow-up events. Point out unresolved calls and link each route to its source.
 
-[![Chaos Redux event options](images/comparisons/source/event-chain-mcp.png)](images/comparisons/source/event-chain-mcp.png)
+[![Mod event options](images/comparisons/source/event-chain-mcp.png)](images/comparisons/source/event-chain-mcp.png)
 
 > Compare this decision's `ai_will_do` score before and after my change in peace and war. List missing conditions separately from known results.
 
@@ -71,5 +71,5 @@ A decision score is not automatically a percentage chance of an AI click.
 
 The images are source previews, not recordings of the server running the game.
 Supplied game screenshots are identified separately and published with permission.
-The [comparison pages](visual-comparisons.md) and [interface gallery](gui-comparisons.md) keep source details, reproducible inputs and known differences alongside the images.
-The package does not include HOI4 or Chaos Redux source files or artwork.
+The [comparison pages](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md) and [interface gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md) keep source details, reproducible inputs and known differences alongside the images.
+The package does not include HOI4 or mod source files or artwork.

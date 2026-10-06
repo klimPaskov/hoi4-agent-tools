@@ -1,160 +1,124 @@
 # HOI4 Agent Tools
 
-Give your coding agent one MCP server for Hearts of Iron IV modding.
-It can find local documentation and vanilla examples, inspect a mod, render its trees and interfaces, compare source behavior, and make focused edits to focus trees, GUIs and maps.
-The pictures below use real Chaos Redux or installed HOI4 files; click any image for the full-size version.
+[![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
+[![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
+[![License](https://img.shields.io/npm/l/hoi4-agent-tools)](LICENSE)
 
-## Get started
+An [MCP](https://modelcontextprotocol.io/) server that lets a coding agent such as Claude Code, Codex or Cursor read, preview, analyse and safely edit a Hearts of Iron IV mod.
+Your agent gets cited answers from the game's own documentation, pictures of focus trees, technology folders, interfaces and maps, and checks that catch load errors before you launch the game.
 
-Install [Node.js](https://nodejs.org/) 22.19+ in the Node 22 line, or Node.js 24, then run:
+[![A large focus tree rendered from mod source](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png)
 
-```bash
-npm install --global hoi4-agent-tools
-hoi4-agent-tools-setup --print-client-config
-```
+## What it does
 
-Add the printed configuration to your MCP client and open your mod as its workspace.
-The install is about 280 MiB, because npm fetches the image library's binaries for every platform to keep each install identical.
-Keep an installed copy of HOI4 available for vanilla examples, artwork and fonts.
-The [setup guide](docs/setup.md) covers connecting your agent and choosing game or mod paths.
+| Area                   | Ask your agent, for example                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Find the rule          | "Find the installed documentation for `save_event_target_as` and show a vanilla usage with file and line." |
+| Check before launch    | "Check `events/my_events.txt` for scope errors, then group the last `error.log` by category."              |
+| See the tree           | "Render this mod's largest focus tree and list focuses with missing icons."                                |
+| Preview the window     | "Preview this scripted GUI at 100% and 125% UI scale and check for clipped text."                          |
+| Read the map           | "Find Brandenburg, list its provinces and neighbours, and show the files a change would touch."            |
+| Follow the events      | "Trace this event's options and follow-up events and point out unresolved calls."                          |
+| Weigh the AI           | "Compare this decision's `ai_will_do` before and after my change, at peace and at war."                    |
+| Plan new content       | "Give me the next free event ID in my namespace and summarize what the mod defines."                       |
+| Edit with a safety net | "Add a new branch to this focus tree" — the edit is validated before anything is written.                  |
 
-Ask your agent to find a focus tree and render it, locate the installed documentation for a script command, or preview a scripted GUI at different UI scales.
-The examples below show the results.
+The server never launches the game.
+Previews and tests are built from source files, so they show what the source says, not what a running campaign did.
+
+## Quick start
+
+1. Install [Node.js](https://nodejs.org/) 22 (22.19 or later) or 24, and keep Hearts of Iron IV installed for vanilla files, artwork and fonts.
+2. Install the server:
+
+   ```bash
+   npm install --global hoi4-agent-tools
+   ```
+
+3. Print the client configuration:
+
+   ```bash
+   hoi4-agent-tools-setup --print-client-config
+   ```
+
+   Paste the `globalInstall` block into a JSON client such as Claude Code, Claude Desktop or Cursor, or the `codexTomlGlobal` block into Codex's `config.toml`.
+
+4. Open your mod folder as the agent's workspace and try: "Render this mod's largest focus tree."
+
+The [setup guide](docs/setup.md) covers several mods, explicit game paths, local wiki snapshots and troubleshooting with `--discover` and `--diagnose`.
 
 ## Examples
 
-[Focus trees](#focus-trees-and-alternative-prerequisites) · [Technology folders](#technology-folders-and-card-artwork) · [Interfaces](#scripted-interfaces) · [Maps and events](#maps-and-event-chains) · [Local rules and AI](#local-rules-and-ai-weights) · [All tools](#complete-tool-list)
+Each pair shows a capture from the game next to the server's preview of the same source.
 
-### Focus trees and alternative prerequisites
+| In game                                                                                                                                | Server preview                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [![Focus tree in game](docs/images/comparisons/fury-ingame.png)](docs/images/comparisons/fury-ingame.png)                              | [![Focus tree preview](docs/images/comparisons/fury-mcp.png)](docs/images/comparisons/fury-mcp.png)                              |
+| [![Infantry technology folder in game](docs/images/comparisons/infantry-ingame.png)](docs/images/comparisons/infantry-ingame.png)      | [![Infantry technology folder preview](docs/images/comparisons/infantry-mcp.png)](docs/images/comparisons/infantry-mcp.png)      |
+| [![Video options in game](docs/images/comparisons/gui/options-video-ingame.png)](docs/images/comparisons/gui/options-video-ingame.png) | [![Video options preview](docs/images/comparisons/gui/options-video-mcp.png)](docs/images/comparisons/gui/options-video-mcp.png) |
 
-| Focus tree  | Supplied in-game capture                                                                                                    | MCP source preview                                                                                                    |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 52 focuses  | [![Medium focus tree in game](docs/images/comparisons/fury-ingame.png)](docs/images/comparisons/fury-ingame.png)            | [![Medium focus tree preview](docs/images/comparisons/fury-mcp.png)](docs/images/comparisons/fury-mcp.png)            |
-| 111 focuses | [![Large focus tree in game](docs/images/comparisons/holy-realm-ingame.png)](docs/images/comparisons/holy-realm-ingame.png) | [![Large focus tree preview](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png) |
-| 124 focuses | [![Branching focus tree in game](docs/images/comparisons/utopia-ingame.png)](docs/images/comparisons/utopia-ingame.png)     | [![Branching focus tree preview](docs/images/comparisons/utopia-mcp.png)](docs/images/comparisons/utopia-mcp.png)     |
+In focus previews, dotted lines mark alternative prerequisites: any one of them unlocks the focus.
+The focus screen in the game has its own framing, labels and icons, and the video options preview has no observed gamma value.
+More comparisons, with their source revisions and fidelity notes, are in the [focus and technology gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md), the [interface gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md) and the [examples guide](docs/examples.md), which also shows map and event renders.
 
-Dotted connectors in the MCP preview mark focuses where either preceding focus satisfies one prerequisite group.
-The tree previews show route structure; the game's focus screen has different framing, labels and icons.
-The [focus guide](docs/focus.md) explains inspection, rendering and edits, and the [comparison details](docs/visual-comparisons.md#focus-trees) retain source revisions.
+## Tools
 
-### Technology folders and card artwork
+The default server has 37 tools.
+Agents pick them from ordinary language, so you rarely need their names.
 
-> Render a technology folder. Check card sizes, artwork, links and missing placements.
+| Area                        | Tools                                                                                                                   | Writes                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| References and source       | `reference_context`, `reference_search`, `reference_read`, `source_lookup`, `script_validate`, `error_log`, `mod_index` | —                       |
+| Focus trees                 | `focus_inspect`, `focus_render`, `focus_raster`, `focus_rewrite`                                                        | review files; mod files |
+| Scripted GUIs               | `gui_inspect`, `gui_render`, `gui_rewrite`                                                                              | review files; mod files |
+| Maps                        | `map_inspect`, `map_render`, `map_rewrite`                                                                              | review files; mod files |
+| Events                      | `event_inspect`, `event_render`, `event_compare`                                                                        | —                       |
+| Technology and doctrines    | `tech_inspect`, `tech_render`, `tech_compare`                                                                           | —                       |
+| AI weights and timing       | `probability_inspect`, `_evaluate`, `_sweep`, `_simulate`, `_sequence`, `_compare`, `_render`                           | —                       |
+| Decisions, impact and tests | `impact_inspect`, `decision_inspect`, `mechanic_test`, `package_check`, `scenario_test`                                 | —                       |
+| Background jobs             | `job_inspect`, `job_cancel`                                                                                             | job state               |
 
-| Folder           | Supplied in-game capture                                                                                                                   | MCP source preview                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vanilla infantry | [![Infantry folder in game](docs/images/comparisons/infantry-ingame.png)](docs/images/comparisons/infantry-ingame.png)                     | [![Infantry technology folder](docs/images/comparisons/infantry-mcp.png)](docs/images/comparisons/infantry-mcp.png)                          |
-| Mod wide cards   | [![Mod technology folder in game](docs/images/comparisons/chemical-recent-ingame.png)](docs/images/comparisons/chemical-recent-ingame.png) | [![Mod technology folder preview](docs/images/comparisons/chemical-historical-mcp.png)](docs/images/comparisons/chemical-historical-mcp.png) |
+Every name starts with `hoi4.`.
+"Review files" are images and reports in the server's own storage; only the three `*_rewrite` tools change mod files.
+The [tool reference](docs/tools.md) gives each tool's purpose, prompts, resources and long-running behaviour.
 
-The mod folder preview uses the source revision recorded with its screenshot and includes wide equipment cards.
-Armored-car artwork that installed DLC folders provide appears in the infantry preview.
-The [technology comparison](docs/visual-comparisons.md#technology-folders) records its source revision, and the [technology guide](docs/technology.md) covers inspection and doctrine paths.
+## Safety and limits
 
-### Scripted interfaces
+- The server reads the mod, its dependencies, the installed game, local reference folders and the game's error log.
+- Inspection and rendering never change mod files.
+  The focus, GUI and map rewrite tools validate a proposed edit before writing it and write it as a journaled transaction, so an interrupted write is restored rather than left half-applied.
+- Large renders and reports are stored as linked files, and documentation is returned as cited sections rather than whole manuals.
+- The server does not launch or control the game.
+  Previews and source tests cannot prove live clicks, AI choices or engine timing; a source score alone does not establish an AI click probability.
+- Your repository instructions and review process still apply.
 
-> Preview an interface with its game assets and fonts. Check states, text clipping and clickable areas at 100% and 125% UI scale.
+## Configuration
 
-| Interface              | Supplied in-game capture                                                                                                                  | MCP source preview                                                                                                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Vanilla video options  | [![Options in game](docs/images/comparisons/gui/options-video-ingame.png)](docs/images/comparisons/gui/options-video-ingame.png)          | [![Options preview](docs/images/comparisons/gui/options-video-mcp.png)](docs/images/comparisons/gui/options-video-mcp.png)          |
-| Vanilla priority panel | [![Priority panel in game](docs/images/comparisons/gui/skoda-priority-ingame.png)](docs/images/comparisons/gui/skoda-priority-ingame.png) | [![Priority panel preview](docs/images/comparisons/gui/skoda-priority-mcp.png)](docs/images/comparisons/gui/skoda-priority-mcp.png) |
-| Mod management window  | [![Management window in game](docs/images/comparisons/gui/tag-manager-ingame.png)](docs/images/comparisons/gui/tag-manager-ingame.png)    | [![Management window preview](docs/images/comparisons/gui/tag-manager-mcp.png)](docs/images/comparisons/gui/tag-manager-mcp.png)    |
+Started inside a mod folder, the server needs no configuration file.
+`hoi4-agent-tools-setup --init` writes one when you work on several mods or the game is not found automatically.
+For remote or shared use, `hoi4-agent-tools-http` serves the same tools over HTTP with tokens or OAuth.
+See the [configuration reference](docs/configuration.md) and the [HTTP guide](docs/http.md).
 
-The management window capture comes from an older layout.
-The video options preview has no observed gamma value, and the priority panel's capture frames its background differently.
+## Documentation
 
-| Mod event log                                                                                                        | Mod status panel                                                                                                                        | Mod status panel, second tab                                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Event Log preview](docs/images/comparisons/gui/event-log-mcp.png)](docs/images/comparisons/gui/event-log-mcp.png) | [![Chaos Meter status](docs/images/comparisons/gui/chaos-meter-status-mcp.png)](docs/images/comparisons/gui/chaos-meter-status-mcp.png) | [![Chaos Meter deaths](docs/images/comparisons/gui/chaos-meter-deaths-mcp.png)](docs/images/comparisons/gui/chaos-meter-deaths-mcp.png) |
+- [Setup](docs/setup.md) and [configuration](docs/configuration.md)
+- [Examples](docs/examples.md) and [tool reference](docs/tools.md)
+- Guides: [local references](docs/reference.md), [focus trees](docs/focus.md), [scripted GUIs](docs/gui.md), [maps](docs/map.md), [events](docs/events.md), [technology](docs/technology.md), [AI weights and timing](docs/probability.md), [decisions and impact](docs/analysis.md), [mechanic and package tests](docs/mechanics.md)
+- [Background jobs](docs/jobs.md) and [HTTP](docs/http.md)
+- [Development](docs/development.md), [changelog](CHANGELOG.md) and [security policy](SECURITY.md)
+- [Documentation index](docs/README.md)
 
-| Vanilla decisions                                                                                                                                        | Vanilla occupation                                                                                                                                             |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Decision window](docs/images/comparisons/native-ui/countrydecisionview-window.png)](docs/images/comparisons/native-ui/countrydecisionview-window.png) | [![Occupation window](docs/images/comparisons/native-ui/countryoccupationview-window.png)](docs/images/comparisons/native-ui/countryoccupationview-window.png) |
+## Development
 
-The event log, status panel, decision and occupation previews use declared states or positions for layout review.
-They are source previews, not observations of a running campaign.
-See the [interface gallery](docs/gui-comparisons.md) for full images and fidelity notes, and the [GUI guide](docs/gui.md) for scenario inputs.
+```bash
+npm ci
+npm run check
+```
 
-### Maps and event chains
+See the [contributing guide](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/CONTRIBUTING.md) and the [development guide](docs/development.md).
 
-> Find Brandenburg on the map, inspect its provinces and neighbours, and show the affected source files before a change.
+## License
 
-> Trace an event's options and follow-up events. Point out unresolved calls and link each route to its source.
-
-| Source map                                                                                                                      | Mod event chain                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Map rendered from installed source](docs/images/comparisons/source/map-mcp.png)](docs/images/comparisons/source/map-mcp.png) | [![Chaos Redux event options](docs/images/comparisons/source/event-chain-mcp.png)](docs/images/comparisons/source/event-chain-mcp.png) |
-
-The [map guide](docs/map.md) covers connected province, state, supply and railway data.
-The [event guide](docs/events.md) covers routes, scope, timing and unresolved references.
-
-### Local rules and AI weights
-
-> Find the installed documentation for `save_event_target_as`, read the relevant section, and show a vanilla usage with file and line references.
-
-> Compare this decision's `ai_will_do` score before and after a change in peace and war. List missing conditions separately from known results.
-
-The [reference example](docs/research/reference-benchmark.md) found the installed effect documentation first and read its relevant 12-line section instead of loading whole wiki pages.
-The [AI guide](docs/probability.md) covers supported weights, chance and timing models; a source score alone does not establish an AI click probability.
-The [examples guide](docs/examples.md) has more prompt details.
-
-## Complete tool list
-
-The default server exposes 35 tools.
-Your agent can select them from ordinary language; use the live tool schema for call parameters.
-
-| Tool                        | Purpose                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `hoi4.focus_inspect`        | Read focus trees, continuous-focus placement, and structural or reference problems.                              |
-| `hoi4.focus_render`         | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                                                |
-| `hoi4.focus_raster`         | Produce a PNG preview with decoded source icons.                                                                 |
-| `hoi4.focus_rewrite`        | Create or update a focus tree.                                                                                   |
-| `hoi4.gui_inspect`          | Read a scripted GUI and its linked assets and logic.                                                             |
-| `hoi4.gui_render`           | Render generated and explicit GUI scenarios, states, resolutions, and layout diagnostics.                        |
-| `hoi4.gui_rewrite`          | Create or update a GUI source package.                                                                           |
-| `hoi4.map_inspect`          | Search, click, navigate, and inspect the complete rendered map and its linked data.                              |
-| `hoi4.map_render`           | Render full-map layers, overlays, names, IDs, coordinates, and source-linked catalogs.                           |
-| `hoi4.map_rewrite`          | Create or update states, provinces, IDs, networks, positions, and connected map data.                            |
-| `hoi4.reference_context`    | Get compact, cited wiki and installed documentation pointers for a modding surface.                              |
-| `hoi4.reference_search`     | Search local documentation in plain words or script names; each result names its answering line.                 |
-| `hoi4.reference_read`       | Read one revision-bound section, with line continuation.                                                         |
-| `hoi4.source_lookup`        | Find exact definitions, overrides and usages across game, DLC and mod, or the definition containing a file line. |
-| `hoi4.script_validate`      | Check a snippet or a whole mod file for syntax, command kinds, and scopes against local documentation.           |
-| `hoi4.event_inspect`        | Scan, trace, explain, lint, or assess event chains and their state flow.                                         |
-| `hoi4.event_render`         | Render source-linked event routes, options, timing, state, scope, and unresolved edges.                          |
-| `hoi4.event_compare`        | Compare event-chain topology and diagnostics between revisions.                                                  |
-| `hoi4.impact_inspect`       | Trace symbol and changed-file consumers across source systems and compare proposals.                             |
-| `hoi4.decision_inspect`     | Inventory and evaluate decisions or missions under declared scenarios and source changes.                        |
-| `hoi4.mechanic_test`        | Execute bounded source effects on a copied declared scenario and check assertions.                               |
-| `hoi4.package_check`        | Check declarative package definitions, calls, registrations, assets, and case links.                             |
-| `hoi4.scenario_test`        | Run named source and domain cases in resumable, revision-bound batches.                                          |
-| `hoi4.job_inspect`          | Inspect durable background work or retrieve its completed tool result.                                           |
-| `hoi4.job_cancel`           | Durably request cancellation of authorized background work.                                                      |
-| `hoi4.tech_inspect`         | Scan, trace, explain, lint, and assess technology and doctrine systems.                                          |
-| `hoi4.tech_render`          | Render source layouts with real item sizes and year guides, plus dependencies and assets.                        |
-| `hoi4.tech_compare`         | Compare technology graphs, placements, references, diagnostics, and source overlays.                             |
-| `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs.                         |
-| `hoi4.probability_evaluate` | Evaluate supported weights, probability and timing models, and missing inputs.                                   |
-| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.                                |
-| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                                         |
-| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.                                 |
-| `hoi4.probability_compare`  | Attribute AI-weight and MTTH changes between real or proposed source.                                            |
-| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.                                |
-
-Set `HOI4_AGENT_TOOLS_CHAOSX=1` to expose two optional Chaos Redux workflow tools: `chaosx.focus_country_assets` and `chaosx.visual_revision`.
-The [tool guide](docs/tools.md) explains results, linked artifacts and long operations.
-
-## How it fits your workflow
-
-The server works through your coding agent and follows the mod workspace you provide.
-It keeps large renders and reports in linked files, and retrieves relevant documentation sections instead of whole manuals.
-Your repository instructions and review process still apply.
-
-Inspection and rendering do not edit the mod.
-The focus, GUI and map rewrite tools can change source files after checking the proposed edit.
-The server does not launch or control the game; previews and source tests cannot prove live clicks, AI choices or engine timing.
-
-[Documentation](docs/README.md) · [Tool reference](docs/tools.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
-
-Apache-2.0 licensed.
-Hearts of Iron IV artwork belongs to its respective owners; this project is unaffiliated with Paradox Interactive.
+Apache-2.0; see [LICENSE](LICENSE) and the [third-party notices](docs/third-party-notices.md).
+Hearts of Iron IV artwork belongs to Paradox Interactive; this project is unaffiliated with Paradox Interactive.
+The in-game captures were supplied for these comparisons.

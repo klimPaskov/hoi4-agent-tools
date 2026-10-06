@@ -18,6 +18,24 @@ Use the three technology tools directly from the target mod.
 - `impact`: find the definitions, placements, edges, grants, bonuses, unlocks, localisation, sprites, and files affected by a proposed removal or rename.
 - `helper_expansion`: stream source-linked scripted-effect call paths and helper-owned technology references with bounded pages and revision-bound continuation.
 
+Request fields select the records each mode reads:
+
+| Field                    | Used by                                                            | Meaning                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `technologyId`           | `trace`, `explain` (required); `unlocks`, `bonus_coverage`, `lint` | Technology to trace or explain, or a filter for the other modes.                                              |
+| `folderId`               | `folders`, `lint`                                                  | Folder to inspect, or a lint filter.                                                                          |
+| `categoryId`             | `bonus_coverage`                                                   | Technology category whose research-bonus coverage is reported.                                                |
+| `targetKind`             | `unlocks`                                                          | Unlock target kind: `equipment`, `equipment_module`, `sub_unit`, `building`, `ability`, `tactic`, or `other`. |
+| `targetId`               | `unlocks`                                                          | Unlock target ID.                                                                                             |
+| `direction`              | `trace`                                                            | `prerequisites`, `descendants`, or `both` (default).                                                          |
+| `maxDepth`               | `trace`                                                            | Traversal depth, 1 to 256, default 32.                                                                        |
+| `maxNodes`               | `trace`                                                            | Traversed nodes, 1 to 25,000, default 2,000.                                                                  |
+| `includeSubTechnologies` | `trace`                                                            | Follow sub-technology edges as well as prerequisites; default `true`.                                         |
+| `classifications`        | `lint`                                                             | Up to 4 of `confirmed_error`, `probable_defect`, `design_warning`, and `unresolved_analysis`.                 |
+| `codes`                  | `lint`                                                             | Up to 100 diagnostic codes.                                                                                   |
+| `impact`                 | `impact` (required)                                                | Removal or rename subject, described below.                                                                   |
+| `helperExpansion`        | `helper_expansion`                                                 | Bounded helper-expansion request; see [bounded helper expansion](helper-expansion.md).                        |
+
 Example trace:
 
 ```json
@@ -64,6 +82,11 @@ Render validation is scoped to the requested view: folder source placement, omit
 
 Subtechnology cards use the sprite declared by their source GUI slot before any technology-id fallback. Slot-declared textures are included in the bounded asset scan even when no ordinary technology icon references the same file.
 
+`hoi4.tech_render` accepts `folderId` (required for the `folder` view), `technologyId`, `categoryId`, and `targetId`.
+`technologyId` selects the traced neighbourhood in the `dependencies` and `technology` views and filters the `bonuses`, `grants`, and `unlocks` views.
+`categoryId` filters the `memberships`, `bonuses`, and `grants` views, and `targetId` filters the `unlocks` view.
+`maxNodes` ranges from 1 to 2,000 and defaults to 1,000.
+
 Example folder render:
 
 ```json
@@ -84,6 +107,8 @@ Large dependency requests return a bounded overview plus focused folder resource
 `hoi4.tech_compare` compares cached revisions, graph resources, current source, or proposed in-memory source overlays. It reports added, removed, renamed, or moved technologies; graph and placement changes; metadata, category, tag, unlock, grant, bonus, localisation, and icon changes; introduced and resolved findings; and newly reachable or disconnected content.
 
 `before` and `after` each accept `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. Proposed overlays take `{ relativePath, source, expectedSourceHash? }`; use `source: null` to model deletion. Overlays are analyzed without writing them.
+A request takes between 1 and 128 overlays, and `after` and `proposedSources` are mutually exclusive.
+The comparison render is produced unless `render` is `false`; `maxRenderNodes` ranges from 1 to 2,000 and defaults to 500.
 
 ```json
 {

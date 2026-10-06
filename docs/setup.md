@@ -1,6 +1,6 @@
 # Setup
 
-You need a coding agent that supports MCP and Node.js 22.19+ in the Node 22 line, or Node.js 24.
+You need a coding agent that supports MCP and Node.js 22 (22.19 or later) or Node.js 24.
 Keep an installed copy of Hearts of Iron IV available for vanilla references, artwork and fonts.
 
 ## 1. Install
@@ -21,13 +21,28 @@ Previews need the assets and fonts referenced by the mod; missing files are repo
 hoi4-agent-tools-setup --print-client-config
 ```
 
-Copy the printed `globalInstall` configuration into your MCP client, or use `codexTomlGlobal` for a TOML-based Codex configuration.
-The printed command is correct for your platform.
+The command prints four alternatives:
+
+| Key               | Use it for                                                                    |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `globalInstall`   | JSON clients (Claude Code, Claude Desktop, Cursor and others), global install |
+| `codexTomlGlobal` | Codex `config.toml`, global install                                           |
+| `generic`         | JSON clients that should start a pinned version through `npx`                 |
+| `codexToml`       | Codex `config.toml` through `npx`                                             |
+
+Copy one of them into your MCP client; the printed command is correct for your platform.
+The Codex entries also set `startup_timeout_sec = 120`, `tool_timeout_sec = 600` and an idle limit, because the first scan of a large mod and long renders exceed Codex's default timeouts.
+The [client examples](../examples/clients) show the same entries without your paths.
 
 Open the mod as your agent's workspace.
-If your client does not supply workspace roots, set the MCP process working directory to that mod folder.
-The server can then select the active mod without a separate configuration file.
-It keeps indexes and generated images in your user data directory.
+
+### How the server picks your mod
+
+Every tool takes an optional `workspaceId`; the default, `"current"`, means the mod that contains the client's workspace root or, when the client sends no roots, the server's working directory.
+With no configuration file, the server configures itself from that folder, so set the MCP process working directory to the mod if your client does not supply roots.
+After `--init` writes a configuration file, every folder under its mod roots is a workspace, and the current mod is the one that contains the client root or working directory; when that matches no mod and several are configured, pass the mod's `workspaceId`.
+The [configuration reference](configuration.md#how-the-server-picks-your-mod) gives the exact rules, the default file location, every key and the environment variables.
+Indexes are kept in the server's state folder and generated images in workspace storage, both in your user data directory by default.
 
 ## 3. Try a small task
 
@@ -36,7 +51,7 @@ It keeps indexes and generated images in your user data directory.
 > Find the installed documentation for `save_event_target_as` and read only the relevant section.
 
 Continue with the [examples guide](examples.md).
-A mod normally has `descriptor.mod` or standard HOI4 content folders; an empty folder needs a descriptor or explicit configuration.
+Without a configuration file, the folder must look like a mod: it needs `descriptor.mod` or standard HOI4 content folders.
 
 ## Choose game and mod paths
 
@@ -53,7 +68,7 @@ It can be repeated for several locations.
 Use quoted Windows paths on Windows, for example `"C:/Program Files (x86)/Steam/steamapps/common/Hearts of Iron IV"`.
 
 For a custom configuration location, add `--config PATH` to both setup commands.
-`--workspace-storage-root PATH` chooses where generated indexes and images are saved.
+`--workspace-storage-root PATH` chooses where generated images and rewrite transactions are saved.
 Linked mod directories are not followed; configure their real parent directory instead.
 
 ### How sources are layered
@@ -85,16 +100,28 @@ See [Local references](reference.md) for source selection and missing-source rep
 | A control's state is unresolved     | Supply the scenario's required country, state, controller or variable inputs; do not assume a visible control is available. |
 | A large query takes several minutes | Start with the specific tree, window or source area you need. Use [background jobs](jobs.md) when supported by your client. |
 | Idle server processes accumulate    | Set an idle limit as described in [Server lifetime](#server-lifetime).                                                      |
+| The game reported errors at startup | Ask the agent to read them with `hoi4.error_log`; set `gameUserRoot` if the game's user folder is not found automatically.  |
+| Startup or a tool call times out    | Raise the client's timeouts; the printed Codex entries allow 120 seconds for startup and 600 seconds per call.              |
 
-The supplied Codex registration allows 120 seconds for startup and 600 seconds per tool call.
+Two setup commands help with path problems:
+
+```bash
+hoi4-agent-tools-setup --discover
+hoi4-agent-tools-setup --diagnose
+```
+
+`--discover` prints the mod and game folders the server can detect, without writing anything.
+`--diagnose` checks the configured paths and their permissions, the Node.js version and the image library, and accepts `--config PATH`.
+`--help` lists every option.
 
 For remote or shared deployments, use the [HTTP guide](http.md).
 
 ### Server lifetime
 
-A stdio server exits when its client closes stdin, and when the process that launched it, such as a `cmd.exe` shim, has exited.
+A stdio server exits when its client closes stdin, and when the process that launched it, such as a `cmd.exe` shim, has exited and no request is still open.
 Some clients start a server for every subagent and keep each connection open after the subagent finishes, so idle servers accumulate and each holds its own index in memory.
-A server with no client traffic and no open request for `stdioIdleExitMinutes` minutes exits.
+A server with no client traffic and no open request for `stdioIdleExitMinutes` minutes (0–10,080) exits.
 That setting applies to every client sharing the server configuration, so prefer the `HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES` environment variable in the affected client's registration; the Codex registrations printed by `hoi4-agent-tools-setup --print-client-config` set it to 30.
+The variable takes a whole number from 0 to 10,080; an empty value uses the configuration, and any other value stops the server at startup with an error.
 A client that later calls an exited server reports it as disconnected, so leave the limit at `0` (never) for a single long-lived session.
 Over stdio, read the `hoi4-agent://server/status` resource to see every server process that shares the server state root, with its transport, memory, last client activity and the execution limits in effect. Records of exited processes are removed on read; a server that has not updated its record for five minutes is listed as stale.

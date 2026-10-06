@@ -125,7 +125,8 @@ export function createModernOperationServer(
         `Invalid arguments for tool ${definition.name}: ${input.error.issues
           .slice(0, 5)
           .map(
-            ({ path, message }) => `${path.length === 0 ? '(input)' : path.map(String).join('.')}: ${message}`,
+            ({ path, message }) =>
+              `${path.length === 0 ? '(input)' : path.map(String).join('.')}: ${message}`,
           )
           .join('; ')
           .slice(0, 1000)}`,

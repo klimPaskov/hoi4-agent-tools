@@ -208,7 +208,7 @@ describe('offline package and Registry metadata', () => {
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
       description:
-        'HOI4 modding tools for agents: local references, visual previews, focus trees, interfaces and maps.',
+        'HOI4 modding for agents: cited docs, tree/GUI/map previews, event and AI analysis, validated edits.',
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
@@ -255,7 +255,10 @@ describe('offline package and Registry metadata', () => {
       'docs/development.md',
       'docs/jobs.md',
       'docs/helper-expansion.md',
+      'docs/configuration.md',
+      'docs/third-party-notices.md',
       'examples/clients/',
+      'examples/config/',
       'examples/probability/',
       'schemas/',
       'server.json',

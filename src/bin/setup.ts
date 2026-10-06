@@ -268,8 +268,9 @@ function printClientConfig(configPath: string): void {
     ...(useDefaultConfiguration ? {} : { env: { HOI4_AGENT_CONFIG: absolute } }),
   };
   // Codex keeps a server per subagent connected after the subagent finishes, so its servers
-  // exit after half an hour without traffic instead of accumulating.
-  const codexEnv = `\nenv = { ${
+  // exit after half an hour without traffic instead of accumulating. The first scan of a large
+  // mod and long renders need more than Codex's default startup and tool-call timeouts.
+  const codexEnv = `\nstartup_timeout_sec = 120\ntool_timeout_sec = 600\nenv = { ${
     useDefaultConfiguration ? '' : `HOI4_AGENT_CONFIG = ${JSON.stringify(absolute)}, `
   }HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES = "30" }`;
   const npxToml = `[mcp_servers.hoi4_agent_tools]\ncommand = "${command}"\nargs = ["-y", "hoi4-agent-tools@${PACKAGE_VERSION}"]${codexEnv}`;

@@ -14,13 +14,13 @@ Markdown headings and recognizable standalone names in generated `.log` files fo
 
 ## Tools
 
-- `hoi4.reference_context`: request a surface such as `event`, `focus`, `technology`, `gui`, or `map`. It reserves citations for available installed documentation and offline wiki sources before adding further question matches. Supply `question` to select the best matching section within each required source. At a limit of two or more, both source kinds are represented when available; a one-result limit prioritizes installed documentation. `omittedSources` names required sources excluded by the result limit, while `missing` names sources absent from the configured roots. Increase the limit or search an omitted source directly before treating the bundle as sufficient. Citations are pointers and excerpts; read the pertinent sections before changing code.
+- `hoi4.reference_context`: request one surface: `general`, `event`, `decision`, `idea`, `focus`, `technology`, `gui`, `map`, `localisation`, or `ai`. The default limit is 16 citations and the maximum is 24. It reserves citations for available installed documentation and offline wiki sources before adding further question matches. Supply `question` to select the best matching section within each required source. At a limit of two or more, both source kinds are represented when available; a one-result limit prioritizes installed documentation. `omittedSources` names required sources excluded by the result limit, while `missing` names sources absent from the configured roots. Increase the limit or search an omitted source directly before treating the bundle as sufficient. Citations are pointers and excerpts; read the pertinent sections before changing code.
 - `hoi4.reference_search`: search with plain words or exact script tokens. Ranking weighs headings above body text and rare words above common ones, and it matches identifiers both whole and by their words, so "check if a state is controlled by a country" can find `is_controlled_by`. A query that names an identifier only matches sections containing it, an exact heading ranks first, and installed documentation precedes the wiki when they rank equally. Each result's `matchLine` is the cited line that best matches the query; pass it as `startLine` to `hoi4.reference_read` to land on the answer inside a long section. When several sources document the same name, the first copy keeps its place and later copies follow other distinct answers. The default limit is six results and the maximum is twelve. Filter `sources` to `game_doc`, `wiki`, or `script_doc` when appropriate. Only selected authorities are scanned; `coverage.included = false` means that an authority was excluded from this query, not that it is missing.
-- `hoi4.reference_read`: provide a search/context result's `id` and `revision`. Optionally pass its `source` for a focused authority read; resident citations provide this hint automatically. Read up to 80 lines and 8,000 UTF-8 bytes, with JSON escaping also bounded. Continue with the returned `nextLine`, `nextColumn` as `startColumn`, and the same revision. Long source lines continue without losing characters. A changed source returns `REFERENCE_REVISION_STALE`.
+- `hoi4.reference_read`: provide a search/context result's `id` and `revision`. Optionally pass its `source` for a focused authority read; resident citations provide this hint automatically. Read 40 lines by default, set `maxLines` up to 80, and at most 8,000 UTF-8 bytes, with JSON escaping also bounded. Continue with the returned `nextLine`, `nextColumn` as `startColumn`, and the same revision. Long source lines continue without losing characters. A changed source returns `REFERENCE_REVISION_STALE`.
 - `hoi4.source_lookup`: find exact definitions and indexed usages in the installed game and configured mod source. The response includes load order, override status, up to three source blocks bounded to 2,000 bytes each, a scan revision, and explicit reference counts and truncation. Follow `nextLine` and `nextColumn` as `fromLine` and `fromColumn`, with `expectedRevision`, to read more of the active definition.
 - When `hoi4.source_lookup` finds no definition, `suggestions` lists up to five indexed identifiers within three edits of the requested symbol, nearest first, which catches typos and near-miss names.
 - `hoi4.source_lookup` with `path` and `line` instead of `symbol` locates a source position, such as a diagnostic or a changed line in a diff. `path` may be a result path such as `mod:events/example.txt`, a path relative to a source root, or an absolute path inside one. The result names the file's layer and whether a later layer shadows it, the indexed definitions that contain the line, innermost first, and the chain of enclosing assignments with zero-based occurrences for repeated keys. Its `keyPath` starts inside the innermost definition: pass that definition's `id` as `symbol`, its `kind`, and the `keyPath` to read or list that exact block. Without `column`, the first non-blank character of the line is used. A file with parse errors returns its definitions but no structural chain. Only the requested file's folder is scanned, in every layer.
-- `hoi4.script_validate`: check a bounded effect or trigger body against installed native-command documentation. Supply the body in `source`, its `kind`, and its current `scope`. Results cover syntax, command kind, and declared scope, with exact documentation citations. They do not validate command parameters or prove game execution.
+- `hoi4.script_validate`: check a bounded effect or trigger body against installed native-command documentation. Supply the body in `source`, its `kind`, and its current `scope` (`country`, `state`, `character`, `combatant`, `ace`, `strategic_region`, `operation`, `industrial_org`, `purchase_contract`, `raid_instance`, `special_project`, or `faction`). `limit` (1–32, default 12) bounds the returned findings. Results cover syntax, command kind, and declared scope, with exact documentation citations. They do not validate command parameters or prove game execution.
 - `hoi4.script_validate` with `path` instead of `source` checks a whole mod file: every effect and trigger body of an event, decision, national focus, scripted effect, scripted trigger, or on-action file, with the scope the file's structure fixes. It is meant to catch the game's own load errors before launch.
 
 ## Navigate a definition
@@ -100,7 +100,46 @@ Search and context replies also report `limitedByBytes` when metadata exceeds th
 Read omitted required sources with targeted calls rather than repeatedly requesting the same oversized bundle.
 Reference text supports UTF-8, Windows-1252, and explicitly BOM-marked UTF-16; native engine source encoding rules remain separate.
 
-Example:
+## Read the game's error log
+
+`hoi4.error_log` reads `logs/error.log` from the game's user folder, the folder that also holds `mod/` and `save games/`.
+The server finds it from the configured `gameUserRoot`, then the user folder that contains the mod when the mod sits in its `mod/` folder, then the operating system's default user folder locations.
+It reads the last 16 MiB of the log, joins continuation lines, and groups identical messages with a count.
+
+Each entry has a `category`: `syntax`, `duplicate`, `localisation`, `effect`, `trigger`, `scope`, `graphics`, `interface`, `map`, `missing_reference`, or `other`.
+When the message names a file, the entry gives the file, the line when known, and its layer (`mod`, `dependency`, `game`, or `unknown`).
+`changedSinceLog` is `true` when that file was modified after the log was written, so the error may already be fixed; relaunch the game to confirm.
+Mod entries are listed first.
+
+Filter with `scope` (`all`, `mod` for entries in the mod's own files, or `unlocated` for entries naming no file), `category`, or a text `query`, and page with `limit` (1–50, default 20) and `offset`.
+
+```json
+{ "scope": "mod", "category": "scope", "limit": 10 }
+```
+
+The tool reads the log the game wrote at its last launch; it never starts the game.
+Run `hoi4.script_validate` with `path` on the reported file to check the same body before the next launch.
+
+## Index the mod and pick free IDs
+
+`hoi4.mod_index` with `mode: "overview"` summarizes the mod without reading every file:
+
+- `descriptor`: the `descriptor.mod` name, version, supported game version, tags, dependencies, `replace_path` entries and Workshop ID;
+- `kinds`: how many definitions of each kind the mod contains, such as events, focuses, decisions and scripted effects;
+- `folders`: file counts and sizes per top-level folder, and per `common/` subfolder;
+- `namespaces`: each event namespace with its number of events, lowest and highest number, and file count.
+
+Set `layer: "all"` to count active definitions across the game, DLC, dependencies and the mod instead of the mod alone.
+
+`mode: "next_id"` finds the next free numbered identifier for an event `namespace` or any `prefix` of one `kind` (`event`, `focus`, `decision`, `idea`, `leader` or `technology`).
+It checks every source layer, so a new ID never collides with a game or dependency definition.
+The result gives `nextId` after the highest used number, and `firstGapId` when a lower number is unused.
+
+```json
+{ "mode": "next_id", "kind": "event", "namespace": "my_mod" }
+```
+
+## Example
 
 ```json
 { "workspaceId": "current", "surface": "event", "question": "save_event_target_as" }

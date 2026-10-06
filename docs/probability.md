@@ -99,6 +99,8 @@ Decision and mission adapters intentionally return scores and ranks without inve
 
 `candidateOverrides` declares candidate eligibility for a scenario. It does not force weight-modifier conditions to be true or false; those conditions still use the scenario's actual declared variables, flags, scopes, and controller facts. An overridden eligibility claim is an explicit scenario assumption, not evidence that the engine makes that candidate available.
 
+`hoi4.probability_sweep` takes a `sweep` object with 1 to 32 input `paths`, `steps` from 2 to 10,000 (default 25), `pairwise` (default `false`), and `findRankReversals` (default `true`).
+
 Named acceptance bands and configurable diagnostic thresholds let a test suite state intended probability, timing, starvation, dominance, prevalence, and sensitivity limits. Evaluate, sweep, and simulation requests can name the metrics of interest; that set is retained in result metadata while the authoritative result keeps the eligibility and trace context required to explain them. Sweeps enumerate declared alternatives exactly, add trigger breakpoints and their adjacent values for continuous ranges, and report local elasticities, pairwise interactions, rank reversals, cliffs, and missed target bands. Sweep expansion is bounded and rejected before it can silently truncate the requested analysis.
 
 ## Results
@@ -117,6 +119,9 @@ Every candidate includes source provenance with a stable AST path, an ordered mo
 Every evaluated scope pool is stored with the scenario in authoritative JSON. Pool rows include eligibility, resolved weight, exact conditional share when supported, trigger traces, eligible IDs, unresolved IDs, and unresolved evidence. Compact MCP responses report pool and pool-candidate counts without copying the full catalog into the prompt.
 
 Nested `random_list` entries report both their conditional share inside the immediate list and their full path probability through every enclosing list. Dynamic parent paths remain explicit unresolved evidence.
+
+`hoi4.probability_simulate` defaults to `samples: 100000` (range 100 to 10,000,000), `seed: 1` (any 32-bit signed integer), `confidenceLevel: 0.95` (range 0.5 to 0.9999), and `samplingMethod: "latin_hypercube"`; the other sampling method is `pseudo_random`.
+`hoi4.probability_sequence` uses the same `samples`, `seed`, and `confidenceLevel` defaults, requires `horizonDays`, and defaults `maxSteps` to 1,000 (range 1 to 100,000).
 
 Deterministic simulation uses constant-memory Latin hypercube sampling by default, with seeded pseudo-random sampling available when requested. Numeric distributions can use a Gaussian copula correlation matrix. Discrete or categorical correlation requests are sampled independently and reported as unresolved instead of being approximated silently. Simulation reports Wilson intervals, effective sample count, global input importance, and HOI4 daily-hazard MTTH samples. Timing quantiles use a deterministic bounded reservoir and include their confidence basis and retained sample count.
 

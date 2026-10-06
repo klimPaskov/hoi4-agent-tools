@@ -12,7 +12,23 @@ Use `query` for a compact name or ID result list and `coordinates` for exact pix
 
 Set `lookupOnly: true` for coordinate, query, and selected-ID lookups without full validation, the complete catalog artifact, overview rendering, or province geometry export. The lookup artifact contains only the requested matches and source revision. Use full inspection for allocation previews or province row runs.
 
+`hoi4.map_inspect` accepts these fields:
+
+| Field                | Default and limits               | Meaning                                                                                                                                                                                                                 |
+| -------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provinceIds`        | `[]`, at most 32                 | Province records to return, with exact geometry row runs.                                                                                                                                                               |
+| `stateIds`           | `[]`, at most 1,000              | State records to return.                                                                                                                                                                                                |
+| `regionIds`          | `[]`, at most 1,000              | Strategic-region records to return.                                                                                                                                                                                     |
+| `query`              | optional, at most 256 characters | Name, localisation key, or ID search.                                                                                                                                                                                   |
+| `queryLimit`         | 100, range 1 to 1,000            | Maximum `query` matches.                                                                                                                                                                                                |
+| `coordinates`        | `[]`, at most 100                | `{ "kind": "pixel", "x", "y" }` with top-left bitmap pixels, or `{ "kind": "map", "x", "z" }` with HOI4 map coordinates.                                                                                                |
+| `lookupOnly`         | `false`                          | Return only the requested lookups, as described above.                                                                                                                                                                  |
+| `includeOverview`    | `true`                           | Render the full-map PNG and navigator; set `false` to skip the overview render.                                                                                                                                         |
+| `allocationRequests` | `[]`, at most 100                | Preview the next free identifiers: `{ "kind": "state", "requestedId"? }` or `{ "kind": "province", "requestedId"?, "requestedColor"? }`, where `requestedColor` is `{ "r", "g", "b" }`. Not accepted with `lookupOnly`. |
+
 `hoi4.map_render` creates the same complete catalog and navigator with a chosen base layer and overlays. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, and building, unit, and weather positions.
+
+`hoi4.map_render` takes `layer` (default `province`), up to 12 `overlays`, and an integer `scale` from 1 to 16 (default 1).
 
 Pass `tile: { x, y, width, height }` to `hoi4.map_render` for a reusable bounded PNG, JSON, and HTML view of one top-left bitmap area. The tile preserves the selected base layer and overlays, and its JSON records raster dimensions and province IDs in the area. Identical source revisions and render settings produce identical artifact hashes.
 
@@ -28,9 +44,42 @@ When no terrain category file is available, seas and lakes are checked against t
 The engine stops reading `adjacencies.csv` at its first `-1` row.
 Rows after it are not read and report `MAP_ADJACENCY_AFTER_TERMINATOR`; a file without that row reports `MAP_ADJACENCY_TERMINATOR_MISSING` as a warning, because the offline wiki describes it as required although at least one published mod omits it.
 
+## Rewrite requests
+
+`hoi4.map_rewrite` takes an ordered list of 1 to 100 operations in `operations`, an optional integer `diffScale` from 1 to 16 for the comparison render (default 1), and an optional `requestKey` for background retries:
+
+```json
+{
+  "operations": [
+    {
+      "id": "create-western-state",
+      "kind": "create_state",
+      "provinceIds": [120, 121, 122],
+      "displayName": "Western State"
+    }
+  ],
+  "diffScale": 2
+}
+```
+
+Every operation has a unique `id` (1 to 256 characters), an optional `summary`, and a `kind`.
+The supported kinds are:
+
+- states: `create_state`, `split_state`, `merge_states`, `move_state_provinces`, `update_state`;
+- provinces: `create_province`, `split_province`, `merge_provinces`, `remove_province`, `update_province_definition`;
+- strategic regions: `move_region_provinces`;
+- identifiers: `renumber_map_entity`;
+- adjacency: `add_normal_adjacency`, `remove_normal_adjacency`, `add_adjacency`, `remove_adjacency`;
+- supply and railways: `add_supply_node`, `remove_supply_node`, `add_railway`, `remove_railway`;
+- positions: `upsert_building_position`, `remove_building_position`, `upsert_unit_position`, `remove_unit_position`, `upsert_weather_position`, `remove_weather_position`;
+- entity locators: `update_entity_locator`.
+
+The complete operation schema is [map-operation.schema.json](../schemas/map-operation.schema.json).
+The examples below show single operations; each goes inside the `operations` array.
+
 ## Create states
 
-The compact `create_state` form needs selected provinces and a display name:
+The compact `create_state` form needs selected provinces and a `displayName` or `name`:
 
 ```json
 {

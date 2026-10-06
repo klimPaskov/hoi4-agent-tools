@@ -1,0 +1,51 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.0.0/schemas/mod-index-input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "default": "current",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "mode": {
+      "default": "overview",
+      "type": "string",
+      "enum": [
+        "overview",
+        "next_id"
+      ]
+    },
+    "layer": {
+      "default": "mod",
+      "type": "string",
+      "enum": [
+        "mod",
+        "all"
+      ]
+    },
+    "kind": {
+      "default": "event",
+      "type": "string",
+      "enum": [
+        "event",
+        "focus",
+        "decision",
+        "idea",
+        "leader",
+        "technology"
+      ]
+    },
+    "prefix": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  },
+  "additionalProperties": false
+}

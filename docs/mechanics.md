@@ -39,6 +39,8 @@ An `advance_days` step only expires modeled timed flags; it never runs on action
 }
 ```
 
+The complete input schema is [mechanic-test-input.schema.json](../schemas/mechanic-test-input.schema.json).
+
 The linked trace records applied, skipped, and unresolved source operations with before and after values.
 The `single_payment` assertion checks the named balance's final change and the number and size of its traced deductions, so a compensating grant cannot hide a second charge.
 Supported operations include documented persistent and unscoped temporary-variable arithmetic, exact `has_variable` presence checks, flags, event targets, arrays, conditionals, finite declared scope iteration, scripted helpers, safe meta substitutions, and selected balance effects.
@@ -55,6 +57,7 @@ Add expected `definitions` and `calls` as `{ "kind": "scripted_effect", "id": "t
 The report separates present, absent, shadowed, and unresolved links and includes source hashes and locations.
 Required cases are checked for declaration; run `hoi4.scenario_test` to evaluate them.
 The manifest accepts no source patches or executable commands.
+The input and manifest schemas are [package-check-input.schema.json](../schemas/package-check-input.schema.json) and [package-manifest.schema.json](../schemas/package-manifest.schema.json).
 
 ## Run a suite
 
@@ -63,6 +66,7 @@ The suite has `schemaVersion: "1.0"`, an `id`, and named `cases` in the `mechani
 A mechanic case supplies the same `test` as `hoi4.mechanic_test`; a package case supplies a `manifest`.
 A tool case names one allowed inspect, render, or evaluate operation and supplies its typed `arguments`.
 Cases may declare `sourceSelectors`, output path assertions, and `views` (`summary`, `artifacts`, `diagnostics`).
+The input and suite schemas are [scenario-test-input.schema.json](../schemas/scenario-test-input.schema.json) and [scenario-suite.schema.json](../schemas/scenario-suite.schema.json).
 
 Set `maxCases` to bound a batch.
 Each case receives a content-addressed result artifact; the batch returns its counts and, while cases remain, a `continuation`.

@@ -7,7 +7,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs formatting, type checks, tests, fixture checks, schema generation checks, build checks, and package validation. Use narrower commands during iteration:
+`npm run check` runs formatting, lint, type checks, tests, fixture checks, schema generation checks, build checks, package validation, and MCP Registry metadata validation. Use narrower commands during iteration:
 
 ```bash
 npm run test
@@ -23,7 +23,7 @@ The event-chain acceptance fixture contains more than 300 project-owned event de
 
 The technology acceptance fixture contains 1,040 project-owned technologies across 13 folders and exercises classic and current doctrines, prerequisites, exclusive branches, multiple placements, unlocks, bonuses, grants, assets, unresolved references, rendering, and comparison.
 
-`npx vitest run tests/integration/mcp-concurrent-workloads.test.ts` tests simultaneous production calls across all six domains over six HTTP sessions and four independent stdio processes, including artifact retrieval and queued cancellation. Execution limits and connection behavior are described in [HTTP](http.md) and the [concurrency decision](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0026-concurrent-request-execution.md).
+`npx vitest run tests/integration/mcp-concurrent-workloads.test.ts` tests simultaneous production calls across the tool domains over six HTTP sessions and four independent stdio processes, including artifact retrieval and queued cancellation. Execution limits and connection behavior are described in [HTTP](http.md) and the [concurrency decision](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0026-concurrent-request-execution.md).
 
 Persistent-job qualification covers authenticated record publication, request-key conflicts, read-result checkpoints, transaction-journal reconciliation, stopped-owner takeover, native task negotiation, ordinary-call parity, reconnect isolation, rewrite cancellation before source application, and fixed-entry worker execution. The public lifecycle contract is documented in [Persistent jobs and MCP tasks](jobs.md).
 

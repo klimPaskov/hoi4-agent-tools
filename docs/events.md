@@ -40,6 +40,11 @@ Selectors use one of these forms:
 
 `impact` requires an `impactSubject` object with `kind` and `name`. Allowed impact kinds are `event`, `helper`, `flag`, `variable`, `array`, `event_target`, and `saved_scope`. Set `refresh: true` after source changes when a prior graph may be cached.
 
+`maxDepth` defaults to 8 (range 1 to 64), `maxNodes` defaults to 500 (range 1 to 5,000), and `maxEdges` defaults to 2,000 (range 1 to 20,000).
+`direction` defaults to `both`.
+`expandHelpers` defaults to `true` for `explain_path` and `false` for the other modes.
+`refresh` defaults to `true` for `scan` and `false` for the other modes.
+
 Example `hoi4.event_inspect` arguments:
 
 ```json
@@ -55,6 +60,19 @@ Example `hoi4.event_inspect` arguments:
 }
 ```
 
+Example `explain_path` arguments, which explain the route from one event to another:
+
+```json
+{
+  "mode": "explain_path",
+  "from": { "kind": "event", "eventId": "my_namespace.1" },
+  "to": { "kind": "event", "eventId": "my_namespace.5" },
+  "maxDepth": 8
+}
+```
+
+`from` and `to` accept any selector form and are both required in this mode.
+
 ## Render
 
 `hoi4.event_render` produces deterministic, source-linked views of a chain. The exact `view` values are `overview`, `neighborhood`, `options`, `entries`, `reachability`, `timing`, `state`, `targets`, `scope`, `terminals`, and `unresolved`. JSON is the authoritative graph; SVG and PNG provide visual review, with HTML available for bundled navigation when requested.
@@ -62,6 +80,9 @@ Example `hoi4.event_inspect` arguments:
 Large overview requests return a compact overview plus bounded branch JSON/SVG/PNG resources and a coverage manifest. The manifest indexes every generated data artifact by canonical MCP resource URI, including artifacts omitted from the compact tool response. Follow those links instead of asking the agent to reason from one unreadable all-node image.
 
 Dynamic and meta-generated targets that cannot be resolved statically remain explicit unresolved edges. The renderer never invents a destination.
+
+`maxDepth` defaults to 4 (range 1 to 64) and `maxNodes` defaults to 120 (range 1 to 240).
+`direction` defaults to `both`, and `expandHelpers`, `includeHtml`, and `refresh` default to `false`.
 
 Example `hoi4.event_render` arguments:
 

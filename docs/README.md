@@ -16,21 +16,23 @@ You can ask your coding agent for these tasks in ordinary language; you do not n
 | Inspect or edit the map                              | [Maps](map.md)                            |
 | Compare weights, chances or timing                   | [AI and probability](probability.md)      |
 | Test a mechanic or check a content package           | [Mechanic tests](mechanics.md)            |
+| Read the game's error log or pick a free event ID    | [Local references](reference.md)          |
 
 ## See the results
 
 - [Examples](examples.md): practical prompts with real renders.
 - [Latest release](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest): a short introduction to the published server.
-- [Focus and technology comparisons](visual-comparisons.md): supplied game captures beside source renders.
-- [Interface comparisons](gui-comparisons.md): vanilla and Chaos Redux windows.
+- [Focus and technology comparisons](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md): supplied game captures beside source renders.
+- [Interface comparisons](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md): vanilla and mod windows.
 
 ## Detailed reference
 
 - [Tool reference](tools.md): tool names and what each one does.
+- [Configuration](configuration.md): every setting, default location and environment variable.
 - [Background jobs](jobs.md): inspect, cancel or retrieve long operations.
 - [Large event and technology queries](helper-expansion.md): follow bounded results without losing coverage.
 - [Remote hosting](http.md): share the server over HTTP.
 - [Development](development.md): build, test and contribute.
-- [Architecture decisions](adr/README.md): implementation rationale for contributors.
+- [Architecture decisions](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/README.md): implementation rationale for contributors.
 
 For vulnerability reporting, use the [security policy](../SECURITY.md).

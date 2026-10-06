@@ -339,6 +339,7 @@ describe('clean npm-pack installation', () => {
     expect(defaultClient.generic.mcpServers.hoi4_agent_tools).not.toHaveProperty('env');
     expect(defaultClient.codexToml).not.toContain('HOI4_AGENT_CONFIG');
     expect(defaultClient.codexToml).toContain('HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES = "30"');
+    expect(defaultClient.codexToml).toContain('tool_timeout_sec = 600');
   });
 
   it('qualifies authenticated Streamable HTTP through the installed package binary', async () => {

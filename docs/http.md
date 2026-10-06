@@ -41,7 +41,7 @@ Add an HTTP section to a config created by setup:
 }
 ```
 
-Set `HOI4_AGENT_HTTP_TOKEN` to a random value of at least 32 characters, then run `hoi4-agent-tools-http --config PATH`. `allowDiscoveredMods` grants that principal only the mod IDs created by discovery beneath `modRoots`; it never grants unrelated explicit workspaces. For narrower remote access, define the permitted mods as explicit `workspaces`, list those IDs in `workspaceIds`, and omit `allowDiscoveredMods`.
+Set `HOI4_AGENT_HTTP_TOKEN` to a random value of at least 32 characters, then run `hoi4-agent-tools-http --config PATH`. `allowDiscoveredMods` grants that principal only the mod IDs created by discovery beneath `modRoots`; it never grants unrelated explicit workspaces. A static token always grants both `hoi4:read` and `hoi4:write`, so its holder can run the rewrite tools that change mod source. For narrower remote access, define the permitted mods as explicit `workspaces`, list those IDs in `workspaceIds`, and omit `allowDiscoveredMods`.
 
 ## Shared or remote access
 
@@ -53,6 +53,8 @@ A non-loopback deployment needs:
 - explicit user-to-mod grants;
 - narrow mounted mod and game paths;
 - request, connection, and session limits.
+
+The `http.oauth` block (`issuer`, `jwksUri`, `audience`, `requiredScopes`, `algorithms`) validates tokens; an OAuth principal receives only the scopes in its token, and `requiredScopes` defaults to `["hoi4:read"]`, so grant `hoi4:write` only to principals that may edit mods. `publicUrl`, `trustedProxyAddresses`, the timeouts, and the connection, session, event-stream and rate limits are listed in the [configuration reference](configuration.md#http).
 
 Do not expose a developer home directory or a whole game library. The installed game and dependencies should be mounted read-only. Use separate server instances for teams that should not share operating-system access.
 

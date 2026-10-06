@@ -18,6 +18,19 @@ Use a symbol when you know the definition you plan to change:
 
 Use `changedFiles` with scanned display paths such as `mod:common/ideas/rationing.txt` to seed every active definition in a file.
 Use `proposedSources` to add, replace, or remove files in memory under the authorized mod root; a `null` content removes a source from the proposed snapshot.
+Each entry is an object with `relativePath` and `content`, and a request takes between 1 and 64 entries of at most 8 MiB each:
+
+```json
+{
+  "proposedSources": [
+    { "relativePath": "common/ideas/my_ideas.txt", "content": "ideas = { ... }" },
+    { "relativePath": "common/ideas/my_old_ideas.txt", "content": null }
+  ]
+}
+```
+
+Impact and decision proposals name the text field `content`.
+Event and technology proposals for `hoi4.event_compare` and `hoi4.tech_compare` name the same field `source` and also accept an optional `expectedSourceHash`.
 When `changedFiles` is omitted, each proposed file seeds all its active definitions alongside any selected symbols.
 The report compares the original and proposed consumer graph, including added and removed consumers and affected files.
 Moving a source location within one file does not count an unchanged reference as a new or removed consumer.
