@@ -341,8 +341,38 @@ export class TransactionManager {
     private readonly serverState: ServerState | undefined = resolver.serverState(),
   ) {}
 
+  /** Workspaces whose startup recovery failed, with the reason; their rewrites are refused. */
+  readonly #recoveryFailures = new Map<string, string>();
+
+  /**
+   * Record that startup recovery failed for a workspace. The server still starts and reads the
+   * workspace; rewrites retry recovery and are refused while it keeps failing.
+   */
+  recordRecoveryFailure(workspaceId: string, error: unknown): void {
+    this.#recoveryFailures.set(
+      workspaceId,
+      error instanceof Error ? error.message : 'Rewrite journal recovery failed',
+    );
+  }
+
+  private async assertRecovered(workspaceId: string, signal?: AbortSignal): Promise<void> {
+    if (!this.#recoveryFailures.has(workspaceId)) return;
+    try {
+      await this.recover(workspaceId, undefined, signal);
+      this.#recoveryFailures.delete(workspaceId);
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') throw error;
+      this.recordRecoveryFailure(workspaceId, error);
+      throw new ServiceError(
+        'TRANSACTION_RECOVERY_REQUIRED',
+        `Rewrites of this workspace wait until its interrupted rewrite journal can be recovered: ${this.#recoveryFailures.get(workspaceId)}`,
+      );
+    }
+  }
+
   async plan(input: PlanTransactionInput): Promise<TransactionManifest> {
     input.signal?.throwIfAborted();
+    await this.assertRecovered(input.workspaceId, input.signal);
     if (
       input.changes.length > TRANSACTION_MAX_FILES ||
       input.operations.length > TRANSACTION_MAX_OPERATIONS ||
@@ -603,6 +633,7 @@ export class TransactionManager {
     const workspace = this.resolver.get(workspaceId, options.principal);
     if (!workspace.writeEnabled)
       throw new ServiceError('WRITE_POLICY_DISABLED', 'Workspace writes are not enabled');
+    await this.assertRecovered(workspaceId, options.signal);
     const manifest = await this.load(workspace, transactionId, {
       headMode: 'reconcile',
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -968,6 +999,9 @@ export class TransactionManager {
     for (const entry of directoryEntries.filter((value) => value.isDirectory())) {
       signal?.throwIfAborted();
       if (!transactionIdPattern.test(entry.name)) continue;
+      // A journal folder without a manifest is a plan that never committed: nothing was
+      // applied from it, and pruning removes it once it expires.
+      if (!(await fileExists(path.join(directory, entry.name, 'manifest.json')))) continue;
       const manifest = await this.load(workspace, entry.name, {
         headMode: 'none',
         rootBinding: 'ignored',

@@ -14,6 +14,7 @@ import type { WorkspaceResolver } from './workspace.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
 import { JobStore } from './job-store.js';
+import { ServiceError } from './result.js';
 
 /**
  * Completed scans kept per workspace. One tool call often scans several pattern sets (a GUI
@@ -215,8 +216,22 @@ export class CoreEngine {
 
   async initialize(): Promise<void> {
     for (const workspace of this.resolver.list()) {
-      // Recovery repairs an interrupted internal rewrite before the workspace is exposed.
-      await this.transactions.recover(workspace.id);
+      // Recovery repairs an interrupted internal rewrite before the workspace is exposed. A
+      // journal that cannot be recovered blocks rewrites of its own workspace, not the server.
+      try {
+        await this.transactions.recover(workspace.id);
+      } catch (error) {
+        this.transactions.recordRecoveryFailure(workspace.id, error);
+        process.stderr.write(
+          `${JSON.stringify({
+            level: 'error',
+            event: 'transaction_recovery_blocked',
+            workspaceId: workspace.id,
+            code: error instanceof ServiceError ? error.code : 'TRANSACTION_RECOVERY_FAILED',
+            message: error instanceof Error ? error.message : String(error),
+          })}\n`,
+        );
+      }
     }
   }
 
