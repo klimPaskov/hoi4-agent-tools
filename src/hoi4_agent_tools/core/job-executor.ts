@@ -136,7 +136,17 @@ export class JobExecutor {
     private readonly operations: JobOperations,
   ) {}
 
-  async run(workspaceId: string, id: string, principal?: string): Promise<JobRecord> {
+  /**
+   * `deadlineMs` (epoch milliseconds) stops a read-only operation that is still running then
+   * and records JOB_DEADLINE_EXCEEDED as the job's owner. An operation that never yields cannot
+   * observe it; its supervising host stops the process instead.
+   */
+  async run(
+    workspaceId: string,
+    id: string,
+    principal?: string,
+    options: { deadlineMs?: number } = {},
+  ): Promise<JobRecord> {
     const initial = await this.jobs.get(workspaceId, id, principal);
     if (['completed', 'failed', 'cancelled'].includes(initial.status)) return initial;
     const operation = this.operations.get(initial.request.toolName);
@@ -177,6 +187,19 @@ export class JobExecutor {
     const controller = new AbortController();
     const watchStop = new AbortController();
     let watchFailure: unknown;
+    const deadlineTimer =
+      options.deadlineMs === undefined || operation.mutation
+        ? undefined
+        : setTimeout(
+            () => {
+              watchFailure = new ServiceError(
+                'JOB_DEADLINE_EXCEEDED',
+                'The job ran past its deadline and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds',
+              );
+              controller.abort(watchFailure);
+            },
+            Math.max(0, options.deadlineMs - Date.now()),
+          );
     const watch = (async () => {
       while (!watchStop.signal.aborted) {
         const current = await this.jobs.get(workspaceId, id, principal);
@@ -317,6 +340,7 @@ export class JobExecutor {
         },
       });
     } finally {
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
       watchStop.abort();
       await watch;
     }
