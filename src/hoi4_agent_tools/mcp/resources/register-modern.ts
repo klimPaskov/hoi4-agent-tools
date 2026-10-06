@@ -17,12 +17,16 @@ export function registerModernResources(
   engine: CoreEngine,
   context: OperationContext,
 ): void {
-  server.setRequestHandler('resources/list', () => ({ resources: [serverStatusResource] }));
+  // Process details are offered to the local client only, never to authenticated remote ones.
+  const local = context.principal === undefined;
+  server.setRequestHandler('resources/list', () => ({
+    resources: local ? [serverStatusResource] : [],
+  }));
   server.setRequestHandler('resources/templates/list', () => ({
     resourceTemplates: [artifactResourceDefinition],
   }));
   server.setRequestHandler('resources/read', async (request, extra) => {
-    if (request.params.uri === serverStatusResource.uri)
+    if (local && request.params.uri === serverStatusResource.uri)
       return ReadResourceResultSchema.parse({
         ...(await readServerStatus(engine)),
         resultType: 'complete',

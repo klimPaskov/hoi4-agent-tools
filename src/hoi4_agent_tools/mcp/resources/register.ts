@@ -17,6 +17,8 @@ export function registerMcpResources(
     metadata,
     (uri, _variables, extra) => readArtifactResource(engine, uri.href, context, extra.signal),
   );
+  // Process details are offered to the local client only, never to authenticated remote ones.
+  if (context.principal !== undefined) return;
   const { name: statusName, uri: statusUri, ...statusMetadata } = serverStatusResource;
   server.registerResource(statusName, statusUri, statusMetadata, () => readServerStatus(engine));
 }
