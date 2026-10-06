@@ -198,6 +198,8 @@ export const serverConfigurationSchema = z
       .default(134_217_728),
     modRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     gameRoot: z.string().min(1).optional(),
+    /** The game's user-data folder holding logs/ and mod/; derived from the mod folder when unset. */
+    gameUserRoot: z.string().min(1).optional(),
     workspaceStorageRoot: z.string().min(1).optional(),
     storageRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     workspaces: z.array(workspaceRegistrationSchema).max(WORKSPACE_MAX_REGISTRATIONS).default([]),

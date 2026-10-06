@@ -21,6 +21,14 @@ import {
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
+import { readErrorLog } from './error-log.js';
+import { modIndex } from './mod-index.js';
+import {
+  errorLogDataSchema,
+  errorLogRequestSchema,
+  modIndexDataSchema,
+  modIndexRequestSchema,
+} from '../schemas/mod-tools.js';
 import type { LocalisedText, PlayerTextContext } from './player-text.js';
 import { eventPopupDefinitions, type EventPopupDefinition } from './event-popups.js';
 import { locatePatterns, selectFile } from './source-locate.js';
@@ -61,6 +69,8 @@ const schemas = {
   'hoi4.reference_context': referenceContextRequestSchema,
   'hoi4.source_lookup': sourceLookupRequestSchema,
   'hoi4.script_validate': scriptValidateRequestSchema,
+  'hoi4.error_log': errorLogRequestSchema,
+  'hoi4.mod_index': modIndexRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -108,22 +118,58 @@ export class ReferenceToolService {
                 referenceContextRequestSchema.parse(parsed),
                 signal,
               )
-            : name === 'hoi4.script_validate'
-              ? await this.validateScript(
-                  workspaceId,
+            : name === 'hoi4.error_log'
+              ? await readErrorLog(
                   workspace,
-                  scriptValidateRequestSchema.parse(parsed),
-                  context.principal,
+                  errorLogRequestSchema.parse(parsed),
+                  this.engine.resolver.config().gameUserRoot,
                   signal,
                 )
-              : await sourceLookup(
-                  this.engine,
-                  workspaceId,
-                  sourceLookupRequestSchema.parse(parsed),
-                  context.principal,
-                  signal,
-                );
+              : name === 'hoi4.mod_index'
+                ? await modIndex(
+                    this.engine,
+                    workspaceId,
+                    modIndexRequestSchema.parse(parsed),
+                    context.principal,
+                    signal,
+                  )
+                : name === 'hoi4.script_validate'
+                  ? await this.validateScript(
+                      workspaceId,
+                      workspace,
+                      scriptValidateRequestSchema.parse(parsed),
+                      context.principal,
+                      signal,
+                    )
+                  : await sourceLookup(
+                      this.engine,
+                      workspaceId,
+                      sourceLookupRequestSchema.parse(parsed),
+                      context.principal,
+                      signal,
+                    );
     const result = emptyServiceResult(workspaceId, data);
+    if (name === 'hoi4.error_log') {
+      const log = errorLogDataSchema.parse(data);
+      result.code = 'ERROR_LOG_READ';
+      result.validation = {
+        passed: log.modEntries === 0,
+        checks: [
+          {
+            id: 'error-log-mod-entries',
+            passed: log.modEntries === 0,
+            message:
+              log.modEntries === 0
+                ? 'The last game launch logged no errors located in this mod'
+                : `The last game launch logged ${log.modEntries} distinct errors located in this mod`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.mod_index') {
+      const index = modIndexDataSchema.parse(data);
+      result.code = index.complete ? 'MOD_INDEXED' : 'MOD_INDEXED_PARTIAL';
+    }
     if (name === 'hoi4.script_validate') {
       const checked = scriptValidateDataSchema.parse(data);
       result.code = checked.valid === null ? 'SCRIPT_CHECK_PARTIAL' : 'SCRIPT_CHECKED';

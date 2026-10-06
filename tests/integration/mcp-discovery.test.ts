@@ -64,6 +64,8 @@ describe('MCP discovery', () => {
       'hoi4.reference_context',
       'hoi4.source_lookup',
       'hoi4.script_validate',
+      'hoi4.error_log',
+      'hoi4.mod_index',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.event_compare',
@@ -127,6 +129,8 @@ describe('MCP discovery', () => {
       'hoi4.reference_context',
       'hoi4.source_lookup',
       'hoi4.script_validate',
+      'hoi4.error_log',
+      'hoi4.mod_index',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,

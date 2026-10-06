@@ -15,6 +15,12 @@ import {
 } from '../../schemas/reference.js';
 import type { ToolDefinition } from '../server/task-tool-definition.js';
 import {
+  errorLogDataSchema,
+  errorLogRequestSchema,
+  modIndexDataSchema,
+  modIndexRequestSchema,
+} from '../../schemas/mod-tools.js';
+import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../../schemas/script-validation.js';
@@ -68,6 +74,24 @@ export const referenceTools = [
       'Check an effect or trigger snippet (source, kind, scope) or a whole mod file (path) for syntax, native command kinds and scopes against cited installed documentation. Unknown helpers and native argument blocks remain explicit.',
     inputSchema: scriptValidateRequestSchema,
     outputSchema: strictOperationResultSchema(scriptValidateDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.error_log',
+    title: 'Read the game error log',
+    description:
+      'Group logs/error.log from the last game launch by category, with the source file, line and layer of each entry and whether that file changed since. Filter by scope, category or text.',
+    inputSchema: errorLogRequestSchema,
+    outputSchema: strictOperationResultSchema(errorLogDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.mod_index',
+    title: 'Index mod definitions and free IDs',
+    description:
+      'overview: definition counts by kind, folders and event namespace ranges of the mod; next_id: the next free numbered ID for a prefix or namespace across every layer.',
+    inputSchema: modIndexRequestSchema,
+    outputSchema: strictOperationResultSchema(modIndexDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];
