@@ -375,7 +375,8 @@ export class SymbolIndex {
    */
   readonly #fileRanges = new Map<
     string,
-    { symbols: [number, number]; references: [number, number]; diagnostics: [number, number] }
+    // Diagnostics are copied, not ranged: finalize() sorts and extends that array.
+    { symbols: [number, number]; references: [number, number]; diagnostics: Diagnostic[] }
   >();
   readonly #indexNestingBlocked = new Set<string>();
   readonly #skippedSourcePaths = new Set<string>();
@@ -590,7 +591,7 @@ export class SymbolIndex {
     return {
       symbols: this.symbols.slice(...range.symbols),
       references: this.references.slice(...range.references),
-      diagnostics: this.diagnostics.slice(...range.diagnostics),
+      diagnostics: range.diagnostics,
       complete: true,
     };
   }
@@ -612,7 +613,7 @@ export class SymbolIndex {
       this.#fileRanges.set(address, {
         symbols: [symbols, this.symbols.length],
         references: [references, this.references.length],
-        diagnostics: [diagnostics, this.diagnostics.length],
+        diagnostics: this.diagnostics.slice(diagnostics),
       });
     const reused =
       (previous === undefined ? undefined : previous.#segmentAt(address)) ?? cache?.get(address);
