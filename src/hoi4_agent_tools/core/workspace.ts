@@ -655,7 +655,9 @@ export class WorkspaceResolver {
       .split('/')
       .find((segment) => segment !== '.' && segment.length > 0)
       ?.toLowerCase();
-    if (access === 'write' && firstSegment === '.hoi4-agent') {
+    // Server storage holds other principals' proposals and journals; it is never mod source,
+    // for reads as well as writes.
+    if (firstSegment === '.hoi4-agent') {
       throw new ServiceError(
         'PATH_GENERATED_STORAGE_RESERVED',
         'Generated .hoi4-agent storage cannot be targeted as mod source',
@@ -670,17 +672,17 @@ export class WorkspaceResolver {
       const candidate = await canonicalPath(path.join(root.path, relativePath));
       if (!isWithin(root.path, candidate)) continue;
       if (access === 'read' && !(await exists(candidate))) continue;
+      if (
+        root.kind === 'mod' &&
+        (pathsOverlap(workspace.artifactRoot, candidate) ||
+          pathsOverlap(workspace.cacheRoot, candidate))
+      ) {
+        throw new ServiceError(
+          'PATH_GENERATED_STORAGE_RESERVED',
+          'Artifact and cache storage cannot be targeted as mod source',
+        );
+      }
       if (access === 'write') {
-        if (
-          root.kind === 'mod' &&
-          (pathsOverlap(workspace.artifactRoot, candidate) ||
-            pathsOverlap(workspace.cacheRoot, candidate))
-        ) {
-          throw new ServiceError(
-            'PATH_GENERATED_STORAGE_RESERVED',
-            'Artifact and cache storage cannot be targeted as mod source',
-          );
-        }
         const existingParent = await canonicalPath(path.dirname(candidate));
         if (!isWithin(root.path, existingParent)) continue;
       }
