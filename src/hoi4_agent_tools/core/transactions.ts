@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { access, mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
@@ -1948,7 +1949,15 @@ export class TransactionManager {
       );
       return await action();
     } finally {
-      await rm(lock, { recursive: true, force: true });
+      // Release only this holder's lock; never one another process holds after a takeover.
+      const owner = await readFile(path.join(lock, 'owner.json'), 'utf8')
+        .then((text) => JSON.parse(text) as { instanceId?: unknown; transactionId?: unknown })
+        .catch(() => undefined);
+      if (
+        owner === undefined ||
+        (owner.instanceId === lockInstanceId && owner.transactionId === transactionId)
+      )
+        await rm(lock, { recursive: true, force: true });
     }
   }
 
@@ -1972,8 +1981,7 @@ export class TransactionManager {
       } catch {
         return false;
       }
-      await rm(lock, { recursive: true, force: true });
-      return true;
+      return this.retireStaleLock(lock, undefined);
     }
     if (
       typeof owner !== 'object' ||
@@ -2000,7 +2008,34 @@ export class TransactionManager {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return false;
     }
-    await rm(lock, { recursive: true, force: true });
+    return this.retireStaleLock(lock, canonicalJson(owner));
+  }
+
+  /**
+   * Move a lock judged stale aside under a unique name; only one process can win the rename.
+   * The moved lock must still carry the owner that was judged stale (`undefined`: no owner
+   * file). Otherwise a new holder took the lock in between, and it is put back untouched.
+   */
+  private async retireStaleLock(lock: string, judgedOwner: string | undefined): Promise<boolean> {
+    const tombstone = `${lock}.stale-${randomUUID()}`;
+    try {
+      await rename(lock, tombstone);
+    } catch {
+      return false;
+    }
+    let movedOwner: string | undefined;
+    try {
+      movedOwner = canonicalJson(
+        JSON.parse(await readFile(path.join(tombstone, 'owner.json'), 'utf8')) as unknown,
+      );
+    } catch {
+      movedOwner = undefined;
+    }
+    if (movedOwner !== judgedOwner) {
+      await rename(tombstone, lock).catch(() => undefined);
+      return false;
+    }
+    await rm(tombstone, { recursive: true, force: true });
     return true;
   }
 }
