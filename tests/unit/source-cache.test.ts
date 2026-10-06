@@ -31,6 +31,27 @@ describe('content-addressed parsed source cache', () => {
     expect(cache.statistics()).toMatchObject({ hits: 2, misses: 1, retainedDocuments: 1 });
   });
 
+  it('keeps documents that are read again when a scan cycles through more source than fits', () => {
+    const files = Array.from({ length: 40 }, (_, index) =>
+      Buffer.from(`entry_${index} = { value = ${index} }`),
+    );
+    // Room for the conservative admission estimate of one document, which holds several.
+    const sample = parseClausewitz(files[0]!, '0.txt', new SourceDocumentCache(0));
+    const estimate = sample.bytes.length * 12 + sample.tokens.length * 512 + 70 * 2 + 128;
+    const cache = new SourceDocumentCache(estimate * 2);
+    const pass = () =>
+      files.forEach((bytes, index) => parseClausewitz(bytes, `${index}.txt`, cache));
+    pass();
+    const kept = cache.statistics().retainedDocuments;
+    expect(kept).toBeGreaterThan(1);
+    expect(kept).toBeLessThan(files.length);
+    pass();
+    pass();
+    // Plain LRU evicts every document before its next read and never hits on this cycle.
+    expect(cache.statistics().hits).toBe(2 * kept);
+    expect(cache.statistics().rejections).toBeGreaterThan(0);
+  });
+
   it('distinguishes source locations and content changes even with identical byte lengths', () => {
     const cache = new SourceDocumentCache();
     const before = Buffer.from('old = 1');
@@ -41,7 +62,7 @@ describe('content-addressed parsed source cache', () => {
     expect(cache.statistics()).toMatchObject({ hits: 0, misses: 3, retainedDocuments: 3 });
   });
 
-  it('evicts by retained bytes and continues parsing when retention is disabled', () => {
+  it('bounds retained bytes and continues parsing when retention is disabled', () => {
     const bytes = Buffer.from('x = 1');
     const probe = new SourceDocumentCache();
     const expected = parseClausewitz(bytes, 'a.txt', probe);
@@ -52,7 +73,8 @@ describe('content-addressed parsed source cache', () => {
     const cache = new SourceDocumentCache(capacity);
     parseClausewitz(bytes, 'a.txt', cache);
     for (let index = 0; index < 30; index += 1) parseClausewitz(bytes, `b${index}.txt`, cache);
-    expect(cache.statistics().evictions).toBeGreaterThan(0);
+    const { evictions, rejections } = cache.statistics();
+    expect(evictions + rejections).toBeGreaterThan(0);
     expect(cache.statistics().retainedBytes).toBeLessThanOrEqual(capacity);
     cache.clear();
     expect(cache.statistics().retainedBytes).toBe(0);

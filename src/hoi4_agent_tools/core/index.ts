@@ -3,7 +3,11 @@ import path from 'node:path';
 import type { Diagnostic, SourceLocation } from './diagnostics.js';
 import { sortDiagnostics } from './diagnostics.js';
 import type { ScannedFile } from './scanner.js';
-import { type IndexSegmentCache, indexSegmentAddress } from './index-segments.js';
+import {
+  type FileIndexSegment,
+  type IndexSegmentCache,
+  indexSegmentAddress,
+} from './index-segments.js';
 import {
   parseClausewitz,
   parseLocalisation,
@@ -365,6 +369,14 @@ export class SymbolIndex {
   readonly files = new Map<string, ScannedFile>();
   readonly #active = new Map<string, SymbolRecord>();
   readonly #definitionFiles = new Set<string>();
+  /**
+   * Where each completely indexed file's records sit in this index, by segment address, so a
+   * rebuild after an edit reuses unchanged files instead of parsing and indexing them again.
+   */
+  readonly #fileRanges = new Map<
+    string,
+    { symbols: [number, number]; references: [number, number]; diagnostics: [number, number] }
+  >();
   readonly #indexNestingBlocked = new Set<string>();
   readonly #skippedSourcePaths = new Set<string>();
   readonly #skippedPossibleSymbolKinds = new Set<SymbolKind>();
@@ -376,7 +388,11 @@ export class SymbolIndex {
   #diagnosticsTruncated = false;
   readonly #indexTableBlocked = new Set<string>();
 
-  static build(files: readonly ScannedFile[], segments?: IndexSegmentCache): SymbolIndex {
+  static build(
+    files: readonly ScannedFile[],
+    segments?: IndexSegmentCache,
+    previous?: SymbolIndex,
+  ): SymbolIndex {
     const index = new SymbolIndex();
     const definitionSelection = selectedDefinitionFiles(files);
     for (const displayPath of definitionSelection.selected) index.#definitionFiles.add(displayPath);
@@ -387,7 +403,7 @@ export class SymbolIndex {
       (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
     )) {
       index.files.set(file.displayPath, file);
-      index.indexFileWithSegments(file, segments);
+      index.indexFileWithSegments(file, segments, previous);
     }
     index.finalize();
     return index;
@@ -398,6 +414,7 @@ export class SymbolIndex {
     files: readonly ScannedFile[],
     signal?: AbortSignal,
     segments?: IndexSegmentCache,
+    previous?: SymbolIndex,
   ): Promise<SymbolIndex> {
     signal?.throwIfAborted();
     const index = new SymbolIndex();
@@ -412,7 +429,7 @@ export class SymbolIndex {
     )) {
       signal?.throwIfAborted();
       index.files.set(file.displayPath, file);
-      index.indexFileWithSegments(file, segments);
+      index.indexFileWithSegments(file, segments, previous);
       if (performance.now() - yieldedAt >= 20) {
         await new Promise<void>((resolve) => setImmediate(resolve));
         signal?.throwIfAborted();
@@ -566,31 +583,55 @@ export class SymbolIndex {
     for (const diagnostic of diagnostics) this.addDiagnostic(diagnostic);
   }
 
-  private indexFileWithSegments(file: ScannedFile, cache?: IndexSegmentCache): void {
-    if (cache === undefined) {
+  /** The records one completely indexed file contributed to this index, if it was recorded. */
+  #segmentAt(address: string): FileIndexSegment | undefined {
+    const range = this.#fileRanges.get(address);
+    if (range === undefined) return undefined;
+    return {
+      symbols: this.symbols.slice(...range.symbols),
+      references: this.references.slice(...range.references),
+      diagnostics: this.diagnostics.slice(...range.diagnostics),
+      complete: true,
+    };
+  }
+
+  private indexFileWithSegments(
+    file: ScannedFile,
+    cache?: IndexSegmentCache,
+    previous?: SymbolIndex,
+  ): void {
+    if (cache === undefined && previous === undefined) {
       this.indexFile(file);
       return;
     }
     const address = indexSegmentAddress(file, this.#definitionFiles.has(file.displayPath));
-    const cached = cache.get(address);
-    if (
-      cached?.complete === true &&
-      this.symbols.length + cached.symbols.length <= INDEX_RECORD_LIMIT &&
-      this.references.length + cached.references.length <= INDEX_RECORD_LIMIT &&
-      this.diagnostics.length + cached.diagnostics.length <= INDEX_DIAGNOSTIC_LIMIT
-    ) {
-      this.#currentFileShadowed = file.shadowedBy !== undefined;
-      for (const symbol of cached.symbols) this.addSymbol(symbol);
-      for (const reference of cached.references) this.addReference(reference);
-      this.addDiagnostics(cached.diagnostics);
-      return;
-    }
     const symbols = this.symbols.length;
     const references = this.references.length;
     const diagnostics = this.diagnostics.length;
+    const record = () =>
+      this.#fileRanges.set(address, {
+        symbols: [symbols, this.symbols.length],
+        references: [references, this.references.length],
+        diagnostics: [diagnostics, this.diagnostics.length],
+      });
+    const reused =
+      (previous === undefined ? undefined : previous.#segmentAt(address)) ?? cache?.get(address);
+    if (
+      reused?.complete === true &&
+      this.symbols.length + reused.symbols.length <= INDEX_RECORD_LIMIT &&
+      this.references.length + reused.references.length <= INDEX_RECORD_LIMIT &&
+      this.diagnostics.length + reused.diagnostics.length <= INDEX_DIAGNOSTIC_LIMIT
+    ) {
+      this.#currentFileShadowed = file.shadowedBy !== undefined;
+      for (const symbol of reused.symbols) this.addSymbol(symbol);
+      for (const reference of reused.references) this.addReference(reference);
+      this.addDiagnostics(reused.diagnostics);
+      if (!this.#diagnosticsTruncated) record();
+      return;
+    }
     this.indexFile(file);
     // Incomplete files and aggregate ceilings retain the full builder's exact diagnostic
-    // ordering and coverage bookkeeping. They are never cached as complete segments.
+    // ordering and coverage bookkeeping. They are never reused as complete segments.
     if (
       this.#indexTableBlocked.has(file.displayPath) ||
       this.#skippedSourcePaths.has(file.displayPath) ||
@@ -600,7 +641,8 @@ export class SymbolIndex {
       this.#diagnosticsTruncated
     )
       return;
-    cache.put(address, {
+    record();
+    cache?.put(address, {
       symbols: this.symbols.slice(symbols),
       references: this.references.slice(references),
       diagnostics: this.diagnostics.slice(diagnostics),

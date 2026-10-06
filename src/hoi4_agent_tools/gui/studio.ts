@@ -19,6 +19,7 @@ import { DiagnosticCollector } from '../core/diagnostic-collector.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { CoreEngine } from '../core/engine.js';
+import type { SymbolIndex } from '../core/index.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
 import { escapeFileGlob } from '../core/file-glob.js';
@@ -831,6 +832,8 @@ const galleryStates: readonly GuiPreviewState[] = [
 export interface GuiStudioScanResult {
   files: ScannedFile[];
   graph: GuiSourceGraph;
+  /** The symbol index the graph was built from, reused when the same scope is rebuilt. */
+  index?: SymbolIndex;
 }
 
 export interface GuiStudioRenderInput {
@@ -1233,6 +1236,8 @@ export function guiArtifactProvenance(
 }
 
 const sharedGuiGraphs = new WeakMap<CoreEngine, Map<string, GuiStudioScanResult>>();
+/** Graphs kept per engine: one for each scope a preview builds, across a few workspaces. */
+const GUI_GRAPH_CACHE_SCOPES = 6;
 
 export class ScriptedGuiStudio {
   private readonly engine: CoreEngine;
@@ -1290,16 +1295,22 @@ export class ScriptedGuiStudio {
       return cached;
     }
     const retainedFiles = [...files];
+    // The previous graph of this scope still indexes every unchanged file.
+    const previous = [...this.#graphCache].find(([existing]) =>
+      existing.startsWith(`${scope}:`),
+    )?.[1].index;
+    const index = this.engine.indexFiles(retainedFiles, previous);
     const scanned = {
       files: retainedFiles,
-      graph: buildGuiSourceGraph(
-        retainedFiles,
-        this.engine.indexFiles(retainedFiles),
-        additionalLocalisationKeys,
-      ),
+      graph: buildGuiSourceGraph(retainedFiles, index, additionalLocalisationKeys),
+      index,
     };
+    // One graph per scope: a preview builds layout, game-layout and definition graphs, and a
+    // single shared slot made each repeat call rebuild all of them.
+    for (const existing of this.#graphCache.keys())
+      if (existing.startsWith(`${scope}:`)) this.#graphCache.delete(existing);
     this.#graphCache.set(key, scanned);
-    while (this.#graphCache.size > 1) {
+    while (this.#graphCache.size > GUI_GRAPH_CACHE_SCOPES) {
       const oldest = this.#graphCache.keys().next().value;
       if (oldest === undefined) break;
       this.#graphCache.delete(oldest);
@@ -1393,7 +1404,7 @@ export class ScriptedGuiStudio {
         layoutFiles,
         gameLayouts.files.filter(({ displayPath }) => selectedPaths.has(displayPath)),
       );
-      layoutGraph = this.graphForFiles(layoutFiles, `layout:${workspaceId}`).graph;
+      layoutGraph = this.graphForFiles(layoutFiles, `merged-layout:${workspaceId}`).graph;
     }
     if (!layoutGraph.elements.some(({ name }) => name === windowName))
       assertTargetWindowAvailable(layoutGraph, windowName);
@@ -1504,7 +1515,9 @@ export class ScriptedGuiStudio {
         ({ tooltip }) => tooltip !== undefined,
       ),
     );
-    const evaluationDefinitions = ClausewitzEvaluationDefinitions.build(scanned);
+    let builtDefinitions: ClausewitzEvaluationDefinitions | undefined;
+    const evaluationDefinitions = () =>
+      (builtDefinitions ??= ClausewitzEvaluationDefinitions.build(scanned));
     const resolveLocalisation = (target: GuiPreviewScenario) =>
       resolveScenarioScriptedLocalisation(
         scanned.graph,
@@ -1521,7 +1534,7 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
-            evaluationDefinitions,
+            evaluationDefinitions(),
           );
     const scenario = generatedScenarios[0] ?? suppliedScenario;
     const relatedScenarios = [
@@ -1685,7 +1698,9 @@ export class ScriptedGuiStudio {
         ...explicitRelatedScenarios,
       ].some(({ tooltip }) => tooltip !== undefined),
     );
-    const evaluationDefinitions = ClausewitzEvaluationDefinitions.build(scanned);
+    let builtDefinitions: ClausewitzEvaluationDefinitions | undefined;
+    const evaluationDefinitions = () =>
+      (builtDefinitions ??= ClausewitzEvaluationDefinitions.build(scanned));
     const resolveLocalisation = (target: GuiPreviewScenario) =>
       resolveScenarioScriptedLocalisation(
         scanned.graph,
@@ -1702,7 +1717,7 @@ export class ScriptedGuiStudio {
             input.windowName,
             placeholderScenario,
             generatedOptions,
-            evaluationDefinitions,
+            evaluationDefinitions(),
           );
     const scenario = generatedScenarios[0] ?? suppliedScenario;
     const relatedScenarios = [

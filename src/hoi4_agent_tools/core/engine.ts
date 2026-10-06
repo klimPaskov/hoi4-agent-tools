@@ -15,6 +15,12 @@ import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
 import { JobStore } from './job-store.js';
 
+/**
+ * Completed scans kept per workspace. One tool call often scans several pattern sets (a GUI
+ * preview scans layouts, linked definitions and localisation), so a single slot made every
+ * repeat call rescan and reindex each set.
+ */
+const SCAN_CACHE_ENTRIES_PER_WORKSPACE = 4;
 const RECOVERY_TTL_SECONDS = 3_600;
 const RECOVERY_MAX_BYTES = 536_870_912;
 const RECOVERY_MAX_RECORDS = 128;
@@ -265,9 +271,6 @@ export class CoreEngine {
     })}`;
     let flight = this.#scanFlights.get(requestKey);
     if (flight === undefined) {
-      for (const key of this.#scanCache.keys())
-        if (key.startsWith(`${workspaceId}:`) && !key.startsWith(`${requestKey}:`))
-          this.#scanCache.delete(key);
       const controller = new AbortController();
       const promise = (async (): Promise<ScanSnapshot> => {
         return this.withScanAdmission(controller.signal, async () => {
@@ -303,7 +306,11 @@ export class CoreEngine {
           );
           const cacheKey = `${requestKey}:${revision}`;
           const cached = this.#scanCache.get(cacheKey);
-          if (cached !== undefined) return cached;
+          if (cached !== undefined) {
+            this.#scanCache.delete(cacheKey);
+            this.#scanCache.set(cacheKey, cached);
+            return cached;
+          }
           const persistentAnalysisCache = await this.persistentAnalysisCache;
           const analysisScope = {
             workspaceIdentity: workspace.workspaceIdentity,
@@ -317,7 +324,17 @@ export class CoreEngine {
             this.indexSegments,
             controller.signal,
           );
-          const index = await SymbolIndex.buildAsync(files, controller.signal, this.indexSegments);
+          // The previous revision of the same request still holds every unchanged file's
+          // records, so only edited files are parsed and indexed again.
+          const previous = [...this.#scanCache]
+            .filter(([key]) => key.startsWith(`${requestKey}:`))
+            .at(-1)?.[1].index;
+          const index = await SymbolIndex.buildAsync(
+            files,
+            controller.signal,
+            this.indexSegments,
+            previous,
+          );
           await persistentAnalysisCache?.persist(
             analysisScope,
             files,
@@ -336,10 +353,22 @@ export class CoreEngine {
             diagnostics: index.diagnostics,
           } satisfies ScanSnapshot;
           if ((this.#scanGenerations.get(workspaceId) ?? 0) === generation) {
+            // Replace this request's earlier revision and drop earlier generations; keep the
+            // most recent other requests of this workspace.
             for (const key of this.#scanCache.keys()) {
-              if (key.startsWith(`${workspaceId}:`)) this.#scanCache.delete(key);
+              if (
+                key.startsWith(`${requestKey}:`) ||
+                (key.startsWith(`${workspaceId}:`) &&
+                  !key.startsWith(`${workspaceId}:${generation}:`))
+              )
+                this.#scanCache.delete(key);
             }
             this.#scanCache.set(cacheKey, snapshot);
+            const retained = [...this.#scanCache.keys()].filter((key) =>
+              key.startsWith(`${workspaceId}:`),
+            );
+            for (const key of retained.slice(0, -SCAN_CACHE_ENTRIES_PER_WORKSPACE))
+              this.#scanCache.delete(key);
           }
           return snapshot;
         });
@@ -519,7 +548,8 @@ export class CoreEngine {
     }
   }
 
-  indexFiles(files: readonly ScannedFile[]): SymbolIndex {
-    return SymbolIndex.build(files, this.indexSegments);
+  /** `previous` supplies unchanged files' records from an earlier index of the same sources. */
+  indexFiles(files: readonly ScannedFile[], previous?: SymbolIndex): SymbolIndex {
+    return SymbolIndex.build(files, this.indexSegments, previous);
   }
 }

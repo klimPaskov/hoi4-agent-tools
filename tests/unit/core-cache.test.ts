@@ -79,6 +79,14 @@ describe('CoreEngine scan cache', () => {
       const bounded = await engine.scan('cache_test', boundedOptions);
       engine.invalidate('other-workspace');
       expect(await engine.scan('cache_test', boundedOptions)).toBe(bounded);
+      // A different pattern set of the same workspace keeps the earlier snapshot.
+      const focusOnly = await engine.scan('cache_test', {
+        patterns: ['common/national_focus/*.txt'],
+      });
+      expect(await engine.scan('cache_test', boundedOptions)).toBe(bounded);
+      expect(await engine.scan('cache_test', { patterns: ['common/national_focus/*.txt'] })).toBe(
+        focusOnly,
+      );
       engine.releaseScanCaches();
       expect(engine.indexSegments.statistics().retainedBytes).toBe(0);
       expect(await engine.scan('cache_test', boundedOptions)).not.toBe(bounded);

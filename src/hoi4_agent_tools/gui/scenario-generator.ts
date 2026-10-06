@@ -632,12 +632,18 @@ export function resolveScenarioScriptedLocalisation(
   graph: GuiSourceGraph,
   windowName: string,
   base: GuiPreviewScenario,
-  definitions = new ClausewitzEvaluationDefinitions(),
+  /** Built only when the window shows scripted localisation; building scans every helper. */
+  definitions: () => ClausewitzEvaluationDefinitions = () => new ClausewitzEvaluationDefinitions(),
 ): GuiPreviewScenario {
   if (graph.scriptedLocalisation.length === 0) return base;
   const scripted = relatedScriptedGuis(graph, windowName);
   const elements = relevantElements(graph, windowName, scripted);
   const textual = tokensIn(sourceTexts(graph, elements, base.language, scripted)).textual;
+  const names = new Set(graph.scriptedLocalisation.map(({ name }) => name));
+  const shown = (token: string) => names.has(token.slice(token.lastIndexOf('.') + 1));
+  const imageTokens = scriptedImageTokens(scripted);
+  if (![...textual, ...imageTokens].some(shown)) return base;
+  const evaluation = definitions();
   const explicitValues = guiExplicitConditionValues(base);
   const values = { ...base.values };
   const templates = new Map<string, string>();
@@ -651,14 +657,14 @@ export function resolveScenarioScriptedLocalisation(
           kind,
           explicitValues,
           base,
-          definitions,
+          evaluation,
           [],
         );
   for (const key of textual) {
     const template = evaluate(key, 'text');
     if (template !== undefined) templates.set(key, template);
   }
-  for (const key of scriptedImageTokens(scripted)) {
+  for (const key of imageTokens) {
     const sprite = evaluate(key, 'image');
     if (sprite !== undefined) values[key] = sprite;
   }
