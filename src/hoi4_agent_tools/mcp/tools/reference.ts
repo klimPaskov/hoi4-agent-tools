@@ -89,7 +89,7 @@ export const referenceTools = [
     name: 'hoi4.mod_index',
     title: 'Index mod definitions and free IDs',
     description:
-      'overview: definition counts by kind, folders and event namespace ranges of the mod; next_id: the next free numbered ID for a prefix or namespace across every layer.',
+      'overview: descriptor metadata, definition counts by kind, folders and event namespace ranges of the mod; next_id: the next free numbered ID for a prefix or namespace across every layer.',
     inputSchema: modIndexRequestSchema,
     outputSchema: strictOperationResultSchema(modIndexDataSchema),
     annotations: readOnly,

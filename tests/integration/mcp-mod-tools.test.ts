@@ -26,7 +26,10 @@ async function client() {
   const user = path.join(root, 'user');
   const mod = path.join(user, 'mod', 'fixture');
   const game = path.join(root, 'game');
-  await write(path.join(mod, 'descriptor.mod'), 'name="Mod tools fixture"\n');
+  await write(
+    path.join(mod, 'descriptor.mod'),
+    'name="Mod tools fixture"\nversion="1.2"\nsupported_version="1.16.*"\ntags={ "Gameplay" }\n',
+  );
   await write(
     path.join(mod, 'events', 'broken.txt'),
     'add_namespace = fixture\ncountry_event = { id = fixture.1 }\ncountry_event = { id = fixture.2 }\ncountry_event = { id = fixture.5 }\n',
@@ -164,7 +167,16 @@ describe('error log and mod index tools', () => {
     const overview = (await call('hoi4.mod_index', {})).data as {
       kinds: Array<{ kind: string; count: number }>;
       namespaces: Array<{ namespace: string; events: number; lowest: number; highest: number }>;
+      descriptor: unknown;
     };
+    expect(overview.descriptor).toEqual({
+      name: 'Mod tools fixture',
+      version: '1.2',
+      supportedVersion: '1.16.*',
+      tags: ['Gameplay'],
+      dependencies: [],
+      replacePaths: [],
+    });
     expect(overview.kinds).toEqual(
       expect.arrayContaining([
         { kind: 'event', count: 3 },

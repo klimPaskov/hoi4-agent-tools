@@ -102,6 +102,52 @@ async function discoverDlcLayers(gameRoot: string): Promise<DlcLayer[]> {
   );
 }
 
+export interface ModDescriptor {
+  name?: string;
+  version?: string;
+  supportedVersion?: string;
+  remoteFileId?: string;
+  tags: string[];
+  dependencies: string[];
+  replacePaths: string[];
+}
+
+/** Read a mod's `descriptor.mod` metadata, or `undefined` when it is absent or unreadable. */
+export async function readModDescriptor(root: string): Promise<ModDescriptor | undefined> {
+  const descriptor = path.join(root, 'descriptor.mod');
+  let bytes: Buffer;
+  try {
+    const metadata = await lstat(descriptor);
+    if (!metadata.isFile() || metadata.size > MAX_DESCRIPTOR_BYTES) return undefined;
+    bytes = await readFile(descriptor);
+  } catch {
+    return undefined;
+  }
+  const document = parseClausewitz(bytes, descriptor);
+  const result: ModDescriptor = { tags: [], dependencies: [], replacePaths: [] };
+  const text = (value: string) => value.slice(0, 256);
+  for (const entry of document.root.entries) {
+    if (entry.type !== 'assignment') continue;
+    const key = entry.key.value.toLowerCase();
+    if (entry.value.type === 'scalar') {
+      const value = text(entry.value.value);
+      if (key === 'name') result.name = value;
+      else if (key === 'version') result.version = value;
+      else if (key === 'supported_version') result.supportedVersion = value;
+      else if (key === 'remote_file_id') result.remoteFileId = value;
+      else if (key === 'replace_path' && result.replacePaths.length < 64)
+        result.replacePaths.push(value);
+      continue;
+    }
+    const list =
+      key === 'tags' ? result.tags : key === 'dependencies' ? result.dependencies : undefined;
+    if (list === undefined) continue;
+    for (const item of entry.value.entries)
+      if (item.type === 'scalar' && list.length < 64) list.push(text(item.value));
+  }
+  return result;
+}
+
 /**
  * `replace_path` entries from a mod descriptor. The engine unloads earlier-loaded files
  * under each path. Entries that are not safe relative folders are ignored.

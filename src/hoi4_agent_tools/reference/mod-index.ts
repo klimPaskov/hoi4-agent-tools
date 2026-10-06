@@ -2,6 +2,7 @@ import type { z } from 'zod/v4';
 import type { CoreEngine } from '../core/engine.js';
 import type { SymbolRecord } from '../core/index.js';
 import { ServiceError } from '../core/result.js';
+import { readModDescriptor } from '../core/workspace.js';
 import type { modIndexDataSchema, modIndexRequestSchema } from '../schemas/mod-tools.js';
 
 /**
@@ -101,10 +102,15 @@ export async function modIndex(
     folders.set(folder, totals);
   }
   const allNamespaces = namespaces(symbols);
+  const modRoot = engine.resolver
+    .get(workspaceId, principal)
+    .roots.find(({ kind }) => kind === 'mod')?.path;
+  const descriptor = modRoot === undefined ? undefined : await readModDescriptor(modRoot);
   return {
     mode: 'overview',
     layer: input.layer,
     complete: snapshot.complete,
+    ...(descriptor === undefined ? {} : { descriptor }),
     files: snapshot.files.length,
     kinds: [...kinds]
       .map(([kind, count]) => ({ kind, count }))

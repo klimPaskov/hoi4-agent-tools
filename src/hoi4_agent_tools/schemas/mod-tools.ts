@@ -98,6 +98,19 @@ export const modIndexDataSchema = z
     mode: z.enum(['overview', 'next_id']),
     complete: z.boolean(),
     layer: z.enum(['mod', 'all']).optional(),
+    /** The mod's descriptor.mod metadata. */
+    descriptor: z
+      .object({
+        name: z.string().max(256).optional(),
+        version: z.string().max(256).optional(),
+        supportedVersion: z.string().max(256).optional(),
+        remoteFileId: z.string().max(256).optional(),
+        tags: z.array(z.string().max(256)).max(64),
+        dependencies: z.array(z.string().max(256)).max(64),
+        replacePaths: z.array(z.string().max(256)).max(64),
+      })
+      .strict()
+      .optional(),
     files: z.number().int().min(0).optional(),
     kinds: z
       .array(z.object({ kind: z.string().max(64), count: z.number().int().min(0) }).strict())
