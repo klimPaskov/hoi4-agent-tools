@@ -249,6 +249,10 @@ describe('MCP discovery', () => {
     expect(Buffer.byteLength(JSON.stringify(tools), 'utf8')).toBeLessThanOrEqual(
       toolsListByteBudget,
     );
+    // Listed schemas carry no dialect declarations or implicit safe-integer bounds.
+    const listed = JSON.stringify(tools);
+    expect(listed).not.toContain('"$schema"');
+    expect(listed).not.toContain(String(Number.MAX_SAFE_INTEGER));
     for (const tool of tools.tools) {
       expect(Buffer.byteLength(JSON.stringify(tool), 'utf8'), tool.name).toBeLessThanOrEqual(
         singleToolByteBudget,

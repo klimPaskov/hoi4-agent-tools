@@ -3,6 +3,7 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { CoreEngine } from '../../core/engine.js';
 import { progressReporter, withProgressHeartbeat } from './progress.js';
 import { withTaskRequestSignal } from './task-request-context.js';
+import { slimToolList } from './tool-listing.js';
 
 // Durable task compatibility and cancellation are control traffic. They must
 // remain responsive while every domain-execution slot is occupied.
@@ -45,6 +46,8 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
   const owner = {};
   server.server.setRequestHandler = (schema, handler) => {
     register(schema, (request, extra) => {
+      if (request.method === 'tools/list')
+        return Promise.resolve(handler(request, extra)).then(slimToolList);
       if (request.method !== 'tools/call') return handler(request, extra);
       const progress = progressReporter(extra);
       const taskCall = CallToolRequestSchema.safeParse(request);

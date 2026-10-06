@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { slimListedTool } from './tool-listing.js';
 import {
   CallToolResultSchema,
   ClientCapabilitiesSchema,
@@ -92,22 +93,24 @@ export function createModernOperationServer(
   registerModernPrompts(server);
   server.setRequestHandler('tools/list', () =>
     ListToolsResultSchema.parse({
-      tools: definitions.map(({ name, inputSchema, outputSchema, ...metadata }) => ({
-        ...metadata,
-        name,
-        inputSchema: {
-          ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
-          type: 'object' as const,
-        },
-        ...(outputSchema === undefined
-          ? {}
-          : {
-              outputSchema: {
-                ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
-                type: 'object' as const,
-              },
-            }),
-      })),
+      tools: definitions.map(({ name, inputSchema, outputSchema, ...metadata }) =>
+        slimListedTool({
+          ...metadata,
+          name,
+          inputSchema: {
+            ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
+            type: 'object' as const,
+          },
+          ...(outputSchema === undefined
+            ? {}
+            : {
+                outputSchema: {
+                  ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
+                  type: 'object' as const,
+                },
+              }),
+        }),
+      ),
     }),
   );
   server.setRequestHandler('tools/call', async (request, extra) => {
