@@ -330,9 +330,9 @@ export class OperationTaskService {
     // A finished job needs no cancellation; release the listener with its execution.
     if (cancel !== undefined && requestSignal !== undefined) {
       const listener = cancel;
-      void this.launches
-        .get(operationTaskId(record))
-        ?.finally(() => requestSignal.removeEventListener('abort', listener));
+      const release = (): void => requestSignal.removeEventListener('abort', listener);
+      // Release on rejection too; the launch handles its own failure where it is created.
+      void this.launches.get(operationTaskId(record))?.then(release, release);
     }
     return record;
   }
