@@ -147,6 +147,15 @@ describe('MCP Technology Tree Viewer workflow', () => {
       const first = await client.readResource({ uri: response.artifacts[0]!.uri });
       expect(first.contents[0], call.name).toBeDefined();
     }
+    // A cross-field rule is part of the published input, so clients get a readable message.
+    const missingFolder = await client.callTool({
+      name: 'hoi4.tech_render',
+      arguments: { workspaceId: 'technology_workflow', view: 'folder' },
+    });
+    expect(missingFolder.isError).toBe(true);
+    const missingFolderText = (missingFolder.content as Array<{ text: string }>)[0]!.text;
+    expect(missingFolderText).toContain('Folder view requires folderId');
+    expect(missingFolderText.trimStart().startsWith('[')).toBe(false);
     expect(
       await readFile(
         path.join(copiedWorkspace, 'common', 'technologies', 'synthetic_technologies_01.txt'),

@@ -15,6 +15,7 @@ import {
   technologyInspectRequestSchema,
   technologyProposedSourceSchema,
   technologyRenderRequestSchema,
+  validateTechnologyRenderRequest,
   technologyRenderViewSchema,
   validateTechnologyCompareRequest,
   validateTechnologyInspectRequest,
@@ -38,7 +39,10 @@ const inspectInputSchema = z
   .strict()
   .superRefine(validateTechnologyInspectRequest);
 
-const renderInputSchema = z.object({ ...technologyRenderRequestSchema.shape }).strict();
+const renderInputSchema = z
+  .object({ ...technologyRenderRequestSchema.shape })
+  .strict()
+  .superRefine(validateTechnologyRenderRequest);
 
 const compareInputSchema = z
   .object({

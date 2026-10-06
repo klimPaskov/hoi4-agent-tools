@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Report a `hoi4.tech_render` folder view without `folderId` as a readable argument error instead of a raw validation dump.
 - List every server process sharing a server state root, with its memory, last client activity and execution limits, in the `hoi4-agent://server/status` resource.
 
 ## 3.9.0 - 2026-10-06

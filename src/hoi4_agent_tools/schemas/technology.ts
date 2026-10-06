@@ -155,14 +155,20 @@ export const technologyRenderRequestSchema = z
     refresh: z.boolean().optional(),
   })
   .strict()
-  .superRefine((value, context) => {
-    if (value.view === 'folder' && value.folderId === undefined)
-      context.addIssue({
-        code: 'custom',
-        path: ['folderId'],
-        message: 'Folder view requires folderId',
-      });
-  });
+  .superRefine(validateTechnologyRenderRequest);
+
+/** Shared by the request schema and the published tool input, so clients see the same rule. */
+export function validateTechnologyRenderRequest(
+  value: { view: string; folderId?: string | undefined },
+  context: z.RefinementCtx,
+): void {
+  if (value.view === 'folder' && value.folderId === undefined)
+    context.addIssue({
+      code: 'custom',
+      path: ['folderId'],
+      message: 'Folder view requires folderId',
+    });
+}
 
 export function validateTechnologyCompareRequest(
   value: { after?: unknown; proposedSources?: unknown },
