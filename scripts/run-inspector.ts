@@ -316,9 +316,11 @@ try {
   const resources = successfulJson(
     await runInspector('resources/list'),
     'Inspector resources/list',
-  ) as { resources?: unknown[] };
-  if ((resources.resources?.length ?? 0) !== 0) {
-    throw new Error('Inspector returned fixed resources');
+  ) as { resources?: Array<{ uri?: string }> };
+  // A local stdio server lists only its process status; workspace content stays non-enumerable.
+  const resourceUris = resources.resources?.map(({ uri }) => uri ?? '') ?? [];
+  if (!exactNames(resourceUris, ['hoi4-agent://server/status'])) {
+    throw new Error(`Inspector returned unexpected fixed resources: ${resourceUris.join(', ')}`);
   }
 
   const prompts = successfulJson(await runInspector('prompts/list'), 'Inspector prompts/list') as {
