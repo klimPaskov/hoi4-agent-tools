@@ -658,6 +658,35 @@ export async function startHttpServer(
   // Supplying a defined parsed body to handleRequest prevents the SDK from falling back to
   // an unbounded Request.json() parse for alternate media types or empty established-session
   // requests. GET and DELETE deliberately remain bodyless.
+  // Authenticate before reading the body, so an unauthenticated caller cannot hold a request
+  // slot and body budget while it sends one slowly. Scopes that depend on the parsed body are
+  // checked again afterwards.
+  app.post('/mcp', async (request: Request, response: Response, next: NextFunction) => {
+    const baseScopes = requiredScopesForMcpRequest(configuration, undefined);
+    try {
+      const authorization = request.headers.authorization;
+      await authenticate(
+        Array.isArray(authorization) ? undefined : authorization,
+        configuration,
+        baseScopes,
+      );
+      next();
+    } catch (error) {
+      sendAuthError(
+        response,
+        configuration,
+        error instanceof HttpAuthError
+          ? error
+          : new HttpAuthError(
+              401,
+              'AUTH_INVALID',
+              'Authentication failed',
+              'invalid_token',
+              baseScopes,
+            ),
+      );
+    }
+  });
   app.post(
     '/mcp',
     express.json({
