@@ -396,6 +396,20 @@ interface RetainedArtifactManifest {
   targetBytes: number;
 }
 
+/** The chunked logical artifact a chunk or index manifest belongs to, and its role in it. */
+function chunkMembership(
+  manifest: ArtifactManifest,
+): { group: string; role: 'chunk' | 'index' } | undefined {
+  const chunked = manifest.provenance.metadata?.chunkedArtifact as
+    { role?: unknown; originalSha256?: unknown } | undefined;
+  if (
+    typeof chunked?.originalSha256 !== 'string' ||
+    (chunked.role !== 'chunk' && chunked.role !== 'index')
+  )
+    return undefined;
+  return { group: chunked.originalSha256, role: chunked.role };
+}
+
 function isValidArtifactName(name: string): boolean {
   return (
     safeNamePattern.test(name) &&
@@ -1194,10 +1208,32 @@ export class ArtifactStore {
       }
     };
     await reclaimDebris(await containedGeneratedPath(workspace.artifactRoot));
+    // A chunked artifact's pieces are written before its index, so they are always older. Age
+    // a group by its newest member and evict its index first, so readers never follow an index
+    // to evicted pieces, and protect the whole group when any member is protected.
+    const groupAge = new Map<string, number>();
+    const protectedGroups = new Set<string>();
+    for (const entry of retained) {
+      const membership = chunkMembership(entry.manifest);
+      if (membership === undefined) continue;
+      groupAge.set(
+        membership.group,
+        Math.max(groupAge.get(membership.group) ?? 0, entry.modifiedAt),
+      );
+      if (protectedManifests.has(entry.manifestPath) || protectedTargets.has(entry.targetPath))
+        protectedGroups.add(membership.group);
+    }
+    const evictionAge = (entry: RetainedArtifactManifest) => {
+      const membership = chunkMembership(entry.manifest);
+      return membership === undefined ? entry.modifiedAt : groupAge.get(membership.group)!;
+    };
+    const indexFirst = (entry: RetainedArtifactManifest) =>
+      chunkMembership(entry.manifest)?.role === 'chunk' ? 1 : 0;
     retained.sort(
       (left, right) =>
         Number(right.staleIdentity) - Number(left.staleIdentity) ||
-        left.modifiedAt - right.modifiedAt ||
+        evictionAge(left) - evictionAge(right) ||
+        indexFirst(left) - indexFirst(right) ||
         compareCodeUnits(left.manifestPath, right.manifestPath),
     );
 
@@ -1206,6 +1242,8 @@ export class ArtifactStore {
       signal?.throwIfAborted();
       if (current.bytes <= targetBytes && current.entries <= targetEntries) break;
       if (protectedManifests.has(candidate.manifestPath)) continue;
+      const membership = chunkMembership(candidate.manifest);
+      if (membership !== undefined && protectedGroups.has(membership.group)) continue;
       try {
         await unlink(candidate.manifestPath);
       } catch (error) {

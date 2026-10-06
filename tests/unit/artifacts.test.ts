@@ -1180,6 +1180,78 @@ describe('content-addressed artifacts', () => {
     await expect(store.list(workspace)).resolves.toHaveLength(index.chunks.length + 1);
   });
 
+  it('evicts a chunked artifact by its newest member and never strands its index', async () => {
+    const { workspace } = await fixture();
+    const store = new ArtifactStore(10_000_000, 10, 16_384);
+    const provenance = {
+      kind: 'chunked-eviction-test',
+      toolVersion: '0.1.0',
+      schemaVersion: 'chunked.v1',
+      sourceHashes: {},
+    };
+    const bytes = Buffer.from('chunked eviction payload\n'.repeat(2_500), 'utf8');
+    const logical = await store.putChunked(
+      workspace,
+      'graph.json',
+      'application/json',
+      bytes,
+      provenance,
+    );
+    const index = JSON.parse(
+      (await store.read(workspace, logical.uri)).bytes.toString('utf8'),
+    ) as ChunkedArtifactIndex;
+    const plain = [];
+    for (let number = 0; number < 10 - index.chunks.length - 1; number += 1)
+      plain.push(
+        await store.put(
+          workspace,
+          `plain-${number}.json`,
+          'application/json',
+          `${number}\n`,
+          provenance,
+        ),
+      );
+    const manifestPath = (artifact: { path: string; name: string; provenanceHash: string }) =>
+      path.join(
+        path.dirname(artifact.path),
+        `${artifact.name}.${artifact.provenanceHash}.manifest.json`,
+      );
+    // The pieces are the oldest entries; the index was used recently.
+    const old = new Date(Date.now() - 600_000);
+    for (const chunk of index.chunks) {
+      const [, , , sha256, provenanceHash, name] = new URL(chunk.uri).pathname.split('/');
+      await utimes(
+        path.join(
+          workspace.artifactRoot,
+          sha256!.slice(0, 2),
+          sha256!,
+          `${decodeURIComponent(name!)}.${provenanceHash}.manifest.json`,
+        ),
+        old,
+        old,
+      );
+    }
+    for (const [number, artifact] of plain.entries()) {
+      const time = new Date(Date.now() - 300_000 + number * 1_000);
+      await utimes(manifestPath(artifact), time, time);
+    }
+    const recent = new Date(Date.now() - 10_000);
+    await utimes(manifestPath(logical), recent, recent);
+
+    await store.put(workspace, 'newest.json', 'application/json', '{}\n', provenance);
+
+    await expect(
+      store.readLogical(workspace, logical.uri, {
+        mimeType: 'application/json',
+        maxBytes: bytes.length,
+        maxChunks: index.chunks.length,
+      }),
+    ).resolves.toMatchObject({ bytes });
+    await expect(store.read(workspace, plain[0]!.uri)).rejects.toMatchObject({
+      code: 'ARTIFACT_NOT_FOUND',
+    });
+  });
+
   it('rolls back every chunk and index when a logical batch commit fails or is cancelled', async () => {
     const { workspace } = await fixture();
     const store = new ArtifactStore(1_000_000, 100, 16_384);
