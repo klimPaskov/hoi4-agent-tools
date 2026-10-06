@@ -585,7 +585,7 @@ export async function validateScript(
       scope: UNKNOWN_SCOPE,
       line: position.line,
       column: position.column,
-      message: finding.message,
+      message: finding.message.slice(0, 500),
       suggestions: [],
     });
   }

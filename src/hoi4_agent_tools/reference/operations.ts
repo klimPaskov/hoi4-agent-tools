@@ -231,23 +231,25 @@ export class ReferenceToolService {
   ) {
     if (request.path === undefined)
       return validateScript(this.references, workspace, request, signal);
-    const snapshot = await this.engine.scan(
-      workspaceId,
-      {
-        patterns: [
-          ...(locatePatterns(this.engine, workspaceId, request.path, principal) ?? []),
-          'common/scripted_effects/**/*.txt',
-          'common/scripted_triggers/**/*.txt',
-          ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
-          // One scan serves every check: the engine keeps one snapshot per workspace.
-          ...playerTextPatterns,
-          'events/**/*.txt',
-        ],
-      },
-      principal,
-      signal,
-    );
-    const file = selectFile(snapshot, request.path);
+    // Every file check of the supported families shares one scan, so checking files across
+    // folders reuses one snapshot and its incremental index; other folders add their own.
+    const scan = (extra: readonly string[]) =>
+      this.engine.scan(
+        workspaceId,
+        { patterns: [...fileCheckPatterns, ...extra] },
+        principal,
+        signal,
+      );
+    let snapshot = await scan([]);
+    let file;
+    try {
+      file = selectFile(snapshot, request.path);
+    } catch (error) {
+      const extra = locatePatterns(this.engine, workspaceId, request.path, principal);
+      if (extra === undefined) throw error;
+      snapshot = await scan(extra);
+      file = selectFile(snapshot, request.path);
+    }
     const playerText = playerTextFamily(file.relativePath)
       ? this.playerTextContext(workspaceId, snapshot)
       : undefined;
@@ -296,7 +298,12 @@ export class ReferenceToolService {
     if (cached?.key === cacheKey) return cached.context;
     const localisation = new Map<string, LocalisedText & { loadOrder: number }>();
     for (const symbol of snapshot.index.symbols) {
-      if (symbol.kind !== 'localisation' || !symbol.id.startsWith('l_english:')) continue;
+      if (
+        symbol.kind !== 'localisation' ||
+        symbol.sourceShadowed ||
+        !symbol.id.startsWith('l_english:')
+      )
+        continue;
       const key = symbol.id.slice('l_english:'.length);
       const previous = localisation.get(key);
       if (previous !== undefined && previous.loadOrder > symbol.loadOrder) continue;
@@ -340,7 +347,15 @@ export class ReferenceToolService {
   }
 }
 
-const playerTextPatterns = [
+/** The families file mode checks, the helpers and databases it resolves, and localisation. */
+const fileCheckPatterns = [
+  'events/**/*.txt',
+  'common/decisions/**/*.txt',
+  'common/national_focus/**/*.txt',
+  'common/on_actions/**/*.txt',
+  'common/scripted_effects/**/*.txt',
+  'common/scripted_triggers/**/*.txt',
+  ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
   'localisation/**/*_l_english.yml',
   'common/scripted_localisation/**/*.txt',
 ] as const;

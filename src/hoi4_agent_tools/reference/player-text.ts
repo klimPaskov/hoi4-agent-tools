@@ -32,7 +32,8 @@ const tooltipTriggerBlocks: Readonly<Record<string, ReadonlySet<string>>> = {
 /** Words that describe the mod's development rather than the game world. */
 const implementationWording =
   /\b(?:TODO|FIXME|TBD|hard-?coded|newly added|(?:has been|was|been) reworked|placeholder)\b/iu;
-const colourCode = /[§£]/u;
+/** Colour codes; text icons (£) are legible on parchment and stay allowed. */
+const colourCode = '§';
 
 function blockOf(entry: AssignmentNode): BlockNode | undefined {
   return entry.value.type === 'block' ? entry.value : undefined;
@@ -97,7 +98,7 @@ export function playerTextFindings(
         `${key} (${where(text)}) describes development rather than the game: "${implementationWording.exec(text.value)![0]}"`,
       );
     if (!options.colourFree) return;
-    if (colourCode.test(text.value)) {
+    if (text.value.includes(colourCode)) {
       add(
         node,
         'SCRIPT_NEWS_TEXT_COLOUR_CODE',
@@ -108,7 +109,7 @@ export function playerTextFindings(
     for (const name of scriptedTokens(text.value, context))
       for (const branchKey of context.scriptedLocalisation.get(name) ?? []) {
         const branch = context.localisation.get(branchKey);
-        if (branch !== undefined && colourCode.test(branch.value)) {
+        if (branch?.value.includes(colourCode) === true) {
           add(
             node,
             'SCRIPT_NEWS_TEXT_COLOUR_CODE',
