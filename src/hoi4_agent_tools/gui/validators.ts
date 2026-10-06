@@ -691,6 +691,23 @@ function validateOverlapAndGeometry(
         const overlap = intersection(left.rect, right.rect);
         if (overlap === undefined) continue;
         const ratio = area(overlap) / Math.max(1, Math.min(area(left.rect), area(right.rect)));
+        // Tab pages and alternative panels overlap by design; the game shows one at a time.
+        // When the scenario cannot decide which, the preview draws them stacked, and the pair
+        // is reported only as missing scenario facts, not as a layout or click conflict.
+        if (left.visibilityStatus === 'unresolved' || right.visibilityStatus === 'unresolved') {
+          if (left.depth === right.depth && ratio > 0.2)
+            diagnostics.push(
+              issue(
+                'GUI_UNRESOLVED_VISIBILITY_OVERLAP',
+                'warning',
+                'layout',
+                `${left.name} and ${right.name} overlap and the scenario does not decide which is visible, so the preview draws both. Declare the flags or variables their visible triggers read, with closedFlags, to render one of them.`,
+                right,
+                { left: left.id, right: right.id, ratio },
+              ),
+            );
+          continue;
+        }
         if (left.clickable && right.clickable && ratio > 0.02) {
           diagnostics.push(
             issue(
@@ -703,23 +720,6 @@ function validateOverlapAndGeometry(
             ),
           );
         }
-        // Tab pages and alternative panels overlap by design; the game shows one at a time.
-        // When the scenario cannot decide which, the preview draws them stacked.
-        if (
-          left.depth === right.depth &&
-          ratio > 0.2 &&
-          (left.visibilityStatus === 'unresolved' || right.visibilityStatus === 'unresolved')
-        )
-          diagnostics.push(
-            issue(
-              'GUI_UNRESOLVED_VISIBILITY_OVERLAP',
-              'warning',
-              'layout',
-              `${left.name} and ${right.name} overlap and the scenario does not decide which is visible, so the preview draws both. Declare the flags or variables their visible triggers read, with closedFlags, to render one of them.`,
-              right,
-              { left: left.id, right: right.id, ratio },
-            ),
-          );
         if (left.depth === right.depth && ratio > 0.2) {
           diagnostics.push(
             issue(

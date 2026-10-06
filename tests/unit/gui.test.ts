@@ -971,6 +971,9 @@ describe('Scripted GUI source graph, layout, rendering, and validation', () => {
     expect(
       openValidation.diagnostics.filter(({ code }) => code === 'GUI_UNRESOLVED_VISIBILITY_OVERLAP'),
     ).toHaveLength(1);
+    expect(openValidation.diagnostics.some(({ code }) => code === 'GUI_VISIBLE_OVERLAP')).toBe(
+      false,
+    );
 
     const declaredOnly = await buildGuiScene(
       graph,
