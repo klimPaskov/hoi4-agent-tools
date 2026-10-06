@@ -1844,6 +1844,18 @@ export class EventChainViewer {
   public async compareAndStore(input: EventCompareInput): Promise<EventCompareResult> {
     input.signal?.throwIfAborted();
     if (input.proposedSources !== undefined) assertProposedSourceBounds(input.proposedSources);
+    // Without references the comparison uses the previous cached revision; with none cached,
+    // say so before scanning the workspace.
+    if (
+      input.before === undefined &&
+      input.after === undefined &&
+      input.proposedSources === undefined &&
+      (this.#state.history.get(input.workspaceId)?.size ?? 0) === 0
+    )
+      throw new ServiceError(
+        'EVENT_COMPARISON_BASELINE_REQUIRED',
+        'Provide a cached revision, graph artifact, or proposed source overlay',
+      );
     const refresh =
       input.refresh ??
       (input.proposedSources !== undefined ||

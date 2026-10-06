@@ -1348,6 +1348,18 @@ export class TechnologyTreeViewer {
   public async compareAndStore(input: TechnologyCompareInput): Promise<TechnologyCompareResult> {
     input.signal?.throwIfAborted();
     if (input.proposedSources !== undefined) assertProposedBounds(input.proposedSources);
+    // Without references the comparison uses the previous cached revision; with none cached,
+    // say so before scanning the workspace.
+    if (
+      input.before === undefined &&
+      input.after === undefined &&
+      input.proposedSources === undefined &&
+      (this.#state.history.get(input.workspaceId)?.size ?? 0) === 0
+    )
+      throw new ServiceError(
+        'TECH_COMPARISON_BASELINE_REQUIRED',
+        'Provide a cached revision, graph artifact, or proposed source overlay',
+      );
     const current = await this.scan(input.workspaceId, {
       refresh: input.refresh ?? input.proposedSources !== undefined,
       ...(input.principal === undefined ? {} : { principal: input.principal }),

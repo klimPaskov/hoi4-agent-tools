@@ -122,6 +122,19 @@ agent.2.a: "Finish"
       async () => server.close(),
     );
 
+    // With no cached revision yet, a reference-free comparison is refused before any scan.
+    const unbased = resultOf(
+      await client.callTool({
+        name: 'hoi4.event_compare',
+        arguments: { workspaceId: 'event-workflow' },
+      }),
+    );
+    expect(unbased).toMatchObject({
+      status: 'error',
+      code: 'EVENT_COMPARISON_BASELINE_REQUIRED',
+      filesScanned: [],
+    });
+
     const progress: number[] = [];
     const scanned = resultOf(
       await client.callTool(
