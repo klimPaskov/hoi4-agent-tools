@@ -316,16 +316,24 @@ export class OperationTaskService {
       context.principal,
       requestSignal,
     );
+    let cancel: (() => void) | undefined;
     if (!explicitTask && requestSignal !== undefined) {
       if (requestSignal.aborted) {
         return jobs.cancel(workspaceId, record.id, context.principal);
       }
-      const cancel = (): void => {
+      cancel = (): void => {
         void jobs.cancel(workspaceId, record.id, context.principal).catch(() => undefined);
       };
       requestSignal.addEventListener('abort', cancel, { once: true });
     }
     this.ensureExecution(record, context.principal);
+    // A finished job needs no cancellation; release the listener with its execution.
+    if (cancel !== undefined && requestSignal !== undefined) {
+      const listener = cancel;
+      void this.launches
+        .get(operationTaskId(record))
+        ?.finally(() => requestSignal.removeEventListener('abort', listener));
+    }
     return record;
   }
 
