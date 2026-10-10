@@ -238,6 +238,7 @@ describe('offline package and Registry metadata', () => {
       'dist/',
       'docs/README.md',
       'docs/setup.md',
+      'docs/troubleshooting.md',
       'docs/examples.md',
       'docs/tools.md',
       'docs/events.md',

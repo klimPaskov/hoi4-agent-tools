@@ -27,7 +27,8 @@ You can ask your coding agent for these tasks in ordinary language; you do not n
 
 ## Detailed reference
 
-- [Tool reference](tools.md): tool names and what each one does.
+- [Tool reference](tools.md): tool names, what each one does, and an example call for each.
+- [Troubleshooting](troubleshooting.md): error codes and what to do about them.
 - [Configuration](configuration.md): every setting, default location and environment variable.
 - [Background jobs](jobs.md): inspect, cancel or retrieve long operations.
 - [Large event and technology queries](helper-expansion.md): follow bounded results without losing coverage.

@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Known mistakes
+
+- Add a reviewed, source-cited list of documented script mistakes (`known-mistakes.json`, with a detector for each rule) in place of a mutable learned-rule database. `hoi4.script_validate` in file mode flags seven of them as `KNOWN_MISTAKE_<RULE>` with the symptom and the fix and reports `known_mistakes` in `checksPerformed`: an event without `add_namespace`, an event number that is not a whole number below 100,000, a timer on a triggered-only event, an automatic event that can fire every day, a news event that is not `major` or is `fire_only_once`, a date window shorter than the 20-day trigger check, and a scope prefix on a temporary variable.
+- `hoi4.reference_context` returns the `knownMistakes` of the requested surface, and `hoi4.error_log` adds `knownMistake` (rule id and fix) to a logged message that a rule explains. A rule that no longer applies is kept as `resolved` with the date and reason and is not applied.
+
+### Maps
+
+- `move_state_provinces` redistributes by default: without a `distribution`, or with `"proportional"`, the target receives the moved provinces' share of the source state's manpower, resources and slot buildings (in whole units; levels such as infrastructure keep the higher value). `stateValues: "retain-in-current-states"` keeps the old behaviour.
+- `merge_states`, `create_state` and `split_state` accept `remapReferences` (`refuse` or `override`) to rewrite the scripts that named the state in the same plan.
+- Script references now include `has_full_control_of_state`, `set_state_controller`, `to_state`, `border_state`, `capital` in any script, `set_province_controller`, `reset_province_name`, `goto_province`, `prioritize_location`, `to_province`, `region`, `area`, `prioritize = { ... }` lists and `province = { id = ... }` blocks. Arguments that take exactly one value are never copied or deleted by a remap; they change to the first successor, or stay and are reported as `MAP_REFERENCE_NEEDS_REVIEW`.
+- `MAP_COUNTRY_CAPITAL_NOT_OWNED` is checked only in `history/countries`.
+
+### Tools
+
+- Show at most 8 resource links beside a result (images first); every artifact stays in `structuredContent.artifacts`. A GUI render result was about 33 KB, a third of it links listed twice. Passed validation checks that only report a problem "not detected" are no longer listed.
+
+### Documentation
+
+- Add a troubleshooting guide with the error codes and their fixes, the tool audit and the review of smerss/Clausewitz-MCP and cpntodd/HOI4-MCP under `docs/plans`, a worked example that builds and reshapes a world in the map guide, and a section on adding a known mistake to the development guide.
+
 ## 4.0.0 - 2026-10-10
 
 ### Breaking changes
