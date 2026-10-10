@@ -433,7 +433,21 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       kind: z.literal('merge_states'),
       sourceStateIds: z.array(stateId).min(1).max(100_000),
       targetStateId: stateId,
-      distribution: mergeStateDistributionSchema,
+      // Every merge policy has one allowed value, so the whole object may be omitted.
+      distribution: mergeStateDistributionSchema.default({
+        stateValues: 'sum-into-target',
+        ownership: 'retain-target',
+        controller: 'retain-target',
+        cores: 'union',
+        claims: 'union',
+        victoryPoints: 'follow-province',
+        provinceBuildings: 'follow-province',
+        ports: 'follow-province',
+        supplyNodes: 'follow-province',
+        railways: 'follow-province',
+        positions: 'follow-province',
+        strategicRegion: 'require-same',
+      }),
     })
     .strict(),
   splitProvinceOperation('split_province'),
@@ -475,6 +489,118 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       targetRegionId: z.number().int().positive(),
       provinceIds: z.array(provinceId).min(1).max(100_000),
       distribution: z.literal('move-membership'),
+    })
+    .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('create_world'),
+      width: z.number().int().min(256).max(8_192).multipleOf(256).default(1_024),
+      height: z.number().int().min(256).max(4_096).multipleOf(256).default(512),
+      seed: z.number().int().min(0).max(2_147_483_647).default(1),
+      landCoverage: z.number().min(0.05).max(0.9).default(0.35),
+      continents: z.number().int().min(1).max(12).default(3),
+      landPolygons: z
+        .array(z.array(pointSchema).min(3).max(10_000))
+        .max(64)
+        .optional()
+        .describe('Land outlines in top-left pixel coordinates; omit for generated continents.'),
+      landProvincePixels: z.number().int().min(60).max(50_000).default(400),
+      seaProvincePixels: z.number().int().min(200).max(200_000).default(2_500),
+      provincesPerState: z.number().int().min(1).max(64).default(5),
+      landProvincesPerRegion: z.number().int().min(2).max(400).default(25),
+      seaProvincesPerRegion: z.number().int().min(1).max(200).default(10),
+      countries: z
+        .array(
+          z
+            .object({
+              tag: z.string().regex(/^[A-Z][A-Z0-9]{2}$/u),
+              name: z.string().min(1).max(64),
+              adjective: z.string().min(1).max(64).optional(),
+              color: rgbSchema.optional(),
+              share: z.number().min(0.05).max(100).optional(),
+              ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(200),
+      continentNames: z.array(z.string().min(1).max(64)).max(12).optional(),
+      startDate: z
+        .string()
+        .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)
+        .default('1936.1.1'),
+      rivers: z.number().int().min(0).max(500).default(8),
+      replaceBaseGame: z
+        .boolean()
+        .default(true)
+        .describe(
+          'Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.',
+        ),
+    })
+    .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('remap_map_references'),
+      entity: z.enum(['province', 'state', 'strategic-region']),
+      mapping: z
+        .array(
+          z
+            .object({
+              from: z.number().int().min(0),
+              to: z
+                .union([
+                  z.number().int().min(0),
+                  z.array(z.number().int().min(0)).min(1).max(16),
+                  z.null(),
+                ])
+                .describe(
+                  'One ID replaces; several IDs copy the referencing assignment once per ID; null removes it.',
+                ),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(1_000),
+      readOnlySources: z
+        .enum(['refuse', 'override'])
+        .default('refuse')
+        .describe('override copies game or dependency files that need the change into the mod.'),
+      pathPrefixes: z.array(z.string().min(1).max(256)).max(32).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('regenerate_map_positions'),
+      positions: z
+        .array(z.enum(['buildings', 'units', 'weather']))
+        .min(1)
+        .max(3)
+        .default(['buildings', 'units', 'weather']),
+      stateIds: z.array(stateId).max(10_000).optional(),
+      provinceIds: z.array(provinceId).max(100_000).optional(),
+      regionIds: z.array(z.number().int().positive()).max(10_000).optional(),
+      mode: z
+        .enum(['missing', 'replace'])
+        .default('missing')
+        .describe('missing adds only absent positions; replace rewrites them for the selection.'),
+    })
+    .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('rebuild_supply'),
+      stateIds: z.array(stateId).max(10_000).optional(),
+      mode: z
+        .enum(['connect', 'replace'])
+        .default('connect')
+        .describe(
+          'connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.',
+        ),
+      railwayLevel: z.number().int().min(1).max(5).default(1),
+      capitalRailwayLevel: z.number().int().min(1).max(5).default(3),
     })
     .strict(),
   z

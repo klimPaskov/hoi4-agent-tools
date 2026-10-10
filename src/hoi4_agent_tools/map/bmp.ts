@@ -37,6 +37,11 @@ export interface CreateBmpOptions {
   palette?: readonly RgbColor[];
   rgbPixels?: readonly RgbColor[];
   indexedPixels?: Uint8Array;
+  /**
+   * The header's colours-used count for an 8-bit image; defaults to the palette size. The game
+   * expects 0 in rivers.bmp and warns about the palette otherwise.
+   */
+  colorsUsed?: number;
 }
 
 function assertByte(value: number, label: string): void {
@@ -437,8 +442,7 @@ export function createBmp(options: CreateBmpOptions): Buffer {
   bytes.writeUInt16LE(options.bitsPerPixel, 28);
   bytes.writeUInt32LE(0, 30);
   bytes.writeUInt32LE(stride * options.height, 34);
-  if (options.bitsPerPixel === 8)
-    bytes.writeUInt32LE(palette.length === 256 ? 256 : palette.length, 46);
+  if (options.bitsPerPixel === 8) bytes.writeUInt32LE(options.colorsUsed ?? palette.length, 46);
   for (const [index, color] of palette.entries()) {
     const offset = 14 + dibSize + index * 4;
     bytes[offset] = color.b;

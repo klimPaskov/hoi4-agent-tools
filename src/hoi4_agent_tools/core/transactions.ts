@@ -33,6 +33,18 @@ import {
 import { PACKAGE_VERSION, TRANSACTION_VERSION } from '../version.js';
 import { transactionManifestSchema } from '../schemas/transaction.js';
 
+/**
+ * A file name usable as an artifact name: mod files may contain spaces and other characters
+ * (`history/countries/AUR - Aurelia.txt`) that artifact names do not allow.
+ */
+function diffArtifactStem(relativePath: string): string {
+  const stem = path
+    .basename(relativePath)
+    .replace(/[^A-Za-z0-9._-]+/gu, '_')
+    .replace(/^[^A-Za-z0-9]+/u, '');
+  return (stem.length === 0 ? 'file' : stem).slice(0, 100);
+}
+
 export type TransactionState =
   'planned' | 'applying' | 'applied' | 'rolling_back' | 'rolled_back' | 'failed';
 
@@ -522,7 +534,7 @@ export class TransactionManager {
       };
       if (isText(file.mediaType)) {
         return {
-          name: `${path.basename(pending.relativePath)}.diff`,
+          name: `${diffArtifactStem(pending.relativePath)}.diff`,
           mimeType: 'text/x-diff',
           content: unifiedTextDiff(
             sourceDiffText(pending.before),
@@ -541,7 +553,7 @@ export class TransactionManager {
         };
       }
       return {
-        name: `${path.basename(pending.relativePath)}.binary-diff.json`,
+        name: `${diffArtifactStem(pending.relativePath)}.binary-diff.json`,
         mimeType: 'application/json',
         content: `${canonicalJson(
           binaryDiff(pending.before ?? Buffer.alloc(0), pending.after ?? Buffer.alloc(0)),

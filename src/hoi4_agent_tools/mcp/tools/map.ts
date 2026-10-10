@@ -4,11 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
-import {
-  mapInspectRequestSchema,
-  mapRenderRequestSchema,
-  mapRewriteRequestSchema,
-} from '../../schemas/map-requests.js';
+import { mapInspectRequestSchema, mapRewriteRequestSchema } from '../../schemas/map-requests.js';
 import type { ServerContext } from '../server/base-tools.js';
 import {
   allocationEvidenceSchema,
@@ -73,52 +69,55 @@ const mapSemanticDiffSchema = z
     normalAdjacenciesChanged: z.boolean(),
   })
   .strict();
-const mapWorkspaceInspectOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      revision: sha256Schema,
-      sharedRevision: sha256Schema,
-      width: nonNegativeIntegerSchema.nullable(),
-      height: nonNegativeIntegerSchema.nullable(),
-      definitions: nonNegativeIntegerSchema,
-      states: nonNegativeIntegerSchema,
-      regions: nonNegativeIntegerSchema,
-      ports: nonNegativeIntegerSchema,
-      inspectedProvinceCount: nonNegativeIntegerSchema,
-      inspectedStateCount: nonNegativeIntegerSchema,
-      inspectedRegionCount: nonNegativeIntegerSchema,
-      allocationCount: nonNegativeIntegerSchema,
-      queryMatchCount: nonNegativeIntegerSchema,
-      coordinateMatchCount: nonNegativeIntegerSchema,
-      overviewRendered: z.boolean(),
-      provinceGeometryCount: nonNegativeIntegerSchema,
-      provinceGeometryPixelCount: nonNegativeIntegerSchema,
-      provinceGeometryRowRunCount: nonNegativeIntegerSchema,
-      lookupOnly: z.boolean().optional(),
-      unknownProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
-      missingGeometryProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
-    })
-    .strict(),
-);
-const mapRenderOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      revision: sha256Schema,
-      width: nonNegativeIntegerSchema,
-      height: nonNegativeIntegerSchema,
-      hashes: bitmapRenderHashesSchema,
-      offlineRepresentation: z.literal(true),
-      tile: z
-        .object({
-          x: nonNegativeIntegerSchema,
-          y: nonNegativeIntegerSchema,
-          width: nonNegativeIntegerSchema,
-          height: nonNegativeIntegerSchema,
-        })
-        .strict()
-        .optional(),
-    })
-    .strict(),
+const mapWorkspaceInspectDataSchema = z
+  .object({
+    revision: sha256Schema,
+    sharedRevision: sha256Schema,
+    width: nonNegativeIntegerSchema.nullable(),
+    height: nonNegativeIntegerSchema.nullable(),
+    definitions: nonNegativeIntegerSchema,
+    states: nonNegativeIntegerSchema,
+    regions: nonNegativeIntegerSchema,
+    ports: nonNegativeIntegerSchema,
+    inspectedProvinceCount: nonNegativeIntegerSchema,
+    inspectedStateCount: nonNegativeIntegerSchema,
+    inspectedRegionCount: nonNegativeIntegerSchema,
+    allocationCount: nonNegativeIntegerSchema,
+    queryMatchCount: nonNegativeIntegerSchema,
+    coordinateMatchCount: nonNegativeIntegerSchema,
+    overviewRendered: z.boolean(),
+    provinceGeometryCount: nonNegativeIntegerSchema,
+    provinceGeometryPixelCount: nonNegativeIntegerSchema,
+    provinceGeometryRowRunCount: nonNegativeIntegerSchema,
+    lookupOnly: z.boolean().optional(),
+    unknownProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
+    missingGeometryProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
+    scriptReferences: z
+      .object({ references: nonNegativeIntegerSchema, missing: nonNegativeIntegerSchema })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const mapRenderDataSchema = z
+  .object({
+    revision: sha256Schema,
+    width: nonNegativeIntegerSchema,
+    height: nonNegativeIntegerSchema,
+    hashes: bitmapRenderHashesSchema,
+    offlineRepresentation: z.literal(true),
+    tile: z
+      .object({
+        x: nonNegativeIntegerSchema,
+        y: nonNegativeIntegerSchema,
+        width: nonNegativeIntegerSchema,
+        height: nonNegativeIntegerSchema,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const mapInspectOutputSchema = strictOperationResultSchema(
+  z.union([mapWorkspaceInspectDataSchema, mapRenderDataSchema]),
 );
 const mapPlanOutputSchema = strictOperationResultSchema(
   z
@@ -150,18 +149,9 @@ export const mapTaskTools = [
     name: 'hoi4.map_inspect',
     title: 'Inspect HOI4 map',
     description:
-      'Validate and inspect the complete map, or use lookupOnly for bounded coordinate and entity lookups.',
+      'Validate the complete map with a searchable navigator, look up provinces, states, regions, names or coordinates (lookupOnly for speed), or render a layer, overlays, tile or entity area.',
     inputSchema: mapInspectRequestSchema,
-    outputSchema: mapWorkspaceInspectOutputSchema,
-    annotations: artifactProducing,
-  },
-  {
-    name: 'hoi4.map_render',
-    title: 'Render map inspection artifacts',
-    description:
-      'Render searchable full-map PNG, JSON, and HTML, or a reusable source-coordinate tile.',
-    inputSchema: mapRenderRequestSchema,
-    outputSchema: mapRenderOutputSchema,
+    outputSchema: mapInspectOutputSchema,
     annotations: artifactProducing,
   },
   {

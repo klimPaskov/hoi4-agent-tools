@@ -37,6 +37,40 @@ export const mapOverlaySchema = z.enum([
   'weather-positions',
 ]);
 
+const mapTileSchema = z
+  .object({
+    x: z.number().int().min(0),
+    y: z.number().int().min(0),
+    width: z.number().int().min(1).max(2_048),
+    height: z.number().int().min(1).max(2_048),
+  })
+  .strict();
+
+const mapAreaSchema = z
+  .object({
+    provinceIds: z.array(z.number().int().nonnegative()).max(256).optional(),
+    stateIds: z.array(z.number().int().nonnegative()).max(64).optional(),
+    regionIds: z.array(z.number().int().nonnegative()).max(64).optional(),
+    padding: z.number().int().min(0).max(256).optional(),
+  })
+  .strict()
+  .refine(
+    ({ provinceIds, stateIds, regionIds }) =>
+      (provinceIds?.length ?? 0) + (stateIds?.length ?? 0) + (regionIds?.length ?? 0) > 0,
+    'Map area requires at least one province, state, or region ID',
+  );
+
+/** Fields that select a rendered map view instead of validation and lookups. */
+export const MAP_VIEW_FIELDS = ['layer', 'overlays', 'scale', 'tile', 'area'] as const;
+const MAP_LOOKUP_FIELDS = [
+  'provinceIds',
+  'stateIds',
+  'regionIds',
+  'query',
+  'coordinates',
+  'allocationRequests',
+] as const;
+
 export const mapInspectRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
@@ -73,38 +107,53 @@ export const mapInspectRequestSchema = z
     lookupOnly: z.boolean().default(false),
     includeOverview: z.boolean().default(true),
     allocationRequests: z.array(mapAllocationRequestSchema).max(100).default([]),
+    references: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Also check events, focuses, decisions, history and AI areas for states, provinces and regions the map lacks, and state tags without a country.',
+      ),
+    layer: mapLayerSchema
+      .optional()
+      .describe(
+        'Render this base layer instead of validating; combine with overlays, tile or area.',
+      ),
+    overlays: z.array(mapOverlaySchema).max(12).optional(),
+    scale: z.number().int().min(1).max(16).optional(),
+    tile: mapTileSchema.optional().describe('Render one top-left bitmap area.'),
+    area: mapAreaSchema
+      .optional()
+      .describe('Render the bounding area of these provinces, states or regions.'),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.tile !== undefined && value.area !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['area'],
+        message: 'Choose tile or area, not both',
+      });
+    if (!MAP_VIEW_FIELDS.some((field) => value[field] !== undefined)) return;
+    for (const field of MAP_LOOKUP_FIELDS) {
+      const fieldValue = value[field];
+      if (fieldValue !== undefined && !(Array.isArray(fieldValue) && fieldValue.length === 0))
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `${field} is a lookup; request a rendered view (layer, overlays, tile, area, scale) in a separate call`,
+        });
+    }
+  });
 
+/** Internal render request derived from a map inspection that names a view. */
 export const mapRenderRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
     layer: mapLayerSchema.optional(),
     overlays: z.array(mapOverlaySchema).max(12).optional(),
     scale: z.number().int().min(1).max(16).optional(),
-    tile: z
-      .object({
-        x: z.number().int().min(0),
-        y: z.number().int().min(0),
-        width: z.number().int().min(1).max(2_048),
-        height: z.number().int().min(1).max(2_048),
-      })
-      .strict()
-      .optional(),
-    area: z
-      .object({
-        provinceIds: z.array(z.number().int().nonnegative()).max(256).optional(),
-        stateIds: z.array(z.number().int().nonnegative()).max(64).optional(),
-        regionIds: z.array(z.number().int().nonnegative()).max(64).optional(),
-        padding: z.number().int().min(0).max(256).optional(),
-      })
-      .strict()
-      .refine(
-        ({ provinceIds, stateIds, regionIds }) =>
-          (provinceIds?.length ?? 0) + (stateIds?.length ?? 0) + (regionIds?.length ?? 0) > 0,
-        'Map area requires at least one province, state, or region ID',
-      )
-      .optional(),
+    tile: mapTileSchema.optional(),
+    area: mapAreaSchema.optional(),
   })
   .strict()
   .refine(

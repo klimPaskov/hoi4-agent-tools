@@ -28,6 +28,7 @@ import {
 import {
   derivedStateCapital,
   encodeTextDocument,
+  LEVEL_STATE_BUILDINGS,
   MapWorkspaceIndex,
   parseMapDate,
   parseTextDocument,
@@ -40,6 +41,9 @@ import {
   type UnitPositionRecord,
   type WeatherPositionRecord,
 } from './model.js';
+import { planReferenceRemap, ReferenceRemapError } from './references.js';
+import { generateWorld, type WorldCountry } from './world.js';
+import { planMapPositions, planSupplyRebuild } from './derived.js';
 
 type MapOperationSteps<T> = Generator<void, T, void>;
 
@@ -192,7 +196,7 @@ export interface MergeStatesOperation extends MapOperationBase {
   kind: 'merge_states';
   sourceStateIds: number[];
   targetStateId: number;
-  distribution: MergeStateDistributionPolicy;
+  distribution?: MergeStateDistributionPolicy;
 }
 
 export type ProvinceGeometrySelection =
@@ -407,7 +411,56 @@ export interface RenumberMapEntityOperation extends MapOperationBase {
   renameLocalisation?: boolean;
 }
 
+export interface CreateWorldOperation extends MapOperationBase {
+  kind: 'create_world';
+  width?: number;
+  height?: number;
+  seed?: number;
+  landCoverage?: number;
+  continents?: number;
+  landPolygons?: Array<Array<{ x: number; y: number }>>;
+  landProvincePixels?: number;
+  seaProvincePixels?: number;
+  provincesPerState?: number;
+  landProvincesPerRegion?: number;
+  seaProvincesPerRegion?: number;
+  countries: WorldCountry[];
+  continentNames?: string[];
+  startDate?: string;
+  rivers?: number;
+  replaceBaseGame?: boolean;
+}
+
+export interface RemapMapReferencesOperation extends MapOperationBase {
+  kind: 'remap_map_references';
+  entity: 'province' | 'state' | 'strategic-region';
+  mapping: Array<{ from: number; to: number | number[] | null }>;
+  readOnlySources?: 'refuse' | 'override';
+  pathPrefixes?: string[];
+}
+
+export interface RegenerateMapPositionsOperation extends MapOperationBase {
+  kind: 'regenerate_map_positions';
+  positions?: Array<'buildings' | 'units' | 'weather'>;
+  stateIds?: number[];
+  provinceIds?: number[];
+  regionIds?: number[];
+  mode?: 'missing' | 'replace';
+}
+
+export interface RebuildSupplyOperation extends MapOperationBase {
+  kind: 'rebuild_supply';
+  stateIds?: number[];
+  mode?: 'connect' | 'replace';
+  railwayLevel?: number;
+  capitalRailwayLevel?: number;
+}
+
 export type MapOperation =
+  | CreateWorldOperation
+  | RemapMapReferencesOperation
+  | RegenerateMapPositionsOperation
+  | RebuildSupplyOperation
   | MoveStateProvincesOperation
   | UpdateStateOperation
   | SplitStateOperation
@@ -502,6 +555,8 @@ interface StateData {
   victoryPoints: { provinceId: number; value: number }[];
   provinceBuildings: Map<number, Map<string, number>>;
   stateBuildings: Map<string, number>;
+  /** Dated history blocks (`1939.1.1 = { ... }`) a new state carries over, as source text. */
+  datedHistory?: string[];
 }
 
 interface StatePatchFields {
@@ -652,6 +707,7 @@ function compileHistory(data: StateData, indent: string, newline: string): strin
   if (data.stateBuildings.size > 0 || data.provinceBuildings.size > 0) {
     rows.push(`${indent}\tbuildings = ${renderBuildings(data, `${indent}\t`, newline)}`);
   }
+  rows.push(...(data.datedHistory ?? []).map((block) => `${indent}\t${block}`));
   return rows.length === 0 ? `{ }` : `{${newline}${rows.join(newline)}${newline}${indent}}`;
 }
 
@@ -689,8 +745,13 @@ function removeAssignments(block: BlockNode, key: string, replacements: SourceRe
   }
 }
 
-function patchState(state: StateRecord, data: StateData, fields: StatePatchFields): Buffer {
-  const replacements: SourceReplacement[] = [];
+function patchState(
+  state: StateRecord,
+  data: StateData,
+  fields: StatePatchFields,
+  extra: readonly SourceReplacement[] = [],
+): Buffer {
+  const replacements: SourceReplacement[] = [...extra];
   const stateInsertions: string[] = [];
   const newline = state.document.newline;
   const stateIndent = lineIndent(state.document.text, state.assignment.start);
@@ -1409,12 +1470,20 @@ function syntheticFile(relativePath: string, bytes: Buffer, loadOrder: number): 
 export function indexWithProposedChanges(
   base: MapWorkspaceIndex,
   changes: readonly Pick<ProposedFileChange, 'relativePath' | 'content'>[],
+  replacedRoots: readonly string[] = [],
 ): MapWorkspaceIndex {
   const maximumLoadOrder =
     base.sourceFiles.reduce((maximum, { loadOrder }) => Math.max(maximum, loadOrder), 0) + 1;
   const byPath = new Map(changes.map((change) => [normalizeRelative(change.relativePath), change]));
+  // A replace_path folder drops every lower-layer file directly inside it, as the game does.
+  const replaced = replacedRoots.map((root) => normalizeRelative(root).replace(/\/$/u, ''));
   const files = base.sourceFiles.filter(
-    (file) => !(file.rootKind === 'mod' && byPath.has(normalizeRelative(file.relativePath))),
+    (file) =>
+      !(file.rootKind === 'mod' && byPath.has(normalizeRelative(file.relativePath))) &&
+      !(
+        file.rootKind !== 'mod' &&
+        replaced.some((root) => path.posix.dirname(normalizeRelative(file.relativePath)) === root)
+      ),
   );
   for (const change of changes) {
     if (change.content !== null)
@@ -1457,11 +1526,18 @@ function proposedChanges(changes: ReadonlyMap<string, MutableChange>): ProposedF
     }));
 }
 
+/** Source folders a new world replaces, per plan, so lower layers stop counting. */
+const replacedRootsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, readonly string[]>();
+
 function currentIndex(
   base: MapWorkspaceIndex,
   changes: ReadonlyMap<string, MutableChange>,
 ): MapWorkspaceIndex {
-  return indexWithProposedChanges(base, proposedChanges(changes));
+  return indexWithProposedChanges(
+    base,
+    proposedChanges(changes),
+    replacedRootsByPlan.get(changes) ?? [],
+  );
 }
 
 function samePolicy(actual: unknown, expected: Record<string, unknown>): boolean {
@@ -1800,18 +1876,40 @@ function splitScalar(total: number, ratio: number, policy: SplitScalarPolicy): [
   return [policy.source, policy.destination];
 }
 
+/**
+ * Whether a state building is a level (infrastructure, air base, anti-air, radar) rather than a
+ * count of slot buildings. A level applies to the whole state, so a split keeps it in both parts
+ * and a merge keeps the highest; slot buildings are divided and summed.
+ */
+function isLevelStateBuilding(index: MapWorkspaceIndex, building: string): boolean {
+  const definition = index.buildingDefinitions.get(building);
+  if (definition !== undefined) return !definition.sharesSlots && !definition.provincial;
+  return LEVEL_STATE_BUILDINGS.has(building);
+}
+
 function splitMap(
   total: ReadonlyMap<string, number>,
   ratio: number,
   policy: SplitMapPolicy,
+  isLevel: (key: string) => boolean = () => false,
 ): [Map<string, number>, Map<string, number>] {
   if (policy.method === 'retain-in-source') return [new Map(total), new Map<string, number>()];
   if (policy.method === 'proportional-by-land-pixels') {
     const source = new Map<string, number>();
     const destination = new Map<string, number>();
     for (const [key, value] of total) {
-      const moved = Math.round(value * ratio * 1_000_000) / 1_000_000;
-      source.set(key, value - moved);
+      if (isLevel(key)) {
+        source.set(key, value);
+        destination.set(key, value);
+        continue;
+      }
+      // Whole buildings and resource units stay whole; fractional source values keep two
+      // decimals.
+      const moved = Number.isInteger(value)
+        ? Math.round(value * ratio)
+        : Math.round(value * ratio * 100) / 100;
+      const kept = Math.round((value - moved) * 100) / 100;
+      if (kept !== 0) source.set(key, kept);
       if (moved !== 0) destination.set(key, moved);
     }
     return [source, destination];
@@ -1899,15 +1997,124 @@ function commitState(
   data: StateData,
   fields: StatePatchFields,
   operationId: string,
+  datedRewrite?: readonly SourceReplacement[],
+  datedRewriteFollowsProvinces = datedRewrite !== undefined,
 ): void {
-  assertDatedStateHistorySafe(state, fields, operationId);
+  // Distributed dated history already follows the new province membership.
+  assertDatedStateHistorySafe(
+    state,
+    datedRewriteFollowsProvinces
+      ? { ...fields, provinces: false, victoryPoints: false, buildings: false }
+      : fields,
+    operationId,
+  );
   addChange(
     changes,
     state.file.relativePath,
-    patchState(state, data, fields),
+    patchState(state, data, fields, datedRewrite),
     operationId,
     'text/plain',
   );
+}
+
+/**
+ * Split a state's dated history blocks between the part it keeps and a new state: ownership,
+ * cores and other dated effects apply to both, victory points and province buildings follow
+ * their provinces, level buildings keep their level, and slot buildings divide by the same land
+ * share as the undated values.
+ */
+function distributeDatedHistory(
+  index: MapWorkspaceIndex,
+  state: StateRecord,
+  moved: ReadonlySet<number>,
+  ratio: number,
+): { source: SourceReplacement[]; destination: string[] } {
+  const result: { source: SourceReplacement[]; destination: string[] } = {
+    source: [],
+    destination: [],
+  };
+  if (state.historyBlock === undefined) return result;
+  const text = state.document.text;
+  const newline = state.document.newline;
+  for (const entry of assignments(state.historyBlock)) {
+    if (entry.value.type !== 'block' || parseMapDate(entry.key.value) === undefined) continue;
+    const block = entry.value;
+    // A block without province-bound entries applies unchanged to both parts.
+    if (
+      !block.entries.some(
+        (child) =>
+          child.type === 'assignment' &&
+          (child.key.value === 'victory_points' || child.key.value === 'buildings'),
+      )
+    ) {
+      result.destination.push(text.slice(entry.start, entry.end));
+      continue;
+    }
+    const part = (keep: (provinceId: number) => boolean, destination: boolean, indent: string) => {
+      const rows: string[] = [];
+      for (const child of block.entries) {
+        if (
+          child.type === 'assignment' &&
+          child.key.value === 'victory_points' &&
+          child.value.type === 'block'
+        ) {
+          const first = child.value.entries[0];
+          if (first?.type === 'scalar' && !keep(Number(first.value))) continue;
+          rows.push(text.slice(child.start, child.end));
+          continue;
+        }
+        if (
+          child.type === 'assignment' &&
+          child.key.value === 'buildings' &&
+          child.value.type === 'block'
+        ) {
+          const inner: string[] = [];
+          for (const building of child.value.entries) {
+            if (building.type === 'assignment' && /^\d+$/u.test(building.key.value)) {
+              if (keep(Number(building.key.value)))
+                inner.push(text.slice(building.start, building.end));
+              continue;
+            }
+            if (
+              building.type === 'assignment' &&
+              building.value.type === 'scalar' &&
+              /^\d+(?:\.\d+)?$/u.test(building.value.value)
+            ) {
+              const value = Number(building.value.value);
+              if (isLevelStateBuilding(index, building.key.value)) {
+                inner.push(`${building.key.value} = ${building.value.value}`);
+                continue;
+              }
+              const share = Math.round(value * ratio);
+              const kept = destination ? share : value - share;
+              if (kept > 0) inner.push(`${building.key.value} = ${kept}`);
+              continue;
+            }
+            inner.push(text.slice(building.start, building.end));
+          }
+          if (inner.length > 0)
+            rows.push(
+              `buildings = {${newline}${inner.map((row) => `${indent}\t\t${row}`).join(newline)}${newline}${indent}\t}`,
+            );
+          continue;
+        }
+        rows.push(text.slice(child.start, child.end));
+      }
+      return rows.length === 0
+        ? undefined
+        : `${entry.key.value} = {${newline}${rows.map((row) => `${indent}\t${row}`).join(newline)}${newline}${indent}}`;
+    };
+    const sourceText = part((id) => !moved.has(id), false, lineIndent(text, entry.start));
+    result.source.push({
+      start: entry.start,
+      end: entry.end,
+      text: sourceText ?? '',
+      description: 'Keep the dated history that follows the remaining provinces',
+    });
+    const destinationText = part((id) => moved.has(id), true, '\t\t');
+    if (destinationText !== undefined) result.destination.push(destinationText);
+  }
+  return result;
 }
 
 function assertDatedStateHistorySafe(
@@ -1965,25 +2172,6 @@ function assertDatedStateHistorySafe(
       },
     );
   }
-}
-
-function assertNoDatedStateHistory(state: StateRecord, operationId: string): void {
-  if (state.historyBlock === undefined) return;
-  const dated = assignments(state.historyBlock).find(
-    (entry) => entry.value.type === 'block' && parseMapDate(entry.key.value) !== undefined,
-  );
-  if (dated === undefined) return;
-  throw new ServiceError(
-    'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED',
-    `State ${state.id} has dated history that cannot be distributed to a new or merged state`,
-    {
-      operationId,
-      stateId: state.id,
-      datedAt: dated.key.value,
-      sourcePath: state.file.displayPath,
-      sourceOffset: dated.start,
-    },
-  );
 }
 
 function commitRegion(
@@ -2300,7 +2488,6 @@ function* applySplitState(
   const source = index.statesById.get(sourceStateId);
   if (source === undefined)
     throw new ServiceError('MAP_STATE_NOT_FOUND', `State ${sourceStateId} does not exist`);
-  assertNoDatedStateHistory(source, operation.id);
   const selectedSet = new Set(selected);
   if (selected.length === 0 || selected.some((id) => !source.provinces.includes(id))) {
     throw new ServiceError(
@@ -2371,6 +2558,7 @@ function* applySplitState(
     source.stateBuildings,
     ratio,
     policy.stateBuildings,
+    (building) => isLevelStateBuilding(index, building),
   );
   [sourceData.owner, destinationData.owner] = splitTag(source.owner, policy.owner);
   [sourceData.controller, destinationData.controller] = splitTag(
@@ -2391,6 +2579,8 @@ function* applySplitState(
   destinationData.provinceBuildings = new Map(
     [...destinationData.provinceBuildings].filter(([provinceId]) => selectedSet.has(provinceId)),
   );
+  const dated = distributeDatedHistory(index, source, selectedSet, ratio);
+  destinationData.datedHistory = dated.destination;
   commitState(
     changes,
     source,
@@ -2399,14 +2589,16 @@ function* applySplitState(
       manpower: true,
       resources: true,
       provinces: true,
-      owner: true,
-      controller: true,
-      cores: true,
-      claims: true,
+      // Copied ownership is unchanged in the source and needs no rewrite.
+      owner: policy.owner.method !== 'copy-source',
+      controller: policy.controller.method !== 'copy-source',
+      cores: policy.cores.method !== 'copy-source',
+      claims: policy.claims.method !== 'copy-source',
       victoryPoints: true,
       buildings: true,
     },
     operation.id,
+    dated.source,
   );
   const requestedName = operation.fileName ?? `${allocation.id}-AGENT_STATE.txt`;
   const safeName = requestedName.replaceAll('\\', '/').split('/').at(-1) ?? requestedName;
@@ -2431,6 +2623,8 @@ function* applySplitState(
 }
 
 function requireMergeStatePolicy(operation: MergeStatesOperation): void {
+  // Every merge policy field has one allowed value, so an omitted policy means that one.
+  if (operation.distribution === undefined) return;
   if (
     !samePolicy(operation.distribution, {
       stateValues: 'sum-into-target',
@@ -2491,7 +2685,28 @@ function applyMergeStates(
       'Merge target and source states must exist',
     );
   }
-  for (const source of sources) assertNoDatedStateHistory(source, operation.id);
+  // Dated ownership, cores and effects of a merged state carry over to the target; dated
+  // building levels cannot be combined, because each part's later value replaces its own.
+  const carriedHistory: string[] = [];
+  for (const source of sources) {
+    if (source.historyBlock === undefined) continue;
+    for (const entry of assignments(source.historyBlock)) {
+      if (entry.value.type !== 'block' || parseMapDate(entry.key.value) === undefined) continue;
+      if (assignments(entry.value, 'buildings').length > 0)
+        throw new ServiceError(
+          'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED',
+          `State ${source.id} sets building levels in dated history (${entry.key.value}), which a merge cannot combine; move its provinces with move_state_provinces or edit that block first`,
+          {
+            operationId: operation.id,
+            stateId: source.id,
+            datedAt: entry.key.value,
+            sourcePath: source.file.displayPath,
+            sourceOffset: entry.start,
+          },
+        );
+      carriedHistory.push(source.document.text.slice(entry.start, entry.end));
+    }
+  }
   const regionIds = new Set(
     [...target.provinces, ...sources.flatMap((state) => state.provinces)].map((id) =>
       regionMembershipId(index, id),
@@ -2506,7 +2721,13 @@ function applyMergeStates(
   for (const source of sources) {
     data.manpower += source.manpower;
     addMaps(data.resources, source.resources);
-    addMaps(data.stateBuildings, source.stateBuildings);
+    for (const [building, value] of source.stateBuildings)
+      data.stateBuildings.set(
+        building,
+        isLevelStateBuilding(index, building)
+          ? Math.max(data.stateBuildings.get(building) ?? 0, value)
+          : (data.stateBuildings.get(building) ?? 0) + value,
+      );
     data.provinces.push(...source.provinces);
     data.cores.push(...source.cores);
     data.claims.push(...source.claims);
@@ -2519,6 +2740,18 @@ function applyMergeStates(
   data.provinces = uniqueSorted(data.provinces);
   data.cores = uniqueStrings(data.cores);
   data.claims = uniqueStrings(data.claims);
+  const historyClose = target.historyBlock?.close;
+  const carried: SourceReplacement[] = [];
+  if (carriedHistory.length > 0 && historyClose !== undefined) {
+    const indent = lineIndent(target.document.text, target.historyBlock!.start);
+    const newline = target.document.newline;
+    carried.push({
+      start: historyClose.start,
+      end: historyClose.start,
+      text: carriedHistory.map((block) => `\t${block}${newline}${indent}`).join(''),
+      description: 'Carry dated history from merged states',
+    });
+  } else data.datedHistory = carriedHistory;
   commitState(
     changes,
     target,
@@ -2533,6 +2766,8 @@ function applyMergeStates(
       buildings: true,
     },
     operation.id,
+    carried.length === 0 ? undefined : carried,
+    false,
   );
   for (const source of sources) {
     addChange(
@@ -5053,6 +5288,176 @@ function applyRenumberMapEntity(
     renameLocalisationKeys(currentIndex(base, changes), changes, localisationKeys, operation.id);
 }
 
+/** Folders a new world replaces in the base game. */
+export const WORLD_REPLACED_ROOTS = [
+  'history/states',
+  'history/countries',
+  'history/units',
+  'map/strategicregions',
+  'map/supplyareas',
+  'common/bookmarks',
+] as const;
+
+/** Add replace_path lines to descriptor.mod, creating a minimal descriptor when none exists. */
+function descriptorWithReplacePaths(index: MapWorkspaceIndex, roots: readonly string[]): Buffer {
+  const existing = index.sourceFiles.find(
+    (file) => file.rootKind === 'mod' && normalizeRelative(file.relativePath) === 'descriptor.mod',
+  );
+  const textValue =
+    existing === undefined
+      ? 'version="1.0"\nname="New World"\nsupported_version="1.*"\n'
+      : existing.bytes.toString('utf8');
+  const newline = textValue.includes('\r\n') ? '\r\n' : '\n';
+  const present = new Set(
+    [...textValue.matchAll(/replace_path\s*=\s*"([^"]+)"/gu)].map((match) =>
+      normalizeRelative(match[1]!),
+    ),
+  );
+  const missing = roots.filter((root) => !present.has(normalizeRelative(root)));
+  const body = textValue.endsWith('\n') ? textValue : `${textValue}${newline}`;
+  return Buffer.from(
+    `${body}${missing.map((root) => `replace_path="${root}"`).join(newline)}${missing.length > 0 ? newline : ''}`,
+    'utf8',
+  );
+}
+
+function applyCreateWorld(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: CreateWorldOperation,
+): Diagnostic[] {
+  const mapRoot = base.sourceRoots.map[0] ?? 'map';
+  const world = generateWorld(
+    {
+      width: operation.width ?? 1_024,
+      height: operation.height ?? 512,
+      seed: operation.seed ?? 1,
+      landCoverage: operation.landCoverage ?? 0.35,
+      continents: operation.continents ?? 3,
+      ...(operation.landPolygons === undefined ? {} : { landPolygons: operation.landPolygons }),
+      landProvincePixels: operation.landProvincePixels ?? 400,
+      seaProvincePixels: operation.seaProvincePixels ?? 2_500,
+      provincesPerState: operation.provincesPerState ?? 5,
+      landProvincesPerRegion: operation.landProvincesPerRegion ?? 25,
+      seaProvincesPerRegion: operation.seaProvincesPerRegion ?? 10,
+      countries: operation.countries,
+      ...(operation.continentNames === undefined
+        ? {}
+        : { continentNames: operation.continentNames }),
+      startDate: operation.startDate ?? '1936.1.1',
+      rivers: operation.rivers ?? 8,
+    },
+    {
+      palettes: {},
+      mapRoot,
+      statesRoot: base.sourceRoots.states[0] ?? 'history/states',
+      localisationRoot: base.sourceRoots.localisation[0] ?? 'localisation',
+    },
+  );
+  const roots = operation.replaceBaseGame === false ? [] : [...WORLD_REPLACED_ROOTS];
+  replacedRootsByPlan.set(changes, roots);
+  for (const file of world.files)
+    addChange(changes, file.relativePath, file.content, operation.id, file.mediaType);
+  // Start from empty derived files so no base-game position or supply line survives.
+  for (const name of [
+    'buildings.txt',
+    'unitstacks.txt',
+    'weatherpositions.txt',
+    'supply_nodes.txt',
+    'railways.txt',
+  ])
+    addChange(changes, `${mapRoot}/${name}`, Buffer.alloc(0), operation.id, 'text/plain');
+  if (roots.length > 0)
+    addChange(
+      changes,
+      'descriptor.mod',
+      descriptorWithReplacePaths(base, roots),
+      operation.id,
+      'text/plain',
+    );
+  const generated = currentIndex(base, changes);
+  for (const file of planMapPositions(generated, { mode: 'replace' }))
+    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+  const positioned = currentIndex(base, changes);
+  for (const file of planSupplyRebuild(positioned, { mode: 'replace' }))
+    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+  return [
+    {
+      code: 'MAP_WORLD_CREATED',
+      severity: 'info',
+      category: 'map',
+      operationId: operation.id,
+      message: `Created a ${world.summary.width}x${world.summary.height} world: ${world.summary.landProvinces} land, ${world.summary.seaProvinces} sea and ${world.summary.lakeProvinces} lake provinces, ${world.summary.states} states, ${world.summary.landRegions + world.summary.seaRegions} strategic regions, ${world.summary.countries} countries and ${world.summary.rivers} rivers`,
+      details: world.summary,
+    },
+    ...(roots.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_LAUNCHER_REPLACE_PATHS',
+            severity: 'info' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message: `descriptor.mod replaces ${roots.join(', ')}; the launcher's .mod file beside the mod folder needs the same replace_path lines`,
+            details: { replacePaths: roots },
+          },
+        ]),
+  ];
+}
+
+function applyRegenerateMapPositions(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RegenerateMapPositionsOperation,
+): void {
+  const index = currentIndex(base, changes);
+  for (const file of planMapPositions(index, operation))
+    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+}
+
+function applyRebuildSupply(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RebuildSupplyOperation,
+): void {
+  const index = currentIndex(base, changes);
+  for (const file of planSupplyRebuild(index, operation))
+    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+}
+
+function applyRemapMapReferences(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RemapMapReferencesOperation,
+): void {
+  const index = currentIndex(base, changes);
+  let plan: ReturnType<typeof planReferenceRemap>;
+  try {
+    plan = planReferenceRemap(
+      index.sourceFiles,
+      {
+        entity: operation.entity,
+        mapping: operation.mapping,
+        readOnlySources: operation.readOnlySources ?? 'refuse',
+        ...(operation.pathPrefixes === undefined ? {} : { pathPrefixes: operation.pathPrefixes }),
+      },
+      (document, replacements) => applyReplacements(document, replacements),
+    );
+  } catch (error) {
+    if (error instanceof ReferenceRemapError)
+      throw new ServiceError(error.code, error.message, error.details);
+    throw error;
+  }
+  if (plan.files.length === 0)
+    throw new ServiceError(
+      'MAP_REFERENCE_REMAP_EMPTY',
+      `No script references the mapped ${operation.entity} IDs`,
+      { entity: operation.entity, from: operation.mapping.map(({ from }) => from) },
+    );
+  for (const file of plan.files)
+    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+}
+
 function applyEntityLocator(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -5140,7 +5545,9 @@ function* planMapOperationSteps(
     const allocationsCheckpoint = allocations.length;
     const boundsCheckpoint = expectedChangedBounds;
     try {
-      if (operation.kind === 'move_state_provinces')
+      if (operation.kind === 'create_world')
+        diagnostics.push(...applyCreateWorld(base, changes, operation));
+      else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
       else if (operation.kind === 'split_state' || operation.kind === 'create_state')
@@ -5175,6 +5582,11 @@ function* planMapOperationSteps(
         applyEntityLocator(base, changes, operation);
       else if (operation.kind === 'renumber_map_entity')
         applyRenumberMapEntity(base, changes, operation);
+      else if (operation.kind === 'remap_map_references')
+        applyRemapMapReferences(base, changes, operation);
+      else if (operation.kind === 'regenerate_map_positions')
+        applyRegenerateMapPositions(base, changes, operation);
+      else if (operation.kind === 'rebuild_supply') applyRebuildSupply(base, changes, operation);
       else handleSimpleOperation(base, changes, operation as SimpleMapOperation);
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -5210,7 +5622,11 @@ function* planMapOperationSteps(
   }
   const finalized = proposedChanges(changes);
   yield* cancellationCheckpoint(signal);
-  const finalIndex = indexWithProposedChanges(base, finalized);
+  const finalIndex = indexWithProposedChanges(
+    base,
+    finalized,
+    replacedRootsByPlan.get(changes) ?? [],
+  );
   return {
     changes: finalized,
     diagnostics,
