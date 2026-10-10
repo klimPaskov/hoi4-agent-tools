@@ -273,6 +273,7 @@ export class CoreEngine {
     signal?: AbortSignal,
   ): Promise<ScanSnapshot> {
     signal?.throwIfAborted();
+    await this.resolver.refreshDescriptors(workspaceId, principal);
     const workspace = this.resolver.get(workspaceId, principal);
     const patterns = options.patterns ?? defaultPatterns(workspace);
     const ignore = options.ignore;

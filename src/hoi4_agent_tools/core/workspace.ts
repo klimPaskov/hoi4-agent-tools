@@ -23,6 +23,12 @@ export interface ResolvedRoot {
   writable: boolean;
   loadOrder: number;
   replacePaths: string[];
+  /**
+   * The replace paths the workspace identity was derived from at startup. A descriptor changed
+   * while the server runs updates `replacePaths` for later scans, but jobs, transactions and
+   * caches stay scoped to the identity they started under.
+   */
+  identityReplacePaths?: string[];
   /** Display label for a DLC layer: its installed folder name. */
   label?: string;
 }
@@ -286,13 +292,15 @@ export function resolvedWorkspaceIdentity(
 ): string {
   return hashCanonical({
     id: workspace.id,
-    roots: workspace.roots.map(({ kind, path: rootPath, loadOrder, writable, replacePaths }) => ({
-      kind,
-      rootHash: sha256Bytes(process.platform === 'win32' ? rootPath.toLowerCase() : rootPath),
-      loadOrder,
-      writable,
-      replacePaths,
-    })),
+    roots: workspace.roots.map(
+      ({ kind, path: rootPath, loadOrder, writable, replacePaths, identityReplacePaths }) => ({
+        kind,
+        rootHash: sha256Bytes(process.platform === 'win32' ? rootPath.toLowerCase() : rootPath),
+        loadOrder,
+        writable,
+        replacePaths: identityReplacePaths ?? replacePaths,
+      }),
+    ),
     behavior: {
       kind: workspace.registration.kind,
       relativeRoots: workspace.registration.roots,
@@ -380,6 +388,8 @@ function assertRelative(relativePath: string): void {
 
 export class WorkspaceResolver {
   readonly #byId = new Map<string, ResolvedWorkspace>();
+  /** Size and modification time of each descriptor when its `replace_path` entries were read. */
+  readonly #descriptorStamps = new Map<string, string>();
   readonly #discoveredWorkspaceIds = new Set<string>();
   #storageRoots: string[] = [];
   #modRoots: string[] = [];
@@ -661,6 +671,36 @@ export class WorkspaceResolver {
     return [...this.#byId.values()]
       .filter((workspace) => allowed === undefined || allowed.has(workspace.id))
       .sort((a, b) => compareCodeUnits(a.id, b.id));
+  }
+
+  /**
+   * Re-read the `replace_path` entries of the workspace's mod and dependency descriptors when a
+   * descriptor changed since they were last read. A server keeps running while a rewrite such as
+   * a new world adds folders to the descriptor, and later scans must hide the replaced folders.
+   */
+  async refreshDescriptors(workspaceId: string, principal?: string): Promise<void> {
+    const workspace = this.get(workspaceId, principal);
+    if (workspace.registration.kind === 'game') return;
+    const dependencies = workspace.registration.dependencies;
+    for (const root of workspace.roots) {
+      if (root.kind !== 'mod' && root.kind !== 'dependency') continue;
+      const descriptor = path.join(root.path, 'descriptor.mod');
+      const stamp = await lstat(descriptor).then(
+        (metadata) => `${metadata.size}:${metadata.mtimeMs}`,
+        () => 'missing',
+      );
+      const key = `${workspace.id}\0${root.path}`;
+      if (this.#descriptorStamps.get(key) === stamp) continue;
+      this.#descriptorStamps.set(key, stamp);
+      const index = workspace.dependencyRoots.indexOf(root.path);
+      const configured =
+        root.kind === 'mod'
+          ? workspace.registration.replacePaths
+          : (dependencies[index]?.replacePaths ?? []);
+      root.replacePaths = [
+        ...new Set([...configured, ...(await descriptorReplacePaths(root.path))]),
+      ];
+    }
   }
 
   get(workspaceId: string, principal?: string): ResolvedWorkspace {
@@ -1055,6 +1095,7 @@ export class WorkspaceResolver {
 
     for (const root of roots) {
       root.path = await canonicalPath(root.path);
+      root.identityReplacePaths = root.replacePaths;
     }
     const workspaceBase = {
       id: registration.id,

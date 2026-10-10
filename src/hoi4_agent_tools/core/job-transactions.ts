@@ -140,7 +140,7 @@ export class JobTransactions {
           ? 'JOB_REWRITE_RESTORED'
           : 'JOB_REWRITE_RECOVERY_REQUIRED',
         transaction.rollbackStatus === 'applied'
-          ? 'The interrupted rewrite was restored; it was not replayed'
+          ? `The interrupted rewrite was restored; it was not replayed${failureCause(undefined, transaction)}`
           : 'The transaction could not establish a completed or restored outcome',
         principal,
       );
@@ -245,7 +245,7 @@ export class JobTransactions {
             current,
             ownerToken,
             'JOB_REWRITE_RESTORED',
-            'The rewrite failed and its original source was restored',
+            `The rewrite failed and its original source was restored${failureCause(error, outcome)}`,
             principal,
           );
         if (outcome.state === 'failed')
@@ -312,4 +312,33 @@ export class JobTransactions {
       { status: 'failed', failure: { code, message } },
     );
   }
+}
+
+/**
+ * Why the write stopped: the error code and message of a service error, else only the error
+ * kind, followed by the first check or diagnostic of the transaction that failed validation.
+ */
+function failureCause(error: unknown, transaction: TransactionManifest): string {
+  const recorded =
+    transaction.failure === undefined
+      ? ''
+      : `${transaction.failure.code}: ${transaction.failure.message}`;
+  const cause =
+    error instanceof ServiceError
+      ? `${error.code}: ${error.message}`
+      : error instanceof Error
+        ? error.name
+        : recorded;
+  const failedCheck = transaction.validation.checks.find(({ passed }) => !passed);
+  const blocking = transaction.diagnostics.find(
+    ({ severity }) => severity === 'error' || severity === 'blocker',
+  );
+  const text = [
+    cause,
+    failedCheck?.message ?? '',
+    blocking === undefined ? '' : `${blocking.code}: ${blocking.message}`,
+  ]
+    .filter((part) => part !== '')
+    .join('; ');
+  return text === '' ? '' : ` (${text})`.slice(0, 500);
 }
