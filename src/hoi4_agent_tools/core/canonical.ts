@@ -22,7 +22,7 @@ export function canonicalize(value: unknown): JsonValue {
     const object = value as Record<string, unknown>;
     // Filling the copy directly avoids an entry array per member; a plain object lists integer
     // keys first and the rest in insertion (here code unit) order, the same as before.
-    const copy: { [key: string]: JsonValue } = {};
+    const copy: Record<string, JsonValue> = {};
     for (const key of Object.keys(object).sort(compareCodeUnits)) {
       const member = object[key];
       if (member === undefined) continue;
