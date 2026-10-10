@@ -476,6 +476,8 @@ try {
       'source={"identifier":"inspector_root"}',
       '--tool-arg',
       'candidatePool=["inspector_root"]',
+      '--tool-arg',
+      'evaluate=false',
     ]),
     'Inspector hoi4.probability_inspect',
   );

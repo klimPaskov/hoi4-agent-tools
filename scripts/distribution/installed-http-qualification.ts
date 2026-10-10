@@ -444,6 +444,8 @@ export async function qualifyInstalledHttpBinary(
         adapter: 'national_focus_ai_will_do',
         source: { identifier: options.probabilityFocusId },
         candidatePool: [options.probabilityFocusId],
+        // The inventory of the weighted surface; evaluation is a separate, larger answer.
+        evaluate: false,
       },
     });
     requireCondition(

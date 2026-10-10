@@ -1539,7 +1539,8 @@ it('rejects mismatched HTTP task-routing headers', async () => {
         'mcp-name': 'different-task',
       })
     ).error,
-  ).toMatchObject({ code: -32602 });
+    // The SDK's inbound ladder answers a header that disagrees with the body with HeaderMismatch.
+  ).toMatchObject({ code: -32020 });
   expect(
     (
       await wire.request('tasks/get', { taskId: 'missing' }, capabilities, {

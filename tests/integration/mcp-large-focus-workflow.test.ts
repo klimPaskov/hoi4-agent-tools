@@ -214,11 +214,17 @@ describe('large public focus workflow', () => {
       data: { treeCount: 1, trees: [expect.objectContaining({ focusCount })] },
     });
 
+    // The vector-only render is a separate request since the picture became the default.
     const rendered = resultOf(
       await client.callTool(
         {
           name: 'hoi4.focus_render',
-          arguments: { workspaceId: 'many-icons', relativePath, treeId: 'many_icon_tree' },
+          arguments: {
+            workspaceId: 'many-icons',
+            relativePath,
+            treeId: 'many_icon_tree',
+            png: false,
+          },
         },
         undefined,
         { timeout: 300_000, resetTimeoutOnProgress: true, maxTotalTimeout: 300_000 },
@@ -394,6 +400,7 @@ describe('large public focus workflow', () => {
       data: { treeCount: 1 },
     });
 
+    // The vector-only render is a separate request since the picture became the default.
     const rendered = resultOf(
       await client.callTool(
         {
@@ -402,6 +409,7 @@ describe('large public focus workflow', () => {
             workspaceId: 'large-focus',
             relativePath,
             treeId: 'massive_agent_tree',
+            png: false,
           },
         },
         undefined,
