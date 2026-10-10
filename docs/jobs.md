@@ -14,15 +14,21 @@ A modern native task handoff ends that request's heartbeat without declaring the
 
 ## Supported tools
 
-Optional tasks are available for all 28 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
+Optional tasks are available for all 19 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
 
-- `hoi4.event_inspect`, `hoi4.event_render`, and `hoi4.event_compare`
+- `hoi4.event_inspect` and `hoi4.event_render`
 - `hoi4.impact_inspect`, `hoi4.decision_inspect`, `hoi4.mechanic_test`, `hoi4.package_check`, and `hoi4.scenario_test`
-- `hoi4.tech_inspect`, `hoi4.tech_render`, and `hoi4.tech_compare`
-- `hoi4.probability_inspect`, `hoi4.probability_evaluate`, `hoi4.probability_sweep`, `hoi4.probability_simulate`, `hoi4.probability_sequence`, `hoi4.probability_compare`, and `hoi4.probability_render`
-- `hoi4.map_inspect`, `hoi4.map_render`, and `hoi4.map_rewrite`
+- `hoi4.tech_inspect` and `hoi4.tech_render`
+- `hoi4.probability_inspect` and `hoi4.probability_analyze`
+- `hoi4.map_inspect` and `hoi4.map_rewrite`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`
-- `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, and `hoi4.focus_rewrite`
+- `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite`
+
+## Warm workers
+
+Domain tools run in a separate worker process. After a job the worker stays warm for `jobWorkerIdleSeconds` (default 180) and runs its server's next job with the indexes it already loaded, so a second GUI render or decision inspection of a large mod skips the cold scan. An idle worker holds no execution slot, exits when its idle time ends or its server closes, and a worker whose job failed is never reused. Set `jobWorkerIdleSeconds: 0` to start a fresh worker for every job.
+
+## Results
 
 Task results are exact tool results, including linked artifacts, partial-analysis markers, validation evidence, and tool-level errors.
 A completed tool-level error is therefore a completed task whose result has `isError: true`; an execution or storage failure is a failed task.

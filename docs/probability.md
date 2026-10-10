@@ -4,30 +4,52 @@ The probability tools explain weighted HOI4 logic under explicit world-state sce
 
 Use them for event timing and option weights, decision and mission scores, focus selection, technology and doctrine selection, direct random chances, `random_list`, supported AI strategy factors, and declared custom weighted pools.
 
-| Tool                        | Use                                                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `hoi4.probability_inspect`  | Discover weighted blocks, compatible adapters, candidates, provenance, capabilities, and unsupported constructs.                |
-| `hoi4.probability_evaluate` | Evaluate eligibility, modifier traces, raw values, proven probabilities, and MTTH horizon chances across scenarios.             |
-| `hoi4.probability_sweep`    | Sweep declared ranges and locate sensitivity changes, breakpoints, and rank reversals.                                          |
-| `hoi4.probability_simulate` | Sample declared distributions with a deterministic seed and confidence intervals.                                               |
-| `hoi4.probability_sequence` | Analyze only recovery, caps, cooldowns, removal, resets, timers, and terminal states declared by a custom pool manifest.        |
-| `hoi4.probability_compare`  | Attribute changes in eligibility, modifiers, values, probabilities, timing, ranks, and unresolved analysis to a proposed patch. |
-| `hoi4.probability_render`   | Render cached ranking, matrix, waterfall, timing, sensitivity, sequence, comparison, and unresolved views.                      |
+| Tool                       | Use                                                                                                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hoi4.probability_inspect` | Find weighted logic by file, identifier or candidate IDs and evaluate it: each candidate's weight and probability per scenario, the strongest first, and the facts still missing.                        |
+| `hoi4.probability_analyze` | Deeper analysis selected by `analysis`: `compare` a proposed or frozen source, `sweep` declared ranges, `simulate` uncertain inputs, `sequence` a declared pool over time, `render` a retained analysis. |
 
-All seven tools are read-only. Proposed source is parsed in memory and never written. When an installed game root is configured, evaluation fails closed unless `launcher-settings.json` identifies the supported HOI4 build and checksum. Results otherwise state that they target the adapter version without claiming local-game verification.
+Both tools are read-only. Proposed source is parsed in memory and never written. When an installed game root is configured, evaluation fails closed unless `launcher-settings.json` identifies the supported HOI4 build and checksum. Results otherwise state that they target the adapter version without claiming local-game verification.
 
-Pass a source without an adapter when the surface type is not yet known. Inspection returns every compatible adapter, candidate counts, and example candidate IDs; its discovery artifact includes every candidate ID and source location. If a requested adapter, identifier, or candidate pool does not match the source, inspection returns the same discovery result with an explanation and suggested adapter instead of `PROBABILITY_SURFACE_EMPTY`.
+## One call for current weights
+
+`hoi4.probability_inspect` finds the weighted surface and evaluates it in the same call.
+Name what to inspect in whichever way is at hand:
+
+- `source.path` (and `source.line`) for a file or one block in it;
+- `source.identifier` for a decision, mission, focus, technology, event or `random_list` ID;
+- `candidatePool` alone: its first ID finds the defining file, an event ID stands for all of its options, and a `random_list` ID for all of its entries.
+
+Without `scenarioSet` the evaluation uses one scenario with no declared facts.
+Conditions that need facts stay unresolved, and `missingInputs` lists the facts to declare in a `scenarioSet` for the next call.
+The inline `ranking` shows, for up to four scenarios, the twelve strongest candidates with eligibility, weight, probability and MTTH; the linked resource holds every candidate's trace.
+
+```json
+{ "candidatePool": ["my_mod.12"] }
+```
+
+```json
+{
+  "source": { "path": "common/decisions/my_decisions.txt" },
+  "candidatePool": ["my_decision_a", "my_decision_b"],
+  "scenarioSet": [{ "actor": "GER", "state": { "has_war": true } }]
+}
+```
+
+When a named adapter does not match the source, such as `decision_ai_will_do` for a mission, inspection switches to the matching adapter.
+Set `evaluate: false` for the inventory alone: compatible adapters, candidate counts, example IDs, and the required inputs of the selected source.
 
 Source request paths are exact workspace-relative files, such as `common/decisions/example.txt`.
 The `mod:`, `game:`, and `dependency-N:` labels in returned source citations identify origins; they are not part of a probability request's `source.path`.
 
 For a selected source, `hoi4.probability_inspect` includes missing source-condition fields in compact `requiredInputPaths`, adapter-wide completeness flags in `adapterRequiredInputPaths`, and the full candidate catalog, source provenance, and per-candidate requirements in its JSON resource. Unsupported source constructs remain unresolved evidence rather than being presented as scenario inputs. Evaluation reports eligible, excluded, and unresolved candidate counts inline; the resource preserves each candidate's exact eligibility and unresolved reasons for every scenario.
 
-Evaluation, sweep, simulation, and source comparison also accept an omitted adapter. When a source selector identifies one unambiguous weighted surface, the analyzer selects that source-backed adapter automatically. If a caller supplies a mismatched adapter or `custom_weighted_pool` for a source-backed request, the analyzer corrects it when the source has exactly one match. `customPoolManifest`, `beforeManifest`, and `afterManifest` use the custom-pool adapter automatically; `PROBABILITY_SURFACE_EMPTY` is reserved for sources with no weighted surface, while genuinely multi-adapter sources ask the caller to narrow by identifier or line.
+Inspection, sweeps, simulation and source comparison also accept an omitted adapter. When a source selector identifies one unambiguous weighted surface, the analyzer selects that source-backed adapter automatically. If a caller supplies a mismatched adapter or `custom_weighted_pool` for a source-backed request, the analyzer corrects it when the source has exactly one match. `customPoolManifest`, `beforeManifest`, and `afterManifest` use the custom-pool adapter automatically; `PROBABILITY_SURFACE_EMPTY` is reserved for sources with no weighted surface, while genuinely multi-adapter sources ask the caller to narrow by identifier or line.
 
 ## Scenarios
 
-A scenario contains only state the caller is willing to declare. Missing values stay unresolved. Alternatives and ranges produce exact branches or bounds; probability distributions require `hoi4.probability_simulate`.
+A scenario contains only state the caller is willing to declare. Missing values stay unresolved. Alternatives and ranges produce exact branches or bounds; probability distributions require `hoi4.probability_analyze` with `analysis: simulate`.
+A scenario set may be sent as a bare list of scenarios, and scenarios without `id` or `state` get `scenario-1`, `scenario-2` and an empty state.
 
 ```json
 {
@@ -99,7 +121,7 @@ Decision and mission adapters intentionally return scores and ranks without inve
 
 `candidateOverrides` declares candidate eligibility for a scenario. It does not force weight-modifier conditions to be true or false; those conditions still use the scenario's actual declared variables, flags, scopes, and controller facts. An overridden eligibility claim is an explicit scenario assumption, not evidence that the engine makes that candidate available.
 
-`hoi4.probability_sweep` takes a `sweep` object with 1 to 32 input `paths`, `steps` from 2 to 10,000 (default 25), `pairwise` (default `false`), and `findRankReversals` (default `true`).
+`analysis: sweep` takes a `sweep` object with 1 to 32 input `paths`, `steps` from 2 to 10,000 (default 25), `pairwise` (default `false`), and `findRankReversals` (default `true`).
 
 Named acceptance bands and configurable diagnostic thresholds let a test suite state intended probability, timing, starvation, dominance, prevalence, and sensitivity limits. Evaluate, sweep, and simulation requests can name the metrics of interest; that set is retained in result metadata while the authoritative result keeps the eligibility and trace context required to explain them. Sweeps enumerate declared alternatives exactly, add trigger breakpoints and their adjacent values for continuous ranges, and report local elasticities, pairwise interactions, rank reversals, cliffs, and missed target bands. Sweep expansion is bounded and rejected before it can silently truncate the requested analysis.
 
@@ -120,14 +142,14 @@ Every evaluated scope pool is stored with the scenario in authoritative JSON. Po
 
 Nested `random_list` entries report both their conditional share inside the immediate list and their full path probability through every enclosing list. Dynamic parent paths remain explicit unresolved evidence.
 
-`hoi4.probability_simulate` defaults to `samples: 100000` (range 100 to 10,000,000), `seed: 1` (any 32-bit signed integer), `confidenceLevel: 0.95` (range 0.5 to 0.9999), and `samplingMethod: "latin_hypercube"`; the other sampling method is `pseudo_random`.
-`hoi4.probability_sequence` uses the same `samples`, `seed`, and `confidenceLevel` defaults, requires `horizonDays`, and defaults `maxSteps` to 1,000 (range 1 to 100,000).
+`analysis: simulate` defaults to `samples: 100000` (range 100 to 10,000,000), `seed: 1` (any 32-bit signed integer), `confidenceLevel: 0.95` (range 0.5 to 0.9999), and `samplingMethod: "latin_hypercube"`; the other sampling method is `pseudo_random`.
+`analysis: sequence` uses the same `samples`, `seed`, and `confidenceLevel` defaults, requires `horizonDays`, and defaults `maxSteps` to 1,000 (range 1 to 100,000).
 
 Deterministic simulation uses constant-memory Latin hypercube sampling by default, with seeded pseudo-random sampling available when requested. Numeric distributions can use a Gaussian copula correlation matrix. Discrete or categorical correlation requests are sampled independently and reported as unresolved instead of being approximated silently. Simulation reports Wilson intervals, effective sample count, global input importance, and HOI4 daily-hazard MTTH samples. Timing quantiles use a deterministic bounded reservoir and include their confidence basis and retained sample count.
 
 ## Proposed patches
 
-Pass `inlineClausewitz` or `virtualPatch` in a source selector to analyze text without writing it. `hoi4.probability_compare` evaluates the before and after source under the same scenarios and attributes each changed rank, score, probability, or uncertainty to its modifier trace.
+Pass `inlineClausewitz` or `virtualPatch` in a source selector to analyze text without writing it. `hoi4.probability_analyze` with `analysis: compare` evaluates the before and after source under the same scenarios and attributes each changed rank, score, probability, or uncertainty to its modifier trace.
 
 For a frozen file stored outside its gameplay folder, set the source selector's `path` to its logical gameplay path, `snapshotPath` to the preserved workspace-relative file, and `expectedSourceHash` to the SHA-256 of that file's exact bytes. For example, a decision copy in `docs/evidence/decisions-before.txt` can be analyzed as `common/decisions/policy.txt`. The server verifies the frozen bytes and retains their physical source provenance while using the logical path for domain recognition. It never replaces the current file. Both paths must identify exact files inside authorized roots; traversal and wildcard selectors are rejected. Shared helpers and constants still come from the current configured workspace, so one frozen file is not a complete historical workspace snapshot.
 
@@ -137,7 +159,7 @@ Sequence analysis accepts a `customPoolManifest`. The manifest is the complete m
 
 ## Visual review
 
-`hoi4.probability_render` produces deterministic ranking, matrix, waterfall, timing-survival, sensitivity, threshold, sequence, comparison, and unresolved views. Filters can select scenarios, candidates, and metrics. Pass the scenario hash returned by evaluation as `expectedScenarioHash` when a caller needs a render bound to that exact analysis; a stale hash returns a structured stale-result diagnostic and no visual artifact.
+`analysis: render` with the `analysisId` of a retained analysis produces deterministic ranking, matrix, waterfall, timing-survival, sensitivity, threshold, sequence, comparison, and unresolved views. Filters can select scenarios, candidates, and metrics. Pass the scenario hash returned by evaluation as `expectedScenarioHash` when a caller needs a render bound to that exact analysis; a stale hash returns a structured stale-result diagnostic and no visual artifact.
 
 Adapter evidence and known boundaries are recorded in [probability-adapter-evidence.md](research/probability-adapter-evidence.md).
 

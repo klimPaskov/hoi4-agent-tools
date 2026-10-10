@@ -46,3 +46,6 @@ Implementation rationale for contributors. For using the server, start with the 
 41. [DLC source layers and descriptor replace paths](0041-dlc-source-layers-and-descriptor-replace-paths.md)
 
 [Progress heartbeats](0042-long-running-progress-heartbeats.md) describes progress reporting for long operations.
+
+43. [One inspect tool per domain, forgiving arguments, compact answers and warm workers](0043-tool-consolidation-and-agent-ergonomics.md)
+44. [New worlds and geography changes](0044-new-worlds-and-geography-changes.md)

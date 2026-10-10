@@ -116,6 +116,12 @@ hoi4-agent-tools-setup --diagnose
 
 For remote or shared deployments, use the [HTTP guide](http.md).
 
+### A running game
+
+This server reads source and never launches, controls or watches the game.
+Pair it with a live-game MCP server, such as the separate HOI4 Live Tools project, for anything that needs the running game: launching and loading saves, the console, firing events, reading popups and the screen, playing time forward, and log deltas during a session.
+Use this server to find and fix the source (`hoi4.error_log` maps last launch's errors to files and says which ones a relaunch removed), and the live server to reproduce and confirm in game.
+
 ### Server lifetime
 
 A stdio server exits when its client closes stdin, and when the process that launched it, such as a `cmd.exe` shim, has exited and no request is still open.

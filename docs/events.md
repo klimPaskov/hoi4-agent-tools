@@ -6,6 +6,8 @@ Use the three event tools directly from the target mod.
 
 ## Inspect
 
+A selector may also be a plain string: an event ID such as `my_mod.12`, a namespace such as `my_mod`, or a file path such as `events/my_events.txt`. An object without `kind` is read the same way from its `eventId`, `namespace`, `path` and `line` fields.
+
 `hoi4.event_inspect` provides eight focused modes:
 
 - `scan`: inventory event definitions, namespaces, call sites, and unresolved references.
@@ -101,16 +103,17 @@ Example `hoi4.event_render` arguments:
 
 ## Compare
 
-`hoi4.event_compare` compares whole workspace event graphs. `before` and `after` each accept exactly one graph reference: `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. If no reference or overlay is supplied, the tool compares the previous cached revision with a fresh scan of the current source and reports an error when no prior revision is available. Comparisons refresh current source by default so normal agent file edits are detected; set `refresh: false` only when intentionally comparing cached graphs.
+`hoi4.event_inspect` with `mode: compare` compares whole workspace event graphs. `before` and `after` each accept exactly one graph reference: `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. If no reference or overlay is supplied, the tool compares the previous cached revision with a fresh scan of the current source and reports an error when no prior revision is available. Comparisons refresh current source by default so normal agent file edits are detected; set `refresh: false` only when intentionally comparing cached graphs.
 
 Set `selector` to an event, namespace, file, source location, node, or manifest to view the downstream chain in both revisions. `maxChainNodes` bounds each traversal, defaults to 1,000, and reports `selectionTruncated` when the chain exceeds the boundary. The artifact retains the full comparison and graph hashes, and its `selection` reports selected, omitted, and unattributed changes explicitly. Diagnostics without a chain owner remain unattributed. The rendered view uses the selected changed nodes.
 
 Alternatively, compare the current graph with `proposedSources`, an in-memory list of `{ relativePath, source, expectedSourceHash? }` overlays. Set `source` to a string to add or replace source, or to `null` to delete an existing mod source. `after` and `proposedSources` are mutually exclusive. Proposed sources are analyzed without being written. The result reports added, removed, and changed definitions, edges, options, state operations, diagnostics, and route reachability.
 
-Example `hoi4.event_compare` arguments:
+Example `hoi4.event_inspect` comparison arguments:
 
 ```json
 {
+  "mode": "compare",
   "proposedSources": [
     {
       "relativePath": "events/example.txt",
@@ -135,6 +138,6 @@ A coding agent can combine the viewer with repository instructions, skills, and 
 2. use `trace`, `explain_path`, `state_flow`, or `impact` for the current task;
 3. read linked JSON evidence only when the compact summary is insufficient;
 4. edit event source with the agent's normal file-editing workflow;
-5. call `hoi4.event_compare`, `lint`, and `hoi4.event_render` to review the result; comparison refreshes the edited source by default.
+5. call `hoi4.event_inspect` with `mode: compare` and `lint`, then `hoi4.event_render` to review the result; comparison refreshes the edited source by default.
 
 Static analysis cannot prove runtime conditions, random outcomes, delayed scheduling, or arbitrary meta-generated text. Those limits are reported in diagnostics and artifacts rather than hidden or guessed. The server never launches or captures Hearts of Iron IV.

@@ -30,7 +30,7 @@ Each entry is an object with `relativePath` and `content`, and a request takes b
 ```
 
 Impact and decision proposals name the text field `content`.
-Event and technology proposals for `hoi4.event_compare` and `hoi4.tech_compare` name the same field `source` and also accept an optional `expectedSourceHash`.
+Event and technology proposals for `hoi4.event_inspect` and `hoi4.tech_inspect` with `mode: compare` name the same field `source` and also accept an optional `expectedSourceHash`.
 When `changedFiles` is omitted, each proposed file seeds all its active definitions alongside any selected symbols.
 The report compares the original and proposed consumer graph, including added and removed consumers and affected files.
 Moving a source location within one file does not count an unchanged reference as a new or removed consumer.

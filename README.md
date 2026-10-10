@@ -18,8 +18,10 @@ Your agent gets cited answers from the game's own documentation, pictures of foc
 | See the tree           | "Render this mod's largest focus tree and list focuses with missing icons."                                |
 | Preview the window     | "Preview this scripted GUI at 100% and 125% UI scale and check for clipped text."                          |
 | Read the map           | "Find Brandenburg, list its provinces and neighbours, and show the files a change would touch."            |
+| Reshape the map        | "Split Brandenburg in two and update every event and focus that names it."                                 |
+| Build a new world      | "Create a 2048x1024 world with six countries, then list what still needs hand-made content."               |
 | Follow the events      | "Trace this event's options and follow-up events and point out unresolved calls."                          |
-| Weigh the AI           | "Compare this decision's `ai_will_do` before and after my change, at peace and at war."                    |
+| Weigh the AI           | "Show the AI weights of event `my_mod.12`'s options, then compare them before and after my change."        |
 | Plan new content       | "Give me the next free event ID in my namespace and summarize what the mod defines."                       |
 | Edit with a safety net | "Add a new branch to this focus tree" — the edit is validated before anything is written.                  |
 
@@ -63,18 +65,18 @@ More comparisons, with their source revisions and fidelity notes, are in the [fo
 
 ## Tools
 
-The default server has 37 tools.
+The default server has 28 tools.
 Agents pick them from ordinary language, so you rarely need their names.
 
 | Area                        | Tools                                                                                                                   | Writes                  |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | References and source       | `reference_context`, `reference_search`, `reference_read`, `source_lookup`, `script_validate`, `error_log`, `mod_index` | —                       |
-| Focus trees                 | `focus_inspect`, `focus_render`, `focus_raster`, `focus_rewrite`                                                        | review files; mod files |
+| Focus trees                 | `focus_inspect`, `focus_render`, `focus_rewrite`                                                                        | review files; mod files |
 | Scripted GUIs               | `gui_inspect`, `gui_render`, `gui_rewrite`                                                                              | review files; mod files |
-| Maps                        | `map_inspect`, `map_render`, `map_rewrite`                                                                              | review files; mod files |
-| Events                      | `event_inspect`, `event_render`, `event_compare`                                                                        | —                       |
-| Technology and doctrines    | `tech_inspect`, `tech_render`, `tech_compare`                                                                           | —                       |
-| AI weights and timing       | `probability_inspect`, `_evaluate`, `_sweep`, `_simulate`, `_sequence`, `_compare`, `_render`                           | —                       |
+| Maps                        | `map_inspect`, `map_rewrite`                                                                                            | review files; mod files |
+| Events                      | `event_inspect`, `event_render`                                                                                         | —                       |
+| Technology and doctrines    | `tech_inspect`, `tech_render`                                                                                           | —                       |
+| AI weights and timing       | `probability_inspect`, `probability_analyze`                                                                            | —                       |
 | Decisions, impact and tests | `impact_inspect`, `decision_inspect`, `mechanic_test`, `package_check`, `scenario_test`                                 | —                       |
 | Background jobs             | `job_inspect`, `job_cancel`                                                                                             | job state               |
 

@@ -1,6 +1,6 @@
 # Focus trees
 
-Use `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes.
+Use `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes.
 
 ## Create a tree
 
@@ -115,7 +115,7 @@ Each `prerequisites.groups` entry is one `prerequisite` block whose `focusIds` a
 `provenance` must be present: an imported plan carries the hashes of the source it came from, and a plan for a new tree may use 64-character hexadecimal placeholders as shown.
 When `treeId` is also supplied, it must equal `plan.id`.
 
-For a missing target, call `hoi4.focus_rewrite` with `createIfMissing: true`. Review the proposed and final artifacts returned by the rewrite, then inspect and render the result. Call `hoi4.focus_raster` when the review needs decoded source icons and a deterministic PNG. Do not call a tree complete with placeholder rewards, missing localisation, missing icons, or absent AI choices.
+For a missing target, call `hoi4.focus_rewrite` with `createIfMissing: true`. Review the proposed and final artifacts returned by the rewrite, then inspect and render the result. `hoi4.focus_render` returns a deterministic PNG with decoded source icons. Do not call a tree complete with placeholder rewards, missing localisation, missing icons, or absent AI choices.
 
 ## Clean an existing tree
 
@@ -173,10 +173,10 @@ Inspection and rendering can report missing references, invalid prerequisite str
 
 For a named tree, pass `scenario: { "completedFocusIds": ["my_route_root"] }` to `hoi4.focus_inspect`. The linked inspection artifact records each focus's prerequisite groups, route locks, exclusive choices, and unresolved runtime fields against that completed set. The inline tree summary counts completed, blocked, unresolved, and structural candidate focuses, plus contradictory completed choices. A structural candidate still requires runtime trigger evaluation before an agent can call it playable.
 
-Pass up to 16 `cropFocusIds` to `hoi4.focus_raster` for source-linked problem crops around specific focuses. Each crop uses the same rendered pixels as the full tree; a JSON manifest records the focus ID, crop bounds, image hash, and diagnostics. An unknown focus ID is reported explicitly.
+Pass up to 16 `cropFocusIds` to `hoi4.focus_render` for source-linked problem crops around specific focuses. Each crop uses the same rendered pixels as the full tree; a JSON manifest records the focus ID, crop bounds, image hash, and diagnostics. An unknown focus ID is reported explicitly.
 
 The layout JSON reports horizontal, vertical, and Manhattan grid spans for every prerequisite connector in `layout.connectorMeasurements`.
 
-`hoi4.focus_render` is the normal structural view and writes complete HTML, SVG, JSON, and source-map artifacts without decoding every icon or creating a PNG. `hoi4.focus_raster` adds decoded icons and the high-fidelity PNG. National trees with 200 or more focuses raster at half scale by default; pass `reviewScale` from `0.25` through `1` when a different PNG size is needed.
+`hoi4.focus_render` writes complete HTML, SVG, JSON and source-map artifacts and a high-fidelity PNG with decoded icons. Pass `png: false` for the faster structural view without decoding icons. National trees with 200 or more focuses raster at half scale by default; pass `reviewScale` from `0.25` through `1` when a different PNG size is needed.
 
 The public workflow is regression-tested with 1,024-focus creation, compact rewrites, deterministic repeat runs, inspection, vector rendering, and raster rendering. A separate 1,024-icon test decodes a distinct texture for every focus. Large source diffs use the same deterministic review-artifact path instead of blocking at the quadratic matrix size.

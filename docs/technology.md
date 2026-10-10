@@ -104,7 +104,7 @@ Large dependency requests return a bounded overview plus focused folder resource
 
 ## Compare
 
-`hoi4.tech_compare` compares cached revisions, graph resources, current source, or proposed in-memory source overlays. It reports added, removed, renamed, or moved technologies; graph and placement changes; metadata, category, tag, unlock, grant, bonus, localisation, and icon changes; introduced and resolved findings; and newly reachable or disconnected content.
+`hoi4.tech_inspect` with `mode: compare` compares cached revisions, graph resources, current source, or proposed in-memory source overlays. It reports added, removed, renamed, or moved technologies; graph and placement changes; metadata, category, tag, unlock, grant, bonus, localisation, and icon changes; introduced and resolved findings; and newly reachable or disconnected content.
 
 `before` and `after` each accept `{ "revision": "<sha256>" }` or `{ "artifactUri": "hoi4-agent://..." }`. Proposed overlays take `{ relativePath, source, expectedSourceHash? }`; use `source: null` to model deletion. Overlays are analyzed without writing them.
 A request takes between 1 and 128 overlays, and `after` and `proposedSources` are mutually exclusive.

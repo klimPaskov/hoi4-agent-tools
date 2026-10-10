@@ -1,14 +1,44 @@
 # Changelog
 
-## 4.0.0 - 2026-10-06
+## 4.0.0 - 2026-10-10
 
 ### Breaking changes
+
+- 37 tools become 28, one inspect tool per domain:
+  - `hoi4.probability_inspect` finds weighted logic and evaluates it in the same call, with a fact-free scenario when none is given; `evaluate: false` returns only the inventory. `hoi4.probability_analyze` replaces `hoi4.probability_evaluate`'s siblings `_sweep`, `_simulate`, `_sequence`, `_compare` and `_render`, selected by `analysis`; `hoi4.probability_evaluate` itself is folded into `hoi4.probability_inspect`.
+  - `hoi4.event_compare` and `hoi4.tech_compare` become `mode: compare` of `hoi4.event_inspect` and `hoi4.tech_inspect`.
+  - `hoi4.focus_raster` is folded into `hoi4.focus_render`, which now produces the PNG with decoded icons by default; `png: false` keeps the vector-only output.
+  - `hoi4.map_render` is folded into `hoi4.map_inspect`: a `layer`, `overlays`, `scale`, `tile` or `area` renders that view.
+- Inline results list at most 12 scanned files, mod files first.
 
 - The HTTP server verifies the bearer token before it reads a request body, so an unauthenticated `POST /mcp` receives `401` without its body being parsed; body-dependent scopes such as `hoi4:write` for rewrites are checked again afterwards.
 - Behind a trusted proxy, rate limiting uses the rightmost `X-Forwarded-For` hop that is not a trusted proxy instead of the leftmost, client-supplied entry.
 - A rewrite journal that cannot be recovered no longer stops startup: the server starts, and rewrites of that workspace fail with `TRANSACTION_RECOVERY_REQUIRED` until recovery succeeds. A journal folder without a manifest is skipped.
 - Rolling back a transaction keeps a planned file that was never replaced and has no backup, instead of refusing the whole rollback; a replaced file that changed since still reports `TRANSACTION_STALE`.
 - `tools/list` omits the JSON Schema dialect and the safe-integer bounds that every integer field repeated; field types, ranges and descriptions are unchanged.
+
+### Agent ergonomics
+
+- Accept the argument shorthands agents most often send: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, a probability scenario set as a bare list or without ids and `state`, a probability `source` as a string, and `generatedScenarios.maxScenarios`. The full event selector is published in the tool schema.
+- Return the answer inline: probability results rank the strongest candidates per scenario with weight, probability and MTTH, list the facts still missing, and list the largest changes of a comparison.
+- An event ID in a probability `candidatePool` stands for all its options and a `random_list` ID for its entries; a pool alone finds its defining file; a wrong adapter guess, such as a mission named as a decision, switches to the matching adapter.
+- Order inline diagnostics with the mod's own files first, summarise an omitted flood by code, and keep the first diagnostics of an oversized result instead of dropping them all.
+- Name the error kind and a path-free message for unexpected failures, and print the cause of a startup failure such as a configuration file's JSON error.
+- `hoi4.error_log` adds a fix hint per category, groups messages that differ only in names and numbers into `patterns`, and compares each new launch's log with the previous one: `sinceLastLaunch` counts new, persisting and fixed entries and every entry says whether it is new.
+
+### Speed
+
+- Keep a job worker warm for `jobWorkerIdleSeconds` (default 180) after a job, so its server's next job reuses the loaded indexes instead of scanning cold. An idle worker holds no execution slot and exits with its server; a failed job never leaves a worker for reuse.
+
+### Maps
+
+- Add `create_world` to `hoi4.map_rewrite`: a complete new map from dimensions, a seed, land coverage or outlines and countries, with provinces, terrain, heights, rivers, trees, colour maps, continents, strategic regions with weather, states, country files, history, flags, a bookmark, localisation, positions, supply and `replace_path` entries.
+- Add `regenerate_map_positions` (building, unit-stack and weather positions from geometry), `rebuild_supply` (supply nodes in state capitals joined to each country's hub by railway, or only the states with a supply gap) and `remap_map_references` (rewrite script references to changed states, provinces or regions, copying a reference per successor, and override game files only on request).
+- Add `references: true` to `hoi4.map_inspect`: missing state, province and region references across events, focuses, decisions, helpers, history and AI areas, undeclared state tags, and countries whose capital they do not own.
+- Split states with dated history: dated ownership and effects apply to both parts, and dated victory points and buildings follow their provinces. Merges carry dated blocks without building levels.
+- Keep level buildings (infrastructure, air bases, anti-air, radar, or any building without `shares_slots`) at their level in both parts of a split and at the highest level in a merge, and divide slot buildings and resources in whole units.
+- A merge's distribution policy may be omitted. Generated positions take their height from the heightmap. Province 0's reserved null row no longer reports an unknown terrain or a missing continent.
+- Name transaction diff artifacts safely for files with spaces in their names.
 
 ### Tools
 

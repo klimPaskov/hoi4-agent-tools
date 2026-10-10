@@ -111,6 +111,12 @@ When the message names a file, the entry gives the file, the line when known, an
 `changedSinceLog` is `true` when that file was modified after the log was written, so the error may already be fixed; relaunch the game to confirm.
 Mod entries are listed first.
 
+Each category in `categories` carries a `hint` that says what usually fixes it and which tool narrows it down.
+`patterns` groups messages that differ only in names, numbers, quoted values and paths, such as a run of missing localisation keys, so a flood of one mistake reads as one line with its count.
+
+The server remembers the entries of each log it reads in its own cache, keyed by the log's write time.
+When the game has been relaunched since, `sinceLastLaunch` says how many entries are new, how many persist and how many the last fixes removed, with examples of the removed ones, and every entry carries `new`.
+
 Filter with `scope` (`all`, `mod` for entries in the mod's own files, or `unlocated` for entries naming no file), `category`, or a text `query`, and page with `limit` (1–50, default 20) and `offset`.
 
 ```json

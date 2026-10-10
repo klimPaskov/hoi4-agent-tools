@@ -157,6 +157,7 @@ Each `roots` key takes up to 16 folders, and setting `roots` replaces only the k
 | `jobDeadlineSeconds`    | integer | 1–86,400   | 1,800   | A read-only job still running this long after dispatch is stopped and fails with `JOB_DEADLINE_EXCEEDED`. Rewrite jobs are never stopped this way.                    |
 | `jobCancelGraceSeconds` | integer | 1–600      | 10      | A read-only job still running this long after cancellation is stopped and settles as cancelled.                                                                       |
 | `jobWorkerMaxHeapMiB`   | integer | 256–65,536 | unset   | Memory ceiling for each job worker's JavaScript heap, in MiB. Unset keeps Node's default.                                                                             |
+| `jobWorkerIdleSeconds`  | integer | 0–3,600    | 180     | How long a job worker stays warm after a job so the next job reuses its loaded indexes. `0` starts a fresh worker for every job.                                      |
 | `stdioIdleExitMinutes`  | integer | 0–10,080   | 0       | A stdio server with no client traffic and no open request for this many minutes exits. `0` never exits. `HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES` overrides it per client. |
 
 See [Persistent jobs and MCP tasks](jobs.md) for how jobs, cancellation and recovery behave.

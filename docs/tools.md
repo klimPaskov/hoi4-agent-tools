@@ -4,7 +4,7 @@ Most users can ask their agent in ordinary language; the [examples guide](exampl
 This page lists exact tool names for agents and integrations.
 Use the connected server's live schema for the fields accepted by each call.
 
-The default server exposes 37 tools in nine areas.
+The default server exposes 28 tools in nine areas.
 The **Writes** column says what a call can change:
 
 - **—** reads source and returns a result.
@@ -31,8 +31,7 @@ MCP clients see the review-file tools as not read-only, because they store artif
 | Tool                 | Purpose                                                                                                                    | Writes       |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `hoi4.focus_inspect` | Read focus trees, continuous-focus placement, and structural or reference problems.                                        | review files |
-| `hoi4.focus_render`  | Produce fast HTML, SVG, JSON, and source-linked layout artifacts.                                                          | review files |
-| `hoi4.focus_raster`  | Produce a PNG preview with decoded source icons.                                                                           | review files |
+| `hoi4.focus_render`  | Render a tree or palette as a PNG with decoded icons plus HTML, SVG, JSON and source maps; `png: false` for vector only.   | review files |
 | `hoi4.focus_rewrite` | Create a focus tree or continuous-focus palette from a complete plan, or compact an existing tree's layout without a plan. | mod files    |
 
 ## Scripted GUIs
@@ -45,39 +44,31 @@ MCP clients see the review-file tools as not read-only, because they store artif
 
 ## Maps
 
-| Tool               | Purpose                                                                                         | Writes       |
-| ------------------ | ----------------------------------------------------------------------------------------------- | ------------ |
-| `hoi4.map_inspect` | Search, click, navigate, and inspect the complete rendered map and its linked data.             | review files |
-| `hoi4.map_render`  | Render full-map layers, overlays, names, IDs and coordinates, or a bounded tile or entity area. | review files |
-| `hoi4.map_rewrite` | Create or update states, provinces, IDs, networks, positions, and connected map data.           | mod files    |
+| Tool               | Purpose                                                                                                                                      | Writes       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `hoi4.map_inspect` | Validate, search and look up the map; render a layer, overlays, tile or area; check script references to map entities.                       | review files |
+| `hoi4.map_rewrite` | Create a new world, or create, split, merge and renumber states and provinces, regenerate positions and supply, and remap script references. | mod files    |
 
 ## Events
 
-| Tool                 | Purpose                                                                                                    | Writes |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- | ------ |
-| `hoi4.event_inspect` | Scan, trace, explain, lint, or assess event chains and their state flow.                                   | —      |
-| `hoi4.event_render`  | Render source-linked event routes, options, timing, state, scope, and unresolved edges.                    | —      |
-| `hoi4.event_compare` | Compare cached, artifact, current or proposed in-memory event graphs, optionally for one downstream chain. | —      |
+| Tool                 | Purpose                                                                                                                             | Writes |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `hoi4.event_inspect` | Scan, trace, explain, lint, or assess event chains and their state flow; `mode: compare` diffs cached, artifact or proposed graphs. | —      |
+| `hoi4.event_render`  | Render source-linked event routes, options, timing, state, scope, and unresolved edges.                                             | —      |
 
 ## Technology and doctrines
 
-| Tool                | Purpose                                                                                   | Writes |
-| ------------------- | ----------------------------------------------------------------------------------------- | ------ |
-| `hoi4.tech_inspect` | Scan, trace, explain, lint, and assess technology and doctrine systems.                   | —      |
-| `hoi4.tech_render`  | Render source layouts with real item sizes and year guides, plus dependencies and assets. | —      |
-| `hoi4.tech_compare` | Compare technology graphs, placements, references, diagnostics, and source overlays.      | —      |
+| Tool                | Purpose                                                                                                                   | Writes |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `hoi4.tech_inspect` | Scan, trace, explain, lint, and assess technology and doctrine systems; `mode: compare` diffs graphs and source overlays. | —      |
+| `hoi4.tech_render`  | Render source layouts with real item sizes and year guides, plus dependencies and assets.                                 | —      |
 
 ## AI weights and timing
 
-| Tool                        | Purpose                                                                                           | Writes |
-| --------------------------- | ------------------------------------------------------------------------------------------------- | ------ |
-| `hoi4.probability_inspect`  | Locate weighted logic and discover compatible adapters, candidates, and required inputs.          | —      |
-| `hoi4.probability_evaluate` | Evaluate supported weights, probability and timing models, and missing inputs.                    | —      |
-| `hoi4.probability_sweep`    | Find sensitivity, breakpoints, cliffs, and rank reversals across declared ranges.                 | —      |
-| `hoi4.probability_simulate` | Run deterministic sampled analysis with confidence and convergence data.                          | —      |
-| `hoi4.probability_sequence` | Analyze declared recovery, caps, cooldowns, resets, timers, and terminal states.                  | —      |
-| `hoi4.probability_compare`  | Compare real, proposed or frozen sources, or two declared custom pools, under the same scenarios. | —      |
-| `hoi4.probability_render`   | Render cached rankings, matrices, timing, sensitivity, sequence, and comparisons.                 | —      |
+| Tool                       | Purpose                                                                                                                  | Writes |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `hoi4.probability_inspect` | Find weighted logic by path, ID or candidate IDs and evaluate it: weights, probabilities and the facts still missing.    | —      |
+| `hoi4.probability_analyze` | Compare a proposed source, sweep ranges, simulate uncertainty, analyze a declared pool over time, or render an analysis. | —      |
 
 ## Decisions, impact and tests
 
@@ -107,6 +98,11 @@ Clients can read a byte range with `?offset=<bytes>&length=<bytes>`.
 Local stdio clients also see the fixed resource `hoi4-agent://server/status`, which lists the server processes sharing this server state, with memory use, last client activity and execution limits; see [server lifetime](setup.md#server-lifetime).
 Authenticated HTTP sessions never see it.
 
+## Arguments
+
+Tools accept the shorthands agents most often send and read them as the canonical form: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, and a probability scenario set as a bare list or without ids and `state`.
+Anything still invalid is refused with the failing fields named.
+
 ## Reading results
 
 Inspect findings and missing inputs along with the image or result.
@@ -118,7 +114,7 @@ Archive images you need to keep rather than relying on temporary server storage.
 
 ## Longer operations
 
-All 28 domain tools accept negotiated MCP tasks, so a client that supports tasks can retrieve a long operation after reconnecting.
+All 19 domain tools accept negotiated MCP tasks, so a client that supports tasks can retrieve a long operation after reconnecting.
 The 7 reference tools and the 2 job tools always answer in the foreground.
 Other clients receive the ordinary synchronous result.
 Use `hoi4.job_inspect` to inspect an authorized job or retrieve its result, and `hoi4.job_cancel` to request cancellation.
