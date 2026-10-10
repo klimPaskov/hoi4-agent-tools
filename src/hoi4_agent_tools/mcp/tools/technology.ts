@@ -140,7 +140,7 @@ export const technologyTaskTools = [
     name: 'hoi4.tech_inspect',
     title: 'Inspect technology trees',
     description:
-      'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, assess impact, or compare technology graphs (mode compare: cached, resource-backed or proposed sources).',
+      'Scan, trace, explain, list unlocks and bonus coverage, lint, assess impact or compare (mode compare) technology and doctrine graphs. Example: {"mode":"explain","technologyId":"my_tech"}. Returns counts and the main findings inline; the full report is a linked resource.',
     inputSchema: inspectInputSchema,
     outputSchema: analysisOutputSchema,
     annotations: readOnlyTechnologyTool,
@@ -148,7 +148,8 @@ export const technologyTaskTools = [
   {
     name: 'hoi4.tech_render',
     title: 'Render technology trees',
-    description: 'Render source-linked JSON, SVG, PNG, and optional HTML technology views.',
+    description:
+      'Render a technology folder, dependencies, doctrine, bonuses, grants, unlocks or unresolved view as JSON, SVG and PNG with real item sizes and year guides. Example: {"view":"folder","folderId":"my_folder"}. Images are linked artifacts.',
     inputSchema: renderInputSchema,
     outputSchema: renderOutputSchema,
     annotations: readOnlyTechnologyTool,

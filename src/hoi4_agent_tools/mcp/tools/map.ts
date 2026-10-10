@@ -149,7 +149,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_inspect',
     title: 'Inspect HOI4 map',
     description:
-      'Validate the complete map with a searchable navigator, look up provinces, states, regions, names or coordinates (lookupOnly for speed), or render a layer, overlays, tile or entity area.',
+      'Validate the map with a searchable navigator, look up provinces, states, regions, names or coordinates (lookupOnly for speed), render a layer, tile or area, or check script references (references:true). Example: {"query":"Brandenburg","lookupOnly":true}. Returns counts and matches inline; PNG, HTML and the catalog are artifacts.',
     inputSchema: mapInspectRequestSchema,
     outputSchema: mapInspectOutputSchema,
     annotations: artifactProducing,
@@ -157,7 +157,8 @@ export const mapTaskTools = [
   {
     name: 'hoi4.map_rewrite',
     title: 'Create or clean up map content',
-    description: 'Apply map creation, edits, and ID swaps with visual and semantic evidence.',
+    description:
+      'Create a world, or create, split, merge, move and renumber states and provinces, regenerate positions and supply, and remap script references. Example: {"operations":[{"id":"s1","kind":"create_state","provinceIds":[120,121],"displayName":"New State"}]}. All or nothing: a failed operation leaves no partial files. Returns changed IDs, semantic diff and a render.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {

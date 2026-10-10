@@ -176,7 +176,7 @@ export const analysisTaskTools = [
     name: 'hoi4.impact_inspect',
     title: 'Inspect cross-system impact',
     description:
-      'Trace definitions and consumers of symbols or changed source across HOI4 systems. Proposed sources are analyzed in memory; full revision-bound evidence is linked.',
+      'Trace where symbols are defined and consumed across focuses, events, decisions, ideas, GUI and helpers, or what a changed file affects; proposed sources are analyzed in memory. Example: {"symbols":[{"kind":"scripted_effect","id":"my_effect"}]}. Returns consumer counts inline; the revision-bound graph is a linked resource.',
     inputSchema: impactInspectRequestSchema,
     outputSchema: impactOutputSchema,
     annotations: readOnlyAnalysisTool,
@@ -185,7 +185,7 @@ export const analysisTaskTools = [
     name: 'hoi4.decision_inspect',
     title: 'Inspect decisions and missions',
     description:
-      'Inventory decisions or evaluate declared actor and target scenarios for gates, payment, lifecycle, and proposed-source differences. Full evidence is linked.',
+      'Inventory decisions and missions, or evaluate one under declared actor and target scenarios: visibility, availability, payment, lifecycle and proposed-source differences. Example: {"mode":"inspect","id":"my_decision","scenarios":[{"id":"base","actor":"GER","state":{}}]}. Returns each scenario outcome inline; full evidence is linked.',
     inputSchema: decisionInspectRequestSchema,
     outputSchema: decisionOutputSchema,
     annotations: readOnlyAnalysisTool,
@@ -194,7 +194,7 @@ export const analysisTaskTools = [
     name: 'hoi4.mechanic_test',
     title: 'Test declared mechanic steps',
     description:
-      'Interpret bounded, source-backed effect steps on isolated declared state and check typed invariants. Unsupported effects remain unresolved; no game or mod source is changed.',
+      'Interpret source-backed effect steps (scripted effect, event option, decision, focus reward) on a declared state and check typed assertions; unsupported effects stay unresolved and no source changes. Example: {"test":{"id":"t","scenario":{"schemaVersion":"1.0","id":"t","state":{"treasury":10}},"steps":[...],"assertions":[...]}}. See docs/mechanics.md.',
     inputSchema: mechanicInputSchema,
     outputSchema: mechanicOutputSchema,
     annotations: readOnlyAnalysisTool,
@@ -203,7 +203,7 @@ export const analysisTaskTools = [
     name: 'hoi4.package_check',
     title: 'Check package connections',
     description:
-      'Check a declarative package manifest against active definitions, references, registrations, localisation, assets, and required suite cases.',
+      'Check a declarative package manifest against active definitions, calls, registrations, localisation, assets and required suite cases. Example: {"manifest":{"schemaVersion":"1.0","id":"my_package","definitions":[{"kind":"scripted_effect","id":"my_effect"}]}}. Returns present, absent, shadowed and unresolved counts inline.',
     inputSchema: packageInputSchema,
     outputSchema: packageOutputSchema,
     annotations: readOnlyAnalysisTool,
@@ -212,7 +212,7 @@ export const analysisTaskTools = [
     name: 'hoi4.scenario_test',
     title: 'Run scenario suite',
     description:
-      'Run named inline or workspace-relative cases through bounded typed read-only domain services. Large suites return an authenticated continuation.',
+      'Run a suite of named mechanic, package or read-only tool cases, inline or from a workspace file, in resumable revision-bound batches. Example: {"suitePath":"tests/my_suite.json","maxCases":20}. Returns completed, failed, unresolved and pending counts, and a continuation while cases remain.',
     inputSchema: scenarioInputSchema,
     outputSchema: scenarioOutputSchema,
     annotations: readOnlyAnalysisTool,

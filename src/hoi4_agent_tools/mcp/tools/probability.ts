@@ -137,7 +137,7 @@ export const probabilityTaskTools = [
     name: 'hoi4.probability_inspect',
     title: 'Inspect and evaluate AI weights and MTTH',
     description:
-      "Find weighted logic (ai_will_do, ai_chance, MTTH, random_list, strategy factors) by path, ID, or candidate IDs and return each candidate's weight and probability under the given scenarios, or under no declared facts, with the facts still missing.",
+      'Find weighted logic (ai_will_do, ai_chance, MTTH, random_list, strategy factors) by path, ID or candidate IDs and evaluate it under declared scenarios, or none: weights, probabilities and the facts still missing. Example: {"candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"has_war":false}}]}. Ranks the strongest candidates inline.',
     inputSchema: probabilityInspectRequestSchema,
     outputSchema: inspectOutput,
     annotations: readOnly,
@@ -146,7 +146,7 @@ export const probabilityTaskTools = [
     name: 'hoi4.probability_analyze',
     title: 'Compare, sweep, simulate, or sequence weighted logic',
     description:
-      'Deeper weighted analysis: compare before/after source under the same scenarios, sweep input ranges for breakpoints and rank reversals, simulate uncertain inputs, analyze a declared pool over time, or render a retained analysis.',
+      'Deeper weighted analysis: compare before and after source under the same scenarios, sweep input ranges for breakpoints and rank reversals, simulate uncertain inputs, run a declared pool over time, or render a retained analysis. Example: {"analysis":"sweep","source":"common/decisions/my_decisions.txt","candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"variable.pressure":10}}],"sweep":{"paths":["variable.pressure"],"steps":10}}.',
     inputSchema: probabilityAnalyzeRequestSchema,
     outputSchema: analysisOutput,
     annotations: readOnly,

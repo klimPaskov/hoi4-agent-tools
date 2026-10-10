@@ -10,6 +10,7 @@ import { probabilityInspectRequestSchema } from '../../src/hoi4_agent_tools/sche
 import { scriptValidateRequestSchema } from '../../src/hoi4_agent_tools/schemas/script-validation.js';
 import { invalidArgumentsResult } from '../../src/hoi4_agent_tools/mcp/server/argument-errors.js';
 import { referenceTools } from '../../src/hoi4_agent_tools/mcp/tools/reference.js';
+import { jobControlTools } from '../../src/hoi4_agent_tools/mcp/tools/job.js';
 import { taskToolCatalog } from '../../src/hoi4_agent_tools/mcp/server/task-tool-catalog.js';
 
 describe('argument shorthands agents send', () => {
@@ -175,16 +176,54 @@ describe('argument shorthands agents send', () => {
   it('publishes examples that the tools accept', async () => {
     const { ARGUMENT_EXAMPLES } =
       await import('../../src/hoi4_agent_tools/mcp/server/argument-errors.js');
-    const definitions = [...taskToolCatalog, ...referenceTools];
+    const definitions = [...taskToolCatalog, ...referenceTools, ...jobControlTools];
+    // Every tool shows a working call when its arguments are wrong.
+    expect(Object.keys(ARGUMENT_EXAMPLES).sort()).toEqual(
+      definitions.map(({ name }) => name).sort(),
+    );
+    const rejected: Array<{ name: string; example: string; issues: unknown[] }> = [];
     for (const [name, examples] of Object.entries(ARGUMENT_EXAMPLES))
       for (const example of (examples as string).split(' or ')) {
+        // An identifier only a previous result can supply is written as a <placeholder>.
+        if (example.includes('<')) continue;
         const schema = definitions.find((definition) => definition.name === name)!.inputSchema;
         const parsed = schema.safeParse(normalizeToolArguments(name, JSON.parse(example)));
-        expect({ name, example, issues: parsed.error?.issues ?? [] }).toEqual({
-          name,
-          example,
-          issues: [],
-        });
+        if (!parsed.success) rejected.push({ name, example, issues: parsed.error.issues });
       }
+    expect(rejected).toEqual([]);
+  });
+
+  it('shows a call in every tool description that the tool accepts', () => {
+    /** The first balanced `{...}` object after `Example:`, string-aware. */
+    const exampleIn = (description: string): string | undefined => {
+      const start = description.indexOf('{', description.indexOf('Example:'));
+      let depth = 0;
+      let inString = false;
+      for (let index = start; start >= 0 && index < description.length; index += 1) {
+        const character = description[index]!;
+        if (inString) {
+          if (character === '\\') index += 1;
+          else if (character === '"') inString = false;
+        } else if (character === '"') inString = true;
+        else if (character === '{') depth += 1;
+        else if (character === '}' && --depth === 0) return description.slice(start, index + 1);
+      }
+      return undefined;
+    };
+    const definitions = [...taskToolCatalog, ...referenceTools, ...jobControlTools];
+    const rejected: Array<{ name: string; example: string; issues: unknown[] }> = [];
+    for (const definition of definitions) {
+      const example = exampleIn(definition.description);
+      expect(example, definition.name).toBeDefined();
+      // A `<placeholder>` or `{…}` stands for something only a previous result or a long plan supplies.
+      if (example!.includes('<') || example!.includes('{...}') || example!.includes('[...]'))
+        continue;
+      const parsed = definition.inputSchema.safeParse(
+        normalizeToolArguments(definition.name, JSON.parse(example!)),
+      );
+      if (!parsed.success)
+        rejected.push({ name: definition.name, example: example!, issues: parsed.error.issues });
+    }
+    expect(rejected).toEqual([]);
   });
 });

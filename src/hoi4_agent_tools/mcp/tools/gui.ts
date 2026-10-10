@@ -96,7 +96,8 @@ export const guiTaskTools = [
   {
     name: 'hoi4.gui_inspect',
     title: 'Inspect scripted GUI',
-    description: 'Inspect GUI sources and scenarios.',
+    description:
+      'Inspect a scripted GUI window with its linked .gui, .gfx, scripted-GUI, localisation and font sources, and layout diagnostics. Example: {"windowName":"my_window"}. Returns element counts and fidelity inline; the full scene is a linked resource.',
     inputSchema: guiInspectRequestSchema,
     outputSchema: guiScanOutputSchema,
     annotations: artifactProducing,
@@ -105,7 +106,7 @@ export const guiTaskTools = [
     name: 'hoi4.gui_render',
     title: 'Render scripted GUI artifacts',
     description:
-      'Render GUI states, resolutions, scenarios, hierarchy, comparisons, and diagnostics.',
+      'Render a GUI window under a scenario at several states and resolutions, with click regions, hierarchy and a diagnostics report. Example: {"windowName":"my_window","scenario":{"id":"normal","flags":{"my_flag":true}}}. Returns a gallery of about 25 linked artifacts; undecided visibility stays marked unresolved.',
     inputSchema: guiRenderRequestSchema,
     outputSchema: guiRenderOutputSchema,
     annotations: artifactProducing,
@@ -114,7 +115,7 @@ export const guiTaskTools = [
     name: 'hoi4.gui_rewrite',
     title: 'Create or clean up scripted GUI',
     description:
-      'Apply one validated source, helper, or exact-patch GUI package. Text dependencies use additionalFiles; binary art stays workspace-referenced.',
+      'Apply one validated GUI change as complete source, structured helpers or exact patches, plus extra text files (additionalFiles); binary art must already be in the mod. Example: {"mode":"helpers","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"helper":{...}}. Writes atomically; returns changed files and a rollback-able transaction.',
     inputSchema: guiRewriteRequestSchema,
     outputSchema: guiPlanOutputSchema,
     annotations: {

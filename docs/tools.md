@@ -105,6 +105,52 @@ Anything still invalid comes back as a tool error, code `INVALID_ARGUMENTS`, tha
 It is a tool error rather than a protocol error because clients show a tool error's text to the model, while some reduce a protocol error to a generic message.
 Every error and blocked result also carries its blockers in the text content, so a client that shows only text still explains the failure.
 
+## Example calls
+
+Every tool description in `tools/list` ends with a call like these, and an invalid call returns the same example for its tool.
+Fields not shown take their defaults; `workspaceId` is `"current"` unless you pass one.
+The CI stdio smoke suite sends each of these shapes to a real server process.
+
+| Tool                       | Example arguments                                                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hoi4.reference_context`   | `{"surface":"event","question":"fire an event after a delay"}`                                                                                                                                                          |
+| `hoi4.reference_search`    | `{"query":"add_timed_idea"}`                                                                                                                                                                                            |
+| `hoi4.reference_read`      | `{"id":"<hit id>","revision":"<hit revision>"}` from a search or context hit                                                                                                                                            |
+| `hoi4.source_lookup`       | `{"symbol":"my_scripted_effect"}` or `{"path":"events/my_events.txt","line":42}`                                                                                                                                        |
+| `hoi4.script_validate`     | `{"source":"add_political_power = 10","kind":"effect","scope":"country"}` or `{"path":"events/my_events.txt"}`                                                                                                          |
+| `hoi4.error_log`           | `{"scope":"mod","category":"effect"}`                                                                                                                                                                                   |
+| `hoi4.mod_index`           | `{"mode":"overview"}` or `{"mode":"next_id","kind":"event","namespace":"my_mod"}`                                                                                                                                       |
+| `hoi4.focus_inspect`       | `{"treeId":"my_focus_tree"}`                                                                                                                                                                                            |
+| `hoi4.focus_render`        | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}`                                                                                                                                         |
+| `hoi4.focus_rewrite`       | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}`                                                                                                                  |
+| `hoi4.gui_inspect`         | `{"windowName":"my_window"}`                                                                                                                                                                                            |
+| `hoi4.gui_render`          | `{"windowName":"my_window","scenario":{"id":"normal"}}`                                                                                                                                                                 |
+| `hoi4.gui_rewrite`         | `{"mode":"helpers","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"helper":{…}}`                                                                                          |
+| `hoi4.map_inspect`         | `{"query":"Brandenburg","lookupOnly":true}` or `{"layer":"state","tile":{"x":2600,"y":500,"width":256,"height":256}}`                                                                                                   |
+| `hoi4.map_rewrite`         | `{"operations":[{"id":"s1","kind":"create_state","provinceIds":[120,121],"displayName":"New State"}]}`                                                                                                                  |
+| `hoi4.event_inspect`       | `{"mode":"trace","selector":"my_mod.1","direction":"downstream"}`                                                                                                                                                       |
+| `hoi4.event_render`        | `{"view":"overview","selector":"my_mod"}`                                                                                                                                                                               |
+| `hoi4.tech_inspect`        | `{"mode":"explain","technologyId":"my_tech"}`                                                                                                                                                                           |
+| `hoi4.tech_render`         | `{"view":"folder","folderId":"my_folder"}`                                                                                                                                                                              |
+| `hoi4.probability_inspect` | `{"candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"has_war":false}}]}`                                                                                                                           |
+| `hoi4.probability_analyze` | `{"analysis":"sweep","source":"common/decisions/my_decisions.txt","candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"variable.pressure":10}}],"sweep":{"paths":["variable.pressure"],"steps":10}}` |
+| `hoi4.impact_inspect`      | `{"symbols":[{"kind":"scripted_effect","id":"my_effect"}]}`                                                                                                                                                             |
+| `hoi4.decision_inspect`    | `{"mode":"inspect","id":"my_decision","scenarios":[{"id":"base","actor":"GER","state":{}}]}`                                                                                                                            |
+| `hoi4.mechanic_test`       | `{"test":{"id":"t","scenario":{…},"steps":[…],"assertions":[…]}}`, see [Mechanic tests](mechanics.md)                                                                                                                   |
+| `hoi4.package_check`       | `{"manifest":{"schemaVersion":"1.0","id":"my_package","definitions":[{"kind":"scripted_effect","id":"my_effect"}]}}`                                                                                                    |
+| `hoi4.scenario_test`       | `{"suitePath":"tests/my_suite.json","maxCases":20}`                                                                                                                                                                     |
+| `hoi4.job_inspect`         | `{"jobId":"job_<64 hex characters>"}` from a native task id                                                                                                                                                             |
+| `hoi4.job_cancel`          | `{"jobId":"job_<64 hex characters>"}`                                                                                                                                                                                   |
+
+## Result sizes
+
+An inline result never exceeds 32 KB of structured content.
+Typical answers are 1 to 5 KB: counts, the main findings, the strongest candidates and links.
+Focus, GUI and map results are larger, up to about 20 KB, because they list trees, scenes or matches.
+The text content of a successful call is a short JSON summary (status, code, workspace and artifact count), so a client that shows only text still sees how the call ended; an error or blocked result puts its blockers in the text.
+Pictures are never inlined: renders, galleries, full graphs and per-candidate traces are linked artifacts that you read in ranges, and every inline list says how many items it omitted.
+A reference read is limited to 80 lines and 8,000 bytes; a source lookup returns at most 3 definitions and 10 usages.
+
 ## Reading results
 
 Inspect findings and missing inputs along with the image or result.

@@ -222,7 +222,7 @@ export const eventTaskTools = [
     name: 'hoi4.event_inspect',
     title: 'Inspect event chains',
     description:
-      'Scan, find roots, trace, explain paths, inspect state flow, lint, assess impact, or compare event graphs (mode compare: cached, artifact or proposed in-memory sources). Full source-linked reports are resources.',
+      'Scan, find roots, trace, explain paths, inspect state flow, lint, assess impact or compare (mode compare) event graphs. Example: {"mode":"trace","selector":"my_mod.1","direction":"downstream"}; a selector is an event ID, a namespace, my_mod.* or a file. Returns counts and the main findings inline; the full source-linked report is a resource.',
     inputSchema: eventInspectInputSchema,
     outputSchema: eventInspectOutputSchema,
     annotations: readOnlyEventTool,
@@ -231,7 +231,7 @@ export const eventTaskTools = [
     name: 'hoi4.event_render',
     title: 'Render event chains',
     description:
-      'Render deterministic JSON, SVG, PNG, and optional HTML for an event-chain view. Complete artifacts retain source links.',
+      'Render a source-linked event view (overview, neighborhood, options, timing, state, scope, unresolved and more) as JSON, SVG and PNG. Example: {"view":"overview","selector":"my_mod"}. Images are linked artifacts; calls that cannot be resolved statically stay explicit unresolved edges.',
     inputSchema: eventRenderInputSchema,
     outputSchema: eventRenderOutputSchema,
     annotations: readOnlyEventTool,

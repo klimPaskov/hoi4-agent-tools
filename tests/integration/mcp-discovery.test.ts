@@ -238,6 +238,8 @@ describe('MCP discovery', () => {
       expect(Buffer.byteLength(JSON.stringify(tool), 'utf8'), tool.name).toBeLessThanOrEqual(
         singleToolByteBudget,
       );
+      // Each description says what the tool is for, shows a call and says how big the answer is.
+      expect(tool.description ?? '', tool.name).toContain('Example: {');
       expect(
         Buffer.byteLength(JSON.stringify(tool.inputSchema), 'utf8'),
         `${tool.name} input schema`,
