@@ -77,7 +77,8 @@ export interface StoredMapRender {
 
 export interface StoredMapDiff {
   bundle: MapDiffBundle;
-  beforeBundle: MapRenderBundle;
+  /** Absent when the sources hold no map to draw before the change, as for a new world. */
+  beforeBundle?: MapRenderBundle;
   proposedBundle: MapRenderBundle;
   plan: MapOperationPlan;
   artifacts: StoredArtifact[];
@@ -1137,6 +1138,9 @@ export class AgentNudger {
       'victory-points',
       'weather-positions',
     ] as const;
+    const hasBeforeMap =
+      snapshot.index.raster !== undefined ||
+      snapshot.index.diagnostics.some(({ code }) => code.startsWith('RENDER_'));
     const sameSize =
       snapshot.index.provinceBitmap !== undefined &&
       snapshot.index.provinceBitmap.width === plan.finalIndex.provinceBitmap?.width &&
@@ -1155,13 +1159,16 @@ export class AgentNudger {
             budget,
             review,
           }),
-      renderMap(snapshot.index, {
-        layer: 'state',
-        overlays: [...comparisonOverlays],
-        ...(options.scale === undefined ? {} : { scale: options.scale }),
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-        budget,
-      }),
+      // A new world over a game without any map has nothing to draw as "before".
+      hasBeforeMap
+        ? renderMap(snapshot.index, {
+            layer: 'state',
+            overlays: [...comparisonOverlays],
+            ...(options.scale === undefined ? {} : { scale: options.scale }),
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+            budget,
+          })
+        : Promise.resolve(undefined),
       renderMap(plan.finalIndex, {
         layer: 'state',
         overlays: [...comparisonOverlays],
@@ -1173,7 +1180,10 @@ export class AgentNudger {
     const completeSourceHashes = sourceHashes(snapshot);
     const sourceEvidence = boundedSourceHashEvidence(completeSourceHashes);
     const bundle = mapBundleWithSourceHashes(rawBundle, completeSourceHashes);
-    const beforeBundle = mapBundleWithSourceHashes(rawBeforeBundle, completeSourceHashes);
+    const beforeBundle =
+      rawBeforeBundle === undefined
+        ? undefined
+        : mapBundleWithSourceHashes(rawBeforeBundle, completeSourceHashes);
     const proposedBundle = mapBundleWithSourceHashes(rawProposedBundle, completeSourceHashes);
     const workspace = this.resolver.get(snapshot.workspaceId, options.principal);
     const provenance = {
@@ -1226,24 +1236,6 @@ export class AgentNudger {
         provenance,
       },
       {
-        name: 'map-before.png',
-        mimeType: 'image/png',
-        content: beforeBundle.png,
-        provenance: comparisonProvenance('before'),
-      },
-      {
-        name: 'map-before.json',
-        mimeType: 'application/json',
-        content: beforeBundle.json,
-        provenance: comparisonProvenance('before'),
-      },
-      {
-        name: 'map-before.html',
-        mimeType: 'text/html',
-        content: beforeBundle.html,
-        provenance: comparisonProvenance('before'),
-      },
-      {
         name: 'map-proposed.png',
         mimeType: 'image/png',
         content: proposedBundle.png,
@@ -1262,6 +1254,29 @@ export class AgentNudger {
         provenance: comparisonProvenance('proposed'),
       },
     ];
+    if (beforeBundle !== undefined)
+      writes.splice(
+        3,
+        0,
+        {
+          name: 'map-before.png',
+          mimeType: 'image/png',
+          content: beforeBundle.png,
+          provenance: comparisonProvenance('before'),
+        },
+        {
+          name: 'map-before.json',
+          mimeType: 'application/json',
+          content: beforeBundle.json,
+          provenance: comparisonProvenance('before'),
+        },
+        {
+          name: 'map-before.html',
+          mimeType: 'text/html',
+          content: beforeBundle.html,
+          provenance: comparisonProvenance('before'),
+        },
+      );
     const artifacts = await this.artifacts.withAtomicChunkedWrites(
       workspace,
       writes,
@@ -1270,7 +1285,7 @@ export class AgentNudger {
     );
     return {
       bundle,
-      beforeBundle,
+      ...(beforeBundle === undefined ? {} : { beforeBundle }),
       proposedBundle,
       plan,
       artifacts,

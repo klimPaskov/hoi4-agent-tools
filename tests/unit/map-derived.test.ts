@@ -366,5 +366,21 @@ describe('a new world', () => {
     expect(prepared.plan.finalIndex.states.every(({ owner }) => owner !== 'AAA')).toBe(true);
     expect(prepared.validation.passed).toBe(true);
     expect(prepared.artifacts.map(({ name }) => name)).toContain('map-diff.png');
+    expect(prepared.artifacts.map(({ name }) => name)).toContain('map-before.png');
+  });
+
+  it('reviews a new world over sources that hold no map without a before picture', async () => {
+    const { nudger } = await workspace({
+      'descriptor.mod': 'name="World"' + String.fromCharCode(10),
+    });
+    const prepared = await nudger.planRewriteWithDiff({
+      workspaceId: 'derived',
+      operations: [mapOperationSchema.parse(world) as MapOperation],
+    });
+    expect(prepared.validation.passed).toBe(true);
+    expect(prepared.beforeBundle).toBeUndefined();
+    const names = prepared.artifacts.map(({ name }) => name);
+    expect(names).toEqual(expect.arrayContaining(['map-diff.png', 'map-proposed.png']));
+    expect(names.some((name) => name.startsWith('map-before'))).toBe(false);
   });
 });
