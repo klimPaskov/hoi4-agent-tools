@@ -95,6 +95,19 @@ export function countryAssetDiscoveryPatterns(workspace: ResolvedWorkspace): str
   ]);
 }
 
+/**
+ * The changed files of a map rewrite plus the province definitions they refer to. A state file
+ * lists provinces that `map/definition.csv` defines, usually in the base game, so a scan of the
+ * changed files alone would report every listed province as unresolved.
+ */
+export function mapChangeScanPatterns(relativePaths: readonly string[]): string[] {
+  return uniquePatterns([
+    ...exactChangedFilePatterns(relativePaths),
+    'map/default.map',
+    'map/*.csv',
+  ]);
+}
+
 export function exactChangedFilePatterns(relativePaths: readonly string[]): string[] {
   return uniquePatterns(
     relativePaths.map((relativePath) => relativePath.replaceAll('\\', '/').replace(/^\.\//u, '')),

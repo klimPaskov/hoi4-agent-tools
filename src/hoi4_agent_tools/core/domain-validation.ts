@@ -1,6 +1,10 @@
 import { boundedSourceHashEvidence, publicArtifactLink } from './artifacts.js';
 import { canonicalJson } from './canonical.js';
-import { exactChangedFilePatterns, focusDomainScanPatterns } from './domain-scan-patterns.js';
+import {
+  exactChangedFilePatterns,
+  focusDomainScanPatterns,
+  mapChangeScanPatterns,
+} from './domain-scan-patterns.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { CoreEngine } from './engine.js';
 import type { ArtifactLink } from './result.js';
@@ -58,12 +62,15 @@ export async function postValidateTransaction(
   const focusTransaction =
     transaction.operationKind === 'focus-plan-changes' ||
     transaction.operationKind === 'continuous-focus-plan-changes';
+  const changedPaths = transaction.files.map(({ relativePath }) => relativePath);
   const snapshot = await engine.scan(
     transaction.workspaceId,
     {
       patterns: focusTransaction
         ? focusDomainScanPatterns(workspace)
-        : exactChangedFilePatterns(transaction.files.map(({ relativePath }) => relativePath)),
+        : transaction.operationKind === 'agent-nudger-map-changes'
+          ? mapChangeScanPatterns(changedPaths)
+          : exactChangedFilePatterns(changedPaths),
     },
     principal,
     signal,

@@ -333,12 +333,19 @@ function failureCause(error: unknown, transaction: TransactionManifest): string 
   const blocking = transaction.diagnostics.find(
     ({ severity }) => severity === 'error' || severity === 'blocker',
   );
+  // The blocking diagnostic comes first: it is the part the agent can act on.
   const text = [
-    cause,
+    blocking === undefined
+      ? ''
+      : `${blocking.code}: ${blocking.message}${
+          blocking.location === undefined
+            ? ''
+            : ` at ${blocking.location.path}:${blocking.location.start.line}`
+        }`,
     failedCheck?.message ?? '',
-    blocking === undefined ? '' : `${blocking.code}: ${blocking.message}`,
+    cause,
   ]
     .filter((part) => part !== '')
     .join('; ');
-  return text === '' ? '' : ` (${text})`.slice(0, 500);
+  return text === '' ? '' : ` (${text})`.slice(0, 700);
 }
