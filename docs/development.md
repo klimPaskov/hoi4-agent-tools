@@ -39,6 +39,12 @@ npm run test:local
 
 Add `HOI4_DEPENDENCY_ROOTS` as the platform path-delimited list when the external mod has dependencies. Local tests remain read-only.
 
+`tests/integration/mcp-stdio-smoke.test.ts` starts the real `src/bin/stdio.ts` entry point and calls every exposed tool once with the argument shape an agent sends, then once with a deliberately wrong field.
+Each success must be a non-error `ok` result whose inline structured content stays under 40 KB, and each wrong call must be a `INVALID_ARGUMENTS` tool error that names the field and shows a working example.
+The suite also builds a world with `create_world`, splits and merges a state with `create_state` and `merge_states`, repairs script references with `remap_map_references`, and load-checks the resulting `definition.csv`, state, strategic region, supply and railway files independently of the server's own validator.
+`tests/local/mcp-stdio-smoke.test.ts` repeats the read-only calls against the installed game (through an empty mod) and the external mod above; set `HOI4_SMOKE_REPORT` to a file path to receive the per-tool coverage table with timings.
+`npm run benchmark:cold` times the slow first calls (`hoi4.mod_index`, an event lint and a decision inventory) of a real mod in a fresh server process and again in a second process on the same state folder; the maintainer checklist for tagging a release is `docs/RELEASING.md` in the repository.
+
 The installed-game qualification also parses every shipped bitmap-font descriptor, resolves every atlas page, shapes native and enlarged glyphs, verifies deterministic raster output, and checks HOI4 localisation colours across base fonts and language overrides.
 
 ## Adding a known mistake

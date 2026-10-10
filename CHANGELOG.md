@@ -50,10 +50,13 @@
 - Order inline diagnostics with the mod's own files first, summarise an omitted flood by code, and keep the first diagnostics of an oversized result instead of dropping them all.
 - Name the error kind and a path-free message for unexpected failures, and print the cause of a startup failure such as a configuration file's JSON error.
 - `hoi4.error_log` adds a fix hint per category, groups messages that differ only in names and numbers into `patterns`, and compares each new launch's log with the previous one: `sinceLastLaunch` counts new, persisting and fixed entries and every entry says whether it is new.
+- Every tool description now says what the tool is for, shows a working example call and gives the size of the answer, and every invalid-argument error shows an example for its tool (28 of 28; ten before). Tests send each published example to its tool's schema, and `docs/tools.md` lists the examples with the result sizes.
 
 ### Speed
 
 - Keep a job worker warm for `jobWorkerIdleSeconds` (default 180) after a job, so its server's next job reuses the loaded indexes instead of scanning cold. An idle worker holds no execution slot and exits with its server; a failed job never leaves a worker for reuse.
+- Authenticate persistent cache entries over their metadata and payload hash instead of the whole payload, decode a cached parsed document when it is first read instead of for every file at load, and stop copying the payload of an entry that is already stored on every scan. The entry format version is 2, so older entries are rewritten once. Fill the canonical copy used for hashing and for index segments directly, about 40% faster on large segments with identical output.
+- Record where a cold index of a large mod spends its time, and why a background warm-up of the persistent cache does not help it, in ADR 0045. Add `npm run benchmark:cold`, which times `hoi4.mod_index`, an event lint and a decision inventory in a first and a second server process.
 
 ### Maps
 
@@ -64,6 +67,10 @@
 - Keep level buildings (infrastructure, air bases, anti-air, radar, or any building without `shares_slots`) at their level in both parts of a split and at the highest level in a merge, and divide slot buildings and resources in whole units.
 - A merge's distribution policy may be omitted. Generated positions take their height from the heightmap. Province 0's reserved null row no longer reports an unknown terrain or a missing continent.
 - Name transaction diff artifacts safely for files with spaces in their names.
+- Say why a restored rewrite failed: `JOB_REWRITE_RESTORED` now names the error and the first failing check or blocking diagnostic, such as `GUI_REFERENCE_UNRESOLVED`, instead of only that the source was restored.
+- Review a new world over sources that hold no map without a "before" picture, instead of failing with `MAP_RENDER_RASTER_MISSING`.
+- Notice a changed `descriptor.mod` at the next scan of a running server. A new world adds `replace_path` folders to the descriptor, and its post-write check used to see the base-game states it replaces and fail on duplicate state IDs until the server restarted. Jobs, transactions and caches keep the workspace identity they started under.
+- Stop undoing map rewrites that touch a state file. The post-write check scanned only the changed files, so every province a state lists counted as an unresolved reference unless the rewrite also changed `map/definition.csv`; a split, merge or manpower change on a real map was restored with `JOB_REWRITE_RESTORED`. The check now also reads `map/default.map` and the map CSV files.
 
 ### Tools
 
@@ -96,6 +103,7 @@
 - Restructure the README around what the server does, a four-step quick start, a grouped tool table with what each area writes, and safety notes.
 - Add a configuration reference with every key, range, default location and environment variable.
 - Complete the GUI scenario and request field tables, and document the prompt, resources, task-capable tools and setup troubleshooting commands.
+- Add `docs/RELEASING.md`, the checklist for tagging a release, and describe the stdio smoke suites in the development guide: every tool called once with an agent-style argument shape and once with a wrong field, a generated world split, merged and repaired, and the same calls against the installed game and a real mod.
 
 ## 3.10.0 - 2026-10-06
 
