@@ -91,7 +91,7 @@ async function client() {
     expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
     return result.structuredContent as { code: string; data: Record<string, unknown> };
   };
-  return { call };
+  return { call, log };
 }
 
 interface LogEntry {
@@ -196,5 +196,52 @@ describe('error log and mod index tools', () => {
       used: 4,
       firstGapId: 'fixture.3',
     });
+  });
+  it('says which errors a fix removed and which are new since the previous launch', async () => {
+    const { call, log } = await client();
+    const first = (await call('hoi4.error_log', {})).data as {
+      sinceLastLaunch?: unknown;
+      categories: Array<{ category: string; hint: string }>;
+      patterns: unknown[];
+    };
+    // The first log this server reads has nothing to compare with.
+    expect(first.sinceLastLaunch).toBeUndefined();
+    expect(first.categories.every(({ hint }) => hint.length > 0)).toBe(true);
+    await writeFile(
+      log,
+      [
+        '[10:15:03][localisation.cpp:300]: Missing localisation key: missing_title',
+        '[10:15:03][localisation.cpp:300]: Missing localisation key: missing_desc',
+        '[10:15:03][localisation.cpp:300]: Missing localisation key: missing_name',
+        '[10:15:06][effectimplementation.cpp:120]: Unknown effect-type: add_manpowr, near line: 9 in file: "common/scripted_effects/helpers.txt"',
+        '',
+      ].join(String.fromCharCode(10)),
+    );
+    const relaunched = new Date('2026-01-01T12:00:00Z');
+    await utimes(log, relaunched, relaunched);
+    const second = (await call('hoi4.error_log', {})).data as {
+      sinceLastLaunch: {
+        newEntries: number;
+        persistingEntries: number;
+        resolvedEntries: number;
+        resolvedExamples: Array<{ category: string }>;
+      };
+      patterns: Array<{ pattern: string; distinct: number }>;
+      entries: Array<{ message: string; new?: boolean }>;
+    };
+    expect(second.sinceLastLaunch).toMatchObject({
+      newEntries: 3,
+      persistingEntries: 1,
+      resolvedEntries: 4,
+    });
+    expect(second.sinceLastLaunch.resolvedExamples.map(({ category }) => category)).toContain(
+      'syntax',
+    );
+    expect(second.entries.find(({ message }) => message.endsWith('missing_title'))?.new).toBe(
+      false,
+    );
+    expect(second.entries.find(({ message }) => message.endsWith('missing_desc'))?.new).toBe(true);
+    // Three missing keys share one message shape.
+    expect(second.patterns[0]).toMatchObject({ distinct: 3 });
   });
 });

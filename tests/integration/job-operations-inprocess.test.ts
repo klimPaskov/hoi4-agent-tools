@@ -139,11 +139,12 @@ describe('in-process durable job operation adapters', () => {
           workspaceId: 'fixture',
           relativePath: 'common/national_focus/inprocess.txt',
           treeId: 'inprocess_tree',
+          png: false,
         },
         'FOCUS_RENDERED',
       ],
       [
-        'hoi4.focus_raster',
+        'hoi4.focus_render',
         {
           workspaceId: 'fixture',
           relativePath: 'common/national_focus/inprocess.txt',
@@ -168,6 +169,7 @@ describe('in-process durable job operation adapters', () => {
           workspaceId: 'fixture',
           relativePath: 'common/continuous_focus/inprocess.txt',
           paletteId: 'inprocess_palette',
+          png: false,
         },
         'CONTINUOUS_FOCUS_RENDERED',
       ],
@@ -199,6 +201,7 @@ describe('in-process durable job operation adapters', () => {
       transitions: [],
     };
     const inspected = await runRead(engine, operations, 'hoi4.probability_inspect', {
+      evaluate: false,
       workspaceId: 'fixture',
       customPoolManifest,
     });
@@ -206,7 +209,7 @@ describe('in-process durable job operation adapters', () => {
       structuredContent: { status: 'ok', code: 'PROBABILITY_SOURCE_INSPECTED' },
     });
     expect(inspected.staged).toEqual([inspected.result]);
-    const evaluated = await runRead(engine, operations, 'hoi4.probability_evaluate', {
+    const evaluated = await runRead(engine, operations, 'hoi4.probability_inspect', {
       workspaceId: 'fixture',
       customPoolManifest,
       scenarioSet: {
@@ -221,8 +224,9 @@ describe('in-process durable job operation adapters', () => {
     expect(evaluated.staged).toEqual([evaluated.result]);
     const analysisId = (evaluated.result.structuredContent as { data: { analysisId: string } }).data
       .analysisId;
-    const rendered = await runRead(engine, operations, 'hoi4.probability_render', {
+    const rendered = await runRead(engine, operations, 'hoi4.probability_analyze', {
       workspaceId: 'fixture',
+      analysis: 'render',
       analysisId,
       outputs: ['matrix', 'waterfall', 'threshold'],
       filter: { metrics: ['conditional_probability'] },
@@ -270,7 +274,7 @@ describe('in-process durable job operation adapters', () => {
       structuredContent: { status: 'ok', code: 'MAP_INSPECTED' },
     });
     expect(inspected.staged).toEqual([inspected.result]);
-    const rendered = await runRead(engine, operations, 'hoi4.map_render', {
+    const rendered = await runRead(engine, operations, 'hoi4.map_inspect', {
       workspaceId: 'fixture',
       layer: 'province',
       scale: 1,

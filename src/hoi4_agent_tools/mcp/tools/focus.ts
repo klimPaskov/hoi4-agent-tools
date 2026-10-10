@@ -192,17 +192,9 @@ export const focusTaskTools = [
   },
   {
     name: 'hoi4.focus_render',
-    title: 'Render focus review artifacts',
+    title: 'Render a focus tree or continuous palette',
     description:
-      'Render focus HTML, SVG, JSON, and source maps. Use hoi4.focus_raster for decoded icons and PNG.',
-    inputSchema: focusRenderRequestSchema,
-    outputSchema: focusRenderOutputSchema,
-    annotations: artifactProducing,
-  },
-  {
-    name: 'hoi4.focus_raster',
-    title: 'Rasterize focus review artifacts',
-    description: 'Render focus PNG with decoded source icons; also returns HTML, SVG, and JSON.',
+      'Render a focus tree or palette as a PNG with decoded icons plus HTML, SVG and JSON source maps; cropFocusIds adds close-ups of problem focuses.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,

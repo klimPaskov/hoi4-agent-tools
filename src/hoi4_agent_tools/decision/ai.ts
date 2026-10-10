@@ -113,7 +113,7 @@ export async function inspectDecisionAi(
         ? {}
         : {
             proposedUnresolved:
-              'The proposal changes multiple sources or adds/removes the weighted decision; use probability_compare with explicit source selectors',
+              'The proposal changes multiple sources or adds/removes the weighted decision; use hoi4.probability_analyze with analysis compare and explicit source selectors',
           }),
     };
   }

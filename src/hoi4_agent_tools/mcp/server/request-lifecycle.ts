@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { CoreEngine } from '../../core/engine.js';
+import { DOMAIN_TOOL_NAMES } from '../../core/domain-tools.js';
+import { normalizeToolArguments } from '../../schemas/lenient-arguments.js';
 import { progressReporter, withProgressHeartbeat } from './progress.js';
 import { withTaskRequestSignal } from './task-request-context.js';
 import { slimToolList } from './tool-listing.js';
@@ -9,36 +11,7 @@ import { slimToolList } from './tool-listing.js';
 // remain responsive while every domain-execution slot is occupied.
 const controlTools = new Set(['hoi4.job_inspect', 'hoi4.job_cancel']);
 
-const backgroundTools = new Set([
-  'hoi4.impact_inspect',
-  'hoi4.decision_inspect',
-  'hoi4.mechanic_test',
-  'hoi4.package_check',
-  'hoi4.scenario_test',
-  'hoi4.event_inspect',
-  'hoi4.event_render',
-  'hoi4.event_compare',
-  'hoi4.tech_inspect',
-  'hoi4.tech_render',
-  'hoi4.tech_compare',
-  'hoi4.probability_inspect',
-  'hoi4.probability_evaluate',
-  'hoi4.probability_sweep',
-  'hoi4.probability_simulate',
-  'hoi4.probability_sequence',
-  'hoi4.probability_compare',
-  'hoi4.probability_render',
-  'hoi4.map_inspect',
-  'hoi4.map_render',
-  'hoi4.map_rewrite',
-  'hoi4.gui_inspect',
-  'hoi4.gui_render',
-  'hoi4.gui_rewrite',
-  'hoi4.focus_inspect',
-  'hoi4.focus_render',
-  'hoi4.focus_raster',
-  'hoi4.focus_rewrite',
-]);
+const backgroundTools: ReadonlySet<string> = new Set(DOMAIN_TOOL_NAMES);
 
 /** Wrap the public SDK handler registration so optional tools receive the same lifecycle. */
 export function installRequestLifecycle(server: McpServer, engine: CoreEngine): void {
@@ -49,6 +22,9 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
       if (request.method === 'tools/list')
         return Promise.resolve(handler(request, extra)).then(slimToolList);
       if (request.method !== 'tools/call') return handler(request, extra);
+      const params = (request as { params?: { name?: unknown; arguments?: unknown } }).params;
+      if (params !== undefined && typeof params.name === 'string')
+        params.arguments = normalizeToolArguments(params.name, params.arguments);
       const progress = progressReporter(extra);
       const taskCall = CallToolRequestSchema.safeParse(request);
       if (taskCall.success && controlTools.has(taskCall.data.params.name))

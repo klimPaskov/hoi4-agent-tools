@@ -113,28 +113,6 @@ export function validateTechnologyInspectRequest(
     });
 }
 
-export const technologyInspectRequestSchema = z
-  .object({
-    workspaceId: workspaceIdSchema,
-    mode: technologyAnalysisModeSchema,
-    folderId: technologyIdSchema.optional(),
-    technologyId: technologyIdSchema.optional(),
-    categoryId: technologyIdSchema.optional(),
-    targetKind: technologyUnlockKindSchema.optional(),
-    targetId: technologyIdSchema.optional(),
-    direction: technologyDirectionSchema.optional(),
-    maxDepth: z.number().int().min(1).max(256).optional(),
-    maxNodes: z.number().int().min(1).max(25_000).optional(),
-    includeSubTechnologies: z.boolean().optional(),
-    classifications: z.array(technologyDefectClassSchema).max(4).optional(),
-    codes: z.array(z.string().min(1).max(256)).max(100).optional(),
-    impact: technologyImpactSchema.optional(),
-    helperExpansion: helperExpansionRequestSchema.optional(),
-    refresh: z.boolean().optional(),
-  })
-  .strict()
-  .superRefine(validateTechnologyInspectRequest);
-
 export const technologyRenderRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
@@ -194,3 +172,94 @@ export const technologyCompareRequestSchema = z
   })
   .strict()
   .superRefine(validateTechnologyCompareRequest);
+
+export const technologyInspectToolModeSchema = z.enum([
+  ...technologyAnalysisModeSchema.options,
+  'compare',
+]);
+
+const technologyCompareOnlyFields = [
+  'before',
+  'after',
+  'proposedSources',
+  'render',
+  'maxRenderNodes',
+] as const;
+const technologyInspectOnlyFields = [
+  'folderId',
+  'technologyId',
+  'categoryId',
+  'targetKind',
+  'targetId',
+  'direction',
+  'maxDepth',
+  'maxNodes',
+  'includeSubTechnologies',
+  'classifications',
+  'codes',
+  'impact',
+  'helperExpansion',
+] as const;
+
+/** Inspection and graph comparison share one tool; mode compare selects the comparison. */
+export const technologyInspectRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    mode: technologyInspectToolModeSchema,
+    folderId: technologyIdSchema.optional(),
+    technologyId: technologyIdSchema.optional(),
+    categoryId: technologyIdSchema.optional(),
+    targetKind: technologyUnlockKindSchema.optional(),
+    targetId: technologyIdSchema.optional(),
+    direction: technologyDirectionSchema.optional(),
+    maxDepth: z.number().int().min(1).max(256).optional(),
+    maxNodes: z.number().int().min(1).max(25_000).optional(),
+    includeSubTechnologies: z.boolean().optional(),
+    classifications: z.array(technologyDefectClassSchema).max(4).optional(),
+    codes: z.array(z.string().min(1).max(256)).max(100).optional(),
+    impact: technologyImpactSchema.optional(),
+    helperExpansion: helperExpansionRequestSchema.optional(),
+    before: technologyGraphReferenceSchema.optional(),
+    after: technologyGraphReferenceSchema.optional(),
+    proposedSources: z.array(technologyProposedSourceSchema).min(1).max(128).optional(),
+    render: z.boolean().optional(),
+    maxRenderNodes: z.number().int().min(1).max(2_000).optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine(validateTechnologyInspectToolRequest);
+
+export function validateTechnologyInspectToolRequest(
+  value: Record<string, unknown> & { mode: string },
+  context: z.RefinementCtx,
+): void {
+  const compare = value.mode === 'compare';
+  for (const field of compare ? technologyInspectOnlyFields : technologyCompareOnlyFields)
+    if (value[field] !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: compare
+          ? `${field} is not used by mode compare`
+          : `${field} is used only by mode compare`,
+      });
+  if (compare)
+    validateTechnologyCompareRequest(
+      value as Parameters<typeof validateTechnologyCompareRequest>[0],
+      context,
+    );
+  else validateTechnologyInspectRequest(value, context);
+}
+
+/** Split an inspect request into a comparison or an analysis of the current graph. */
+export function splitTechnologyInspectRequest(
+  input: z.infer<typeof technologyInspectRequestSchema>,
+):
+  | { compare: true; request: z.infer<typeof technologyCompareRequestSchema> }
+  | { compare: false; request: Record<string, unknown> } {
+  if (input.mode !== 'compare') return { compare: false, request: input };
+  const request: Record<string, unknown> = { workspaceId: input.workspaceId };
+  for (const field of [...technologyCompareOnlyFields, 'refresh'] as const)
+    if (input[field] !== undefined) request[field] = input[field];
+  return { compare: true, request: technologyCompareRequestSchema.parse(request) };
+}

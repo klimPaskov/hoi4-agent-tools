@@ -171,6 +171,11 @@ export const serverConfigurationSchema = z
     stdioIdleExitMinutes: z.number().int().min(0).max(10_080).default(0),
     /** V8 heap ceiling for each job worker in MiB; unset keeps Node's default. */
     jobWorkerMaxHeapMiB: z.number().int().min(256).max(65_536).optional(),
+    /**
+     * A job worker stays warm this many seconds after a job, so the next job reuses its loaded
+     * indexes instead of scanning cold; 0 starts a fresh worker for every job.
+     */
+    jobWorkerIdleSeconds: z.number().int().min(0).max(3_600).default(180),
     scanMaxBytes: z
       .number()
       .int()

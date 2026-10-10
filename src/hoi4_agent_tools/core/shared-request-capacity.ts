@@ -21,6 +21,11 @@ function processAlive(pid: number): boolean {
 export interface SharedCapacityLease {
   /** Transfer a worker slot before admitting work in a newly started child process. */
   handoffToProcess(pid: number): Promise<void>;
+  /**
+   * Take a transferred slot back once its worker finished the job and went idle, so a warm
+   * idle worker holds no capacity. The slot is then released with this lease.
+   */
+  reclaimFromProcess(): Promise<void>;
 }
 
 export interface SharedCapacityOptions {
@@ -65,6 +70,7 @@ export class SharedRequestCapacity {
             ),
           );
         },
+        reclaimFromProcess: () => Promise.resolve(),
       });
     const root = await containedGeneratedPath(
       await canonicalPath(this.stateRoot, signal),
@@ -155,6 +161,13 @@ export class SharedRequestCapacity {
               }
               owner = next;
               transferredPid = pid;
+            },
+            reclaimFromProcess: async () => {
+              if (transferredPid === undefined) return;
+              const next = path.join(slot, `${process.pid}-${randomUUID()}.lease`);
+              await retryWindowsSharing(() => rename(owner, next));
+              owner = next;
+              transferredPid = undefined;
             },
           });
         } finally {

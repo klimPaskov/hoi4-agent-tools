@@ -557,6 +557,31 @@ function samePool(candidate: WeightedCandidate, selected: WeightedCandidate): bo
   return candidate.id === selected.id;
 }
 
+/**
+ * A pool entry that names no candidate but names a categorical pool, such as an event ID for
+ * its options or a random_list ID, stands for every candidate of that pool.
+ */
+export function expandCandidatePool(
+  candidates: readonly WeightedCandidate[],
+  candidatePool: readonly string[],
+): string[] {
+  if (candidatePool.length === 0) return [];
+  const ids = new Set(candidates.map(({ id }) => id));
+  const expanded = new Set<string>();
+  for (const entry of candidatePool) {
+    if (ids.has(entry)) {
+      expanded.add(entry);
+      continue;
+    }
+    const members = candidates.filter(
+      ({ metadata }) => metadata.eventId === entry || metadata.randomListId === entry,
+    );
+    if (members.length === 0) expanded.add(entry);
+    for (const { id } of members) expanded.add(id);
+  }
+  return [...expanded];
+}
+
 function candidatesAtSourceLine(
   candidates: WeightedCandidate[],
   adapterId: ProbabilityAdapterId,
@@ -603,7 +628,6 @@ export function inventoryWeightedSurfaces(
   adapterIds: readonly ProbabilityAdapterId[] = sourceBackedAdapterIds,
 ): WeightedSurfaceInventory {
   const contexts = sourceContexts(snapshot, source);
-  const wanted = new Set(candidatePool);
   const adapters = adapterIds
     .filter((adapterId) => adapterId !== 'custom_weighted_pool')
     .map((adapterId): WeightedSurfaceInventoryEntry => {
@@ -612,6 +636,7 @@ export function inventoryWeightedSurfaces(
         adapterId,
         source.line,
       ).sort((left, right) => compareCodeUnits(left.id, right.id));
+      const wanted = new Set(expandCandidatePool(candidates, candidatePool));
       return {
         adapterId,
         candidateCount: candidates.length,
@@ -653,6 +678,7 @@ export function discoverWeightedSurface(
   let candidates = contexts.flatMap((context) => candidatesFor(context, adapterId));
   candidates.sort((left, right) => compareCodeUnits(left.id, right.id));
   candidates = candidatesAtSourceLine(candidates, adapterId, source.line);
+  candidatePool = expandCandidatePool(candidates, candidatePool);
   const localCategoricalPool =
     adapterId === 'event_option_ai_chance' || adapterId === 'random_list';
   let completeLocalPoolIds: Set<string> | undefined;

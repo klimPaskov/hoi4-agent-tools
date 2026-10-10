@@ -125,8 +125,9 @@ describe('technology jobs and negotiated native tasks', () => {
         arguments: { workspaceId: 'test', view: 'folder', folderId: 'task_folder' },
       },
       {
-        name: 'hoi4.tech_compare',
+        name: 'hoi4.tech_inspect',
         arguments: {
+          mode: 'compare',
           workspaceId: 'test',
           proposedSources: [
             { relativePath: 'common/technologies/task_technologies.txt', source: proposed },
@@ -182,8 +183,9 @@ describe('technology jobs and negotiated native tasks', () => {
     const second = await connect(secondEngine);
     const comparison = serviceResult(
       await second.client.callTool({
-        name: 'hoi4.tech_compare',
+        name: 'hoi4.tech_inspect',
         arguments: {
+          mode: 'compare',
           workspaceId: 'test',
           before: { revision: scan.data.revision },
           render: false,

@@ -230,7 +230,7 @@ describe('large public focus workflow', () => {
     const rasterized = resultOf(
       await client.callTool(
         {
-          name: 'hoi4.focus_raster',
+          name: 'hoi4.focus_render',
           arguments: { workspaceId: 'many-icons', relativePath, treeId: 'many_icon_tree' },
         },
         undefined,
@@ -424,7 +424,7 @@ describe('large public focus workflow', () => {
     const rasterized = resultOf(
       await client.callTool(
         {
-          name: 'hoi4.focus_raster',
+          name: 'hoi4.focus_render',
           arguments: {
             workspaceId: 'large-focus',
             relativePath,

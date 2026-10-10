@@ -1474,7 +1474,7 @@ it('retains all shared tool names, descriptions, annotations, and schemas across
   expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   const listed = await client.listTools();
   const operations = listed.tools.map(({ execution: _execution, ...definition }) => definition);
-  expect(operations).toHaveLength(37);
+  expect(operations).toHaveLength(28);
   expect(modern.tools).toEqual(operations);
 });
 
@@ -1495,7 +1495,7 @@ it('supports the official SDK v2 ordinary-call client without requiring the Task
   });
   await client.connect(clientTransport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools).toHaveLength(37);
+  expect((await client.listTools()).tools).toHaveLength(28);
   expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
     'hoi4.probability_analysis',
   ]);

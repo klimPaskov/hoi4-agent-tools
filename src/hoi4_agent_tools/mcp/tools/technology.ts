@@ -9,7 +9,6 @@ import {
 } from '../../schemas/helper-expansion.js';
 import {
   technologyAnalysisModeSchema,
-  technologyCompareRequestSchema,
   technologyGraphReferenceSchema,
   technologyImpactSchema,
   technologyInspectRequestSchema,
@@ -17,8 +16,7 @@ import {
   technologyRenderRequestSchema,
   validateTechnologyRenderRequest,
   technologyRenderViewSchema,
-  validateTechnologyCompareRequest,
-  validateTechnologyInspectRequest,
+  validateTechnologyInspectToolRequest,
 } from '../../schemas/technology.js';
 import { compactValidatedInputSchema } from '../server/context-schemas.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
@@ -35,36 +33,32 @@ const inspectInputSchema = z
       technologyImpactSchema,
       'Rename or removal subject.',
     ).optional(),
-  })
-  .strict()
-  .superRefine(validateTechnologyInspectRequest);
-
-const renderInputSchema = z
-  .object({ ...technologyRenderRequestSchema.shape })
-  .strict()
-  .superRefine(validateTechnologyRenderRequest);
-
-const compareInputSchema = z
-  .object({
-    ...technologyCompareRequestSchema.shape,
     before: compactValidatedInputSchema(
       technologyGraphReferenceSchema,
-      'Revision or graph resource.',
+      'Mode compare: revision or graph resource.',
     ).optional(),
     after: compactValidatedInputSchema(
       technologyGraphReferenceSchema,
-      'Revision or graph resource.',
+      'Mode compare: revision or graph resource.',
     ).optional(),
     proposedSources: z
       .array(
-        compactValidatedInputSchema(technologyProposedSourceSchema, 'In-memory source overlay.'),
+        compactValidatedInputSchema(
+          technologyProposedSourceSchema,
+          'Mode compare: in-memory source overlay.',
+        ),
       )
       .min(1)
       .max(128)
       .optional(),
   })
   .strict()
-  .superRefine(validateTechnologyCompareRequest);
+  .superRefine(validateTechnologyInspectToolRequest);
+
+const renderInputSchema = z
+  .object({ ...technologyRenderRequestSchema.shape })
+  .strict()
+  .superRefine(validateTechnologyRenderRequest);
 
 const countsSchema = z
   .object({
@@ -81,17 +75,15 @@ const countsSchema = z
   })
   .strict();
 
-const analysisOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      mode: technologyAnalysisModeSchema,
-      revision: sha256Schema,
-      graphHash: sha256Schema,
-      counts: countsSchema,
-      helperExpansion: helperExpansionSummarySchema.optional(),
-    })
-    .strict(),
-);
+const analysisDataSchema = z
+  .object({
+    mode: technologyAnalysisModeSchema,
+    revision: sha256Schema,
+    graphHash: sha256Schema,
+    counts: countsSchema,
+    helperExpansion: helperExpansionSummarySchema.optional(),
+  })
+  .strict();
 
 const renderOutputSchema = strictOperationResultSchema(
   z
@@ -115,23 +107,25 @@ const renderOutputSchema = strictOperationResultSchema(
     .strict(),
 );
 
-const compareOutputSchema = strictOperationResultSchema(
-  z
-    .object({
-      beforeRevision: sha256Schema,
-      afterRevision: sha256Schema,
-      added: nonNegativeIntegerSchema,
-      removed: nonNegativeIntegerSchema,
-      renamed: nonNegativeIntegerSchema,
-      moved: nonNegativeIntegerSchema,
-      regressions: nonNegativeIntegerSchema,
-      artifacts: nonNegativeIntegerSchema,
-      renderHashes: z
-        .object({ json: sha256Schema, svg: sha256Schema, png: sha256Schema })
-        .strict()
-        .optional(),
-    })
-    .strict(),
+const compareDataSchema = z
+  .object({
+    beforeRevision: sha256Schema,
+    afterRevision: sha256Schema,
+    added: nonNegativeIntegerSchema,
+    removed: nonNegativeIntegerSchema,
+    renamed: nonNegativeIntegerSchema,
+    moved: nonNegativeIntegerSchema,
+    regressions: nonNegativeIntegerSchema,
+    artifacts: nonNegativeIntegerSchema,
+    renderHashes: z
+      .object({ json: sha256Schema, svg: sha256Schema, png: sha256Schema })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+const analysisOutputSchema = strictOperationResultSchema(
+  z.union([analysisDataSchema, compareDataSchema]),
 );
 
 const readOnlyTechnologyTool = {
@@ -146,7 +140,7 @@ export const technologyTaskTools = [
     name: 'hoi4.tech_inspect',
     title: 'Inspect technology trees',
     description:
-      'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, and assess impact.',
+      'Scan, discover folders, trace, explain, inspect unlocks or bonuses, lint, assess impact, or compare technology graphs (mode compare: cached, resource-backed or proposed sources).',
     inputSchema: inspectInputSchema,
     outputSchema: analysisOutputSchema,
     annotations: readOnlyTechnologyTool,
@@ -157,15 +151,6 @@ export const technologyTaskTools = [
     description: 'Render source-linked JSON, SVG, PNG, and optional HTML technology views.',
     inputSchema: renderInputSchema,
     outputSchema: renderOutputSchema,
-    annotations: readOnlyTechnologyTool,
-  },
-  {
-    name: 'hoi4.tech_compare',
-    title: 'Compare technology trees',
-    description:
-      'Compare cached, resource-backed, current, or proposed source graphs without writes.',
-    inputSchema: compareInputSchema,
-    outputSchema: compareOutputSchema,
     annotations: readOnlyTechnologyTool,
   },
 ] satisfies readonly TaskToolDefinition[];

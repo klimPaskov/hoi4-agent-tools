@@ -139,7 +139,7 @@ describe('focus jobs and negotiated native tasks', () => {
         },
       },
       {
-        name: 'hoi4.focus_raster',
+        name: 'hoi4.focus_render',
         arguments: {
           workspaceId: 'test',
           relativePath,

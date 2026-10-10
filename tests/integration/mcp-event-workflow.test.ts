@@ -101,6 +101,8 @@ agent.2.a: "Finish"
       version: 1,
       serverStateRoot: path.join(temporary, 'state'),
       storageRoots: [runtime],
+      // Each call starts cold, so the bounded focused analysis below is what answers it.
+      jobWorkerIdleSeconds: 0,
       workspaces: [
         {
           id: 'event-workflow',
@@ -125,8 +127,8 @@ agent.2.a: "Finish"
     // With no cached revision yet, a reference-free comparison is refused before any scan.
     const unbased = resultOf(
       await client.callTool({
-        name: 'hoi4.event_compare',
-        arguments: { workspaceId: 'event-workflow' },
+        name: 'hoi4.event_inspect',
+        arguments: { mode: 'compare', workspaceId: 'event-workflow' },
       }),
     );
     expect(unbased).toMatchObject({
@@ -213,8 +215,9 @@ country_event = {
 `;
     const compared = resultOf(
       await client.callTool({
-        name: 'hoi4.event_compare',
+        name: 'hoi4.event_inspect',
         arguments: {
+          mode: 'compare',
           workspaceId: 'event-workflow',
           proposedSources: [{ relativePath: eventRelativePath, source: proposedEvents }],
           render: true,
@@ -238,8 +241,9 @@ country_event = {
     await writeFile(eventPath, proposedEvents, 'utf8');
     const comparisonWithoutForcedRefresh = resultOf(
       await client.callTool({
-        name: 'hoi4.event_compare',
+        name: 'hoi4.event_inspect',
         arguments: {
+          mode: 'compare',
           workspaceId: 'event-workflow',
           before: { revision: scanned.data.revision },
           render: false,
@@ -258,8 +262,9 @@ country_event = {
 
     const comparedAfterAgentEdit = resultOf(
       await client.callTool({
-        name: 'hoi4.event_compare',
+        name: 'hoi4.event_inspect',
         arguments: {
+          mode: 'compare',
           workspaceId: 'event-workflow',
           before: { revision: scanned.data.revision },
           render: false,

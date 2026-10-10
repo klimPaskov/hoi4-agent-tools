@@ -5,6 +5,7 @@ import { setInlineFilesScanned } from '../core/operation-result.js';
 import { emptyServiceResult } from '../core/result.js';
 import {
   eventInspectRequestSchema,
+  splitEventInspectRequest,
   eventRenderRequestSchema,
   eventCompareRequestSchema,
 } from '../schemas/event.js';
@@ -21,6 +22,22 @@ export function normalizeEventInspectionRequest(input: unknown): EventInspectInp
   // Validated request fields are JSON-only. Match wire semantics by removing optional
   // undefined fields, including nested source-selector columns, before service dispatch.
   return JSON.parse(JSON.stringify(eventInspectRequestSchema.parse(input))) as EventInspectInput;
+}
+
+/** Route mode compare to the graph comparison and every other mode to inspection. */
+export function inspectOrCompareEvents(viewer: EventChainViewer, input: EventInspectInput) {
+  const split = splitEventInspectRequest(input);
+  if (!split.compare) return inspectEvents(viewer, input);
+  const { signal, principal } = input as EventInspectInput & {
+    signal?: AbortSignal;
+    principal?: string;
+  };
+  return compareEvents(viewer, {
+    ...(JSON.parse(JSON.stringify(split.request)) as EventCompareInput),
+    workspaceId: input.workspaceId,
+    ...(principal === undefined ? {} : { principal }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 export function normalizeEventRenderRequest(input: unknown): EventRenderServiceInput {

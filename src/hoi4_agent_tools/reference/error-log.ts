@@ -1,4 +1,5 @@
-import { open, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { z } from 'zod/v4';
@@ -63,6 +64,114 @@ const moduleCategories: ReadonlyArray<readonly [RegExp, Category]> = [
   [/province|map|state|region|supply|railway|adjacenc/iu, 'map'],
   [/persistent|parse|pdx_?data|script/iu, 'syntax'],
 ];
+
+/** What to do about each kind of entry; names the tool that narrows it down. */
+const categoryHints: Readonly<Record<Category, string>> = {
+  syntax:
+    'Check braces, quotes and assignments near the named line; hoi4.script_validate with the file path pinpoints it.',
+  duplicate:
+    'Two active definitions share a name: rename one, or remove the copy that overrides the other.',
+  localisation:
+    'Add the key to a UTF-8 with BOM .yml under localisation/<language>/ (key: "Text", no :0), or correct the key name.',
+  effect:
+    'Check that the effect exists and takes these arguments in this scope: hoi4.script_validate on the file, hoi4.reference_search for its documentation.',
+  trigger:
+    'Check that the trigger exists and takes these arguments in this scope: hoi4.script_validate on the file, hoi4.reference_search for its documentation.',
+  scope:
+    'A command runs in the wrong scope: check the enclosing scope changes with hoi4.script_validate.',
+  graphics:
+    'Register the sprite in a .gfx file, and check the texture path, file name case and DDS format.',
+  interface:
+    'Check the .gui element and sprite names; hoi4.gui_inspect shows the window and its missing assets.',
+  map: 'Check the named province, state or region with hoi4.map_inspect; map errors can stop the game loading without debug mode.',
+  missing_reference:
+    'The named object is not defined in any active layer: hoi4.source_lookup confirms, then define it or fix the name.',
+  other: 'Read the message and the named file; hoi4.source_lookup locates the definition.',
+};
+
+/** Reduce a message to its shape: names, numbers, quoted values and paths become placeholders. */
+export function errorLogPattern(message: string): string {
+  return (
+    message
+      .toLowerCase()
+      .replace(/"[^"]*"/gu, '<v>')
+      .replace(new RegExp(`[\\w./\\\\:-]+\\.(?:${SOURCE_EXTENSIONS})\\b`, 'gu'), '<file>')
+      .replace(/\b[a-z_][\w]*\.\d+\b/gu, '<id>')
+      // snake_case script names (keys, effects, sprites) differ between otherwise equal messages.
+      .replace(/\b[a-z0-9]+(?:_[a-z0-9]+)+\b/gu, '<name>')
+      .replace(/-?\b\d+(?:\.\d+)?\b/gu, '<n>')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .slice(0, 300)
+  );
+}
+
+interface LaunchRecord {
+  modifiedAt: string;
+  entries: Record<string, { category: Category; message: string; relativePath?: string }>;
+}
+
+interface LaunchHistory {
+  previous?: LaunchRecord;
+  current?: LaunchRecord;
+}
+
+const HISTORY_FILE = 'error-log-history.json';
+const MAX_HISTORY_ENTRIES = 5_000;
+
+function entryKey(module: string, message: string): string {
+  return createHash('sha256').update(`${module}\0${message}`).digest('hex').slice(0, 24);
+}
+
+async function readHistory(file: string): Promise<LaunchHistory> {
+  try {
+    const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown;
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Remember the entries of each log this server reads, keyed by the log's write time, so the
+ * next launch's log can say which errors are new and which a fix removed. The history lives
+ * in the server's own cache folder, never in the mod.
+ */
+async function compareWithPreviousLaunch(
+  workspace: ResolvedWorkspace,
+  modifiedAt: string,
+  entries: ReadonlyArray<{
+    module: string;
+    message: string;
+    category: Category;
+    relativePath?: string;
+  }>,
+): Promise<{ previous?: LaunchRecord; current: LaunchRecord }> {
+  const file = path.join(workspace.cacheRoot, HISTORY_FILE);
+  const history = await readHistory(file);
+  const current: LaunchRecord = { modifiedAt, entries: {} };
+  for (const entry of entries.slice(0, MAX_HISTORY_ENTRIES))
+    current.entries[entryKey(entry.module, entry.message)] = {
+      category: entry.category,
+      message: entry.message.slice(0, 300),
+      ...(entry.relativePath === undefined ? {} : { relativePath: entry.relativePath }),
+    };
+  if (history.current?.modifiedAt === modifiedAt)
+    return { ...(history.previous === undefined ? {} : { previous: history.previous }), current };
+  const next: LaunchHistory = {
+    ...(history.current === undefined ? {} : { previous: history.current }),
+    current,
+  };
+  try {
+    await mkdir(workspace.cacheRoot, { recursive: true });
+    const temporary = `${file}.${process.pid}.tmp`;
+    await writeFile(temporary, JSON.stringify(next));
+    await rename(temporary, file);
+  } catch {
+    // The comparison is a convenience; an unwritable cache leaves the read itself intact.
+  }
+  return { ...(next.previous === undefined ? {} : { previous: next.previous }), current };
+}
 
 function classify(module: string, message: string): Category {
   for (const [category, pattern] of categoryRules)
@@ -238,6 +347,35 @@ export async function readErrorLog(
         entry.message.toLowerCase().includes(input.query.toLowerCase()) ||
         entry.source?.relativePath.toLowerCase().includes(input.query.toLowerCase()) === true),
   );
+  const launches = await compareWithPreviousLaunch(
+    workspace,
+    new Date(found.modified).toISOString(),
+    all.map((entry) => ({
+      module: entry.module,
+      message: entry.message,
+      category: entry.category,
+      ...(entry.source === undefined ? {} : { relativePath: entry.source.relativePath }),
+    })),
+  );
+  const previousKeys =
+    launches.previous === undefined ? undefined : new Set(Object.keys(launches.previous.entries));
+  const currentKeys = new Set(Object.keys(launches.current.entries));
+  const patterns = new Map<
+    string,
+    { category: Category; distinct: number; entries: number; example: string }
+  >();
+  for (const entry of selected) {
+    const pattern = errorLogPattern(entry.message);
+    const totals = patterns.get(pattern) ?? {
+      category: entry.category,
+      distinct: 0,
+      entries: 0,
+      example: entry.message,
+    };
+    totals.distinct += 1;
+    totals.entries += entry.count;
+    patterns.set(pattern, totals);
+  }
   const categories = new Map<Category, { entries: number; distinct: number }>();
   for (const entry of selected) {
     const totals = categories.get(entry.category) ?? { entries: 0, distinct: 0 };
@@ -260,9 +398,33 @@ export async function readErrorLog(
     modEntries: all.filter((entry) => entry.source?.layer === 'mod').length,
     changedSinceLog: all.filter((entry) => entry.source?.changedSinceLog === true).length,
     categories: [...categories]
-      .map(([category, totals]) => ({ category, ...totals }))
+      .map(([category, totals]) => ({ category, ...totals, hint: categoryHints[category] }))
       .sort((left, right) => right.entries - left.entries),
-    entries: page.map(({ order: _order, ...entry }) => entry),
+    patterns: [...patterns]
+      .filter(([, totals]) => totals.distinct > 1)
+      .sort(([, left], [, right]) => right.distinct - left.distinct || right.entries - left.entries)
+      .slice(0, 8)
+      .map(([pattern, totals]) => ({ pattern, ...totals })),
+    ...(launches.previous === undefined || previousKeys === undefined
+      ? {}
+      : {
+          sinceLastLaunch: {
+            previousLogAt: launches.previous.modifiedAt,
+            newEntries: [...currentKeys].filter((key) => !previousKeys.has(key)).length,
+            persistingEntries: [...currentKeys].filter((key) => previousKeys.has(key)).length,
+            resolvedEntries: [...previousKeys].filter((key) => !currentKeys.has(key)).length,
+            resolvedExamples: Object.entries(launches.previous.entries)
+              .filter(([key]) => !currentKeys.has(key))
+              .slice(0, 5)
+              .map(([, entry]) => entry),
+          },
+        }),
+    entries: page.map(({ order: _order, ...entry }) => ({
+      ...entry,
+      ...(previousKeys === undefined
+        ? {}
+        : { new: !previousKeys.has(entryKey(entry.module, entry.message)) }),
+    })),
     offset: input.offset,
     ...(input.offset + page.length < selected.length
       ? { nextOffset: input.offset + page.length }

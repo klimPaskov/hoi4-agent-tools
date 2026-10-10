@@ -49,9 +49,45 @@ export const errorLogDataSchema = z
           category: errorLogCategorySchema,
           entries: z.number().int().min(0),
           distinct: z.number().int().min(0),
+          hint: z.string().max(300),
         })
         .strict(),
     ),
+    /** Messages that differ only in names, numbers and paths, grouped by their shape. */
+    patterns: z
+      .array(
+        z
+          .object({
+            pattern: z.string().max(300),
+            category: errorLogCategorySchema,
+            distinct: z.number().int().min(0),
+            entries: z.number().int().min(0),
+            example: z.string().max(600),
+          })
+          .strict(),
+      )
+      .max(8),
+    /** Compared with the previous launch's log this server read, when there was one. */
+    sinceLastLaunch: z
+      .object({
+        previousLogAt: z.string().max(64),
+        newEntries: z.number().int().min(0),
+        persistingEntries: z.number().int().min(0),
+        resolvedEntries: z.number().int().min(0),
+        resolvedExamples: z
+          .array(
+            z
+              .object({
+                category: errorLogCategorySchema,
+                message: z.string().max(300),
+                relativePath: z.string().max(1024).optional(),
+              })
+              .strict(),
+          )
+          .max(5),
+      })
+      .strict()
+      .optional(),
     entries: z
       .array(
         z
@@ -62,6 +98,8 @@ export const errorLogDataSchema = z
             count: z.number().int().min(1),
             firstLogLine: z.number().int().min(1),
             time: z.string().max(16).optional(),
+            /** Absent from the previous launch's log. */
+            new: z.boolean().optional(),
             source: z
               .object({
                 relativePath: z.string().max(1024),

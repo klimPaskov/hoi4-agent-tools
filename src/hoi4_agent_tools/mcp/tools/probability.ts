@@ -9,16 +9,22 @@ import {
 
 import { z } from 'zod/v4';
 import {
-  probabilityCompareRequestSchema,
-  probabilityEvaluateRequestSchema,
+  probabilityAnalyzeRequestSchema,
   probabilityInspectRequestSchema,
-  probabilityRenderRequestSchema,
-  probabilitySequenceRequestSchema,
-  probabilitySimulateRequestSchema,
-  probabilitySweepRequestSchema,
 } from '../../schemas/probability-requests.js';
 import { nonNegativeIntegerSchema, sha256Schema } from '../server/output-schemas.js';
 import { strictOperationResultSchema } from '../server/result.js';
+
+const rankedCandidateSchema = z
+  .object({
+    id: z.string().max(512),
+    eligible: z.enum(['true', 'false', 'unresolved']),
+    weight: z.number().nullable(),
+    weightRange: z.array(z.number().nullable()).length(2).optional(),
+    probability: z.number().nullable(),
+    mtthDays: z.number().nullable().optional(),
+  })
+  .strict();
 
 const analysisDataSchema = z
   .object({
@@ -46,6 +52,33 @@ const analysisDataSchema = z
       .optional(),
     comparisonChanges: nonNegativeIntegerSchema.optional(),
     visualResources: nonNegativeIntegerSchema.optional(),
+    ranking: z
+      .array(
+        z
+          .object({
+            scenarioId: z.string().max(512),
+            poolComplete: z.boolean(),
+            candidates: z.array(rankedCandidateSchema).max(12),
+            omittedCandidates: nonNegativeIntegerSchema.optional(),
+          })
+          .strict(),
+      )
+      .max(4),
+    missingInputs: z.array(z.string().max(1024)).max(16),
+    changes: z
+      .array(
+        z
+          .object({
+            scenarioId: z.string().max(512),
+            candidateId: z.string().max(512),
+            weightDelta: z.number().nullable().optional(),
+            probabilityDelta: z.number().nullable().optional(),
+            eligibility: z.string().max(64).optional(),
+          })
+          .strict(),
+      )
+      .max(12)
+      .optional(),
   })
   .strict();
 
@@ -85,12 +118,13 @@ const inspectDataSchema = z
     requiredInputs: nonNegativeIntegerSchema,
     requiredInputPaths: z.array(z.string().max(1024)).max(32),
     requiredInputPathsTruncated: z.boolean(),
+    adapterRequiredInputPaths: z.array(z.string().max(1024)).max(32).optional(),
     unresolved: nonNegativeIntegerSchema,
   })
   .strict();
 
 const analysisOutput = strictOperationResultSchema(analysisDataSchema);
-const inspectOutput = strictOperationResultSchema(inspectDataSchema);
+const inspectOutput = strictOperationResultSchema(z.union([analysisDataSchema, inspectDataSchema]));
 const readOnly = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -101,57 +135,19 @@ const readOnly = {
 export const probabilityTaskTools = [
   {
     name: 'hoi4.probability_inspect',
-    title: 'Inspect AI and MTTH weighted logic',
-    description: 'Discover weighted adapters, candidates, provenance, and required inputs.',
+    title: 'Inspect and evaluate AI weights and MTTH',
+    description:
+      "Find weighted logic (ai_will_do, ai_chance, MTTH, random_list, strategy factors) by path, ID, or candidate IDs and return each candidate's weight and probability under the given scenarios, or under no declared facts, with the facts still missing.",
     inputSchema: probabilityInspectRequestSchema,
     outputSchema: inspectOutput,
     annotations: readOnly,
   },
   {
-    name: 'hoi4.probability_evaluate',
-    title: 'Evaluate AI and MTTH scenarios',
-    description: 'Evaluate weights and probabilities under explicit scenarios.',
-    inputSchema: probabilityEvaluateRequestSchema,
-    outputSchema: analysisOutput,
-    annotations: readOnly,
-  },
-  {
-    name: 'hoi4.probability_sweep',
-    title: 'Sweep AI and MTTH parameters',
-    description: 'Evaluate declared ranges, breakpoints, and rank reversals.',
-    inputSchema: probabilitySweepRequestSchema,
-    outputSchema: analysisOutput,
-    annotations: readOnly,
-  },
-  {
-    name: 'hoi4.probability_simulate',
-    title: 'Simulate uncertain weighted scenarios',
-    description: 'Run seeded simulations with distributions and confidence intervals.',
-    inputSchema: probabilitySimulateRequestSchema,
-    outputSchema: analysisOutput,
-    annotations: readOnly,
-  },
-  {
-    name: 'hoi4.probability_sequence',
-    title: 'Analyze a declared weighted sequence',
-    description: 'Analyze a manifest-declared dynamic weighted sequence.',
-    inputSchema: probabilitySequenceRequestSchema,
-    outputSchema: analysisOutput,
-    annotations: readOnly,
-  },
-  {
-    name: 'hoi4.probability_compare',
-    title: 'Compare weighted source patches',
-    description: 'Compare sources or declared pools under identical scenarios.',
-    inputSchema: probabilityCompareRequestSchema,
-    outputSchema: analysisOutput,
-    annotations: readOnly,
-  },
-  {
-    name: 'hoi4.probability_render',
-    title: 'Render AI and MTTH analysis',
-    description: 'Render retained probability analysis as deterministic resources.',
-    inputSchema: probabilityRenderRequestSchema,
+    name: 'hoi4.probability_analyze',
+    title: 'Compare, sweep, simulate, or sequence weighted logic',
+    description:
+      'Deeper weighted analysis: compare before/after source under the same scenarios, sweep input ranges for breakpoints and rank reversals, simulate uncertain inputs, analyze a declared pool over time, or render a retained analysis.',
+    inputSchema: probabilityAnalyzeRequestSchema,
     outputSchema: analysisOutput,
     annotations: readOnly,
   },

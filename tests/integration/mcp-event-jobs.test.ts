@@ -244,17 +244,19 @@ describe('production event inspection jobs', () => {
       if (workerPid !== undefined) stopOwnedProcess(workerPid);
     }
   });
-  it.each(['hoi4.event_inspect', 'hoi4.event_render', 'hoi4.event_compare'] as const)(
+  it.each(['hoi4.event_inspect', 'hoi4.event_render', 'compare'] as const)(
     'executes %s in a distinct process and retrieves its persisted result',
-    async (toolName) => {
+    async (variant) => {
+      const toolName = variant === 'compare' ? 'hoi4.event_inspect' : variant;
       const { engine, jobs, client, source } = await fixture();
       const before = await readFile(source);
       const input: JobRequest['arguments'] = {
         workspaceId: 'test',
-        ...(toolName === 'hoi4.event_inspect' ? { mode: 'roots' } : {}),
-        ...(toolName === 'hoi4.event_render' ? { view: 'overview', includeHtml: true } : {}),
-        ...(toolName === 'hoi4.event_compare'
+        ...(variant === 'hoi4.event_inspect' ? { mode: 'roots' } : {}),
+        ...(variant === 'hoi4.event_render' ? { view: 'overview', includeHtml: true } : {}),
+        ...(variant === 'compare'
           ? {
+              mode: 'compare',
               render: true,
               proposedSources: [
                 {
@@ -336,11 +338,14 @@ describe('production event inspection jobs', () => {
         render,
         proposedSources: [{ relativePath: 'events/synthetic.txt', source: proposed }],
       };
-      const foreground = await client.callTool({ name: 'hoi4.event_compare', arguments: input });
+      const foreground = await client.callTool({
+        name: 'hoi4.event_inspect',
+        arguments: { ...input, mode: 'compare' },
+      });
       expect(foreground.isError).not.toBe(true);
       const { record } = await jobs.submit('test', {
-        toolName: 'hoi4.event_compare',
-        arguments: input,
+        toolName: 'hoi4.event_inspect',
+        arguments: { ...input, mode: 'compare' },
         mutation: false,
       });
       const completed = await executor.run('test', record.id);

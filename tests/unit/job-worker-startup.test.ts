@@ -165,6 +165,8 @@ describe('worker startup failure boundaries', () => {
           serverConfigurationSchema.parse({
             version: 1,
             serverStateRoot: path.join(root, 'state'),
+            // The cold path: each job gets its own worker, which exits on disconnect.
+            jobWorkerIdleSeconds: 0,
             workspaces: [{ id: 'test', name: 'Synthetic worker startup', root: mod }],
           }),
         ),
@@ -214,4 +216,49 @@ describe('worker startup failure boundaries', () => {
     },
     15_000,
   );
+  it('reuses a warm worker for the next job and releases its capacity while idle', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-worker-warm-'));
+    roots.push(root);
+    const mod = path.join(root, 'mod');
+    await mkdir(mod);
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          jobWorkerIdleSeconds: 30,
+          workspaces: [{ id: 'test', name: 'Warm worker fixture', root: mod }],
+        }),
+      ),
+    );
+    await engine.persistentAnalysisCache;
+    const jobs = await JobService.create(engine.resolver);
+    const host = await JobWorkerHost.create(engine, jobs);
+    const submit = async () =>
+      (
+        await jobs.submit('test', {
+          toolName: 'hoi4.event_inspect',
+          arguments: { workspaceId: 'test', mode: 'lint' },
+          mutation: false,
+        })
+      ).record;
+    const first = await submit();
+    await expect(host.run('test', first.id)).resolves.toMatchObject({ status: 'completed' });
+    const second = await submit();
+    await expect(host.run('test', second.id)).resolves.toMatchObject({ status: 'completed' });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const idle = (host as unknown as { idleWorkers: Array<{ pid?: number; kill(): boolean }> })
+      .idleWorkers;
+    expect(idle).toHaveLength(1);
+    // An idle warm worker holds no capacity slot, so a full set of slots stays available.
+    const capacity = (host as unknown as { capacity: SharedRequestCapacity }).capacity;
+    await expect(
+      Promise.all(
+        Array.from({ length: 4 }, () =>
+          capacity.run(new AbortController().signal, () => Promise.resolve(true)),
+        ),
+      ),
+    ).resolves.toEqual([true, true, true, true]);
+    for (const child of idle) child.kill();
+  }, 60_000);
 });

@@ -62,6 +62,16 @@ async function main(): Promise<void> {
           level: 'error',
           event: 'transport_startup_failed',
           message: error instanceof Error ? error.message : String(error),
+          // Startup output goes to the operator's own log; the cause (such as the JSON parse
+          // position in a configuration file) is what makes the failure fixable.
+          ...(typeof error === 'object' &&
+          error !== null &&
+          'details' in error &&
+          typeof error.details === 'object' &&
+          error.details !== null &&
+          Object.keys(error.details).length > 0
+            ? { details: error.details }
+            : {}),
         })}\n`,
       );
     },

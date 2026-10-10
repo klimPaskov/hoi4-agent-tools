@@ -18,7 +18,9 @@ describe('MCP error privacy', () => {
     const unknown = errorResult(new Error(`ENOENT opening ${secretPath}`), 'test');
     expect(unknown.structuredContent).toMatchObject({
       code: 'INTERNAL_ERROR',
-      blockers: [{ message: 'Unexpected internal error' }],
+      blockers: [
+        { message: expect.stringContaining('Unexpected Error: ENOENT opening workspace') },
+      ],
     });
     expect(JSON.stringify(unknown.structuredContent)).not.toContain(secretPath);
 
@@ -135,9 +137,15 @@ describe('MCP error privacy', () => {
     }));
     const output = toolResult(result);
     expect(output.structuredContent).toMatchObject({
-      diagnostics: [{ code: 'MCP_RESPONSE_TRUNCATED' }],
       data: { scenarioId: 'meter_history', variantCount: 5 },
     });
+    // The first diagnostics survive without their bulky related locations.
+    const diagnostics = output.structuredContent.diagnostics as Array<Record<string, unknown>>;
+    expect(diagnostics.slice(0, 2).map(({ code }) => code)).toEqual([
+      'MCP_RESPONSE_TRUNCATED',
+      'GUI_0',
+    ]);
+    expect(diagnostics.every(({ related }) => related === undefined)).toBe(true);
     expect(Buffer.byteLength(JSON.stringify(output), 'utf8')).toBeLessThanOrEqual(
       MAX_TOOL_RESULT_BYTES,
     );
