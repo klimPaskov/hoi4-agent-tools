@@ -138,6 +138,28 @@ describe('argument shorthands agents send', () => {
     ]);
   });
 
+  it('clamps size limits above the maximum and infers a snippet kind', () => {
+    const script = normalizeToolArguments('hoi4.script_validate', {
+      path: 'events/my_events.txt',
+      limit: 50,
+    });
+    expect(scriptValidateRequestSchema.parse(script).limit).toBe(32);
+    const snippet = scriptValidateRequestSchema.parse(
+      normalizeToolArguments('hoi4.script_validate', { snippet: 'add_political_power = 10' }),
+    );
+    expect(snippet).toMatchObject({ source: 'add_political_power = 10', scope: 'country' });
+    expect(snippet.kind).toBeUndefined();
+    const inspect = eventInspectRequestSchema.parse(
+      normalizeToolArguments('hoi4.event_inspect', {
+        mode: 'trace',
+        selector: 'my_mod.1',
+        maxDepth: 500,
+        maxNodes: 99_999,
+      }),
+    );
+    expect(inspect).toMatchObject({ maxDepth: 64, maxNodes: 5_000 });
+  });
+
   it('answers invalid arguments with a tool error naming the field and a working call', () => {
     const schema = referenceTools.find(({ name }) => name === 'hoi4.script_validate')!.inputSchema;
     const parsed = schema.safeParse({ source: 'x = 1', kind: 'effect', scope: 'planet' });

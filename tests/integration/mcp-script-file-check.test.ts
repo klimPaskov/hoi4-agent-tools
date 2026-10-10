@@ -269,12 +269,44 @@ describe('script_validate file mode', () => {
     ]);
   });
 
-  it('rejects mixing file mode with snippet arguments', async () => {
+  it('rejects a file path together with a snippet and names the field', async () => {
     const mcp = await client();
     const result = await mcp.callTool({
       name: 'hoi4.script_validate',
-      arguments: { workspaceId: 'fixture', path: 'events/checks.txt', kind: 'effect' },
+      arguments: { workspaceId: 'fixture', path: 'events/checks.txt', source: 'x = 1' },
     });
     expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('INVALID_ARGUMENTS');
+  });
+
+  it('ignores a kind and scope sent with a file path', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: {
+        workspaceId: 'fixture',
+        path: 'events/checks.txt',
+        kind: 'effect',
+        scope: 'country',
+        limit: 99,
+      },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+  });
+
+  it('infers the kind of a snippet that does not name one', async () => {
+    const mcp = await client();
+    const call = async (source: string) => {
+      const result = await mcp.callTool({
+        name: 'hoi4.script_validate',
+        arguments: { workspaceId: 'fixture', snippet: source },
+      });
+      expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+      return (result.structuredContent as { data: { findings: Array<{ kind: string }> } }).data;
+    };
+    expect((await call('add_power = 10')).findings.map(({ kind }) => kind)).not.toContain(
+      'trigger',
+    );
+    expect((await call('has_flag = x')).findings.map(({ kind }) => kind)).not.toContain('effect');
   });
 });

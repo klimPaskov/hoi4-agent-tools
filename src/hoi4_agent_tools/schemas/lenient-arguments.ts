@@ -18,6 +18,14 @@ function isObject(value: unknown): value is JsonObject {
 
 const EVENT_ID = /^[A-Za-z0-9_.-]+\.[0-9]+$/u;
 
+/** A size limit above the accepted maximum means "as many as allowed", not an invalid call. */
+function clampLimits(args: JsonObject, maximums: Readonly<Record<string, number>>): void {
+  for (const [key, maximum] of Object.entries(maximums)) {
+    const value = args[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > maximum) args[key] = maximum;
+  }
+}
+
 /** A selector object that names its kind but uses `id` or `path` for the kind's own field. */
 function withKindField(value: JsonObject): JsonObject {
   const { kind, id, path, ...rest } = value;
@@ -156,6 +164,7 @@ function normalizeEventArguments(args: JsonObject): JsonObject {
  */
 function normalizeScriptValidateArguments(args: JsonObject): JsonObject {
   const result = { ...args };
+  clampLimits(result, { limit: 32 });
   for (const alias of ['file', 'filePath', 'sourcePath'] as const)
     if (result.path === undefined && typeof result[alias] === 'string') {
       result.path = result[alias];
@@ -244,9 +253,16 @@ function normalizeProbabilityArguments(args: JsonObject): JsonObject {
 export function normalizeToolArguments(name: string, args: unknown): unknown {
   if (!isObject(args)) return args;
   switch (name) {
-    case 'hoi4.event_inspect':
-    case 'hoi4.event_render':
-      return normalizeEventArguments(args);
+    case 'hoi4.event_inspect': {
+      const result = normalizeEventArguments(args);
+      clampLimits(result, { maxDepth: 64, maxNodes: 5_000, maxEdges: 20_000 });
+      return result;
+    }
+    case 'hoi4.event_render': {
+      const result = normalizeEventArguments(args);
+      clampLimits(result, { maxDepth: 64, maxNodes: 240 });
+      return result;
+    }
     case 'hoi4.gui_inspect':
       return normalizeGuiArguments(args, false);
     case 'hoi4.gui_render':

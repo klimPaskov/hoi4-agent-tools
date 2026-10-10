@@ -229,8 +229,28 @@ export class ReferenceToolService {
     principal?: string,
     signal?: AbortSignal,
   ) {
-    if (request.path === undefined)
-      return validateScript(this.references, workspace, request, signal);
+    if (request.path === undefined) {
+      if (request.kind !== undefined)
+        return validateScript(this.references, workspace, request, signal);
+      // A snippet without a kind is checked as an effect and as a trigger; the reading with
+      // fewer errors and unresolved commands is the one the author meant.
+      const effect = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'effect' },
+        signal,
+      );
+      const trigger = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'trigger' },
+        signal,
+      );
+      const misses = (checked: typeof effect): number =>
+        checked.findings.filter(({ status }) => status === 'error').length * 100_000 +
+        checked.unresolvedCount;
+      return misses(trigger) < misses(effect) ? trigger : effect;
+    }
     // Every file check of the supported families shares one scan, so checking files across
     // folders reuses one snapshot and its incremental index; other folders add their own.
     const scan = (extra: readonly string[]) =>
