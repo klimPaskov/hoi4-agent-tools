@@ -774,18 +774,20 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       );
       expect(denied).toEqual(missing);
       expect(denied).toMatchObject({ isError: true, structuredContent: { code: 'JOB_NOT_FOUND' } });
-      expect(
-        (
-          await wire.request('tools/call', {
-            name,
-            arguments: { workspaceId: 'alpha', jobId: queued.id, principal: 'beta-user' },
-          })
-        ).error,
-      ).toMatchObject({
-        code: -32602,
-        // The rejection names the tool and the offending field.
-        message: expect.stringMatching(new RegExp(`${name.replace('.', '\\.')}:.*principal`, 'u')),
+      // A tool error, which clients show to the model, names the tool and the offending field.
+      const rejected = result(
+        await wire.request('tools/call', {
+          name,
+          arguments: { workspaceId: 'alpha', jobId: queued.id, principal: 'beta-user' },
+        }),
+      );
+      expect(rejected).toMatchObject({
+        isError: true,
+        structuredContent: { code: 'INVALID_ARGUMENTS' },
       });
+      expect(JSON.stringify(rejected.content)).toMatch(
+        new RegExp(`${name.replace('.', '\\.')}:.*principal`, 'u'),
+      );
     }
     expect(
       result(
@@ -1336,14 +1338,18 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       code: -32602,
       message: 'Task not found',
     });
-    expect(
-      (
-        await wire.request('tools/call', {
-          name: 'hoi4.event_inspect',
-          arguments: { workspaceId: 'alpha', unknownField: true },
-        })
-      ).error,
-    ).toMatchObject({ code: -32602 });
+    // Invalid tool arguments are a tool error the model can read, not a protocol error.
+    const invalid = result(
+      await wire.request('tools/call', {
+        name: 'hoi4.event_inspect',
+        arguments: { workspaceId: 'alpha', unknownField: true },
+      }),
+    );
+    expect(invalid).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'INVALID_ARGUMENTS' },
+    });
+    expect(JSON.stringify(invalid.content)).toContain('unknownField');
   });
 
   it('ignores unknown update keys and cannot cancel or resume writes with read-only scope', async () => {

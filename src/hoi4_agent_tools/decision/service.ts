@@ -191,6 +191,36 @@ export class DecisionAnalyzer {
       overrides: inventory.overrides.length,
       scenarios: input.mode === 'inventory' ? 0 : input.scenarios.length,
       unresolvedDefinitions: inventory.unresolvedDefinitions.length,
+      ...(inventory.unresolvedDefinitions.length === 0
+        ? {}
+        : {
+            unresolvedSample: inventory.unresolvedDefinitions
+              .slice(0, 8)
+              .map(({ id, path, reason }) => ({ id, path, reason })),
+          }),
+      // The gate outcome of each scenario answers most inspections without the report.
+      ...(input.mode === 'inspect' && Array.isArray(analysis)
+        ? {
+            outcomes: analysis.slice(0, 16).map(({ scenarioId, inspection }) =>
+              inspection === null
+                ? { scenarioId, found: false }
+                : {
+                    scenarioId,
+                    found: true,
+                    eligible: inspection.gates.eligible,
+                    visible: inspection.gates.visible,
+                    available: inspection.gates.available,
+                    ...(inspection.gates.unresolved.length === 0
+                      ? {}
+                      : {
+                          unresolved: inspection.gates.unresolved
+                            .slice(0, 5)
+                            .map(({ code, message }) => ({ code, message: message.slice(0, 300) })),
+                        }),
+                  },
+            ),
+          }
+        : {}),
     });
     result.code = complete ? 'DECISION_ANALYZED' : 'DECISION_ANALYZED_PARTIAL';
     result.artifacts = [publicArtifactLink(artifact)];

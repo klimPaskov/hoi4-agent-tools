@@ -3,6 +3,11 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { CoreEngine } from '../../core/engine.js';
 import { DOMAIN_TOOL_NAMES } from '../../core/domain-tools.js';
 import { normalizeToolArguments } from '../../schemas/lenient-arguments.js';
+import { referenceTools } from '../tools/reference.js';
+import { jobControlTools } from '../tools/job.js';
+import { invalidArgumentsResult } from './argument-errors.js';
+import { taskToolCatalog } from './task-tool-catalog.js';
+import type { ToolDefinition } from './task-tool-definition.js';
 import { progressReporter, withProgressHeartbeat } from './progress.js';
 import { withTaskRequestSignal } from './task-request-context.js';
 import { slimToolList } from './tool-listing.js';
@@ -13,6 +18,16 @@ const controlTools = new Set(['hoi4.job_inspect', 'hoi4.job_cancel']);
 
 const backgroundTools: ReadonlySet<string> = new Set(DOMAIN_TOOL_NAMES);
 
+let inputSchemas: ReadonlyMap<string, ToolDefinition['inputSchema']> | undefined;
+function inputSchema(name: string): ToolDefinition['inputSchema'] | undefined {
+  inputSchemas ??= new Map(
+    [...taskToolCatalog, ...referenceTools, ...jobControlTools].map(
+      ({ name: toolName, inputSchema: schema }) => [toolName, schema] as const,
+    ),
+  );
+  return inputSchemas.get(name);
+}
+
 /** Wrap the public SDK handler registration so optional tools receive the same lifecycle. */
 export function installRequestLifecycle(server: McpServer, engine: CoreEngine): void {
   const register = server.server.setRequestHandler.bind(server.server);
@@ -22,9 +37,23 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
       if (request.method === 'tools/list')
         return Promise.resolve(handler(request, extra)).then(slimToolList);
       if (request.method !== 'tools/call') return handler(request, extra);
-      const params = (request as { params?: { name?: unknown; arguments?: unknown } }).params;
-      if (params !== undefined && typeof params.name === 'string')
+      const params = (
+        request as { params?: { name?: unknown; arguments?: unknown; task?: unknown } }
+      ).params;
+      if (params !== undefined && typeof params.name === 'string') {
         params.arguments = normalizeToolArguments(params.name, params.arguments);
+        // Answer invalid arguments with a tool error that names the fields and a working call.
+        const schema = params.task === undefined ? inputSchema(params.name) : undefined;
+        const parsed = schema?.safeParse(params.arguments ?? {});
+        if (parsed !== undefined && !parsed.success)
+          return Promise.resolve(
+            invalidArgumentsResult(
+              params.name,
+              parsed.error,
+              (params.arguments as { workspaceId?: unknown } | undefined)?.workspaceId,
+            ),
+          );
+      }
       const progress = progressReporter(extra);
       const taskCall = CallToolRequestSchema.safeParse(request);
       if (taskCall.success && controlTools.has(taskCall.data.params.name))

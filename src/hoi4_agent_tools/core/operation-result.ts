@@ -452,11 +452,24 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
     ...(artifact.description === undefined ? {} : { description: artifact.description }),
     ...(artifact.size === undefined ? {} : { size: artifact.size }),
   }));
+  // Clients show an error's text, not its structured content, so an error or a blocked
+  // result carries what went wrong and how to proceed in the text as well.
   const summary = canonicalJson({
     status: selected.status,
     code: selected.code,
     workspaceId: selected.workspaceId,
     artifactCount: selected.artifacts.length,
+    ...(selected.status === 'ok' || selected.blockers.length === 0
+      ? {}
+      : {
+          blockers: selected.blockers.slice(0, 3).map(({ code, message, details }) => ({
+            code,
+            message,
+            ...(details === undefined || Object.keys(details).length === 0
+              ? {}
+              : { details: compactDetails(details) }),
+          })),
+        }),
   });
   return {
     content: [{ type: 'text', text: summary }, ...links],

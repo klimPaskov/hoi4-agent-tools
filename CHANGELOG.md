@@ -19,7 +19,9 @@
 
 ### Agent ergonomics
 
-- Accept the argument shorthands agents most often send: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, a probability scenario set as a bare list or without ids and `state`, a probability `source` as a string, and `generatedScenarios.maxScenarios`. The full event selector is published in the tool schema.
+- Accept the argument shorthands agents most often send: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, a probability scenario set as a bare list or without ids and `state`, a probability `source` as a string, and `generatedScenarios.maxScenarios`. The full event selector is published in the tool schema. Also a namespace wildcard such as `chaosx.nr14.*`, a selector with `id` for its own field, a trace started from `from`, a GUI inspection without a scenario, a decision by `decisionId`, and a script file check that names the kind and scope its file fixes.
+- Answer invalid arguments with a tool error, code `INVALID_ARGUMENTS`, naming each failing field, what it expected and a working call, instead of a protocol error that clients reduced to "Invalid tool arguments". Error and blocked results carry their blockers in the text content, which is what clients show for an error.
+- Find decisions in files that open the same category block more than once; such decisions were reported as unresolved definitions. Decision inspections list each scenario's eligible, visible and available outcome inline, and a sample of any unresolved definitions.
 - Return the answer inline: probability results rank the strongest candidates per scenario with weight, probability and MTTH, list the facts still missing, and list the largest changes of a comparison.
 - An event ID in a probability `candidatePool` stands for all its options and a `random_list` ID for its entries; a pool alone finds its defining file; a wrong adapter guess, such as a mission named as a decision, switches to the matching adapter.
 - Order inline diagnostics with the mod's own files first, summarise an omitted flood by code, and keep the first diagnostics of an oversized result instead of dropping them all.
@@ -51,6 +53,7 @@
 
 ### Fixes
 
+- Update the MCP SDK packages (`@modelcontextprotocol/sdk` 1.32.1, `core`, `server` and `client` 2.3.1, `node` 2.1.1) and `sharp` 0.35.5 past their published high-severity advisories.
 - Keep each file's own diagnostics when an index is rebuilt incrementally after an edit; a rebuild could copy other files' errors and lose real ones.
 - Close a cancelled stdio request so the idle limit still applies, count a request open for twice the idle limit as abandoned, and finish open requests before exiting after the launching process exits.
 - Record an orphaned worker's own deadline as `JOB_DEADLINE_EXCEEDED` instead of leaving the job running.

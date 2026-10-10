@@ -53,6 +53,28 @@ const decisionOutputSchema = strictOperationResultSchema(
       overrides: nonNegativeIntegerSchema,
       scenarios: nonNegativeIntegerSchema,
       unresolvedDefinitions: nonNegativeIntegerSchema,
+      unresolvedSample: z
+        .array(z.object({ id: z.string(), path: z.string(), reason: z.string() }).strict())
+        .max(8)
+        .optional(),
+      outcomes: z
+        .array(
+          z
+            .object({
+              scenarioId: z.string(),
+              found: z.boolean(),
+              eligible: z.string().optional(),
+              visible: z.string().nullable().optional(),
+              available: z.string().optional(),
+              unresolved: z
+                .array(z.object({ code: z.string(), message: z.string() }).strict())
+                .max(5)
+                .optional(),
+            })
+            .strict(),
+        )
+        .max(16)
+        .optional(),
     })
     .strict(),
 );

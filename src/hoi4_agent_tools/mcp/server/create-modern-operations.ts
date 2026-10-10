@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { normalizeToolArguments } from '../../schemas/lenient-arguments.js';
+import { invalidArgumentsResult } from './argument-errors.js';
 import { slimListedTool } from './tool-listing.js';
 import {
   CallToolResultSchema,
@@ -127,19 +128,17 @@ export function createModernOperationServer(
     const input = definition.inputSchema.safeParse(
       normalizeToolArguments(definition.name, request.params.arguments ?? {}),
     );
-    if (!input.success)
-      // Name each failing field so the caller can correct its arguments.
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidParams,
-        `Invalid arguments for tool ${definition.name}: ${input.error.issues
-          .slice(0, 5)
-          .map(
-            ({ path, message }) =>
-              `${path.length === 0 ? '(input)' : path.map(String).join('.')}: ${message}`,
-          )
-          .join('; ')
-          .slice(0, 1000)}`,
-      );
+    if (!input.success) {
+      // A tool error, not a protocol error, so the model sees which field to correct.
+      const workspaceId = (request.params.arguments as { workspaceId?: unknown } | undefined)
+        ?.workspaceId;
+      return CallToolResultSchema.parse({
+        ...invalidArgumentsResult(definition.name, input.error, workspaceId),
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+      });
+    }
     const capabilities = clientCapabilities(extra.mcpReq.envelope);
     const arguments_ = z.record(z.string(), z.json()).parse(input.data);
     let operationContext = context;

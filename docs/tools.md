@@ -100,8 +100,10 @@ Authenticated HTTP sessions never see it.
 
 ## Arguments
 
-Tools accept the shorthands agents most often send and read them as the canonical form: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, and a probability scenario set as a bare list or without ids and `state`.
-Anything still invalid is refused with the failing fields named.
+Tools accept the shorthands agents most often send and read them as the canonical form: an event selector as a plain string, a namespace wildcard such as `chaosx.nr14.*`, or an object without `kind` or with `id` for its own field; a trace's event as `from`, `eventId` or `namespace`; a GUI scenario without `id`, or none for a window inspection; a decision inspection by `id` or `decisionId` without a scenario; a probability scenario set as a bare list or without ids and `state`; and a script file check that also names a kind and scope, which the file already fixes.
+Anything still invalid comes back as a tool error, code `INVALID_ARGUMENTS`, that names each failing field with what it expected and shows a working call.
+It is a tool error rather than a protocol error because clients show a tool error's text to the model, while some reduce a protocol error to a generic message.
+Every error and blocked result also carries its blockers in the text content, so a client that shows only text still explains the failure.
 
 ## Reading results
 

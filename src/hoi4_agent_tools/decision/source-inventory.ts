@@ -229,16 +229,17 @@ export function decisionSourceInventory(
       typeof symbol.metadata.category === 'string' ? symbol.metadata.category : undefined;
     const file = files.get(symbol.path);
     const document = sourceDocument(file, documents);
-    const categoryNode =
+    // A file may open the same category block more than once; the decision is in one of them.
+    const decisionNode =
       document === undefined || category === undefined
         ? undefined
-        : categoryBlock(document, category);
-    const decisionNode =
-      categoryNode === undefined
-        ? undefined
-        : assignments(categoryNode, symbol.id).find(
-            (assignment) => assignment.value.type === 'block',
-          )?.value;
+        : assignments(document.root, category)
+            .flatMap((categoryAssignment) =>
+              categoryAssignment.value.type === 'block'
+                ? assignments(categoryAssignment.value, symbol.id)
+                : [],
+            )
+            .find((assignment) => assignment.value.type === 'block')?.value;
     if (
       file === undefined ||
       document === undefined ||

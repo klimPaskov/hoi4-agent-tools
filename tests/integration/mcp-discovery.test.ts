@@ -281,13 +281,13 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidFocus).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidFocus.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidFocus.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidGui = await client.callTool({
       name: 'hoi4.gui_inspect',
       arguments: { workspaceId: 'test', windowName: 'window', scenario: { id: 7 } },
     });
     expect(invalidGui).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidGui.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidGui.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidMap = await client.callTool({
       name: 'hoi4.map_rewrite',
       arguments: {
@@ -296,13 +296,13 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidMap).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidMap.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidMap.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidEvent = await client.callTool({
       name: 'hoi4.event_inspect',
       arguments: { workspaceId: 'test', mode: 'trace' },
     });
     expect(invalidEvent).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidEvent.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidEvent.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidEventSelector = await client.callTool({
       name: 'hoi4.event_inspect',
       arguments: {
@@ -312,7 +312,7 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidEventSelector).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidProbability = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
@@ -323,7 +323,7 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidProbability).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidProbability.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidProbability.content)).toMatch(/Invalid arguments for hoi4\./u);
   });
 
   it('emits progress and honors cancellation for GUI inspection', async () => {
