@@ -21,6 +21,7 @@ import {
   type PreparedSource,
 } from '../core/scanner.js';
 import { decodeSource } from '../core/source/encoding.js';
+import { activeKnownMistakes } from './known-mistakes.js';
 import { readBoundedJsonLines } from './lines.js';
 import { RankingIndex, sectionTerms, type SectionTerms } from './ranking.js';
 
@@ -731,6 +732,11 @@ export class ReferenceService {
       missing,
       coverage: inventory.coverage,
       skipped: inventory.skipped,
+      knownMistakes: activeKnownMistakes(input.surface).map(({ id, title, fix }) => ({
+        id,
+        title,
+        fix,
+      })),
     };
   }
 

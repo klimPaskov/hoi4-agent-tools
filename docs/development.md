@@ -41,6 +41,21 @@ Add `HOI4_DEPENDENCY_ROOTS` as the platform path-delimited list when the externa
 
 The installed-game qualification also parses every shipped bitmap-font descriptor, resolves every atlas page, shapes native and enlarged glyphs, verifies deterministic raster output, and checks HOI4 localisation colours across base fonts and language overrides.
 
+## Adding a known mistake
+
+`src/hoi4_agent_tools/reference/known-mistakes.json` is the reviewed list behind `known_mistakes` in `hoi4.script_validate`, the `knownMistakes` of `hoi4.reference_context`, and the `knownMistake` of `hoi4.error_log`.
+It is not written at run time: a mistake enters it through a commit.
+
+1. Find the mistake in the offline wiki, the game documentation, or a reproduced `error.log` message, and note the page, heading and item.
+   A rule without a source is not accepted.
+2. Add the rule: a unique snake_case `id`, `severity` (`error` when the definition cannot work, `warning` otherwise), the `surfaces` it belongs to, a `title`, the `mistake`, its `symptom`, the `fix`, the `sources`, and, when the game logs a fixed message, a `logPattern` regular expression.
+3. Add the detector with the same id in `known-mistakes.ts`, working on the parsed file, and the families it applies to.
+   `tests/unit/known-mistakes.test.ts` fails when a rule has no detector or a detector has no rule; add a case that flags the mistake and one that accepts the corrected script.
+4. When the rule is written from a recurring `error.log` pattern, run `hoi4.error_log` first: its `patterns` show the shapes, and the new `logPattern` makes later logs name the fix.
+
+When the game fixes the behaviour, or the rule turns out to be wrong, set `status` to `resolved` and add `resolution` with the date and the reason, and leave the entry in the file.
+A resolved rule is not applied and its detector is skipped; deleting it would lose why it was removed.
+
 See the package [Security Policy](../SECURITY.md) for private vulnerability reporting.
 
 ## Dependencies

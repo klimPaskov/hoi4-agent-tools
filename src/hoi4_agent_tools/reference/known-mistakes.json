@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "reviewed": "2026-10-10",
+  "rules": [
+    {
+      "id": "event_triggered_only_with_mtth",
+      "status": "active",
+      "severity": "warning",
+      "surfaces": ["event"],
+      "title": "mean_time_to_happen on a triggered-only event",
+      "mistake": "The event sets is_triggered_only = yes and also mean_time_to_happen.",
+      "symptom": "The game logs \"Event is triggered only, but does not have a 1 base-factor\", and the timer never runs.",
+      "fix": "Remove mean_time_to_happen, or remove is_triggered_only if the event is meant to fire by itself.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unintuitive logged errors",
+          "item": "Event is triggered only, but does not have a 1 base-factor."
+        }
+      ],
+      "logPattern": "Event is triggered only, but does not have a 1 base-factor"
+    },
+    {
+      "id": "event_fires_every_day",
+      "status": "active",
+      "severity": "warning",
+      "surfaces": ["event"],
+      "title": "Automatic event with a one-day timer",
+      "mistake": "The event can fire by itself, can repeat, and has no mean_time_to_happen or one of 1 day or less.",
+      "symptom": "The game logs \"Event is set to trigger every day\"; once its trigger is true the event can fire daily.",
+      "fix": "Add is_triggered_only = yes and fire the event from an effect or on action, add fire_only_once = yes, or give it a longer mean_time_to_happen.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unintuitive logged errors",
+          "item": "Event is set to trigger every day."
+        }
+      ],
+      "logPattern": "Event is set to trigger every day"
+    },
+    {
+      "id": "news_event_not_major",
+      "status": "active",
+      "severity": "warning",
+      "surfaces": ["event"],
+      "title": "News event that reaches one country",
+      "mistake": "A news_event lacks major = yes, or combines major = yes with fire_only_once = yes.",
+      "symptom": "Only the first country receives the news event; fire_only_once cancels the effect of major.",
+      "fix": "Set major = yes and remove fire_only_once. Use show_major to limit which countries see it.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unlogged errors",
+          "item": "Setting a news event to fire only once or not setting one as major"
+        }
+      ]
+    },
+    {
+      "id": "event_date_window_too_tight",
+      "status": "active",
+      "severity": "warning",
+      "surfaces": ["event"],
+      "title": "Date window shorter than the 20-day trigger check",
+      "mistake": "An event that fires by itself bounds date on both sides less than 20 days apart in its trigger.",
+      "symptom": "The trigger is checked about every 20 days, so the window can fall between two checks and the event never fires.",
+      "fix": "Make the event is_triggered_only = yes and fire it with a delay from on_startup or another effect, or widen the window to at least 20 days.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unlogged errors",
+          "item": "Tight bounds on date triggers"
+        }
+      ]
+    },
+    {
+      "id": "event_namespace_missing",
+      "status": "active",
+      "severity": "error",
+      "surfaces": ["event"],
+      "title": "Event id without add_namespace",
+      "mistake": "An event id uses a namespace that no events file declares with add_namespace.",
+      "symptom": "The game logs \"Malformed token\" at the id line and the event does not work.",
+      "fix": "Add add_namespace = <namespace> outside any event, before the first event that uses it.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "ID rules",
+          "item": "A namespace must be first created before defining any events that use it."
+        },
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unintuitive logged errors",
+          "item": "Malformed token: event_id.123, near line"
+        }
+      ],
+      "logPattern": "Malformed token: [\\w.]+\\.\\d+"
+    },
+    {
+      "id": "event_numeric_id_invalid",
+      "status": "active",
+      "severity": "error",
+      "surfaces": ["event"],
+      "title": "Event number that is not a whole number below 100000",
+      "mistake": "The part of an event id after the last dot is not an integer, or is 100000 or more.",
+      "symptom": "Every non-integer id becomes number 0, and numbers from 100000 reach the next namespace, so events share one internal id and one fires the other (\"Failed to create id ... Already exists in game\").",
+      "fix": "End the id with a whole number from 0 to 99999, unique within its namespace.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "ID rules",
+          "item": "the ID of the event after the namespace must be an integer"
+        },
+        {
+          "kind": "wiki",
+          "page": "Event modding",
+          "heading": "Common mistakes > Unintuitive logged errors",
+          "item": "Failed to create id 12300000 50. Already exists in game."
+        }
+      ],
+      "logPattern": "Failed to create id \\d+ 50\\. Already exists in game"
+    },
+    {
+      "id": "temp_variable_scope_prefix",
+      "status": "active",
+      "severity": "warning",
+      "surfaces": ["event", "decision", "focus"],
+      "title": "Scope prefix on a temporary variable",
+      "mistake": "A temporary variable is read through a scope, such as ROOT.my_temp, in a file that only ever sets it as a temporary variable.",
+      "symptom": "Temporary variables have no scope, so the prefix does nothing useful and the read does not find the variable the author meant.",
+      "fix": "Read the temporary variable by its plain name, or store the value in a regular variable on the scope that needs it.",
+      "sources": [
+        {
+          "kind": "wiki",
+          "page": "Data structures",
+          "heading": "Variables > Variable types",
+          "item": "Temporary variables are unscoped"
+        },
+        {
+          "kind": "wiki",
+          "page": "Data structures",
+          "heading": "Variables > Scoping",
+          "item": "Scoping only exists for regular variables."
+        }
+      ]
+    }
+  ]
+}

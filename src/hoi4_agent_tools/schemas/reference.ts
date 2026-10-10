@@ -182,6 +182,21 @@ export const referenceContextDataSchema = z
     missing: z.array(z.string().max(256)).max(32),
     coverage: coverageBySource,
     skipped: count,
+    /**
+     * Reviewed mistakes for this surface that `hoi4.script_validate` flags in a checked file,
+     * each with its fix; the cited wiki heading is in the rule list the server ships.
+     */
+    knownMistakes: z
+      .array(
+        z
+          .object({
+            id: z.string().max(64),
+            title: z.string().max(120),
+            fix: z.string().max(300),
+          })
+          .strict(),
+      )
+      .max(16),
   })
   .strict();
 export const sourceLookupDataSchema = z

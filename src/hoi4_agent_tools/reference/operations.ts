@@ -283,7 +283,29 @@ export class ReferenceToolService {
       implicitTriggers: implicitTriggerNames(snapshot),
       ...(playerText === undefined ? {} : { playerText }),
       eventPopups: this.eventPopupContext(workspaceId, snapshot),
+      knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
     });
+  }
+
+  readonly #eventNamespaces = new Map<string, { key: string; namespaces: ReadonlySet<string> }>();
+
+  /** Namespaces declared with `add_namespace` in every active events file, cached by hash. */
+  private eventNamespaces(workspaceId: string, snapshot: ScanSnapshot): ReadonlySet<string> {
+    const sources = [...snapshot.index.files.values()].filter(
+      ({ relativePath, shadowedBy }) =>
+        shadowedBy === undefined && relativePath.startsWith('events/'),
+    );
+    const cacheKey = hashCanonical(sources.map(({ displayPath, sha256 }) => [displayPath, sha256]));
+    const cached = this.#eventNamespaces.get(workspaceId);
+    if (cached?.key === cacheKey) return cached.namespaces;
+    const namespaces = new Set<string>();
+    for (const file of sources)
+      for (const match of file.bytes
+        .toString('utf8')
+        .matchAll(/^\s*add_namespace\s*=\s*"?([\w.]+)"?/gmu))
+        namespaces.add(match[1]!);
+    this.#eventNamespaces.set(workspaceId, { key: cacheKey, namespaces });
+    return namespaces;
   }
 
   /** Every active event definition, cached by the hashes of the events files. */

@@ -100,6 +100,11 @@ export const errorLogDataSchema = z
             time: z.string().max(16).optional(),
             /** Absent from the previous launch's log. */
             new: z.boolean().optional(),
+            /** A reviewed known mistake this message reports, with its documented fix. */
+            knownMistake: z
+              .object({ id: z.string().max(64), fix: z.string().max(300) })
+              .strict()
+              .optional(),
             source: z
               .object({
                 relativePath: z.string().max(1024),

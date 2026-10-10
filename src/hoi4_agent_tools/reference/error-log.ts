@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { z } from 'zod/v4';
 import { ServiceError } from '../core/result.js';
+import { knownMistakeForLogMessage } from './known-mistakes.js';
 import type { ResolvedWorkspace } from '../core/workspace.js';
 import type { errorLogDataSchema, errorLogRequestSchema } from '../schemas/mod-tools.js';
 
@@ -178,6 +179,12 @@ function classify(module: string, message: string): Category {
     if (category !== 'missing_reference' && pattern.test(message)) return category;
   for (const [pattern, category] of moduleCategories) if (pattern.test(module)) return category;
   return categoryRules.at(-1)![1].test(message) ? 'missing_reference' : 'other';
+}
+
+/** The reviewed known mistake a logged message reports, when there is one. */
+function knownMistakeOf(message: string): { knownMistake?: { id: string; fix: string } } {
+  const rule = knownMistakeForLogMessage(message);
+  return rule === undefined ? {} : { knownMistake: { id: rule.id, fix: rule.fix } };
 }
 
 /** The user-data folder that holds `logs/`, in order of preference. */
@@ -421,6 +428,7 @@ export async function readErrorLog(
         }),
     entries: page.map(({ order: _order, ...entry }) => ({
       ...entry,
+      ...knownMistakeOf(entry.message),
       ...(previousKeys === undefined
         ? {}
         : { new: !previousKeys.has(entryKey(entry.module, entry.message)) }),

@@ -96,6 +96,27 @@ File mode reports `SCRIPT_EVENT_POPUP_REPEATED` warnings for any family and adds
 A visible event fired inside an `every_*` loop reaches one player once per loop member when it is sent to a fixed recipient (`ROOT`, `FROM`, `PREV`, `global`, a tag, an `event_target:` or a `var:` scope), or when it is `major = yes` without `fire_only_once`, because a major event is shown to every country.
 An event sent to each loop member in turn, a hidden event, and an event the scanned sources do not define are not reported.
 Scripted effects called inside a loop are checked in their own file, not followed from the caller.
+
+### Known mistakes
+
+File mode also applies a short, reviewed list of mistakes that the game accepts silently or reports with an unhelpful message, and adds `known_mistakes` to `checksPerformed`.
+Each finding is `KNOWN_MISTAKE_<RULE>` with the symptom and the fix in its message.
+A finding that makes a definition not work (`error`) sets `valid` to `false`; the others are warnings.
+
+| Rule                             | Status  | Flags                                                                                                       |
+| -------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `event_namespace_missing`        | error   | An event id whose namespace no events file declares with `add_namespace` (the game logs "Malformed token"). |
+| `event_numeric_id_invalid`       | error   | An event number that is not a whole number from 0 to 99999, so events share an internal id.                 |
+| `event_triggered_only_with_mtth` | warning | `mean_time_to_happen` on an `is_triggered_only = yes` event, which never runs the timer.                    |
+| `event_fires_every_day`          | warning | An automatic, repeatable event with no `mean_time_to_happen` or one of a day or less.                       |
+| `news_event_not_major`           | warning | A `news_event` without `major = yes`, or one that also sets `fire_only_once = yes`.                         |
+| `event_date_window_too_tight`    | warning | An automatic event whose `date` bounds are less than the 20-day trigger check apart.                        |
+| `temp_variable_scope_prefix`     | warning | A scope prefix such as `ROOT.amount` on a variable the file only sets as a temporary variable.              |
+
+The rules come from the offline wiki's Event modding "Common mistakes" and Data structures pages; each rule in `src/hoi4_agent_tools/reference/known-mistakes.json` names its source page, heading and item, and has a detector that reads the parsed file.
+`hoi4.reference_context` lists the rules of the requested surface as `knownMistakes` (id, title and fix) so an author can read them before editing, and `hoi4.error_log` adds `knownMistake` to a logged message that a rule explains.
+The list is shipped with the server and changes only through a reviewed commit; see [Development](development.md#adding-a-known-mistake) for how a rule is added, and how one that no longer applies is resolved.
+
 Search and context replies also report `limitedByBytes` when metadata exceeds their reply budget.
 Read omitted required sources with targeted calls rather than repeatedly requesting the same oversized bundle.
 Reference text supports UTF-8, Windows-1252, and explicitly BOM-marked UTF-16; native engine source encoding rules remain separate.
@@ -113,6 +134,7 @@ Mod entries are listed first.
 
 Each category in `categories` carries a `hint` that says what usually fixes it and which tool narrows it down.
 `patterns` groups messages that differ only in names, numbers, quoted values and paths, such as a run of missing localisation keys, so a flood of one mistake reads as one line with its count.
+An entry whose message is one of the game's wording for a [known mistake](#known-mistakes) carries `knownMistake` with the rule id and the documented fix.
 
 The server remembers the entries of each log it reads in its own cache, keyed by the log's write time.
 When the game has been relaunched since, `sinceLastLaunch` says how many entries are new, how many persist and how many the last fixes removed, with examples of the removed ones, and every entry carries `new`.
