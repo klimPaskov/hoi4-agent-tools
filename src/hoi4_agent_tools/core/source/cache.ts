@@ -6,10 +6,7 @@ export function sourceDocumentCacheKey(bytes: Uint8Array, sourcePath: string): s
   return `${sha256Bytes(bytes)}:${sourcePath}`;
 }
 
-function decodedDocument(
-  encoded: Uint8Array,
-  expected?: { bytes: Uint8Array; sourcePath: string },
-): SourceDocument {
+function decodedDocument(encoded: Uint8Array): SourceDocument {
   const value = deserialize(encoded) as unknown;
   if (
     value === null ||
@@ -28,13 +25,6 @@ function decodedDocument(
     !(value.bytes instanceof Uint8Array)
   )
     throw new Error('Persistent source document is structurally invalid');
-  if (
-    expected !== undefined &&
-    (value.path !== expected.sourcePath ||
-      value.sourceRevision !== sha256Bytes(expected.bytes) ||
-      !Buffer.from(value.bytes).equals(Buffer.from(expected.bytes)))
-  )
-    throw new Error('Persistent source document does not match its source identity');
   return value as SourceDocument;
 }
 
@@ -81,12 +71,21 @@ export class SourceDocumentCache {
       this.#misses += 1;
       return undefined;
     }
+    let document: SourceDocument;
+    try {
+      document = decodedDocument(entry.encoded);
+    } catch {
+      // An imported entry is decoded here, on first use; one that cannot be decoded is a miss.
+      this.#remove(key);
+      this.#misses += 1;
+      return undefined;
+    }
     this.#hits += 1;
     if (entry.hits === 0) this.#coldBytes -= entrySize(key, entry.encoded);
     entry.hits += 1;
     this.#entries.delete(key);
     this.#entries.set(key, entry);
-    return decodedDocument(entry.encoded);
+    return document;
   }
 
   /** Availability check without deserialization or cache-hit accounting. */
@@ -115,13 +114,14 @@ export class SourceDocumentCache {
     this.retain(key, serialize(document));
   }
 
-  /** Import one authenticated same-runtime entry without counting it as a process-local hit. */
-  importEncoded(
-    key: string,
-    encoded: Uint8Array,
-    expected: { bytes: Uint8Array; sourcePath: string },
-  ): void {
-    decodedDocument(encoded, expected);
+  /**
+   * Import one authenticated same-runtime entry without counting it as a process-local hit.
+   * The caller has verified the entry against the key's source bytes (the key is their hash and
+   * the path), so the document is decoded when it is first read instead of for every file at
+   * load, which cost as much as parsing the files again; `get` treats an undecodable entry as
+   * a miss.
+   */
+  importEncoded(key: string, encoded: Uint8Array): void {
     this.retain(key, Buffer.from(encoded));
   }
 

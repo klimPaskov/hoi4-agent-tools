@@ -20,12 +20,22 @@ export function canonicalize(value: unknown): JsonValue {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (typeof value === 'object') {
     const object = value as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.keys(object)
-        .sort(compareCodeUnits)
-        .filter((key) => object[key] !== undefined)
-        .map((key) => [key, canonicalize(object[key])]),
-    );
+    // Filling the copy directly avoids an entry array per member; a plain object lists integer
+    // keys first and the rest in insertion (here code unit) order, the same as before.
+    const copy: { [key: string]: JsonValue } = {};
+    for (const key of Object.keys(object).sort(compareCodeUnits)) {
+      const member = object[key];
+      if (member === undefined) continue;
+      if (key === '__proto__')
+        Object.defineProperty(copy, key, {
+          value: canonicalize(member),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      else copy[key] = canonicalize(member);
+    }
+    return copy;
   }
   throw new TypeError(`Canonical JSON cannot contain ${typeof value}`);
 }

@@ -15,7 +15,7 @@ const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const entryKindSchema = z.enum(['source-document', 'index-segment']);
 const unsignedEntrySchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     kind: entryKindSchema,
     scopeHash: digestSchema,
     address: digestSchema,
@@ -55,6 +55,16 @@ interface RetainedEntry {
 }
 
 const entryFilePattern = /^(?<address>[a-f0-9]{64})\.json$/u;
+
+/**
+ * What the authentication tag covers: every field but the payload bytes, which the tag binds
+ * through their SHA-256. A reader hashes the payload once and compares it, so the megabytes of
+ * a parsed document do not pass through canonical JSON and the HMAC as well.
+ */
+function entryIdentity(entry: UnsignedEntry): unknown {
+  const { payload: _payload, ...identity } = entry;
+  return { kind: 'analysis-cache-entry.v2', entry: identity };
+}
 
 function sourceAddress(key: string): string {
   return hashCanonical({
@@ -168,10 +178,7 @@ export class PersistentAnalysisCache {
         const payload = await this.read(scopeHash, 'source-document', documentAddress, signal);
         if (payload !== undefined) {
           try {
-            documents.importEncoded(key, payload, {
-              bytes: file.bytes,
-              sourcePath: file.displayPath,
-            });
+            documents.importEncoded(key, payload);
           } catch {
             this.#invalidEntries += 1;
             this.#invalidAddresses.add(`${scopeHash}\0source-document\0${documentAddress}`);
@@ -237,26 +244,31 @@ export class PersistentAnalysisCache {
         }
         const key = sourceDocumentCacheKey(file.bytes, file.displayPath);
         const documentAddress = sourceAddress(key);
-        const document = documents.exportEncoded(key);
+        // Stored entries are skipped before their payload is exported, which copies it.
         if (
-          document !== undefined &&
-          (!sourceEntries.has(documentAddress) ||
-            this.#invalidAddresses.has(`${scopeHash}\0source-document\0${documentAddress}`))
+          !sourceEntries.has(documentAddress) ||
+          this.#invalidAddresses.has(`${scopeHash}\0source-document\0${documentAddress}`)
         ) {
-          if (await retain('source-document', documentAddress, document)) {
+          const document = documents.exportEncoded(key);
+          if (
+            document !== undefined &&
+            (await retain('source-document', documentAddress, document))
+          ) {
             sourceEntries.add(documentAddress);
           }
         }
         for (const provinceDefinition of [false, true]) {
           const address = indexSegmentAddress(file, provinceDefinition);
-          const segment = segments.exportEncoded(address);
           if (
-            segment === undefined ||
-            (indexEntries.has(address) &&
-              !this.#invalidAddresses.has(`${scopeHash}\0index-segment\0${address}`))
+            indexEntries.has(address) &&
+            !this.#invalidAddresses.has(`${scopeHash}\0index-segment\0${address}`)
           )
             continue;
-          if (await retain('index-segment', address, Buffer.from(segment))) {
+          const segment = segments.exportEncoded(address);
+          if (
+            segment !== undefined &&
+            (await retain('index-segment', address, Buffer.from(segment)))
+          ) {
             indexEntries.add(address);
           }
         }
@@ -334,7 +346,7 @@ export class PersistentAnalysisCache {
         entry.scopeHash !== scopeHash ||
         entry.kind !== kind ||
         entry.address !== address ||
-        !this.state.verifyJournal({ kind: 'analysis-cache-entry.v1', entry }, authenticationTag)
+        !this.state.verifyJournal(entryIdentity(entry), authenticationTag)
       )
         throw new Error('Persistent analysis cache authentication or identity is invalid');
       const payload = Buffer.from(entry.payload, 'base64');
@@ -377,7 +389,7 @@ export class PersistentAnalysisCache {
     const target = await containedGeneratedPath(directory, `${digestSchema.parse(address)}.json`);
     const invalidAddress = `${scopeHash}\0${kind}\0${address}`;
     const unsigned: UnsignedEntry = {
-      version: 1,
+      version: 2,
       kind,
       scopeHash,
       address,
@@ -389,10 +401,7 @@ export class PersistentAnalysisCache {
     const bytes = Buffer.from(
       canonicalJson({
         ...unsigned,
-        authenticationTag: this.state.authenticateJournal({
-          kind: 'analysis-cache-entry.v1',
-          entry: unsigned,
-        }),
+        authenticationTag: this.state.authenticateJournal(entryIdentity(unsigned)),
       }),
     );
     if (bytes.length > Math.ceil((this.maxSingleBytes * 4) / 3) + 4096) {

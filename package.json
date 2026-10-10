@@ -90,6 +90,7 @@
     "test:local": "tsx scripts/run-local-tests.ts",
     "test:coverage": "vitest run --coverage",
     "benchmark": "node --expose-gc --import tsx scripts/benchmark.ts",
+    "benchmark:cold": "tsx scripts/benchmark-cold-paths.ts",
     "docs:examples": "tsx scripts/generate-readme-examples.ts",
     "docs:comparison-examples": "tsx scripts/generate-real-visual-comparisons.ts",
     "fixtures:generate": "npm run fixtures:generate:focus && npm run fixtures:generate:gui && npm run fixtures:generate:map && npm run fixtures:generate:event && npm run fixtures:generate:technology && npm run fixtures:generate:probability",
