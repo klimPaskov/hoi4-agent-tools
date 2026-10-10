@@ -139,6 +139,27 @@ Renumbering also inspects active event, focus, decision, scripted helper, on-act
 
 Set `collision` to `reject` to require an unused destination. Set `renameLocalisation` to `false` only when custom localisation-key handling is intentional.
 
+## Move provinces between states
+
+`move_state_provinces` hands provinces from one state to another.
+Without a `distribution` (or with `"distribution": "proportional"`) the values follow the land: the target receives the moved provinces' share of the source's land pixels of its manpower (the state's population), resources and slot buildings (factories, dockyards, refineries and the like), in whole units.
+Level buildings (infrastructure, air bases, anti-air, radar) stay at their level in the source, and the target takes the higher level of the two.
+Victory points and province buildings follow their province, and the moved provinces take the target's owner, controller, cores and claims because they are now part of the target.
+The provinces must share the target's strategic region, or the operation stops; set `strategicRegion: "move-to-target-region"` in a full `distribution` to move them to the target's region.
+Pass a full `distribution` with `stateValues: "retain-in-current-states"` to leave manpower, resources and buildings where they are, or `"proportional-by-land-pixels"` to write the automatic choice out.
+
+```json
+{
+  "id": "give-province-to-neighbour",
+  "kind": "move_state_provinces",
+  "sourceStateId": 64,
+  "targetStateId": 65,
+  "provinceIds": [3314]
+}
+```
+
+Nothing is lost or duplicated: for any split, merge or move, the sums of manpower, each resource and each slot building over all states are the same before and after.
+
 ## Other map changes
 
 `hoi4.map_rewrite` also moves and merges states, moves provinces between strategic regions, merges or removes provinces, changes province definitions and types, adds or removes normal and special adjacency, and updates supply, railway, building, unit, weather, and entity-locator records. Send one ordered operation list when several connected changes belong together.
@@ -150,7 +171,7 @@ Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnos
 Set `references: true` on `hoi4.map_inspect` to also read events, focuses, decisions, scripted effects and triggers, on-actions, ideas, characters, AI strategies and areas, and country and unit history.
 It reports:
 
-- `MAP_SCRIPT_REFERENCE_MISSING`: a state, province or strategic region named by number that the map does not define, as `owns_state = 64`, as a state scope `64 = { ... }`, as a country `capital`, a unit `location`, or an AI area's `strategic_regions`; an error in the mod's own files and a warning in game or dependency files;
+- `MAP_SCRIPT_REFERENCE_MISSING`: a state, province or strategic region named by number that the map does not define, as `owns_state = 64`, `has_full_control_of_state = 64`, `transfer_state = 64`, `set_state_controller = 64`, `capital = 64`, a state scope `64 = { ... }`, a `prioritize = { 64 65 }` list, a `state`, `to_state` or `start_state` argument, a province argument such as `set_province_controller` or `province = { id = 3314 }`, a strategic region in `region = 12` or `ships_in_area`, a unit `location`, or an AI area's `strategic_regions`; an error in the mod's own files and a warning in game or dependency files;
 - `MAP_STATE_TAG_UNKNOWN`: a state owner, controller, core or claim whose tag no `common/country_tags` file declares;
 - `MAP_COUNTRY_CAPITAL_NOT_OWNED`: a country that owns states but has its capital in another country's state.
 
@@ -173,7 +194,10 @@ The data's `scriptReferences` counts the references checked and the missing ones
 }
 ```
 
-One target replaces the number. Several targets keep the first and copy the whole referencing assignment for each further target, so `64 = { add_core_of = ROOT }` becomes one block per successor and `owns_state = 64` becomes one condition per successor. `null` removes the referencing assignment. Game and dependency files are never edited: with `readOnlySources: override` the files that need the change are copied into the mod with it, and otherwise the operation refuses and lists them. `pathPrefixes` limits the rewrite to some folders. Run it in the same request as the split so the review shows both.
+One target replaces the number. Several targets keep the first and copy the whole referencing assignment for each further target, so `64 = { add_core_of = ROOT }` becomes one block per successor and `owns_state = 64` becomes one condition per successor. In a list such as `prioritize = { 64 65 }` the extra targets join the list.
+Keys that take exactly one value (`capital`, `state`, `to_state`, `start_state`, `province`, `region` and the like) are never copied or deleted: they change to the first target, and when their state has no successor they stay as they are and are reported as `MAP_REFERENCE_NEEDS_REVIEW` with the file and line, so that you choose the new target. They also remain visible to `references: true`. `null` removes the referencing assignment. Game and dependency files are never edited: with `readOnlySources: override` the files that need the change are copied into the mod with it, and otherwise the operation refuses and lists them. `pathPrefixes` limits the rewrite to some folders. Run it in the same request as the split so the review shows both.
+
+`merge_states`, `create_state` and `split_state` can do this themselves: add `"remapReferences": "refuse"` (or `"override"`, which copies the game files that need it into the mod) and the merged-away states are renamed to the survivor, or the source state's references are extended to the new part, in the same plan.
 
 ## Positions and supply
 
@@ -208,6 +232,57 @@ Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world, and the result is validated like any other rewrite; afterwards refine it with the other operations.
+
+## Worked example: build a world, then reshape it
+
+1. Create the world. The result is validated like any other rewrite, and the same seed always gives the same world.
+
+   ```json
+   {
+     "operations": [
+       {
+         "id": "world",
+         "kind": "create_world",
+         "width": 1024,
+         "height": 512,
+         "seed": 11,
+         "countries": [
+           { "tag": "AUR", "name": "Aurelia" },
+           { "tag": "BOR", "name": "Borea", "share": 2 }
+         ]
+       }
+     ]
+   }
+   ```
+
+2. Inspect it. `hoi4.map_inspect` with `references: true` lists scripts that still name base-game states. Fix those with `remap_map_references` (to a new state) or by replacing the script.
+
+3. Reorganise in one request. The merge folds state 12 into state 11 and rewrites every script that named 12; the move gives one province to a neighbour with its share of population, resources and factories.
+
+   ```json
+   {
+     "operations": [
+       {
+         "id": "merge",
+         "kind": "merge_states",
+         "targetStateId": 11,
+         "sourceStateIds": [12],
+         "remapReferences": "override"
+       },
+       {
+         "id": "move",
+         "kind": "move_state_provinces",
+         "sourceStateId": 11,
+         "targetStateId": 13,
+         "provinceIds": [402]
+       }
+     ]
+   }
+   ```
+
+4. Repair what a change leaves behind. `rebuild_supply` joins new or changed states to their country's supply network, `regenerate_map_positions` adds missing building, unit and weather positions, and `hoi4.map_inspect` with `references: true` must report no `MAP_SCRIPT_REFERENCE_MISSING` and no `MAP_REFERENCE_NEEDS_REVIEW` follow-ups before the mod is released.
+
+`tests/unit/map-reorganise.test.ts` runs this sequence on a generated world and checks that totals of manpower, resources and factories are unchanged.
 
 ## Dated state history
 

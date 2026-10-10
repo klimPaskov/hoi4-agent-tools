@@ -871,7 +871,10 @@ export class AgentNudger {
       principal,
       signal,
       operations.some(
-        ({ kind }) => kind === 'renumber_map_entity' || kind === 'remap_map_references',
+        (operation) =>
+          operation.kind === 'renumber_map_entity' ||
+          operation.kind === 'remap_map_references' ||
+          'remapReferences' in operation,
       ),
     );
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal);

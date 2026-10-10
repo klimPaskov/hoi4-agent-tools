@@ -73,12 +73,18 @@ const FIELD_KEYS: Record<MapReferenceEntity, ReadonlySet<string>> = {
     'target_state',
     'owns_state',
     'controls_state',
+    'has_full_control_of_state',
     'transfer_state',
     'transfer_state_to',
+    'set_state_controller',
     'add_state_core',
     'add_state_claim',
     'remove_state_core',
     'remove_state_claim',
+    'to_state',
+    'border_state',
+    'capital',
+    'has_naval_invasion_against_state',
   ]),
   province: new Set([
     'province',
@@ -86,9 +92,19 @@ const FIELD_KEYS: Record<MapReferenceEntity, ReadonlySet<string>> = {
     'start_province',
     'target_province',
     'controls_province',
+    'set_province_controller',
+    'reset_province_name',
+    'goto_province',
+    'prioritize_location',
+    'to_province',
   ]),
-  'strategic-region': new Set(['strategic_region', 'strategic_region_id']),
+  'strategic-region': new Set(['strategic_region', 'strategic_region_id', 'region', 'area']),
 };
+
+/** Blocks whose `id = <province>` children name provinces: `province = { id = 500 }`. */
+const PROVINCE_ID_BLOCKS = new Set(['province', 'provinces', 'set_province_name']);
+/** Blocks that list states by number: `random_state = { prioritize = { 64 65 } }`. */
+const STATE_LIST_BLOCKS = new Set(['prioritize']);
 
 /** Keys whose meaning depends on the folder they appear in. */
 function folderFieldEntity(relativePath: string, key: string): MapReferenceEntity | undefined {
@@ -113,6 +129,40 @@ function fieldEntity(relativePath: string, key: string): MapReferenceEntity | un
 const WEIGHTED_BLOCKS = new Set(['random_list', 'random_events', 'random']);
 
 const NUMBER = /^\d+$/u;
+
+/**
+ * Keys that take exactly one value, such as `capital = 64` or the `state` argument of an effect.
+ * Copying them for a second state would give the same block two values, and deleting them would
+ * leave an incomplete command, so a remap changes them only to a single new target and leaves
+ * them for review when their state has no successor.
+ */
+const SINGLE_VALUED_KEYS = new Set([
+  'state',
+  'state_id',
+  'capital',
+  'to_state',
+  'border_state',
+  'start_state',
+  'target_state',
+  'province',
+  'province_id',
+  'start_province',
+  'target_province',
+  'to_province',
+  'goto_province',
+  'prioritize_location',
+  'strategic_region',
+  'strategic_region_id',
+  'region',
+  'area',
+  'set_province_name.id',
+]);
+
+export function singleValuedReference(
+  reference: Pick<MapScriptReference, 'key' | 'form'>,
+): boolean {
+  return reference.form === 'field' && SINGLE_VALUED_KEYS.has(reference.key);
+}
 
 export interface CollectedMapReferences {
   references: MapScriptReference[];
@@ -157,11 +207,13 @@ export function collectMapScriptReferences(files: readonly ScannedFile[]): Colle
             node: entry.key,
             assignment: entry,
           });
-        if (aiAreas && key === 'strategic_regions')
+        const listEntity = aiAreas && key === 'strategic_regions' ? 'strategic-region' : undefined;
+        const listedEntity = listEntity ?? (STATE_LIST_BLOCKS.has(key) ? 'state' : undefined);
+        if (listedEntity !== undefined)
           for (const item of entry.value.entries)
             if (item.type === 'scalar' && NUMBER.test(item.value))
               references.push({
-                entity: 'strategic-region',
+                entity: listedEntity,
                 id: Number(item.value),
                 key,
                 form: 'list',
@@ -169,6 +221,25 @@ export function collectMapScriptReferences(files: readonly ScannedFile[]): Colle
                 document,
                 node: item,
                 assignment: entry,
+              });
+        if (PROVINCE_ID_BLOCKS.has(key))
+          for (const child of entry.value.entries)
+            if (
+              child.type === 'assignment' &&
+              child.key.value === 'id' &&
+              child.value.type === 'scalar' &&
+              NUMBER.test(child.value.value)
+            )
+              references.push({
+                entity: 'province',
+                id: Number(child.value.value),
+                key: `${key}.id`,
+                form: 'field',
+                file,
+                document,
+                node: child.value,
+                // Several ids may sit in one block, so a copy or a removal acts on the id line.
+                assignment: key === 'set_province_name' ? entry : child,
               });
         const childWeighted = WEIGHTED_BLOCKS.has(key);
         for (const child of entry.value.entries) visit(child, childWeighted);
@@ -255,6 +326,8 @@ export interface ReferenceRemapPlan {
   rewritten: number;
   duplicated: number;
   removed: number;
+  /** Single-valued references left for review: they have no single successor. */
+  unchanged: Array<{ relativePath: string; line: number; key: string; id: number }>;
 }
 
 export interface ReplacementLike {
@@ -351,16 +424,42 @@ export function planReferenceRemap(
     list.push(reference);
     byFile.set(reference.file, list);
   }
-  const plan: ReferenceRemapPlan = { files: [], rewritten: 0, duplicated: 0, removed: 0 };
+  const unchanged: ReferenceRemapPlan['unchanged'] = [];
+  const plan: ReferenceRemapPlan = {
+    files: [],
+    rewritten: 0,
+    duplicated: 0,
+    removed: 0,
+    unchanged,
+  };
   for (const [file, fileReferences] of [...byFile].sort(([left], [right]) =>
     compareCodeUnits(left.relativePath, right.relativePath),
   )) {
     const document = fileReferences[0]!.document;
     const text = document.text;
-    const removedRanges = fileReferences
-      .filter(({ id }) => mapping.get(id) === null)
-      .map(({ assignment }) => assignment);
-    const duplicating = fileReferences.filter(({ id }) => (mapping.get(id)?.length ?? 0) > 1);
+    // A list item is removed or extended on its own; any other reference acts on its assignment.
+    const removedRanges: Array<{ start: number; end: number }> = fileReferences
+      .filter(
+        (reference) => mapping.get(reference.id) === null && !singleValuedReference(reference),
+      )
+      .map((reference) => (reference.form === 'list' ? reference.node : reference.assignment));
+    const duplicating = fileReferences.filter(
+      (reference) =>
+        reference.form !== 'list' &&
+        !singleValuedReference(reference) &&
+        (mapping.get(reference.id)?.length ?? 0) > 1,
+    );
+    for (const reference of fileReferences)
+      if (
+        singleValuedReference(reference) &&
+        (mapping.get(reference.id) === null || (mapping.get(reference.id)?.length ?? 0) > 1)
+      )
+        unchanged.push({
+          relativePath: file.relativePath,
+          line: nodeLocation(reference.document, reference.node).start.line,
+          key: reference.key,
+          id: reference.id,
+        });
     for (const outer of duplicating)
       for (const inner of duplicating)
         if (inner.assignment !== outer.assignment && within(inner.assignment, outer.assignment))
@@ -382,6 +481,18 @@ export function planReferenceRemap(
       description: `Remap ${reference.entity} ${reference.id}`,
     }));
     plan.rewritten += points.length;
+    for (const reference of points.filter(
+      ({ id, form }) => form === 'list' && (mapping.get(id)?.length ?? 0) > 1,
+    )) {
+      const extra = mapping.get(reference.id)!.slice(1);
+      replacements.push({
+        start: reference.node.end,
+        end: reference.node.end,
+        text: extra.map((target) => ` ${target}`).join(''),
+        description: `Add ${reference.entity} ${extra.join(', ')} beside ${reference.id}`,
+      });
+      plan.duplicated += extra.length;
+    }
     // Removal of whole assignments; a nested removal is covered by the outermost one.
     for (const range of removedRanges) {
       if (removedRanges.some((other) => other !== range && within(range, other))) continue;
@@ -513,6 +624,7 @@ export function mapScriptConsistency(index: MapConsistencyIndex): {
   const owners = new Set(index.states.flatMap(({ owner }) => (owner === undefined ? [] : [owner])));
   for (const reference of references) {
     if (reference.form !== 'field' || reference.key !== 'capital') continue;
+    if (!/^history[/\\]countries[/\\]/iu.test(reference.file.relativePath)) continue;
     const tag = /^([A-Z0-9]{3})\b/u.exec(
       reference.file.relativePath.replaceAll('\\', '/').split('/').at(-1) ?? '',
     )?.[1];

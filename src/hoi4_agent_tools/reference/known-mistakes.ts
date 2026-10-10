@@ -221,7 +221,7 @@ const detectors: Readonly<Record<string, Detector>> = {
     eventsOf(document).flatMap(({ body }) => {
       if (scalarField(body, 'is_triggered_only') === 'yes') return [];
       const trigger = field(body, 'trigger');
-      if (trigger === undefined || trigger.value.type !== 'block') return [];
+      if (trigger?.value.type !== 'block') return [];
       const { lower, upper } = dateBounds(trigger.value);
       return lower !== undefined && upper !== undefined && upper - lower < TRIGGER_CHECK_DAYS
         ? [{ node: trigger }]

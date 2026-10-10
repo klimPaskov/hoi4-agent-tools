@@ -22,7 +22,7 @@ const operationBase = {
 
 const moveStateDistributionSchema = z
   .object({
-    stateValues: z.literal('retain-in-current-states'),
+    stateValues: z.enum(['retain-in-current-states', 'proportional-by-land-pixels']),
     ownership: z.literal('retain-in-current-states'),
     provinceBuildings: z.literal('follow-province'),
     victoryPoints: z.literal('follow-province'),
@@ -289,6 +289,7 @@ const splitStateOperation = (kind: 'split_state') =>
       fileName: z.string().max(255).optional(),
       localisation: stateLocalisationSchema.optional(),
       distribution: splitStateDistributionSchema,
+      remapReferences: z.enum(['refuse', 'override']).optional(),
     })
     .strict();
 const createStateOperation = z
@@ -303,6 +304,7 @@ const createStateOperation = z
     fileName: z.string().max(255).optional(),
     localisation: stateLocalisationSchema.optional(),
     distribution: z.union([z.literal('proportional'), splitStateDistributionSchema]).optional(),
+    remapReferences: z.enum(['refuse', 'override']).optional(),
   })
   .strict()
   .refine((value) => value.name !== undefined || value.displayName !== undefined, {
@@ -344,7 +346,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       sourceStateId: stateId,
       targetStateId: stateId,
       provinceIds: z.array(provinceId).min(1).max(100_000),
-      distribution: moveStateDistributionSchema,
+      distribution: z.union([z.literal('proportional'), moveStateDistributionSchema]).optional(),
     })
     .strict(),
   z
@@ -448,6 +450,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         positions: 'follow-province',
         strategicRegion: 'require-same',
       }),
+      remapReferences: z.enum(['refuse', 'override']).optional(),
     })
     .strict(),
   splitProvinceOperation('split_province'),

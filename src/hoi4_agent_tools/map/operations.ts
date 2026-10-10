@@ -86,7 +86,11 @@ export interface MapOperationBase {
 }
 
 export interface MoveStateDistributionPolicy {
-  stateValues: 'retain-in-current-states';
+  /**
+   * `proportional-by-land-pixels` carries a share of the source state's manpower, resources and
+   * slot buildings, equal to the moved provinces' share of its land, into the target.
+   */
+  stateValues: 'retain-in-current-states' | 'proportional-by-land-pixels';
   ownership: 'retain-in-current-states';
   provinceBuildings: 'follow-province';
   victoryPoints: 'follow-province';
@@ -159,7 +163,8 @@ export interface MoveStateProvincesOperation extends MapOperationBase {
   sourceStateId: number;
   targetStateId: number;
   provinceIds: number[];
-  distribution: MoveStateDistributionPolicy;
+  /** `proportional` (or omitted) redistributes values by land share and requires the same region. */
+  distribution?: MoveStateDistributionPolicy | 'proportional';
 }
 
 export interface UpdateStateOperation extends MapOperationBase {
@@ -190,6 +195,11 @@ export interface SplitStateOperation extends MapOperationBase {
   fileName?: string;
   localisation?: StateLocalisationPolicy;
   distribution?: SplitStateDistributionPolicy | 'proportional';
+  /**
+   * Also rewrite script references to the state, so that conditions and effects that named it
+   * name the new part as well. `override` copies the game files that need it into the mod.
+   */
+  remapReferences?: 'refuse' | 'override';
 }
 
 export interface MergeStatesOperation extends MapOperationBase {
@@ -197,6 +207,11 @@ export interface MergeStatesOperation extends MapOperationBase {
   sourceStateIds: number[];
   targetStateId: number;
   distribution?: MergeStateDistributionPolicy;
+  /**
+   * Also rewrite script references to the merged-away states so that they name the target.
+   * `override` copies the game files that need it into the mod.
+   */
+  remapReferences?: 'refuse' | 'override';
 }
 
 export type ProvinceGeometrySelection =
@@ -1527,6 +1542,9 @@ function proposedChanges(changes: ReadonlyMap<string, MutableChange>): ProposedF
 }
 
 /** Source folders a new world replaces, per plan, so lower layers stop counting. */
+/** Diagnostics an operation raises while applying, drained into the plan after it succeeds. */
+const diagnosticsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, Diagnostic[]>();
+
 const replacedRootsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, readonly string[]>();
 
 function currentIndex(
@@ -1546,13 +1564,28 @@ function samePolicy(actual: unknown, expected: Record<string, unknown>): boolean
   return Object.entries(expected).every(([key, value]) => object[key] === value);
 }
 
-function requireMovePolicy(operation: MoveStateProvincesOperation): void {
-  const distribution = (
-    operation as unknown as { distribution?: Partial<MoveStateDistributionPolicy> }
-  ).distribution;
+const AUTOMATIC_MOVE_POLICY: MoveStateDistributionPolicy = {
+  stateValues: 'proportional-by-land-pixels',
+  ownership: 'retain-in-current-states',
+  provinceBuildings: 'follow-province',
+  victoryPoints: 'follow-province',
+  ports: 'follow-province',
+  supplyNodes: 'follow-province',
+  railways: 'follow-province',
+  positions: 'follow-province',
+  strategicRegion: 'require-same',
+};
+
+function requireMovePolicy(operation: MoveStateProvincesOperation): MoveStateDistributionPolicy {
+  const requested = operation.distribution;
+  if (requested === undefined || requested === 'proportional') return AUTOMATIC_MOVE_POLICY;
+  const distribution = requested as Partial<MoveStateDistributionPolicy>;
   if (
+    !(
+      samePolicy(distribution, { stateValues: 'retain-in-current-states' }) ||
+      samePolicy(distribution, { stateValues: 'proportional-by-land-pixels' })
+    ) ||
     !samePolicy(distribution, {
-      stateValues: 'retain-in-current-states',
       ownership: 'retain-in-current-states',
       provinceBuildings: 'follow-province',
       victoryPoints: 'follow-province',
@@ -1561,14 +1594,15 @@ function requireMovePolicy(operation: MoveStateProvincesOperation): void {
       railways: 'follow-province',
       positions: 'follow-province',
     }) ||
-    (distribution?.strategicRegion !== 'require-same' &&
-      distribution?.strategicRegion !== 'move-to-target-region')
+    (distribution.strategicRegion !== 'require-same' &&
+      distribution.strategicRegion !== 'move-to-target-region')
   ) {
     throw new ServiceError(
       'MAP_STATE_DISTRIBUTION_REQUIRED',
-      'Moving state provinces requires explicit state-value, ownership, building, victory-point, port, network, position, and strategic-region policies',
+      'A move needs either no distribution (values follow land share) or a complete one with state-value, ownership, building, victory-point, port, network, position, and strategic-region policies',
     );
   }
+  return distribution as MoveStateDistributionPolicy;
 }
 
 function requireSplitPolicy(operation: SplitStateOperation): SplitStateDistributionPolicy {
@@ -2359,7 +2393,7 @@ function applyMoveStateProvinces(
   changes: Map<string, MutableChange>,
   operation: MoveStateProvincesOperation,
 ): void {
-  requireMovePolicy(operation);
+  const policy = requireMovePolicy(operation);
   const index = currentIndex(base, changes);
   const source = index.statesById.get(operation.sourceStateId);
   const target = index.statesById.get(operation.targetStateId);
@@ -2385,6 +2419,43 @@ function applyMoveStateProvinces(
   const sourceData = cloneState(source);
   const targetData = cloneState(target);
   const movingSet = new Set(moving);
+  const redistribute = policy.stateValues === 'proportional-by-land-pixels';
+  if (redistribute) {
+    const sourcePixels = provincePixelTotal(index, source.provinces);
+    const movedPixels = provincePixelTotal(index, moving);
+    if (sourcePixels <= 0 || movedPixels <= 0)
+      throw new ServiceError(
+        'MAP_STATE_DISTRIBUTION_GEOMETRY_MISSING',
+        'Proportional state distribution requires province geometry',
+      );
+    const ratio = movedPixels / sourcePixels;
+    const proportional = { method: 'proportional-by-land-pixels' } as const;
+    // The share that leaves the source joins the target: people and resources and slot
+    // buildings are carried over, and a level (infrastructure, air base) is the higher of both.
+    const [keptManpower, movedManpower] = splitScalar(source.manpower, ratio, proportional);
+    sourceData.manpower = keptManpower;
+    targetData.manpower = target.manpower + movedManpower;
+    const [keptResources, movedResources] = splitMap(source.resources, ratio, proportional);
+    sourceData.resources = keptResources;
+    targetData.resources = new Map(target.resources);
+    addMaps(targetData.resources, movedResources);
+    const isLevel = (building: string) => isLevelStateBuilding(index, building);
+    const [keptBuildings, movedBuildings] = splitMap(
+      source.stateBuildings,
+      ratio,
+      proportional,
+      isLevel,
+    );
+    sourceData.stateBuildings = keptBuildings;
+    targetData.stateBuildings = new Map(target.stateBuildings);
+    for (const [building, value] of movedBuildings)
+      targetData.stateBuildings.set(
+        building,
+        isLevel(building)
+          ? Math.max(value, targetData.stateBuildings.get(building) ?? 0)
+          : (targetData.stateBuildings.get(building) ?? 0) + value,
+      );
+  }
   sourceData.provinces = sourceData.provinces.filter((id) => !movingSet.has(id));
   targetData.provinces = uniqueSorted([...targetData.provinces, ...moving]);
   const movedVps = sourceData.victoryPoints.filter(({ provinceId }) => movingSet.has(provinceId));
@@ -2412,7 +2483,7 @@ function applyMoveStateProvinces(
     'Target state has no strategic region',
   );
   if (
-    operation.distribution.strategicRegion === 'require-same' &&
+    policy.strategicRegion === 'require-same' &&
     [...movingRegionIds].some((id) => id !== targetRegionId)
   ) {
     throw new ServiceError(
@@ -2424,17 +2495,29 @@ function applyMoveStateProvinces(
     changes,
     source,
     sourceData,
-    { provinces: true, victoryPoints: true, buildings: true },
+    {
+      provinces: true,
+      victoryPoints: true,
+      buildings: true,
+      manpower: redistribute,
+      resources: redistribute,
+    },
     operation.id,
   );
   commitState(
     changes,
     target,
     targetData,
-    { provinces: true, victoryPoints: true, buildings: true },
+    {
+      provinces: true,
+      victoryPoints: true,
+      buildings: true,
+      manpower: redistribute,
+      resources: redistribute,
+    },
     operation.id,
   );
-  if (operation.distribution.strategicRegion === 'move-to-target-region') {
+  if (policy.strategicRegion === 'move-to-target-region') {
     for (const regionId of movingRegionIds) {
       if (regionId === targetRegionId) continue;
       const region = required(
@@ -2620,6 +2703,12 @@ function* applySplitState(
     'text/plain',
   );
   remapBuildingPositionStates(index, changes, selectedSet, allocation.id, operation.id);
+  if (operation.remapReferences !== undefined)
+    remapScriptReferences(base, changes, operation.id, {
+      entity: 'state',
+      mapping: [{ from: source.id, to: [source.id, allocation.id] }],
+      readOnlySources: operation.remapReferences,
+    });
 }
 
 function requireMergeStatePolicy(operation: MergeStatesOperation): void {
@@ -2785,6 +2874,12 @@ function applyMergeStates(
     target.id,
     operation.id,
   );
+  if (operation.remapReferences !== undefined)
+    remapScriptReferences(base, changes, operation.id, {
+      entity: 'state',
+      mapping: sources.map((source) => ({ from: source.id, to: target.id })),
+      readOnlySources: operation.remapReferences,
+    });
 }
 
 function pointInEvenOddPolygon(x: number, y: number, points: readonly PixelPoint[]): boolean {
@@ -5425,37 +5520,67 @@ function applyRebuildSupply(
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
 }
 
-function applyRemapMapReferences(
+/**
+ * Rewrite the script references of one entity kind in the proposed changes. Returns the number
+ * of script files changed; an empty result is an error only when the caller asks for it.
+ */
+function remapScriptReferences(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
-  operation: RemapMapReferencesOperation,
-): void {
+  operationId: string,
+  request: {
+    entity: RemapMapReferencesOperation['entity'];
+    mapping: RemapMapReferencesOperation['mapping'];
+    readOnlySources: 'refuse' | 'override';
+    pathPrefixes?: readonly string[];
+  },
+): number {
   const index = currentIndex(base, changes);
   let plan: ReturnType<typeof planReferenceRemap>;
   try {
-    plan = planReferenceRemap(
-      index.sourceFiles,
-      {
-        entity: operation.entity,
-        mapping: operation.mapping,
-        readOnlySources: operation.readOnlySources ?? 'refuse',
-        ...(operation.pathPrefixes === undefined ? {} : { pathPrefixes: operation.pathPrefixes }),
-      },
-      (document, replacements) => applyReplacements(document, replacements),
+    plan = planReferenceRemap(index.sourceFiles, request, (document, replacements) =>
+      applyReplacements(document, replacements),
     );
   } catch (error) {
     if (error instanceof ReferenceRemapError)
       throw new ServiceError(error.code, error.message, error.details);
     throw error;
   }
-  if (plan.files.length === 0)
+  for (const file of plan.files)
+    addChange(changes, file.relativePath, file.content, operationId, 'text/plain');
+  if (plan.unchanged.length > 0) {
+    const raised = diagnosticsByPlan.get(changes) ?? [];
+    for (const item of plan.unchanged.slice(0, 20))
+      raised.push({
+        code: 'MAP_REFERENCE_NEEDS_REVIEW',
+        severity: 'info',
+        category: 'map',
+        message: `${item.relativePath}:${item.line} names ${request.entity} ${item.id} through ${item.key}, which takes one value; it was left as it is. Point it at the successor you want.`,
+        operationId,
+        details: { ...item, entity: request.entity },
+      });
+    diagnosticsByPlan.set(changes, raised);
+  }
+  return plan.files.length;
+}
+
+function applyRemapMapReferences(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RemapMapReferencesOperation,
+): void {
+  const changed = remapScriptReferences(base, changes, operation.id, {
+    entity: operation.entity,
+    mapping: operation.mapping,
+    readOnlySources: operation.readOnlySources ?? 'refuse',
+    ...(operation.pathPrefixes === undefined ? {} : { pathPrefixes: operation.pathPrefixes }),
+  });
+  if (changed === 0)
     throw new ServiceError(
       'MAP_REFERENCE_REMAP_EMPTY',
       `No script references the mapped ${operation.entity} IDs`,
       { entity: operation.entity, from: operation.mapping.map(({ from }) => from) },
     );
-  for (const file of plan.files)
-    addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
 }
 
 function applyEntityLocator(
@@ -5588,7 +5713,10 @@ function* planMapOperationSteps(
         applyRegenerateMapPositions(base, changes, operation);
       else if (operation.kind === 'rebuild_supply') applyRebuildSupply(base, changes, operation);
       else handleSimpleOperation(base, changes, operation as SimpleMapOperation);
+      diagnostics.push(...(diagnosticsByPlan.get(changes) ?? []));
+      diagnosticsByPlan.delete(changes);
     } catch (error) {
+      diagnosticsByPlan.delete(changes);
       if (signal?.aborted) throw error;
       changes.clear();
       for (const [key, change] of changesCheckpoint) changes.set(key, change);

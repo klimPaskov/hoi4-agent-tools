@@ -1177,6 +1177,8 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
         sourceStateId: 1,
         targetStateId: 2,
         provinceIds: [4],
+        // Omitting the policy redistributes by land share; a partial one is refused.
+        distribution: { stateValues: 'retain-in-current-states' },
       },
       {
         id: 'province-policy-unresolved',

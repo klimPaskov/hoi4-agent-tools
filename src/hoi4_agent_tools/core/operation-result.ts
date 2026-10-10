@@ -321,7 +321,7 @@ function compactDetails(details: Record<string, unknown>): Record<string, unknow
 /** A passed check that only says its problem was not found carries nothing to act on. */
 function withoutCleanChecks(result: ServiceResult<unknown>): ServiceResult<unknown> {
   const checks = result.validation.checks.filter(
-    (check) => !(check.passed && /not detected\.$/u.test(check.message)),
+    (check) => !(check.passed && check.message.endsWith('not detected.')),
   );
   return checks.length === result.validation.checks.length
     ? result
