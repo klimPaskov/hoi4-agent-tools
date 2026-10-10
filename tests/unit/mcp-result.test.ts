@@ -3,6 +3,7 @@ import { emptyServiceResult, ServiceError } from '../../src/hoi4_agent_tools/cor
 import {
   errorResult,
   MAX_INLINE_ARTIFACT_LINKS,
+  MAX_CONTENT_RESOURCE_LINKS,
   MAX_INLINE_DIAGNOSTICS,
   MAX_INLINE_VALIDATION_CHECKS,
   MAX_INLINE_FILES_SCANNED,
@@ -264,10 +265,64 @@ describe('MCP error privacy', () => {
     }
     expect(structured.artifacts).toHaveLength(24);
     expect(structured.validation.checks).toHaveLength(MAX_INLINE_VALIDATION_CHECKS);
-    expect(output.content.filter(({ type }) => type === 'resource_link')).toHaveLength(24);
+    expect(output.content.filter(({ type }) => type === 'resource_link')).toHaveLength(
+      MAX_CONTENT_RESOURCE_LINKS,
+    );
+    expect(output.content[0]).toMatchObject({ type: 'text' });
+    expect((output.content[0] as { text: string }).text).toContain(
+      '"artifactsListedInStructuredContent":24',
+    );
     expect(structured.artifacts.length).toBeLessThanOrEqual(MAX_INLINE_ARTIFACT_LINKS);
     expect(Buffer.byteLength(JSON.stringify(output), 'utf8')).toBeLessThanOrEqual(
       MAX_TOOL_RESULT_BYTES,
     );
+  });
+
+  it('shows images before reports in the few links beside the summary', () => {
+    const result = emptyServiceResult('test', {});
+    const names = ['a.svg', 'b.json', 'c.png', 'd.html', 'e.png'];
+    const mime: Record<string, string> = {
+      svg: 'image/svg+xml',
+      json: 'application/json',
+      png: 'image/png',
+      html: 'text/html',
+    };
+    result.artifacts = [...names, ...Array.from({ length: 10 }, (_, i) => `f${i}.json`)].map(
+      (name) => ({
+        uri: `hoi4-agent://workspace/test/artifact/${'a'.repeat(64)}/${'b'.repeat(64)}/${name}`,
+        name,
+        mimeType: mime[name.split('.')[1]!]!,
+      }),
+    );
+    const output = toolResult(result);
+    const links = output.content.filter(({ type }) => type === 'resource_link');
+    expect(links.map((link) => ('name' in link ? link.name : ''))).toEqual([
+      'c.png',
+      'e.png',
+      'b.json',
+      'f0.json',
+      'f1.json',
+      'f2.json',
+      'f3.json',
+      'f4.json',
+    ]);
+    expect(output.structuredContent).toMatchObject({ artifacts: expect.any(Array) });
+    expect((output.structuredContent as { artifacts: unknown[] }).artifacts).toHaveLength(15);
+  });
+
+  it('leaves out passed checks that only report a problem not found', () => {
+    const result = emptyServiceResult('test', {});
+    result.validation = {
+      passed: true,
+      checks: [
+        { id: 'a', passed: true, message: 'GUI_X not detected.' },
+        { id: 'b', passed: true, message: 'GUI_Y detected 3 times as non-blocking findings.' },
+        { id: 'c', passed: false, message: 'GUI_Z not detected.' },
+      ],
+    };
+    const structured = toolResult(result).structuredContent as {
+      validation: { checks: Array<{ id: string }> };
+    };
+    expect(structured.validation.checks.map(({ id }) => id)).toEqual(['b', 'c']);
   });
 });

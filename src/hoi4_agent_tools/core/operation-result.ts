@@ -9,6 +9,19 @@ import { artifactLinkSchema, validationSummarySchema } from '../schemas/transact
 
 // Agents act on the mod's own files; a long inventory of scanned game files is linked evidence.
 export const MAX_INLINE_FILES_SCANNED = 12;
+/**
+ * Resource links shown beside the summary. Every artifact stays in `structuredContent.artifacts`,
+ * which clients show as well, so a long gallery is not listed twice; images and reports come first.
+ */
+export const MAX_CONTENT_RESOURCE_LINKS = 8;
+const linkPriority = (mimeType: string): number =>
+  mimeType === 'image/png'
+    ? 0
+    : mimeType === 'text/html'
+      ? 2
+      : mimeType === 'image/svg+xml'
+        ? 3
+        : 1;
 export const MAX_INLINE_PROPOSED_FILES = 64;
 export const MAX_INLINE_CHANGED_FILES = 64;
 export const MAX_INLINE_DIAGNOSTICS = 20;
@@ -305,7 +318,18 @@ function compactDetails(details: Record<string, unknown>): Record<string, unknow
   return jsonBytesWithin(details, 2_048) ? details : { truncated: true };
 }
 
-function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unknown> {
+/** A passed check that only says its problem was not found carries nothing to act on. */
+function withoutCleanChecks(result: ServiceResult<unknown>): ServiceResult<unknown> {
+  const checks = result.validation.checks.filter(
+    (check) => !(check.passed && /not detected\.$/u.test(check.message)),
+  );
+  return checks.length === result.validation.checks.length
+    ? result
+    : { ...result, validation: { ...result.validation, checks } };
+}
+
+function compactDescriptions(unfiltered: ServiceResult<unknown>): ServiceResult<unknown> {
+  const result = withoutCleanChecks(unfiltered);
   const compactLocation = (location: Diagnostic['location']) =>
     location === undefined
       ? undefined
@@ -444,7 +468,16 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
 
 function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
   const structuredContent = operationResultSchema.parse(selected) as Record<string, unknown>;
-  const links = selected.artifacts.map((artifact) => ({
+  const shown = selected.artifacts
+    .map((artifact, order) => ({ artifact, order }))
+    .sort(
+      (left, right) =>
+        linkPriority(left.artifact.mimeType) - linkPriority(right.artifact.mimeType) ||
+        left.order - right.order,
+    )
+    .slice(0, MAX_CONTENT_RESOURCE_LINKS)
+    .map(({ artifact }) => artifact);
+  const links = shown.map((artifact) => ({
     type: 'resource_link' as const,
     uri: artifact.uri,
     name: artifact.name,
@@ -459,6 +492,9 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
     code: selected.code,
     workspaceId: selected.workspaceId,
     artifactCount: selected.artifacts.length,
+    ...(selected.artifacts.length > shown.length
+      ? { artifactsListedInStructuredContent: selected.artifacts.length }
+      : {}),
     ...(selected.status === 'ok' || selected.blockers.length === 0
       ? {}
       : {
