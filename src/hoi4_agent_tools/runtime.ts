@@ -1,6 +1,6 @@
 import { lstat, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import {
   loadConfiguration,
   serverConfigurationSchema,
@@ -10,6 +10,7 @@ import { CoreEngine } from './core/engine.js';
 import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
 import { CONFIG_VERSION } from './version.js';
+import { sweepTemporaryDirectories } from './core/temporary-directories.js';
 
 export function defaultConfigurationPath(): string {
   const configRoot =
@@ -275,6 +276,18 @@ export async function createEngine(configPath = configurationPath()): Promise<Co
     configuration = await automaticConfiguration();
   }
   const resolver = await WorkspaceResolver.create(configuration);
+  await sweepTemporaryDirectories(tmpdir(), {
+    protectedRoots: [
+      ...resolver
+        .list()
+        .flatMap((workspace) => [
+          ...workspace.roots.map((root) => root.path),
+          workspace.artifactRoot,
+          workspace.cacheRoot,
+        ]),
+      ...(resolver.serverState() === undefined ? [] : [resolver.serverState()!.root]),
+    ],
+  }).catch(() => undefined);
   const engine = new CoreEngine(resolver);
   await engine.initialize();
   return engine;

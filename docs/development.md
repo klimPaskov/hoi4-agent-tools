@@ -19,6 +19,8 @@ npm run inspector
 
 Keep changes focused and include tests for behavior changes. CI fixtures must be synthetic and project-owned; never commit installed-game or third-party-mod content. Public tool or schema changes require compatibility review and a versioned release.
 
+Vitest tracks temporary fixtures created with `mkdtemp` and removes them after each test or suite teardown, with process-exit cleanup as a fallback. Fixture writes and truncations reserve a 256 MiB aggregate disk budget. Test oversized inputs with a small injected limit or mocked metadata; do not allocate gigabyte fixtures. Startup recovery preserves live owners, locks and dated benchmark evidence; see [temporary fixture ownership](adr/0048-temporary-fixture-lifetimes.md).
+
 The event-chain acceptance fixture contains more than 300 project-owned event definitions and exercises routes, options, timing, state flow, scope changes, unresolved dynamic calls, rendering, and comparison.
 
 The technology acceptance fixture contains 1,040 project-owned technologies across 13 folders and exercises classic and current doctrines, prerequisites, exclusive branches, multiple placements, unlocks, bonuses, grants, assets, unresolved references, rendering, and comparison.
