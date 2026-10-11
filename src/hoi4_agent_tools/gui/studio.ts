@@ -46,6 +46,7 @@ import type { ResolvedWorkspace, WorkspaceResolver } from '../core/workspace.js'
 import { PACKAGE_VERSION } from '../version.js';
 import { isSafeAnimationSourcePath } from './animation-manifest.js';
 import { GuiAssetCatalog, parseBmFont } from './assets.js';
+import { scenarioNeedsCountryHistory } from './native-state.js';
 import { projectGuiGraphForArtifact } from './inspection-artifact.js';
 import { buildGuiScene } from './layout.js';
 import { GUI_VALIDATION_MAX_DIAGNOSTICS } from './limits.js';
@@ -751,6 +752,18 @@ export function scenarioCountryFlagPatterns(scenarios: readonly GuiPreviewScenar
         `gfx/flags/${directory}${tag}_*.{bmp,dds,png,tga}`,
       ]),
     );
+}
+
+/**
+ * Engine-controlled windows read the scenario country's faction, balance of power and ruling
+ * party from country history; the faction facts also live in other countries' histories.
+ */
+function scenarioCountryHistoryPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
+  return scenarios.some(scenarioNeedsCountryHistory) ? ['history/countries/*.txt'] : [];
+}
+
+function scenarioCountryAssetPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
+  return [...scenarioCountryFlagPatterns(scenarios), ...scenarioCountryHistoryPatterns(scenarios)];
 }
 
 function bmFontPagePatterns(files: readonly ScannedFile[]): string[] {
@@ -1509,7 +1522,7 @@ export class ScriptedGuiStudio {
         generatedOptions?.textSamples,
       ),
       scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
-      scenarioCountryFlagPatterns([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioCountryAssetPatterns([placeholderScenario, ...explicitRelatedScenarios]),
       scenarioLocalisationKeys([placeholderScenario, ...explicitRelatedScenarios]),
       [placeholderScenario, ...explicitRelatedScenarios].some(
         ({ tooltip }) => tooltip !== undefined,
@@ -1585,7 +1598,7 @@ export class ScriptedGuiStudio {
       [beforeScenario.language, afterScenario.language],
       scenarioSpriteNames([beforeScenario, afterScenario]),
       scenarioTemplateNames([beforeScenario, afterScenario]),
-      scenarioCountryFlagPatterns([beforeScenario, afterScenario]),
+      scenarioCountryAssetPatterns([beforeScenario, afterScenario]),
       scenarioLocalisationKeys([beforeScenario, afterScenario]),
       [beforeScenario, afterScenario].some(({ tooltip }) => tooltip !== undefined),
     );
@@ -1681,7 +1694,7 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
       ]),
-      scenarioCountryFlagPatterns([
+      scenarioCountryAssetPatterns([
         placeholderScenario,
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
@@ -2336,7 +2349,7 @@ export class ScriptedGuiStudio {
             [previewScenario!.language],
             scenarioSpriteNames([previewScenario!]),
             scenarioTemplateNames([previewScenario!]),
-            scenarioCountryFlagPatterns([previewScenario!]),
+            scenarioCountryAssetPatterns([previewScenario!]),
             scenarioLocalisationKeys([previewScenario!]),
             previewScenario!.tooltip !== undefined,
           );
@@ -2367,7 +2380,7 @@ export class ScriptedGuiStudio {
           [scenario.language],
           scenarioTemplateNames([scenario]),
         ),
-        ...scenarioCountryFlagPatterns([scenario]),
+        ...scenarioCountryAssetPatterns([scenario]),
       ];
       const exactProposedAssets =
         proposedAssetPatterns.length === 0

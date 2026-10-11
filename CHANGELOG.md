@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### GUI render
+
+- `hoi4.gui_render` and `hoi4.gui_inspect` model the engine-controlled branches of `countrypoliticsview` instead of drawing all of them: no faction, faction leader, faction member and balance of power are chosen from the scenario country (`tag`, `ideology`, `faction`, `balanceOfPower`, or its `history/countries` facts at the scenario date), and `pol_faction_icon` follows the ruling ideology instead of its static frame. Explicit scenario visibility, values and selected frames still win.
+- Element visibility honours `show` as well as `visible`, `hide` and `hidden`, and scenario `name.visible` values may be yes/no words or 1/0 as well as booleans.
+
 ### Job workers
 
 - A worker that stops without a result is now reported by its real cause. The host keeps each worker's exit code, signal and last standard error and fails the job with `JOB_WORKER_EXIT` naming a V8 heap limit (with its size), a native out-of-memory, a native crash, an external termination, a stop by the server's own deadline, or an uncaught job error with its error code. Earlier releases discarded this and always suggested that memory ran out. Logs of workers that ended unexpectedly are kept, newest ten, in `job-workers/logs` under the server state root.

@@ -114,6 +114,7 @@ const modelledElementAttributes = new Set([
   'hide',
   'hidden',
   'visible',
+  'show',
   'enabled',
   'context_aware_text',
 ]);
