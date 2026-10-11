@@ -49,6 +49,8 @@ Previews and tests are built from source files, so they show what the source say
 
 The [setup guide](docs/setup.md) covers several mods, explicit game paths, local wiki snapshots and troubleshooting with `--discover` and `--diagnose`.
 
+[Watch the Agent Tools demo](https://github.com/klimPaskov/Agentic-HOI4-Modding/releases/latest/download/hoi4_agent_tools_promo.mp4) or use [HOI4 Mod Setup](https://github.com/klimPaskov/HOI4-Mod-Setup/releases/latest) to install and register the verified server for your mod.
+
 ## Examples
 
 Each pair shows a capture from the game next to the server's preview of the same source.
