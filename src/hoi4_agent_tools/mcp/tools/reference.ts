@@ -34,36 +34,36 @@ const readOnly = {
 export const referenceTools = [
   {
     name: 'hoi4.reference_search',
-    title: 'Search local HOI4 references',
+    title: 'Find a modding rule',
     description:
-      'Search the offline wiki and installed game documentation by words or script names; each hit gives its file, lines, revision and answering line. Example: {"query":"add_timed_idea"}. Returns 6 hits by default (up to 12); read one with hoi4.reference_read using its id and revision.',
+      'Find the right modding rule in the offline wiki and installed game docs using ordinary words or script names. Each hit includes its file, lines, revision and answering line. Example: {"query":"add_timed_idea"}. Returns 6 hits by default (up to 12); read one with hoi4.reference_read using its id and revision.',
     inputSchema: referenceSearchRequestSchema,
     outputSchema: strictOperationResultSchema(referenceSearchDataSchema),
     annotations: readOnly,
   },
   {
     name: 'hoi4.reference_read',
-    title: 'Read cited HOI4 reference section',
+    title: 'Read a modding rule',
     description:
-      'Read one cited documentation section: pass the id and revision of a reference_search or reference_context hit. Example: {"id":"<hit id>","revision":"<hit revision>"}. Returns at most 80 lines (40 by default) and 8,000 bytes, with a line to continue from.',
+      'Read a documentation section returned by reference_search or reference_context. Pass its id and revision. Example: {"id":"<hit id>","revision":"<hit revision>"}. Returns at most 80 lines (40 by default) and 8,000 bytes, with a line to continue from.',
     inputSchema: referenceReadRequestSchema,
     outputSchema: strictOperationResultSchema(referenceReadDataSchema),
     annotations: readOnly,
   },
   {
     name: 'hoi4.reference_context',
-    title: 'Get HOI4 task references',
+    title: 'Find docs for a modding task',
     description:
-      'Cited wiki and installed-documentation sections for one modding surface (event, decision, idea, focus, technology, gui, map, localisation, ai, general). Example: {"surface":"event","question":"fire an event after a delay"}. Returns up to 16 short sections; read more with hoi4.reference_read.',
+      'Find documentation for the content you are building: events, decisions, ideas, focuses, technology, GUI, maps, localisation or AI. Example: {"surface":"event","question":"fire an event after a delay"}. Returns up to 16 short sections; read more with hoi4.reference_read.',
     inputSchema: referenceContextRequestSchema,
     outputSchema: strictOperationResultSchema(referenceContextDataSchema),
     annotations: readOnly,
   },
   {
     name: 'hoi4.source_lookup',
-    title: 'Look up HOI4 source symbol',
+    title: 'Find definitions and usages',
     description:
-      'Find where a script symbol is defined across game, DLC and mod, and where it is used; or pass path and line for the definition containing that line. Example: {"symbol":"my_scripted_effect"}. Returns up to 3 definitions with source text and 10 usages; keyPath and view=structure navigate nested blocks.',
+      'Find where a script symbol is defined and used across the game, DLC and mod. Pass a symbol, or a file path and line. Example: {"symbol":"my_scripted_effect"}. Returns up to 3 definitions with source text and 10 usages; keyPath and view=structure navigate nested blocks.',
     inputSchema: sourceLookupRequestSchema,
     outputSchema: strictOperationResultSchema(sourceLookupDataSchema),
     annotations: readOnly,
@@ -72,7 +72,7 @@ export const referenceTools = [
     name: 'hoi4.script_validate',
     title: 'Check HOI4 script commands and scopes',
     description:
-      'Check an effect or trigger snippet, or a whole mod file, against the installed documentation: syntax, command kinds and scopes. Unknown helpers and native argument blocks stay marked unresolved, never valid. Example: {"source":"add_political_power = 10","kind":"effect","scope":"country"} or {"path":"events/a.txt"}. Returns up to 12 findings.',
+      'Find broken syntax, commands and scopes in an effect, trigger or mod file using the installed docs. Unknown helpers and native argument blocks stay unresolved. Example: {"source":"add_political_power = 10","kind":"effect","scope":"country"} or {"path":"events/a.txt"}. Returns up to 12 findings.',
     inputSchema: scriptValidateRequestSchema,
     outputSchema: strictOperationResultSchema(scriptValidateDataSchema),
     annotations: readOnly,
@@ -81,16 +81,16 @@ export const referenceTools = [
     name: 'hoi4.error_log',
     title: 'Read the game error log',
     description:
-      'Group the game\'s logs/error.log from its last launch by category, with each entry\'s source file, line, layer and whether that file changed since; mod entries first. Example: {"scope":"mod","category":"effect"}. Returns at most 20 entries (limit 50) with fix hints and which entries are new since the previous launch.',
+      'Find errors from the last game launch and group them by category, with source files, lines and fix hints. Show which files changed since the log and which errors appeared after a relaunch; mod entries come first. Example: {"scope":"mod","category":"effect"}. Returns at most 20 entries (limit 50) with fix hints and which entries are new since the previous launch.',
     inputSchema: errorLogRequestSchema,
     outputSchema: strictOperationResultSchema(errorLogDataSchema),
     annotations: readOnly,
   },
   {
     name: 'hoi4.mod_index',
-    title: 'Index mod definitions and free IDs',
+    title: 'Explore mod content and find free IDs',
     description:
-      'overview: the mod descriptor, definition counts by kind, folders and event namespace ranges. next_id: the next free numbered ID for an event namespace or prefix across every layer. Example: {"mode":"next_id","kind":"event","namespace":"my_mod"}. Returns a compact summary; the first call indexes the mod, which takes seconds on a large one.',
+      'Summarize the content in a mod or find a free event ID across the mod, game and dependencies. Use overview for descriptors, folders and definitions, or next_id with a namespace or prefix. Example: {"mode":"next_id","kind":"event","namespace":"my_mod"}. Returns a compact summary; the first call indexes the mod, which takes seconds on a large one.',
     inputSchema: modIndexRequestSchema,
     outputSchema: strictOperationResultSchema(modIndexDataSchema),
     annotations: readOnly,

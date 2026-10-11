@@ -1,6 +1,7 @@
 # Persistent jobs and MCP tasks
 
-Long-running domain operations support optional MCP tasks while preserving the ordinary tool-call contract.
+Let a large preview or analysis run in the background, check its progress or stop it.
+Long-running operations support optional MCP tasks and ordinary tool calls.
 Clients that negotiate task support can request a task, disconnect, reconnect with the same authorized identity, inspect or cancel it, and retrieve the original tool result after completion.
 Clients that do not request a task receive the ordinary synchronous tool result.
 

@@ -1,7 +1,7 @@
 # Bounded helper expansion
 
 `hoi4.event_inspect` and `hoi4.tech_inspect` accept `mode: "helper_expansion"`.
-This is a read-only stream of source-linked helper paths, not a source rewrite or runtime simulation.
+Follow helper calls back to their source and see where analysis could not resolve them.
 It avoids materializing the whole helper closure before returning its first page.
 
 Start either tool with:

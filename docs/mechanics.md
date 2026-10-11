@@ -1,7 +1,7 @@
 # Mechanic tests, package checks, and scenario suites
 
-`hoi4.mechanic_test`, `hoi4.package_check`, and `hoi4.scenario_test` read authorized HOI4 source and return linked, revision-bound evidence.
-They do not launch the game or change source files.
+Test scripted effects, find missing pieces of a feature and run repeatable scenarios.
+`hoi4.mechanic_test`, `hoi4.package_check` and `hoi4.scenario_test` evaluate mod source and return reports tied to that source revision.
 Supply `expectedRevision` when continuing analysis against a reviewed scan.
 
 ## Test an effect

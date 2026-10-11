@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Describe modding tasks in plain language across the README, guides, package metadata and MCP tool descriptions.
 ### GUI render
 
 - `hoi4.gui_render` and `hoi4.gui_inspect` model the engine-controlled branches of `countrypoliticsview` instead of drawing all of them: no faction, faction leader, faction member and balance of power are chosen from the scenario country (`tag`, `ideology`, `faction`, `balanceOfPower`, or its `history/countries` facts at the scenario date), and `pol_faction_icon` follows the ruling ideology instead of its static frame. Explicit scenario visibility, values and selected frames still win.

@@ -1,8 +1,7 @@
 # Technology trees
 
-The Technology Tree Viewer reconstructs classic technologies, legacy doctrine technologies, and current doctrine definitions across the active mod, configured dependencies, and vanilla sources. It links prerequisites, folder placements, exclusive choices, categories, tags, unlocks, bonuses, grants, localisation, icons, and AI metadata without launching the game.
-
-Use the three technology tools directly from the target mod.
+Preview technology trees and doctrines. Follow research paths, unlocks and bonuses, and find missing links or misplaced items.
+The tools reconstruct classic technologies and legacy and current doctrines from the mod, its dependencies and vanilla sources.
 
 ## Inspect
 

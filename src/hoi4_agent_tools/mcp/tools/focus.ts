@@ -185,25 +185,25 @@ export const focusTaskTools = [
     name: 'hoi4.focus_inspect',
     title: 'Inspect focus trees',
     description:
-      'Read national focus trees and continuous-focus palettes: structure, layout, source references and diagnostics. Example: {"treeId":"my_focus_tree"}. Returns counts and the main diagnostics inline; the full report is a linked resource.',
+      'Find focus branches, prerequisites, layout problems and missing references in national trees and continuous-focus palettes. Example: {"treeId":"my_focus_tree"}. Returns counts and the main diagnostics inline; the full report is a linked resource.',
     inputSchema: focusInspectRequestSchema,
     outputSchema: focusInspectOutputSchema,
     annotations: artifactProducing,
   },
   {
     name: 'hoi4.focus_render',
-    title: 'Render a focus tree or continuous palette',
+    title: 'Preview a focus tree or continuous palette',
     description:
-      'Render a focus tree or palette as a PNG with decoded icons plus HTML, SVG and JSON source maps (png:false for vector only; cropFocusIds adds close-ups). Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}. Images are linked artifacts, not inline.',
+      'Preview a focus tree or palette with its icons. Export PNG, HTML, SVG and JSON source maps; png:false skips the PNG and cropFocusIds adds close-ups. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}. Images are linked artifacts, not inline.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
   },
   {
     name: 'hoi4.focus_rewrite',
-    title: 'Create or clean up focus content',
+    title: 'Build or arrange a focus tree',
     description:
-      'Create a focus tree or palette from a complete plan (createIfMissing), or re-lay out an existing tree without a plan. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}. Validates, writes atomically and returns the changed files with a rollback-able transaction.',
+      'Create focus trees and continuous-focus palettes, or rearrange existing branches. Use createIfMissing with a complete plan to create content, or layoutMode to arrange an existing tree. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}. Returns the changed files.',
     inputSchema: focusRewriteRequestSchema,
     outputSchema: focusPlanOutputSchema,
     annotations: {

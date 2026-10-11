@@ -6,9 +6,9 @@ export const probabilityPromptArguments = z.object({
 });
 export const probabilityPromptDefinition = {
   name: 'hoi4.probability_analysis',
-  title: 'Analyze HOI4 weighted logic',
+  title: 'Analyze AI choices and event timing',
   description:
-    'Plan one source-linked AI, MTTH, random, or declared-pool analysis and return to the owning modding workflow.',
+    'Outline an analysis of AI choices, event timing, random chances or a custom weighted pool.',
 };
 
 /** One prompt body for both protocol generations; it does not run an analysis. */

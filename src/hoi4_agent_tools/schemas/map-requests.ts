@@ -115,9 +115,7 @@ export const mapInspectRequestSchema = z
       ),
     layer: mapLayerSchema
       .optional()
-      .describe(
-        'Render this base layer instead of validating; combine with overlays, tile or area.',
-      ),
+      .describe('Render this base layer; combine with overlays, tile or area.'),
     overlays: z.array(mapOverlaySchema).max(12).optional(),
     scale: z.number().int().min(1).max(16).optional(),
     tile: mapTileSchema.optional().describe('Render one top-left bitmap area.'),
