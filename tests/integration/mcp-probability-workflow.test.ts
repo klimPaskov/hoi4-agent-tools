@@ -85,8 +85,9 @@ describe('probability MCP workflow', () => {
     await writeFile(path.join(mod, logical), 'policy = { action = { ai_will_do = { base = 9 } } }');
     await writeFile(path.join(mod, frozen), before);
     const compared = await client.callTool({
-      name: 'hoi4.probability_compare',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'compare',
         workspaceId: 'probability-mcp',
         adapter: 'decision_ai_will_do',
         before: { path: logical, snapshotPath: frozen, expectedSourceHash: sha256Bytes(before) },
@@ -149,9 +150,7 @@ describe('probability MCP workflow', () => {
     };
     const inspected = await client.callTool({
       name: 'hoi4.probability_inspect',
-      arguments: {
-        customPoolManifest: manifest(5),
-      },
+      arguments: { evaluate: false, customPoolManifest: manifest(5) },
     });
     expect(inspected.structuredContent).toMatchObject({
       status: 'ok',
@@ -165,7 +164,7 @@ describe('probability MCP workflow', () => {
       },
     });
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         customPoolManifest: manifest(5),
         scenarioSet,
@@ -212,8 +211,9 @@ describe('probability MCP workflow', () => {
     });
 
     const compared = await client.callTool({
-      name: 'hoi4.probability_compare',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'compare',
         adapter: 'custom_weighted_pool',
         beforeManifest: manifest(5),
         afterManifest: manifest(7),
@@ -234,7 +234,7 @@ describe('probability MCP workflow', () => {
   it('evaluates proposed weighted source and serves authoritative JSON plus deterministic visuals', async () => {
     const { client } = await connected();
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'event_option_ai_chance',
         source: {
@@ -285,8 +285,9 @@ describe('probability MCP workflow', () => {
     ).toEqual([0.2, 0.8]);
 
     const rendered = await client.callTool({
-      name: 'hoi4.probability_render',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'render',
         analysisId: structured.data.analysisId,
         outputs: ['matrix', 'waterfall', 'threshold'],
         filter: { metrics: ['conditional_probability'] },
@@ -298,8 +299,9 @@ describe('probability MCP workflow', () => {
     });
 
     const repeated = await client.callTool({
-      name: 'hoi4.probability_render',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'render',
         analysisId: structured.data.analysisId,
         outputs: ['matrix', 'waterfall', 'threshold'],
         filter: { metrics: ['conditional_probability'] },
@@ -342,7 +344,7 @@ describe('probability MCP workflow', () => {
   it('accepts scoped FROM bindings and returns enumerated dynamic pools through MCP resources', async () => {
     const { client } = await connected();
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'event_option_ai_chance',
         source: {
@@ -434,7 +436,7 @@ describe('probability MCP workflow', () => {
       arguments: { adapter: 'event_option_ai_chance', source: { inlineClausewitz: source } },
     });
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'event_option_ai_chance',
         source: { inlineClausewitz: source },
@@ -442,8 +444,9 @@ describe('probability MCP workflow', () => {
       },
     });
     await client.callTool({
-      name: 'hoi4.probability_sweep',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'sweep',
         adapter: 'event_option_ai_chance',
         source: { inlineClausewitz: source },
         scenarioSet,
@@ -451,8 +454,9 @@ describe('probability MCP workflow', () => {
       },
     });
     await client.callTool({
-      name: 'hoi4.probability_simulate',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'simulate',
         adapter: 'event_option_ai_chance',
         source: { inlineClausewitz: source },
         scenarioSet,
@@ -462,8 +466,9 @@ describe('probability MCP workflow', () => {
       },
     });
     await client.callTool({
-      name: 'hoi4.probability_sequence',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'sequence',
         scenarioSet: {
           schemaVersion: '1.0',
           id: 'sequence',
@@ -484,8 +489,9 @@ describe('probability MCP workflow', () => {
       },
     });
     await client.callTool({
-      name: 'hoi4.probability_compare',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'compare',
         adapter: 'event_option_ai_chance',
         before: { inlineClausewitz: source },
         after: { inlineClausewitz: source.replace('base = 1', 'base = 3') },
@@ -495,8 +501,8 @@ describe('probability MCP workflow', () => {
     const analysisId = (evaluated.structuredContent as { data: { analysisId: string } }).data
       .analysisId;
     await client.callTool({
-      name: 'hoi4.probability_render',
-      arguments: { analysisId, outputs: ['ranking'] },
+      name: 'hoi4.probability_analyze',
+      arguments: { analysis: 'render', analysisId, outputs: ['ranking'] },
     });
     expect(await treeSnapshot(mod)).toEqual(before);
   });
@@ -508,6 +514,7 @@ describe('probability MCP workflow', () => {
     const discovered = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
+        evaluate: false,
         adapter: 'decision_ai_will_do',
         source: { inlineClausewitz: source },
       },
@@ -556,7 +563,7 @@ describe('probability MCP workflow', () => {
 
     const automatic = await client.callTool({
       name: 'hoi4.probability_inspect',
-      arguments: { source: { inlineClausewitz: source } },
+      arguments: { evaluate: false, source: { inlineClausewitz: source } },
     });
     expect(automatic.structuredContent).toMatchObject({
       status: 'ok',
@@ -569,6 +576,7 @@ describe('probability MCP workflow', () => {
     const missingDate = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
+        evaluate: false,
         adapter: 'national_focus_ai_will_do',
         source: {
           inlineClausewitz:
@@ -582,9 +590,45 @@ describe('probability MCP workflow', () => {
         adapterRequiredInputPaths: ['focus.external_factors_complete'],
       },
     });
+    // By default the same call also evaluates the focus and names the fact it still needs.
+    const evaluatedDate = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: {
+          inlineClausewitz:
+            'focus_tree = { id = dated_tree focus = { id = dated_focus x = 0 y = 0 ai_will_do = { factor = 1 modifier = { factor = 2 date > 1937.1.1 } } } }',
+        },
+      },
+    });
+    expect(evaluatedDate.structuredContent).toMatchObject({
+      status: 'ok',
+      data: {
+        operation: 'evaluate',
+        missingInputs: ['date'],
+        ranking: [{ scenarioId: 'no-facts', candidates: [{ id: 'dated_focus' }] }],
+      },
+    });
+    const datedLater = await client.callTool({
+      name: 'hoi4.probability_inspect',
+      arguments: {
+        adapter: 'national_focus_ai_will_do',
+        source: {
+          inlineClausewitz:
+            'focus_tree = { id = dated_tree focus = { id = dated_focus x = 0 y = 0 ai_will_do = { factor = 1 modifier = { factor = 2 date > 1937.1.1 } } } }',
+        },
+        // A bare scenario list without ids is accepted.
+        scenarioSet: [{ date: '1938.1.1' }],
+      },
+    });
+    expect(datedLater.structuredContent, JSON.stringify(datedLater.content)).toMatchObject({
+      status: 'ok',
+      data: { ranking: [{ scenarioId: 'scenario-1', candidates: [{ weight: 2 }] }] },
+    });
     const irrelevantDate = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
+        evaluate: false,
         adapter: 'national_focus_ai_will_do',
         source: {
           inlineClausewitz:
@@ -599,6 +643,7 @@ describe('probability MCP workflow', () => {
     const missingIdentifier = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
+        evaluate: false,
         adapter: 'national_focus_ai_will_do',
         source: { identifier: 'missing_focus', inlineClausewitz: source },
       },
@@ -616,6 +661,7 @@ describe('probability MCP workflow', () => {
     const missingPool = await client.callTool({
       name: 'hoi4.probability_inspect',
       arguments: {
+        evaluate: false,
         adapter: 'national_focus_ai_will_do',
         source: { inlineClausewitz: source },
         candidatePool: ['missing_focus'],
@@ -632,7 +678,10 @@ describe('probability MCP workflow', () => {
 
     const noSurface = await client.callTool({
       name: 'hoi4.probability_inspect',
-      arguments: { source: { inlineClausewitz: 'set_country_flag = no_weight_here' } },
+      arguments: {
+        evaluate: false,
+        source: { inlineClausewitz: 'set_country_flag = no_weight_here' },
+      },
     });
     expect(noSurface.structuredContent).toMatchObject({
       status: 'ok',
@@ -646,7 +695,7 @@ describe('probability MCP workflow', () => {
     });
 
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'decision_ai_will_do',
         source: { inlineClausewitz: source },
@@ -667,8 +716,9 @@ describe('probability MCP workflow', () => {
     });
 
     const compared = await client.callTool({
-      name: 'hoi4.probability_compare',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'compare',
         adapter: 'custom_weighted_pool',
         before: { inlineClausewitz: source },
         after: { inlineClausewitz: source.replace('factor = 2', 'factor = 4') },
@@ -692,7 +742,7 @@ describe('probability MCP workflow', () => {
   it('refuses to render a cached claim after workspace source changes', async () => {
     const { client, mod } = await connected();
     const evaluated = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'direct_random',
         source: { inlineClausewitz: 'random = { chance = 50 }' },
@@ -706,8 +756,9 @@ describe('probability MCP workflow', () => {
     const analysisId = (evaluated.structuredContent as { data: { analysisId: string } }).data
       .analysisId;
     const scenarioStale = await client.callTool({
-      name: 'hoi4.probability_render',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'render',
         analysisId,
         expectedScenarioHash: '0'.repeat(64),
         outputs: ['ranking'],
@@ -724,8 +775,8 @@ describe('probability MCP workflow', () => {
       'changed_probability_trigger = { always = yes }\n',
     );
     const rendered = await client.callTool({
-      name: 'hoi4.probability_render',
-      arguments: { analysisId, outputs: ['ranking'] },
+      name: 'hoi4.probability_analyze',
+      arguments: { analysis: 'render', analysisId, outputs: ['ranking'] },
     });
     expect(rendered.structuredContent).toMatchObject({
       status: 'ok',
@@ -737,7 +788,7 @@ describe('probability MCP workflow', () => {
   it('reports cancellation and rejects cross-workspace scenario declarations', async () => {
     const { client } = await connected();
     const mismatch = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'direct_random',
         source: { inlineClausewitz: 'random = { chance = 50 }' },
@@ -758,8 +809,9 @@ describe('probability MCP workflow', () => {
     await expect(
       client.callTool(
         {
-          name: 'hoi4.probability_simulate',
+          name: 'hoi4.probability_analyze',
           arguments: {
+            analysis: 'simulate',
             adapter: 'direct_random',
             source: { inlineClausewitz: 'random = { chance = 50 }' },
             scenarioSet: {
@@ -781,22 +833,23 @@ describe('probability MCP workflow', () => {
   it('rejects malformed scenarios and undeclared sequence targets at the MCP boundary', async () => {
     const { client } = await connected();
     const malformed = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         adapter: 'direct_random',
         source: { inlineClausewitz: 'random = { chance = 50 }' },
         scenarioSet: {
           schemaVersion: '1.0',
           id: 'malformed',
-          scenarios: [{ id: 'missing-state' }],
+          scenarios: [{ id: 'bad-state', state: 'not-an-object' }],
         },
       },
     });
     expect(malformed.isError).toBe(true);
 
     const invalidTarget = await client.callTool({
-      name: 'hoi4.probability_sequence',
+      name: 'hoi4.probability_analyze',
       arguments: {
+        analysis: 'sequence',
         scenarioSet: {
           schemaVersion: '1.0',
           id: 'invalid-target',

@@ -642,6 +642,8 @@ function* validateDefinitions(
   }
   for (const [definitionIndex, definition] of index.definitions.entries()) {
     yield* cancellationCheckpoint(options.signal, definitionIndex, 256);
+    // Province 0 is the reserved null row (0;0;0;0;land;false;unknown;0) the game expects.
+    if (definition.id === 0 && definition.terrain === 'unknown') continue;
     const terrain = index.terrainCategories?.get(definition.terrain);
     if (index.terrainCategories !== undefined && terrain === undefined) {
       addDiagnostic(diagnostics, options, {

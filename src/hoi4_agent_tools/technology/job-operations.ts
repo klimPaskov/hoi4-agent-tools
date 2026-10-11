@@ -5,14 +5,11 @@ import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
 import {
-  technologyCompareRequestSchema,
   technologyInspectRequestSchema,
   technologyRenderRequestSchema,
 } from '../schemas/technology.js';
 import {
-  compareTechnologies,
-  inspectTechnologies,
-  normalizeTechnologyCompareRequest,
+  inspectOrCompareTechnologies,
   normalizeTechnologyInspectionRequest,
   normalizeTechnologyRenderRequest,
   renderTechnologies,
@@ -81,7 +78,7 @@ export function registerTechnologyJobs(operations: JobOperations, engine: CoreEn
     'hoi4.tech_inspect',
     technologyInspectRequestSchema,
     normalizeTechnologyInspectionRequest,
-    inspectTechnologies,
+    inspectOrCompareTechnologies,
     'Analyzing technology trees',
   );
   register(
@@ -90,12 +87,5 @@ export function registerTechnologyJobs(operations: JobOperations, engine: CoreEn
     normalizeTechnologyRenderRequest,
     renderTechnologies,
     'Rendering technology-tree view',
-  );
-  register(
-    'hoi4.tech_compare',
-    technologyCompareRequestSchema,
-    normalizeTechnologyCompareRequest,
-    compareTechnologies,
-    'Comparing technology-tree graphs',
   );
 }

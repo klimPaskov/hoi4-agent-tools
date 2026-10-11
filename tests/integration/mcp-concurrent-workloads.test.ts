@@ -80,6 +80,8 @@ async function mixedCalls() {
       arguments: {
         workspaceId: 'focus',
         relativePath: 'common/national_focus/synthetic_acceptance.txt',
+        // Preserve the fixed vector workload when PNG became the default in 4.0.0.
+        png: false,
       },
     },
     {
@@ -115,6 +117,8 @@ async function mixedCalls() {
       name: 'hoi4.probability_inspect',
       arguments: {
         workspaceId: 'probability',
+        // This stress case inventories options; scenario evaluation has its own coverage.
+        evaluate: false,
         adapter: 'event_option_ai_chance',
         source: { identifier: 'synthetic_options.1' },
       },
@@ -132,14 +136,23 @@ async function exercise(clients: Client[], requestCount = 30) {
       const client = clients[index % clients.length]!;
       const started = performance.now();
       const progress: number[] = [];
-      const result = await client.callTool(call, undefined, {
-        timeout: 30_000,
-        maxTotalTimeout: 240_000,
-        resetTimeoutOnProgress: true,
-        onprogress: ({ progress: value }) => {
-          progress.push(value);
-        },
-      });
+      const result = await client
+        .callTool(call, undefined, {
+          timeout: 30_000,
+          maxTotalTimeout: 240_000,
+          resetTimeoutOnProgress: true,
+          onprogress: ({ progress: value }) => {
+            progress.push(value);
+          },
+        })
+        .catch((error: unknown) => {
+          throw new Error(
+            `${call.name} failed after ${Math.round(performance.now() - started)} ms`,
+            {
+              cause: error,
+            },
+          );
+        });
       durations.push(performance.now() - started);
       expect(result.isError, `${call.name}: ${JSON.stringify(result)}`).not.toBe(true);
       expect(result.structuredContent, call.name).toMatchObject({
@@ -166,7 +179,7 @@ async function exercise(clients: Client[], requestCount = 30) {
       'Concurrent domain calls failed',
     );
   expect(results).toHaveLength(requestCount);
-  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(35);
+  for (const client of clients) expect((await client.listTools()).tools).toHaveLength(28);
   console.info(
     JSON.stringify({
       workload: `${requestCount} concurrent mixed domain calls`,
@@ -293,7 +306,7 @@ describe('concurrent production MCP workloads', () => {
       controller.abort();
       await expect(cancelled).rejects.toThrow();
       const discoveryStarted = performance.now();
-      expect((await client.listTools()).tools.length).toBe(36);
+      expect((await client.listTools()).tools.length).toBe(29);
       expect(performance.now() - discoveryStarted).toBeLessThan(2_000);
       await new Promise<void>((resolve) => setTimeout(resolve, 14_000));
       expect(started).toEqual([1]);

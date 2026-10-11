@@ -4,18 +4,12 @@ import { IdleCacheLifetime } from '../core/idle-cache-lifetime.js';
 import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
+import { eventInspectRequestSchema, eventRenderRequestSchema } from '../schemas/event.js';
 import {
-  eventInspectRequestSchema,
-  eventRenderRequestSchema,
-  eventCompareRequestSchema,
-} from '../schemas/event.js';
-import {
-  inspectEvents,
+  inspectOrCompareEvents,
   renderEvents,
-  compareEvents,
   normalizeEventInspectionRequest,
   normalizeEventRenderRequest,
-  normalizeEventCompareRequest,
 } from './operations.js';
 import { EventChainViewer } from './service.js';
 
@@ -55,7 +49,12 @@ export function registerEventJobs(operations: JobOperations, engine: CoreEngine)
           'revision' in result.data &&
           typeof result.data.revision === 'string'
             ? result.data.revision
-            : undefined;
+            : result.data !== null &&
+                typeof result.data === 'object' &&
+                'afterRevision' in result.data &&
+                typeof result.data.afterRevision === 'string'
+              ? result.data.afterRevision
+              : undefined;
         if (revision !== undefined) await context.stageResult(wire, { sourceRevision: revision });
         return wire;
       } catch (error) {
@@ -72,7 +71,7 @@ export function registerEventJobs(operations: JobOperations, engine: CoreEngine)
     'hoi4.event_inspect',
     eventInspectRequestSchema,
     normalizeEventInspectionRequest,
-    inspectEvents,
+    inspectOrCompareEvents,
     'Analyzing event chain',
   );
   register(
@@ -81,12 +80,5 @@ export function registerEventJobs(operations: JobOperations, engine: CoreEngine)
     normalizeEventRenderRequest,
     renderEvents,
     'Rendering event-chain view',
-  );
-  register(
-    'hoi4.event_compare',
-    eventCompareRequestSchema,
-    normalizeEventCompareRequest,
-    compareEvents,
-    'Comparing event-chain graphs',
   );
 }

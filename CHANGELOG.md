@@ -1,5 +1,114 @@
 # Changelog
 
+## Unreleased
+
+## 4.0.0 - 2026-10-10
+
+### Known mistakes
+
+- Add a reviewed, source-cited list of documented script mistakes (`known-mistakes.json`, with a detector for each rule) in place of a mutable learned-rule database. `hoi4.script_validate` in file mode flags seven of them as `KNOWN_MISTAKE_<RULE>` with the symptom and the fix and reports `known_mistakes` in `checksPerformed`: an event without `add_namespace`, an event number that is not a whole number below 100,000, a timer on a triggered-only event, an automatic event that can fire every day, a news event that is not `major` or is `fire_only_once`, a date window shorter than the 20-day trigger check, and a scope prefix on a temporary variable.
+- `hoi4.reference_context` returns the `knownMistakes` of the requested surface, and `hoi4.error_log` adds `knownMistake` (rule id and fix) to a logged message that a rule explains. A rule that no longer applies is kept as `resolved` with the date and reason and is not applied.
+
+### Maps
+
+- `move_state_provinces` redistributes by default: without a `distribution`, or with `"proportional"`, the target receives the moved provinces' share of the source state's manpower, resources and slot buildings (in whole units; levels such as infrastructure keep the higher value). `stateValues: "retain-in-current-states"` keeps the old behaviour.
+- `merge_states`, `create_state` and `split_state` accept `remapReferences` (`refuse` or `override`) to rewrite the scripts that named the state in the same plan.
+- Script references now include `has_full_control_of_state`, `set_state_controller`, `to_state`, `border_state`, `capital` in any script, `set_province_controller`, `reset_province_name`, `goto_province`, `prioritize_location`, `to_province`, `region`, `area`, `prioritize = { ... }` lists and `province = { id = ... }` blocks. Arguments that take exactly one value are never copied or deleted by a remap; they change to the first successor, or stay and are reported as `MAP_REFERENCE_NEEDS_REVIEW`.
+- `MAP_COUNTRY_CAPITAL_NOT_OWNED` is checked only in `history/countries`.
+
+### Tools
+
+- Show at most 8 resource links beside a result (images first); every artifact stays in `structuredContent.artifacts`. A GUI render result was about 33 KB, a third of it links listed twice. Passed validation checks that only report a problem "not detected" are no longer listed.
+
+### Workers
+
+- A warm job worker whose heap still holds more than 40% of its limit after a job and a full collection exits instead of waiting for the next job. Against the real Chaos Redux mod, a GUI render followed by a decision inspection in one worker ran past the 4 GB heap limit and ended with `JOB_WORKER_EXIT`; the next job now starts in a fresh worker. The `JOB_WORKER_EXIT` message now names an out-of-memory exit and the `jobWorkerMaxHeapMiB` setting.
+
+### Documentation
+
+- Add a troubleshooting guide with the error codes and their fixes, the tool audit and the review of smerss/Clausewitz-MCP and cpntodd/HOI4-MCP under `docs/plans`, a worked example that builds and reshapes a world in the map guide, and a section on adding a known mistake to the development guide.
+
+### Breaking changes
+
+- 37 tools become 28, one inspect tool per domain:
+  - `hoi4.probability_inspect` finds weighted logic and evaluates it in the same call, with a fact-free scenario when none is given; `evaluate: false` returns only the inventory. `hoi4.probability_analyze` replaces `hoi4.probability_evaluate`'s siblings `_sweep`, `_simulate`, `_sequence`, `_compare` and `_render`, selected by `analysis`; `hoi4.probability_evaluate` itself is folded into `hoi4.probability_inspect`.
+  - `hoi4.event_compare` and `hoi4.tech_compare` become `mode: compare` of `hoi4.event_inspect` and `hoi4.tech_inspect`.
+  - `hoi4.focus_raster` is folded into `hoi4.focus_render`, which now produces the PNG with decoded icons by default; `png: false` keeps the vector-only output.
+  - `hoi4.map_render` is folded into `hoi4.map_inspect`: a `layer`, `overlays`, `scale`, `tile` or `area` renders that view.
+- Inline results list at most 12 scanned files, mod files first.
+
+- The HTTP server verifies the bearer token before it reads a request body, so an unauthenticated `POST /mcp` receives `401` without its body being parsed; body-dependent scopes such as `hoi4:write` for rewrites are checked again afterwards.
+- Behind a trusted proxy, rate limiting uses the rightmost `X-Forwarded-For` hop that is not a trusted proxy instead of the leftmost, client-supplied entry.
+- A rewrite journal that cannot be recovered no longer stops startup: the server starts, and rewrites of that workspace fail with `TRANSACTION_RECOVERY_REQUIRED` until recovery succeeds. A journal folder without a manifest is skipped.
+- Rolling back a transaction keeps a planned file that was never replaced and has no backup, instead of refusing the whole rollback; a replaced file that changed since still reports `TRANSACTION_STALE`.
+- `tools/list` omits the JSON Schema dialect and the safe-integer bounds that every integer field repeated; field types, ranges and descriptions are unchanged.
+
+### Agent ergonomics
+
+- Accept the argument shorthands agents most often send: an event selector as a plain string or without `kind`, a GUI scenario without `id`, a decision inspection without a scenario, a probability scenario set as a bare list or without ids and `state`, a probability `source` as a string, and `generatedScenarios.maxScenarios`. The full event selector is published in the tool schema. Also a namespace wildcard such as `chaosx.nr14.*`, a selector with `id` for its own field, a trace started from `from`, a GUI inspection without a scenario, a decision by `decisionId`, and a script file check that names the kind and scope its file fixes.
+- Answer invalid arguments with a tool error, code `INVALID_ARGUMENTS`, naming each failing field, what it expected and a working call, instead of a protocol error that clients reduced to "Invalid tool arguments". Error and blocked results carry their blockers in the text content, which is what clients show for an error.
+- Find decisions in files that open the same category block more than once; such decisions were reported as unresolved definitions. Decision inspections list each scenario's eligible, visible and available outcome inline, and a sample of any unresolved definitions.
+- A snippet check without a `kind` is read as the effect or trigger with fewer errors and unresolved commands, and a `limit`, `maxDepth`, `maxNodes` or `maxEdges` above its maximum is lowered to the maximum, instead of rejecting the call.
+- Return the answer inline: probability results rank the strongest candidates per scenario with weight, probability and MTTH, list the facts still missing, and list the largest changes of a comparison.
+- An event ID in a probability `candidatePool` stands for all its options and a `random_list` ID for its entries; a pool alone finds its defining file; a wrong adapter guess, such as a mission named as a decision, switches to the matching adapter.
+- Order inline diagnostics with the mod's own files first, summarise an omitted flood by code, and keep the first diagnostics of an oversized result instead of dropping them all.
+- Name the error kind and a path-free message for unexpected failures, and print the cause of a startup failure such as a configuration file's JSON error.
+- `hoi4.error_log` adds a fix hint per category, groups messages that differ only in names and numbers into `patterns`, and compares each new launch's log with the previous one: `sinceLastLaunch` counts new, persisting and fixed entries and every entry says whether it is new.
+- Every tool description now says what the tool is for, shows a working example call and gives the size of the answer, and every invalid-argument error shows an example for its tool (28 of 28; ten before). Tests send each published example to its tool's schema, and `docs/tools.md` lists the examples with the result sizes.
+
+### Speed
+
+- Keep a job worker warm for `jobWorkerIdleSeconds` (default 180) after a job, so its server's next job reuses the loaded indexes instead of scanning cold. An idle worker holds no execution slot and exits with its server; a failed job never leaves a worker for reuse.
+- Authenticate persistent cache entries over their metadata and payload hash instead of the whole payload, decode a cached parsed document when it is first read instead of for every file at load, and stop copying the payload of an entry that is already stored on every scan. The entry format version is 2, so older entries are rewritten once. Fill the canonical copy used for hashing and for index segments directly, about 40% faster on large segments with identical output.
+- Record where a cold index of a large mod spends its time, and why a background warm-up of the persistent cache does not help it, in ADR 0045. Add `npm run benchmark:cold`, which times `hoi4.mod_index`, an event lint and a decision inventory in a first and a second server process.
+
+### Maps
+
+- Add `create_world` to `hoi4.map_rewrite`: a complete new map from dimensions, a seed, land coverage or outlines and countries, with provinces, terrain, heights, rivers, trees, colour maps, continents, strategic regions with weather, states, country files, history, flags, a bookmark, localisation, positions, supply and `replace_path` entries.
+- Add `regenerate_map_positions` (building, unit-stack and weather positions from geometry), `rebuild_supply` (supply nodes in state capitals joined to each country's hub by railway, or only the states with a supply gap) and `remap_map_references` (rewrite script references to changed states, provinces or regions, copying a reference per successor, and override game files only on request).
+- Add `references: true` to `hoi4.map_inspect`: missing state, province and region references across events, focuses, decisions, helpers, history and AI areas, undeclared state tags, and countries whose capital they do not own.
+- Split states with dated history: dated ownership and effects apply to both parts, and dated victory points and buildings follow their provinces. Merges carry dated blocks without building levels.
+- Keep level buildings (infrastructure, air bases, anti-air, radar, or any building without `shares_slots`) at their level in both parts of a split and at the highest level in a merge, and divide slot buildings and resources in whole units.
+- A merge's distribution policy may be omitted. Generated positions take their height from the heightmap. Province 0's reserved null row no longer reports an unknown terrain or a missing continent.
+- Name transaction diff artifacts safely for files with spaces in their names.
+- Say why a restored rewrite failed: `JOB_REWRITE_RESTORED` now names the error and the first failing check or blocking diagnostic, such as `GUI_REFERENCE_UNRESOLVED`, instead of only that the source was restored.
+- Review a new world over sources that hold no map without a "before" picture, instead of failing with `MAP_RENDER_RASTER_MISSING`.
+- Notice a changed `descriptor.mod` at the next scan of a running server. A new world adds `replace_path` folders to the descriptor, and its post-write check used to see the base-game states it replaces and fail on duplicate state IDs until the server restarted. Jobs, transactions and caches keep the workspace identity they started under.
+- Stop undoing map rewrites that touch a state file. The post-write check scanned only the changed files, so every province a state lists counted as an unresolved reference unless the rewrite also changed `map/definition.csv`; a split, merge or manpower change on a real map was restored with `JOB_REWRITE_RESTORED`. The check now also reads `map/default.map` and the map CSV files.
+
+### Tools
+
+- Add `hoi4.error_log`: read the game's `logs/error.log` from its last launch, grouped by category, with each entry's source file, line and layer, whether that file changed since the log was written, and `scope`, `category` and text filters. Set `gameUserRoot` when the game's user folder is not found automatically.
+- Add `hoi4.mod_index`: summarize a mod's descriptor, definitions by kind, folders and event namespace ranges, or find the next free numbered ID for an event namespace or prefix across every source layer, with the first unused gap.
+- Name the tool and up to five failing fields with their reasons when the 2026-07-28 server rejects tool arguments.
+- Check every supported family of `hoi4.script_validate` file mode from one shared scan, skip localisation from shadowed files in player-text checks, and report only `§` colour codes in news text.
+- Report an overlapping pair whose visibility the GUI scenario does not decide only as `GUI_UNRESOLVED_VISIBILITY_OVERLAP`, without a generic overlap or click-region conflict.
+- Print `startup_timeout_sec = 120` and `tool_timeout_sec = 600` in the Codex registrations from `hoi4-agent-tools-setup --print-client-config`.
+
+### Fixes
+
+- Lex Clausewitz whitespace with a character-code test instead of a regular expression per character, which shortens the cold index of a large mod by roughly a quarter.
+- Update the MCP SDK packages (`@modelcontextprotocol/sdk` 1.32.1, `core`, `server` and `client` 2.3.1, `node` 2.1.1) and `sharp` 0.35.5 past their published high-severity advisories.
+- Keep each file's own diagnostics when an index is rebuilt incrementally after an edit; a rebuild could copy other files' errors and lose real ones.
+- Close a cancelled stdio request so the idle limit still applies, count a request open for twice the idle limit as abandoned, and finish open requests before exiting after the launching process exits.
+- Record an orphaned worker's own deadline as `JOB_DEADLINE_EXCEEDED` instead of leaving the job running.
+- Start one worker launcher per job across HTTP requests and polls, and spawn nothing when the job has finished or a live worker runs it.
+- Re-check a rewrite's journal under the workspace lock before applying it, re-hash the backup it moves aside, and take over a stale workspace lock only through an atomic rename that one process can win.
+- Refuse reads, not only writes, of server storage (`.hoi4-agent`, artifact and cache roots) through workspace paths.
+- Keep artifact listings from removing a folder that a concurrent write is filling.
+- Evict a chunked artifact by the age of its newest member, index first, and protect all its pieces when any of them is protected, so a large result's index never points at evicted pieces.
+- Treat a job store lock held for more than ten minutes as abandoned even when its process ID now belongs to another process, and wait at most two minutes for the lock before failing with `JOB_STORE_BUSY`, so a lock left by a crashed process cannot hang every job.
+- Sweep expired finished job results on first use, and keep the record of a refused task call for five minutes.
+- Bound retained scan snapshots by bytes, remove temporary files from failed heartbeat writes, and drop server records silent for two hours.
+- Release a foreground task's cancellation listener when the task finishes.
+
+### Documentation
+
+- Restructure the README around what the server does, a four-step quick start, a grouped tool table with what each area writes, and safety notes.
+- Add a configuration reference with every key, range, default location and environment variable.
+- Complete the GUI scenario and request field tables, and document the prompt, resources, task-capable tools and setup troubleshooting commands.
+- Add `docs/RELEASING.md`, the checklist for tagging a release, and describe the stdio smoke suites in the development guide: every tool called once with an agent-style argument shape and once with a wrong field, a generated world split, merged and repaired, and the same calls against the installed game and a real mod.
+
 ## 3.10.0 - 2026-10-06
 
 - Rebuild a workspace index after an edit from the previous index, parsing and indexing only changed files, and keep the latest scan of each pattern set and each GUI graph scope instead of one per workspace. A repeated GUI preview of a large, actively edited mod took 64 s instead of 244 s.

@@ -396,6 +396,20 @@ interface RetainedArtifactManifest {
   targetBytes: number;
 }
 
+/** The chunked logical artifact a chunk or index manifest belongs to, and its role in it. */
+function chunkMembership(
+  manifest: ArtifactManifest,
+): { group: string; role: 'chunk' | 'index' } | undefined {
+  const chunked = manifest.provenance.metadata?.chunkedArtifact as
+    { role?: unknown; originalSha256?: unknown } | undefined;
+  if (
+    typeof chunked?.originalSha256 !== 'string' ||
+    (chunked.role !== 'chunk' && chunked.role !== 'index')
+  )
+    return undefined;
+  return { group: chunked.originalSha256, role: chunked.role };
+}
+
 function isValidArtifactName(name: string): boolean {
   return (
     safeNamePattern.test(name) &&
@@ -572,9 +586,15 @@ async function withArtifactQueue<T>(
   }
 }
 
+/**
+ * Measure artifact storage. With `cleanup`, also remove aged temporary files and empty
+ * folders; only the serialized write path may do that, since a listing running beside a
+ * write could remove the folder a new artifact is about to be written into.
+ */
 async function artifactUsage(
   root: string,
   signal?: AbortSignal,
+  cleanup = false,
 ): Promise<{ bytes: number; entries: number }> {
   let bytes = 0;
   let entries = 0;
@@ -624,7 +644,8 @@ async function artifactUsage(
               'ARTIFACT_STORAGE_UNSAFE',
               'Artifact storage contains a symbolic link or junction',
             );
-          if (Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs) await unlink(temporary);
+          if (cleanup && Date.now() - metadata.mtimeMs >= artifactDebrisMinimumAgeMs)
+            await unlink(temporary);
         } catch (error) {
           if (!['ENOENT', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? ''))
             throw error;
@@ -649,7 +670,7 @@ async function artifactUsage(
         }
       }
     }
-    if (directory !== canonicalRoot) {
+    if (cleanup && directory !== canonicalRoot) {
       try {
         await rmdir(directory);
       } catch (error) {
@@ -1187,10 +1208,32 @@ export class ArtifactStore {
       }
     };
     await reclaimDebris(await containedGeneratedPath(workspace.artifactRoot));
+    // A chunked artifact's pieces are written before its index, so they are always older. Age
+    // a group by its newest member and evict its index first, so readers never follow an index
+    // to evicted pieces, and protect the whole group when any member is protected.
+    const groupAge = new Map<string, number>();
+    const protectedGroups = new Set<string>();
+    for (const entry of retained) {
+      const membership = chunkMembership(entry.manifest);
+      if (membership === undefined) continue;
+      groupAge.set(
+        membership.group,
+        Math.max(groupAge.get(membership.group) ?? 0, entry.modifiedAt),
+      );
+      if (protectedManifests.has(entry.manifestPath) || protectedTargets.has(entry.targetPath))
+        protectedGroups.add(membership.group);
+    }
+    const evictionAge = (entry: RetainedArtifactManifest) => {
+      const membership = chunkMembership(entry.manifest);
+      return membership === undefined ? entry.modifiedAt : groupAge.get(membership.group)!;
+    };
+    const indexFirst = (entry: RetainedArtifactManifest) =>
+      chunkMembership(entry.manifest)?.role === 'chunk' ? 1 : 0;
     retained.sort(
       (left, right) =>
         Number(right.staleIdentity) - Number(left.staleIdentity) ||
-        left.modifiedAt - right.modifiedAt ||
+        evictionAge(left) - evictionAge(right) ||
+        indexFirst(left) - indexFirst(right) ||
         compareCodeUnits(left.manifestPath, right.manifestPath),
     );
 
@@ -1199,6 +1242,8 @@ export class ArtifactStore {
       signal?.throwIfAborted();
       if (current.bytes <= targetBytes && current.entries <= targetEntries) break;
       if (protectedManifests.has(candidate.manifestPath)) continue;
+      const membership = chunkMembership(candidate.manifest);
+      if (membership !== undefined && protectedGroups.has(membership.group)) continue;
       try {
         await unlink(candidate.manifestPath);
       } catch (error) {
@@ -1869,7 +1914,7 @@ export class ArtifactStore {
         if (!Number.isSafeInteger(additionalBytes)) {
           throw new ServiceError('ARTIFACT_STORAGE_LIMIT', 'Artifact batch size is unsafe');
         }
-        const usage = await artifactUsage(workspace.artifactRoot, signal);
+        const usage = await artifactUsage(workspace.artifactRoot, signal, true);
         const additionalEntries = [...uniqueManifests.values()].filter(
           (artifact) => !artifact.exists,
         ).length;

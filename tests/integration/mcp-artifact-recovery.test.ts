@@ -113,7 +113,7 @@ describe('MCP artifact manifest recovery', () => {
 
     const calls = [
       {
-        name: 'hoi4.probability_evaluate',
+        name: 'hoi4.probability_inspect',
         arguments: {
           adapter: 'event_option_ai_chance',
           source: {

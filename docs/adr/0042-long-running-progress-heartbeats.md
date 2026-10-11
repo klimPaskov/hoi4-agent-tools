@@ -1,4 +1,4 @@
-# ADR 0024: Keep long MCP operations alive with progress heartbeats
+# ADR 0042: Keep long MCP operations alive with progress heartbeats
 
 Superseded by [concurrent request execution](0026-concurrent-request-execution.md): heartbeats cover every tool and use strictly increasing values, including during queue waits.
 

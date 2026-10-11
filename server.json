@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.klimPaskov/hoi4-agent-tools",
   "title": "HOI4 Agent Tools",
-  "description": "HOI4 modding tools for agents: local references, visual previews, focus trees, interfaces and maps.",
-  "version": "3.10.0",
+  "description": "HOI4 modding for agents: cited docs, tree/GUI/map previews, event and AI analysis, validated edits.",
+  "version": "4.0.0",
   "repository": {
     "url": "https://github.com/klimPaskov/hoi4-agent-tools",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "hoi4-agent-tools",
-      "version": "3.10.0",
+      "version": "4.0.0",
       "transport": {
         "type": "stdio"
       }

@@ -35,14 +35,16 @@ describe('trusted worker domain admission', () => {
     ['hoi4.focus_rewrite', true],
     ['hoi4.gui_rewrite', true],
     ['hoi4.map_rewrite', true],
-    ['hoi4.probability_evaluate', false],
+    ['hoi4.probability_analyze', false],
     ['hoi4.tech_render', false],
     ['hoi4.scenario_test', false],
   ] as const)('retains the recorded write policy for %s', async (toolName, mutation) => {
     const operations = await registerWorkerOperations(await fixture(), toolName);
     expect(operations.get(toolName).mutation).toBe(mutation);
     expect(() =>
-      operations.get(toolName.startsWith('hoi4.event_') ? 'hoi4.map_render' : 'hoi4.event_inspect'),
+      operations.get(
+        toolName.startsWith('hoi4.event_') ? 'hoi4.map_inspect' : 'hoi4.event_inspect',
+      ),
     ).toThrow('No typed core operation');
   });
 

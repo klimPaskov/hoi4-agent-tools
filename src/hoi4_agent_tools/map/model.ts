@@ -781,6 +781,101 @@ export function parseTerrainCategories(
   return categories;
 }
 
+/** A building type from `common/buildings/*.txt`, as far as map edits need it. */
+export interface BuildingDefinition {
+  name: string;
+  /** Slot buildings (factories, dockyards, refineries) count toward the state's shared slots. */
+  sharesSlots: boolean;
+  /** Provincial buildings (bunkers, naval bases, supply hubs) are placed per province. */
+  provincial: boolean;
+  stateMax?: number;
+  provinceMax?: number;
+  /** Map models per state or province, from `show_on_map`. */
+  showOnMap: number;
+  onlyCoastal: boolean;
+  /** A building whose model is placed at a named spawn point instead of its own positions. */
+  spawnPoint?: string;
+}
+
+/** A spawn point from the `spawn_points` block of `common/buildings`. */
+export interface BuildingSpawnPoint {
+  name: string;
+  provincial: boolean;
+  max: number;
+  onlyCoastal: boolean;
+  autoNudged: boolean;
+}
+
+/**
+ * When no building definitions are scanned, these state buildings are levels rather than slot
+ * counts, as in the base game: a split keeps the level in both states and a merge keeps the
+ * highest level.
+ */
+export const LEVEL_STATE_BUILDINGS: ReadonlySet<string> = new Set([
+  'infrastructure',
+  'air_base',
+  'anti_air_building',
+  'radar_station',
+]);
+
+/** Building types and spawn points from the active `common/buildings` files. */
+export function parseBuildingDefinitions(
+  files: readonly ScannedFile[],
+  diagnostics: Diagnostic[],
+): { definitions: Map<string, BuildingDefinition>; spawnPoints: Map<string, BuildingSpawnPoint> } {
+  const definitions = new Map<string, BuildingDefinition>();
+  const spawnPoints = new Map<string, BuildingSpawnPoint>();
+  const yes = (block: BlockNode, key: string) => firstScalar(block, key)?.value === 'yes';
+  const numberIn = (block: BlockNode | undefined, key: string): number | undefined => {
+    if (block === undefined) return undefined;
+    const value = Number(firstScalar(block, key)?.value);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  for (const file of [...files].sort((left, right) =>
+    compareCodeUnits(normalizedPath(left.relativePath), normalizedPath(right.relativePath)),
+  )) {
+    const document = parseClausewitz(file.bytes, file.displayPath);
+    addMapDiagnostics(diagnostics, document.diagnostics);
+    for (const entry of document.root.entries) {
+      if (entry.type !== 'assignment' || entry.value.type !== 'block') continue;
+      if (entry.key.value === 'buildings') {
+        for (const building of entry.value.entries) {
+          if (building.type !== 'assignment' || building.value.type !== 'block') continue;
+          const block = building.value;
+          const levelCap = assignments(block, 'level_cap')[0]?.value;
+          const cap = levelCap?.type === 'block' ? levelCap : undefined;
+          const provinceMax = numberIn(cap, 'province_max') ?? numberIn(block, 'province_max');
+          const stateMax = numberIn(cap, 'state_max') ?? numberIn(block, 'state_max');
+          const spawnPoint = firstScalar(block, 'spawn_point')?.value;
+          definitions.set(building.key.value, {
+            name: building.key.value,
+            sharesSlots:
+              yes(block, 'shares_slots') || (cap !== undefined && yes(cap, 'shares_slots')),
+            provincial: yes(block, 'provincial') || provinceMax !== undefined,
+            ...(stateMax === undefined ? {} : { stateMax }),
+            ...(provinceMax === undefined ? {} : { provinceMax }),
+            showOnMap: numberIn(block, 'show_on_map') ?? 0,
+            onlyCoastal: yes(block, 'only_costal'),
+            ...(spawnPoint === undefined ? {} : { spawnPoint }),
+          });
+        }
+      } else if (entry.key.value === 'spawn_points') {
+        for (const point of entry.value.entries) {
+          if (point.type !== 'assignment' || point.value.type !== 'block') continue;
+          spawnPoints.set(point.key.value, {
+            name: point.key.value,
+            provincial: firstScalar(point.value, 'type')?.value === 'province',
+            max: numberIn(point.value, 'max') ?? 1,
+            onlyCoastal: yes(point.value, 'only_costal'),
+            autoNudged: !yes(point.value, 'disable_auto_nudging'),
+          });
+        }
+      }
+    }
+  }
+  return { definitions, spawnPoints };
+}
+
 /** Continent names in `continent.txt`; their one-based positions are the continent IDs. */
 export function parseContinents(
   file: ScannedFile,
@@ -1440,8 +1535,43 @@ export class MapWorkspaceIndex {
   readonly continents: readonly string[] | undefined;
   /** Terrain categories when any `common/terrain` file was read. */
   readonly terrainCategories: ReadonlyMap<string, TerrainCategory> | undefined;
+  /** Building types from `common/buildings`; empty when none were scanned. */
+  readonly buildingDefinitions: ReadonlyMap<string, BuildingDefinition>;
+  readonly buildingSpawnPoints: ReadonlyMap<string, BuildingSpawnPoint>;
   readonly supplyNodeFile: ScannedFile | undefined;
   readonly railwayFile: ScannedFile | undefined;
+  /** The active heightmap, when the scan included it; decoded on first use. */
+  readonly heightmapFile: ScannedFile | undefined;
+  #heightmap: BmpImage | null | undefined;
+
+  /**
+   * Map height (the Y coordinate) at a bitmap pixel: the heightmap value divided by ten, as the
+   * game reads it. Without a readable heightmap of the province map's size, sea level (9.5).
+   */
+  heightAt(x: number, y: number): number {
+    if (this.#heightmap === undefined) {
+      this.#heightmap = null;
+      if (this.heightmapFile !== undefined)
+        try {
+          const decoded = BmpImage.decode(this.heightmapFile.bytes);
+          if (
+            decoded.bitsPerPixel === 8 &&
+            decoded.width === this.raster?.width &&
+            decoded.height === this.raster.height
+          )
+            this.#heightmap = decoded;
+        } catch {
+          this.#heightmap = null;
+        }
+    }
+    if (this.#heightmap === null) return 9.5;
+    const index = this.#heightmap.paletteIndexAt(
+      Math.min(Math.max(0, Math.floor(x)), this.#heightmap.width - 1),
+      Math.min(Math.max(0, Math.floor(y)), this.#heightmap.height - 1),
+    );
+    const color = this.#heightmap.palette[index];
+    return (color === undefined ? index : color.r) / 10;
+  }
 
   private constructor(
     files: readonly ScannedFile[],
@@ -1638,6 +1768,17 @@ export class MapWorkspaceIndex {
       terrainFiles.length === 0
         ? undefined
         : parseTerrainCategories(terrainFiles, this.diagnostics);
+    this.heightmapFile = mapFile(
+      this.activeFiles,
+      defaultMapSelectorValue(this.defaultMapFile, 'heightmap', 'heightmap.bmp'),
+      this.sourceRoots.map,
+    );
+    const buildingFiles = this.activeFiles.all.filter((file) =>
+      /^common\/buildings\/[^/]+\.txt$/iu.test(normalizedPath(file.relativePath)),
+    );
+    const buildings = parseBuildingDefinitions(buildingFiles, []);
+    this.buildingDefinitions = buildings.definitions;
+    this.buildingSpawnPoints = buildings.spawnPoints;
     this.adjacencyFile = mapFile(
       this.activeFiles,
       defaultMapSelectorValue(this.defaultMapFile, 'adjacencies', 'adjacencies.csv'),

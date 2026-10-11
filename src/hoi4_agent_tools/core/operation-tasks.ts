@@ -1,44 +1,10 @@
 import { z } from 'zod/v4';
-import { decisionInspectRequestSchema, impactInspectRequestSchema } from '../schemas/analysis.js';
 import {
-  mechanicTestRequestSchema,
-  packageCheckRequestSchema,
-  scenarioTestRequestSchema,
-} from '../schemas/scenarios.js';
-import {
-  eventCompareRequestSchema,
-  eventInspectRequestSchema,
-  eventRenderRequestSchema,
-} from '../schemas/event.js';
-import {
-  focusInspectRequestSchema,
-  focusRenderRequestSchema,
-  focusRewriteRequestSchema,
-} from '../schemas/focus-requests.js';
-import {
-  guiInspectRequestSchema,
-  guiRenderRequestSchema,
-  guiRewriteRequestSchema,
-} from '../schemas/gui-requests.js';
-import {
-  mapInspectRequestSchema,
-  mapRenderRequestSchema,
-  mapRewriteRequestSchema,
-} from '../schemas/map-requests.js';
-import {
-  probabilityCompareRequestSchema,
-  probabilityEvaluateRequestSchema,
-  probabilityInspectRequestSchema,
-  probabilityRenderRequestSchema,
-  probabilitySequenceRequestSchema,
-  probabilitySimulateRequestSchema,
-  probabilitySweepRequestSchema,
-} from '../schemas/probability-requests.js';
-import {
-  technologyCompareRequestSchema,
-  technologyInspectRequestSchema,
-  technologyRenderRequestSchema,
-} from '../schemas/technology.js';
+  DOMAIN_TOOL_ARGUMENT_SCHEMAS,
+  DOMAIN_TOOL_NAMES,
+  MUTATION_TOOL_NAMES,
+} from './domain-tools.js';
+import { normalizeToolArguments } from '../schemas/lenient-arguments.js';
 import type { CoreEngine } from './engine.js';
 import {
   currentJobOwner,
@@ -71,82 +37,21 @@ const authenticatedTaskIdSchema = z
   .regex(/^[a-z][a-z0-9_-]{0,63}:job_[a-f0-9]{64}\.[a-f0-9]{64}$/u);
 export const operationTaskCallSchema = z
   .object({
-    name: z.enum([
-      'hoi4.impact_inspect',
-      'hoi4.decision_inspect',
-      'hoi4.mechanic_test',
-      'hoi4.package_check',
-      'hoi4.scenario_test',
-      'hoi4.event_inspect',
-      'hoi4.event_render',
-      'hoi4.event_compare',
-      'hoi4.tech_inspect',
-      'hoi4.tech_render',
-      'hoi4.tech_compare',
-      'hoi4.probability_inspect',
-      'hoi4.probability_evaluate',
-      'hoi4.probability_sweep',
-      'hoi4.probability_simulate',
-      'hoi4.probability_sequence',
-      'hoi4.probability_compare',
-      'hoi4.probability_render',
-      'hoi4.map_inspect',
-      'hoi4.map_render',
-      'hoi4.map_rewrite',
-      'hoi4.gui_inspect',
-      'hoi4.gui_render',
-      'hoi4.gui_rewrite',
-      'hoi4.focus_inspect',
-      'hoi4.focus_render',
-      'hoi4.focus_raster',
-      'hoi4.focus_rewrite',
-    ]),
+    name: z.enum(DOMAIN_TOOL_NAMES),
     arguments: z.record(z.string(), z.json()),
   })
   .strict();
 export type OperationTaskCall = z.infer<typeof operationTaskCallSchema>;
-const taskArgumentSchemas: Record<OperationTaskCall['name'], z.ZodType<Record<string, unknown>>> = {
-  'hoi4.impact_inspect': impactInspectRequestSchema,
-  'hoi4.decision_inspect': decisionInspectRequestSchema,
-  'hoi4.mechanic_test': mechanicTestRequestSchema,
-  'hoi4.package_check': packageCheckRequestSchema,
-  'hoi4.scenario_test': scenarioTestRequestSchema,
-  'hoi4.event_inspect': eventInspectRequestSchema,
-  'hoi4.event_render': eventRenderRequestSchema,
-  'hoi4.event_compare': eventCompareRequestSchema,
-  'hoi4.tech_inspect': technologyInspectRequestSchema,
-  'hoi4.tech_render': technologyRenderRequestSchema,
-  'hoi4.tech_compare': technologyCompareRequestSchema,
-  'hoi4.probability_inspect': probabilityInspectRequestSchema,
-  'hoi4.probability_evaluate': probabilityEvaluateRequestSchema,
-  'hoi4.probability_sweep': probabilitySweepRequestSchema,
-  'hoi4.probability_simulate': probabilitySimulateRequestSchema,
-  'hoi4.probability_sequence': probabilitySequenceRequestSchema,
-  'hoi4.probability_compare': probabilityCompareRequestSchema,
-  'hoi4.probability_render': probabilityRenderRequestSchema,
-  'hoi4.map_inspect': mapInspectRequestSchema,
-  'hoi4.map_render': mapRenderRequestSchema,
-  'hoi4.map_rewrite': mapRewriteRequestSchema,
-  'hoi4.gui_inspect': guiInspectRequestSchema,
-  'hoi4.gui_render': guiRenderRequestSchema,
-  'hoi4.gui_rewrite': guiRewriteRequestSchema,
-  'hoi4.focus_inspect': focusInspectRequestSchema,
-  'hoi4.focus_render': focusRenderRequestSchema,
-  'hoi4.focus_raster': focusRenderRequestSchema,
-  'hoi4.focus_rewrite': focusRewriteRequestSchema,
-};
+const taskArgumentSchemas = DOMAIN_TOOL_ARGUMENT_SCHEMAS;
 
 const sourceResolvingTools = new Set([
   'hoi4.focus_inspect',
   'hoi4.focus_render',
-  'hoi4.focus_raster',
   'hoi4.focus_rewrite',
 ]);
 
-const mutationTools = new Set(['hoi4.gui_rewrite', 'hoi4.map_rewrite', 'hoi4.focus_rewrite']);
-
 export function isMutationTask(name: string): boolean {
-  return mutationTools.has(name);
+  return MUTATION_TOOL_NAMES.has(name);
 }
 
 export interface OperationTaskOptions {
@@ -193,21 +98,52 @@ export function operationTaskMessage(record: JobRecord): string | undefined {
 }
 
 /** Protocol-independent task execution, ownership, retention, and recovery over durable jobs. */
-export class OperationTaskService {
-  private jobsPromise?: Promise<JobService>;
-  private workerPromise?: Promise<JobWorkerHost>;
-  private readonly launches = new Map<string, Promise<void>>();
+/**
+ * One job service, worker host and launch registry per engine. A service is created per HTTP
+ * request or session, and polling a queued task from each would otherwise start another
+ * launcher for the same job every time.
+ */
+interface EngineTaskState {
+  jobs?: Promise<JobService>;
+  worker?: Promise<JobWorkerHost>;
+  launches: Map<string, Promise<void>>;
+}
+const engineTaskStates = new WeakMap<CoreEngine, EngineTaskState>();
 
-  constructor(private readonly engine: CoreEngine) {}
+const REJECTED_TASK_RETENTION_MS = 300_000;
+
+/** Let an engine's idle warm workers exit, for example when its last client disconnects. */
+export async function releaseIdleWorkers(engine: CoreEngine): Promise<void> {
+  const worker = engineTaskStates.get(engine)?.worker;
+  if (worker === undefined) return;
+  (await worker.catch(() => undefined))?.releaseIdleWorkers();
+}
+
+export class OperationTaskService {
+  private readonly state: EngineTaskState;
+
+  constructor(private readonly engine: CoreEngine) {
+    const state = engineTaskStates.get(engine) ?? { launches: new Map() };
+    engineTaskStates.set(engine, state);
+    this.state = state;
+  }
+
+  private get launches(): Map<string, Promise<void>> {
+    return this.state.launches;
+  }
 
   private jobs(): Promise<JobService> {
-    this.jobsPromise ??= JobService.create(this.engine.resolver);
-    return this.jobsPromise;
+    // The first use per engine also sweeps results nobody will read again.
+    this.state.jobs ??= JobService.create(this.engine.resolver).then(async (jobs) => {
+      await jobs.store.sweepExpired().catch(() => 0);
+      return jobs;
+    });
+    return this.state.jobs;
   }
 
   private worker(): Promise<JobWorkerHost> {
-    this.workerPromise ??= this.jobs().then((jobs) => JobWorkerHost.create(this.engine, jobs));
-    return this.workerPromise;
+    this.state.worker ??= this.jobs().then((jobs) => JobWorkerHost.create(this.engine, jobs));
+    return this.state.worker;
   }
 
   async submit(
@@ -216,7 +152,10 @@ export class OperationTaskService {
     options: OperationTaskOptions,
   ): Promise<JobRecord> {
     const parsed = operationTaskCallSchema.parse(input);
-    const validatedArguments = taskArgumentSchemas[parsed.name].parse(parsed.arguments);
+    // The same shorthand normalization as the transport, for callers that submit directly.
+    const validatedArguments = taskArgumentSchemas[parsed.name].parse(
+      normalizeToolArguments(parsed.name, parsed.arguments),
+    );
     const requestSignal = options.signal;
     const mutation = isMutationTask(parsed.name);
     const explicitTask = options.background;
@@ -292,16 +231,24 @@ export class OperationTaskService {
       context.principal,
       requestSignal,
     );
+    let cancel: (() => void) | undefined;
     if (!explicitTask && requestSignal !== undefined) {
       if (requestSignal.aborted) {
         return jobs.cancel(workspaceId, record.id, context.principal);
       }
-      const cancel = (): void => {
+      cancel = (): void => {
         void jobs.cancel(workspaceId, record.id, context.principal).catch(() => undefined);
       };
       requestSignal.addEventListener('abort', cancel, { once: true });
     }
-    await this.ensureExecution(record, context.principal);
+    this.ensureExecution(record, context.principal);
+    // A finished job needs no cancellation; release the listener with its execution.
+    if (cancel !== undefined && requestSignal !== undefined) {
+      const listener = cancel;
+      const release = (): void => requestSignal.removeEventListener('abort', listener);
+      // Release on rejection too; the launch handles its own failure where it is created.
+      void this.launches.get(operationTaskId(record))?.then(release, release);
+    }
     return record;
   }
 
@@ -341,11 +288,11 @@ export class OperationTaskService {
     return this.resume(record, context, options);
   }
 
-  private async resume(
+  private resume(
     record: JobRecord | null,
     context: OperationContext,
     options: { resume?: boolean },
-  ): Promise<JobRecord | null> {
+  ): JobRecord | null {
     if (record?.request.protocolTask === undefined) return null;
     if (options.resume === false) return record;
     // Reading a retained rewrite must not resume it under a credential that lost write scope.
@@ -355,7 +302,7 @@ export class OperationTaskService {
       !context.scopes.includes('hoi4:write')
     )
       return record;
-    await this.ensureExecution(record, context.principal);
+    this.ensureExecution(record, context.principal);
     return record;
   }
 
@@ -497,7 +444,8 @@ export class OperationTaskService {
         mutation: false,
         requestKey: `rejected:${secureId('request')}`,
         protocolTask: {
-          ttl: taskRetention(options.ttlMs),
+          // A refusal is read once; it need not outlive a short retry window.
+          ttl: Math.min(taskRetention(options.ttlMs), REJECTED_TASK_RETENTION_MS),
           pollInterval: TASK_POLL_INTERVAL,
         },
       },
@@ -517,7 +465,7 @@ export class OperationTaskService {
     return completed;
   }
 
-  private async ensureExecution(record: JobRecord, principal?: string): Promise<void> {
+  private ensureExecution(record: JobRecord, principal?: string): void {
     if (['completed', 'failed', 'cancelled'].includes(record.status)) return;
     if (
       record.status !== 'queued' &&
@@ -526,9 +474,9 @@ export class OperationTaskService {
       return;
     const key = operationTaskId(record);
     if (this.launches.has(key)) return;
-    const worker = await this.worker();
-    const launched = worker
-      .run(record.scope.workspaceId, record.id, principal)
+    // Registered before any await, so a concurrent poll cannot start a second launcher.
+    const launched = this.worker()
+      .then((worker) => worker.run(record.scope.workspaceId, record.id, principal))
       .then(() => undefined)
       .catch(async (error: unknown) => {
         const jobs = await this.jobs();

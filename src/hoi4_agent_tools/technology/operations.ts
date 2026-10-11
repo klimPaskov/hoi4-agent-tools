@@ -6,6 +6,7 @@ import { setInlineFilesScanned } from '../core/operation-result.js';
 import {
   technologyCompareRequestSchema,
   technologyInspectRequestSchema,
+  splitTechnologyInspectRequest,
   technologyRenderRequestSchema,
 } from '../schemas/technology.js';
 import type { TechnologyGraphSnapshot } from './model.js';
@@ -22,6 +23,25 @@ export function normalizeTechnologyInspectionRequest(input: unknown): Technology
   return JSON.parse(
     JSON.stringify(technologyInspectRequestSchema.parse(input)),
   ) as TechnologyAnalysisInput;
+}
+
+/** Route mode compare to the graph comparison and every other mode to analysis. */
+export function inspectOrCompareTechnologies(
+  viewer: TechnologyTreeViewer,
+  input: TechnologyAnalysisInput,
+) {
+  const split = splitTechnologyInspectRequest(input);
+  if (!split.compare) return inspectTechnologies(viewer, input);
+  const { signal, principal } = input as TechnologyAnalysisInput & {
+    signal?: AbortSignal;
+    principal?: string;
+  };
+  return compareTechnologies(viewer, {
+    ...(JSON.parse(JSON.stringify(split.request)) as TechnologyCompareInput),
+    workspaceId: input.workspaceId,
+    ...(principal === undefined ? {} : { principal }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 export function normalizeTechnologyRenderRequest(input: unknown): TechnologyRenderServiceInput {

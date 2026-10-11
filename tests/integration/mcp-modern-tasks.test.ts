@@ -774,14 +774,20 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       );
       expect(denied).toEqual(missing);
       expect(denied).toMatchObject({ isError: true, structuredContent: { code: 'JOB_NOT_FOUND' } });
-      expect(
-        (
-          await wire.request('tools/call', {
-            name,
-            arguments: { workspaceId: 'alpha', jobId: queued.id, principal: 'beta-user' },
-          })
-        ).error,
-      ).toMatchObject({ code: -32602 });
+      // A tool error, which clients show to the model, names the tool and the offending field.
+      const rejected = result(
+        await wire.request('tools/call', {
+          name,
+          arguments: { workspaceId: 'alpha', jobId: queued.id, principal: 'beta-user' },
+        }),
+      );
+      expect(rejected).toMatchObject({
+        isError: true,
+        structuredContent: { code: 'INVALID_ARGUMENTS' },
+      });
+      expect(JSON.stringify(rejected.content)).toMatch(
+        new RegExp(`${name.replace('.', '\\.')}:.*principal`, 'u'),
+      );
     }
     expect(
       result(
@@ -1332,14 +1338,18 @@ describe.each<Mode>(['stdio', 'http'])('2026-07-28 tasks over %s serving', (mode
       code: -32602,
       message: 'Task not found',
     });
-    expect(
-      (
-        await wire.request('tools/call', {
-          name: 'hoi4.event_inspect',
-          arguments: { workspaceId: 'alpha', unknownField: true },
-        })
-      ).error,
-    ).toMatchObject({ code: -32602 });
+    // Invalid tool arguments are a tool error the model can read, not a protocol error.
+    const invalid = result(
+      await wire.request('tools/call', {
+        name: 'hoi4.event_inspect',
+        arguments: { workspaceId: 'alpha', unknownField: true },
+      }),
+    );
+    expect(invalid).toMatchObject({
+      isError: true,
+      structuredContent: { code: 'INVALID_ARGUMENTS' },
+    });
+    expect(JSON.stringify(invalid.content)).toContain('unknownField');
   });
 
   it('ignores unknown update keys and cannot cancel or resume writes with read-only scope', async () => {
@@ -1470,7 +1480,7 @@ it('retains all shared tool names, descriptions, annotations, and schemas across
   expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   const listed = await client.listTools();
   const operations = listed.tools.map(({ execution: _execution, ...definition }) => definition);
-  expect(operations).toHaveLength(35);
+  expect(operations).toHaveLength(28);
   expect(modern.tools).toEqual(operations);
 });
 
@@ -1491,7 +1501,7 @@ it('supports the official SDK v2 ordinary-call client without requiring the Task
   });
   await client.connect(clientTransport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools).toHaveLength(35);
+  expect((await client.listTools()).tools).toHaveLength(28);
   expect((await client.listPrompts()).prompts.map(({ name }) => name)).toEqual([
     'hoi4.probability_analysis',
   ]);
@@ -1529,7 +1539,8 @@ it('rejects mismatched HTTP task-routing headers', async () => {
         'mcp-name': 'different-task',
       })
     ).error,
-  ).toMatchObject({ code: -32602 });
+    // The SDK's inbound ladder answers a header that disagrees with the body with HeaderMismatch.
+  ).toMatchObject({ code: -32020 });
   expect(
     (
       await wire.request('tasks/get', { taskId: 'missing' }, capabilities, {

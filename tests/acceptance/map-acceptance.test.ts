@@ -1177,6 +1177,8 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
         sourceStateId: 1,
         targetStateId: 2,
         provinceIds: [4],
+        // Omitting the policy redistributes by land share; a partial one is refused.
+        distribution: { stateValues: 'retain-in-current-states' },
       },
       {
         id: 'province-policy-unresolved',
@@ -1439,7 +1441,8 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     expect(firstDiff.bundle.semantic.supplyNodes.length).toBeGreaterThan(0);
     expect(firstDiff.bundle.semantic.railways.length).toBeGreaterThan(0);
     expect(firstDiff.bundle.semantic.adjacencies.length).toBeGreaterThan(0);
-    expect(firstDiff.beforeBundle.hashes).not.toEqual(firstDiff.proposedBundle.hashes);
+    expect(firstDiff.beforeBundle).toBeDefined();
+    expect(firstDiff.beforeBundle!.hashes).not.toEqual(firstDiff.proposedBundle.hashes);
     const diffEvidence = JSON.parse(firstDiff.bundle.json) as {
       review: {
         operationIds: string[];

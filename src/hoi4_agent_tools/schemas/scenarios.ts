@@ -181,14 +181,12 @@ const readOnlySuiteTool = z.enum([
   'hoi4.tech_inspect',
   'hoi4.tech_render',
   'hoi4.probability_inspect',
-  'hoi4.probability_evaluate',
-  'hoi4.probability_render',
+  'hoi4.probability_analyze',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
   'hoi4.map_inspect',
-  'hoi4.map_render',
 ]);
 const suiteCaseMetadata = {
   sourceSelectors: z.array(manifestItem).max(64).default([]),

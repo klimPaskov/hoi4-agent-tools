@@ -544,6 +544,24 @@ describe('Streamable HTTP deployment limits', () => {
     if (typeof address !== 'object' || address === null) throw new Error('server not bound');
     const sockets: Socket[] = [];
     try {
+      // An unauthenticated slow upload is refused before its body is read and holds nothing.
+      const anonymous = createConnection({ host: '127.0.0.1', port: address.port });
+      sockets.push(anonymous);
+      const anonymousReply = new Promise<string>((resolve) => {
+        anonymous.once('data', (chunk: Buffer) => resolve(chunk.toString('latin1')));
+      });
+      anonymous.write(
+        [
+          'POST /mcp HTTP/1.1',
+          `Host: 127.0.0.1:${address.port}`,
+          `Origin: ${origin}`,
+          'Content-Type: application/json',
+          `Content-Length: ${HTTP_MAX_BODY_BYTES}`,
+          '',
+          '{',
+        ].join('\r\n'),
+      );
+      expect(await anonymousReply).toMatch(/^HTTP\/1\.1 401/u);
       for (let index = 0; index < 2; index += 1) {
         const socket = createConnection({ host: '127.0.0.1', port: address.port });
         sockets.push(socket);
@@ -556,6 +574,7 @@ describe('Streamable HTTP deployment limits', () => {
             'POST /mcp HTTP/1.1',
             `Host: 127.0.0.1:${address.port}`,
             `Origin: ${origin}`,
+            `Authorization: Bearer ${token}`,
             'Content-Type: application/json',
             `Content-Length: ${HTTP_MAX_BODY_BYTES}`,
             '',

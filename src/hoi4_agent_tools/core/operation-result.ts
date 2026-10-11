@@ -7,7 +7,21 @@ export { MAX_INLINE_ARTIFACT_LINKS } from './result.js';
 import { diagnosticSchema } from '../schemas/common.js';
 import { artifactLinkSchema, validationSummarySchema } from '../schemas/transaction.js';
 
-export const MAX_INLINE_FILES_SCANNED = 64;
+// Agents act on the mod's own files; a long inventory of scanned game files is linked evidence.
+export const MAX_INLINE_FILES_SCANNED = 12;
+/**
+ * Resource links shown beside the summary. Every artifact stays in `structuredContent.artifacts`,
+ * which clients show as well, so a long gallery is not listed twice; images and reports come first.
+ */
+export const MAX_CONTENT_RESOURCE_LINKS = 8;
+const linkPriority = (mimeType: string): number =>
+  mimeType === 'image/png'
+    ? 0
+    : mimeType === 'text/html'
+      ? 2
+      : mimeType === 'image/svg+xml'
+        ? 3
+        : 1;
 export const MAX_INLINE_PROPOSED_FILES = 64;
 export const MAX_INLINE_CHANGED_FILES = 64;
 export const MAX_INLINE_DIAGNOSTICS = 20;
@@ -85,7 +99,12 @@ export function setInlineFilesScanned(
   result: ServiceResult<unknown>,
   files: readonly string[],
 ): void {
-  result.filesScanned = files.slice(0, MAX_INLINE_FILES_SCANNED);
+  // Mod files first: they are the ones an agent can change.
+  const ordered = [
+    ...files.filter((file) => file.startsWith('mod:')),
+    ...files.filter((file) => !file.startsWith('mod:')),
+  ];
+  result.filesScanned = ordered.slice(0, MAX_INLINE_FILES_SCANNED);
   if (files.length <= MAX_INLINE_FILES_SCANNED) return;
   const truncation: Diagnostic = {
     code: 'MCP_INLINE_FILES_TRUNCATED',
@@ -118,6 +137,39 @@ function preserveDeferredFilesDiagnostic(result: ServiceResult<unknown>): Servic
   };
 }
 
+/**
+ * When a result is too large, keep the first few diagnostics with their code, message and
+ * location only; the linked evidence holds the rest.
+ */
+function essentialDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic[] {
+  const kept: Diagnostic[] = [];
+  let bytes = 0;
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.code === 'MCP_RESPONSE_TRUNCATED' || kept.length >= 5) continue;
+    const essential: Diagnostic = {
+      code: diagnostic.code.slice(0, 256),
+      severity: diagnostic.severity,
+      category: diagnostic.category,
+      message: diagnostic.message.slice(0, 300),
+      ...(diagnostic.location === undefined
+        ? {}
+        : {
+            location: {
+              ...diagnostic.location,
+              path: diagnostic.location.path.slice(0, 512),
+              ...(diagnostic.location.symbol === undefined
+                ? {}
+                : { symbol: diagnostic.location.symbol.slice(0, 128) }),
+            },
+          }),
+    };
+    bytes += Buffer.byteLength(JSON.stringify(essential), 'utf8');
+    if (bytes > 6_000) break;
+    kept.push(essential);
+  }
+  return kept;
+}
+
 function boundedResult(
   result: ServiceResult<unknown>,
   actualBytes: number,
@@ -143,7 +195,7 @@ function boundedResult(
     filesScanned: [],
     proposedFiles: [],
     changedFiles: [],
-    diagnostics: [truncationDiagnostic],
+    diagnostics: [truncationDiagnostic, ...essentialDiagnostics(result.diagnostics)],
     artifacts: result.artifacts
       .slice(0, 1)
       .map(({ description: _description, ...artifact }) => artifact),
@@ -247,11 +299,37 @@ function jsonBytesWithin(value: unknown, budget: number): boolean {
   return visit(value);
 }
 
+/** The most frequent diagnostic codes, so an omitted flood is still visible by kind. */
+function diagnosticCodeCounts(diagnostics: readonly Diagnostic[]): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const { code } of diagnostics) counts.set(code, (counts.get(code) ?? 0) + 1);
+  return Object.fromEntries(
+    [...counts]
+      .sort(
+        ([leftCode, left], [rightCode, right]) =>
+          right - left || (leftCode < rightCode ? -1 : leftCode > rightCode ? 1 : 0),
+      )
+      .slice(0, 12)
+      .map(([code, count]) => [code.slice(0, 256), count]),
+  );
+}
+
 function compactDetails(details: Record<string, unknown>): Record<string, unknown> {
   return jsonBytesWithin(details, 2_048) ? details : { truncated: true };
 }
 
-function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unknown> {
+/** A passed check that only says its problem was not found carries nothing to act on. */
+function withoutCleanChecks(result: ServiceResult<unknown>): ServiceResult<unknown> {
+  const checks = result.validation.checks.filter(
+    (check) => !(check.passed && check.message.endsWith('not detected.')),
+  );
+  return checks.length === result.validation.checks.length
+    ? result
+    : { ...result, validation: { ...result.validation, checks } };
+}
+
+function compactDescriptions(unfiltered: ServiceResult<unknown>): ServiceResult<unknown> {
+  const result = withoutCleanChecks(unfiltered);
   const compactLocation = (location: Diagnostic['location']) =>
     location === undefined
       ? undefined
@@ -298,12 +376,19 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
   const hardDiagnostics = result.diagnostics.filter(
     ({ severity }) => severity === 'error' || severity === 'blocker',
   );
-  const priorityDiagnostics = result.diagnostics.filter(
-    ({ code, severity }) =>
-      severity === 'error' || severity === 'blocker' || code === 'MCP_INLINE_FILES_TRUNCATED',
+  // Within each class, diagnostics in the mod's own files come before game or dependency ones.
+  const modFirst = (diagnostics: Diagnostic[]): Diagnostic[] => [
+    ...diagnostics.filter(({ location }) => location?.path.startsWith('mod:') === true),
+    ...diagnostics.filter(({ location }) => location?.path.startsWith('mod:') !== true),
+  ];
+  const priorityDiagnostics = modFirst(
+    result.diagnostics.filter(
+      ({ code, severity }) =>
+        severity === 'error' || severity === 'blocker' || code === 'MCP_INLINE_FILES_TRUNCATED',
+    ),
   );
-  const otherDiagnostics = result.diagnostics.filter(
-    (diagnostic) => !priorityDiagnostics.includes(diagnostic),
+  const otherDiagnostics = modFirst(
+    result.diagnostics.filter((diagnostic) => !priorityDiagnostics.includes(diagnostic)),
   );
   const retainedPriorityDiagnostics = priorityDiagnostics.slice(0, diagnosticSlots);
   const retainedDiagnostics = [
@@ -343,6 +428,9 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
           collections: truncatedCollections,
           diagnosticsReturned: retainedDiagnostics.length,
           omittedHardDiagnostics,
+          ...(result.diagnostics.length > retainedDiagnostics.length
+            ? { codeCounts: diagnosticCodeCounts(result.diagnostics) }
+            : {}),
         },
       }
     : undefined;
@@ -380,7 +468,16 @@ function compactDescriptions(result: ServiceResult<unknown>): ServiceResult<unkn
 
 function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
   const structuredContent = operationResultSchema.parse(selected) as Record<string, unknown>;
-  const links = selected.artifacts.map((artifact) => ({
+  const shown = selected.artifacts
+    .map((artifact, order) => ({ artifact, order }))
+    .sort(
+      (left, right) =>
+        linkPriority(left.artifact.mimeType) - linkPriority(right.artifact.mimeType) ||
+        left.order - right.order,
+    )
+    .slice(0, MAX_CONTENT_RESOURCE_LINKS)
+    .map(({ artifact }) => artifact);
+  const links = shown.map((artifact) => ({
     type: 'resource_link' as const,
     uri: artifact.uri,
     name: artifact.name,
@@ -388,11 +485,27 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
     ...(artifact.description === undefined ? {} : { description: artifact.description }),
     ...(artifact.size === undefined ? {} : { size: artifact.size }),
   }));
+  // Clients show an error's text, not its structured content, so an error or a blocked
+  // result carries what went wrong and how to proceed in the text as well.
   const summary = canonicalJson({
     status: selected.status,
     code: selected.code,
     workspaceId: selected.workspaceId,
     artifactCount: selected.artifacts.length,
+    ...(selected.artifacts.length > shown.length
+      ? { artifactsListedInStructuredContent: selected.artifacts.length }
+      : {}),
+    ...(selected.status === 'ok' || selected.blockers.length === 0
+      ? {}
+      : {
+          blockers: selected.blockers.slice(0, 3).map(({ code, message, details }) => ({
+            code,
+            message,
+            ...(details === undefined || Object.keys(details).length === 0
+              ? {}
+              : { details: compactDetails(details) }),
+          })),
+        }),
   });
   return {
     content: [{ type: 'text', text: summary }, ...links],
@@ -421,6 +534,26 @@ export function toolResult(result: ServiceResult<unknown>): ToolResultOutput {
   return output;
 }
 
+/** Paths in a message can name private folders; the file name is enough to act on. */
+function withoutDirectories(message: string): string {
+  return message
+    .replace(/(?:[A-Za-z]:)?[\\/](?:[^\s'"`:\\/]+[\\/])+([^\s'"`:\\/]+)/gu, '$1')
+    .slice(0, 300);
+}
+
+/**
+ * An unexpected failure is a server defect. Name the error kind and its path-free message so
+ * the caller can tell a malformed source from a bug, and say what to do next.
+ */
+export function internalServiceError(error: unknown): ServiceError {
+  const kind = error instanceof Error ? error.name : typeof error;
+  const message = error instanceof Error ? withoutDirectories(error.message) : '';
+  return new ServiceError(
+    'INTERNAL_ERROR',
+    `Unexpected ${kind}${message.length > 0 ? `: ${message}` : ''}. Retry once with a narrower selector; if it repeats, report this message with the tool name and arguments.`,
+  );
+}
+
 export function errorResult(
   error: unknown,
   workspaceId = '',
@@ -432,10 +565,7 @@ export function errorResult(
     data?: unknown;
   } = {},
 ): ReturnType<typeof toolResult> {
-  const serviceError =
-    error instanceof ServiceError
-      ? error
-      : new ServiceError('INTERNAL_ERROR', 'Unexpected internal error');
+  const serviceError = error instanceof ServiceError ? error : internalServiceError(error);
   const internalWriteError = serviceError.code.startsWith('TRANSACTION_');
   const publicCode = internalWriteError
     ? `REWRITE_${serviceError.code.slice('TRANSACTION_'.length)}`

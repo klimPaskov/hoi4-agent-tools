@@ -171,6 +171,11 @@ export const serverConfigurationSchema = z
     stdioIdleExitMinutes: z.number().int().min(0).max(10_080).default(0),
     /** V8 heap ceiling for each job worker in MiB; unset keeps Node's default. */
     jobWorkerMaxHeapMiB: z.number().int().min(256).max(65_536).optional(),
+    /**
+     * A job worker stays warm this many seconds after a job, so the next job reuses its loaded
+     * indexes instead of scanning cold; 0 starts a fresh worker for every job.
+     */
+    jobWorkerIdleSeconds: z.number().int().min(0).max(3_600).default(180),
     scanMaxBytes: z
       .number()
       .int()
@@ -198,6 +203,8 @@ export const serverConfigurationSchema = z
       .default(134_217_728),
     modRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     gameRoot: z.string().min(1).optional(),
+    /** The game's user-data folder holding logs/ and mod/; derived from the mod folder when unset. */
+    gameUserRoot: z.string().min(1).optional(),
     workspaceStorageRoot: z.string().min(1).optional(),
     storageRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     workspaces: z.array(workspaceRegistrationSchema).max(WORKSPACE_MAX_REGISTRATIONS).default([]),

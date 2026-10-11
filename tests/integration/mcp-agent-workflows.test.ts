@@ -182,7 +182,7 @@ describe('MCP coding-agent workflows', () => {
     const rendered = resultOf(
       await client.callTool({
         name: 'hoi4.focus_render',
-        arguments: { workspaceId: 'focus', relativePath, treeId: 'workflow_tree' },
+        arguments: { workspaceId: 'focus', relativePath, treeId: 'workflow_tree', png: false },
       }),
     );
     expect(rendered).toMatchObject({
@@ -196,7 +196,7 @@ describe('MCP coding-agent workflows', () => {
     expect(rendered.artifacts.some(({ mimeType }) => mimeType === 'image/png')).toBe(false);
     const rasterized = resultOf(
       await client.callTool({
-        name: 'hoi4.focus_raster',
+        name: 'hoi4.focus_render',
         arguments: { workspaceId: 'focus', relativePath, treeId: 'workflow_tree' },
       }),
     );
@@ -726,7 +726,7 @@ describe('MCP coding-agent workflows', () => {
 
     const rendered = resultOf(
       await client.callTool({
-        name: 'hoi4.map_render',
+        name: 'hoi4.map_inspect',
         arguments: { workspaceId: 'map', layer: 'province', overlays: ['coastlines'] },
       }),
     );
@@ -736,7 +736,7 @@ describe('MCP coding-agent workflows', () => {
     );
     const tile = resultOf(
       await client.callTool({
-        name: 'hoi4.map_render',
+        name: 'hoi4.map_inspect',
         arguments: {
           workspaceId: 'map',
           layer: 'province',
@@ -756,7 +756,7 @@ describe('MCP coding-agent workflows', () => {
     });
     const area = resultOf(
       await client.callTool({
-        name: 'hoi4.map_render',
+        name: 'hoi4.map_inspect',
         arguments: {
           workspaceId: 'map',
           layer: 'province',

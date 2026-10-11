@@ -70,6 +70,10 @@ describe('workspace path policy', () => {
       await expect(
         resolver.resolvePath('test', relativePath, 'write', ['mod']),
       ).rejects.toMatchObject({ code: 'PATH_GENERATED_STORAGE_RESERVED' });
+      // Server storage holds other principals' proposals, so reads are refused as well.
+      await expect(resolver.resolvePath('test', relativePath, 'read')).rejects.toMatchObject({
+        code: 'PATH_GENERATED_STORAGE_RESERVED',
+      });
     }
   });
 

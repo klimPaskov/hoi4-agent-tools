@@ -106,8 +106,9 @@ describe('MCP Technology Tree Viewer workflow', () => {
         code: 'TECH_RENDERED',
       },
       {
-        name: 'hoi4.tech_compare',
+        name: 'hoi4.tech_inspect',
         arguments: {
+          mode: 'compare',
           proposedSources: [
             {
               relativePath: 'common/technologies/synthetic_technologies_01.txt',

@@ -106,9 +106,16 @@ export function rateLimitClientAddress(
   if (!trusted.has(socketAddress)) return socketAddress;
   const forwarded = request.headers['x-forwarded-for'];
   if (typeof forwarded !== 'string') return undefined;
-  const client = forwarded.split(',')[0]?.trim();
-  if (client === undefined || isIP(client) === 0) return undefined;
-  return normalizeIpAddress(client);
+  // Proxies append to the right, so only the entries after the last untrusted hop are
+  // trustworthy; the leftmost entry is whatever the client sent.
+  const hops = forwarded.split(',').map((hop) => hop.trim());
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    const hop = hops[index]!;
+    if (isIP(hop) === 0) return undefined;
+    const normalized = normalizeIpAddress(hop);
+    if (!trusted.has(normalized)) return normalized;
+  }
+  return undefined;
 }
 
 export function requiredScopesForMcpRequest(
@@ -651,6 +658,35 @@ export async function startHttpServer(
   // Supplying a defined parsed body to handleRequest prevents the SDK from falling back to
   // an unbounded Request.json() parse for alternate media types or empty established-session
   // requests. GET and DELETE deliberately remain bodyless.
+  // Authenticate before reading the body, so an unauthenticated caller cannot hold a request
+  // slot and body budget while it sends one slowly. Scopes that depend on the parsed body are
+  // checked again afterwards.
+  app.post('/mcp', async (request: Request, response: Response, next: NextFunction) => {
+    const baseScopes = requiredScopesForMcpRequest(configuration, undefined);
+    try {
+      const authorization = request.headers.authorization;
+      await authenticate(
+        Array.isArray(authorization) ? undefined : authorization,
+        configuration,
+        baseScopes,
+      );
+      next();
+    } catch (error) {
+      sendAuthError(
+        response,
+        configuration,
+        error instanceof HttpAuthError
+          ? error
+          : new HttpAuthError(
+              401,
+              'AUTH_INVALID',
+              'Authentication failed',
+              'invalid_token',
+              baseScopes,
+            ),
+      );
+    }
+  });
   app.post(
     '/mcp',
     express.json({

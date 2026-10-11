@@ -26,7 +26,9 @@ export { processAlive };
 
 export class StdioLifetime {
   readonly #options: Required<Omit<StdioLifetimeOptions, 'parentPid'>> & { parentPid: number };
-  readonly #open = new Set<string | number>();
+  /** Open client requests and when each arrived. */
+  readonly #open = new Map<string | number, number>();
+  #parentGone = false;
   #lastActivity: number;
   #timer: NodeJS.Timeout | undefined;
   #stopped = false;
@@ -58,7 +60,10 @@ export class StdioLifetime {
   received(message: unknown): void {
     this.#lastActivity = this.#options.now();
     const id = requestId(message, 'method');
-    if (id !== undefined) this.#open.add(id);
+    if (id !== undefined) this.#open.set(id, this.#lastActivity);
+    // A cancelled request gets no response, so the cancellation closes it.
+    const cancelled = cancelledRequestId(message);
+    if (cancelled !== undefined) this.#open.delete(cancelled);
   }
 
   /** A server message: a response closes its request. */
@@ -75,22 +80,34 @@ export class StdioLifetime {
 
   check(): void {
     if (this.#stopped) return;
-    const { parentPid, isAlive, idleExitMinutes, now, onExit } = this.#options;
-    // A parent pid of 0 or 1 means the server was already reparented at start.
-    if (parentPid > 1 && !isAlive(parentPid)) {
+    const { parentPid, isAlive, idleExitMinutes, now, onExit, pollMs } = this.#options;
+    const idleMs = idleExitMinutes * 60_000;
+    // A request open for twice the idle limit was abandoned by its client.
+    if (idleMs > 0)
+      for (const [id, openedAt] of this.#open)
+        if (now() - openedAt > 2 * idleMs) this.#open.delete(id);
+    // A parent pid of 0 or 1 means the server was already reparented at start. Once the
+    // parent is gone, the server finishes open requests and waits for a quiet poll first,
+    // since some launchers exit while the client keeps using the pipes.
+    if (parentPid > 1 && !this.#parentGone && !isAlive(parentPid)) this.#parentGone = true;
+    if (this.#parentGone && this.#open.size === 0 && now() - this.#lastActivity >= pollMs) {
       this.stop();
       onExit('parent_exited');
       return;
     }
-    if (
-      idleExitMinutes > 0 &&
-      this.#open.size === 0 &&
-      now() - this.#lastActivity > idleExitMinutes * 60_000
-    ) {
+    if (idleMs > 0 && this.#open.size === 0 && now() - this.#lastActivity > idleMs) {
       this.stop();
       onExit('idle');
     }
   }
+}
+
+function cancelledRequestId(message: unknown): string | number | undefined {
+  if (typeof message !== 'object' || message === null) return undefined;
+  const { method, params } = message as { method?: unknown; params?: { requestId?: unknown } };
+  if (method !== 'notifications/cancelled') return undefined;
+  const id = params?.requestId;
+  return typeof id === 'string' || typeof id === 'number' ? id : undefined;
 }
 
 function requestId(message: unknown, field: string): string | number | undefined {

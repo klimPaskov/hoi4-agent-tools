@@ -93,7 +93,11 @@ describe('background transaction boundary', () => {
     const apply = vi.spyOn(engine.transactions, 'apply');
     expect(await execution.execute('test', record.id, owner.token, transaction)).toMatchObject({
       status: 'failed',
-      failure: { code: 'JOB_REWRITE_RESTORED' },
+      failure: {
+        code: 'JOB_REWRITE_RESTORED',
+        // The agent is told why the write was undone, not only that it was.
+        message: expect.stringContaining('SOURCE_UNCLOSED_BLOCK') as unknown,
+      },
     });
     expect(apply).toHaveBeenCalledTimes(1);
     expect(await readFile(target, 'utf8')).toBe('value = before\n');

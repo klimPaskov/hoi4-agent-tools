@@ -91,10 +91,22 @@ export const focusRenderRequestSchema = z
     cropFocusIds: z.array(z.string().min(1).max(256)).max(16).optional(),
     columns: z.number().int().min(1).max(12).optional(),
     padding: z.number().int().min(0).max(1000).optional(),
+    png: z
+      .boolean()
+      .optional()
+      .describe(
+        'Default true: add a PNG with decoded source icons. False returns only the faster HTML, SVG and JSON.',
+      ),
   })
   .strict()
   .superRefine((value, context) => {
     const mode = value.mode ?? 'national';
+    if (value.png === false && (value.cropFocusIds?.length ?? 0) > 0)
+      context.addIssue({
+        code: 'custom',
+        path: ['cropFocusIds'],
+        message: 'cropFocusIds produce PNG crops; omit png or set it to true',
+      });
     const invalid =
       mode === 'national'
         ? ([

@@ -33,13 +33,13 @@ To analyze edited source or use a different depth, start a new request without t
 
 `helperExpansion` has these optional fields:
 
-| Field             | Contract                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `rootIds`         | Up to 2,000 exact structural helper-call root IDs; omitted means all recognized non-helper callers. Obtain IDs from a page's `rootId` or the linked ordinary scan graph. |
-| `maxDepth`        | 1–256 helper calls, default 64.                                                                                                                                          |
-| `maxRecords`      | 1–5,000 records per page, default 250.                                                                                                                                   |
-| `maxWork`         | 1–100,000 traversal transitions per page, default 5,000.                                                                                                                 |
-| `continuationUri` | Opaque sibling resource returned in the prior tool result. Do not edit or construct it.                                                                                  |
+| Field             | Contract                                                                                                                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rootIds`         | 1 to 2,000 exact structural helper-call root IDs; an empty array is rejected, and omitting the field selects all recognized non-helper callers. Obtain IDs from a page's `rootId` or the linked ordinary scan graph. |
+| `maxDepth`        | 1–256 helper calls, default 64.                                                                                                                                                                                      |
+| `maxRecords`      | 1–5,000 records per page, default 250.                                                                                                                                                                               |
+| `maxWork`         | 1–100,000 traversal transitions per page, default 5,000.                                                                                                                                                             |
+| `continuationUri` | Opaque sibling resource returned in the prior tool result. Do not edit or construct it.                                                                                                                              |
 
 Other inspection filters such as top-level `maxDepth`, `selector`, and `technologyId` are rejected in this mode rather than silently ignored.
 The shared dependency inventory is limited to one million edges; source, parser, and artifact byte limits also remain enforced.
@@ -69,7 +69,7 @@ This is not permanent storage of every historical page.
 
 ## Compatibility and boundaries
 
-This opt-in mode and optional result summary are additive in 3.1.0.
+The `helper_expansion` mode and its `data.helperExpansion` result summary are opt-in; other inspection modes neither accept `helperExpansion` nor return the summary.
 Existing inspection modes retain their own ordering, representative-path policy, and materialization limits.
 A depth- or projection-truncated materialized graph reports incomplete coverage.
 The paged edge-path stream must not be mistaken for the deduplicated projections in those graphs.

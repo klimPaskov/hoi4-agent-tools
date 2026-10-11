@@ -51,22 +51,21 @@ describe('MCP discovery', () => {
     expect(tools.tools.map(({ name }) => name)).toEqual([
       'hoi4.focus_inspect',
       'hoi4.focus_render',
-      'hoi4.focus_raster',
       'hoi4.focus_rewrite',
       'hoi4.gui_inspect',
       'hoi4.gui_render',
       'hoi4.gui_rewrite',
       'hoi4.map_inspect',
-      'hoi4.map_render',
       'hoi4.map_rewrite',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
       'hoi4.source_lookup',
       'hoi4.script_validate',
+      'hoi4.error_log',
+      'hoi4.mod_index',
       'hoi4.event_inspect',
       'hoi4.event_render',
-      'hoi4.event_compare',
       'hoi4.impact_inspect',
       'hoi4.decision_inspect',
       'hoi4.mechanic_test',
@@ -74,14 +73,8 @@ describe('MCP discovery', () => {
       'hoi4.scenario_test',
       'hoi4.tech_inspect',
       'hoi4.tech_render',
-      'hoi4.tech_compare',
       'hoi4.probability_inspect',
-      'hoi4.probability_evaluate',
-      'hoi4.probability_sweep',
-      'hoi4.probability_simulate',
-      'hoi4.probability_sequence',
-      'hoi4.probability_compare',
-      'hoi4.probability_render',
+      'hoi4.probability_analyze',
       'hoi4.job_inspect',
       'hoi4.job_cancel',
     ]);
@@ -89,11 +82,9 @@ describe('MCP discovery', () => {
     for (const name of [
       'hoi4.focus_inspect',
       'hoi4.focus_render',
-      'hoi4.focus_raster',
       'hoi4.gui_inspect',
       'hoi4.gui_render',
       'hoi4.map_inspect',
-      'hoi4.map_render',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: false,
@@ -110,23 +101,18 @@ describe('MCP discovery', () => {
       'hoi4.scenario_test',
       'hoi4.event_inspect',
       'hoi4.event_render',
-      'hoi4.event_compare',
       'hoi4.tech_inspect',
       'hoi4.tech_render',
-      'hoi4.tech_compare',
       'hoi4.probability_inspect',
-      'hoi4.probability_evaluate',
-      'hoi4.probability_sweep',
-      'hoi4.probability_simulate',
-      'hoi4.probability_sequence',
-      'hoi4.probability_compare',
-      'hoi4.probability_render',
+      'hoi4.probability_analyze',
       'hoi4.job_inspect',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
       'hoi4.source_lookup',
       'hoi4.script_validate',
+      'hoi4.error_log',
+      'hoi4.mod_index',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
@@ -184,12 +170,7 @@ describe('MCP discovery', () => {
       tools.tools.find(({ name }) => name === 'hoi4.job_inspect')?.outputSchema,
     ).toBeUndefined();
 
-    for (const name of [
-      'hoi4.focus_inspect',
-      'hoi4.focus_render',
-      'hoi4.focus_raster',
-      'hoi4.focus_rewrite',
-    ]) {
+    for (const name of ['hoi4.focus_inspect', 'hoi4.focus_render', 'hoi4.focus_rewrite']) {
       const tool = tools.tools.find((candidate) => candidate.name === name);
       expect(JSON.stringify(tool?.inputSchema)).toContain('continuous');
       expect(JSON.stringify(tool?.inputSchema)).toContain('national');
@@ -249,10 +230,16 @@ describe('MCP discovery', () => {
     expect(Buffer.byteLength(JSON.stringify(tools), 'utf8')).toBeLessThanOrEqual(
       toolsListByteBudget,
     );
+    // Listed schemas carry no dialect declarations or implicit safe-integer bounds.
+    const listed = JSON.stringify(tools);
+    expect(listed).not.toContain('"$schema"');
+    expect(listed).not.toContain(String(Number.MAX_SAFE_INTEGER));
     for (const tool of tools.tools) {
       expect(Buffer.byteLength(JSON.stringify(tool), 'utf8'), tool.name).toBeLessThanOrEqual(
         singleToolByteBudget,
       );
+      // Each description says what the tool is for, shows a call and says how big the answer is.
+      expect(tool.description ?? '', tool.name).toContain('Example: {');
       expect(
         Buffer.byteLength(JSON.stringify(tool.inputSchema), 'utf8'),
         `${tool.name} input schema`,
@@ -279,14 +266,13 @@ describe('MCP discovery', () => {
     const guiInspect = tools.tools.find(({ name }) => name === 'hoi4.gui_inspect');
     const mapRewrite = tools.tools.find(({ name }) => name === 'hoi4.map_rewrite');
     const eventInspect = tools.tools.find(({ name }) => name === 'hoi4.event_inspect');
-    const probabilityEvaluate = tools.tools.find(
-      ({ name }) => name === 'hoi4.probability_evaluate',
-    );
+    const probabilityEvaluate = tools.tools.find(({ name }) => name === 'hoi4.probability_inspect');
 
     expect(JSON.stringify(focusRewrite?.inputSchema)).not.toContain('completionReward');
     expect(JSON.stringify(guiInspect?.inputSchema)).not.toContain('animationTimeSeconds');
     expect(JSON.stringify(mapRewrite?.inputSchema)).not.toContain('move_state_provinces');
-    expect(JSON.stringify(eventInspect?.inputSchema)).not.toContain('eventId');
+    // The event selector is published in full; it was the field agents most often got wrong.
+    expect(JSON.stringify(eventInspect?.inputSchema)).toContain('eventId');
     expect(JSON.stringify(probabilityEvaluate?.inputSchema)).not.toContain('uncertainInputs');
     const invalidFocus = await client.callTool({
       name: 'hoi4.focus_rewrite',
@@ -297,13 +283,13 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidFocus).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidFocus.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidFocus.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidGui = await client.callTool({
       name: 'hoi4.gui_inspect',
-      arguments: { workspaceId: 'test', windowName: 'window', scenario: {} },
+      arguments: { workspaceId: 'test', windowName: 'window', scenario: { id: 7 } },
     });
     expect(invalidGui).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidGui.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidGui.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidMap = await client.callTool({
       name: 'hoi4.map_rewrite',
       arguments: {
@@ -312,13 +298,13 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidMap).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidMap.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidMap.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidEvent = await client.callTool({
       name: 'hoi4.event_inspect',
       arguments: { workspaceId: 'test', mode: 'trace' },
     });
     expect(invalidEvent).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidEvent.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidEvent.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidEventSelector = await client.callTool({
       name: 'hoi4.event_inspect',
       arguments: {
@@ -328,9 +314,9 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidEventSelector).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidEventSelector.content)).toMatch(/Invalid arguments for hoi4\./u);
     const invalidProbability = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: {
         workspaceId: 'test',
         adapter: 'event_option_ai_chance',
@@ -339,7 +325,7 @@ describe('MCP discovery', () => {
       },
     });
     expect(invalidProbability).toMatchObject({ isError: true });
-    expect(JSON.stringify(invalidProbability.content)).toMatch(/Input validation error/iu);
+    expect(JSON.stringify(invalidProbability.content)).toMatch(/Invalid arguments for hoi4\./u);
   });
 
   it('emits progress and honors cancellation for GUI inspection', async () => {

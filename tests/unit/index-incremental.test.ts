@@ -66,3 +66,40 @@ describe('incremental symbol index rebuilds', () => {
     expect(view(previous)).toEqual(view(SymbolIndex.build(files, new IndexSegmentCache(0))));
   });
 });
+
+describe('incremental rebuilds with diagnostics', () => {
+  it('keeps per-file parse errors and cross-file collisions exact across successive edits', () => {
+    const base = [
+      scanned('events/a.txt', 'add_namespace = a\ncountry_event = { id = a.1 }\n'),
+      scanned('events/a2.txt', 'add_namespace = a\ncountry_event = { id = a.1 }\n'),
+      scanned('events/b.txt', 'add_namespace = b\ncountry_event = { id = b.1\n'),
+      scanned('events/c.txt', 'add_namespace = c\ncountry_event = { id = c.1 }\n'),
+      scanned('events/d.txt', 'add_namespace = d\ncountry_event = { id = d.1 } }\n'),
+    ];
+    const codes = (index: SymbolIndex) =>
+      index.diagnostics.map(({ code, location }) => `${code}@${location?.path ?? ''}`);
+    const replace = (files: ScannedFile[], relativePath: string, content: string) =>
+      files.map((file) =>
+        file.relativePath === relativePath ? scanned(relativePath, content) : file,
+      );
+    const first = SymbolIndex.build(base, new IndexSegmentCache(0));
+    const editC = replace(
+      base,
+      'events/c.txt',
+      'add_namespace = c\ncountry_event = { id = c.2 }\n',
+    );
+    const second = SymbolIndex.build(editC, new IndexSegmentCache(0), first);
+    expect(codes(second)).toEqual(codes(SymbolIndex.build(editC, new IndexSegmentCache(0))));
+    const fixDuplicate = replace(
+      editC,
+      'events/a2.txt',
+      'add_namespace = a\ncountry_event = { id = a.2 }\n',
+    );
+    const third = SymbolIndex.build(fixDuplicate, new IndexSegmentCache(0), second);
+    const fresh = SymbolIndex.build(fixDuplicate, new IndexSegmentCache(0));
+    expect(codes(third)).toEqual(codes(fresh));
+    expect(view(third)).toEqual(view(fresh));
+    expect(codes(fresh).some((code) => code.startsWith('INDEX_SYMBOL_COLLISION'))).toBe(false);
+    expect(codes(fresh).length).toBeGreaterThanOrEqual(2);
+  });
+});

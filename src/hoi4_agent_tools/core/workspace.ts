@@ -23,6 +23,12 @@ export interface ResolvedRoot {
   writable: boolean;
   loadOrder: number;
   replacePaths: string[];
+  /**
+   * The replace paths the workspace identity was derived from at startup. A descriptor changed
+   * while the server runs updates `replacePaths` for later scans, but jobs, transactions and
+   * caches stay scoped to the identity they started under.
+   */
+  identityReplacePaths?: string[];
   /** Display label for a DLC layer: its installed folder name. */
   label?: string;
 }
@@ -100,6 +106,52 @@ async function discoverDlcLayers(gameRoot: string): Promise<DlcLayer[]> {
   return layers.sort(
     (left, right) => left.id - right.id || compareCodeUnits(left.folder, right.folder),
   );
+}
+
+export interface ModDescriptor {
+  name?: string;
+  version?: string;
+  supportedVersion?: string;
+  remoteFileId?: string;
+  tags: string[];
+  dependencies: string[];
+  replacePaths: string[];
+}
+
+/** Read a mod's `descriptor.mod` metadata, or `undefined` when it is absent or unreadable. */
+export async function readModDescriptor(root: string): Promise<ModDescriptor | undefined> {
+  const descriptor = path.join(root, 'descriptor.mod');
+  let bytes: Buffer;
+  try {
+    const metadata = await lstat(descriptor);
+    if (!metadata.isFile() || metadata.size > MAX_DESCRIPTOR_BYTES) return undefined;
+    bytes = await readFile(descriptor);
+  } catch {
+    return undefined;
+  }
+  const document = parseClausewitz(bytes, descriptor);
+  const result: ModDescriptor = { tags: [], dependencies: [], replacePaths: [] };
+  const text = (value: string) => value.slice(0, 256);
+  for (const entry of document.root.entries) {
+    if (entry.type !== 'assignment') continue;
+    const key = entry.key.value.toLowerCase();
+    if (entry.value.type === 'scalar') {
+      const value = text(entry.value.value);
+      if (key === 'name') result.name = value;
+      else if (key === 'version') result.version = value;
+      else if (key === 'supported_version') result.supportedVersion = value;
+      else if (key === 'remote_file_id') result.remoteFileId = value;
+      else if (key === 'replace_path' && result.replacePaths.length < 64)
+        result.replacePaths.push(value);
+      continue;
+    }
+    const list =
+      key === 'tags' ? result.tags : key === 'dependencies' ? result.dependencies : undefined;
+    if (list === undefined) continue;
+    for (const item of entry.value.entries)
+      if (item.type === 'scalar' && list.length < 64) list.push(text(item.value));
+  }
+  return result;
 }
 
 /**
@@ -240,13 +292,15 @@ export function resolvedWorkspaceIdentity(
 ): string {
   return hashCanonical({
     id: workspace.id,
-    roots: workspace.roots.map(({ kind, path: rootPath, loadOrder, writable, replacePaths }) => ({
-      kind,
-      rootHash: sha256Bytes(process.platform === 'win32' ? rootPath.toLowerCase() : rootPath),
-      loadOrder,
-      writable,
-      replacePaths,
-    })),
+    roots: workspace.roots.map(
+      ({ kind, path: rootPath, loadOrder, writable, replacePaths, identityReplacePaths }) => ({
+        kind,
+        rootHash: sha256Bytes(process.platform === 'win32' ? rootPath.toLowerCase() : rootPath),
+        loadOrder,
+        writable,
+        replacePaths: identityReplacePaths ?? replacePaths,
+      }),
+    ),
     behavior: {
       kind: workspace.registration.kind,
       relativeRoots: workspace.registration.roots,
@@ -334,6 +388,8 @@ function assertRelative(relativePath: string): void {
 
 export class WorkspaceResolver {
   readonly #byId = new Map<string, ResolvedWorkspace>();
+  /** Size and modification time of each descriptor when its `replace_path` entries were read. */
+  readonly #descriptorStamps = new Map<string, string>();
   readonly #discoveredWorkspaceIds = new Set<string>();
   #storageRoots: string[] = [];
   #modRoots: string[] = [];
@@ -617,6 +673,36 @@ export class WorkspaceResolver {
       .sort((a, b) => compareCodeUnits(a.id, b.id));
   }
 
+  /**
+   * Re-read the `replace_path` entries of the workspace's mod and dependency descriptors when a
+   * descriptor changed since they were last read. A server keeps running while a rewrite such as
+   * a new world adds folders to the descriptor, and later scans must hide the replaced folders.
+   */
+  async refreshDescriptors(workspaceId: string, principal?: string): Promise<void> {
+    const workspace = this.get(workspaceId, principal);
+    if (workspace.registration.kind === 'game') return;
+    const dependencies = workspace.registration.dependencies;
+    for (const root of workspace.roots) {
+      if (root.kind !== 'mod' && root.kind !== 'dependency') continue;
+      const descriptor = path.join(root.path, 'descriptor.mod');
+      const stamp = await lstat(descriptor).then(
+        (metadata) => `${metadata.size}:${metadata.mtimeMs}`,
+        () => 'missing',
+      );
+      const key = `${workspace.id}\0${root.path}`;
+      if (this.#descriptorStamps.get(key) === stamp) continue;
+      this.#descriptorStamps.set(key, stamp);
+      const index = workspace.dependencyRoots.indexOf(root.path);
+      const configured =
+        root.kind === 'mod'
+          ? workspace.registration.replacePaths
+          : (dependencies[index]?.replacePaths ?? []);
+      root.replacePaths = [
+        ...new Set([...configured, ...(await descriptorReplacePaths(root.path))]),
+      ];
+    }
+  }
+
   get(workspaceId: string, principal?: string): ResolvedWorkspace {
     const resolvedWorkspaceId = this.resolveWorkspaceId(workspaceId, principal);
     if (principal !== undefined && !this.allowedWorkspaceIds(principal).has(resolvedWorkspaceId)) {
@@ -655,7 +741,9 @@ export class WorkspaceResolver {
       .split('/')
       .find((segment) => segment !== '.' && segment.length > 0)
       ?.toLowerCase();
-    if (access === 'write' && firstSegment === '.hoi4-agent') {
+    // Server storage holds other principals' proposals and journals; it is never mod source,
+    // for reads as well as writes.
+    if (firstSegment === '.hoi4-agent') {
       throw new ServiceError(
         'PATH_GENERATED_STORAGE_RESERVED',
         'Generated .hoi4-agent storage cannot be targeted as mod source',
@@ -670,17 +758,17 @@ export class WorkspaceResolver {
       const candidate = await canonicalPath(path.join(root.path, relativePath));
       if (!isWithin(root.path, candidate)) continue;
       if (access === 'read' && !(await exists(candidate))) continue;
+      if (
+        root.kind === 'mod' &&
+        (pathsOverlap(workspace.artifactRoot, candidate) ||
+          pathsOverlap(workspace.cacheRoot, candidate))
+      ) {
+        throw new ServiceError(
+          'PATH_GENERATED_STORAGE_RESERVED',
+          'Artifact and cache storage cannot be targeted as mod source',
+        );
+      }
       if (access === 'write') {
-        if (
-          root.kind === 'mod' &&
-          (pathsOverlap(workspace.artifactRoot, candidate) ||
-            pathsOverlap(workspace.cacheRoot, candidate))
-        ) {
-          throw new ServiceError(
-            'PATH_GENERATED_STORAGE_RESERVED',
-            'Artifact and cache storage cannot be targeted as mod source',
-          );
-        }
         const existingParent = await canonicalPath(path.dirname(candidate));
         if (!isWithin(root.path, existingParent)) continue;
       }
@@ -1007,6 +1095,7 @@ export class WorkspaceResolver {
 
     for (const root of roots) {
       root.path = await canonicalPath(root.path);
+      root.identityReplacePaths = root.replacePaths;
     }
     const workspaceBase = {
       id: registration.id,

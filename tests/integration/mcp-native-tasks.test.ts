@@ -192,15 +192,7 @@ describe('native MCP tasks backed by persistent jobs', () => {
     const before = await readFile(source);
     const { client } = await connect();
     const tools = await client.listTools();
-    for (const name of [
-      'hoi4.probability_inspect',
-      'hoi4.probability_evaluate',
-      'hoi4.probability_sweep',
-      'hoi4.probability_simulate',
-      'hoi4.probability_sequence',
-      'hoi4.probability_compare',
-      'hoi4.probability_render',
-    ]) {
+    for (const name of ['hoi4.probability_inspect', 'hoi4.probability_analyze']) {
       expect(tools.tools.find((tool) => tool.name === name)?.execution, name).toEqual({
         taskSupport: 'optional',
       });
@@ -226,13 +218,13 @@ describe('native MCP tasks backed by persistent jobs', () => {
       outputs: ['json'],
     };
     const legacyEvaluate = await client.callTool({
-      name: 'hoi4.probability_evaluate',
+      name: 'hoi4.probability_inspect',
       arguments: evaluateArguments,
     });
     const evaluated = await client.request(
       {
         method: 'tools/call',
-        params: { name: 'hoi4.probability_evaluate', arguments: evaluateArguments },
+        params: { name: 'hoi4.probability_inspect', arguments: evaluateArguments },
       },
       CreateTaskResultSchema,
       { task: {} },
@@ -254,13 +246,16 @@ describe('native MCP tasks backed by persistent jobs', () => {
       includeHtml: false,
     };
     const legacyRender = await client.callTool({
-      name: 'hoi4.probability_render',
-      arguments: renderArguments,
+      name: 'hoi4.probability_analyze',
+      arguments: { ...renderArguments, analysis: 'render' },
     });
     const rendered = await client.request(
       {
         method: 'tools/call',
-        params: { name: 'hoi4.probability_render', arguments: renderArguments },
+        params: {
+          name: 'hoi4.probability_analyze',
+          arguments: { ...renderArguments, analysis: 'render' },
+        },
       },
       CreateTaskResultSchema,
       { task: {} },

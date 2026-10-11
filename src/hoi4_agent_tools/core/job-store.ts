@@ -305,6 +305,9 @@ export async function publishJobRecord(
   await retryWindowsSharing(() => publish(temporary, target), retry);
 }
 
+const JOB_STORE_LOCK_WAIT_MS = 120_000;
+const JOB_STORE_LEASE_MAX_AGE_MS = 600_000;
+
 /** Internal durable job records. Callers must obtain scopes from the authorized workspace resolver. */
 export class JobStore {
   private constructor(
@@ -314,6 +317,25 @@ export class JobStore {
     private readonly maxRecordBytes: number,
   ) {}
 
+  /**
+   * Run under the store lock, waiting at most JOB_STORE_LOCK_WAIT_MS for it. A lock left by a
+   * crashed process whose pid was reused looks held forever; a bounded wait reports it instead
+   * of hanging every job operation. The wait bound never interrupts the locked action.
+   */
+  private async locked<T>(signal: AbortSignal, action: () => Promise<T>): Promise<T> {
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(JOB_STORE_LOCK_WAIT_MS)]);
+    try {
+      return await this.lock.run(bounded, action);
+    } catch (error) {
+      if (bounded.aborted && !signal.aborted)
+        throw new ServiceError(
+          'JOB_STORE_BUSY',
+          `The job store lock stayed held for ${JOB_STORE_LOCK_WAIT_MS / 1000} seconds; a crashed server process may still hold it`,
+        );
+      throw error;
+    }
+  }
+
   static async create(state: ServerState, maxRecordBytes = 4 * 1024 * 1024): Promise<JobStore> {
     if (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1024)
       throw new RangeError('Job record budget must be an integer of at least 1024 bytes');
@@ -322,7 +344,14 @@ export class JobStore {
     await mkdir(root, { recursive: true, mode: 0o700 });
     await assertUnlinked(path.join(state.root, 'jobs'));
     await containedGeneratedPath(state.root, 'jobs');
-    return new JobStore(state, root, new SharedRequestCapacity(root, 1), maxRecordBytes);
+    return new JobStore(
+      state,
+      root,
+      // Store operations hold the lock briefly, so an old lease is a crashed holder's even
+      // when its pid now belongs to another process.
+      new SharedRequestCapacity(root, 1, { leaseMaxAgeMs: JOB_STORE_LEASE_MAX_AGE_MS }),
+      maxRecordBytes,
+    );
   }
 
   async submit(
@@ -344,7 +373,7 @@ export class JobStore {
       request.requestKey === undefined
         ? undefined
         : `job_${hashCanonical({ scope, key: request.requestKey })}`;
-    return this.lock.run(signal, async () => {
+    return this.locked(signal, async () => {
       const current = await this.read(scope, id);
       // Never lose an authenticated retry receipt merely because its identifier predates
       // secret-derived IDs. Read both under the publication lock and fail closed on damage.
@@ -426,7 +455,7 @@ export class JobStore {
   ): Promise<boolean> {
     const scope = scopeSchema.parse(scopeInput);
     const id = jobId.parse(idInput);
-    return this.lock.run(signal, async () => {
+    return this.locked(signal, async () => {
       const record = await this.read(scope, id);
       if (record === undefined) return false;
       if (!['completed', 'cancelled', 'failed'].includes(record.status))
@@ -453,7 +482,7 @@ export class JobStore {
     signal = new AbortController().signal,
   ): Promise<{ record: JobRecord; recovery: boolean }> {
     const owner = ownerSchema.parse(ownerInput);
-    return this.lock.run(signal, async () => {
+    return this.locked(signal, async () => {
       const current = await this.get(scope, id, signal);
       if (!['queued', 'running', 'reconciling'].includes(current.status))
         throw new ServiceError('JOB_TERMINAL', 'The job already has a terminal outcome');
@@ -559,7 +588,7 @@ export class JobStore {
     signal = new AbortController().signal,
   ): Promise<JobRecord> {
     const patch = updateSchema.parse(update);
-    return this.lock.run(signal, async () => {
+    return this.locked(signal, async () => {
       const current = await this.get(scope, id, signal);
       if (current.revision !== expectedRevision)
         throw new ServiceError(
@@ -616,6 +645,55 @@ export class JobStore {
   }
 
   /** Operator-internal eviction guard; never returns another principal's job data. */
+  /**
+   * Remove expired, finished read-only records across every scope, inspecting at most
+   * `limit` directory entries. Records are otherwise removed only when they are read again,
+   * so results nobody polls would accumulate without bound.
+   */
+  async sweepExpired(limit = 5_000, signal = new AbortController().signal): Promise<number> {
+    let inspected = 0;
+    let removed = 0;
+    const terminal = (record: JobRecord | undefined): record is JobRecord =>
+      record !== undefined &&
+      !record.request.mutation &&
+      ['completed', 'cancelled', 'failed'].includes(record.status) &&
+      jobRetentionExpired(record);
+    await assertUnlinked(this.root);
+    for await (const directory of await opendir(this.root)) {
+      if (++inspected > limit) break;
+      signal.throwIfAborted();
+      if (
+        directory.name === 'request-capacity' ||
+        directory.isSymbolicLink() ||
+        !directory.isDirectory() ||
+        !digest.safeParse(directory.name).success
+      )
+        continue;
+      const scopeRoot = await containedGeneratedPath(this.root, directory.name);
+      for await (const entry of await opendir(scopeRoot)) {
+        if (++inspected > limit) break;
+        const id = entry.name.replace(/\.json$/u, '');
+        if (!entry.isFile() || !entry.name.endsWith('.json') || !jobId.safeParse(id).success)
+          continue;
+        const file = await containedGeneratedPath(scopeRoot, entry.name);
+        const read = () => this.readEnvelope(file, id, directory.name).catch(() => undefined);
+        if (!terminal(await read())) continue;
+        const deleted = await this.locked(signal, async () => {
+          if (!terminal(await read())) return false;
+          try {
+            await retryWindowsSharing(() => unlink(file), { signal });
+            return true;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+            throw error;
+          }
+        });
+        if (deleted) removed += 1;
+      }
+    }
+    return removed;
+  }
+
   async checkpointResources(
     workspace: Pick<JobScope, 'workspaceId' | 'workspaceIdentity' | 'rootFingerprint'>,
     signal?: AbortSignal,

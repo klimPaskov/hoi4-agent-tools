@@ -1,3 +1,4 @@
+import { MAP_REFERENCE_SCRIPT_PATTERNS, mapScriptConsistency } from './references.js';
 import path from 'node:path';
 import { escapeFileGlob } from '../core/file-glob.js';
 import {
@@ -76,7 +77,8 @@ export interface StoredMapRender {
 
 export interface StoredMapDiff {
   bundle: MapDiffBundle;
-  beforeBundle: MapRenderBundle;
+  /** Absent when the sources hold no map to draw before the change, as for a new world. */
+  beforeBundle?: MapRenderBundle;
   proposedBundle: MapRenderBundle;
   plan: MapOperationPlan;
   artifacts: StoredArtifact[];
@@ -576,6 +578,8 @@ function sourceTextPatterns(roots: {
   return [
     'common/bookmarks/**/*.txt',
     'common/terrain/*.txt',
+    'common/buildings/*.txt',
+    'descriptor.mod',
     ...roots.map.flatMap((root) => {
       const normalized = normalizeSourceRoot(root);
       return ['map', 'csv', 'txt'].map((extension) => `${normalized}/**/*.${extension}`);
@@ -597,17 +601,22 @@ function provinceBitmapPatterns(
       .filter(({ shadowedBy }) => shadowedBy === undefined)
       .map((file) => [file.relativePath.replaceAll('\\', '/').toLowerCase(), file] as const),
   );
-  let activeName = 'provinces.bmp';
-  for (const root of mapRoots) {
-    const relativePath = `${normalizeSourceRoot(root)}/default.map`.toLowerCase();
-    const active = activeByPath.get(relativePath);
-    if (active === undefined) continue;
-    activeName = defaultMapSelectorValue(active, 'provinces', activeName);
-    break;
-  }
-  const names = new Set([activeName]);
-  for (const file of defaultMaps) {
-    names.add(defaultMapSelectorValue(file, 'provinces', activeName));
+  // The province bitmap, and the heightmap that gives generated positions their height.
+  const names = new Set<string>();
+  for (const [selector, fallback] of [
+    ['provinces', 'provinces.bmp'],
+    ['heightmap', 'heightmap.bmp'],
+  ] as const) {
+    let activeName: string = fallback;
+    for (const root of mapRoots) {
+      const relativePath = `${normalizeSourceRoot(root)}/default.map`.toLowerCase();
+      const active = activeByPath.get(relativePath);
+      if (active === undefined) continue;
+      activeName = defaultMapSelectorValue(active, selector, activeName);
+      break;
+    }
+    names.add(activeName);
+    for (const file of defaultMaps) names.add(defaultMapSelectorValue(file, selector, activeName));
   }
   const patterns = new Set<string>();
   for (const root of mapRoots) {
@@ -672,6 +681,47 @@ function validationWithPlan(
       !diagnostics.some(({ severity }) => severity === 'error' || severity === 'blocker'),
     diagnostics,
     checks,
+  };
+}
+
+/**
+ * A map whose bitmap changed size (a new world) cannot be diffed pixel by pixel; its review
+ * image is the whole proposed map, and every province counts as changed.
+ */
+async function wholeMapDiff(
+  after: MapWorkspaceIndex,
+  options: Parameters<typeof renderMapDiff>[2],
+): Promise<Awaited<ReturnType<typeof renderMapDiff>>> {
+  const rendered = await renderMap(after, {
+    layer: 'state',
+    overlays: ['coastlines', 'ports', 'victory-points', 'supply-nodes', 'railways'],
+    ...(options?.scale === undefined ? {} : { scale: options.scale }),
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
+    ...(options?.budget === undefined ? {} : { budget: options.budget }),
+  });
+  return {
+    ...rendered,
+    changedProvinceIds: after.definitions.map(({ id }) => id).filter((id) => id > 0),
+    semantic: {
+      definitions: [],
+      stateMembership: [],
+      regionMembership: [],
+      states: [],
+      ports: [],
+      buildingPositions: [],
+      unitPositions: [],
+      weatherPositions: [],
+      entityLocators: [],
+      supplyNodes: [],
+      railways: [],
+      adjacencies: [],
+      normalAdjacencies: [],
+      supplyNodesChanged: true,
+      railwaysChanged: true,
+      adjacenciesChanged: true,
+      normalAdjacenciesChanged: true,
+    },
+    ...(options?.review === undefined ? {} : { review: options.review }),
   };
 }
 
@@ -745,17 +795,7 @@ export class AgentNudger {
       ? await this.engine.scan(
           workspaceId,
           {
-            patterns: [
-              'events/**/*.txt',
-              'common/national_focus/**/*.txt',
-              'common/decisions/**/*.txt',
-              'common/scripted_effects/**/*.txt',
-              'common/scripted_triggers/**/*.txt',
-              'common/on_actions/**/*.txt',
-              'common/ideas/**/*.txt',
-              'common/characters/**/*.txt',
-              'history/countries/**/*.txt',
-            ],
+            patterns: [...MAP_REFERENCE_SCRIPT_PATTERNS],
           },
           principal,
           signal,
@@ -785,11 +825,38 @@ export class AgentNudger {
     workspaceId: string,
     principal?: string,
     signal?: AbortSignal,
-  ): Promise<{ snapshot: MapScanSnapshot; validation: MapValidationResult }> {
-    const snapshot = await this.scan(workspaceId, principal, signal);
+    scripts = false,
+  ): Promise<{
+    snapshot: MapScanSnapshot;
+    validation: MapValidationResult;
+    scriptReferences?: { references: number; missing: number };
+  }> {
+    const snapshot = await this.scan(workspaceId, principal, signal, scripts);
+    const validation = await validateMapAsync(
+      snapshot.index,
+      signal === undefined ? {} : { signal },
+    );
+    if (!scripts) return { snapshot, validation };
+    const consistency = mapScriptConsistency(snapshot.index);
+    const diagnostics = sortDiagnostics([...validation.diagnostics, ...consistency.diagnostics]);
     return {
       snapshot,
-      validation: await validateMapAsync(snapshot.index, signal === undefined ? {} : { signal }),
+      validation: {
+        ...validation,
+        passed:
+          validation.passed &&
+          !consistency.diagnostics.some(({ severity }) => severity === 'error'),
+        diagnostics,
+        checks: [
+          ...validation.checks,
+          {
+            id: 'map-script-references',
+            passed: consistency.missing === 0,
+            message: `${consistency.references} script reference(s) to map entities checked; ${consistency.missing} name an undefined state, province or region`,
+          },
+        ],
+      },
+      scriptReferences: { references: consistency.references, missing: consistency.missing },
     };
   }
 
@@ -804,15 +871,22 @@ export class AgentNudger {
       workspaceId,
       principal,
       signal,
-      operations.some(({ kind }) => kind === 'renumber_map_entity'),
+      operations.some(
+        (operation) =>
+          operation.kind === 'renumber_map_entity' ||
+          operation.kind === 'remap_map_references' ||
+          'remapReferences' in operation,
+      ),
     );
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal);
     const baselineValidation = await validateMapAsync(
       snapshot.index,
       signal === undefined ? {} : { signal },
     );
+    // A new world has nothing to compare its bitmap format and pixels with.
+    const newWorld = operations.some(({ kind }) => kind === 'create_world');
     const rawValidation = await validateMapAsync(plan.finalIndex, {
-      baseline: snapshot.index,
+      ...(newWorld ? {} : { baseline: snapshot.index }),
       ...(signal === undefined ? {} : { signal }),
       ...(plan.expectedChangedBounds === undefined
         ? {}
@@ -1064,20 +1138,37 @@ export class AgentNudger {
       'victory-points',
       'weather-positions',
     ] as const;
+    const hasBeforeMap =
+      snapshot.index.raster !== undefined ||
+      snapshot.index.diagnostics.some(({ code }) => code.startsWith('RENDER_'));
+    const sameSize =
+      snapshot.index.provinceBitmap !== undefined &&
+      snapshot.index.provinceBitmap.width === plan.finalIndex.provinceBitmap?.width &&
+      snapshot.index.provinceBitmap.height === plan.finalIndex.provinceBitmap.height;
     const [rawBundle, rawBeforeBundle, rawProposedBundle] = await Promise.all([
-      renderMapDiff(snapshot.index, plan.finalIndex, {
-        ...(options.scale === undefined ? {} : { scale: options.scale }),
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-        budget,
-        review,
-      }),
-      renderMap(snapshot.index, {
-        layer: 'state',
-        overlays: [...comparisonOverlays],
-        ...(options.scale === undefined ? {} : { scale: options.scale }),
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-        budget,
-      }),
+      sameSize
+        ? renderMapDiff(snapshot.index, plan.finalIndex, {
+            ...(options.scale === undefined ? {} : { scale: options.scale }),
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+            budget,
+            review,
+          })
+        : wholeMapDiff(plan.finalIndex, {
+            ...(options.scale === undefined ? {} : { scale: options.scale }),
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+            budget,
+            review,
+          }),
+      // A new world over a game without any map has nothing to draw as "before".
+      hasBeforeMap
+        ? renderMap(snapshot.index, {
+            layer: 'state',
+            overlays: [...comparisonOverlays],
+            ...(options.scale === undefined ? {} : { scale: options.scale }),
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+            budget,
+          })
+        : Promise.resolve(undefined),
       renderMap(plan.finalIndex, {
         layer: 'state',
         overlays: [...comparisonOverlays],
@@ -1089,7 +1180,10 @@ export class AgentNudger {
     const completeSourceHashes = sourceHashes(snapshot);
     const sourceEvidence = boundedSourceHashEvidence(completeSourceHashes);
     const bundle = mapBundleWithSourceHashes(rawBundle, completeSourceHashes);
-    const beforeBundle = mapBundleWithSourceHashes(rawBeforeBundle, completeSourceHashes);
+    const beforeBundle =
+      rawBeforeBundle === undefined
+        ? undefined
+        : mapBundleWithSourceHashes(rawBeforeBundle, completeSourceHashes);
     const proposedBundle = mapBundleWithSourceHashes(rawProposedBundle, completeSourceHashes);
     const workspace = this.resolver.get(snapshot.workspaceId, options.principal);
     const provenance = {
@@ -1142,24 +1236,6 @@ export class AgentNudger {
         provenance,
       },
       {
-        name: 'map-before.png',
-        mimeType: 'image/png',
-        content: beforeBundle.png,
-        provenance: comparisonProvenance('before'),
-      },
-      {
-        name: 'map-before.json',
-        mimeType: 'application/json',
-        content: beforeBundle.json,
-        provenance: comparisonProvenance('before'),
-      },
-      {
-        name: 'map-before.html',
-        mimeType: 'text/html',
-        content: beforeBundle.html,
-        provenance: comparisonProvenance('before'),
-      },
-      {
         name: 'map-proposed.png',
         mimeType: 'image/png',
         content: proposedBundle.png,
@@ -1178,6 +1254,29 @@ export class AgentNudger {
         provenance: comparisonProvenance('proposed'),
       },
     ];
+    if (beforeBundle !== undefined)
+      writes.splice(
+        3,
+        0,
+        {
+          name: 'map-before.png',
+          mimeType: 'image/png',
+          content: beforeBundle.png,
+          provenance: comparisonProvenance('before'),
+        },
+        {
+          name: 'map-before.json',
+          mimeType: 'application/json',
+          content: beforeBundle.json,
+          provenance: comparisonProvenance('before'),
+        },
+        {
+          name: 'map-before.html',
+          mimeType: 'text/html',
+          content: beforeBundle.html,
+          provenance: comparisonProvenance('before'),
+        },
+      );
     const artifacts = await this.artifacts.withAtomicChunkedWrites(
       workspace,
       writes,
@@ -1186,7 +1285,7 @@ export class AgentNudger {
     );
     return {
       bundle,
-      beforeBundle,
+      ...(beforeBundle === undefined ? {} : { beforeBundle }),
       proposedBundle,
       plan,
       artifacts,

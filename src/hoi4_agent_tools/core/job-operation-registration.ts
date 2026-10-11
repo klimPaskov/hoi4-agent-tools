@@ -2,6 +2,21 @@ import type { CoreEngine } from './engine.js';
 import { JobOperations } from './job-executor.js';
 import { ServiceError } from './result.js';
 
+const analysisTools = [
+  'hoi4.impact_inspect',
+  'hoi4.decision_inspect',
+  'hoi4.mechanic_test',
+  'hoi4.package_check',
+  'hoi4.scenario_test',
+];
+
+/** The domain whose registration serves a tool, so a warm worker registers each domain once. */
+export function workerDomain(toolName: string): string {
+  if (analysisTools.includes(toolName)) return 'analysis';
+  const match = /^hoi4\.([a-z]+)_/u.exec(toolName);
+  return match?.[1] ?? toolName;
+}
+
 /** Load one trusted domain after the authenticated job identifies its operation. */
 export async function registerWorkerOperations(
   engine: CoreEngine,
@@ -20,15 +35,7 @@ export async function registerWorkerOperations(
     (await import('../probability/job-operations.js')).registerProbabilityJobs(operations, engine);
   else if (toolName.startsWith('hoi4.tech_'))
     (await import('../technology/job-operations.js')).registerTechnologyJobs(operations, engine);
-  else if (
-    [
-      'hoi4.impact_inspect',
-      'hoi4.decision_inspect',
-      'hoi4.mechanic_test',
-      'hoi4.package_check',
-      'hoi4.scenario_test',
-    ].includes(toolName)
-  )
+  else if (analysisTools.includes(toolName))
     (await import('./analysis-job-operations.js')).registerAnalysisJobs(operations, engine);
   else
     throw new ServiceError(

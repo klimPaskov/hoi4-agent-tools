@@ -8,6 +8,9 @@ import {
   probabilitySequenceRequestSchema,
   probabilitySimulateRequestSchema,
   probabilitySweepRequestSchema,
+  probabilityAnalyzeRequestSchema,
+  splitProbabilityAnalyzeRequest,
+  type ProbabilityAnalyzeToolRequest,
   type ProbabilityCompareToolRequest,
   type ProbabilityEvaluateToolRequest,
   type ProbabilityInspectToolRequest,
@@ -39,6 +42,94 @@ function runtime(context: ProbabilityOperationContext, refresh?: boolean) {
     ...(context.signal === undefined ? {} : { signal: context.signal }),
     ...(refresh === undefined ? {} : { refresh }),
   };
+}
+
+const INLINE_RANKING_SCENARIOS = 4;
+const INLINE_RANKING_CANDIDATES = 12;
+const INLINE_MISSING_INPUTS = 16;
+const INLINE_COMPARISON_CHANGES = 12;
+
+type AnalysisResult = Awaited<ReturnType<ProbabilityAnalyzer['evaluate']>>;
+
+function rounded(value: number | null | undefined, digits = 6): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  const scale = 10 ** digits;
+  return Math.round(value * scale) / scale;
+}
+
+function compareIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** The answer itself, inline: the strongest candidates of the first scenarios. */
+function inlineRanking(result: AnalysisResult) {
+  return result.scenarios.slice(0, INLINE_RANKING_SCENARIOS).map((scenario) => {
+    const ranked = [...scenario.candidates].sort(
+      (left, right) =>
+        (right.conditionalProbability ?? -1) - (left.conditionalProbability ?? -1) ||
+        (right.rawValue?.value ?? Number.NEGATIVE_INFINITY) -
+          (left.rawValue?.value ?? Number.NEGATIVE_INFINITY) ||
+        compareIds(left.id, right.id),
+    );
+    return {
+      scenarioId: scenario.id,
+      poolComplete: scenario.poolComplete,
+      candidates: ranked.slice(0, INLINE_RANKING_CANDIDATES).map((candidate) => ({
+        id: candidate.id,
+        eligible: candidate.eligibility,
+        weight: rounded(candidate.rawValue?.value),
+        ...((candidate.rawValue === undefined || candidate.rawValue === null) &&
+        candidate.rawInterval !== undefined
+          ? {
+              weightRange: [rounded(candidate.rawInterval.min), rounded(candidate.rawInterval.max)],
+            }
+          : {}),
+        probability: rounded(candidate.conditionalProbability),
+        ...(candidate.effectiveMtthDays === undefined
+          ? {}
+          : { mtthDays: rounded(candidate.effectiveMtthDays, 2) }),
+      })),
+      ...(ranked.length > INLINE_RANKING_CANDIDATES
+        ? { omittedCandidates: ranked.length - INLINE_RANKING_CANDIDATES }
+        : {}),
+    };
+  });
+}
+
+/** Facts the scenarios did not declare but a condition or value needs. */
+function missingInputs(result: AnalysisResult): string[] {
+  const inputs = new Set<string>();
+  for (const { code, path, details } of result.unresolved) {
+    if (typeof details?.scenarioInput === 'string') inputs.add(details.scenarioInput);
+    else if (code === 'VALUE_UNRESOLVED' && path !== undefined && !/^(?:@|constant:)/u.test(path))
+      inputs.add(path);
+  }
+  return [...inputs].sort(compareIds).slice(0, INLINE_MISSING_INPUTS);
+}
+
+function inlineComparison(result: AnalysisResult) {
+  if (result.comparison === undefined) return [];
+  return [...result.comparison.scenarioChanges]
+    .sort(
+      (left, right) =>
+        Math.abs(right.probabilityDelta ?? 0) - Math.abs(left.probabilityDelta ?? 0) ||
+        Math.abs(right.rawDelta ?? 0) - Math.abs(left.rawDelta ?? 0) ||
+        compareIds(left.candidateId, right.candidateId),
+    )
+    .slice(0, INLINE_COMPARISON_CHANGES)
+    .map((change) => ({
+      scenarioId: change.scenarioId,
+      candidateId: change.candidateId,
+      ...(change.rawDelta === undefined ? {} : { weightDelta: rounded(change.rawDelta) }),
+      ...(change.probabilityDelta === undefined
+        ? {}
+        : { probabilityDelta: rounded(change.probabilityDelta) }),
+      ...(change.eligibilityChange === undefined
+        ? {}
+        : {
+            eligibility: `${change.eligibilityChange.before}->${change.eligibilityChange.after}`,
+          }),
+    }));
 }
 
 export function probabilityAnalysisData(
@@ -97,6 +188,9 @@ export function probabilityAnalysisData(
       : { comparisonChanges: result.comparison.scenarioChanges.length }),
     visualResources: result.resources.filter(({ mimeType }) => mimeType.startsWith('image/'))
       .length,
+    ranking: inlineRanking(result),
+    missingInputs: missingInputs(result),
+    ...(result.comparison === undefined ? {} : { changes: inlineComparison(result) }),
   };
 }
 
@@ -162,35 +256,115 @@ export function normalizeProbabilityRenderRequest(input: unknown): ProbabilityRe
   return probabilityRenderRequestSchema.parse(input);
 }
 
+const DEFAULT_SCENARIO_SET = {
+  schemaVersion: '1.0' as const,
+  id: 'source-defaults',
+  description: 'One scenario with no declared facts; conditions that need facts stay unresolved.',
+  scenarios: [{ id: 'no-facts', state: {} }],
+};
+
+/** Discover the weighted surface and, unless evaluate is false, evaluate it in the same call. */
 export async function inspectProbabilities(
   analyzer: ProbabilityAnalyzer,
   input: ProbabilityInspectToolRequest,
   context: ProbabilityOperationContext,
 ) {
-  const inspected = await analyzer.inspect(
+  let source = input.source as ProbabilityAnalysisRequest['source'] | undefined;
+  const candidatePool = input.candidatePool ?? [];
+  // A pool alone names what to inspect: its first ID finds the defining file.
+  if (source === undefined && input.customPoolManifest === undefined && candidatePool.length > 0)
+    source = { identifier: candidatePool[0]! };
+  const customPoolManifest = input.customPoolManifest as
+    ProbabilitySequenceRequest['customPoolManifest'] | undefined;
+  let inspected = await analyzer.inspect(
     runtime(context, input.refresh),
     input.adapter,
-    input.source as ProbabilityAnalysisRequest['source'] | undefined,
-    input.candidatePool,
-    input.customPoolManifest as ProbabilitySequenceRequest['customPoolManifest'] | undefined,
+    source,
+    candidatePool,
+    customPoolManifest,
   );
-  const sourceRequiredInputPaths = (inspected.surface?.requiredInputs ?? []).filter(
+  // A wrong adapter guess, such as a mission named as a decision, should not cost another call.
+  const suggested = inspected.discovery?.suggestedAdapter;
+  if (
+    input.evaluate !== false &&
+    inspected.surface === undefined &&
+    suggested !== undefined &&
+    suggested !== input.adapter &&
+    (inspected.discovery?.reason === 'candidate_pool_not_found' ||
+      inspected.discovery?.reason === 'requested_adapter_empty' ||
+      inspected.discovery?.reason === 'identifier_not_found')
+  )
+    inspected = await analyzer.inspect(
+      runtime(context),
+      suggested,
+      source,
+      candidatePool,
+      customPoolManifest,
+    );
+  const surface = inspected.surface;
+  if (
+    input.evaluate !== false &&
+    surface !== undefined &&
+    (source !== undefined || customPoolManifest !== undefined)
+  ) {
+    const analyzed = await analyzer.evaluate({
+      ...runtime(context),
+      adapter: surface.adapter.id,
+      ...(source === undefined ? {} : { source }),
+      ...(customPoolManifest === undefined ? {} : { customPoolManifest }),
+      ...(candidatePool.length === 0 ? {} : { candidatePool }),
+      scenarioSet: (input.scenarioSet ??
+        DEFAULT_SCENARIO_SET) as ProbabilityAnalysisRequest['scenarioSet'],
+      ...(input.horizonDays === undefined ? {} : { horizonDays: input.horizonDays }),
+      ...(input.metrics === undefined ? {} : { metrics: input.metrics }),
+      ...(input.acceptanceBands === undefined
+        ? {}
+        : {
+            acceptanceBands: input.acceptanceBands as NonNullable<
+              ProbabilityAnalysisRequest['acceptanceBands']
+            >,
+          }),
+      ...(input.diagnosticThresholds === undefined
+        ? {}
+        : {
+            diagnosticThresholds: input.diagnosticThresholds as NonNullable<
+              ProbabilityAnalysisRequest['diagnosticThresholds']
+            >,
+          }),
+      ...(input.outputs === undefined ? {} : { outputs: input.outputs }),
+    });
+    const result = probabilityAnalysisServiceResult(context.workspaceId, analyzed);
+    result.artifacts = [...result.artifacts, ...inspected.artifacts];
+    if (input.scenarioSet === undefined)
+      result.diagnostics = [
+        {
+          code: 'PROBABILITY_DEFAULT_SCENARIO',
+          severity: 'info',
+          category: 'configuration',
+          message:
+            'Evaluated without declared facts; pass scenarioSet with the facts in missingInputs to resolve the remaining conditions',
+        },
+        ...result.diagnostics,
+      ];
+    return result;
+  }
+  const sourceRequiredInputPaths = (surface?.requiredInputs ?? []).filter(
     (path) =>
       path !== 'focus.external_factors_complete' && path !== 'technology.external_factors_complete',
   );
-  const adapterRequiredInputPaths = (inspected.surface?.requiredInputs ?? []).filter(
+  const adapterRequiredInputPaths = (surface?.requiredInputs ?? []).filter(
     (path) =>
       path === 'focus.external_factors_complete' || path === 'technology.external_factors_complete',
   );
   const result = emptyServiceResult(context.workspaceId, {
     adapters: inspected.adapters.length,
-    ...(inspected.surface === undefined
+    ...(surface === undefined
       ? {}
       : {
-          adapterId: inspected.surface.adapter.id,
-          sourceRevision: inspected.surface.sourceRevision,
-          sourceHash: inspected.surface.sourceHash,
-          poolComplete: inspected.surface.poolComplete,
+          adapterId: surface.adapter.id,
+          sourceRevision: surface.sourceRevision,
+          sourceHash: surface.sourceHash,
+          poolComplete: surface.poolComplete,
         }),
     ...(inspected.discovery === undefined
       ? {}
@@ -205,7 +379,7 @@ export async function inspectProbabilities(
           sourceRevision: inspected.discovery.sourceRevision,
           sourceHash: inspected.discovery.sourceHash,
         }),
-    candidates: inspected.surface?.candidateCount ?? 0,
+    candidates: surface?.candidateCount ?? 0,
     availableCandidates:
       inspected.discovery?.availableAdapters.reduce(
         (sum, { candidateCount }) => sum + candidateCount,
@@ -219,14 +393,14 @@ export async function inspectProbabilities(
         candidatePoolMatches: available.candidatePoolMatchCount,
       })) ?? [],
     candidateExamples: inspected.discovery?.exampleCandidateIds ?? [],
-    requiredInputs: inspected.surface?.requiredInputs.length ?? 0,
+    requiredInputs: surface?.requiredInputs.length ?? 0,
     requiredInputPaths: sourceRequiredInputPaths.slice(0, 32),
     requiredInputPathsTruncated: sourceRequiredInputPaths.length > 32,
     adapterRequiredInputPaths,
-    unresolved: inspected.surface?.unsupported.length ?? 0,
+    unresolved: surface?.unsupported.length ?? 0,
   });
   result.code =
-    inspected.surface !== undefined
+    surface !== undefined
       ? 'PROBABILITY_SOURCE_INSPECTED'
       : inspected.discovery !== undefined
         ? 'PROBABILITY_SOURCE_DISCOVERED'
@@ -234,6 +408,31 @@ export async function inspectProbabilities(
   result.artifacts = inspected.artifacts;
   setInlineFilesScanned(result, inspected.filesScanned);
   return result;
+}
+
+/** Compare, sweep, simulate, sequence, or render through one entry point. */
+export async function analyzeProbabilities(
+  analyzer: ProbabilityAnalyzer,
+  input: ProbabilityAnalyzeToolRequest,
+  context: ProbabilityOperationContext,
+) {
+  const split = splitProbabilityAnalyzeRequest(input);
+  switch (split.analysis) {
+    case 'compare':
+      return compareProbabilities(analyzer, split.request, context);
+    case 'sweep':
+      return sweepProbabilities(analyzer, split.request, context);
+    case 'simulate':
+      return simulateProbabilities(analyzer, split.request, context);
+    case 'sequence':
+      return sequenceProbabilities(analyzer, split.request, context);
+    case 'render':
+      return renderProbabilities(analyzer, split.request, context);
+  }
+}
+
+export function normalizeProbabilityAnalyzeRequest(input: unknown): ProbabilityAnalyzeToolRequest {
+  return probabilityAnalyzeRequestSchema.parse(input);
 }
 
 export async function evaluateProbabilities(

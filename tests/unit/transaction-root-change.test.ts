@@ -130,3 +130,43 @@ describe('transaction journals after a workspace root change', () => {
     expect(remaining).toContain(current.transactionId);
   });
 });
+
+describe('startup recovery isolation', () => {
+  it('skips a journal folder whose plan never committed a manifest', async () => {
+    const { resolver, mod } = await setup();
+    const uncommitted = path.join(
+      mod,
+      '.hoi4-agent',
+      'cache',
+      'transactions',
+      'txn_00000000-0000-4000-8000-000000000000',
+      'blobs',
+    );
+    await mkdir(uncommitted, { recursive: true });
+    await expect(new TransactionManager(resolver).recover('test')).resolves.toEqual([]);
+    await expect(new CoreEngine(resolver).initialize()).resolves.toBeUndefined();
+  });
+
+  it('starts with a damaged journal and refuses rewrites of that workspace with the reason', async () => {
+    const { resolver, plan, journal } = await setup();
+    const damaged = await plan('value = damaged\n');
+    await writeFile(journal(damaged.transactionId), '{ not json');
+    const engine = new CoreEngine(resolver);
+    await expect(engine.initialize()).resolves.toBeUndefined();
+    await expect(
+      engine.transactions.plan({
+        workspaceId: 'test',
+        operationKind: 'test',
+        operations,
+        changes: [
+          {
+            relativePath: 'common/one.txt',
+            content: Buffer.from('value = blocked\n'),
+            operationIds: ['op-1'],
+          },
+        ],
+        validate: () => checks('dry-run'),
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_RECOVERY_REQUIRED' });
+  });
+});

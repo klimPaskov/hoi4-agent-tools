@@ -809,7 +809,7 @@ export async function renderFocus(
   if (!rasterize && (input.cropFocusIds?.length ?? 0) > 0)
     throw new ServiceError(
       'FOCUS_CROP_REQUIRES_RASTER',
-      'Focus problem crops require focus_raster',
+      'Focus problem crops are PNG images; omit png: false',
     );
   await context.progress(0, 4, 'Importing and indexing focus source');
   const workspace = engine.resolver.get(context.workspaceId, context.principal);

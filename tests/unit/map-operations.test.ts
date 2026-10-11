@@ -1087,7 +1087,7 @@ describe('Agent Nudger map model and operations', () => {
     ).toMatchObject([{ code: 'MAP_DATED_STATE_HISTORY_CONFLICT' }]);
   });
 
-  it('blocks state distribution when source history has dated commands', async () => {
+  it('carries dated state history through splits and merges', async () => {
     const state = fixtureFiles()['history/states/1-ONE.txt'] as string;
     const { snapshot } = await setup({
       'history/states/1-ONE.txt': state.replace(
@@ -1098,17 +1098,26 @@ describe('Agent Nudger map model and operations', () => {
     const split = planMapOperations(snapshot.index, [
       {
         id: 'dated-split',
-        kind: 'split_state',
-        sourceStateId: 1,
+        kind: 'create_state',
         provinceIds: [4],
         stateId: 3,
-        name: 'STATE_3',
-        distribution: splitStatePolicy,
+        displayName: 'Three',
       },
     ]);
-    expect(split.blockers).toMatchObject([
-      { code: 'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED', operationId: 'dated-split' },
-    ]);
+    // The dated owner change applies to both parts of the split state.
+    expect(split.blockers).toEqual([]);
+    const created = split.changes.find(({ relativePath }) =>
+      relativePath.startsWith('history/states/3-'),
+    );
+    expect(Buffer.from(created?.content ?? []).toString()).toMatch(
+      /1939\.1\.1 = \{\s*owner = DDD\s*\}/u,
+    );
+    expect(
+      Buffer.from(
+        split.changes.find(({ relativePath }) => relativePath === 'history/states/1-ONE.txt')
+          ?.content ?? [],
+      ).toString(),
+    ).toContain('1939.1.1 = { owner = DDD }');
     const datedSource = await setup({
       'history/states/2-TWO.txt':
         'state = { id = 2 name = "STATE_2" manpower = 500 state_category = town provinces = { 2 } history = { owner = BBB add_core_of = BBB 1939.1.1 = { owner = DDD } } }\n',
@@ -1135,7 +1144,23 @@ describe('Agent Nudger map model and operations', () => {
         },
       },
     ]);
-    expect(merge.blockers).toMatchObject([
+    // Dated ownership without building levels carries over to the merged state.
+    expect(merge.blockers).toEqual([]);
+    expect(
+      Buffer.from(
+        merge.changes.find(({ relativePath }) => relativePath === 'history/states/1-ONE.txt')
+          ?.content ?? [],
+      ).toString(),
+    ).toContain('1939.1.1 = { owner = DDD }');
+    const datedBuildings = await setup({
+      'history/states/2-TWO.txt':
+        'state = { id = 2 name = "STATE_2" manpower = 500 state_category = town provinces = { 2 } history = { owner = BBB 1939.1.1 = { buildings = { arms_factory = 2 } } } }\n',
+    });
+    expect(
+      planMapOperations(datedBuildings.snapshot.index, [
+        { id: 'dated-merge', kind: 'merge_states', sourceStateIds: [2], targetStateId: 1 },
+      ] as never).blockers,
+    ).toMatchObject([
       { code: 'MAP_DATED_STATE_DISTRIBUTION_UNSUPPORTED', operationId: 'dated-merge' },
     ]);
   });

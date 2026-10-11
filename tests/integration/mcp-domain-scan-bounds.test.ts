@@ -123,6 +123,7 @@ describe('domain-bounded MCP scans', () => {
       await client.callTool({
         name: 'hoi4.probability_inspect',
         arguments: {
+          evaluate: false,
           workspaceId: 'bounded-focus',
           adapter: 'national_focus_ai_will_do',
           source: {

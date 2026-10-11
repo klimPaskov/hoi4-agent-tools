@@ -16,7 +16,7 @@ export const jobControlTools = [
     name: 'hoi4.job_inspect',
     title: 'Inspect persistent job',
     description:
-      'Inspect a durable background operation. A completed job returns the original tool result; active and terminal non-result states return bounded status evidence.',
+      'Inspect a background operation by jobId (from a native task id): status while it runs, the original tool result once it completed. Example: {"jobId":"job_<64 hex characters>"}. Returns bounded status evidence.',
     inputSchema: jobReferenceSchema,
     annotations: {
       readOnlyHint: true,
@@ -29,7 +29,7 @@ export const jobControlTools = [
     name: 'hoi4.job_cancel',
     title: 'Cancel persistent job',
     description:
-      'Durably request cancellation of an authorized background operation. Completed results remain completed.',
+      'Durably request cancellation of a background operation by jobId. A completed result stays completed. Example: {"jobId":"job_<64 hex characters>"}.',
     inputSchema: jobReferenceSchema,
     outputSchema: jobStatusOutputSchema,
     annotations: {

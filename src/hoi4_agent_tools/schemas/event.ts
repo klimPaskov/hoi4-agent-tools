@@ -137,26 +137,6 @@ export function validateEventInspectRequest(
     });
 }
 
-export const eventInspectRequestSchema = z
-  .object({
-    workspaceId: workspaceIdSchema,
-    mode: eventInspectModeSchema,
-    selector: eventSelectorSchema.optional(),
-    from: eventSelectorSchema.optional(),
-    to: eventSelectorSchema.optional(),
-    direction: eventDirectionSchema.optional(),
-    maxDepth: z.number().int().min(1).max(64).optional(),
-    maxNodes: z.number().int().min(1).max(5_000).optional(),
-    maxEdges: z.number().int().min(1).max(20_000).optional(),
-    expandHelpers: z.boolean().optional(),
-    stateSubject: eventStateSubjectSchema.optional(),
-    impactSubject: eventImpactSubjectSchema.optional(),
-    helperExpansion: helperExpansionRequestSchema.optional(),
-    refresh: z.boolean().optional(),
-  })
-  .strict()
-  .superRefine(validateEventInspectRequest);
-
 export const eventRenderRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
@@ -208,3 +188,94 @@ export const eventCompareRequestSchema = z
   })
   .strict()
   .superRefine(validateEventCompareRequest);
+
+export const eventInspectToolModeSchema = z.enum([...eventInspectModeSchema.options, 'compare']);
+
+const compareOnlyFields = [
+  'before',
+  'after',
+  'proposedSources',
+  'maxChainNodes',
+  'render',
+  'maxRenderNodes',
+] as const;
+const inspectOnlyFields = [
+  'from',
+  'to',
+  'direction',
+  'maxDepth',
+  'maxNodes',
+  'maxEdges',
+  'expandHelpers',
+  'stateSubject',
+  'impactSubject',
+  'helperExpansion',
+] as const;
+
+/**
+ * Inspection and comparison share one tool: mode compare diffs a cached, artifact or proposed
+ * event graph against another, every other mode analyzes the current graph.
+ */
+export const eventInspectRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    mode: eventInspectToolModeSchema,
+    selector: eventSelectorSchema.optional(),
+    from: eventSelectorSchema.optional(),
+    to: eventSelectorSchema.optional(),
+    direction: eventDirectionSchema.optional(),
+    maxDepth: z.number().int().min(1).max(64).optional(),
+    maxNodes: z.number().int().min(1).max(5_000).optional(),
+    maxEdges: z.number().int().min(1).max(20_000).optional(),
+    expandHelpers: z.boolean().optional(),
+    stateSubject: eventStateSubjectSchema.optional(),
+    impactSubject: eventImpactSubjectSchema.optional(),
+    helperExpansion: helperExpansionRequestSchema.optional(),
+    before: eventGraphReferenceSchema.optional(),
+    after: eventGraphReferenceSchema.optional(),
+    proposedSources: z.array(eventProposedSourceSchema).min(1).max(64).optional(),
+    maxChainNodes: z.number().int().min(1).max(5_000).optional(),
+    render: z.boolean().optional(),
+    maxRenderNodes: z.number().int().min(1).max(240).optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine(validateEventInspectToolRequest);
+
+export function validateEventInspectToolRequest(
+  value: Record<string, unknown> & { mode: string },
+  context: z.RefinementCtx,
+): void {
+  const compare = value.mode === 'compare';
+  for (const field of compare ? inspectOnlyFields : compareOnlyFields)
+    if (value[field] !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: compare
+          ? `${field} is not used by mode compare`
+          : `${field} is used only by mode compare`,
+      });
+  if (compare)
+    validateEventCompareRequest(
+      value as Parameters<typeof validateEventCompareRequest>[0],
+      context,
+    );
+  else validateEventInspectRequest(value, context);
+}
+
+/** Split an inspect request into a comparison or an analysis of the current graph. */
+export function splitEventInspectRequest(
+  input: z.infer<typeof eventInspectRequestSchema>,
+):
+  | { compare: true; request: z.infer<typeof eventCompareRequestSchema> }
+  | { compare: false; request: Record<string, unknown> } {
+  const { mode, ...rest } = input;
+  if (mode === 'compare') {
+    const request: Record<string, unknown> = { workspaceId: rest.workspaceId };
+    for (const field of [...compareOnlyFields, 'selector', 'refresh'] as const)
+      if (rest[field] !== undefined) request[field] = rest[field];
+    return { compare: true, request: eventCompareRequestSchema.parse(request) };
+  }
+  return { compare: false, request: { ...rest, mode } };
+}

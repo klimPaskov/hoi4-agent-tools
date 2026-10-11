@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.10.0/schemas/operation-result.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.0.0/schemas/operation-result.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -20,7 +20,7 @@
       "maxLength": 64
     },
     "filesScanned": {
-      "maxItems": 64,
+      "maxItems": 12,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema0"

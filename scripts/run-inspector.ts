@@ -14,22 +14,21 @@ const config = path.join(temporary, 'config.json');
 const publicToolNames = [
   'hoi4.focus_inspect',
   'hoi4.focus_render',
-  'hoi4.focus_raster',
   'hoi4.focus_rewrite',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
   'hoi4.gui_rewrite',
   'hoi4.map_inspect',
-  'hoi4.map_render',
   'hoi4.map_rewrite',
   'hoi4.reference_search',
   'hoi4.reference_read',
   'hoi4.reference_context',
   'hoi4.source_lookup',
   'hoi4.script_validate',
+  'hoi4.error_log',
+  'hoi4.mod_index',
   'hoi4.event_inspect',
   'hoi4.event_render',
-  'hoi4.event_compare',
   'hoi4.impact_inspect',
   'hoi4.decision_inspect',
   'hoi4.mechanic_test',
@@ -37,14 +36,8 @@ const publicToolNames = [
   'hoi4.scenario_test',
   'hoi4.tech_inspect',
   'hoi4.tech_render',
-  'hoi4.tech_compare',
   'hoi4.probability_inspect',
-  'hoi4.probability_evaluate',
-  'hoi4.probability_sweep',
-  'hoi4.probability_simulate',
-  'hoi4.probability_sequence',
-  'hoi4.probability_compare',
-  'hoi4.probability_render',
+  'hoi4.probability_analyze',
   'hoi4.job_inspect',
   'hoi4.job_cancel',
 ] as const;
@@ -399,14 +392,16 @@ try {
   const compared = successfulToolResult(
     await runInspector('tools/call', [
       '--tool-name',
-      'hoi4.event_compare',
+      'hoi4.event_inspect',
       '--tool-arg',
       'workspaceId=inspector',
+      '--tool-arg',
+      'mode=compare',
       '--tool-arg',
       `proposedSources=${JSON.stringify([{ relativePath: 'events/inspector.txt', source: proposedSource }])}`,
       'render=false',
     ]),
-    'Inspector hoi4.event_compare',
+    'Inspector hoi4.event_inspect compare',
   );
   if (compared.code !== 'EVENT_COMPARED') {
     throw new Error(`Inspector event comparison returned ${String(compared.code)}`);
@@ -453,15 +448,17 @@ try {
   const technologyCompared = successfulToolResult(
     await runInspector('tools/call', [
       '--tool-name',
-      'hoi4.tech_compare',
+      'hoi4.tech_inspect',
       '--tool-arg',
       'workspaceId=inspector',
+      '--tool-arg',
+      'mode=compare',
       '--tool-arg',
       `proposedSources=${JSON.stringify([{ relativePath: 'common/technologies/inspector.txt', source: proposedTechnologySource }])}`,
       '--tool-arg',
       'render=false',
     ]),
-    'Inspector hoi4.tech_compare',
+    'Inspector hoi4.tech_inspect compare',
   );
   if (technologyCompared.code !== 'TECH_COMPARED') {
     throw new Error(`Inspector technology comparison returned ${String(technologyCompared.code)}`);
@@ -479,6 +476,8 @@ try {
       'source={"identifier":"inspector_root"}',
       '--tool-arg',
       'candidatePool=["inspector_root"]',
+      '--tool-arg',
+      'evaluate=false',
     ]),
     'Inspector hoi4.probability_inspect',
   );

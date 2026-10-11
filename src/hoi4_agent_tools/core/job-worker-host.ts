@@ -9,9 +9,14 @@ import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity, type SharedCapacityLease } from './shared-request-capacity.js';
 import { containedGeneratedPath } from './workspace.js';
 import { ServiceError } from './result.js';
+import { isDomainToolName } from './domain-tools.js';
 
 const maximumCheckpointRecoveries = 2;
 const maximumPreDispatchRecoveries = 2;
+/** An exit with no outcome is most often the worker running out of memory on a large mod. */
+const WORKER_EXIT_HINT =
+  '; if the mod is large the worker may have run out of memory, so retry the call or raise jobWorkerMaxHeapMiB';
+const WORKER_EXIT_MESSAGE = `The worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`;
 // Native and IPC codes are fixed vocabulary. Error messages can contain paths or source
 // text, so only an allowlisted code and the fixed coordination stage are reported.
 const nativeFailureCodes = new Set([
@@ -105,38 +110,7 @@ export class JobWorkerHost {
   async run(workspaceId: string, id: string, principal?: string): Promise<JobRecord> {
     const initial = await this.jobs.get(workspaceId, id, principal);
     if (['completed', 'cancelled', 'failed'].includes(initial.status)) return initial;
-    if (
-      ![
-        'hoi4.impact_inspect',
-        'hoi4.decision_inspect',
-        'hoi4.mechanic_test',
-        'hoi4.package_check',
-        'hoi4.scenario_test',
-        'hoi4.event_inspect',
-        'hoi4.event_render',
-        'hoi4.event_compare',
-        'hoi4.tech_inspect',
-        'hoi4.tech_render',
-        'hoi4.tech_compare',
-        'hoi4.probability_inspect',
-        'hoi4.probability_evaluate',
-        'hoi4.probability_sweep',
-        'hoi4.probability_simulate',
-        'hoi4.probability_sequence',
-        'hoi4.probability_compare',
-        'hoi4.probability_render',
-        'hoi4.map_inspect',
-        'hoi4.map_render',
-        'hoi4.map_rewrite',
-        'hoi4.gui_inspect',
-        'hoi4.gui_render',
-        'hoi4.gui_rewrite',
-        'hoi4.focus_inspect',
-        'hoi4.focus_render',
-        'hoi4.focus_raster',
-        'hoi4.focus_rewrite',
-      ].includes(initial.request.toolName)
-    )
+    if (!isDomainToolName(initial.request.toolName))
       throw new ServiceError(
         'JOB_OPERATION_UNAVAILABLE',
         'This domain has not yet been registered for worker execution',
@@ -158,10 +132,7 @@ export class JobWorkerHost {
         if (['completed', 'cancelled', 'failed'].includes(current.status)) return current;
         if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive')
           return await this.followOwner(workspaceId, id, principal);
-        throw new ServiceError(
-          'JOB_WORKER_EXIT',
-          'The worker stopped without publishing a terminal job outcome',
-        );
+        throw new ServiceError('JOB_WORKER_EXIT', WORKER_EXIT_MESSAGE);
       } catch (error) {
         const current = await this.jobs.get(workspaceId, id, principal);
         if (
@@ -214,7 +185,7 @@ export class JobWorkerHost {
           liveness === 'unknown' ? 'JOB_OWNER_UNRESOLVED' : 'JOB_WORKER_EXIT',
           liveness === 'unknown'
             ? 'The replacement execution owner cannot be verified on this host'
-            : 'The replacement worker stopped without publishing a terminal job outcome',
+            : `The replacement worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`,
         );
       await delay(100);
     }
@@ -227,12 +198,12 @@ export class JobWorkerHost {
     progress: { stage: WorkerStage },
     principal?: string,
   ): Promise<void> {
-    // Resolve the same configured workspace and grants again immediately before dispatch.
-    await this.jobs.get(workspaceId, id, principal);
-    const sourceMode = import.meta.url.endsWith('.ts');
-    const entry = fileURLToPath(
-      new URL(sourceMode ? './job-worker.ts' : './job-worker.js', import.meta.url),
-    );
+    // Resolve the same configured workspace and grants again immediately before dispatch. A
+    // job that finished, or that a live worker already runs, needs no new worker: another
+    // launcher may have run it while this one waited for capacity.
+    const current = await this.jobs.get(workspaceId, id, principal);
+    if (['completed', 'failed', 'cancelled'].includes(current.status)) return;
+    if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive') return;
     const configuration = this.engine.resolver.config();
     const registeredWorkspaceIds = new Set(
       configuration.workspaces.map((workspace) => workspace.id),
@@ -252,128 +223,53 @@ export class JobWorkerHost {
             workspaceIds: [...new Set([...grant.workspaceIds, ...discoveredWorkspaceIds])],
           }
         : grant;
-    progress.stage = 'startup';
-    const child = spawn(
-      process.execPath,
-      [
-        ...(configuration.jobWorkerMaxHeapMiB === undefined
-          ? []
-          : [`--max-old-space-size=${configuration.jobWorkerMaxHeapMiB}`]),
-        ...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []),
-        entry,
-      ],
-      {
-        detached: true,
-        cwd: process.cwd(),
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        windowsHide: true,
+    const message = {
+      configuration: {
+        ...configuration,
+        modRoots: [],
+        workspaces: resolvedWorkspaces.map(({ registration }) => registration),
+        http: {
+          ...configuration.http,
+          tokens: configuration.http.tokens.map(preserveDiscoveredGrants),
+          principals: configuration.http.principals.map(preserveDiscoveredGrants),
+        },
       },
-    );
-    let phase = 'waiting_for_ready';
-    let acknowledgmentTimer: NodeJS.Timeout | undefined;
-    const initialized = new Promise<void>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('exit', (code, signal) =>
-        reject(
-          new ServiceError(
-            'JOB_WORKER_STARTUP_EXIT',
-            `The worker exited before completing its startup handshake (phase ${phase}, exit ${code ?? 'none'}, signal ${signal ?? 'none'})`,
-          ),
-        ),
-      );
-      child.once('message', (value: unknown) => {
-        void (async () => {
-          if (
-            typeof value !== 'object' ||
-            value === null ||
-            !('type' in value) ||
-            value.type !== 'ready' ||
-            child.pid === undefined
-          )
-            throw new ServiceError(
-              'JOB_WORKER_PROTOCOL',
-              'The worker did not provide its readiness handshake',
-            );
-          progress.stage = 'handoff';
-          await lease.handoffToProcess(child.pid);
-          progress.stage = 'dispatch';
-          await new Promise<void>((resolve, reject) => {
-            phase = 'waiting_for_acceptance';
-            acknowledgmentTimer = setTimeout(
-              () =>
-                reject(
-                  new ServiceError(
-                    'JOB_WORKER_ACCEPT_TIMEOUT',
-                    'The worker did not acknowledge receipt within its startup window',
-                  ),
-                ),
-              30_000,
-            );
-            child.once('message', (accepted: unknown) => {
-              if (
-                typeof accepted !== 'object' ||
-                accepted === null ||
-                !('type' in accepted) ||
-                accepted.type !== 'accepted'
-              ) {
-                reject(
-                  new ServiceError(
-                    'JOB_WORKER_PROTOCOL',
-                    'The worker did not acknowledge the dispatched job',
-                  ),
-                );
-                return;
-              }
-              phase = 'accepted';
-              // Only close IPC after the child confirms receipt. The persistent job,
-              // rather than the launcher's lifetime, owns execution after this point.
-              if (child.connected) child.disconnect();
-              resolve();
-            });
-            child.send(
-              {
-                configuration: {
-                  ...configuration,
-                  modRoots: [],
-                  workspaces: resolvedWorkspaces.map(({ registration }) => registration),
-                  http: {
-                    ...configuration.http,
-                    tokens: configuration.http.tokens.map(preserveDiscoveredGrants),
-                    principals: configuration.http.principals.map(preserveDiscoveredGrants),
-                  },
-                },
-                workspaceId,
-                jobId: id,
-                ...(principal === undefined ? {} : { principal }),
-              },
-              (error) => {
-                if (error !== null) reject(error);
-              },
-            );
-          });
-          resolve();
-        })().catch((error: unknown) => {
-          if (child.connected) child.disconnect();
-          reject(
-            error instanceof Error
-              ? error
-              : new ServiceError('JOB_WORKER_PROTOCOL', 'Worker initialization failed'),
-          );
-        });
-      });
-    });
+      workspaceId,
+      jobId: id,
+      ...(principal === undefined ? {} : { principal }),
+    };
+    const warm = configuration.jobWorkerIdleSeconds > 0;
+    progress.stage = 'startup';
+    const reused = warm ? this.takeIdleWorker() : undefined;
+    const child = reused ?? (await this.startWorker(configuration.jobWorkerMaxHeapMiB));
     try {
-      await initialized;
-    } finally {
-      clearTimeout(acknowledgmentTimer);
+      progress.stage = 'handoff';
+      await lease.handoffToProcess(child.pid!);
+    } catch (error) {
+      // A reused worker that just exited cannot take the slot; no job reached it.
+      if (reused !== undefined && error instanceof ServiceError)
+        throw new ServiceError(
+          'REQUEST_LEASE_HANDOFF_LOST',
+          'The warm worker stopped before it received the job',
+        );
+      if (reused === undefined) await stopChild(child);
+      throw error;
     }
+    progress.stage = 'dispatch';
+    await this.dispatch(child, message, reused !== undefined);
+    // Without warm reuse the persistent job, not the launcher's lifetime, owns execution once
+    // the child confirmed receipt, so close the channel.
+    if (!warm && child.connected) child.disconnect();
     progress.stage = 'supervision';
     const { jobDeadlineSeconds, jobCancelGraceSeconds } = this.engine.resolver.config();
     const supervisedSince = Date.now();
     let cancellationSeenAt: number | undefined;
     for (;;) {
       const record = await this.jobs.get(workspaceId, id, principal);
-      if (['completed', 'failed', 'cancelled'].includes(record.status)) return;
+      if (['completed', 'failed', 'cancelled'].includes(record.status)) {
+        if (warm) await this.keepWarm(child, lease);
+        return;
+      }
       if (record.owner !== undefined && record.owner.pid !== child.pid) {
         if (jobOwnerLiveness(record.owner) === 'alive') return;
       }
@@ -405,13 +301,217 @@ export class JobWorkerHost {
           process.kill(child.pid, 0);
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code === 'ESRCH')
-            throw new ServiceError(
-              'JOB_WORKER_EXIT',
-              'The worker stopped without publishing a terminal job outcome',
-            );
+            throw new ServiceError('JOB_WORKER_EXIT', WORKER_EXIT_MESSAGE);
         }
       }
       await delay(100);
     }
+  }
+
+  /** Idle warm workers of this host, most recently used last. */
+  private readonly idleWorkers: ChildProcess[] = [];
+  /**
+   * Workers that reported idle since their last dispatch. The report usually arrives before the
+   * supervision loop notices the finished job, so it is recorded as it comes.
+   */
+  private readonly reportedIdle = new WeakSet<ChildProcess>();
+  private readonly watched = new WeakSet<ChildProcess>();
+
+  private watchIdle(child: ChildProcess): void {
+    if (this.watched.has(child)) return;
+    this.watched.add(child);
+    child.on('message', (value: unknown) => {
+      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'idle')
+        this.reportedIdle.add(child);
+    });
+  }
+
+  /** Let every idle warm worker exit; a busy one finishes its job first. */
+  releaseIdleWorkers(): void {
+    for (const child of this.idleWorkers.splice(0)) if (child.connected) child.disconnect();
+  }
+
+  private takeIdleWorker(): ChildProcess | undefined {
+    for (;;) {
+      const child = this.idleWorkers.pop();
+      if (child === undefined) return undefined;
+      if (
+        child.connected &&
+        child.exitCode === null &&
+        child.signalCode === null &&
+        child.pid !== undefined
+      ) {
+        child.ref();
+        child.channel?.ref();
+        return child;
+      }
+    }
+  }
+
+  /** Start a fixed-entry worker and wait for its readiness handshake. */
+  private async startWorker(maxHeapMiB: number | undefined): Promise<ChildProcess> {
+    const sourceMode = import.meta.url.endsWith('.ts');
+    const entry = fileURLToPath(
+      new URL(sourceMode ? './job-worker.ts' : './job-worker.js', import.meta.url),
+    );
+    const child = spawn(
+      process.execPath,
+      [
+        ...(maxHeapMiB === undefined ? [] : [`--max-old-space-size=${maxHeapMiB}`]),
+        ...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []),
+        entry,
+      ],
+      {
+        detached: true,
+        cwd: process.cwd(),
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        windowsHide: true,
+      },
+    );
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onExit = (code: number | null, signal: NodeJS.Signals | null): void =>
+          reject(
+            new ServiceError(
+              'JOB_WORKER_STARTUP_EXIT',
+              `The worker exited before completing its startup handshake (phase waiting_for_ready, exit ${code ?? 'none'}, signal ${signal ?? 'none'})`,
+            ),
+          );
+        child.once('error', reject);
+        child.once('exit', onExit);
+        child.once('message', (value: unknown) => {
+          child.off('exit', onExit);
+          child.off('error', reject);
+          if (
+            typeof value !== 'object' ||
+            value === null ||
+            !('type' in value) ||
+            value.type !== 'ready' ||
+            child.pid === undefined
+          )
+            reject(
+              new ServiceError(
+                'JOB_WORKER_PROTOCOL',
+                'The worker did not provide its readiness handshake',
+              ),
+            );
+          else resolve();
+        });
+      });
+    } catch (error) {
+      if (child.connected) child.disconnect();
+      throw error;
+    }
+    return child;
+  }
+
+  /** Send the job and wait until the worker acknowledges receipt. */
+  private async dispatch(
+    child: ChildProcess,
+    message: Record<string, unknown>,
+    reused: boolean,
+  ): Promise<void> {
+    let acknowledgmentTimer: NodeJS.Timeout | undefined;
+    this.watchIdle(child);
+    this.reportedIdle.delete(child);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onExit = (code: number | null, signal: NodeJS.Signals | null): void =>
+          reject(
+            reused
+              ? new ServiceError(
+                  'REQUEST_LEASE_HANDOFF_LOST',
+                  'The warm worker stopped before it received the job',
+                )
+              : new ServiceError(
+                  'JOB_WORKER_STARTUP_EXIT',
+                  `The worker exited before completing its startup handshake (phase waiting_for_acceptance, exit ${code ?? 'none'}, signal ${signal ?? 'none'})`,
+                ),
+          );
+        child.once('exit', onExit);
+        acknowledgmentTimer = setTimeout(
+          () =>
+            reject(
+              new ServiceError(
+                'JOB_WORKER_ACCEPT_TIMEOUT',
+                'The worker did not acknowledge receipt within its startup window',
+              ),
+            ),
+          30_000,
+        );
+        const onMessage = (accepted: unknown): void => {
+          if (
+            typeof accepted === 'object' &&
+            accepted !== null &&
+            'type' in accepted &&
+            accepted.type === 'idle'
+          )
+            return;
+          child.off('message', onMessage);
+          child.off('exit', onExit);
+          if (
+            typeof accepted !== 'object' ||
+            accepted === null ||
+            !('type' in accepted) ||
+            accepted.type !== 'accepted'
+          )
+            reject(
+              new ServiceError(
+                'JOB_WORKER_PROTOCOL',
+                'The worker did not acknowledge the dispatched job',
+              ),
+            );
+          else resolve();
+        };
+        child.on('message', onMessage);
+        child.send(message, (error) => {
+          if (error !== null) reject(error);
+        });
+      });
+    } catch (error) {
+      if (child.connected) child.disconnect();
+      throw error;
+    } finally {
+      clearTimeout(acknowledgmentTimer);
+    }
+  }
+
+  /**
+   * After a job, wait briefly for the worker to report itself idle, release its capacity slot
+   * and keep it for the next job. A worker that does not report idle is left to exit.
+   */
+  private async keepWarm(child: ChildProcess, lease: SharedCapacityLease): Promise<void> {
+    if (!child.connected || child.exitCode !== null || child.signalCode !== null) return;
+    const idle = await new Promise<boolean>((resolve) => {
+      if (this.reportedIdle.has(child)) {
+        resolve(true);
+        return;
+      }
+      const timer = setTimeout(() => finish(false), 10_000);
+      const onMessage = (value: unknown): void => {
+        if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'idle')
+          finish(true);
+      };
+      const onExit = (): void => finish(false);
+      function finish(result: boolean): void {
+        clearTimeout(timer);
+        child.off('message', onMessage);
+        child.off('exit', onExit);
+        resolve(result);
+      }
+      child.on('message', onMessage);
+      child.once('exit', onExit);
+    });
+    // The channel can close while waiting; read it afresh rather than from the earlier check.
+    const connected = (): boolean => child.connected;
+    if (!idle || !connected()) {
+      if (connected()) child.disconnect();
+      return;
+    }
+    await lease.reclaimFromProcess();
+    // An idle worker must not keep this server's event loop alive.
+    child.unref();
+    child.channel?.unref();
+    this.idleWorkers.push(child);
   }
 }

@@ -5,8 +5,8 @@ import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
 import {
+  MAP_VIEW_FIELDS,
   mapInspectRequestSchema,
-  mapRenderRequestSchema,
   mapRewriteRequestSchema,
 } from '../schemas/map-requests.js';
 import { AgentNudger } from './service.js';
@@ -75,9 +75,22 @@ export function registerMapJobs(operations: JobOperations, engine: CoreEngine): 
     'hoi4.map_inspect',
     mapInspectRequestSchema,
     normalizeMapInspectRequest,
-    (nudger, input, context) => inspectMap(engine, nudger, input, context),
+    (nudger, input, context) =>
+      MAP_VIEW_FIELDS.some((field) => input[field] !== undefined)
+        ? renderMapView(
+            nudger,
+            normalizeMapRenderRequest({
+              workspaceId: input.workspaceId,
+              ...Object.fromEntries(
+                MAP_VIEW_FIELDS.flatMap((field) =>
+                  input[field] === undefined ? [] : [[field, input[field]]],
+                ),
+              ),
+            }),
+            context,
+          )
+        : inspectMap(engine, nudger, input, context),
   );
-  register('hoi4.map_render', mapRenderRequestSchema, normalizeMapRenderRequest, renderMapView);
   operations.registerWrite(
     'hoi4.map_rewrite',
     mapRewriteRequestSchema,

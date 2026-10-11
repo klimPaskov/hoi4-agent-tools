@@ -2,9 +2,9 @@
 
 Long-running domain operations support optional MCP tasks while preserving the ordinary tool-call contract.
 Clients that negotiate task support can request a task, disconnect, reconnect with the same authorized identity, inspect or cancel it, and retrieve the original tool result after completion.
-Clients that do not request a task continue to receive the same synchronous tool result as before.
+Clients that do not request a task receive the ordinary synchronous tool result.
 
-Version 3.1.0 routes 2025-era clients through the existing stateful adapter and 2026-07-28 clients through the [modern operation/task adapter](adr/0031-modern-mcp-task-adapter.md) on both stdio and HTTP.
+The server routes 2025-era clients through the stateful adapter and 2026-07-28 clients through the [modern operation/task adapter](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0031-modern-mcp-task-adapter.md) on both stdio and HTTP.
 Modern requests independently negotiate the Tasks extension, use authenticated flat handles, and receive terminal results in `tasks/get`.
 
 Clients can request ordinary-call progress with a progress token.
@@ -14,15 +14,21 @@ A modern native task handoff ends that request's heartbeat without declaring the
 
 ## Supported tools
 
-Optional tasks are available for every read-only event, impact, decision, technology, probability, map, GUI, and focus operation, and for the three rewrite tools:
+Optional tasks are available for all 19 domain tools; the 7 reference tools and the 2 job tools always answer in the foreground.
 
-- `hoi4.event_inspect`, `hoi4.event_render`, and `hoi4.event_compare`
-- `hoi4.impact_inspect` and `hoi4.decision_inspect`
-- `hoi4.tech_inspect`, `hoi4.tech_render`, and `hoi4.tech_compare`
-- `hoi4.probability_inspect`, `hoi4.probability_evaluate`, `hoi4.probability_sweep`, `hoi4.probability_simulate`, `hoi4.probability_sequence`, `hoi4.probability_compare`, and `hoi4.probability_render`
-- `hoi4.map_inspect`, `hoi4.map_render`, and `hoi4.map_rewrite`
+- `hoi4.event_inspect` and `hoi4.event_render`
+- `hoi4.impact_inspect`, `hoi4.decision_inspect`, `hoi4.mechanic_test`, `hoi4.package_check`, and `hoi4.scenario_test`
+- `hoi4.tech_inspect` and `hoi4.tech_render`
+- `hoi4.probability_inspect` and `hoi4.probability_analyze`
+- `hoi4.map_inspect` and `hoi4.map_rewrite`
 - `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite`
-- `hoi4.focus_inspect`, `hoi4.focus_render`, `hoi4.focus_raster`, and `hoi4.focus_rewrite`
+- `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite`
+
+## Warm workers
+
+Domain tools run in a separate worker process. After a job the worker stays warm for `jobWorkerIdleSeconds` (default 180) and runs its server's next job with the indexes it already loaded, so a second GUI render or decision inspection of a large mod skips the cold scan. An idle worker holds no execution slot, exits when its idle time ends or its server closes, and a worker whose job failed, or whose heap still holds more than 40% of its limit after a job and a full collection, is never reused (the next job starts a fresh worker, so several heavy jobs in a row cannot exhaust one worker's heap). Set `jobWorkerIdleSeconds: 0` to start a fresh worker for every job.
+
+## Results
 
 Task results are exact tool results, including linked artifacts, partial-analysis markers, validation evidence, and tool-level errors.
 A completed tool-level error is therefore a completed task whose result has `isError: true`; an execution or storage failure is a failed task.
@@ -52,12 +58,12 @@ Cancelling an ordinary synchronous call prevents admission when possible and oth
 Closing the originating connection does not cancel an accepted native task.
 
 A worker busy in long synchronous analysis cannot observe its own cancellation, so the server that started it also supervises read-only jobs.
-A read-only job still running `jobCancelGraceSeconds` (default 10) after cancellation is stopped and settles as cancelled.
-A read-only job still running `jobDeadlineSeconds` (default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
+A read-only job still running `jobCancelGraceSeconds` (1–600, default 10) after cancellation is stopped and settles as cancelled.
+A read-only job still running `jobDeadlineSeconds` (1–86,400, default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
 Rewrite jobs are never stopped this way, because their transaction journal owns write recovery; they keep cooperative cancellation and reconciliation.
 Supervision belongs to the server process that dispatched the worker. A read-only worker whose dispatching server has exited enforces the same deadline itself and then exits; a rewrite worker keeps running until it finishes.
-`jobWorkerMaxHeapMiB` sets a V8 heap ceiling for each worker; without it, workers use Node's default.
-At most `maxSharedTools` (default 4) workers and expensive calls run at once across every server process that shares a `serverStateRoot`; further work waits for capacity.
+`jobWorkerMaxHeapMiB` (256–65,536) sets a V8 heap ceiling for each worker; without it, workers use Node's default. A worker that runs out of memory ends a job with `JOB_WORKER_EXIT`; retry the call, which starts a fresh worker, or raise the ceiling.
+At most `maxSharedTools` (1–128, default 4) workers and expensive calls run at once across every server process that shares a `serverStateRoot`; further work waits for capacity.
 
 Read-only jobs stage a source-revision-bound result checkpoint before terminal publication.
 If a worker or server stops after that checkpoint, a later authorized process publishes the retained result without rerunning the operation.

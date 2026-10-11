@@ -7,7 +7,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs formatting, type checks, tests, fixture checks, schema generation checks, build checks, and package validation. Use narrower commands during iteration:
+`npm run check` runs formatting, lint, type checks, tests, fixture checks, schema generation checks, build checks, package validation, and MCP Registry metadata validation. Use narrower commands during iteration:
 
 ```bash
 npm run test
@@ -23,7 +23,7 @@ The event-chain acceptance fixture contains more than 300 project-owned event de
 
 The technology acceptance fixture contains 1,040 project-owned technologies across 13 folders and exercises classic and current doctrines, prerequisites, exclusive branches, multiple placements, unlocks, bonuses, grants, assets, unresolved references, rendering, and comparison.
 
-`npx vitest run tests/integration/mcp-concurrent-workloads.test.ts` tests simultaneous production calls across all six domains over six HTTP sessions and four independent stdio processes, including artifact retrieval and queued cancellation. Execution limits and connection behavior are described in [HTTP](http.md) and the [concurrency decision](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0026-concurrent-request-execution.md).
+`npx vitest run tests/integration/mcp-concurrent-workloads.test.ts` tests simultaneous production calls across the tool domains over six HTTP sessions and four independent stdio processes, including artifact retrieval and queued cancellation. Execution limits and connection behavior are described in [HTTP](http.md) and the [concurrency decision](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0026-concurrent-request-execution.md).
 
 Persistent-job qualification covers authenticated record publication, request-key conflicts, read-result checkpoints, transaction-journal reconciliation, stopped-owner takeover, native task negotiation, ordinary-call parity, reconnect isolation, rewrite cancellation before source application, and fixed-entry worker execution. The public lifecycle contract is documented in [Persistent jobs and MCP tasks](jobs.md).
 
@@ -39,7 +39,29 @@ npm run test:local
 
 Add `HOI4_DEPENDENCY_ROOTS` as the platform path-delimited list when the external mod has dependencies. Local tests remain read-only.
 
+`tests/integration/mcp-stdio-smoke.test.ts` starts the real `src/bin/stdio.ts` entry point and calls every exposed tool once with the argument shape an agent sends, then once with a deliberately wrong field.
+Each success must be a non-error `ok` result whose inline structured content stays under 40 KB, and each wrong call must be a `INVALID_ARGUMENTS` tool error that names the field and shows a working example.
+The suite also builds a world with `create_world`, splits and merges a state with `create_state` and `merge_states`, repairs script references with `remap_map_references`, and load-checks the resulting `definition.csv`, state, strategic region, supply and railway files independently of the server's own validator.
+`tests/local/mcp-stdio-smoke.test.ts` repeats the read-only calls against the installed game (through an empty mod) and the external mod above; set `HOI4_SMOKE_REPORT` to a file path to receive the per-tool coverage table with timings.
+Set `HOI4_SMOKE_STDIO_ENTRY` to the absolute `dist/bin/stdio.js` path in a clean tarball installation to test the packaged server instead of the TypeScript source. Rewrites receive invalid inputs on the real mod; successful writes are exercised only on synthetic fixtures.
+`npm run benchmark:cold` times the slow first calls (`hoi4.mod_index`, an event lint and a decision inventory) of a real mod in a fresh server process and again in a second process on the same state folder; the maintainer checklist for tagging a release is `docs/RELEASING.md` in the repository.
+
 The installed-game qualification also parses every shipped bitmap-font descriptor, resolves every atlas page, shapes native and enlarged glyphs, verifies deterministic raster output, and checks HOI4 localisation colours across base fonts and language overrides.
+
+## Adding a known mistake
+
+`src/hoi4_agent_tools/reference/known-mistakes.json` is the reviewed list behind `known_mistakes` in `hoi4.script_validate`, the `knownMistakes` of `hoi4.reference_context`, and the `knownMistake` of `hoi4.error_log`.
+It is not written at run time: a mistake enters it through a commit.
+
+1. Find the mistake in the offline wiki, the game documentation, or a reproduced `error.log` message, and note the page, heading and item.
+   A rule without a source is not accepted.
+2. Add the rule: a unique snake_case `id`, `severity` (`error` when the definition cannot work, `warning` otherwise), the `surfaces` it belongs to, a `title`, the `mistake`, its `symptom`, the `fix`, the `sources`, and, when the game logs a fixed message, a `logPattern` regular expression.
+3. Add the detector with the same id in `known-mistakes.ts`, working on the parsed file, and the families it applies to.
+   `tests/unit/known-mistakes.test.ts` fails when a rule has no detector or a detector has no rule; add a case that flags the mistake and one that accepts the corrected script.
+4. When the rule is written from a recurring `error.log` pattern, run `hoi4.error_log` first: its `patterns` show the shapes, and the new `logPattern` makes later logs name the fix.
+
+When the game fixes the behaviour, or the rule turns out to be wrong, set `status` to `resolved` and add `resolution` with the date and the reason, and leave the entry in the file.
+A resolved rule is not applied and its detector is skipped; deleting it would lose why it was removed.
 
 See the package [Security Policy](../SECURITY.md) for private vulnerability reporting.
 

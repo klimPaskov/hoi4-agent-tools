@@ -646,3 +646,33 @@ describe('persistent job records', () => {
     await expect(store.get(scope, record.id)).rejects.toMatchObject({ code: 'JOB_RECORD_INVALID' });
   });
 });
+
+describe('job record sweep', () => {
+  it('removes only expired finished read-only records', async () => {
+    const { store } = await fixture();
+    const readRequest: JobRequest = {
+      toolName: 'hoi4.focus_inspect',
+      arguments: {},
+      mutation: false,
+      requestKey: 'sweep-read',
+      protocolTask: { ttl: 60_000, pollInterval: 500 },
+    };
+    const finish = async (requestKey: string) => {
+      const { record } = await store.submit(scope, { ...readRequest, requestKey });
+      const claimed = await store.claim(scope, record.id, currentJobOwner());
+      return store.updateOwned(scope, record.id, claimed.record.owner!.token, {
+        status: 'completed',
+        result: {},
+      });
+    };
+    const done = await finish('sweep-done');
+    const { record: queued } = await store.submit(scope, { ...readRequest, requestKey: 'queued' });
+    expect(await store.sweepExpired()).toBe(0);
+    const later = Date.now() + 2 * 24 * 60 * 60 * 1000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    expect(jobRetentionExpired(done)).toBe(true);
+    expect(await store.sweepExpired()).toBe(1);
+    await expect(store.get(scope, done.id)).rejects.toBeDefined();
+    await expect(store.get(scope, queued.id)).resolves.toMatchObject({ status: 'queued' });
+  });
+});

@@ -77,13 +77,14 @@ export function registerFocusJobs(operations: JobOperations, engine: CoreEngine)
     'hoi4.focus_render',
     focusRenderRequestSchema,
     normalizeFocusRenderRequest,
-    (input, context) => renderFocus(engine, workbench, input, context, false),
-  );
-  register(
-    'hoi4.focus_raster',
-    focusRenderRequestSchema,
-    normalizeFocusRenderRequest,
-    (input, context) => renderFocus(engine, workbench, input, context, true),
+    (input, context) =>
+      renderFocus(
+        engine,
+        workbench,
+        input,
+        context,
+        input.png !== false || (input.cropFocusIds?.length ?? 0) > 0,
+      ),
   );
   operations.registerWrite(
     'hoi4.focus_rewrite',

@@ -48,6 +48,22 @@ const request = {
 };
 
 describe('typed job execution', () => {
+  it('stops a read-only job at its deadline and records why as its owner', async () => {
+    const { jobs, operations, executor } = await fixture();
+    operations.registerRead(request.toolName, emptyInput, async (_, context) => {
+      await delay(30_000, undefined, { signal: context.signal });
+      return {};
+    });
+    const job = (await jobs.submit('test', { ...request, requestKey: 'deadline' })).record;
+    const started = Date.now();
+    const settled = await executor.run('test', job.id, undefined, { deadlineMs: Date.now() + 200 });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(settled).toMatchObject({
+      status: 'failed',
+      failure: { code: 'JOB_DEADLINE_EXCEEDED' },
+    });
+  });
+
   it('keeps cancellation responsive while another job owns the only execution slot', async () => {
     const { jobs, operations, executor } = await fixture();
     let entered!: () => void;

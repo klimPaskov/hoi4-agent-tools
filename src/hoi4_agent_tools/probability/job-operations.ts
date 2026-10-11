@@ -5,29 +5,14 @@ import type { JobOperations } from '../core/job-executor.js';
 import { errorResult, toolResult } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
 import {
-  probabilityCompareRequestSchema,
-  probabilityEvaluateRequestSchema,
+  probabilityAnalyzeRequestSchema,
   probabilityInspectRequestSchema,
-  probabilityRenderRequestSchema,
-  probabilitySequenceRequestSchema,
-  probabilitySimulateRequestSchema,
-  probabilitySweepRequestSchema,
 } from '../schemas/probability-requests.js';
 import {
-  compareProbabilities,
-  evaluateProbabilities,
+  analyzeProbabilities,
   inspectProbabilities,
-  normalizeProbabilityCompareRequest,
-  normalizeProbabilityEvaluateRequest,
+  normalizeProbabilityAnalyzeRequest,
   normalizeProbabilityInspectRequest,
-  normalizeProbabilityRenderRequest,
-  normalizeProbabilitySequenceRequest,
-  normalizeProbabilitySimulateRequest,
-  normalizeProbabilitySweepRequest,
-  renderProbabilities,
-  sequenceProbabilities,
-  simulateProbabilities,
-  sweepProbabilities,
   type ProbabilityOperationContext,
 } from './operations.js';
 import { ProbabilityAnalyzer } from './service.js';
@@ -93,48 +78,13 @@ export function registerProbabilityJobs(operations: JobOperations, engine: CoreE
     probabilityInspectRequestSchema,
     normalizeProbabilityInspectRequest,
     inspectProbabilities,
-    'Inspecting weighted source',
+    'Inspecting and evaluating weighted source',
   );
   register(
-    'hoi4.probability_evaluate',
-    probabilityEvaluateRequestSchema,
-    normalizeProbabilityEvaluateRequest,
-    evaluateProbabilities,
-    'Evaluating weighted scenarios',
-  );
-  register(
-    'hoi4.probability_sweep',
-    probabilitySweepRequestSchema,
-    normalizeProbabilitySweepRequest,
-    sweepProbabilities,
-    'Evaluating parameter sweep',
-  );
-  register(
-    'hoi4.probability_simulate',
-    probabilitySimulateRequestSchema,
-    normalizeProbabilitySimulateRequest,
-    simulateProbabilities,
-    'Sampling uncertain scenarios',
-  );
-  register(
-    'hoi4.probability_sequence',
-    probabilitySequenceRequestSchema,
-    normalizeProbabilitySequenceRequest,
-    sequenceProbabilities,
-    'Analyzing declared sequence',
-  );
-  register(
-    'hoi4.probability_compare',
-    probabilityCompareRequestSchema,
-    normalizeProbabilityCompareRequest,
-    compareProbabilities,
-    'Comparing weighted source',
-  );
-  register(
-    'hoi4.probability_render',
-    probabilityRenderRequestSchema,
-    normalizeProbabilityRenderRequest,
-    renderProbabilities,
-    'Rendering analysis resources',
+    'hoi4.probability_analyze',
+    probabilityAnalyzeRequestSchema,
+    normalizeProbabilityAnalyzeRequest,
+    analyzeProbabilities,
+    'Analyzing weighted source',
   );
 }

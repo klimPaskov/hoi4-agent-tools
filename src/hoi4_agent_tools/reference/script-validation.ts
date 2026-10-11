@@ -15,6 +15,7 @@ import type {
 } from '../schemas/script-validation.js';
 import { repeatedPopupFindings, type EventPopupDefinition } from './event-popups.js';
 import { playerTextFindings, playerTextPosition, type PlayerTextContext } from './player-text.js';
+import { knownMistakeFindings, type KnownMistakeContext } from './known-mistakes.js';
 import { editDistance } from './suggestions.js';
 import { publicReferenceSection, type ReferenceService, type ReferenceSection } from './service.js';
 
@@ -47,6 +48,8 @@ export interface ScriptFileContext {
   playerText?: PlayerTextContext;
   /** Event definitions of every source layer, for repeated popup checks. */
   eventPopups?: ReadonlyMap<string, EventPopupDefinition>;
+  /** Namespaces declared across the active events files, for the known-mistake checks. */
+  knownMistakes?: KnownMistakeContext;
 }
 
 /**
@@ -585,10 +588,27 @@ export async function validateScript(
       scope: UNKNOWN_SCOPE,
       line: position.line,
       column: position.column,
-      message: finding.message,
+      message: finding.message.slice(0, 500),
       suggestions: [],
     });
   }
+  const knownMistakes =
+    plan.family === 'snippet' || plan.family === 'unsupported' ? undefined : file?.knownMistakes;
+  if (knownMistakes !== undefined)
+    for (const finding of knownMistakeFindings(plan.family, document, knownMistakes)) {
+      const position = playerTextPosition(documentPath, document.lineIndex, finding);
+      findings.push({
+        code: finding.code,
+        status: finding.rule.severity,
+        command: finding.command.slice(0, 256),
+        kind: 'definition',
+        scope: UNKNOWN_SCOPE,
+        line: position.line,
+        column: position.column,
+        message: finding.message.slice(0, 500),
+        suggestions: [],
+      });
+    }
   const unresolvedCount = findings.filter(({ status }) => status === 'unresolved').length;
   const invalid = findings.some(({ status }) => status === 'error');
   const truncated = visited > commandLimit;
@@ -615,6 +635,7 @@ export async function validateScript(
       'declared_scope',
       ...(playerTextChecked ? (['player_text'] as const) : []),
       ...(eventPopups === undefined ? [] : (['event_popups'] as const)),
+      ...(knownMistakes === undefined ? [] : (['known_mistakes'] as const)),
     ],
     parametersChecked: false,
     documentation: {

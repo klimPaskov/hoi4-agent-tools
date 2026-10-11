@@ -210,7 +210,9 @@ describe('script_validate file mode', () => {
     ).data;
     expect(data.valid).toBe(false);
     expect(data.file).toMatchObject({ family: 'events', roots: 3, unknownScopeRoots: 0 });
-    const found = data.findings.map(({ code, command, line }) => ({ code, command, line }));
+    const found = data.findings
+      .filter(({ code }) => !code.startsWith('KNOWN_MISTAKE_'))
+      .map(({ code, command, line }) => ({ code, command, line }));
     expect(found).toEqual([
       { code: 'SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER', command: 'num_owned_states', line: 8 },
       { code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE', command: 'controller', line: 12 },
@@ -234,17 +236,50 @@ describe('script_validate file mode', () => {
     };
     const news = await check('events/news.txt');
     expect(news.checksPerformed).toContain('player_text');
-    expect(news.findings.map(({ code, line, status }) => ({ code, line, status }))).toEqual([
+    expect(
+      news.findings
+        .filter(({ code }) => !code.startsWith('KNOWN_MISTAKE_'))
+        .map(({ code, line, status }) => ({ code, line, status })),
+    ).toEqual([
       { code: 'SCRIPT_NEWS_TEXT_COLOUR_CODE', line: 3, status: 'warning' },
       { code: 'SCRIPT_NEWS_TEXT_COLOUR_CODE', line: 4, status: 'warning' },
       { code: 'SCRIPT_TEXT_IMPLEMENTATION_WORDING', line: 5, status: 'warning' },
     ]);
-    expect(news.findings[1]?.message).toContain('MOOD_HAPPY');
+    expect(news.findings.find(({ message }) => message.includes('MOOD_HAPPY'))).toBeDefined();
     const decisions = await check('common/decisions/checks.txt');
     expect(decisions.findings.map(({ code, command, line }) => ({ code, command, line }))).toEqual([
       { code: 'SCRIPT_TEXT_IMPLEMENTATION_WORDING', command: 'check_decision', line: 2 },
       { code: 'SCRIPT_FLAG_TOOLTIP_UNLOCALISED', command: 'has_country_flag', line: 5 },
     ]);
+  });
+
+  it('flags the reviewed known mistakes of a checked events file with their fixes', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: { workspaceId: 'fixture', path: 'events/news.txt', limit: 32 },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+    const data = (
+      result.structuredContent as {
+        data: {
+          valid: boolean | null;
+          checksPerformed: string[];
+          findings: Array<Finding & { status: string }>;
+        };
+      }
+    ).data;
+    expect(data.checksPerformed).toContain('known_mistakes');
+    expect(data.valid).toBe(false);
+    const known = data.findings.filter(({ code }) => code.startsWith('KNOWN_MISTAKE_'));
+    expect(known.map(({ code, line, status }) => ({ code, line, status }))).toEqual([
+      { code: 'KNOWN_MISTAKE_EVENT_NAMESPACE_MISSING', line: 2, status: 'error' },
+      { code: 'KNOWN_MISTAKE_EVENT_NAMESPACE_MISSING', line: 8, status: 'error' },
+      { code: 'KNOWN_MISTAKE_EVENT_FIRES_EVERY_DAY', line: 1, status: 'warning' },
+      { code: 'KNOWN_MISTAKE_NEWS_EVENT_NOT_MAJOR', line: 1, status: 'warning' },
+      { code: 'KNOWN_MISTAKE_EVENT_FIRES_EVERY_DAY', line: 7, status: 'warning' },
+    ]);
+    expect(known[0]?.message).toContain('add_namespace');
   });
 
   it('reports visible events that reach one player once per loop member', async () => {
@@ -269,12 +304,44 @@ describe('script_validate file mode', () => {
     ]);
   });
 
-  it('rejects mixing file mode with snippet arguments', async () => {
+  it('rejects a file path together with a snippet and names the field', async () => {
     const mcp = await client();
     const result = await mcp.callTool({
       name: 'hoi4.script_validate',
-      arguments: { workspaceId: 'fixture', path: 'events/checks.txt', kind: 'effect' },
+      arguments: { workspaceId: 'fixture', path: 'events/checks.txt', source: 'x = 1' },
     });
     expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('INVALID_ARGUMENTS');
+  });
+
+  it('ignores a kind and scope sent with a file path', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: {
+        workspaceId: 'fixture',
+        path: 'events/checks.txt',
+        kind: 'effect',
+        scope: 'country',
+        limit: 99,
+      },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+  });
+
+  it('infers the kind of a snippet that does not name one', async () => {
+    const mcp = await client();
+    const call = async (source: string) => {
+      const result = await mcp.callTool({
+        name: 'hoi4.script_validate',
+        arguments: { workspaceId: 'fixture', snippet: source },
+      });
+      expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+      return (result.structuredContent as { data: { findings: Array<{ kind: string }> } }).data;
+    };
+    expect((await call('add_power = 10')).findings.map(({ kind }) => kind)).not.toContain(
+      'trigger',
+    );
+    expect((await call('has_flag = x')).findings.map(({ kind }) => kind)).not.toContain('effect');
   });
 });

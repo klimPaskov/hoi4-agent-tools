@@ -1,13 +1,22 @@
+import { setFlagsFromString, getHeapStatistics } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { z } from 'zod/v4';
-import { serverConfigurationSchema } from './configuration.js';
+import { hashCanonical } from './canonical.js';
+import { serverConfigurationSchema, type ServerConfiguration } from './configuration.js';
 import { CoreEngine } from './engine.js';
-import { JobExecutor } from './job-executor.js';
+import { JobExecutor, type JobOperations } from './job-executor.js';
 import { JobService } from './job-service.js';
 import { WorkspaceResolver } from './workspace.js';
-import { registerWorkerOperations } from './job-operation-registration.js';
+import { registerWorkerOperations, workerDomain } from './job-operation-registration.js';
 
 // Fixed internal process entry point. It accepts only a trusted host's structured IPC
 // message, never a script path, module name, callback, command, or transport request.
+//
+// A worker runs one job at a time. After a job it stays warm for jobWorkerIdleSeconds while
+// its host keeps the IPC channel open, so the host's next job reuses the loaded indexes
+// instead of scanning cold. It exits when the idle time ends or the host disconnects. A worker
+// whose heap stays large after a job is not kept warm: several heavy jobs in a row would
+// otherwise exhaust the heap limit in the middle of the next one.
 const inputSchema = z
   .object({
     configuration: serverConfigurationSchema,
@@ -17,59 +26,110 @@ const inputSchema = z
   })
   .strict();
 if (process.send === undefined) throw new Error('Job workers require their internal IPC host');
+
+interface WarmState {
+  configurationHash: string;
+  resolver: WorkspaceResolver;
+  engine: CoreEngine;
+  jobs: JobService;
+  operations: Map<string, JobOperations>;
+}
+
+let warm: WarmState | undefined;
+let busy = false;
 let started = false;
+let idleTimer: NodeJS.Timeout | undefined;
+
+/** Share of the heap limit a worker may still hold after a job and a full collection. */
+const WARM_HEAP_SHARE = 0.4;
+
+/** Whether the heap, after a full collection, is small enough to serve another job. */
+function heapAllowsReuse(): boolean {
+  const limit = getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE;
+  if (getHeapStatistics().used_heap_size <= limit) return true;
+  try {
+    setFlagsFromString('--expose-gc');
+    (runInNewContext('gc') as () => void)();
+  } catch {
+    // Without a collection the figure above stands: recycle rather than risk the next job.
+    return false;
+  }
+  return getHeapStatistics().used_heap_size <= limit;
+}
+
 const startup = setTimeout(() => {
   if (!started) process.exit(1);
 }, 30_000);
 startup.unref();
-process.once('disconnect', () => {
-  if (!started) process.exit(0);
+
+function finish(): void {
+  if (process.connected) process.disconnect();
+  process.exit(process.exitCode ?? 0);
+}
+
+process.on('disconnect', () => {
+  // A host that leaves while a job runs does not cancel it; the job finishes and the worker
+  // exits afterwards. An idle worker has nothing left to do.
+  if (!busy) finish();
 });
-process.once('message', (value: unknown) => {
+
+async function warmState(configuration: ServerConfiguration): Promise<WarmState> {
+  const configurationHash = hashCanonical(configuration);
+  if (warm?.configurationHash === configurationHash) return warm;
+  const resolver = await WorkspaceResolver.create(configuration);
+  const engine = new CoreEngine(resolver);
+  // Recovery is targeted by the job executor. Do not sweep or interfere with
+  // unrelated live rewrite journals when a worker starts.
+  const jobs = await JobService.create(resolver);
+  warm = { configurationHash, resolver, engine, jobs, operations: new Map() };
+  return warm;
+}
+
+async function runJob(value: unknown): Promise<void> {
+  const input = inputSchema.parse(value);
+  // The send callback confirms enqueueing, not receipt. Acknowledge before the host
+  // continues; losing that channel after receipt never cancels durable execution.
+  if (process.connected) process.send?.({ type: 'accepted' }, () => undefined);
+  const state = await warmState(input.configuration);
+  const record = await state.jobs.get(input.workspaceId, input.jobId, input.principal);
+  // The host enforces the deadline while it lives; the executor also stops a read-only job
+  // at its deadline and records why, so an orphaned worker never runs indefinitely.
+  const deadlineMs = Date.now() + state.resolver.config().jobDeadlineSeconds * 1000;
+  const domain = workerDomain(record.request.toolName);
+  let operations = state.operations.get(domain);
+  if (operations === undefined) {
+    operations = await registerWorkerOperations(state.engine, record.request.toolName);
+    state.operations.set(domain, operations);
+  } else operations.get(record.request.toolName);
+  await new JobExecutor(state.engine, state.jobs, operations).run(
+    input.workspaceId,
+    input.jobId,
+    input.principal,
+    { deadlineMs },
+  );
+}
+
+process.on('message', (value: unknown) => {
+  if (busy) return;
   started = true;
+  busy = true;
   clearTimeout(startup);
-  void (async () => {
-    const input = inputSchema.parse(value);
-    // The send callback confirms enqueueing, not receipt. Acknowledge before the host
-    // disconnects; losing that channel after receipt never cancels durable execution.
-    if (process.connected) process.send?.({ type: 'accepted' }, () => undefined);
-    const resolver = await WorkspaceResolver.create(input.configuration);
-    const engine = new CoreEngine(resolver);
-    // Recovery is targeted by the job executor. Do not sweep or interfere with
-    // unrelated live rewrite journals when a worker starts.
-    const jobs = await JobService.create(resolver);
-    const record = await jobs.get(input.workspaceId, input.jobId, input.principal);
-    if (!record.request.mutation) {
-      // The host enforces the deadline while it lives; a worker whose host has gone stops
-      // itself, so an orphaned read-only analysis never holds memory indefinitely.
-      const { jobDeadlineSeconds } = resolver.config();
-      setTimeout(() => {
-        void jobs
-          .failInterrupted(
-            input.workspaceId,
-            input.jobId,
-            {
-              code: 'JOB_DEADLINE_EXCEEDED',
-              message: `The job ran longer than ${jobDeadlineSeconds} seconds and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds`,
-            },
-            input.principal,
-          )
-          .catch(() => undefined)
-          .finally(() => process.exit(1));
-      }, jobDeadlineSeconds * 1000).unref();
-    }
-    const operations = await registerWorkerOperations(engine, record.request.toolName);
-    await new JobExecutor(engine, jobs, operations).run(
-      input.workspaceId,
-      input.jobId,
-      input.principal,
-    );
-  })()
+  if (idleTimer !== undefined) clearTimeout(idleTimer);
+  void runJob(value)
     .catch(() => {
       process.exitCode = 1;
     })
     .finally(() => {
-      if (process.connected) process.disconnect();
+      busy = false;
+      const idleSeconds = warm?.resolver.config().jobWorkerIdleSeconds ?? 0;
+      // A failed job leaves state of unknown health; start the next job in a fresh worker.
+      if (!process.connected || idleSeconds === 0 || process.exitCode === 1 || !heapAllowsReuse()) {
+        finish();
+        return;
+      }
+      process.send?.({ type: 'idle' }, () => undefined);
+      idleTimer = setTimeout(finish, idleSeconds * 1000);
+      idleTimer.unref();
     });
 });
 process.send({ type: 'ready' });

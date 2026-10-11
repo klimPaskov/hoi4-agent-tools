@@ -19,22 +19,21 @@ const projectRoot = path.resolve(import.meta.dirname, '../..');
 const expectedToolNames = [
   'hoi4.focus_inspect',
   'hoi4.focus_render',
-  'hoi4.focus_raster',
   'hoi4.focus_rewrite',
   'hoi4.gui_inspect',
   'hoi4.gui_render',
   'hoi4.gui_rewrite',
   'hoi4.map_inspect',
-  'hoi4.map_render',
   'hoi4.map_rewrite',
   'hoi4.reference_search',
   'hoi4.reference_read',
   'hoi4.reference_context',
   'hoi4.source_lookup',
   'hoi4.script_validate',
+  'hoi4.error_log',
+  'hoi4.mod_index',
   'hoi4.event_inspect',
   'hoi4.event_render',
-  'hoi4.event_compare',
   'hoi4.impact_inspect',
   'hoi4.decision_inspect',
   'hoi4.mechanic_test',
@@ -42,14 +41,8 @@ const expectedToolNames = [
   'hoi4.scenario_test',
   'hoi4.tech_inspect',
   'hoi4.tech_render',
-  'hoi4.tech_compare',
   'hoi4.probability_inspect',
-  'hoi4.probability_evaluate',
-  'hoi4.probability_sweep',
-  'hoi4.probability_simulate',
-  'hoi4.probability_sequence',
-  'hoi4.probability_compare',
-  'hoi4.probability_render',
+  'hoi4.probability_analyze',
   'hoi4.job_inspect',
   'hoi4.job_cancel',
 ];
@@ -337,6 +330,7 @@ describe('clean npm-pack installation', () => {
     expect(defaultClient.generic.mcpServers.hoi4_agent_tools).not.toHaveProperty('env');
     expect(defaultClient.codexToml).not.toContain('HOI4_AGENT_CONFIG');
     expect(defaultClient.codexToml).toContain('HOI4_AGENT_STDIO_IDLE_EXIT_MINUTES = "30"');
+    expect(defaultClient.codexToml).toContain('tool_timeout_sec = 600');
   });
 
   it('qualifies authenticated Streamable HTTP through the installed package binary', async () => {

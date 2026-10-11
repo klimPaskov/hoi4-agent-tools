@@ -16,6 +16,7 @@ import { registerMcpResources } from '../resources/register.js';
 import { installRequestLifecycle } from './request-lifecycle.js';
 import { PersistentJobTaskStore } from './job-task-store.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
+import { releaseIdleWorkers } from '../../core/operation-tasks.js';
 
 export { SERVER_INSTRUCTIONS } from './instructions.js';
 
@@ -38,6 +39,12 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
     },
   );
   installRequestLifecycle(server, engine);
+  // Warm job workers outlive single calls, not the client session that used them.
+  const previousOnClose = server.server.onclose;
+  server.server.onclose = () => {
+    previousOnClose?.();
+    void releaseIdleWorkers(engine);
+  };
   serverContext = {
     ...context,
     resolveCurrentWorkspaceId: async (signal) => {

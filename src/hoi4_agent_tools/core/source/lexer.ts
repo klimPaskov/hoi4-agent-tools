@@ -36,6 +36,15 @@ export interface LexOptions {
   diagnostics?: SourceDiagnosticCollector;
 }
 
+const unicodeSpace = /\s/u;
+
+/** The same characters as the `\s` class; the regular expression only runs for non-ASCII text. */
+function isSpace(character: string): boolean {
+  const code = character.charCodeAt(0);
+  if (code < 128) return code === 32 || (code >= 9 && code <= 13);
+  return code > 159 && unicodeSpace.test(character);
+}
+
 const operatorStarts = new Set(['=', '<', '>', '!']);
 
 function startsOperator(text: string, index: number): boolean {
@@ -192,8 +201,8 @@ export function lexClausewitz(
     const startColumn = column;
     const current = text[index] ?? '';
 
-    if (/\s/u.test(current)) {
-      while (index < text.length && /\s/u.test(text[index] ?? '')) advance();
+    if (isSpace(current)) {
+      while (index < text.length && isSpace(text[index] ?? '')) advance();
       add('whitespace', start, startLine, startColumn);
       continue;
     }
@@ -286,7 +295,7 @@ export function lexClausewitz(
     while (index < text.length) {
       const character = text[index] ?? '';
       if (
-        /\s/u.test(character) ||
+        isSpace(character) ||
         character === '#' ||
         character === '{' ||
         character === '}' ||

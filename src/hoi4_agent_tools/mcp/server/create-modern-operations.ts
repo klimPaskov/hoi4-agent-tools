@@ -1,4 +1,7 @@
 import { fileURLToPath } from 'node:url';
+import { normalizeToolArguments } from '../../schemas/lenient-arguments.js';
+import { invalidArgumentsResult } from './argument-errors.js';
+import { slimListedTool } from './tool-listing.js';
 import {
   CallToolResultSchema,
   ClientCapabilitiesSchema,
@@ -14,7 +17,7 @@ import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
 import { isJobControlTool, JobControlService } from '../../core/job-controls.js';
 import type { OperationContext } from '../../core/operation-context.js';
-import { OperationTaskService } from '../../core/operation-tasks.js';
+import { OperationTaskService, releaseIdleWorkers } from '../../core/operation-tasks.js';
 import { errorResult } from '../../core/operation-result.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../version.js';
 import { MODERN_TASK_ROUTES, ModernTaskRoutingServer } from '../transports/modern-task-routing.js';
@@ -88,35 +91,54 @@ export function createModernOperationServer(
       instructions: SERVER_INSTRUCTIONS,
     },
   );
+  // Warm job workers outlive single calls, not the client session that used them.
+  const previousOnClose = server.onclose;
+  server.onclose = () => {
+    previousOnClose?.();
+    void releaseIdleWorkers(engine);
+  };
   registerModernResources(server, engine, context);
   registerModernPrompts(server);
   server.setRequestHandler('tools/list', () =>
     ListToolsResultSchema.parse({
-      tools: definitions.map(({ name, inputSchema, outputSchema, ...metadata }) => ({
-        ...metadata,
-        name,
-        inputSchema: {
-          ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
-          type: 'object' as const,
-        },
-        ...(outputSchema === undefined
-          ? {}
-          : {
-              outputSchema: {
-                ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
-                type: 'object' as const,
-              },
-            }),
-      })),
+      tools: definitions.map(({ name, inputSchema, outputSchema, ...metadata }) =>
+        slimListedTool({
+          ...metadata,
+          name,
+          inputSchema: {
+            ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
+            type: 'object' as const,
+          },
+          ...(outputSchema === undefined
+            ? {}
+            : {
+                outputSchema: {
+                  ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
+                  type: 'object' as const,
+                },
+              }),
+        }),
+      ),
     }),
   );
   server.setRequestHandler('tools/call', async (request, extra) => {
     const definition = definitions.find(({ name }) => name === request.params.name);
     if (definition === undefined)
       throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Unknown tool');
-    const input = definition.inputSchema.safeParse(request.params.arguments ?? {});
-    if (!input.success)
-      throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Invalid tool arguments');
+    const input = definition.inputSchema.safeParse(
+      normalizeToolArguments(definition.name, request.params.arguments ?? {}),
+    );
+    if (!input.success) {
+      // A tool error, not a protocol error, so the model sees which field to correct.
+      const workspaceId = (request.params.arguments as { workspaceId?: unknown } | undefined)
+        ?.workspaceId;
+      return CallToolResultSchema.parse({
+        ...invalidArgumentsResult(definition.name, input.error, workspaceId),
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+      });
+    }
     const capabilities = clientCapabilities(extra.mcpReq.envelope);
     const arguments_ = z.record(z.string(), z.json()).parse(input.data);
     let operationContext = context;

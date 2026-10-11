@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SourceDocumentCache } from '../../src/hoi4_agent_tools/core/source/cache.js';
+import {
+  SourceDocumentCache,
+  sourceDocumentCacheKey,
+} from '../../src/hoi4_agent_tools/core/source/cache.js';
 import {
   parseClausewitz,
   serializeUnchanged,
@@ -29,6 +32,28 @@ describe('content-addressed parsed source cache', () => {
     second.tokens.length = 0;
     expect(parseClausewitz(bytes, 'fixture.txt', cache)).toEqual(expected);
     expect(cache.statistics()).toMatchObject({ hits: 2, misses: 1, retainedDocuments: 1 });
+  });
+
+  it('decodes an imported entry on first read and treats an undecodable one as a miss', () => {
+    const bytes = Buffer.from('x = { value = 1 }\n');
+    const source = new SourceDocumentCache();
+    const parsed = parseClausewitz(bytes, 'fixture.txt', source);
+    const key = sourceDocumentCacheKey(bytes, 'fixture.txt');
+    const encoded = source.exportEncoded(key)!;
+
+    const importing = new SourceDocumentCache();
+    importing.importEncoded(key, encoded);
+    expect(importing.has(key)).toBe(true);
+    expect(importing.statistics()).toMatchObject({ hits: 0, retainedDocuments: 1 });
+    expect(parseClausewitz(bytes, 'fixture.txt', importing)).toEqual(parsed);
+    expect(importing.statistics()).toMatchObject({ hits: 1, misses: 0 });
+
+    const damaged = new SourceDocumentCache();
+    damaged.importEncoded(key, Buffer.from('not a serialized document'));
+    expect(damaged.get(key)).toBeUndefined();
+    expect(damaged.has(key)).toBe(false);
+    // The caller parses the file again instead of failing.
+    expect(parseClausewitz(bytes, 'fixture.txt', damaged)).toEqual(parsed);
   });
 
   it('keeps documents that are read again when a scan cycles through more source than fits', () => {

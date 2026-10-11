@@ -93,7 +93,7 @@ describe('map jobs and negotiated native tasks', () => {
         arguments: { workspaceId: 'test', includeOverview: false, provinceIds: [1] },
       },
       {
-        name: 'hoi4.map_render',
+        name: 'hoi4.map_inspect',
         arguments: { workspaceId: 'test', layer: 'province', scale: 1 },
       },
     ];

@@ -21,6 +21,14 @@ import {
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
+import { readErrorLog } from './error-log.js';
+import { modIndex } from './mod-index.js';
+import {
+  errorLogDataSchema,
+  errorLogRequestSchema,
+  modIndexDataSchema,
+  modIndexRequestSchema,
+} from '../schemas/mod-tools.js';
 import type { LocalisedText, PlayerTextContext } from './player-text.js';
 import { eventPopupDefinitions, type EventPopupDefinition } from './event-popups.js';
 import { locatePatterns, selectFile } from './source-locate.js';
@@ -61,6 +69,8 @@ const schemas = {
   'hoi4.reference_context': referenceContextRequestSchema,
   'hoi4.source_lookup': sourceLookupRequestSchema,
   'hoi4.script_validate': scriptValidateRequestSchema,
+  'hoi4.error_log': errorLogRequestSchema,
+  'hoi4.mod_index': modIndexRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -108,22 +118,58 @@ export class ReferenceToolService {
                 referenceContextRequestSchema.parse(parsed),
                 signal,
               )
-            : name === 'hoi4.script_validate'
-              ? await this.validateScript(
-                  workspaceId,
+            : name === 'hoi4.error_log'
+              ? await readErrorLog(
                   workspace,
-                  scriptValidateRequestSchema.parse(parsed),
-                  context.principal,
+                  errorLogRequestSchema.parse(parsed),
+                  this.engine.resolver.config().gameUserRoot,
                   signal,
                 )
-              : await sourceLookup(
-                  this.engine,
-                  workspaceId,
-                  sourceLookupRequestSchema.parse(parsed),
-                  context.principal,
-                  signal,
-                );
+              : name === 'hoi4.mod_index'
+                ? await modIndex(
+                    this.engine,
+                    workspaceId,
+                    modIndexRequestSchema.parse(parsed),
+                    context.principal,
+                    signal,
+                  )
+                : name === 'hoi4.script_validate'
+                  ? await this.validateScript(
+                      workspaceId,
+                      workspace,
+                      scriptValidateRequestSchema.parse(parsed),
+                      context.principal,
+                      signal,
+                    )
+                  : await sourceLookup(
+                      this.engine,
+                      workspaceId,
+                      sourceLookupRequestSchema.parse(parsed),
+                      context.principal,
+                      signal,
+                    );
     const result = emptyServiceResult(workspaceId, data);
+    if (name === 'hoi4.error_log') {
+      const log = errorLogDataSchema.parse(data);
+      result.code = 'ERROR_LOG_READ';
+      result.validation = {
+        passed: log.modEntries === 0,
+        checks: [
+          {
+            id: 'error-log-mod-entries',
+            passed: log.modEntries === 0,
+            message:
+              log.modEntries === 0
+                ? 'The last game launch logged no errors located in this mod'
+                : `The last game launch logged ${log.modEntries} distinct errors located in this mod`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.mod_index') {
+      const index = modIndexDataSchema.parse(data);
+      result.code = index.complete ? 'MOD_INDEXED' : 'MOD_INDEXED_PARTIAL';
+    }
     if (name === 'hoi4.script_validate') {
       const checked = scriptValidateDataSchema.parse(data);
       result.code = checked.valid === null ? 'SCRIPT_CHECK_PARTIAL' : 'SCRIPT_CHECKED';
@@ -183,25 +229,47 @@ export class ReferenceToolService {
     principal?: string,
     signal?: AbortSignal,
   ) {
-    if (request.path === undefined)
-      return validateScript(this.references, workspace, request, signal);
-    const snapshot = await this.engine.scan(
-      workspaceId,
-      {
-        patterns: [
-          ...(locatePatterns(this.engine, workspaceId, request.path, principal) ?? []),
-          'common/scripted_effects/**/*.txt',
-          'common/scripted_triggers/**/*.txt',
-          ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
-          // One scan serves every check: the engine keeps one snapshot per workspace.
-          ...playerTextPatterns,
-          'events/**/*.txt',
-        ],
-      },
-      principal,
-      signal,
-    );
-    const file = selectFile(snapshot, request.path);
+    if (request.path === undefined) {
+      if (request.kind !== undefined)
+        return validateScript(this.references, workspace, request, signal);
+      // A snippet without a kind is checked as an effect and as a trigger; the reading with
+      // fewer errors and unresolved commands is the one the author meant.
+      const effect = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'effect' },
+        signal,
+      );
+      const trigger = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'trigger' },
+        signal,
+      );
+      const misses = (checked: typeof effect): number =>
+        checked.findings.filter(({ status }) => status === 'error').length * 100_000 +
+        checked.unresolvedCount;
+      return misses(trigger) < misses(effect) ? trigger : effect;
+    }
+    // Every file check of the supported families shares one scan, so checking files across
+    // folders reuses one snapshot and its incremental index; other folders add their own.
+    const scan = (extra: readonly string[]) =>
+      this.engine.scan(
+        workspaceId,
+        { patterns: [...fileCheckPatterns, ...extra] },
+        principal,
+        signal,
+      );
+    let snapshot = await scan([]);
+    let file;
+    try {
+      file = selectFile(snapshot, request.path);
+    } catch (error) {
+      const extra = locatePatterns(this.engine, workspaceId, request.path, principal);
+      if (extra === undefined) throw error;
+      snapshot = await scan(extra);
+      file = selectFile(snapshot, request.path);
+    }
     const playerText = playerTextFamily(file.relativePath)
       ? this.playerTextContext(workspaceId, snapshot)
       : undefined;
@@ -215,7 +283,29 @@ export class ReferenceToolService {
       implicitTriggers: implicitTriggerNames(snapshot),
       ...(playerText === undefined ? {} : { playerText }),
       eventPopups: this.eventPopupContext(workspaceId, snapshot),
+      knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
     });
+  }
+
+  readonly #eventNamespaces = new Map<string, { key: string; namespaces: ReadonlySet<string> }>();
+
+  /** Namespaces declared with `add_namespace` in every active events file, cached by hash. */
+  private eventNamespaces(workspaceId: string, snapshot: ScanSnapshot): ReadonlySet<string> {
+    const sources = [...snapshot.index.files.values()].filter(
+      ({ relativePath, shadowedBy }) =>
+        shadowedBy === undefined && relativePath.startsWith('events/'),
+    );
+    const cacheKey = hashCanonical(sources.map(({ displayPath, sha256 }) => [displayPath, sha256]));
+    const cached = this.#eventNamespaces.get(workspaceId);
+    if (cached?.key === cacheKey) return cached.namespaces;
+    const namespaces = new Set<string>();
+    for (const file of sources)
+      for (const match of file.bytes
+        .toString('utf8')
+        .matchAll(/^\s*add_namespace\s*=\s*"?([\w.]+)"?/gmu))
+        namespaces.add(match[1]!);
+    this.#eventNamespaces.set(workspaceId, { key: cacheKey, namespaces });
+    return namespaces;
   }
 
   /** Every active event definition, cached by the hashes of the events files. */
@@ -250,7 +340,12 @@ export class ReferenceToolService {
     if (cached?.key === cacheKey) return cached.context;
     const localisation = new Map<string, LocalisedText & { loadOrder: number }>();
     for (const symbol of snapshot.index.symbols) {
-      if (symbol.kind !== 'localisation' || !symbol.id.startsWith('l_english:')) continue;
+      if (
+        symbol.kind !== 'localisation' ||
+        symbol.sourceShadowed ||
+        !symbol.id.startsWith('l_english:')
+      )
+        continue;
       const key = symbol.id.slice('l_english:'.length);
       const previous = localisation.get(key);
       if (previous !== undefined && previous.loadOrder > symbol.loadOrder) continue;
@@ -294,7 +389,15 @@ export class ReferenceToolService {
   }
 }
 
-const playerTextPatterns = [
+/** The families file mode checks, the helpers and databases it resolves, and localisation. */
+const fileCheckPatterns = [
+  'events/**/*.txt',
+  'common/decisions/**/*.txt',
+  'common/national_focus/**/*.txt',
+  'common/on_actions/**/*.txt',
+  'common/scripted_effects/**/*.txt',
+  'common/scripted_triggers/**/*.txt',
+  ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
   'localisation/**/*_l_english.yml',
   'common/scripted_localisation/**/*.txt',
 ] as const;

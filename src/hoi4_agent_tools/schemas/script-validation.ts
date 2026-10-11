@@ -19,7 +19,7 @@ const scope = z.enum([
 export const scriptValidateRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
-    /** Snippet mode: an effect or trigger body checked under `kind` and `scope`. */
+    /** Snippet mode: an effect or trigger body checked under `scope`; a missing `kind` is inferred. */
     source: z.string().min(1).max(64_000).optional(),
     /** File mode: a scanned mod file whose blocks are checked under the scope its structure fixes. */
     path: z.string().trim().min(1).max(4096).optional(),
@@ -40,11 +40,11 @@ export const scriptValidateRequestSchema = z
         path: ['source'],
         message: 'Provide either source with kind and scope, or a mod file path',
       });
-    if (value.source !== undefined && (value.kind === undefined || value.scope === undefined))
+    if (value.source !== undefined && value.scope === undefined)
       context.addIssue({
         code: 'custom',
-        path: ['kind'],
-        message: 'A snippet check requires kind and scope',
+        path: ['scope'],
+        message: 'A snippet check requires a scope, such as country or state',
       });
     if (
       value.path !== undefined &&
@@ -61,7 +61,14 @@ export const scriptValidateDataSchema = z
   .object({
     valid: z.boolean().nullable(),
     checksPerformed: z.array(
-      z.enum(['syntax', 'command_kind', 'declared_scope', 'player_text', 'event_popups']),
+      z.enum([
+        'syntax',
+        'command_kind',
+        'declared_scope',
+        'player_text',
+        'event_popups',
+        'known_mistakes',
+      ]),
     ),
     parametersChecked: z.literal(false),
     documentation: z
@@ -80,7 +87,7 @@ export const scriptValidateDataSchema = z
             code: z.string().max(80),
             status: z.enum(['supported', 'error', 'unresolved', 'warning']),
             command: z.string().max(256),
-            kind: z.enum(['effect', 'trigger', 'text']),
+            kind: z.enum(['effect', 'trigger', 'text', 'definition']),
             scope: z.string().max(64),
             line: z.number().int().min(1),
             column: z.number().int().min(1),

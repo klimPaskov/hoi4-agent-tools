@@ -472,10 +472,11 @@ export async function inspectMap(
     await context.progress(3, 3, 'Map lookup complete');
     return result;
   }
-  const { snapshot, validation } = await nudger.validate(
+  const { snapshot, validation, scriptReferences } = await nudger.validate(
     context.workspaceId,
     context.principal,
     context.signal,
+    input.references,
   );
   const sharedRevision = snapshot.revision;
   const catalog = buildMapCatalog(snapshot.index);
@@ -670,6 +671,7 @@ export async function inspectMap(
     provinceGeometryRowRunCount: provinceGeometry?.rowRunCount ?? 0,
     unknownProvinceIds: provinceGeometry?.unknownProvinceIds ?? [],
     missingGeometryProvinceIds: provinceGeometry?.missingGeometryProvinceIds ?? [],
+    ...(scriptReferences === undefined ? {} : { scriptReferences }),
   });
   result.code = 'MAP_INSPECTED';
   setInlineFilesScanned(

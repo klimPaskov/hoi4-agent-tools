@@ -14,6 +14,7 @@ import type { WorkspaceResolver } from './workspace.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
 import { JobStore } from './job-store.js';
+import { ServiceError } from './result.js';
 
 /**
  * Completed scans kept per workspace. One tool call often scans several pattern sets (a GUI
@@ -215,8 +216,22 @@ export class CoreEngine {
 
   async initialize(): Promise<void> {
     for (const workspace of this.resolver.list()) {
-      // Recovery repairs an interrupted internal rewrite before the workspace is exposed.
-      await this.transactions.recover(workspace.id);
+      // Recovery repairs an interrupted internal rewrite before the workspace is exposed. A
+      // journal that cannot be recovered blocks rewrites of its own workspace, not the server.
+      try {
+        await this.transactions.recover(workspace.id);
+      } catch (error) {
+        this.transactions.recordRecoveryFailure(workspace.id, error);
+        process.stderr.write(
+          `${JSON.stringify({
+            level: 'error',
+            event: 'transaction_recovery_blocked',
+            workspaceId: workspace.id,
+            code: error instanceof ServiceError ? error.code : 'TRANSACTION_RECOVERY_FAILED',
+            message: error instanceof Error ? error.message : String(error),
+          })}\n`,
+        );
+      }
     }
   }
 
@@ -258,6 +273,7 @@ export class CoreEngine {
     signal?: AbortSignal,
   ): Promise<ScanSnapshot> {
     signal?.throwIfAborted();
+    await this.resolver.refreshDescriptors(workspaceId, principal);
     const workspace = this.resolver.get(workspaceId, principal);
     const patterns = options.patterns ?? defaultPatterns(workspace);
     const ignore = options.ignore;
@@ -369,6 +385,20 @@ export class CoreEngine {
             );
             for (const key of retained.slice(0, -SCAN_CACHE_ENTRIES_PER_WORKSPACE))
               this.#scanCache.delete(key);
+            // Snapshots hold every file's bytes; keep all of them within twice one scan's limit.
+            const limit = this.resolver.config().scanMaxBytes * 2;
+            const bytes = (cached: ScanSnapshot) =>
+              cached.files.reduce((sum, { size }) => sum + size, 0);
+            let retainedBytes = [...this.#scanCache.values()].reduce(
+              (sum, cached) => sum + bytes(cached),
+              0,
+            );
+            for (const [key, cached] of this.#scanCache) {
+              if (retainedBytes <= limit) break;
+              if (key === cacheKey) continue;
+              this.#scanCache.delete(key);
+              retainedBytes -= bytes(cached);
+            }
           }
           return snapshot;
         });

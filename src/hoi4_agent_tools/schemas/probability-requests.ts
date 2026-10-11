@@ -21,7 +21,10 @@ const nestedSource = compact(
   probabilitySourceSchema,
   'Source selector; snapshotPath binds frozen bytes to path with expectedSourceHash.',
 );
-const nestedScenarios = compact(probabilityScenarioSetSchema, 'Explicit world-state scenarios.');
+const nestedScenarios = compact(
+  probabilityScenarioSetSchema,
+  'World-state facts: { id, scenarios: [{ id, actor?, date?, state: { "path": value }, flags?: [names] }] }. Missing ids get defaults; a bare scenario array is accepted.',
+);
 const nestedManifest = compact(
   customWeightedPoolManifestSchema,
   'Declared custom weighted pool and state transitions.',
@@ -53,29 +56,40 @@ const commonShape = {
   refresh: z.boolean().optional(),
 } as const;
 
+const evaluationShape = {
+  scenarioSet: nestedScenarios.optional(),
+  horizonDays: z.number().positive().max(1_000_000).optional(),
+  metrics: z.array(probabilityMetricSchema).min(1).max(4).optional(),
+  acceptanceBands: nestedAcceptanceBands.optional(),
+  diagnosticThresholds: nestedDiagnosticThresholds.optional(),
+  outputs,
+} as const;
+
+/**
+ * One call finds the weighted source and, when a single surface matches, evaluates it.
+ * Without a scenarioSet the evaluation uses one fact-free scenario, so the result shows base
+ * weights and the facts each condition still needs.
+ */
 export const probabilityInspectRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
     adapter: probabilityAdapterIdSchema.optional(),
     source: nestedSource.optional(),
     customPoolManifest: nestedManifest.optional(),
-    candidatePool,
+    candidatePool: candidatePool.describe(
+      'Candidate IDs; an event ID selects all of its options, a decision ID finds its file.',
+    ),
+    evaluate: z
+      .boolean()
+      .optional()
+      .describe('Default true: evaluate the matched surface. False returns only the inventory.'),
+    ...evaluationShape,
     refresh: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {
     if (value.source !== undefined && value.customPoolManifest !== undefined)
       context.addIssue({ code: 'custom', message: 'Provide either source or customPoolManifest' });
-    if (
-      value.adapter !== undefined &&
-      value.source === undefined &&
-      value.customPoolManifest === undefined
-    )
-      context.addIssue({
-        code: 'custom',
-        message:
-          'An adapter requires a source; provide a source alone to discover compatible adapters',
-      });
     if (
       value.customPoolManifest !== undefined &&
       value.adapter !== undefined &&
@@ -85,6 +99,18 @@ export const probabilityInspectRequestSchema = z
         code: 'custom',
         path: ['adapter'],
         message: 'customPoolManifest requires adapter custom_weighted_pool',
+      });
+    if (
+      value.source === undefined &&
+      value.customPoolManifest === undefined &&
+      (value.candidatePool?.length ?? 0) === 0 &&
+      value.adapter !== undefined
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['source'],
+        message:
+          'Name what to inspect: source.path, source.identifier, or candidatePool IDs such as a decision or event ID',
       });
   });
 
@@ -209,6 +235,109 @@ export const probabilityRenderRequestSchema = z
   })
   .strict();
 
+export const probabilityAnalysisKindSchema = z.enum([
+  'compare',
+  'sweep',
+  'simulate',
+  'sequence',
+  'render',
+]);
+
+const analysisVariants = {
+  compare: probabilityCompareRequestSchema,
+  sweep: probabilitySweepRequestSchema,
+  simulate: probabilitySimulateRequestSchema,
+  sequence: probabilitySequenceRequestSchema,
+  render: probabilityRenderRequestSchema,
+} as const;
+
+/**
+ * Deeper weighted analysis behind one tool. The listed schema is the flat union of every
+ * analysis's fields; each request is validated against the schema of its own analysis.
+ */
+export const probabilityAnalyzeRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    analysis: probabilityAnalysisKindSchema.describe(
+      'compare: before/after source or manifests; sweep: input ranges; simulate: sampled uncertainty; sequence: declared pool over time; render: images for a retained analysisId.',
+    ),
+    adapter: probabilityAdapterIdSchema.optional(),
+    source: nestedSource.optional(),
+    before: nestedSource.optional(),
+    after: nestedSource.optional(),
+    beforeManifest: nestedManifest.optional(),
+    afterManifest: nestedManifest.optional(),
+    customPoolManifest: nestedManifest.optional(),
+    scenarioSet: nestedScenarios.optional(),
+    candidatePool,
+    horizonDays: z.number().positive().max(1_000_000).optional(),
+    metrics: z.array(probabilityMetricSchema).min(1).max(4).optional(),
+    acceptanceBands: nestedAcceptanceBands.optional(),
+    diagnosticThresholds: nestedDiagnosticThresholds.optional(),
+    outputs,
+    sweep: z
+      .object({
+        paths: z.array(z.string().min(1).max(1024)).min(1).max(32),
+        steps: z.number().int().min(2).max(10_000).optional(),
+        pairwise: z.boolean().optional(),
+        findRankReversals: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    samples: z.number().int().min(100).max(10_000_000).optional(),
+    seed: z.number().int().min(-2_147_483_648).max(2_147_483_647).optional(),
+    confidenceLevel: z.number().min(0.5).max(0.9999).optional(),
+    samplingMethod: probabilitySamplingMethodSchema.optional(),
+    maxSteps: z.number().int().min(1).max(100_000).optional(),
+    analysisId: z.string().min(1).max(256).optional(),
+    expectedScenarioHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
+    includeHtml: z.boolean().optional(),
+    filter: nestedRenderFilter.optional(),
+    refresh: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const { analysis, ...rest } = value;
+    const parsed = analysisVariants[analysis].safeParse(rest);
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues)
+      context.addIssue({
+        code: 'custom',
+        path: issue.path,
+        message:
+          issue.code === 'unrecognized_keys'
+            ? `${issue.message} (not used by analysis ${analysis})`
+            : issue.message,
+      });
+  });
+
+/** Split one analyze request into its analysis kind and that analysis's own request. */
+export function splitProbabilityAnalyzeRequest(
+  input: unknown,
+):
+  | { analysis: 'compare'; request: ProbabilityCompareToolRequest }
+  | { analysis: 'sweep'; request: ProbabilitySweepToolRequest }
+  | { analysis: 'simulate'; request: ProbabilitySimulateToolRequest }
+  | { analysis: 'sequence'; request: ProbabilitySequenceToolRequest }
+  | { analysis: 'render'; request: ProbabilityRenderToolRequest } {
+  const { analysis, ...rest } = probabilityAnalyzeRequestSchema.parse(input);
+  switch (analysis) {
+    case 'compare':
+      return { analysis, request: probabilityCompareRequestSchema.parse(rest) };
+    case 'sweep':
+      return { analysis, request: probabilitySweepRequestSchema.parse(rest) };
+    case 'simulate':
+      return { analysis, request: probabilitySimulateRequestSchema.parse(rest) };
+    case 'sequence':
+      return { analysis, request: probabilitySequenceRequestSchema.parse(rest) };
+    case 'render':
+      return { analysis, request: probabilityRenderRequestSchema.parse(rest) };
+  }
+}
+
 export type ProbabilityInspectToolRequest = z.infer<typeof probabilityInspectRequestSchema>;
 export type ProbabilityEvaluateToolRequest = z.infer<typeof probabilityEvaluateRequestSchema>;
 export type ProbabilitySweepToolRequest = z.infer<typeof probabilitySweepRequestSchema>;
@@ -216,3 +345,4 @@ export type ProbabilitySimulateToolRequest = z.infer<typeof probabilitySimulateR
 export type ProbabilitySequenceToolRequest = z.infer<typeof probabilitySequenceRequestSchema>;
 export type ProbabilityCompareToolRequest = z.infer<typeof probabilityCompareRequestSchema>;
 export type ProbabilityRenderToolRequest = z.infer<typeof probabilityRenderRequestSchema>;
+export type ProbabilityAnalyzeToolRequest = z.infer<typeof probabilityAnalyzeRequestSchema>;

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { access, mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
@@ -31,6 +32,18 @@ import {
 } from './transaction-limits.js';
 import { PACKAGE_VERSION, TRANSACTION_VERSION } from '../version.js';
 import { transactionManifestSchema } from '../schemas/transaction.js';
+
+/**
+ * A file name usable as an artifact name: mod files may contain spaces and other characters
+ * (`history/countries/AUR - Aurelia.txt`) that artifact names do not allow.
+ */
+function diffArtifactStem(relativePath: string): string {
+  const stem = path
+    .basename(relativePath)
+    .replace(/[^A-Za-z0-9._-]+/gu, '_')
+    .replace(/^[^A-Za-z0-9]+/u, '');
+  return (stem.length === 0 ? 'file' : stem).slice(0, 100);
+}
 
 export type TransactionState =
   'planned' | 'applying' | 'applied' | 'rolling_back' | 'rolled_back' | 'failed';
@@ -341,8 +354,38 @@ export class TransactionManager {
     private readonly serverState: ServerState | undefined = resolver.serverState(),
   ) {}
 
+  /** Workspaces whose startup recovery failed, with the reason; their rewrites are refused. */
+  readonly #recoveryFailures = new Map<string, string>();
+
+  /**
+   * Record that startup recovery failed for a workspace. The server still starts and reads the
+   * workspace; rewrites retry recovery and are refused while it keeps failing.
+   */
+  recordRecoveryFailure(workspaceId: string, error: unknown): void {
+    this.#recoveryFailures.set(
+      workspaceId,
+      error instanceof Error ? error.message : 'Rewrite journal recovery failed',
+    );
+  }
+
+  private async assertRecovered(workspaceId: string, signal?: AbortSignal): Promise<void> {
+    if (!this.#recoveryFailures.has(workspaceId)) return;
+    try {
+      await this.recover(workspaceId, undefined, signal);
+      this.#recoveryFailures.delete(workspaceId);
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') throw error;
+      this.recordRecoveryFailure(workspaceId, error);
+      throw new ServiceError(
+        'TRANSACTION_RECOVERY_REQUIRED',
+        `Rewrites of this workspace wait until its interrupted rewrite journal can be recovered: ${this.#recoveryFailures.get(workspaceId)}`,
+      );
+    }
+  }
+
   async plan(input: PlanTransactionInput): Promise<TransactionManifest> {
     input.signal?.throwIfAborted();
+    await this.assertRecovered(input.workspaceId, input.signal);
     if (
       input.changes.length > TRANSACTION_MAX_FILES ||
       input.operations.length > TRANSACTION_MAX_OPERATIONS ||
@@ -491,7 +534,7 @@ export class TransactionManager {
       };
       if (isText(file.mediaType)) {
         return {
-          name: `${path.basename(pending.relativePath)}.diff`,
+          name: `${diffArtifactStem(pending.relativePath)}.diff`,
           mimeType: 'text/x-diff',
           content: unifiedTextDiff(
             sourceDiffText(pending.before),
@@ -510,7 +553,7 @@ export class TransactionManager {
         };
       }
       return {
-        name: `${path.basename(pending.relativePath)}.binary-diff.json`,
+        name: `${diffArtifactStem(pending.relativePath)}.binary-diff.json`,
         mimeType: 'application/json',
         content: `${canonicalJson(
           binaryDiff(pending.before ?? Buffer.alloc(0), pending.after ?? Buffer.alloc(0)),
@@ -603,21 +646,29 @@ export class TransactionManager {
     const workspace = this.resolver.get(workspaceId, options.principal);
     if (!workspace.writeEnabled)
       throw new ServiceError('WRITE_POLICY_DISABLED', 'Workspace writes are not enabled');
-    const manifest = await this.load(workspace, transactionId, {
-      headMode: 'reconcile',
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-    this.assertBinding(manifest, workspace, expectedPlanHash, options.principal);
-    if (!manifest.planPayload.validation.passed)
-      throw new ServiceError('TRANSACTION_VALIDATION_BLOCKED', 'Dry-run validation did not pass');
-    if (manifest.files.length === 0)
-      throw new ServiceError('TRANSACTION_NO_CHANGES', 'Transaction contains no file changes');
-    if (manifest.state !== 'planned')
-      throw new ServiceError('TRANSACTION_STATE_INVALID', `Transaction is ${manifest.state}`);
-    if (Date.parse(manifest.expiresAt) <= Date.now())
-      throw new ServiceError('TRANSACTION_EXPIRED', 'Transaction has expired');
+    await this.assertRecovered(workspaceId, options.signal);
+    const loadApplicable = async (): Promise<TransactionManifest> => {
+      const loaded = await this.load(workspace, transactionId, {
+        headMode: 'reconcile',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+      this.assertBinding(loaded, workspace, expectedPlanHash, options.principal);
+      if (!loaded.planPayload.validation.passed)
+        throw new ServiceError('TRANSACTION_VALIDATION_BLOCKED', 'Dry-run validation did not pass');
+      if (loaded.files.length === 0)
+        throw new ServiceError('TRANSACTION_NO_CHANGES', 'Transaction contains no file changes');
+      if (loaded.state !== 'planned')
+        throw new ServiceError('TRANSACTION_STATE_INVALID', `Transaction is ${loaded.state}`);
+      if (Date.parse(loaded.expiresAt) <= Date.now())
+        throw new ServiceError('TRANSACTION_EXPIRED', 'Transaction has expired');
+      return loaded;
+    };
+    // Refuse early without the lock, then decide on the journal as it is once the lock is
+    // held: a concurrent apply of the same plan may have finished in between.
+    await loadApplicable();
 
     return this.withWorkspaceLock(workspace, transactionId, async () => {
+      const manifest = await loadApplicable();
       await this.verifyReadDependencies(workspace, manifest, options.principal, options.signal);
       await this.verifyCurrentFiles(
         workspace,
@@ -664,7 +715,18 @@ export class TransactionManager {
               'Source changed while transaction output was being staged',
             );
           }
-          if (existsBeforeReplace) await rename(target.target, target.backup);
+          if (existsBeforeReplace) {
+            await rename(target.target, target.backup);
+            // An edit between the hash check and the rename would otherwise be discarded with
+            // the backup after a successful apply.
+            if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
+              await rename(target.backup, target.target);
+              throw new ServiceError(
+                'TRANSACTION_STALE',
+                'Source changed while transaction output was being staged',
+              );
+            }
+          }
           await options.hooks?.afterBackup?.(file.relativePath, index);
           if (target.staged !== null) {
             if (await fileExists(target.target)) {
@@ -968,6 +1030,9 @@ export class TransactionManager {
     for (const entry of directoryEntries.filter((value) => value.isDirectory())) {
       signal?.throwIfAborted();
       if (!transactionIdPattern.test(entry.name)) continue;
+      // A journal folder without a manifest is a plan that never committed: nothing was
+      // applied from it, and pruning removes it once it expires.
+      if (!(await fileExists(path.join(directory, entry.name, 'manifest.json')))) continue;
       const manifest = await this.load(workspace, entry.name, {
         headMode: 'none',
         rootBinding: 'ignored',
@@ -1056,7 +1121,10 @@ export class TransactionManager {
         }
         backupValid = true;
       }
-      if (currentHash === file.beforeSha256) {
+      // A file this transaction never replaced keeps whatever it holds now, including an
+      // edit made while the transaction ran; it does not block restoring the others.
+      const untouched = !manifest.appliedFiles.includes(file.relativePath) && !backupExists;
+      if (currentHash === file.beforeSha256 || untouched) {
         restorations.push({ file, target, backup, staged, mode: 'keep' });
         continue;
       }
@@ -1117,7 +1185,16 @@ export class TransactionManager {
       }
       if (await fileExists(restoration.staged)) await unlink(restoration.staged);
     }
-    await this.verifyCurrentFiles(workspace, manifest, 'before', principal);
+    await this.verifyCurrentFiles(
+      workspace,
+      manifest,
+      'before',
+      principal,
+      undefined,
+      new Set(
+        restorations.filter(({ mode }) => mode !== 'keep').map(({ file }) => file.relativePath),
+      ),
+    );
     manifest.rollbackStatus = 'applied';
   }
 
@@ -1166,9 +1243,11 @@ export class TransactionManager {
     phase: 'before' | 'after',
     principal?: string,
     signal?: AbortSignal,
+    only?: ReadonlySet<string>,
   ): Promise<void> {
     for (const file of manifest.files) {
       signal?.throwIfAborted();
+      if (only !== undefined && !only.has(file.relativePath)) continue;
       const { path: target } = await this.resolver.resolvePath(
         workspace.id,
         file.relativePath,
@@ -1882,7 +1961,15 @@ export class TransactionManager {
       );
       return await action();
     } finally {
-      await rm(lock, { recursive: true, force: true });
+      // Release only this holder's lock; never one another process holds after a takeover.
+      const owner = await readFile(path.join(lock, 'owner.json'), 'utf8')
+        .then((text) => JSON.parse(text) as { instanceId?: unknown; transactionId?: unknown })
+        .catch(() => undefined);
+      if (
+        owner === undefined ||
+        (owner.instanceId === lockInstanceId && owner.transactionId === transactionId)
+      )
+        await rm(lock, { recursive: true, force: true });
     }
   }
 
@@ -1906,8 +1993,7 @@ export class TransactionManager {
       } catch {
         return false;
       }
-      await rm(lock, { recursive: true, force: true });
-      return true;
+      return this.retireStaleLock(lock, undefined);
     }
     if (
       typeof owner !== 'object' ||
@@ -1934,7 +2020,34 @@ export class TransactionManager {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return false;
     }
-    await rm(lock, { recursive: true, force: true });
+    return this.retireStaleLock(lock, canonicalJson(owner));
+  }
+
+  /**
+   * Move a lock judged stale aside under a unique name; only one process can win the rename.
+   * The moved lock must still carry the owner that was judged stale (`undefined`: no owner
+   * file). Otherwise a new holder took the lock in between, and it is put back untouched.
+   */
+  private async retireStaleLock(lock: string, judgedOwner: string | undefined): Promise<boolean> {
+    const tombstone = `${lock}.stale-${randomUUID()}`;
+    try {
+      await rename(lock, tombstone);
+    } catch {
+      return false;
+    }
+    let movedOwner: string | undefined;
+    try {
+      movedOwner = canonicalJson(
+        JSON.parse(await readFile(path.join(tombstone, 'owner.json'), 'utf8')) as unknown,
+      );
+    } catch {
+      movedOwner = undefined;
+    }
+    if (movedOwner !== judgedOwner) {
+      await rename(tombstone, lock).catch(() => undefined);
+      return false;
+    }
+    await rm(tombstone, { recursive: true, force: true });
     return true;
   }
 }

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -240,6 +240,39 @@ describe('shared task-process execution capacity', () => {
       await expect(
         capacity.run(new AbortController().signal, async () => 'recovered'),
       ).resolves.toBe('recovered');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reclaims an expired lease whose pid belongs to a live process only when asked to', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-capacity-lease-age-'));
+    try {
+      const slot = path.join(
+        root,
+        'request-capacity',
+        sha256Bytes(hostname().toLowerCase()).slice(0, 16),
+        '0',
+      );
+      await mkdir(slot, { recursive: true });
+      // A crashed holder's pid now names a live process: this one.
+      const lease = path.join(slot, `${process.pid}-${randomUUID()}.lease`);
+      await writeFile(lease, '');
+      const old = new Date(Date.now() - 3_600_000);
+      await utimes(lease, old, old);
+
+      const waiting = new AbortController();
+      setTimeout(() => waiting.abort(), 300);
+      await expect(
+        new SharedRequestCapacity(root, 1).run(waiting.signal, () => Promise.resolve('ran')),
+      ).rejects.toThrow();
+
+      await expect(
+        new SharedRequestCapacity(root, 1, { leaseMaxAgeMs: 600_000 }).run(
+          new AbortController().signal,
+          () => Promise.resolve('ran'),
+        ),
+      ).resolves.toBe('ran');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

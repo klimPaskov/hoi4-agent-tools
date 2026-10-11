@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v3.10.0/schemas/scenario-suite.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.0.0/schemas/scenario-suite.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -322,14 +322,12 @@
                 "hoi4.tech_inspect",
                 "hoi4.tech_render",
                 "hoi4.probability_inspect",
-                "hoi4.probability_evaluate",
-                "hoi4.probability_render",
+                "hoi4.probability_analyze",
                 "hoi4.focus_inspect",
                 "hoi4.focus_render",
                 "hoi4.gui_inspect",
                 "hoi4.gui_render",
-                "hoi4.map_inspect",
-                "hoi4.map_render"
+                "hoi4.map_inspect"
               ]
             },
             "arguments": {

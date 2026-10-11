@@ -184,7 +184,7 @@ describe('MCP broad artifact provenance', () => {
       ),
       toolOutput(
         await client.callTool({
-          name: 'hoi4.map_render',
+          name: 'hoi4.map_inspect',
           arguments: { workspaceId: 'map-provenance', layer: 'province' },
         }),
       ),
