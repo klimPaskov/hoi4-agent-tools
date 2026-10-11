@@ -41,7 +41,7 @@ The [interface gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main
 [![Map rendered from installed source](images/comparisons/source/map-mcp.png)](images/comparisons/source/map-mcp.png)
 
 The agent finds the state, splits its provinces and updates connected map records and script references.
-It can also build a whole world from a drawing.
+It can also generate a whole new world.
 See [Maps](map.md) for supported edits.
 
 ## Trace an event or compare AI weights

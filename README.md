@@ -9,14 +9,16 @@
 [![Download](https://img.shields.io/github/v/release/klimPaskov/hoi4-agent-tools?label=Release&logo=github&color=2ea44f)](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest)
 [![Issues](https://img.shields.io/badge/Bugs%20%26%20Ideas-Issues-24292f?logo=github&logoColor=white)](https://github.com/klimPaskov/hoi4-agent-tools/issues)
 
-An [MCP](https://modelcontextprotocol.io/) server that helps coding agents build and edit Hearts of Iron IV mods.
-Make focus trees, events and decisions. Turn a drawing into a playable world. Preview windows, trees and maps, find the right rule in the docs, fix broken script and balance AI choices.
+<!-- TODO-VIDEO-LINK: replace with the promo video URL -->
 
-[![A large focus tree rendered from mod source](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png)
+[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/@ChaosRedux)
+
+An [MCP](https://modelcontextprotocol.io/) server that helps coding agents build and edit Hearts of Iron IV mods.
+Make focus trees, events and decisions. Edit maps and generate a new world. Preview windows, trees and maps, find the right rule in the docs, fix broken script and balance AI choices.
 
 ## What it does
 
-Your agent can build and edit focus trees, events, decisions and maps, and make a whole world from a drawing.
+Your agent can build and edit focus trees, events, decisions and maps, and generate a new world.
 It previews focus trees, technology folders, windows and maps, finds the right rule in the game's documentation, fixes broken script and tunes AI choices.
 You describe what you want; the agent picks the right tools.
 
@@ -46,6 +48,8 @@ Part of the HOI4 modding toolkit with [Agentic HOI4 Modding](https://github.com/
 
 ## Examples
 
+[![A large focus tree rendered from mod source](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png)
+
 Each pair shows a capture from the game next to the server's preview of the same source.
 
 | In game                                                                                                                                | Server preview                                                                                                                   |
@@ -54,9 +58,7 @@ Each pair shows a capture from the game next to the server's preview of the same
 | [![Infantry technology folder in game](docs/images/comparisons/infantry-ingame.png)](docs/images/comparisons/infantry-ingame.png)      | [![Infantry technology folder preview](docs/images/comparisons/infantry-mcp.png)](docs/images/comparisons/infantry-mcp.png)      |
 | [![Video options in game](docs/images/comparisons/gui/options-video-ingame.png)](docs/images/comparisons/gui/options-video-ingame.png) | [![Video options preview](docs/images/comparisons/gui/options-video-mcp.png)](docs/images/comparisons/gui/options-video-mcp.png) |
 
-In focus previews, dotted lines mark alternative prerequisites: any one of them unlocks the focus.
-The focus screen in the game has its own framing, labels and icons, and the video options preview has no observed gamma value.
-More comparisons, with their source revisions and fidelity notes, are in the [focus and technology gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/visual-comparisons.md), the [interface gallery](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md) and the [examples guide](docs/examples.md), which also shows map and event renders.
+See more in the [examples gallery](docs/examples.md).
 
 ## Tools
 
