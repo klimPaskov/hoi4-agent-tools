@@ -324,6 +324,26 @@ describe('temporary directory ownership and recovery', () => {
     expect(await readFile(path.join(directory, 'source.txt'))).toHaveLength(8);
   });
 
+  it('adopts a fixture whose parent is reached through an alias and still enforces its budget', async () => {
+    // A Windows runner reaches %TEMP% through an 8.3 short-name alias of the profile directory.
+    const { parent } = await fixture();
+    const real = path.join(parent, 'real');
+    await mkdir(real);
+    const alias = path.join(parent, 'alias');
+    await symlink(real, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const directory = path.join(alias, 'owned');
+    await mkdir(directory);
+    const lifetime = new TemporaryDirectoryLifetime(16);
+    try {
+      await lifetime.own(directory);
+      expect(lifetime.paths()).toEqual([path.join(real, 'owned')]);
+      expect(() => lifetime.assertFileSize(path.join(directory, 'big'), 17)).toThrow('disk budget');
+      await expect(lifetime.own(alias)).rejects.toThrow('canonical and unlinked');
+    } finally {
+      await lifetime.dispose();
+    }
+  });
+
   it('never follows a scratch junction or deletes a directory whose ownership changed', async () => {
     const { parent, scratch, lease } = await fixture();
     const outside = path.join(parent, 'outside');

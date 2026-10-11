@@ -214,7 +214,14 @@ export class TemporaryDirectoryLifetime {
 
   /** Reject an oversized fixture before truncate allocates its disk blocks on Windows. */
   assertFileSize(file: string, bytes: number): void {
-    const absolute = path.resolve(file);
+    const requested = path.resolve(file);
+    // Fixture paths are canonical, so resolve an aliased parent before matching them.
+    let absolute = requested;
+    try {
+      absolute = path.join(realpathSync(path.dirname(requested)), path.basename(requested));
+    } catch {
+      // A file in a directory that does not exist yet cannot be inside an owned fixture.
+    }
     if (!this.paths().some((directory) => absolute.startsWith(`${directory}${path.sep}`))) return;
     if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > this.maxBytes)
       throw new RangeError('Temporary fixture exceeds the disk budget; use a small injected limit');
@@ -229,7 +236,11 @@ export class TemporaryDirectoryLifetime {
 
   async own(directory: string): Promise<void> {
     const canonical = await realpath(directory);
-    if ((await lstat(directory)).isSymbolicLink() || canonical !== path.resolve(directory))
+    // The parent may be reached through an alias, such as a Windows 8.3 short name for the user
+    // profile; the fixture directory itself must be a real directory, not a link.
+    const resolved = path.resolve(directory);
+    const viaParent = path.join(await realpath(path.dirname(resolved)), path.basename(resolved));
+    if ((await lstat(directory)).isSymbolicLink() || canonical !== viaParent)
       throw new Error('Temporary directory must be canonical and unlinked');
     const sweepLock = path.join(canonical, SWEEP_LOCK);
     if (await lstat(sweepLock).catch(() => undefined))
