@@ -79,7 +79,11 @@ local('local stdio smoke: installed game and external mod', () => {
       let searchHit: { id: string; revision: string } | undefined;
       for (const call of readOnlyCalls(found.subjects)) {
         const result = await server.call(call.tool, `${target}: ${call.label}`, call.args);
-        const problems = successProblems(result, call.tolerate);
+        // A mod under active development can change between a suite's two source snapshots.
+        const problems = successProblems(result, [
+          ...(call.tolerate ?? []),
+          ...(target === 'mod' ? ['SCENARIO_SOURCE_STALE'] : []),
+        ]);
         ledger.record(result, 'success', problems);
         if (problems.length > 0)
           failures.push(`${call.tool} (${call.label}): ${problems.join('; ')}`);

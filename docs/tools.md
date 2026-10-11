@@ -146,7 +146,7 @@ The CI stdio smoke suite sends each of these shapes to a real server process.
 
 An inline result never exceeds 32 KB of structured content.
 Typical answers are 1 to 5 KB: counts, the main findings, the strongest candidates and links.
-Focus, GUI and map results are larger, up to about 20 KB, because they list trees, scenes or matches.
+Focus, GUI and map results are larger, up to about 24 KB, because they list trees, scenes or matches.
 The text content of a successful call is a short JSON summary (status, code, workspace and artifact count), so a client that shows only text still sees how the call ended; an error or blocked result puts its blockers in the text.
 Pictures are never inlined: renders, galleries, full graphs and per-candidate traces are linked artifacts that you read in ranges, and every inline list says how many items it omitted.
 A reference read is limited to 80 lines and 8,000 bytes; a source lookup returns at most 3 definitions and 10 usages.

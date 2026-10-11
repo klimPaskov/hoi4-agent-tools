@@ -13,6 +13,19 @@ This decision records what profiling the real Chaos Redux mod (2,758 indexed fil
 - The cache cannot hold most of the mod in any case. Entries are exported from the in-process document and index-segment caches, which keep 64 MiB each, so only about 550 entries for the 2,758 files ever reach the disk, however many scans write them.
 - A background warm-up that kept writing batches after a scan was built and measured. It reached the same ceiling (everything the memory caches held) and, because a document larger than the batch budget could never be written, it looped without progress until that was fixed. It was removed: it adds work on a shared machine and cannot lift the ceiling.
 
+## Measured timings
+
+`npm run benchmark:cold` on the real Chaos Redux mod (2,758 indexed files) and the installed game, on 11 October 2026, with a HOI4 campaign and several other agents running, wall-clock seconds:
+
+| Call                                               | First process, empty state | Second process, same state |
+| -------------------------------------------------- | -------------------------- | -------------------------- |
+| `hoi4.mod_index` overview                          | 14.8                       | 13.3                       |
+| `hoi4.event_inspect` lint of the largest namespace | 11.8                       | 13.2                       |
+| `hoi4.decision_inspect` inventory                  | 32.9                       | 41.8                       |
+
+The second process is not faster, as the findings above explain; the spread between the columns is load, not caching.
+The decision inventory is the slowest of the three; it was not profiled separately from the index build it triggers.
+
 ## Decision
 
 Keep the bounded per-scan persistence and make each stored entry cheaper to load, which is measurable per entry and does not change what is cached:

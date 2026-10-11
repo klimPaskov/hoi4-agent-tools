@@ -275,7 +275,14 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
           analysis: 'sweep',
           source: { path: subjects.probability.path },
           candidatePool: subjects.probability.candidates,
-          scenarioSet: [{ id: 'peace', actor: 'GER', state: subjects.probability.state }],
+          scenarioSet: [
+            {
+              id: 'peace',
+              actor: 'GER',
+              state: subjects.probability.state,
+              uncertainInputs: [{ path: 'variable.pressure', range: { min: 0, max: 100 } }],
+            },
+          ],
           sweep: { paths: ['variable.pressure'], steps: 5 },
         },
       },
