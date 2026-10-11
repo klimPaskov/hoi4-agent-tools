@@ -26,7 +26,7 @@ Optional tasks are available for all 19 domain tools; the 7 reference tools and 
 
 ## Warm workers
 
-Domain tools run in a separate worker process. After a job the worker stays warm for `jobWorkerIdleSeconds` (default 180) and runs its server's next job with the indexes it already loaded, so a second GUI render or decision inspection of a large mod skips the cold scan. An idle worker holds no execution slot, exits when its idle time ends or its server closes, and a worker whose job failed is never reused. Set `jobWorkerIdleSeconds: 0` to start a fresh worker for every job.
+Domain tools run in a separate worker process. After a job the worker stays warm for `jobWorkerIdleSeconds` (default 180) and runs its server's next job with the indexes it already loaded, so a second GUI render or decision inspection of a large mod skips the cold scan. An idle worker holds no execution slot, exits when its idle time ends or its server closes, and a worker whose job failed, or whose heap still holds more than 40% of its limit after a job and a full collection, is never reused (the next job starts a fresh worker, so several heavy jobs in a row cannot exhaust one worker's heap). Set `jobWorkerIdleSeconds: 0` to start a fresh worker for every job.
 
 ## Results
 
@@ -62,7 +62,7 @@ A read-only job still running `jobCancelGraceSeconds` (1–600, default 10) afte
 A read-only job still running `jobDeadlineSeconds` (1–86,400, default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
 Rewrite jobs are never stopped this way, because their transaction journal owns write recovery; they keep cooperative cancellation and reconciliation.
 Supervision belongs to the server process that dispatched the worker. A read-only worker whose dispatching server has exited enforces the same deadline itself and then exits; a rewrite worker keeps running until it finishes.
-`jobWorkerMaxHeapMiB` (256–65,536) sets a V8 heap ceiling for each worker; without it, workers use Node's default.
+`jobWorkerMaxHeapMiB` (256–65,536) sets a V8 heap ceiling for each worker; without it, workers use Node's default. A worker that runs out of memory ends a job with `JOB_WORKER_EXIT`; retry the call, which starts a fresh worker, or raise the ceiling.
 At most `maxSharedTools` (1–128, default 4) workers and expensive calls run at once across every server process that shares a `serverStateRoot`; further work waits for capacity.
 
 Read-only jobs stage a source-revision-bound result checkpoint before terminal publication.

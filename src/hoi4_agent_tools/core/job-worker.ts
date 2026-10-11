@@ -1,3 +1,5 @@
+import { setFlagsFromString, getHeapStatistics } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { z } from 'zod/v4';
 import { hashCanonical } from './canonical.js';
 import { serverConfigurationSchema, type ServerConfiguration } from './configuration.js';
@@ -12,7 +14,9 @@ import { registerWorkerOperations, workerDomain } from './job-operation-registra
 //
 // A worker runs one job at a time. After a job it stays warm for jobWorkerIdleSeconds while
 // its host keeps the IPC channel open, so the host's next job reuses the loaded indexes
-// instead of scanning cold. It exits when the idle time ends or the host disconnects.
+// instead of scanning cold. It exits when the idle time ends or the host disconnects. A worker
+// whose heap stays large after a job is not kept warm: several heavy jobs in a row would
+// otherwise exhaust the heap limit in the middle of the next one.
 const inputSchema = z
   .object({
     configuration: serverConfigurationSchema,
@@ -35,6 +39,23 @@ let warm: WarmState | undefined;
 let busy = false;
 let started = false;
 let idleTimer: NodeJS.Timeout | undefined;
+
+/** Share of the heap limit a worker may still hold after a job and a full collection. */
+const WARM_HEAP_SHARE = 0.4;
+
+/** Whether the heap, after a full collection, is small enough to serve another job. */
+function heapAllowsReuse(): boolean {
+  const limit = getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE;
+  if (getHeapStatistics().used_heap_size <= limit) return true;
+  try {
+    setFlagsFromString('--expose-gc');
+    (runInNewContext('gc') as () => void)();
+  } catch {
+    // Without a collection the figure above stands: recycle rather than risk the next job.
+    return false;
+  }
+  return getHeapStatistics().used_heap_size <= limit;
+}
 
 const startup = setTimeout(() => {
   if (!started) process.exit(1);
@@ -102,7 +123,7 @@ process.on('message', (value: unknown) => {
       busy = false;
       const idleSeconds = warm?.resolver.config().jobWorkerIdleSeconds ?? 0;
       // A failed job leaves state of unknown health; start the next job in a fresh worker.
-      if (!process.connected || idleSeconds === 0 || process.exitCode === 1) {
+      if (!process.connected || idleSeconds === 0 || process.exitCode === 1 || !heapAllowsReuse()) {
         finish();
         return;
       }

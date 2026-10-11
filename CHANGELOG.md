@@ -18,6 +18,10 @@
 
 - Show at most 8 resource links beside a result (images first); every artifact stays in `structuredContent.artifacts`. A GUI render result was about 33 KB, a third of it links listed twice. Passed validation checks that only report a problem "not detected" are no longer listed.
 
+### Workers
+
+- A warm job worker whose heap still holds more than 40% of its limit after a job and a full collection exits instead of waiting for the next job. Against the real Chaos Redux mod, a GUI render followed by a decision inspection in one worker ran past the 4 GB heap limit and ended with `JOB_WORKER_EXIT`; the next job now starts in a fresh worker. The `JOB_WORKER_EXIT` message now names an out-of-memory exit and the `jobWorkerMaxHeapMiB` setting.
+
 ### Documentation
 
 - Add a troubleshooting guide with the error codes and their fixes, the tool audit and the review of smerss/Clausewitz-MCP and cpntodd/HOI4-MCP under `docs/plans`, a worked example that builds and reshapes a world in the map guide, and a section on adding a known mistake to the development guide.

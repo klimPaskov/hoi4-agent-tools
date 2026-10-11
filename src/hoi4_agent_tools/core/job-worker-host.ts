@@ -13,6 +13,10 @@ import { isDomainToolName } from './domain-tools.js';
 
 const maximumCheckpointRecoveries = 2;
 const maximumPreDispatchRecoveries = 2;
+/** An exit with no outcome is most often the worker running out of memory on a large mod. */
+const WORKER_EXIT_HINT =
+  '; if the mod is large the worker may have run out of memory, so retry the call or raise jobWorkerMaxHeapMiB';
+const WORKER_EXIT_MESSAGE = `The worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`;
 // Native and IPC codes are fixed vocabulary. Error messages can contain paths or source
 // text, so only an allowlisted code and the fixed coordination stage are reported.
 const nativeFailureCodes = new Set([
@@ -128,10 +132,7 @@ export class JobWorkerHost {
         if (['completed', 'cancelled', 'failed'].includes(current.status)) return current;
         if (current.owner !== undefined && jobOwnerLiveness(current.owner) === 'alive')
           return await this.followOwner(workspaceId, id, principal);
-        throw new ServiceError(
-          'JOB_WORKER_EXIT',
-          'The worker stopped without publishing a terminal job outcome',
-        );
+        throw new ServiceError('JOB_WORKER_EXIT', WORKER_EXIT_MESSAGE);
       } catch (error) {
         const current = await this.jobs.get(workspaceId, id, principal);
         if (
@@ -184,7 +185,7 @@ export class JobWorkerHost {
           liveness === 'unknown' ? 'JOB_OWNER_UNRESOLVED' : 'JOB_WORKER_EXIT',
           liveness === 'unknown'
             ? 'The replacement execution owner cannot be verified on this host'
-            : 'The replacement worker stopped without publishing a terminal job outcome',
+            : `The replacement worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`,
         );
       await delay(100);
     }
@@ -300,10 +301,7 @@ export class JobWorkerHost {
           process.kill(child.pid, 0);
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code === 'ESRCH')
-            throw new ServiceError(
-              'JOB_WORKER_EXIT',
-              'The worker stopped without publishing a terminal job outcome',
-            );
+            throw new ServiceError('JOB_WORKER_EXIT', WORKER_EXIT_MESSAGE);
         }
       }
       await delay(100);
