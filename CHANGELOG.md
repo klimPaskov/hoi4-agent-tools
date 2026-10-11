@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.0.0 - 2026-10-10
+
 ### Known mistakes
 
 - Add a reviewed, source-cited list of documented script mistakes (`known-mistakes.json`, with a detector for each rule) in place of a mutable learned-rule database. `hoi4.script_validate` in file mode flags seven of them as `KNOWN_MISTAKE_<RULE>` with the symptom and the fix and reports `known_mistakes` in `checksPerformed`: an event without `add_namespace`, an event number that is not a whole number below 100,000, a timer on a triggered-only event, an automatic event that can fire every day, a news event that is not `major` or is `fire_only_once`, a date window shorter than the 20-day trigger check, and a scope prefix on a temporary variable.
@@ -25,8 +27,6 @@
 ### Documentation
 
 - Add a troubleshooting guide with the error codes and their fixes, the tool audit and the review of smerss/Clausewitz-MCP and cpntodd/HOI4-MCP under `docs/plans`, a worked example that builds and reshapes a world in the map guide, and a section on adding a known mistake to the development guide.
-
-## 4.0.0 - 2026-10-10
 
 ### Breaking changes
 

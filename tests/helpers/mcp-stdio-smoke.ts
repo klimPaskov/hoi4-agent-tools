@@ -70,7 +70,10 @@ export async function writeSmokeConfig(
   return file;
 }
 
-export async function launchSmokeServer(configPath: string): Promise<SmokeServer> {
+export async function launchSmokeServer(
+  configPath: string,
+  packagedEntry?: string,
+): Promise<SmokeServer> {
   const environment: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env))
     if (value !== undefined) environment[key] = value;
@@ -78,7 +81,7 @@ export async function launchSmokeServer(configPath: string): Promise<SmokeServer
   delete environment.HOI4_AGENT_TOOLS_CHAOSX;
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [tsxCli, stdioEntry],
+    args: packagedEntry === undefined ? [tsxCli, stdioEntry] : [packagedEntry],
     cwd: projectRoot,
     env: environment,
     stderr: 'pipe',

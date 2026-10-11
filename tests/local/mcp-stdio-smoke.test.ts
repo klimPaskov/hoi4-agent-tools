@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CreateTaskResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   helpfulErrorProblems,
   launchSmokeServer,
@@ -63,7 +64,7 @@ local('local stdio smoke: installed game and external mod', () => {
         ...(dependencies.length === 0 ? {} : { dependencyRoots: dependencies }),
       },
     ]);
-    server = await launchSmokeServer(config);
+    server = await launchSmokeServer(config, process.env.HOI4_SMOKE_STDIO_ENTRY);
   }, 600_000);
 
   afterAll(async () => {
@@ -72,41 +73,106 @@ local('local stdio smoke: installed game and external mod', () => {
     if (temporary !== '') await rm(temporary, { recursive: true, force: true, maxRetries: 10 });
   });
 
+  it('advertises exactly the current 28 tools', () => {
+    expect([...server.toolNames].sort()).toEqual([...ALL_TOOLS].sort());
+  });
+
+  const readOnlyTools = ALL_TOOLS.filter(
+    (tool) =>
+      ![
+        'hoi4.focus_rewrite',
+        'hoi4.gui_rewrite',
+        'hoi4.map_rewrite',
+        'hoi4.job_inspect',
+        'hoi4.job_cancel',
+      ].includes(tool),
+  );
   for (const target of ['vanilla', 'mod'] as const) {
-    it(`answers a realistic read-only call to every inspect tool on the ${target} fixture`, async () => {
-      const found = target === 'vanilla' ? vanilla : mod;
-      const failures: string[] = [];
-      let searchHit: { id: string; revision: string } | undefined;
-      for (const call of readOnlyCalls(found.subjects)) {
-        const result = await server.call(call.tool, `${target}: ${call.label}`, call.args);
-        // A mod under active development can change between a suite's two source snapshots.
-        const problems = successProblems(result, [
-          ...(call.tolerate ?? []),
-          ...(target === 'mod' ? ['SCENARIO_SOURCE_STALE'] : []),
-        ]);
-        ledger.record(result, 'success', problems);
-        if (problems.length > 0)
-          failures.push(`${call.tool} (${call.label}): ${problems.join('; ')}`);
-        if (call.tool === 'hoi4.reference_search' && problems.length === 0)
-          searchHit = (
-            result.structured.data as { results?: Array<{ id: string; revision: string }> }
+    for (const tool of readOnlyTools) {
+      it(`answers ${tool} on the ${target} fixture`, async () => {
+        const found = target === 'vanilla' ? vanilla : mod;
+        expect(found.missing, `subjects not found in the ${target} files`).toEqual([]);
+        const failures: string[] = [];
+        if (tool === 'hoi4.reference_read') {
+          const searched = await server.call(
+            'hoi4.reference_search',
+            `${target}: select a cited section`,
+            {
+              workspaceId: found.subjects.workspaceId,
+              query: found.subjects.documentationQuery,
+              limit: 1,
+            },
+          );
+          expect(successProblems(searched)).toEqual([]);
+          const hit = (
+            searched.structured.data as { results?: Array<{ id: string; revision: string }> }
           ).results?.[0];
-      }
-      expect(searchHit, 'the installed documentation answers the search').toBeDefined();
-      const read = await server.call('hoi4.reference_read', `${target}: read the first hit`, {
-        workspaceId: found.subjects.workspaceId,
-        id: searchHit!.id,
-        revision: searchHit!.revision,
-        maxLines: 20,
-      });
-      const readProblems = successProblems(read);
-      ledger.record(read, 'success', readProblems);
-      if (readProblems.length > 0) failures.push(`hoi4.reference_read: ${readProblems.join('; ')}`);
-      expect(failures).toEqual([]);
-      // A target without a subject for some tool is reported, not silently skipped.
-      expect(found.missing, `subjects not found in the ${target} files`).toEqual([]);
-    }, 1_800_000);
+          expect(hit, 'the installed documentation answers the search').toBeDefined();
+          const result = await server.call(tool, `${target}: read the first hit`, {
+            workspaceId: found.subjects.workspaceId,
+            id: hit!.id,
+            revision: hit!.revision,
+            maxLines: 20,
+          });
+          const problems = successProblems(result);
+          ledger.record(result, 'success', problems);
+          expect(problems).toEqual([]);
+          return;
+        }
+        const calls = readOnlyCalls(found.subjects).filter((call) => call.tool === tool);
+        expect(calls.length, `${tool} has a real source subject`).toBeGreaterThan(0);
+        for (const call of calls) {
+          const result = await server.call(call.tool, `${target}: ${call.label}`, call.args);
+          const problems = successProblems(result, [
+            ...(call.tolerate ?? []),
+            ...(target === 'mod' ? ['SCENARIO_SOURCE_STALE'] : []),
+          ]);
+          ledger.record(result, 'success', problems);
+          if (problems.length > 0) failures.push(`${call.label}: ${problems.join('; ')}`);
+        }
+        expect(failures).toEqual([]);
+      }, 1_800_000);
+    }
   }
+
+  it('inspects and cancels a background job created through a native task', async () => {
+    const created = await server.client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'hoi4.focus_inspect',
+          arguments: { workspaceId: 'mod', treeId: mod.subjects.focusTreeId },
+        },
+      },
+      CreateTaskResultSchema,
+      { task: { ttl: 600_000 } },
+    );
+    const jobId = /job_[a-f0-9]{64}/u.exec(created.task.taskId)?.[0];
+    expect(jobId, `task id ${created.task.taskId} carries its job id`).toBeDefined();
+    await vi.waitFor(
+      async () => {
+        expect((await server.client.experimental.tasks.getTask(created.task.taskId)).status).toBe(
+          'completed',
+        );
+      },
+      { timeout: 600_000, interval: 250 },
+    );
+    const inspected = await server.call('hoi4.job_inspect', 'result of a finished job', {
+      workspaceId: 'mod',
+      jobId: jobId!,
+    });
+    const inspectedProblems = successProblems(inspected);
+    ledger.record(inspected, 'job', inspectedProblems);
+    expect(inspectedProblems).toEqual([]);
+    expect(inspected.structured.code).toBe('FOCUS_INSPECTED');
+    const cancelled = await server.call('hoi4.job_cancel', 'cancel a job that already completed', {
+      workspaceId: 'mod',
+      jobId: jobId!,
+    });
+    const cancelledProblems = successProblems(cancelled);
+    ledger.record(cancelled, 'job', cancelledProblems);
+    expect(cancelledProblems).toEqual([]);
+  }, 900_000);
 
   it('explains one wrong field per tool on the real mod without writing anything', async () => {
     const failures: string[] = [];
