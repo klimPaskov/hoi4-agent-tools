@@ -42,10 +42,15 @@ let idleTimer: NodeJS.Timeout | undefined;
 
 /** Share of the heap limit a worker may still hold after a job and a full collection. */
 const WARM_HEAP_SHARE = 0.4;
+/** Absolute ceiling on that retained heap, so a large heap limit does not keep gigabytes idle. */
+const WARM_HEAP_MAXIMUM_BYTES = 1_536 * 1024 * 1024;
 
 /** Whether the heap, after a full collection, is small enough to serve another job. */
 function heapAllowsReuse(): boolean {
-  const limit = getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE;
+  const limit = Math.min(
+    getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE,
+    WARM_HEAP_MAXIMUM_BYTES,
+  );
   if (getHeapStatistics().used_heap_size <= limit) return true;
   try {
     setFlagsFromString('--expose-gc');

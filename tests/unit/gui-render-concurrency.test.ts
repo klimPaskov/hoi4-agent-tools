@@ -1,3 +1,4 @@
+import type * as Sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import { SymbolIndex } from '../../src/hoi4_agent_tools/core/index.js';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
@@ -10,7 +11,7 @@ import { renderGuiScene } from '../../src/hoi4_agent_tools/gui/renderer.js';
 const counters = vi.hoisted(() => ({ active: 0, peak: 0, total: 0 }));
 
 vi.mock('sharp', async (importOriginal) => {
-  const module = await importOriginal<typeof import('sharp')>();
+  const module = await importOriginal<typeof Sharp>();
   const real = module.default;
   const counted = ((...input: Parameters<typeof real>) => {
     const instance = real(...input);

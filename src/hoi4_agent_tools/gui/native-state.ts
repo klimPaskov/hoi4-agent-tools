@@ -320,7 +320,7 @@ export function nativeWindowState(
   const visibility: Record<string, boolean> = {};
   const values: Record<string, number> = {};
   const notes: string[] = [];
-  const subject = state.tag === undefined ? 'the scenario country' : state.tag;
+  const subject = state.tag ?? 'the scenario country';
   for (const rule of NATIVE_BRANCHES[windowName] ?? []) {
     const shown = rule.shown(state);
     for (const name of rule.elements) visibility[name] = shown;
