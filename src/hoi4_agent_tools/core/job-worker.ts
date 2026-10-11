@@ -116,7 +116,15 @@ process.on('message', (value: unknown) => {
   clearTimeout(startup);
   if (idleTimer !== undefined) clearTimeout(idleTimer);
   void runJob(value)
-    .catch(() => {
+    .catch((error: unknown) => {
+      // The host reads this line back to tell an uncaught job error from a memory failure.
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+      process.stderr.write(
+        `worker-error: ${/^[A-Z0-9_]{1,64}$/u.test(code) ? code : 'UNCLASSIFIED'}
+${error instanceof Error ? (error.stack ?? error.message) : String(error)}
+`,
+      );
       process.exitCode = 1;
     })
     .finally(() => {

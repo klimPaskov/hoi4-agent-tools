@@ -1615,10 +1615,9 @@ export class ScriptedGuiStudio {
       afterScenario,
       afterCatalog,
     );
-    const [beforeRender, afterRender] = await Promise.all([
-      renderGuiScene(before, ['full'], input.signal, budget),
-      renderGuiScene(after, ['full'], input.signal, budget),
-    ]);
+    // One full raster at a time keeps the peak native memory of a comparison to a single render.
+    const beforeRender = await renderGuiScene(before, ['full'], input.signal, budget);
+    const afterRender = await renderGuiScene(after, ['full'], input.signal, budget);
     const comparison = await compareGuiImages(
       fullImage(beforeRender).png,
       fullImage(afterRender).png,
@@ -1953,17 +1952,14 @@ export class ScriptedGuiStudio {
       `gui-gallery:${sha256Bytes(resolutionGallerySvg)}`,
       'GUI resolution gallery SVG rasterization',
     );
-    const [scenarioGalleryPng, stateGalleryPng, resolutionGalleryPng] = await Promise.all([
-      sharp(Buffer.from(scenarioGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
+    const rasterizeGallery = (svg: string): Promise<Buffer> =>
+      sharp(Buffer.from(svg), { limitInputPixels: RENDER_MAX_PIXELS })
         .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-      sharp(Buffer.from(stateGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
-        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-      sharp(Buffer.from(resolutionGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
-        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-    ]);
+        .toBuffer();
+    // Gallery canvases are large and independent; rasterize them one at a time.
+    const scenarioGalleryPng = await rasterizeGallery(scenarioGallerySvg);
+    const stateGalleryPng = await rasterizeGallery(stateGallerySvg);
+    const resolutionGalleryPng = await rasterizeGallery(resolutionGallerySvg);
     const slug = safeSlug(input.windowName);
     const projectedArtifactGraph = projectGuiGraphForArtifact(scanned.graph, [
       ...new Set(

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Job workers
+
+- A worker that stops without a result is now reported by its real cause. The host keeps each worker's exit code, signal and last standard error and fails the job with `JOB_WORKER_EXIT` naming a V8 heap limit (with its size), a native out-of-memory, a native crash, an external termination, a stop by the server's own deadline, or an uncaught job error with its error code. Earlier releases discarded this and always suggested that memory ran out. Logs of workers that ended unexpectedly are kept, newest ten, in `job-workers/logs` under the server state root.
+- Workers start with a V8 heap ceiling of a quarter of physical memory, between 2,048 and 8,192 MiB, when `jobWorkerMaxHeapMiB` is not set. Node's own default tops out near 4.5 GB, which a large GUI render on a big mod can approach.
+- `hoi4.gui_render` rasterizes its derived variants, the comparison renders and the galleries one at a time instead of together, which lowers the peak native memory of a render.
+
 ## 4.0.0 - 2026-10-10
 
 ### Known mistakes

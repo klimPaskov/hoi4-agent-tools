@@ -62,7 +62,9 @@ A read-only job still running `jobCancelGraceSeconds` (1–600, default 10) afte
 A read-only job still running `jobDeadlineSeconds` (1–86,400, default 1,800) after it was dispatched is stopped and fails with `JOB_DEADLINE_EXCEEDED`; narrow its selector or limits, or raise the setting in the server configuration.
 Rewrite jobs are never stopped this way, because their transaction journal owns write recovery; they keep cooperative cancellation and reconciliation.
 Supervision belongs to the server process that dispatched the worker. A read-only worker whose dispatching server has exited enforces the same deadline itself and then exits; a rewrite worker keeps running until it finishes.
-`jobWorkerMaxHeapMiB` (256–65,536) sets a V8 heap ceiling for each worker; without it, workers use Node's default. A worker that runs out of memory ends a job with `JOB_WORKER_EXIT`; retry the call, which starts a fresh worker, or raise the ceiling.
+`jobWorkerMaxHeapMiB` (256–65,536) sets a V8 heap ceiling for each worker; without it, a worker gets a quarter of physical memory, between 2,048 and 8,192 MiB.
+A worker that stops without publishing a result ends the job with `JOB_WORKER_EXIT`, and the message gives the cause the server observed: a V8 heap limit (with its size), a native out-of-memory, a native crash, termination from outside the server, a stop by the server's own deadline, or an uncaught job error with its error code, together with the exit code or signal. Only a V8 heap limit or a native out-of-memory is a memory failure; raise `jobWorkerMaxHeapMiB` or narrow the request for those, and retry otherwise.
+The standard error of the newest ten workers that ended unexpectedly is kept in `job-workers/logs` under the server state root.
 At most `maxSharedTools` (1–128, default 4) workers and expensive calls run at once across every server process that shares a `serverStateRoot`; further work waits for capacity.
 
 Read-only jobs stage a source-revision-bound result checkpoint before terminal publication.

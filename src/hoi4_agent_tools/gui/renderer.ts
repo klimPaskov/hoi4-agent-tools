@@ -839,46 +839,49 @@ export async function renderGuiScene(
     const basePng = await sharp(Buffer.from(full.svg), { limitInputPixels: RENDER_MAX_PIXELS })
       .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
       .toBuffer();
-    const rendered = await Promise.all(
-      prepared.map(async (item): Promise<GuiRenderedImage> => {
-        if (item.variant === 'full')
-          return {
-            variant: item.variant,
-            svg: item.svg,
-            png: basePng,
-            width: item.view.width,
-            height: item.view.height,
-          };
-        signal?.throwIfAborted();
-        budget.reserveRasterOperation(
-          `gui-derived-variant:${sha256Bytes(item.svg)}`,
-          `GUI ${item.variant} derived rasterization`,
-        );
-        const png =
-          item.variant === 'cropped'
-            ? await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
-                .extract({
-                  left: item.view.viewBox.x,
-                  top: item.view.viewBox.y,
-                  width: item.view.width,
-                  height: item.view.height,
-                })
-                .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-                .toBuffer()
-            : await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
-                .composite([{ input: Buffer.from(overlayToSvg(scene, item.variant)) }])
-                .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-                .toBuffer();
-        signal?.throwIfAborted();
-        return {
+    // Derived variants are rasterized one at a time: each decodes the full-size base raster, so
+    // running them together multiplies the peak native memory of one render.
+    const rendered: GuiRenderedImage[] = [];
+    for (const item of prepared) {
+      if (item.variant === 'full') {
+        rendered.push({
           variant: item.variant,
           svg: item.svg,
-          png,
+          png: basePng,
           width: item.view.width,
           height: item.view.height,
-        };
-      }),
-    );
+        });
+        continue;
+      }
+      signal?.throwIfAborted();
+      budget.reserveRasterOperation(
+        `gui-derived-variant:${sha256Bytes(item.svg)}`,
+        `GUI ${item.variant} derived rasterization`,
+      );
+      const png =
+        item.variant === 'cropped'
+          ? await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
+              .extract({
+                left: item.view.viewBox.x,
+                top: item.view.viewBox.y,
+                width: item.view.width,
+                height: item.view.height,
+              })
+              .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+              .toBuffer()
+          : await sharp(basePng, { limitInputPixels: RENDER_MAX_PIXELS })
+              .composite([{ input: Buffer.from(overlayToSvg(scene, item.variant)) }])
+              .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+              .toBuffer();
+      signal?.throwIfAborted();
+      rendered.push({
+        variant: item.variant,
+        svg: item.svg,
+        png,
+        width: item.view.width,
+        height: item.view.height,
+      });
+    }
     images = rendered;
   }
   return {
