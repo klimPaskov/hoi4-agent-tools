@@ -35,7 +35,7 @@ This page lists the codes you are most likely to meet, then the checks for probl
 
 ## Rewrites
 
-Rewrite tools (`focus_rewrite`, `gui_rewrite`, `map_rewrite`) validate the whole candidate and write nothing when it fails.
+Use the error code to find what prevented a focus, GUI or map edit.
 
 | Code                                     | Cause and fix                                                                                                                                                                                |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

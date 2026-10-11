@@ -1,10 +1,9 @@
 # Scripted GUIs
 
-Use `hoi4.gui_inspect`, `hoi4.gui_render`, and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts, and linked decision entry points.
+Build and edit windows, preview their states and find layout problems.
+Use `hoi4.gui_inspect`, `hoi4.gui_render` and `hoi4.gui_rewrite` for `.gui`, `.gfx`, `common/scripted_guis`, localisation, sprites, fonts and linked decisions.
 
 ## Start with a preview
-
-> Render this window at 100% and 125% UI scale. Show its control regions and list the state inputs needed to establish visibility and availability.
 
 The [interface examples](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/gui-comparisons.md) show real vanilla and mod windows.
 Cyan click regions have confirmed availability under the supplied scenario.
@@ -27,7 +26,7 @@ The preview does not establish native automatic positioning, frame composition, 
 
 ## Create a GUI
 
-`hoi4.gui_rewrite` can work from supported source, targeted patches, or structured helpers. Source and helper rewrites may include one bounded text package: the main `.gui` plus additional interface `.gui`/`.gfx`, configured GFX `.gfx`, `common/scripted_guis/*.txt`, and localisation `.yml` files. The package is path-checked, parsed, linked, rendered, validated, and applied together in one rewrite. Existing text encodings are retained, while localisation is always written as UTF-8 with BOM.
+`hoi4.gui_rewrite` can work from supported source, targeted patches, or structured helpers. Source and helper rewrites may include one bounded text package: the main `.gui` plus additional interface `.gui`/`.gfx`, configured GFX `.gfx`, `common/scripted_guis/*.txt`, and localisation `.yml` files. The related files are written together. Existing text encodings are retained, while localisation is always written as UTF-8 with BOM.
 
 A package may contain at most 32 text files and 16 MiB of encoded source in total. Paths are compared portably, so aliases that differ only by letter case are rejected.
 

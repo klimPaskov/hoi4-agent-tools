@@ -2,7 +2,7 @@
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
   "version": "4.0.0",
-  "description": "HOI4 modding for agents: cited docs, tree/GUI/map previews, event and AI analysis, validated edits.",
+  "description": "Build HOI4 mods: focus trees, events, decisions, worlds, GUI previews, docs and AI balance.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "HOI4 Agent Tools contributors",

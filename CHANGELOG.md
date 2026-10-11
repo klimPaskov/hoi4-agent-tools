@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Describe modding tasks in plain language across the README, guides, package metadata and MCP tool descriptions.
+
 ## 4.0.0 - 2026-10-10
 
 ### Known mistakes

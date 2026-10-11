@@ -1,10 +1,11 @@
 # Focus trees
 
-Use `hoi4.focus_inspect`, `hoi4.focus_render`, and `hoi4.focus_rewrite` for national focus trees and continuous focus palettes.
+Build focus trees, arrange branches and preview the result.
+Use `hoi4.focus_inspect`, `hoi4.focus_render` and `hoi4.focus_rewrite` for national focus trees and continuous-focus palettes.
 
 ## Create a tree
 
-A complete plan should include:
+The agent assembles the tree from your request. For a direct API call, the `plan` argument should include:
 
 - tree ID and country assignment;
 - branch and lane groups;

@@ -135,18 +135,18 @@ const readOnly = {
 export const probabilityTaskTools = [
   {
     name: 'hoi4.probability_inspect',
-    title: 'Inspect and evaluate AI weights and MTTH',
+    title: 'Explain AI choices and event timing',
     description:
-      'Find weighted logic (ai_will_do, ai_chance, MTTH, random_list, strategy factors) by path, ID or candidate IDs and evaluate it under declared scenarios, or none: weights, probabilities and the facts still missing. Example: {"candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"has_war":false}}]}. Ranks the strongest candidates inline.',
+      'Explain why the AI favours an option, decision, focus or technology. Find ai_will_do, ai_chance, MTTH, random_list or strategy factors by path, ID or candidate IDs and evaluate them under declared scenarios. Show weights, supported probabilities and missing facts. Example: {"candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"has_war":false}}]}. Ranks the strongest candidates inline.',
     inputSchema: probabilityInspectRequestSchema,
     outputSchema: inspectOutput,
     annotations: readOnly,
   },
   {
     name: 'hoi4.probability_analyze',
-    title: 'Compare, sweep, simulate, or sequence weighted logic',
+    title: 'Compare AI choices and random outcomes',
     description:
-      'Deeper weighted analysis: compare before and after source under the same scenarios, sweep input ranges for breakpoints and rank reversals, simulate uncertain inputs, run a declared pool over time, or render a retained analysis. Example: {"analysis":"sweep","source":"common/decisions/my_decisions.txt","candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"variable.pressure":10}}],"sweep":{"paths":["variable.pressure"],"steps":10}}.',
+      'Compare AI weights before and after an edit, find where a choice changes, or explore uncertain inputs and choices over time. Select compare, sweep, simulate, sequence or render with analysis. Example: {"analysis":"sweep","source":"common/decisions/my_decisions.txt","candidatePool":["my_decision"],"scenarioSet":[{"actor":"GER","state":{"variable.pressure":10}}],"sweep":{"paths":["variable.pressure"],"steps":10}}.',
     inputSchema: probabilityAnalyzeRequestSchema,
     outputSchema: analysisOutput,
     annotations: readOnly,
