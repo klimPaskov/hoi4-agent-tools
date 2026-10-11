@@ -50,6 +50,20 @@ function evaluate(text: string, scenario: Partial<ConditionScenario> = {}) {
 }
 
 describe('shared structured condition evaluation', () => {
+  it('tests the stored value of a flag in the block form of has_global_flag', () => {
+    const block = 'has_global_flag = { flag = super_event_visible value = 14 }';
+    expect(evaluate(block, { state: { 'global_flag.super_event_visible': 14 } }).state).toBe(
+      'true',
+    );
+    expect(evaluate(block, { state: { 'global_flag.super_event_visible': 6 } }).state).toBe(
+      'false',
+    );
+    expect(evaluate(block, { state: { 'flag.super_event_visible': 14 } }).state).toBe('true');
+    const undeclared = evaluate(block);
+    expect(undeclared.state).toBe('unresolved');
+    expect(undeclared.unresolved[0]?.details?.scenarioInput).toBe('flag.super_event_visible');
+  });
+
   it('identifies the scenario field that can resolve a missing flag or variable', () => {
     expect(
       evaluate('has_country_flag = research_gate', { closedFlags: false, flags: [] }).unresolved[0]
