@@ -1,6 +1,6 @@
 # Maps
 
-Build a world from a drawing, split states and reshape provinces. Preview the map and update the scripts that refer to it.
+Generate a new world, split states and reshape provinces. Preview the map and update the scripts that refer to it.
 Use `hoi4.map_inspect` and `hoi4.map_rewrite` for provinces, states, regions, supply, railways, positions, ownership, resources, buildings and localisation.
 
 ## Inspect and navigate the complete map
