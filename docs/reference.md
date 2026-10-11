@@ -1,6 +1,7 @@
 # Local references and source lookup
 
-The reference tools read only local, authorized sources. They do not fetch the Paradox Wiki or start Hearts of Iron IV. The installed game's documentation has the highest authority for current syntax; the offline wiki supplies broader modding guidance. A result identifies its source, path, exact lines, and SHA-256 revision so an agent can inspect only the relevant section.
+Find the right modding rule and see how vanilla uses it. The tools search local game documentation, an offline wiki and your mod source.
+The installed game docs define current syntax; the wiki supplies broader guidance. Each result includes its file, lines and source revision.
 
 The server discovers these directories for a workspace:
 

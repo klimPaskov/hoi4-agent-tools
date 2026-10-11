@@ -44,11 +44,9 @@ After `--init` writes a configuration file, every folder under its mod roots is 
 The [configuration reference](configuration.md#how-the-server-picks-your-mod) gives the exact rules, the default file location, every key and the environment variables.
 Indexes are kept in the server's state folder and generated images in workspace storage, both in your user data directory by default.
 
-## 3. Try a small task
+## 3. Start working
 
-> Find the focus trees in this mod and render one of them.
-
-> Find the installed documentation for `save_event_target_as` and read only the relevant section.
+Tell your agent what you want to build or fix in the mod.
 
 Continue with the [examples guide](examples.md).
 Without a configuration file, the folder must look like a mod: it needs `descriptor.mod` or standard HOI4 content folders.

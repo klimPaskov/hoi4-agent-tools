@@ -1,7 +1,7 @@
 # Cross-system impact and decisions
 
-`hoi4.impact_inspect` and `hoi4.decision_inspect` analyze authorized HOI4 source without changing it or running the game.
-Both tools return a compact result and a linked JSON report containing source locations, hashes, unresolved cases, and the full analysis.
+Find out why a decision is hidden or unavailable, and see what a script change affects elsewhere in the mod.
+`hoi4.impact_inspect` and `hoi4.decision_inspect` return a summary and a linked JSON report with source locations, hashes and unresolved cases.
 They support ordinary calls and persistent MCP tasks through stdio and HTTP.
 
 ## Cross-system impact

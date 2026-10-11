@@ -3,30 +3,22 @@
 [![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
 [![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
 [![License](https://img.shields.io/npm/l/hoi4-agent-tools)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white)](https://discord.gg/rAXesGcT2t)
+[![YouTube](https://img.shields.io/badge/YouTube-Chaos%20Redux-ff0000?logo=youtube&logoColor=white)](https://www.youtube.com/@ChaosRedux)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20Project-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/klimpaskov)
+[![Download](https://img.shields.io/github/v/release/klimPaskov/hoi4-agent-tools?label=Release&logo=github&color=2ea44f)](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest)
+[![Issues](https://img.shields.io/badge/Bugs%20%26%20Ideas-Issues-24292f?logo=github&logoColor=white)](https://github.com/klimPaskov/hoi4-agent-tools/issues)
 
-An [MCP](https://modelcontextprotocol.io/) server that lets a coding agent such as Claude Code, Codex or Cursor read, preview, analyse and safely edit a Hearts of Iron IV mod.
-Your agent gets cited answers from the game's own documentation, pictures of focus trees, technology folders, interfaces and maps, and checks that catch load errors before you launch the game.
+An [MCP](https://modelcontextprotocol.io/) server that helps coding agents build and edit Hearts of Iron IV mods.
+Make focus trees, events and decisions. Turn a drawing into a playable world. Preview windows, trees and maps, find the right rule in the docs, fix broken script and balance AI choices.
 
 [![A large focus tree rendered from mod source](docs/images/comparisons/holy-realm-mcp.png)](docs/images/comparisons/holy-realm-mcp.png)
 
 ## What it does
 
-| Area                   | Ask your agent, for example                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Find the rule          | "Find the installed documentation for `save_event_target_as` and show a vanilla usage with file and line." |
-| Check before launch    | "Check `events/my_events.txt` for scope errors, then group the last `error.log` by category."              |
-| See the tree           | "Render this mod's largest focus tree and list focuses with missing icons."                                |
-| Preview the window     | "Preview this scripted GUI at 100% and 125% UI scale and check for clipped text."                          |
-| Read the map           | "Find Brandenburg, list its provinces and neighbours, and show the files a change would touch."            |
-| Reshape the map        | "Split Brandenburg in two and update every event and focus that names it."                                 |
-| Build a new world      | "Create a 2048x1024 world with six countries, then list what still needs hand-made content."               |
-| Follow the events      | "Trace this event's options and follow-up events and point out unresolved calls."                          |
-| Weigh the AI           | "Show the AI weights of event `my_mod.12`'s options, then compare them before and after my change."        |
-| Plan new content       | "Give me the next free event ID in my namespace and summarize what the mod defines."                       |
-| Edit with a safety net | "Add a new branch to this focus tree" — the edit is validated before anything is written.                  |
-
-The server never launches the game.
-Previews and tests are built from source files, so they show what the source says, not what a running campaign did.
+Your agent can build and edit focus trees, events, decisions and maps, and make a whole world from a drawing.
+It previews focus trees, technology folders, windows and maps, finds the right rule in the game's documentation, fixes broken script and tunes AI choices.
+You describe what you want; the agent picks the right tools.
 
 ## Quick start
 
@@ -45,11 +37,12 @@ Previews and tests are built from source files, so they show what the source say
 
    Paste the `globalInstall` block into a JSON client such as Claude Code, Claude Desktop or Cursor, or the `codexTomlGlobal` block into Codex's `config.toml`.
 
-4. Open your mod folder as the agent's workspace and try: "Render this mod's largest focus tree."
+4. Open your mod folder as the agent's workspace and tell it what you want to build or fix.
 
 The [setup guide](docs/setup.md) covers several mods, explicit game paths, local wiki snapshots and troubleshooting with `--discover` and `--diagnose`.
 
-[Watch the Agent Tools demo](https://github.com/klimPaskov/Agentic-HOI4-Modding/releases/latest/download/hoi4_agent_tools_promo.mp4) or use [HOI4 Mod Setup](https://github.com/klimPaskov/HOI4-Mod-Setup/releases/latest) to install and register the verified server for your mod.
+[Watch the Agent Tools demo](https://github.com/klimPaskov/Agentic-HOI4-Modding/releases/latest/download/hoi4_agent_tools_promo.mp4) or use [HOI4 Mod Setup](https://github.com/klimPaskov/HOI4-Mod-Setup/releases/latest) to install and connect the server for your mod.
+Part of the HOI4 modding toolkit with [Agentic HOI4 Modding](https://github.com/klimPaskov/Agentic-HOI4-Modding) (skills and instructions for your agent) and [HOI4 Live Tools](https://github.com/klimPaskov/HOI4-Live-Tools) (testing in the running game).
 
 ## Examples
 
@@ -67,34 +60,15 @@ More comparisons, with their source revisions and fidelity notes, are in the [fo
 
 ## Tools
 
-The default server has 28 tools.
-Agents pick them from ordinary language, so you rarely need their names.
+The server gives your agent previews, documentation, script analysis and editing tools.
+The agent combines them with its file editor to build events and decisions, repair scripts and adjust AI weights.
+The [tool reference](docs/tools.md) lists exact names, arguments and results for integrations.
 
-| Area                        | Tools                                                                                                                   | Writes                  |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| References and source       | `reference_context`, `reference_search`, `reference_read`, `source_lookup`, `script_validate`, `error_log`, `mod_index` | —                       |
-| Focus trees                 | `focus_inspect`, `focus_render`, `focus_rewrite`                                                                        | review files; mod files |
-| Scripted GUIs               | `gui_inspect`, `gui_render`, `gui_rewrite`                                                                              | review files; mod files |
-| Maps                        | `map_inspect`, `map_rewrite`                                                                                            | review files; mod files |
-| Events                      | `event_inspect`, `event_render`                                                                                         | —                       |
-| Technology and doctrines    | `tech_inspect`, `tech_render`                                                                                           | —                       |
-| AI weights and timing       | `probability_inspect`, `probability_analyze`                                                                            | —                       |
-| Decisions, impact and tests | `impact_inspect`, `decision_inspect`, `mechanic_test`, `package_check`, `scenario_test`                                 | —                       |
-| Background jobs             | `job_inspect`, `job_cancel`                                                                                             | job state               |
+## FAQ
 
-Every name starts with `hoi4.`.
-"Review files" are images and reports in the server's own storage; only the three `*_rewrite` tools change mod files.
-The [tool reference](docs/tools.md) gives each tool's purpose, prompts, resources and long-running behaviour.
+**Where do edits go?** Changes are written to your mod folder; use Git to review or undo them.
 
-## Safety and limits
-
-- The server reads the mod, its dependencies, the installed game, local reference folders and the game's error log.
-- Inspection and rendering never change mod files.
-  The focus, GUI and map rewrite tools validate a proposed edit before writing it and write it as a journaled transaction, so an interrupted write is restored rather than left half-applied.
-- Large renders and reports are stored as linked files, and documentation is returned as cited sections rather than whole manuals.
-- The server does not launch or control the game.
-  Previews and source tests cannot prove live clicks, AI choices or engine timing; a source score alone does not establish an AI click probability.
-- Your repository instructions and review process still apply.
+**Does it run the game?** No. Previews come from mod source; test gameplay in HOI4 to see live clicks, AI choices and timing.
 
 ## Configuration
 

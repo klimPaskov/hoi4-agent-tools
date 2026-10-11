@@ -15,6 +15,7 @@ const projectRoot = path.resolve(import.meta.dirname, '../..');
 interface PackageJson {
   bin: Record<string, string>;
   dependencies: Record<string, string>;
+  description: string;
   engines: { node: string };
   files: string[];
   mcpName: string;
@@ -207,8 +208,7 @@ describe('offline package and Registry metadata', () => {
       $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
       name: packageJson.mcpName,
       title: 'HOI4 Agent Tools',
-      description:
-        'HOI4 modding for agents: cited docs, tree/GUI/map previews, event and AI analysis, validated edits.',
+      description: packageJson.description,
       version: packageJson.version,
       repository: {
         url: 'https://github.com/klimPaskov/hoi4-agent-tools',
