@@ -1,8 +1,7 @@
 # Event chains
 
-The Event Chain Viewer analyzes event definitions and call sites across the active mod, configured dependencies, and vanilla sources. It is read-only: it does not rewrite event files or simulate the game.
-
-Use the three event tools directly from the target mod.
+Follow event chains, see the choices they offer and find broken calls.
+The event tools analyze the mod, its dependencies and vanilla sources. The agent uses the results with its file editor to create or fix events.
 
 ## Inspect
 

@@ -7,6 +7,7 @@
 - Clean temporary test fixtures after each test, suite teardown and normal process exit. Reject fixture truncation above a 256 MiB aggregate disk budget before Windows allocates the file.
 - Recover stale reference-source and random-name event-evaluation scratch on startup after three hours, with local process leases, lock and canonical-path checks. Evict dead owners oldest first under a 256 MiB scratch cap; preserve live owners and dated benchmark evidence.
 - Document the leak's test-fixture origin. MCP reference lookup already reads configured sources directly and uses the shared persistent analysis cache; it does not copy a source tree per call or process.
+- Describe modding tasks in plain language across the README, guides, package metadata and MCP tool descriptions.
 
 ## 4.0.0 - 2026-10-10
 

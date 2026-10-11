@@ -1,10 +1,11 @@
 # Maps
 
-Use `hoi4.map_inspect` and `hoi4.map_rewrite` for provinces, states, strategic regions, adjacency, supply nodes, railways, positions, ownership, cores, claims, resources, buildings, and localisation.
+Build a world from a drawing, split states and reshape provinces. Preview the map and update the scripts that refer to it.
+Use `hoi4.map_inspect` and `hoi4.map_rewrite` for provinces, states, regions, supply, railways, positions, ownership, resources, buildings and localisation.
 
 ## Inspect and navigate the complete map
 
-`hoi4.map_inspect` validates the map and returns a full-map PNG plus a searchable, clickable HTML navigator by default. The navigator supports pan, zoom, fit-to-map, search by numeric ID, localisation key, or localised name, and exact click lookup for province, state, and strategic-region IDs. Hovering reports both top-left bitmap coordinates and bottom-left HOI4 map coordinates.
+`hoi4.map_inspect` finds map problems and returns a full-map PNG plus a searchable, clickable HTML navigator by default. The navigator supports pan, zoom, fit-to-map, search by numeric ID, localisation key, or localised name, and exact click lookup for province, state, and strategic-region IDs. Hovering reports both top-left bitmap coordinates and bottom-left HOI4 map coordinates.
 
 The linked JSON catalog contains every active province definition, state, and strategic region with resolved names, alternate localisation values, source paths and lines, raster bounds and centers, memberships, neighbors, victory points, resources, buildings, ports, supply nodes, railways, normal and special adjacencies, building positions, unit positions, weather positions, and entity locators. Large catalog and render data remain in MCP resources instead of filling the agent prompt.
 
@@ -231,11 +232,11 @@ Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
-With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world, and the result is validated like any other rewrite; afterwards refine it with the other operations.
+With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
 
 ## Worked example: build a world, then reshape it
 
-1. Create the world. The result is validated like any other rewrite, and the same seed always gives the same world.
+1. Create the world. The same seed always gives the same world.
 
    ```json
    {

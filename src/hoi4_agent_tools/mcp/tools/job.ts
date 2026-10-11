@@ -14,9 +14,9 @@ import type { ToolDefinition } from '../server/task-tool-definition.js';
 export const jobControlTools = [
   {
     name: 'hoi4.job_inspect',
-    title: 'Inspect persistent job',
+    title: 'Check a background task',
     description:
-      'Inspect a background operation by jobId (from a native task id): status while it runs, the original tool result once it completed. Example: {"jobId":"job_<64 hex characters>"}. Returns bounded status evidence.',
+      'Check progress on a background task or retrieve its completed result. Pass jobId from the task handle. Example: {"jobId":"job_<64 hex characters>"}. Returns task status or the completed result.',
     inputSchema: jobReferenceSchema,
     annotations: {
       readOnlyHint: true,
@@ -27,9 +27,9 @@ export const jobControlTools = [
   },
   {
     name: 'hoi4.job_cancel',
-    title: 'Cancel persistent job',
+    title: 'Stop a background task',
     description:
-      'Durably request cancellation of a background operation by jobId. A completed result stays completed. Example: {"jobId":"job_<64 hex characters>"}.',
+      'Stop a background task by jobId. A result that has already completed stays available. Example: {"jobId":"job_<64 hex characters>"}.',
     inputSchema: jobReferenceSchema,
     outputSchema: jobStatusOutputSchema,
     annotations: {

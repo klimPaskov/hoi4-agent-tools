@@ -222,16 +222,16 @@ export const eventTaskTools = [
     name: 'hoi4.event_inspect',
     title: 'Inspect event chains',
     description:
-      'Scan, find roots, trace, explain paths, inspect state flow, lint, assess impact or compare (mode compare) event graphs. Example: {"mode":"trace","selector":"my_mod.1","direction":"downstream"}; a selector is an event ID, a namespace, my_mod.* or a file. Returns counts and the main findings inline; the full source-linked report is a resource.',
+      'Follow event chains and explain their options, conditions, timing and state changes. Find broken calls, inspect affected events or compare revisions with mode compare. Example: {"mode":"trace","selector":"my_mod.1","direction":"downstream"}; a selector is an event ID, a namespace, my_mod.* or a file. Returns counts and the main findings inline; the full source-linked report is a resource.',
     inputSchema: eventInspectInputSchema,
     outputSchema: eventInspectOutputSchema,
     annotations: readOnlyEventTool,
   },
   {
     name: 'hoi4.event_render',
-    title: 'Render event chains',
+    title: 'Preview event chains',
     description:
-      'Render a source-linked event view (overview, neighborhood, options, timing, state, scope, unresolved and more) as JSON, SVG and PNG. Example: {"view":"overview","selector":"my_mod"}. Images are linked artifacts; calls that cannot be resolved statically stay explicit unresolved edges.',
+      'Preview event routes, options, timing, state and scope as JSON, SVG and PNG. Example: {"view":"overview","selector":"my_mod"}. Images are linked artifacts; calls that cannot be resolved statically stay explicit unresolved edges.',
     inputSchema: eventRenderInputSchema,
     outputSchema: eventRenderOutputSchema,
     annotations: readOnlyEventTool,

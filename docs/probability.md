@@ -1,6 +1,7 @@
 # AI and MTTH scenario analysis
 
-The probability tools explain weighted HOI4 logic under explicit world-state scenarios. They inspect real mod source or proposed in-memory source, show which conditions and modifiers apply, calculate only probabilities supported by the selected HOI4 surface, and keep every unresolved input visible.
+Find out why the AI favours one choice and ignores another. Compare weights, conditions and timing to help your agent balance events, decisions, focuses and research.
+The tools evaluate existing or proposed source under declared game conditions and list any missing facts.
 
 Use them for event timing and option weights, decision and mission scores, focus selection, technology and doctrine selection, direct random chances, `random_list`, supported AI strategy factors, and declared custom weighted pools.
 
@@ -9,7 +10,9 @@ Use them for event timing and option weights, decision and mission scores, focus
 | `hoi4.probability_inspect` | Find weighted logic by file, identifier or candidate IDs and evaluate it: each candidate's weight and probability per scenario, the strongest first, and the facts still missing.                        |
 | `hoi4.probability_analyze` | Deeper analysis selected by `analysis`: `compare` a proposed or frozen source, `sweep` declared ranges, `simulate` uncertain inputs, `sequence` a declared pool over time, `render` a retained analysis. |
 
-Both tools are read-only. Proposed source is parsed in memory and never written. When an installed game root is configured, evaluation fails closed unless `launcher-settings.json` identifies the supported HOI4 build and checksum. Results otherwise state that they target the adapter version without claiming local-game verification.
+## Game version
+
+When `gameRoot` is configured, `launcher-settings.json` must identify the supported HOI4 build and checksum for evaluation to run. Without a game root, results identify the adapter version. Proposed source is evaluated in memory.
 
 ## One call for current weights
 

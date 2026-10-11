@@ -4,14 +4,13 @@ Most users can ask their agent in ordinary language; the [examples guide](exampl
 This page lists exact tool names for agents and integrations.
 Use the connected server's live schema for the fields accepted by each call.
 
-The default server exposes 28 tools in nine areas.
 The **Writes** column says what a call can change:
 
 - **—** reads source and returns a result.
 - **review files** writes images and reports to the server's own workspace storage, never to the mod.
-- **mod files** changes mod source after validating the edit, with a recorded transaction that can be rolled back.
+- **mod files** changes mod source.
 
-MCP clients see the review-file tools as not read-only, because they store artifacts, and may ask for approval before running them.
+MCP clients may ask for approval to create review files.
 `hoi4.job_cancel` is marked destructive because it stops work in progress; it never edits source.
 
 ## References and source
@@ -36,17 +35,17 @@ MCP clients see the review-file tools as not read-only, because they store artif
 
 ## Scripted GUIs
 
-| Tool               | Purpose                                                                                                     | Writes       |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- | ------------ |
-| `hoi4.gui_inspect` | Read a scripted GUI and its linked assets and logic.                                                        | review files |
-| `hoi4.gui_render`  | Render generated and explicit GUI scenarios, states, resolutions, and layout diagnostics.                   | review files |
-| `hoi4.gui_rewrite` | Apply one validated GUI change as full source, structured helpers, or exact patches, with extra text files. | mod files    |
+| Tool               | Purpose                                                                                           | Writes       |
+| ------------------ | ------------------------------------------------------------------------------------------------- | ------------ |
+| `hoi4.gui_inspect` | Read a scripted GUI and its linked assets and logic.                                              | review files |
+| `hoi4.gui_render`  | Render generated and explicit GUI scenarios, states, resolutions, and layout diagnostics.         | review files |
+| `hoi4.gui_rewrite` | Create or edit a GUI as full source, structured helpers, or exact patches, with extra text files. | mod files    |
 
 ## Maps
 
 | Tool               | Purpose                                                                                                                                      | Writes       |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `hoi4.map_inspect` | Validate, search and look up the map; render a layer, overlays, tile or area; check script references to map entities.                       | review files |
+| `hoi4.map_inspect` | Find map problems, search and look up places; render a layer, overlays, tile or area; check script references to map entities.               | review files |
 | `hoi4.map_rewrite` | Create a new world, or create, split, merge and renumber states and provinces, regenerate positions and supply, and remap script references. | mod files    |
 
 ## Events
@@ -82,10 +81,10 @@ MCP clients see the review-file tools as not read-only, because they store artif
 
 ## Background jobs
 
-| Tool               | Purpose                                                                | Writes    |
-| ------------------ | ---------------------------------------------------------------------- | --------- |
-| `hoi4.job_inspect` | Inspect durable background work or retrieve its completed tool result. | —         |
-| `hoi4.job_cancel`  | Durably request cancellation of authorized background work.            | job state |
+| Tool               | Purpose                                                      | Writes    |
+| ------------------ | ------------------------------------------------------------ | --------- |
+| `hoi4.job_inspect` | Check background work or retrieve its completed tool result. | —         |
+| `hoi4.job_cancel`  | Stop a background task.                                      | job state |
 
 ## Prompts and resources
 
