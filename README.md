@@ -1,6 +1,6 @@
 # HOI4 Agent Tools
 
-[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/watch?v=Dd36E_NK4rQ)
+[![Watch the HOI4 Agent Tools demo](https://raw.githubusercontent.com/klimPaskov/hoi4-agent-tools/main/docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/watch?v=Dd36E_NK4rQ)
 
 [![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
 [![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
@@ -41,7 +41,7 @@ You describe what you want; the agent picks the right tools.
 
 The [setup guide](docs/setup.md) covers several mods, explicit game paths, local wiki snapshots and troubleshooting with `--discover` and `--diagnose`.
 
-[Watch the Agent Tools demo](https://github.com/klimPaskov/Agentic-HOI4-Modding/releases/latest/download/hoi4_agent_tools_promo.mp4) or use [HOI4 Mod Setup](https://github.com/klimPaskov/HOI4-Mod-Setup/releases/latest) to install and connect the server for your mod.
+[Watch the Agent Tools demo](https://www.youtube.com/watch?v=Dd36E_NK4rQ) or use [HOI4 Mod Setup](https://github.com/klimPaskov/HOI4-Mod-Setup/releases/latest) to install and connect the server for your mod.
 Part of the HOI4 modding toolkit with [Agentic HOI4 Modding](https://github.com/klimPaskov/Agentic-HOI4-Modding) (skills and instructions for your agent) and [HOI4 Live Tools](https://github.com/klimPaskov/HOI4-Live-Tools) (testing in the running game).
 
 ## Examples
