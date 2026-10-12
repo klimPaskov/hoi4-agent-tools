@@ -477,18 +477,25 @@ function assertTargetWindowAvailable(graph: GuiSourceGraph, windowName: string):
   );
 }
 
+const lowerCaseKeySets = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+
 function collectNamedAttributes(
   value: unknown,
   keys: ReadonlySet<string>,
   output: Set<string>,
 ): void {
+  let lowered = lowerCaseKeySets.get(keys);
+  if (lowered === undefined) {
+    lowered = new Set([...keys].map((key) => key.toLowerCase()));
+    lowerCaseKeySets.set(keys, lowered);
+  }
   if (Array.isArray(value)) {
     for (const entry of value) collectNamedAttributes(entry, keys, output);
     return;
   }
   if (typeof value !== 'object' || value === null) return;
   for (const [key, entry] of Object.entries(value)) {
-    if (keys.has(key) && typeof entry === 'string') output.add(entry);
+    if (lowered.has(key.toLowerCase()) && typeof entry === 'string') output.add(entry);
     collectNamedAttributes(entry, keys, output);
   }
 }

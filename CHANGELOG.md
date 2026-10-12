@@ -7,6 +7,7 @@
 ### GUI render
 
 - `hoi4.gui_render` and `hoi4.gui_inspect` model the engine-controlled branches of `countrypoliticsview` instead of drawing all of them: no faction, faction leader, faction member and balance of power are chosen from the scenario country (`tag`, `ideology`, `faction`, `balanceOfPower`, or its `history/countries` facts at the scenario date), and `pol_faction_icon` follows the ruling ideology instead of its static frame. Explicit scenario visibility, values and selected frames still win.
+- GUI text keys are matched without regard to case, so a window that spells `buttontext` in lower case (the vanilla trade window) shows its localised label instead of the key.
 - Element visibility honours `show` as well as `visible`, `hide` and `hidden`, and scenario `name.visible` values may be yes/no words or 1/0 as well as booleans.
 
 ### Job workers
