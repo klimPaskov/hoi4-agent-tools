@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 4.0.1 - 2026-10-11
+## 4.0.1 - 2026-10-12
 
 - Clean temporary test fixtures after each test, suite teardown and normal process exit. Reject fixture truncation above a 256 MiB aggregate disk budget before Windows allocates the file.
 - Recover stale reference-source and random-name event-evaluation scratch on startup after three hours, with local process leases, lock and canonical-path checks. Evict dead owners oldest first under a 256 MiB scratch cap; preserve live owners and dated benchmark evidence.
