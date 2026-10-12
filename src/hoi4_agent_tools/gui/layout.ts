@@ -4,6 +4,7 @@ import { assertRenderDimensions } from '../core/render-budget.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
+import { nativeWindowState } from './native-state.js';
 import { GuiAssetCatalog } from './assets.js';
 import {
   GUI_GRAPH_MAX_EDGES,
@@ -863,6 +864,20 @@ interface AttachedScrollbar {
   horizontal: boolean;
 }
 
+/**
+ * Read a visibility value the way the game reads one: booleans, the script words yes/no and
+ * true/false, visible/hidden/shown, and the numbers 0 and 1. Anything else is not a decision.
+ */
+function visibilityValue(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 0 ? false : value === 1 ? true : undefined;
+  if (typeof value !== 'string') return undefined;
+  const word = value.trim().toLowerCase();
+  if (['yes', 'true', '1', 'visible', 'shown', 'show'].includes(word)) return true;
+  if (['no', 'false', '0', 'hidden', 'hide'].includes(word)) return false;
+  return undefined;
+}
+
 function explicitElementVisibility(
   definition: GuiElementDefinition,
   scenario: GuiPreviewScenario,
@@ -878,8 +893,15 @@ function explicitElementVisibility(
     (definition.sourceOwnerId === undefined
       ? undefined
       : scenario.visibility[definition.sourceOwnerId]) ??
-    (typeof scripted === 'boolean' ? scripted : undefined)
+    visibilityValue(scripted)
   );
+}
+
+/** Source visibility: `visible` and `show` mean shown when true, `hide` and `hidden` when false. */
+function declaredVisibility(attributes: Record<string, GuiPropertyValue>): boolean {
+  const visible = scalarBoolean(property(attributes, 'visible', 'show'));
+  if (visible !== undefined) return visible;
+  return !(scalarBoolean(property(attributes, 'hide', 'hidden')) ?? false);
 }
 
 function clippedByChain(chain: readonly GuiRect[]): GuiRect | undefined {
@@ -1657,9 +1679,7 @@ async function layoutAttachedScrollbars(
         ...(maximum === 0 ? { enabled: false } : {}),
       },
     };
-    const sourceShown =
-      scalarBoolean(property(bar.attributes, 'visible')) ??
-      !(scalarBoolean(property(bar.attributes, 'hide', 'hidden')) ?? false);
+    const sourceShown = declaredVisibility(bar.attributes);
     barLayouts.push({
       definition: bar,
       rect: { x: coordinate(true), y: coordinate(false), width: barWidth, height: barHeight },
@@ -1868,9 +1888,7 @@ async function layoutElement(
     parentSceneElement?.visibilityStatus === 'unresolved'
       ? parentSceneElement.visibilityStatusReason
       : undefined;
-  const declaredHidden = scalarBoolean(property(definition.attributes, 'hide', 'hidden')) ?? false;
-  const sourceVisible =
-    scalarBoolean(property(definition.attributes, 'visible')) ?? !declaredHidden;
+  const sourceVisible = declaredVisibility(definition.attributes);
   const resolveVisibleAppearance = inheritedVisible && (explicitlyVisible ?? sourceVisible);
   const scriptedEnabled =
     rowValues?.[`${definition.name}.enabled`] ??
@@ -3325,13 +3343,40 @@ export async function buildGuiScene(
       );
     }
   }
+  // Engine-controlled branches and icon frames come from the scenario country; scripted state,
+  // then every explicit scenario value, outranks them.
+  const native = nativeWindowState(
+    windowName,
+    new Set(graph.elements.map(({ name }) => name)),
+    scenario,
+    scannedFiles,
+  );
+  if (native !== undefined) {
+    for (const note of native.notes) addFidelity(fidelity, 'modelled', 'native_window_state', note);
+    const { sources } = native.state;
+    if (
+      native.state.tag === undefined ||
+      sources.faction === 'default' ||
+      sources.balanceOfPower === 'default'
+    )
+      addFidelity(
+        fidelity,
+        'approximated',
+        'native_window_state',
+        native.state.tag === undefined
+          ? 'The scenario names no country, so the window shows the state of a country in no faction and without a balance of power; set country.tag or the country faction, balanceOfPower and ideology facts.'
+          : `No history for ${native.state.tag} was available, so its faction and balance of power default to none; set country.faction, country.balanceOfPower and country.ideology to override.`,
+      );
+  }
   const layoutScenario = {
     ...scenario,
     values: {
       ...resolvedScriptedProperties,
+      ...(native?.values ?? {}),
       ...scenario.values,
     },
     visibility: {
+      ...(native?.visibility ?? {}),
       ...scriptedWindowVisibility,
       ...constantElementVisibility,
       ...scenario.visibility,

@@ -114,6 +114,7 @@ const modelledElementAttributes = new Set([
   'hide',
   'hidden',
   'visible',
+  'show',
   'enabled',
   'context_aware_text',
 ]);
@@ -1304,10 +1305,14 @@ function linkGraph(
   for (const font of fonts) {
     const key = font.name.toLocaleLowerCase('en-US');
     const existing = fontByName.get(key);
+    const declared = font.kind === 'bitmapfont';
+    const existingDeclared = existing?.kind === 'bitmapfont';
     if (
       existing === undefined ||
-      (existing.override && !font.override) ||
-      (existing.languages.length > 0 && font.languages.length === 0)
+      (!existingDeclared && declared) ||
+      (existingDeclared === declared &&
+        ((existing.override && !font.override) ||
+          (existing.languages.length > 0 && font.languages.length === 0)))
     )
       fontByName.set(key, font);
   }
@@ -1422,7 +1427,7 @@ function linkGraph(
       );
     }
     for (const key of localisationAttributeNames) {
-      const value = element.attributes[key];
+      const value = localisationAttributeValue(element.attributes, key);
       if (
         typeof value !== 'string' ||
         value.trim().length === 0 ||
@@ -1587,6 +1592,14 @@ const localisationAttributeNames = [
   'hint_tag',
 ] as const;
 
+/** Clausewitz keys are case-insensitive: vanilla spells the button label `buttontext`. */
+function localisationAttributeValue(attributes: Record<string, unknown>, name: string): unknown {
+  const lowered = name.toLowerCase();
+  for (const [key, value] of Object.entries(attributes))
+    if (key.toLowerCase() === lowered) return value;
+  return undefined;
+}
+
 function isStaticGuiLocalisationReference(value: string): boolean {
   const trimmed = value.trim();
   return !(trimmed.startsWith('[') && trimmed.endsWith(']'));
@@ -1599,7 +1612,7 @@ function referencedGuiLocalisationKeys(
   const keys = new Set(scriptedLocalisation.flatMap(({ localisationKeys }) => localisationKeys));
   for (const element of elements) {
     for (const attribute of localisationAttributeNames) {
-      const value = element.attributes[attribute];
+      const value = localisationAttributeValue(element.attributes, attribute);
       if (
         typeof value === 'string' &&
         value.trim().length > 0 &&

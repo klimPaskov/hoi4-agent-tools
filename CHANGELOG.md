@@ -2,7 +2,27 @@
 
 ## Unreleased
 
+## 4.0.1 - 2026-10-12
+
+- Clean temporary test fixtures after each test, suite teardown and normal process exit. Reject fixture truncation above a 256 MiB aggregate disk budget before Windows allocates the file.
+- Recover stale reference-source and random-name event-evaluation scratch on startup after three hours, with local process leases, lock and canonical-path checks. Evict dead owners oldest first under a 256 MiB scratch cap; preserve live owners and dated benchmark evidence.
+- Document the leak's test-fixture origin. MCP reference lookup already reads configured sources directly and uses the shared persistent analysis cache; it does not copy a source tree per call or process.
 - Describe modding tasks in plain language across the README, guides, package metadata and MCP tool descriptions.
+
+### GUI render
+
+- Decode uncompressed 16-bit RGB DDS portraits, including the 5:5:5 format used by vanilla leaders; truncated pixel data remains unsupported.
+- Preserve declared font colours when a same-name bitmap atlas is loaded, including the dark super-event description font. Atlas metadata no longer outranks a named font declaration, and source links retain that declaration.
+- `hoi4.gui_render` and `hoi4.gui_inspect` model the engine-controlled branches of `countrypoliticsview` instead of drawing all of them: no faction, faction leader, faction member and balance of power are chosen from the scenario country (`tag`, `ideology`, `faction`, `balanceOfPower`, or its `history/countries` facts at the scenario date), and `pol_faction_icon` follows the ruling ideology instead of its static frame. Explicit scenario visibility, values and selected frames still win.
+- GUI text keys are matched without regard to case, so a window that spells `buttontext` in lower case (the vanilla trade window) shows its localised label instead of the key.
+- Element visibility honours `show` as well as `visible`, `hide` and `hidden`, and scenario `name.visible` values may be yes/no words or 1/0 as well as booleans.
+
+### Job workers
+
+- Uncaught worker failures log only a bounded diagnostic code; exception messages, stacks and thrown values are excluded to protect source text and credentials.
+- A worker that stops without a result is now reported by its real cause. The host keeps each worker's exit code, signal and last standard error and fails the job with `JOB_WORKER_EXIT` naming a V8 heap limit (with its size), a native out-of-memory, a native crash, an external termination, a stop by the server's own deadline, or an uncaught job error with its error code. Earlier releases discarded this and always suggested that memory ran out. Logs of workers that ended unexpectedly are kept, newest ten, in `job-workers/logs` under the server state root.
+- Workers start with a V8 heap ceiling of a quarter of physical memory, between 2,048 and 8,192 MiB, when `jobWorkerMaxHeapMiB` is not set. Node's own default tops out near 4.5 GB, which a large GUI render on a big mod can approach.
+- `hoi4.gui_render` rasterizes its derived variants, the comparison renders and the galleries one at a time instead of together, which lowers the peak native memory of a render.
 
 ## 4.0.0 - 2026-10-10
 

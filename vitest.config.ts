@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    setupFiles: ['tests/helpers/temporary-lifetime.ts'],
     include: ['tests/**/*.test.ts'],
     exclude: ['tests/local/**/*.test.ts'],
     testTimeout: 300_000,

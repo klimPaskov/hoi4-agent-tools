@@ -315,6 +315,9 @@ export class GuiAssetCatalog {
       );
       return [
         languageMatch ? 1 : 0,
+        // A .fnt asset supplies glyphs, not a replacement for the named font's
+        // declared colour and styling. Its mod load order must not erase those.
+        definition.kind === 'bitmapfont' ? 1 : 0,
         sourceLoadOrder.get(definition.sourcePath) ?? 0,
         languageMatch === definition.override ? 1 : 0,
       ];

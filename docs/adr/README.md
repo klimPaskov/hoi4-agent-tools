@@ -50,3 +50,5 @@ Implementation rationale for contributors. For using the server, start with the 
 43. [One inspect tool per domain, forgiving arguments, compact answers and warm workers](0043-tool-consolidation-and-agent-ergonomics.md)
 44. [New worlds and geography changes](0044-new-worlds-and-geography-changes.md)
 45. [Cold index cost and persistent cache limits](0045-cold-index-cost-and-persistent-cache-limits.md)
+46. [Temporary fixture ownership and disk limits](0048-temporary-fixture-lifetimes.md)
+47. [Render worker memory and font provenance](0049-render-worker-memory-and-font-provenance.md)

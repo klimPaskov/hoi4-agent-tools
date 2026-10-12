@@ -46,6 +46,7 @@ import type { ResolvedWorkspace, WorkspaceResolver } from '../core/workspace.js'
 import { PACKAGE_VERSION } from '../version.js';
 import { isSafeAnimationSourcePath } from './animation-manifest.js';
 import { GuiAssetCatalog, parseBmFont } from './assets.js';
+import { scenarioNeedsCountryHistory } from './native-state.js';
 import { projectGuiGraphForArtifact } from './inspection-artifact.js';
 import { buildGuiScene } from './layout.js';
 import { GUI_VALIDATION_MAX_DIAGNOSTICS } from './limits.js';
@@ -476,18 +477,25 @@ function assertTargetWindowAvailable(graph: GuiSourceGraph, windowName: string):
   );
 }
 
+const lowerCaseKeySets = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+
 function collectNamedAttributes(
   value: unknown,
   keys: ReadonlySet<string>,
   output: Set<string>,
 ): void {
+  let lowered = lowerCaseKeySets.get(keys);
+  if (lowered === undefined) {
+    lowered = new Set([...keys].map((key) => key.toLowerCase()));
+    lowerCaseKeySets.set(keys, lowered);
+  }
   if (Array.isArray(value)) {
     for (const entry of value) collectNamedAttributes(entry, keys, output);
     return;
   }
   if (typeof value !== 'object' || value === null) return;
   for (const [key, entry] of Object.entries(value)) {
-    if (keys.has(key) && typeof entry === 'string') output.add(entry);
+    if (lowered.has(key.toLowerCase()) && typeof entry === 'string') output.add(entry);
     collectNamedAttributes(entry, keys, output);
   }
 }
@@ -751,6 +759,18 @@ export function scenarioCountryFlagPatterns(scenarios: readonly GuiPreviewScenar
         `gfx/flags/${directory}${tag}_*.{bmp,dds,png,tga}`,
       ]),
     );
+}
+
+/**
+ * Engine-controlled windows read the scenario country's faction, balance of power and ruling
+ * party from country history; the faction facts also live in other countries' histories.
+ */
+function scenarioCountryHistoryPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
+  return scenarios.some(scenarioNeedsCountryHistory) ? ['history/countries/*.txt'] : [];
+}
+
+function scenarioCountryAssetPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
+  return [...scenarioCountryFlagPatterns(scenarios), ...scenarioCountryHistoryPatterns(scenarios)];
 }
 
 function bmFontPagePatterns(files: readonly ScannedFile[]): string[] {
@@ -1509,7 +1529,7 @@ export class ScriptedGuiStudio {
         generatedOptions?.textSamples,
       ),
       scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
-      scenarioCountryFlagPatterns([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioCountryAssetPatterns([placeholderScenario, ...explicitRelatedScenarios]),
       scenarioLocalisationKeys([placeholderScenario, ...explicitRelatedScenarios]),
       [placeholderScenario, ...explicitRelatedScenarios].some(
         ({ tooltip }) => tooltip !== undefined,
@@ -1585,7 +1605,7 @@ export class ScriptedGuiStudio {
       [beforeScenario.language, afterScenario.language],
       scenarioSpriteNames([beforeScenario, afterScenario]),
       scenarioTemplateNames([beforeScenario, afterScenario]),
-      scenarioCountryFlagPatterns([beforeScenario, afterScenario]),
+      scenarioCountryAssetPatterns([beforeScenario, afterScenario]),
       scenarioLocalisationKeys([beforeScenario, afterScenario]),
       [beforeScenario, afterScenario].some(({ tooltip }) => tooltip !== undefined),
     );
@@ -1615,10 +1635,9 @@ export class ScriptedGuiStudio {
       afterScenario,
       afterCatalog,
     );
-    const [beforeRender, afterRender] = await Promise.all([
-      renderGuiScene(before, ['full'], input.signal, budget),
-      renderGuiScene(after, ['full'], input.signal, budget),
-    ]);
+    // One full raster at a time keeps the peak native memory of a comparison to a single render.
+    const beforeRender = await renderGuiScene(before, ['full'], input.signal, budget);
+    const afterRender = await renderGuiScene(after, ['full'], input.signal, budget);
     const comparison = await compareGuiImages(
       fullImage(beforeRender).png,
       fullImage(afterRender).png,
@@ -1682,7 +1701,7 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
       ]),
-      scenarioCountryFlagPatterns([
+      scenarioCountryAssetPatterns([
         placeholderScenario,
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
@@ -1953,17 +1972,14 @@ export class ScriptedGuiStudio {
       `gui-gallery:${sha256Bytes(resolutionGallerySvg)}`,
       'GUI resolution gallery SVG rasterization',
     );
-    const [scenarioGalleryPng, stateGalleryPng, resolutionGalleryPng] = await Promise.all([
-      sharp(Buffer.from(scenarioGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
+    const rasterizeGallery = (svg: string): Promise<Buffer> =>
+      sharp(Buffer.from(svg), { limitInputPixels: RENDER_MAX_PIXELS })
         .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-      sharp(Buffer.from(stateGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
-        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-      sharp(Buffer.from(resolutionGallerySvg), { limitInputPixels: RENDER_MAX_PIXELS })
-        .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
-        .toBuffer(),
-    ]);
+        .toBuffer();
+    // Gallery canvases are large and independent; rasterize them one at a time.
+    const scenarioGalleryPng = await rasterizeGallery(scenarioGallerySvg);
+    const stateGalleryPng = await rasterizeGallery(stateGallerySvg);
+    const resolutionGalleryPng = await rasterizeGallery(resolutionGallerySvg);
     const slug = safeSlug(input.windowName);
     const projectedArtifactGraph = projectGuiGraphForArtifact(scanned.graph, [
       ...new Set(
@@ -2340,7 +2356,7 @@ export class ScriptedGuiStudio {
             [previewScenario!.language],
             scenarioSpriteNames([previewScenario!]),
             scenarioTemplateNames([previewScenario!]),
-            scenarioCountryFlagPatterns([previewScenario!]),
+            scenarioCountryAssetPatterns([previewScenario!]),
             scenarioLocalisationKeys([previewScenario!]),
             previewScenario!.tooltip !== undefined,
           );
@@ -2371,7 +2387,7 @@ export class ScriptedGuiStudio {
           [scenario.language],
           scenarioTemplateNames([scenario]),
         ),
-        ...scenarioCountryFlagPatterns([scenario]),
+        ...scenarioCountryAssetPatterns([scenario]),
       ];
       const exactProposedAssets =
         proposedAssetPatterns.length === 0

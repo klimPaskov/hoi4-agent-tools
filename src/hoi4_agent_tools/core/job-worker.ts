@@ -8,6 +8,7 @@ import { JobExecutor, type JobOperations } from './job-executor.js';
 import { JobService } from './job-service.js';
 import { WorkspaceResolver } from './workspace.js';
 import { registerWorkerOperations, workerDomain } from './job-operation-registration.js';
+import { workerErrorMarker } from './worker-exit.js';
 
 // Fixed internal process entry point. It accepts only a trusted host's structured IPC
 // message, never a script path, module name, callback, command, or transport request.
@@ -42,10 +43,15 @@ let idleTimer: NodeJS.Timeout | undefined;
 
 /** Share of the heap limit a worker may still hold after a job and a full collection. */
 const WARM_HEAP_SHARE = 0.4;
+/** Absolute ceiling on that retained heap, so a large heap limit does not keep gigabytes idle. */
+const WARM_HEAP_MAXIMUM_BYTES = 1_536 * 1024 * 1024;
 
 /** Whether the heap, after a full collection, is small enough to serve another job. */
 function heapAllowsReuse(): boolean {
-  const limit = getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE;
+  const limit = Math.min(
+    getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE,
+    WARM_HEAP_MAXIMUM_BYTES,
+  );
   if (getHeapStatistics().used_heap_size <= limit) return true;
   try {
     setFlagsFromString('--expose-gc');
@@ -116,7 +122,9 @@ process.on('message', (value: unknown) => {
   clearTimeout(startup);
   if (idleTimer !== undefined) clearTimeout(idleTimer);
   void runJob(value)
-    .catch(() => {
+    .catch((error: unknown) => {
+      // The host reads this line back to tell an uncaught job error from a memory failure.
+      process.stderr.write(workerErrorMarker(error));
       process.exitCode = 1;
     })
     .finally(() => {
