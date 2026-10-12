@@ -10,9 +10,9 @@ The super-event description colour was independently reproducible. A bitmap atla
 
 ## Decision
 
-The fixed-entry worker host captures exit codes, signals and a bounded stderr tail. Tool errors report a fixed-vocabulary cause without returning stderr, paths or source text. Unexpected-worker logs remain private server-state evidence; normal exits remove their logs and old unexpected logs are pruned.
+The fixed-entry worker host captures exit codes, signals and a bounded stderr tail. Tool errors report a fixed-vocabulary cause without returning stderr, paths or source text. Uncaught exceptions log only a bounded diagnostic code, never their message, stack or thrown value. Unexpected-worker logs remain private server-state evidence; normal exits remove their logs and old unexpected logs are pruned.
 
-Workers use the configured heap ceiling, or a quarter of physical memory bounded between 2,048 and 8,192 MiB. Warm workers recycle when their collected heap exceeds either 40% of that ceiling or 2 GiB. GUI variants, comparisons and galleries rasterize sequentially. No workspace grants, public tool arguments or rewrite semantics change.
+Workers use the configured heap ceiling, or a quarter of physical memory bounded between 2,048 and 8,192 MiB. Warm workers recycle when their collected heap exceeds either 40% of that ceiling or 1,536 MiB. GUI variants, comparisons and galleries rasterize sequentially. No workspace grants, public tool arguments or rewrite semantics change.
 
 Declared bitmap fonts outrank inferred atlas entries. Language-specific declarations and authored load order still select among declarations; the atlas continues to supply glyphs through normal asset resolution. Graph edges retain the declaration as the font's source evidence.
 

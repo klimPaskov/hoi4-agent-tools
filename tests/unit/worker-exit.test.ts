@@ -12,6 +12,7 @@ import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js'
 import {
   classifyWorkerExit,
   defaultWorkerHeapMiB,
+  workerErrorMarker,
   type WorkerExitEvidence,
 } from '../../src/hoi4_agent_tools/core/worker-exit.js';
 
@@ -38,6 +39,27 @@ function evidence(overrides: Partial<WorkerExitEvidence>): WorkerExitEvidence {
 }
 
 describe('worker exit classification', () => {
+  it('logs only a bounded diagnostic marker without private messages, stacks or thrown values', () => {
+    const privateError = Object.assign(new Error('private source and credential'), {
+      code: 'JOB_VERSION_MISMATCH',
+    });
+    expect(workerErrorMarker(privateError)).toBe('worker-error: JOB_VERSION_MISMATCH\n');
+    for (const error of [
+      new Error('private source and credential'),
+      'private source and credential',
+      { code: 'BAD\nprivate source' },
+      { code: 'A'.repeat(65) },
+      { code: 123 },
+      null,
+      {
+        get code(): never {
+          throw new Error('private source');
+        },
+      },
+    ])
+      expect(workerErrorMarker(error)).toBe('worker-error: UNCLASSIFIED\n');
+  });
+
   it('names a V8 heap exhaustion with its limit and does not guess at memory otherwise', () => {
     const heap = classifyWorkerExit(
       evidence({

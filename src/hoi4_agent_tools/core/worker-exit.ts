@@ -27,6 +27,17 @@ export interface WorkerExitReport {
   message: string;
 }
 
+/** Report an uncaught failure without logging its potentially private message or stack. */
+export function workerErrorMarker(error: unknown): string {
+  let code: unknown;
+  try {
+    code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  } catch {
+    // Even an exceptional code getter must not prevent a bounded failure marker.
+  }
+  return `worker-error: ${typeof code === 'string' && /^[A-Z0-9_]{1,64}$/u.test(code) ? code : 'UNCLASSIFIED'}\n`;
+}
+
 /** Windows status codes that a crashed native module or the C runtime leaves as the exit code. */
 const WINDOWS_CRASH_CODES = new Map<number, string>([
   [0xc0000005, 'access violation'],
@@ -84,7 +95,7 @@ export function classifyWorkerExit(evidence: WorkerExitEvidence): WorkerExitRepo
   if (reported !== undefined)
     return {
       cause: 'uncaught_error',
-      message: `The worker stopped on an uncaught job error ${reported} (${status}); this is not a memory failure, and the retained stderr log under the server state holds the stack`,
+      message: `The worker stopped on an uncaught job error ${reported} (${status}); the retained stderr log records its diagnostic code without source text`,
     };
   return {
     cause: 'exited',
