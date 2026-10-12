@@ -1305,10 +1305,14 @@ function linkGraph(
   for (const font of fonts) {
     const key = font.name.toLocaleLowerCase('en-US');
     const existing = fontByName.get(key);
+    const declared = font.kind === 'bitmapfont';
+    const existingDeclared = existing?.kind === 'bitmapfont';
     if (
       existing === undefined ||
-      (existing.override && !font.override) ||
-      (existing.languages.length > 0 && font.languages.length === 0)
+      (!existingDeclared && declared) ||
+      (existingDeclared === declared &&
+        ((existing.override && !font.override) ||
+          (existing.languages.length > 0 && font.languages.length === 0)))
     )
       fontByName.set(key, font);
   }

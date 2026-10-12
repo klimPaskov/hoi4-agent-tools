@@ -1,5 +1,9 @@
 # HOI4 Agent Tools
 
+<!-- TODO-VIDEO-LINK: replace with the promo video URL -->
+
+[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/@ChaosRedux)
+
 [![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
 [![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
 [![License](https://img.shields.io/npm/l/hoi4-agent-tools)](LICENSE)
@@ -8,10 +12,6 @@
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20Project-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/klimpaskov)
 [![Download](https://img.shields.io/github/v/release/klimPaskov/hoi4-agent-tools?label=Release&logo=github&color=2ea44f)](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest)
 [![Issues](https://img.shields.io/badge/Bugs%20%26%20Ideas-Issues-24292f?logo=github&logoColor=white)](https://github.com/klimPaskov/hoi4-agent-tools/issues)
-
-<!-- TODO-VIDEO-LINK: replace with the promo video URL -->
-
-[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/@ChaosRedux)
 
 An [MCP](https://modelcontextprotocol.io/) server that helps coding agents build and edit Hearts of Iron IV mods.
 Make focus trees, events and decisions. Edit maps and generate a new world. Preview windows, trees and maps, find the right rule in the docs, fix broken script and balance AI choices.
