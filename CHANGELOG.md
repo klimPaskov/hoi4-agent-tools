@@ -2,7 +2,14 @@
 
 ## Unreleased
 
+## 4.0.3 - 2026-10-12
+
+- Publish the README with the supplied HOI4 MCP Server thumbnail and direct links to the demo video on YouTube.
+- Include the exact install command in the authored release page. Server behavior, tool schema shapes and dependency versions are unchanged from 4.0.1.
+
 ## 4.0.2 - 2026-10-12
+
+Not published: release validation stopped before publication because the authored page omitted its install command.
 
 - Put the published demo video first in the README, using the supplied HOI4 MCP Server thumbnail and a direct link to the YouTube video.
 - Use a public image URL so the thumbnail also loads on the npm package page.
