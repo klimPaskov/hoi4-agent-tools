@@ -42,10 +42,15 @@ let idleTimer: NodeJS.Timeout | undefined;
 
 /** Share of the heap limit a worker may still hold after a job and a full collection. */
 const WARM_HEAP_SHARE = 0.4;
+/** Absolute ceiling on that retained heap, so a large heap limit does not keep gigabytes idle. */
+const WARM_HEAP_MAXIMUM_BYTES = 1_536 * 1024 * 1024;
 
 /** Whether the heap, after a full collection, is small enough to serve another job. */
 function heapAllowsReuse(): boolean {
-  const limit = getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE;
+  const limit = Math.min(
+    getHeapStatistics().heap_size_limit * WARM_HEAP_SHARE,
+    WARM_HEAP_MAXIMUM_BYTES,
+  );
   if (getHeapStatistics().used_heap_size <= limit) return true;
   try {
     setFlagsFromString('--expose-gc');
@@ -116,7 +121,15 @@ process.on('message', (value: unknown) => {
   clearTimeout(startup);
   if (idleTimer !== undefined) clearTimeout(idleTimer);
   void runJob(value)
-    .catch(() => {
+    .catch((error: unknown) => {
+      // The host reads this line back to tell an uncaught job error from a memory failure.
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+      process.stderr.write(
+        `worker-error: ${/^[A-Z0-9_]{1,64}$/u.test(code) ? code : 'UNCLASSIFIED'}
+${error instanceof Error ? (error.stack ?? error.message) : String(error)}
+`,
+      );
       process.exitCode = 1;
     })
     .finally(() => {

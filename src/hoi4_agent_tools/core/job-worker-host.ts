@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { closeSync, fstatSync, openSync, readSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { CoreEngine } from './engine.js';
@@ -10,13 +12,21 @@ import { SharedRequestCapacity, type SharedCapacityLease } from './shared-reques
 import { containedGeneratedPath } from './workspace.js';
 import { ServiceError } from './result.js';
 import { isDomainToolName } from './domain-tools.js';
+import {
+  classifyWorkerExit,
+  defaultWorkerHeapMiB,
+  type WorkerExitEvidence,
+} from './worker-exit.js';
 
 const maximumCheckpointRecoveries = 2;
 const maximumPreDispatchRecoveries = 2;
-/** An exit with no outcome is most often the worker running out of memory on a large mod. */
-const WORKER_EXIT_HINT =
-  '; if the mod is large the worker may have run out of memory, so retry the call or raise jobWorkerMaxHeapMiB';
-const WORKER_EXIT_MESSAGE = `The worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`;
+/** Used only when the exit status of the worker is unknown to this process. */
+const WORKER_EXIT_MESSAGE =
+  'The worker stopped without publishing a terminal job outcome; its exit status is not available to this server, so retry the call';
+/** Bytes of a worker's standard error read back when it exits unexpectedly. */
+const STDERR_TAIL_BYTES = 16_384;
+/** Standard-error logs of workers that exited unexpectedly kept for diagnosis. */
+const RETAINED_STDERR_LOGS = 10;
 // Native and IPC codes are fixed vocabulary. Error messages can contain paths or source
 // text, so only an allowlisted code and the fixed coordination stage are reported.
 const nativeFailureCodes = new Set([
@@ -72,11 +82,65 @@ export function workerFailure(
 }
 
 /** Stop a supervised worker and wait, bounded, until the operating system reports its exit. */
-async function stopChild(child: ChildProcess): Promise<void> {
+async function stopChild(child: ChildProcess, stopped?: WeakSet<ChildProcess>): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
+  stopped?.add(child);
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
   child.kill('SIGKILL');
   await Promise.race([exited, delay(10_000)]);
+}
+
+/** Read the last bytes of a worker's standard-error log; empty when it cannot be read. */
+function readTail(file: string): string {
+  try {
+    const fd = openSync(file, 'r');
+    try {
+      const size = fstatSync(fd).size;
+      const length = Math.min(size, STDERR_TAIL_BYTES);
+      const buffer = Buffer.alloc(length);
+      readSync(fd, buffer, 0, length, size - length);
+      return buffer.toString('utf8');
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return '';
+  }
+}
+
+/** Keep only the newest few worker logs; the rest are older diagnostics. */
+function pruneWorkerLogs(logRoot: string): void {
+  try {
+    const logs = readdirSync(logRoot)
+      .filter((name) => name.startsWith('worker-') && name.endsWith('.log'))
+      .map((name) => ({ name, modified: statSync(path.join(logRoot, name)).mtimeMs }))
+      .sort((left, right) => right.modified - left.modified);
+    // A recent log may belong to a worker that is still running, so only older ones go.
+    const cutoff = Date.now() - 10 * 60_000;
+    for (const { name, modified } of logs.slice(RETAINED_STDERR_LOGS))
+      if (modified < cutoff) rmSync(path.join(logRoot, name), { force: true });
+  } catch {
+    // Diagnostics are best effort and must never change a job outcome.
+  }
+}
+
+/**
+ * Remove the log of a worker that ended normally or because the host stopped it. Keep the
+ * newest few logs of workers that ended unexpectedly, because their stack is the evidence.
+ */
+function retainOrRemoveLog(file: string, evidence: WorkerExitEvidence, logRoot: string): void {
+  try {
+    const unexpected =
+      !evidence.stoppedByHost &&
+      (evidence.signal !== null || (evidence.code !== null && evidence.code !== 0));
+    if (!unexpected) {
+      rmSync(file, { force: true });
+      return;
+    }
+    pruneWorkerLogs(logRoot);
+  } catch {
+    // Diagnostics are best effort and must never change a job outcome.
+  }
 }
 
 /**
@@ -90,6 +154,7 @@ export class JobWorkerHost {
     private readonly jobs: JobService,
     private readonly capacity: SharedRequestCapacity,
     private readonly scheduler: RequestScheduler,
+    private readonly logRoot: string,
   ) {}
 
   static async create(engine: CoreEngine, jobs?: JobService): Promise<JobWorkerHost> {
@@ -98,12 +163,16 @@ export class JobWorkerHost {
       throw new ServiceError('JOB_STORAGE_UNAVAILABLE', 'Workers require persistent server state');
     const root = await containedGeneratedPath(state.root, 'job-workers');
     await mkdir(root, { recursive: true, mode: 0o700 });
+    const logRoot = path.join(root, 'logs');
+    await mkdir(logRoot, { recursive: true, mode: 0o700 });
+    pruneWorkerLogs(logRoot);
     const config = engine.resolver.config();
     return new JobWorkerHost(
       engine,
       jobs ?? (await JobService.create(engine.resolver)),
       new SharedRequestCapacity(root, config.maxSharedTools),
       new RequestScheduler(config.maxConcurrentTools),
+      logRoot,
     );
   }
 
@@ -185,7 +254,7 @@ export class JobWorkerHost {
           liveness === 'unknown' ? 'JOB_OWNER_UNRESOLVED' : 'JOB_WORKER_EXIT',
           liveness === 'unknown'
             ? 'The replacement execution owner cannot be verified on this host'
-            : `The replacement worker stopped without publishing a terminal job outcome${WORKER_EXIT_HINT}`,
+            : `The replacement worker stopped without publishing a terminal job outcome; its exit status belongs to the server that started it, so retry the call`,
         );
       await delay(100);
     }
@@ -252,7 +321,7 @@ export class JobWorkerHost {
           'REQUEST_LEASE_HANDOFF_LOST',
           'The warm worker stopped before it received the job',
         );
-      if (reused === undefined) await stopChild(child);
+      if (reused === undefined) await stopChild(child, this.stoppedByHost);
       throw error;
     }
     progress.stage = 'dispatch';
@@ -283,7 +352,7 @@ export class JobWorkerHost {
           cancellationSeenAt !== undefined &&
           Date.now() - cancellationSeenAt > jobCancelGraceSeconds * 1000;
         if (overdue || unresponsive) {
-          await stopChild(child);
+          await stopChild(child, this.stoppedByHost);
           await this.jobs.failInterrupted(
             workspaceId,
             id,
@@ -296,17 +365,21 @@ export class JobWorkerHost {
           return;
         }
       }
-      if (child.pid !== undefined) {
-        try {
-          process.kill(child.pid, 0);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'ESRCH')
-            throw new ServiceError('JOB_WORKER_EXIT', WORKER_EXIT_MESSAGE);
-        }
+      if (child.exitCode !== null || child.signalCode !== null) {
+        const evidence = await this.exits.get(child);
+        throw new ServiceError(
+          'JOB_WORKER_EXIT',
+          evidence === undefined ? WORKER_EXIT_MESSAGE : classifyWorkerExit(evidence).message,
+        );
       }
       await delay(100);
     }
   }
+
+  /** Workers this host stopped itself, so their exit is not reported as a fault. */
+  private readonly stoppedByHost = new WeakSet<ChildProcess>();
+  /** Settles with the exit status and last standard error of each worker this host started. */
+  private readonly exits = new WeakMap<ChildProcess, Promise<WorkerExitEvidence>>();
 
   /** Idle warm workers of this host, most recently used last. */
   private readonly idleWorkers: ChildProcess[] = [];
@@ -316,6 +389,7 @@ export class JobWorkerHost {
    */
   private readonly reportedIdle = new WeakSet<ChildProcess>();
   private readonly watched = new WeakSet<ChildProcess>();
+  private workerSequence = 0;
 
   private watchIdle(child: ChildProcess): void {
     if (this.watched.has(child)) return;
@@ -354,19 +428,43 @@ export class JobWorkerHost {
     const entry = fileURLToPath(
       new URL(sourceMode ? './job-worker.ts' : './job-worker.js', import.meta.url),
     );
-    const child = spawn(
-      process.execPath,
-      [
-        ...(maxHeapMiB === undefined ? [] : [`--max-old-space-size=${maxHeapMiB}`]),
-        ...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []),
-        entry,
-      ],
-      {
-        detached: true,
-        cwd: process.cwd(),
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        windowsHide: true,
-      },
+    const heapLimitMiB = maxHeapMiB ?? defaultWorkerHeapMiB();
+    const stderrLog = path.join(this.logRoot, `worker-${process.pid}-${++this.workerSequence}.log`);
+    const stderrFd = openSync(stderrLog, 'w', 0o600);
+    let child: ChildProcess;
+    try {
+      child = spawn(
+        process.execPath,
+        [
+          `--max-old-space-size=${heapLimitMiB}`,
+          ...(sourceMode ? ['--import', import.meta.resolve('tsx')] : []),
+          entry,
+        ],
+        {
+          detached: true,
+          cwd: process.cwd(),
+          stdio: ['ignore', 'ignore', stderrFd, 'ipc'],
+          windowsHide: true,
+        },
+      );
+    } finally {
+      closeSync(stderrFd);
+    }
+    this.exits.set(
+      child,
+      new Promise<WorkerExitEvidence>((resolve) => {
+        child.once('exit', (code, signal) => {
+          const evidence: WorkerExitEvidence = {
+            code,
+            signal,
+            stderrTail: readTail(stderrLog),
+            stoppedByHost: this.stoppedByHost.has(child),
+            heapLimitMiB,
+          };
+          retainOrRemoveLog(stderrLog, evidence, this.logRoot);
+          resolve(evidence);
+        });
+      }),
     );
     try {
       await new Promise<void>((resolve, reject) => {

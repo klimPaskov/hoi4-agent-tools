@@ -2,7 +2,7 @@ import { RenderBudget, RENDER_MAX_DECODED_PIXELS } from '../core/render-budget.j
 import { sha256Bytes } from '../core/canonical.js';
 
 export type DdsPixelFormat =
-  'rgb24' | 'rgba32' | 'dxt1' | 'dxt3' | 'dxt5' | 'dx10-rgba8-srgb' | 'dx10-bgra8-srgb';
+  'rgb16' | 'rgb24' | 'rgba32' | 'dxt1' | 'dxt3' | 'dxt5' | 'dx10-rgba8-srgb' | 'dx10-bgra8-srgb';
 
 export interface DecodedDds {
   width: number;
@@ -193,7 +193,7 @@ function decodeRgb(
   dataOffset: number,
   width: number,
   height: number,
-  bitCount: 24 | 32,
+  bitCount: 16 | 24 | 32,
   pitch: number,
   masks: readonly [number, number, number, number],
 ): Buffer | undefined {
@@ -207,7 +207,11 @@ function decodeRgb(
       const pixel =
         bitCount === 32
           ? bytes.readUInt32LE(source)
-          : byte(bytes, source) | (byte(bytes, source + 1) << 8) | (byte(bytes, source + 2) << 16);
+          : bitCount === 16
+            ? bytes.readUInt16LE(source)
+            : byte(bytes, source) |
+              (byte(bytes, source + 1) << 8) |
+              (byte(bytes, source + 2) << 16);
       const target = (y * width + x) * 4;
       output[target] = extractChannel(pixel, masks[0], 0);
       output[target + 1] = extractChannel(pixel, masks[1], 0);
@@ -301,10 +305,10 @@ export function decodeDds(
   if ((flags & DDPF_RGB) === 0)
     return unsupported('non-rgb', 'The DDS is neither RGB nor a recognised compressed format.');
   const bitCount = bytes.readUInt32LE(88);
-  if (bitCount !== 24 && bitCount !== 32)
+  if (bitCount !== 16 && bitCount !== 24 && bitCount !== 32)
     return unsupported(
       `rgb${bitCount}`,
-      `RGB DDS bit depth ${bitCount} is unsupported; expected 24 or 32.`,
+      `RGB DDS bit depth ${bitCount} is unsupported; expected 16, 24 or 32.`,
     );
   const masks = [
     bytes.readUInt32LE(92),
@@ -313,7 +317,7 @@ export function decodeDds(
     bytes.readUInt32LE(104),
   ] as const;
   const output = decodeRgb(bytes, 128, width, height, bitCount, rowPitch, masks);
-  const format = bitCount === 24 ? 'rgb24' : 'rgba32';
+  const format = bitCount === 16 ? 'rgb16' : bitCount === 24 ? 'rgb24' : 'rgba32';
   return output === undefined
     ? unsupported(format, 'The DDS RGB pixel data is truncated.')
     : { width, height, data: output, format };

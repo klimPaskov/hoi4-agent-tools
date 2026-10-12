@@ -262,6 +262,30 @@ function evaluateAssignmentCore(
   if (assignment.value.type === 'block') {
     const malformed = malformedBlock(assignment.value, candidate);
     if (malformed !== undefined) return malformed;
+    if (key === 'has_country_flag' || key === 'has_global_flag' || key === 'has_state_flag') {
+      // The block form tests a flag's stored value. A scenario declares that value as a number
+      // under `flag.<name>` (or `global_flag.<name>` for global flags).
+      const flag = firstScalar(assignment.value, 'flag')?.value;
+      const expected = firstScalar(assignment.value, 'value')?.value;
+      if (flag !== undefined) {
+        const names =
+          key === 'has_global_flag' ? [`global_flag.${flag}`, `flag.${flag}`] : [`flag.${flag}`];
+        for (const name of names) {
+          const declared = scopeStateValue(scenario, name, scopeContext);
+          if (typeof declared === 'number' && expected !== undefined)
+            return { state: declared === Number(expected) ? 'true' : 'false', unresolved: [] };
+          if (typeof declared === 'boolean' && expected === undefined)
+            return { state: declared ? 'true' : 'false', unresolved: [] };
+        }
+        if (expected !== undefined)
+          return unresolved(
+            assignment,
+            candidate,
+            `Scenario does not declare the value of flag ${flag}`,
+            `flag.${flag}`,
+          );
+      }
+    }
     if (
       key === 'AND' ||
       key === 'hidden_trigger' ||

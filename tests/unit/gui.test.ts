@@ -277,7 +277,7 @@ describe('GUI raster decoders', () => {
     const nonRgb = ddsHeader(1, 1);
     const invalidDepth = ddsHeader(1, 1);
     invalidDepth.writeUInt32LE(0x40, 80);
-    invalidDepth.writeUInt32LE(16, 88);
+    invalidDepth.writeUInt32LE(8, 88);
 
     expect(decodeDds(Buffer.alloc(4))).toMatchObject({ unsupported: true, format: 'not-dds' });
     expect(decodeDds(invalidHeader)).toMatchObject({
@@ -289,7 +289,22 @@ describe('GUI raster decoders', () => {
       format: 'invalid-dimensions',
     });
     expect(decodeDds(nonRgb)).toMatchObject({ unsupported: true, format: 'non-rgb' });
-    expect(decodeDds(invalidDepth)).toMatchObject({ unsupported: true, format: 'rgb16' });
+    expect(decodeDds(invalidDepth)).toMatchObject({ unsupported: true, format: 'rgb8' });
+
+    // Vanilla leader portraits are 16-bit 5:5:5 RGB without an alpha mask.
+    const rgb555 = ddsHeader(1, 1);
+    rgb555.writeUInt32LE(0x40, 80);
+    rgb555.writeUInt32LE(2, 20);
+    rgb555.writeUInt32LE(16, 88);
+    rgb555.writeUInt32LE(0x7c00, 92);
+    rgb555.writeUInt32LE(0x03e0, 96);
+    rgb555.writeUInt32LE(0x001f, 100);
+    const pixel = Buffer.alloc(2);
+    pixel.writeUInt16LE((31 << 10) | (16 << 5) | 0);
+    const decoded555 = decodeDds(Buffer.concat([rgb555, pixel]));
+    expect(decoded555).toMatchObject({ width: 1, height: 1, format: 'rgb16' });
+    if (!('unsupported' in decoded555)) expect([...decoded555.data]).toEqual([255, 132, 0, 255]);
+    expect(decodeDds(rgb555)).toMatchObject({ unsupported: true, format: 'rgb16' });
 
     const rgb24 = decodeDds(rgbDds(24, Buffer.from([1, 2, 3])));
     expect(rgb24).toMatchObject({ width: 1, height: 1, format: 'rgb24' });
