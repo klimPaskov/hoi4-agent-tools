@@ -7,6 +7,7 @@ import {
   open,
   readFile,
   readdir,
+  realpath,
   rm,
   symlink,
   utimes,
@@ -336,7 +337,7 @@ describe('temporary directory ownership and recovery', () => {
     const lifetime = new TemporaryDirectoryLifetime(16);
     try {
       await lifetime.own(directory);
-      expect(lifetime.paths()).toEqual([path.join(real, 'owned')]);
+      expect(lifetime.paths()).toEqual([path.join(await realpath(real), 'owned')]);
       expect(() => lifetime.assertFileSize(path.join(directory, 'big'), 17)).toThrow('disk budget');
       await expect(lifetime.own(alias)).rejects.toThrow('canonical and unlinked');
     } finally {

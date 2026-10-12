@@ -115,6 +115,18 @@ export async function sweepTemporaryDirectories(
   )
     throw new RangeError('Invalid temporary storage limits');
   const root = await realpath(parent);
+  // A Windows runner reaches %TEMP% through an 8.3 alias; match protected roots by both spellings.
+  const protectedRoots = (
+    await Promise.all(
+      (options.protectedRoots ?? []).map(async (protectedRoot) => {
+        try {
+          return [protectedRoot, await realpath(protectedRoot)];
+        } catch {
+          return [protectedRoot];
+        }
+      }),
+    )
+  ).flat();
   const candidates: Array<{
     directory: string;
     bytes: number;
@@ -123,8 +135,7 @@ export async function sweepTemporaryDirectories(
   }> = [];
   for (const name of (await readdir(root)).filter((name) => scratchName.test(name)).sort()) {
     const directory = path.join(root, name);
-    if (options.protectedRoots?.some((protectedRoot) => overlaps(directory, protectedRoot)))
-      continue;
+    if (protectedRoots.some((protectedRoot) => overlaps(directory, protectedRoot))) continue;
     try {
       const metadata = await lstat(directory);
       if (
@@ -218,7 +229,7 @@ export class TemporaryDirectoryLifetime {
     // Fixture paths are canonical, so resolve an aliased parent before matching them.
     let absolute = requested;
     try {
-      absolute = path.join(realpathSync(path.dirname(requested)), path.basename(requested));
+      absolute = path.join(realpathSync.native(path.dirname(requested)), path.basename(requested));
     } catch {
       // A file in a directory that does not exist yet cannot be inside an owned fixture.
     }
@@ -294,7 +305,7 @@ export class TemporaryDirectoryLifetime {
   disposeSync(): void {
     for (const [directory, token] of this.#owned) {
       try {
-        if (lstatSync(directory).isSymbolicLink() || realpathSync(directory) !== directory)
+        if (lstatSync(directory).isSymbolicLink() || realpathSync.native(directory) !== directory)
           continue;
         const parsed = ownerSchema.safeParse(
           JSON.parse(readFileSync(path.join(directory, OWNER_FILE), 'utf8')) as unknown,
