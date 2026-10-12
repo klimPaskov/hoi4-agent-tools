@@ -274,7 +274,16 @@ export class TemporaryDirectoryLifetime {
     return [...this.#owned.keys()];
   }
 
-  async release(directory: string): Promise<void> {
+  async release(requested: string): Promise<void> {
+    let directory = requested;
+    if (!this.#owned.has(directory)) {
+      // Owned paths are canonical; a caller may still hold an 8.3 or symlinked spelling.
+      try {
+        directory = await realpath(requested);
+      } catch {
+        return;
+      }
+    }
     const token = this.#owned.get(directory);
     if (token === undefined) return;
     if ((await owner(directory))?.token !== token) {
