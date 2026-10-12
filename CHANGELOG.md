@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 4.0.2 - 2026-10-12
+
+- Put the published demo video first in the README, using the supplied HOI4 MCP Server thumbnail and a direct link to the YouTube video.
+- Use a public image URL so the thumbnail also loads on the npm package page.
+- Documentation and release metadata only; server behavior, tool schemas and dependency versions are unchanged.
+
 ## 4.0.1 - 2026-10-12
 
 - Clean temporary test fixtures after each test, suite teardown and normal process exit. Reject fixture truncation above a 256 MiB aggregate disk budget before Windows allocates the file.
