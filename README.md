@@ -1,8 +1,6 @@
 # HOI4 Agent Tools
 
-<!-- TODO-VIDEO-LINK: replace with the promo video URL -->
-
-[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/@ChaosRedux)
+[![Watch the HOI4 Agent Tools demo](docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/watch?v=Dd36E_NK4rQ)
 
 [![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
 [![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
