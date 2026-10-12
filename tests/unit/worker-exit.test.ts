@@ -150,7 +150,12 @@ describe('worker exit reporting through the host', () => {
   }, 30_000);
 
   it('reports an external kill by signal or exit status without guessing at memory', async () => {
-    const { host, record } = await hostFor(`${handshake} process.exit(3221225477); }, 300); });`);
+    // 0xC0000005 is a Windows access violation; elsewhere a native crash arrives as SIGSEGV.
+    const crash =
+      process.platform === 'win32'
+        ? 'process.exit(3221225477);'
+        : "process.kill(process.pid, 'SIGSEGV');";
+    const { host, record } = await hostFor(`${handshake} ${crash} }, 300); });`);
     const failed = await host.run('test', record.id);
     expect(failed.failure?.message).toContain('crashed in native code');
     expect(failed.failure?.message).not.toMatch(/V8 heap/iu);
