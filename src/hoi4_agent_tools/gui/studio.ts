@@ -1432,7 +1432,12 @@ export class ScriptedGuiStudio {
         new Set(['verticalScrollbar', 'horizontalScrollbar', 'scrollbarType', 'scrollbartype']),
         requiredNames,
       );
-    const availableNames = new Set(layoutGraph.elements.map(({ name }) => name));
+    // Scrollbar and row references name public templates, not private controls with the same name.
+    const availableNames = new Set(
+      layoutGraph.elements.filter(({ parentId }) => parentId === undefined).map(({ name }) => name),
+    );
+    if (layoutGraph.elements.some(({ name }) => name === windowName))
+      availableNames.add(windowName);
     if ([...requiredNames].some((name) => !availableNames.has(name))) {
       const gameLayouts = await this.scanner.scan(workspace, {
         patterns: layoutPatterns,

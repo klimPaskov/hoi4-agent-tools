@@ -835,6 +835,8 @@ function legacyRowSuffix(instanceSuffix: string): string {
 }
 
 interface LayoutContext {
+  nativeVisibility: ReadonlyMap<string, boolean>;
+  nativeForeground: ReadonlySet<string>;
   graph: GuiSourceGraph;
   scenario: GuiPreviewScenario;
   catalog: GuiAssetCatalog;
@@ -905,10 +907,14 @@ function explicitElementVisibility(
 }
 
 /** Source visibility: `visible` and `show` mean shown when true, `hide` and `hidden` when false. */
-function declaredVisibility(attributes: Record<string, GuiPropertyValue>): boolean {
+function declaredVisibility(
+  attributes: Record<string, GuiPropertyValue>,
+  fallback = true,
+): boolean {
   const visible = scalarBoolean(property(attributes, 'visible', 'show'));
   if (visible !== undefined) return visible;
-  return !(scalarBoolean(property(attributes, 'hide', 'hidden')) ?? false);
+  const hidden = scalarBoolean(property(attributes, 'hide', 'hidden'));
+  return hidden === undefined ? fallback : !hidden;
 }
 
 function clippedByChain(chain: readonly GuiRect[]): GuiRect | undefined {
@@ -972,7 +978,8 @@ function attachedScrollbars(
   definition: GuiElementDefinition,
   context: LayoutContext,
 ): AttachedScrollbar[] {
-  if (!/^(?:containerwindowtype|windowtype)$/iu.test(definition.elementType)) return [];
+  if (!/^(?:containerwindowtype|windowtype|expandedwindow)$/iu.test(definition.elementType))
+    return [];
   const result: AttachedScrollbar[] = [];
   const add = (
     candidate: GuiElementDefinition | undefined,
@@ -1040,8 +1047,10 @@ function attachedScrollbars(
       property(definition.attributes, horizontal ? 'horizontalScrollbar' : 'verticalScrollbar'),
     );
     if (name !== undefined) {
-      const candidate = context.elementsByName.get(name);
-      add(candidate?.parentId === undefined ? candidate : undefined, horizontal, name);
+      const candidate = context.elementsByNameCandidates
+        .get(name)
+        ?.find((element) => element.parentId === undefined);
+      add(candidate, horizontal, name);
     }
   }
   for (const id of definition.childIds) {
@@ -1795,15 +1804,18 @@ async function layoutElement(
   const clipChain = inheritedClipChain ?? (inheritedClip === undefined ? [] : [inheritedClip]);
   const localScale = scalarNumber(property(definition.attributes, 'scale'), 1) ?? 1;
   const scale = parentScale * localScale;
+  const expandedWindow = definition.elementType.toLowerCase() === 'expandedwindow';
   const shownPosition =
-    depth === 0 ? objectProperty(property(definition.attributes, 'show_position')) : undefined;
+    depth === 0 || expandedWindow
+      ? objectProperty(property(definition.attributes, 'show_position'))
+      : undefined;
   const position = shownPosition ?? objectProperty(property(definition.attributes, 'position'));
   if (shownPosition !== undefined) {
     addFidelity(
       fidelity,
       'modelled',
       'window_show_position',
-      'The requested root window uses its declared settled show position.',
+      'The requested window uses its declared settled show position.',
       definition,
     );
   }
@@ -1887,7 +1899,9 @@ async function layoutElement(
   // Native negative extents specify an inset from the parent's far edge.
   if (width < 0) width = Math.max(0, parentRect.width - localX + width);
   if (height < 0) height = Math.max(0, parentRect.height - localY + height);
-  const explicitlyVisible = explicitElementVisibility(definition, scenario, rowValues);
+  const explicitlyVisible =
+    explicitElementVisibility(definition, scenario, rowValues) ??
+    context.nativeVisibility.get(definition.id);
   const unresolvedVisibilityReason = context.unresolvedElementVisibility.get(definition.name);
   const parentSceneElement =
     parentInstanceId === undefined ? undefined : context.instancesById.get(parentInstanceId);
@@ -1895,7 +1909,24 @@ async function layoutElement(
     parentSceneElement?.visibilityStatus === 'unresolved'
       ? parentSceneElement.visibilityStatusReason
       : undefined;
-  const sourceVisible = declaredVisibility(definition.attributes);
+  const dropdown =
+    definition.parentId === undefined ? undefined : context.elementsById.get(definition.parentId);
+  const sourceVisible = declaredVisibility(
+    definition.attributes,
+    !expandedWindow ||
+      depth === 0 ||
+      visibilityValue(
+        rowValues?.[`${dropdown?.name}.expanded`] ?? scenario.values[`${dropdown?.name}.expanded`],
+      ) === true,
+  );
+  if (expandedWindow)
+    addFidelity(
+      fidelity,
+      'modelled',
+      'native_dropdown',
+      'Dropdown expansion is closed by default; bind <dropdown>.expanded or explicit panel visibility to show its settled position.',
+      definition,
+    );
   const resolveVisibleAppearance = inheritedVisible && (explicitlyVisible ?? sourceVisible);
   const scriptedEnabled =
     rowValues?.[`${definition.name}.enabled`] ??
@@ -2469,16 +2500,17 @@ async function layoutElement(
   if (origoAxes.vertical === 'center') y -= height / 2;
   else if (origoAxes.vertical === 'bottom') y -= height;
   const unclippedRect = { x, y, width: Math.max(0, width), height: Math.max(0, height) };
+  let scrollbars = attachedScrollbars(definition, context);
   const ownClipping =
     scalarBoolean(property(definition.attributes, 'clipping')) ??
-    (backgrounds.length > 0 && /(?:containerwindow|windowtype)/iu.test(definition.elementType));
-  let scrollbars = attachedScrollbars(definition, context);
-  if (scrollbars.length > 0 && (!ownClipping || backgrounds.length === 0)) {
+    ((backgrounds.length > 0 || scrollbars.length > 0) &&
+      /(?:containerwindow|windowtype|expandedwindow)/iu.test(definition.elementType));
+  if (scrollbars.length > 0 && (!ownClipping || width <= 0 || height <= 0)) {
     diagnostics.push(
       diagnostic(
         'GUI_SCROLLBAR_CONTAINER_BOUNDARY_MISSING',
         'warning',
-        `Container ${definition.name} needs a background and clipping for attached scrolling.`,
+        `Container ${definition.name} needs a positive-sized clipping boundary for attached scrolling.`,
         definition,
       ),
     );
@@ -2486,7 +2518,7 @@ async function layoutElement(
       fidelity,
       'unsupported',
       'attached_scrollbar',
-      'The container has no active clipped background boundary.',
+      'The container has no active clipping boundary.',
       definition,
     );
     scrollbars = [];
@@ -2772,11 +2804,13 @@ async function layoutElement(
       .filter((element): element is GuiElementDefinition => element !== undefined)
       .filter(
         (element) =>
-          !/^(?:containerwindowtype|windowtype)$/iu.test(definition.elementType) ||
+          !/^(?:containerwindowtype|windowtype|expandedwindow)$/iu.test(definition.elementType) ||
           element.elementType.toLowerCase() !== 'extendedscrollbartype',
       )
       .sort(
         (left, right) =>
+          Number(context.nativeForeground.has(left.id)) -
+            Number(context.nativeForeground.has(right.id)) ||
           (scalarNumber(property(left.attributes, 'priority'), 0) ?? 0) -
             (scalarNumber(property(right.attributes, 'priority'), 0) ?? 0) ||
           left.definitionOrder - right.definitionOrder,
@@ -2889,7 +2923,7 @@ async function layoutElement(
           index,
           row,
           instanceId,
-          origo,
+          'upper_left',
           resolveVisibleAppearance,
           childClipChain,
         );
@@ -2982,7 +3016,7 @@ async function layoutElement(
         index,
         row,
         instanceId,
-        origo,
+        'upper_left',
         resolveVisibleAppearance,
         childClipChain,
       );
@@ -3011,7 +3045,7 @@ async function layoutElement(
         rowIndex,
         rowValues,
         instanceId,
-        origo,
+        'upper_left',
         resolveVisibleAppearance,
         childClipChain,
       );
@@ -3362,11 +3396,15 @@ export async function buildGuiScene(
   );
   if (native !== undefined) {
     for (const note of native.notes) addFidelity(fidelity, 'modelled', 'native_window_state', note);
-    const { sources } = native.state;
+    for (const note of native.approximations ?? [])
+      addFidelity(fidelity, 'approximated', 'native_window_state', note);
+    const sources = native.state?.sources;
     if (
-      native.state.tag === undefined ||
-      sources.faction === 'default' ||
-      sources.balanceOfPower === 'default'
+      native.state !== undefined &&
+      sources !== undefined &&
+      (native.state.tag === undefined ||
+        sources.faction === 'default' ||
+        sources.balanceOfPower === 'default')
     )
       addFidelity(
         fidelity,
@@ -3385,7 +3423,6 @@ export async function buildGuiScene(
       ...scenario.values,
     },
     visibility: {
-      ...(native?.visibility ?? {}),
       ...scriptedWindowVisibility,
       ...constantElementVisibility,
       ...scenario.visibility,
@@ -3405,6 +3442,32 @@ export async function buildGuiScene(
     elementsByNameCandidates.set(element.name, candidates);
   }
   const context: LayoutContext = {
+    nativeForeground: new Set(
+      graph.elements
+        .filter(
+          (element) => element.parentId === root.id && native?.foreground?.includes(element.name),
+        )
+        .map(({ id }) => id),
+    ),
+    nativeVisibility: new Map(
+      graph.elements.flatMap((element) => {
+        const visible = native?.visibility[element.name];
+        if (visible === undefined) return [];
+        // The designer reuses names (including division_title) inside selector panels.
+        // Its branch decisions apply to root controls, not identically named descendants.
+        if (windowName === 'countrydivisiondesignerview' && element.parentId !== root.id) {
+          const parent =
+            element.parentId === undefined ? undefined : elementsById.get(element.parentId);
+          if (
+            element.name !== 'hq_badge' ||
+            parent?.name !== 'template_emblem_slot' ||
+            parent.parentId !== root.id
+          )
+            return [];
+        }
+        return [[element.id, visible] as const];
+      }),
+    ),
     graph,
     scenario: layoutScenario,
     catalog,

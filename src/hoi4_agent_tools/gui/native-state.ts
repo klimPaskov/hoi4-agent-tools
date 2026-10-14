@@ -7,7 +7,8 @@ import type { GuiPreviewScenario } from './types.js';
  *
  * Some vanilla windows are not scripted: the game itself shows one branch of a window and
  * picks an icon frame from the player's country. This module models those decisions from the
- * scenario country, so a render shows the branch the game would show instead of every branch.
+ * scenario country. Other engine-only panels use documented preview conventions with explicit
+ * scenario bindings, keeping mutually exclusive branches separate without inventing live state.
  * An explicit scenario value, visibility entry or selected frame always wins over this state.
  */
 
@@ -34,7 +35,10 @@ export interface NativeWindowState {
   values: Record<string, number>;
   /** Fixed-vocabulary sentences describing each decision for the fidelity report. */
   notes: string[];
-  state: NativeCountryState;
+  state?: NativeCountryState;
+  approximations?: string[];
+  /** Engine-owned selectors brought in front of their root's ordinary children when shown. */
+  foreground?: readonly string[];
 }
 
 interface NativeBranchRule {
@@ -303,6 +307,7 @@ export function windowHasNativeState(
   elementNames: ReadonlySet<string>,
 ): boolean {
   return (
+    windowName === 'countrydivisiondesignerview' ||
     NATIVE_BRANCHES[windowName] !== undefined ||
     Object.keys(IDEOLOGY_FRAME_ICONS).some((name) => elementNames.has(name))
   );
@@ -316,6 +321,40 @@ export function nativeWindowState(
   files: readonly ScannedFile[],
 ): NativeWindowState | undefined {
   if (!windowHasNativeState(windowName, elementNames)) return undefined;
+  if (windowName === 'countrydivisiondesignerview') {
+    const hq = scenario.values['countrydivisiondesignerview.hq'] === true;
+    const panel = scenario.values['countrydivisiondesignerview.panel'];
+    const visibility: Record<string, boolean> = {};
+    for (const name of ['hq_overlay_images', 'subunits_hq', 'hq_view', 'hq_title', 'hq_badge'])
+      if (elementNames.has(name)) visibility[name] = hq;
+    for (const name of [
+      'subunits',
+      'non_hq_view',
+      'division_title',
+      'division_composition_label',
+      'combat_width_view',
+    ])
+      if (elementNames.has(name)) visibility[name] = !hq;
+    const selectors = [
+      'designerregimentswindow',
+      'division_equipment_view',
+      'div_templ_custom_icon_view',
+      'div_template_select_model',
+      'niche_icon_selector',
+    ];
+    for (const name of selectors) if (elementNames.has(name)) visibility[name] = panel === name;
+    return {
+      visibility,
+      values: {},
+      foreground: selectors,
+      notes: [
+        `Division designer uses the ${hq ? 'HQ' : 'division'} branch and only the explicitly selected native selector panel.`,
+      ],
+      approximations: [
+        'Native division state is a preview convention: defaults to a division with selectors closed. Set values countrydivisiondesignerview.hq and countrydivisiondesignerview.panel, or explicit element visibility. Engine-populated rows and statistics require scenario bindings.',
+      ],
+    };
+  }
   const state = resolveNativeCountryState(scenario, files);
   const visibility: Record<string, boolean> = {};
   const values: Record<string, number> = {};

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 4.0.5 - 2026-10-14
+
+- Keep child anchors independent of parent `origo`, so centered native windows place their controls inside the frame.
+- Preview division and HQ branches separately and close native selector overlays by default. Existing scenario values and visibility bindings select panels explicitly.
+- Preserve dropdown button and expanded-panel boundaries, including closed visibility, settled positions, backgrounds, clipping and attached scrollbars.
+- Render background-free scroll containers using their declared viewport bounds; retain findings for explicitly disabled clipping and invalid boundaries or references.
+- Resolve public scrollbar templates despite unrelated private namesakes. Public tool schemas and dependency versions are unchanged.
+
 ## 4.0.4 - 2026-10-14
 
 - Preview individual GUI windows without redundant full symbol indexes, workspace-wide asset fallback or unbound country-flag inventories; reuse condition definitions across render variants.

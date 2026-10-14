@@ -18,6 +18,63 @@ const outputRoot = process.env.HOI4_GUI_FIDELITY_OUTPUT;
 const local = gameRoot === undefined ? describe.skip : describe;
 
 local('installed native GUI fidelity', () => {
+  it('composes the division designer with local anchors, closed overlays and clipped native scroll panes', async () => {
+    const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-native-division-'));
+    try {
+      const modRoot = path.join(temporary, 'empty-mod');
+      await mkdir(modRoot);
+      const studio = new ScriptedGuiStudio(
+        new CoreEngine(
+          await WorkspaceResolver.create(
+            serverConfigurationSchema.parse({
+              version: 1,
+              serverStateRoot: path.join(temporary, 'state'),
+              workspaceStorageRoot: path.join(temporary, 'storage'),
+              workspaces: [
+                { id: 'division', name: 'Native division qualification', root: modRoot, gameRoot },
+              ],
+            }),
+          ),
+        ),
+      );
+      const { scene } = await studio.lint({
+        workspaceId: 'division',
+        windowName: 'countrydivisiondesignerview',
+        scenario: { id: 'native-division', resolution: { width: 1920, height: 1080 } },
+        generatedScenarios: { enabled: false },
+      });
+      const root = scene.elements.find(({ name }) => name === 'countrydivisiondesignerview')!;
+      const subunits = scene.elements.find(({ name }) => name === 'subunits')!;
+      expect(root.unclippedRect).toEqual({ x: 360, y: 180, width: 1200, height: 720 });
+      expect(subunits.unclippedRect.x).toBeGreaterThanOrEqual(root.unclippedRect.x);
+      expect(subunits.unclippedRect.x).toBeLessThan(root.unclippedRect.x + 100);
+      expect(subunits.scroll).toBeDefined();
+      for (const name of [
+        'hq_overlay_images',
+        'hq_view',
+        'subunits_hq',
+        'division_equipment_view',
+        'designerregimentswindow',
+        'div_template_select_model',
+        'div_templ_custom_icon_view',
+        'niche_icon_selector',
+        'expanded_window',
+      ])
+        expect(
+          scene.elements
+            .filter((element) => element.name === name)
+            .every(({ visible }) => !visible),
+          name,
+        ).toBe(true);
+      expect(
+        scene.elements.filter(({ name }) => name === 'expanded_window').length,
+      ).toBeGreaterThan(0);
+      expect(scene.diagnostics.some(({ code }) => code.startsWith('GUI_SCROLLBAR_'))).toBe(false);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('anchors the native percentage-height war window inside the declared viewport', async () => {
     const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-native-war-'));
     try {

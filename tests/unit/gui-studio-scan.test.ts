@@ -17,6 +17,58 @@ afterEach(async () => {
 });
 
 describe('Scripted GUI Studio configured roots and lazy assets', () => {
+  it('loads a public game scrollbar even when the mod contains a private namesake', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-scroll-scope-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'mod'),
+      gameRoot = path.join(root, 'game');
+    for (const base of [modRoot, gameRoot])
+      await mkdir(path.join(base, 'interface'), { recursive: true });
+    await writeFile(
+      path.join(modRoot, 'interface/window.gui'),
+      `guiTypes = {
+      containerWindowType = { name = "requested" size = { width = 100 height = 80 } verticalScrollbar = "public_bar"
+        containerWindowType = { name = "content" size = { width = 60 height = 160 } }
+      }
+      containerWindowType = { name = "unrelated" iconType = { name = "public_bar" size = { width = 2 height = 2 } } }
+    }`,
+    );
+    await writeFile(
+      path.join(gameRoot, 'interface/core.gui'),
+      `guiTypes = {
+      extendedScrollbarType = { name = "public_bar" size = { width = 10 height = 10 } orientation = upper_right origo = upper_right
+        slider = { name = "thumb" size = { width = 8 height = 8 } }
+        decreaseButton = { name = "up" size = { width = 8 height = 8 } }
+        increaseButton = { name = "down" size = { width = 8 height = 8 } }
+      }
+    }`,
+    );
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(root, 'state'),
+          workspaceStorageRoot: path.join(root, 'storage'),
+          workspaces: [{ id: 'scoped', name: 'Scoped templates', root: modRoot, gameRoot }],
+        }),
+      ),
+    );
+    const { graph, scene } = await new ScriptedGuiStudio(engine).lint({
+      workspaceId: 'scoped',
+      windowName: 'requested',
+      scenario: { id: 'scoped' },
+      generatedScenarios: { enabled: false },
+    });
+    expect(graph.filesScanned).toContain('game:interface/core.gui');
+    expect(scene.diagnostics.some(({ code }) => code === 'GUI_SCROLLBAR_TEMPLATE_MISSING')).toBe(
+      false,
+    );
+    expect(scene.elements.find(({ name }) => name === 'public_bar')).toMatchObject({
+      elementType: 'extendedScrollbarType',
+      visible: true,
+    });
+  });
+
   it('indexes configured definition roots and loads only selected-window assets', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-gui-custom-roots-'));
     temporaryRoots.push(root);
