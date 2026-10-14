@@ -302,15 +302,28 @@ describe('MCP coding-agent workflows', () => {
       data: {
         complete: true,
         windowName: 'synthetic_gui_window',
-        scenarioId: 'synthetic-acceptance-generated-1',
+        scenarioId: 'synthetic-acceptance',
       },
     });
     const inspection = await readJsonArtifact(client, jsonArtifact(inspected).uri);
     expect(inspection).toMatchObject({
       offline: true,
-      scenario: expect.objectContaining({ id: 'synthetic-acceptance-generated-1' }),
+      scenario: expect.objectContaining({ id: 'synthetic-acceptance' }),
       fidelity: expect.any(Object),
     });
+
+    const exploratory = resultOf(
+      await client.callTool({
+        name: 'hoi4.gui_inspect',
+        arguments: {
+          workspaceId: 'gui',
+          windowName: 'synthetic_gui_window',
+          scenario,
+          generatedScenarios: {},
+        },
+      }),
+    );
+    expect(exploratory.data).toMatchObject({ scenarioId: 'synthetic-acceptance-generated-1' });
 
     const rendered = resultOf(
       await client.callTool({

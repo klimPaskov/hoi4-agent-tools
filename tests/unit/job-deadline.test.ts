@@ -63,10 +63,16 @@ async function setup(limits: { jobDeadlineSeconds: number; jobCancelGraceSeconds
     const child = actualSpawn(process.execPath, ['-e', stuckWorker], options);
     children.push(child);
     child.once('spawn', () => {
-      void jobs.store.claim(jobs.scope('test'), record.id, {
-        ...currentJobOwner(),
-        pid: child.pid!,
-      });
+      void jobs.store
+        .claim(jobs.scope('test'), record.id, {
+          ...currentJobOwner(),
+          pid: child.pid!,
+        })
+        .then(({ record: claimed }) =>
+          jobs.store.updateOwned(jobs.scope('test'), record.id, claimed.owner!.token, {
+            progress: { completed: 1, total: 4, message: 'Loading selected GUI assets' },
+          }),
+        );
     });
     return child;
   });
@@ -82,6 +88,7 @@ describe('supervised job deadlines and cancellation', () => {
       status: 'failed',
       failure: { code: 'JOB_DEADLINE_EXCEEDED' },
     });
+    expect(settled.failure?.message).toContain('during: Loading selected GUI assets');
     expect(Date.now() - started).toBeLessThan(30_000);
     const child = children[0]!;
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);

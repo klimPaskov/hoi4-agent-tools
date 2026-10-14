@@ -920,6 +920,34 @@ describe('Technology Tree Viewer project-owned acceptance fixture', () => {
     expect((await viewer.scan(workspaceId)).revision).toBe(graph.revision);
   });
 
+  it('keeps a folder render scoped while inspection retains inbound references', async () => {
+    const phases: string[] = [];
+    const rendered = await viewer.renderAndStore({
+      workspaceId,
+      view: 'folder',
+      folderId: graphManifest.folderIds[0]!,
+      progress: async (phase) => {
+        phases.push(phase);
+      },
+    });
+    expect(rendered.graph.filesScanned.some((file) => file.includes(':events/'))).toBe(false);
+    expect(rendered.graph.analysisBoundary.assumptions).toContain(
+      'Folder renders scan technology definitions, layouts, unlock targets and assets; inbound grants and references require technology inspection.',
+    );
+    expect(rendered.render.selectedIds.length).toBeGreaterThan(0);
+    expect(phases).toEqual([
+      'Indexing technology view sources',
+      'Decoding selected technology assets',
+      'Laying out and rasterizing technology view',
+    ]);
+    const inspected = await viewer.scan(workspaceId);
+    expect(inspected.filesScanned.some((file) => file.includes(':events/'))).toBe(true);
+    expect(inspected.revision).toBe(graph.revision);
+    await expect(
+      viewer.renderAndStore({ workspaceId, view: 'folder', folderId: 'absent' }),
+    ).rejects.toMatchObject({ code: 'TECH_RENDER_FOLDER_EMPTY' });
+  });
+
   it('compares graph snapshots directly with stable semantic identities', () => {
     const same = compareTechnologyGraphs(graph, graph);
     expect(same.technologies.added).toEqual([]);

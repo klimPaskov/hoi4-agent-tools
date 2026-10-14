@@ -489,7 +489,12 @@ describe('secured Streamable HTTP', () => {
       undefined,
       { onprogress: ({ progress: value }) => progress.push(value) },
     );
-    expect(progress).toEqual([0, 2, 3]);
+    expect(progress[0]).toBe(0);
+    expect(progress.at(-1)).toBe(3);
+    expect(progress).toEqual(expect.arrayContaining([0, 2, 3]));
+    expect(progress.every((value, index) => index === 0 || value > progress[index - 1]!)).toBe(
+      true,
+    );
     const technology = await client.callTool({
       name: 'hoi4.tech_inspect',
       arguments: { workspaceId: 'test', mode: 'scan' },

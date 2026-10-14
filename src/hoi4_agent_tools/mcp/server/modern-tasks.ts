@@ -115,7 +115,9 @@ export class ModernTaskAdapter {
     input: unknown,
     capabilities: unknown,
     context: OperationContext,
-    options: Omit<OperationTaskOptions, 'background' | 'ttlMs'>,
+    options: Omit<OperationTaskOptions, 'background' | 'ttlMs'> & {
+      progress?: (completed: number, total: number, message: string) => Promise<void>;
+    },
   ): Promise<Record<string, unknown>> {
     const parsed = operationTaskCallSchema.safeParse(input);
     if (!parsed.success)
@@ -136,6 +138,12 @@ export class ModernTaskAdapter {
       options.signal?.throwIfAborted();
       await delay(100, undefined, { signal: options.signal });
       latest = await this.known(taskId, context);
+      if (latest.progress !== undefined)
+        await options.progress?.(
+          latest.progress.completed,
+          latest.progress.total ?? 1,
+          latest.progress.message,
+        );
     }
     return modernToolResult(latest, await this.tasks.result(operationTaskId(record), context));
   }

@@ -317,20 +317,27 @@ function resolveTokenText(
     (value.includes('_') || value === value.toUpperCase())
   )
     missingLocalisation = true;
-  text = replaceTextBounded(
-    text,
-    /\$([A-Za-z0-9_.-]+)\$/gu,
-    (match) => {
-      const key = match[1] ?? '';
-      const replacement = scenario.localisation[key] ?? localisation.get(key);
-      if (replacement === undefined) {
-        unresolved.push(`$${key}$`);
-        return `$${key}$`;
-      }
-      return replacement;
-    },
-    'GUI localisation substitution',
-  );
+  const expandTokens = (input: string, stack: ReadonlySet<string>, depth: number): string =>
+    replaceTextBounded(
+      input,
+      /\$([A-Za-z0-9_.-]+)\$/gu,
+      (match) => {
+        const key = match[1] ?? '';
+        const replacement =
+          scenario.localisation[key] ??
+          localisation.get(key) ??
+          rowValues?.[key] ??
+          scenario.values[key] ??
+          scenario.variables[key];
+        if (replacement === undefined || stack.has(key) || depth >= 16) {
+          unresolved.push(match[0]);
+          return match[0];
+        }
+        return expandTokens(String(replacement), new Set([...stack, key]), depth + 1);
+      },
+      'GUI localisation substitution',
+    );
+  text = expandTokens(text, new Set([value]), 0);
   text = replaceTextBounded(
     text,
     /\[\?([^\]|]+)(?:\|[^\]]+)?\]/gu,
@@ -3110,7 +3117,9 @@ export async function buildGuiScene(
           entry.language.toLowerCase() === scenario.language.toLowerCase() ||
           entry.language.toLowerCase() === `l_${scenario.language.toLowerCase()}`,
       )
-      .map((entry) => [entry.key, entry.value]),
+      // Graph localisation is ordered with the active (highest-priority) definition first.
+      .map((entry): [string, string] => [entry.key, entry.value])
+      .reverse(),
   );
   if (localisation.size === 0) {
     for (const entry of graph.localisation)
@@ -3155,7 +3164,7 @@ export async function buildGuiScene(
   const conditionDefinitions =
     relevantScriptedGuiNames.size === 0
       ? undefined
-      : ClausewitzEvaluationDefinitions.build({ files: [...scannedFiles] });
+      : ClausewitzEvaluationDefinitions.build({ files: scannedFiles });
   const conditionScenario = guiConditionScenario(scenario);
   for (const scripted of graph.scriptedGuis.filter(({ name }) =>
     relevantScriptedGuiNames.has(name),

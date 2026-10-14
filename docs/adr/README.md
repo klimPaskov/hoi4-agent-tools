@@ -52,3 +52,5 @@ Implementation rationale for contributors. For using the server, start with the 
 45. [Cold index cost and persistent cache limits](0045-cold-index-cost-and-persistent-cache-limits.md)
 46. [Temporary fixture ownership and disk limits](0048-temporary-fixture-lifetimes.md)
 47. [Render worker memory and font provenance](0049-render-worker-memory-and-font-provenance.md)
+
+48. [Scoped render source work](0050-scoped-render-source-work.md)

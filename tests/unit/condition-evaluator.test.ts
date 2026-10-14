@@ -64,6 +64,22 @@ describe('shared structured condition evaluation', () => {
     expect(undeclared.unresolved[0]?.details?.scenarioInput).toBe('flag.super_event_visible');
   });
 
+  it('treats a declared numeric flag as present in scalar visibility checks', () => {
+    for (const value of [0, 1, 14])
+      expect(
+        evaluate('has_global_flag = super_event_visible', {
+          state: { 'global_flag.super_event_visible': value },
+        }).state,
+      ).toBe('true');
+    expect(evaluate('has_country_flag = open', { state: { 'flag.open': 14 } }).state).toBe('true');
+    expect(
+      evaluate('has_global_flag = open', {
+        state: { 'global_flag.open': false, 'flag.open': true },
+      }).state,
+    ).toBe('false');
+    expect(evaluate('has_global_flag = absent', { closedFlags: false }).state).toBe('unresolved');
+  });
+
   it('identifies the scenario field that can resolve a missing flag or variable', () => {
     expect(
       evaluate('has_country_flag = research_gate', { closedFlags: false, flags: [] }).unresolved[0]

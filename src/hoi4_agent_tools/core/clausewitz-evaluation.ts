@@ -1,5 +1,4 @@
 import { compareCodeUnits } from './canonical.js';
-import type { ScanSnapshot } from './engine.js';
 import type { ScannedFile } from './scanner.js';
 import {
   assignments,
@@ -9,8 +8,10 @@ import {
   type SourceDocument,
 } from './source/index.js';
 
-type DefinitionSources = Pick<ScanSnapshot, 'files'>;
-const definitionCache = new WeakMap<DefinitionSources, ClausewitzEvaluationDefinitions>();
+interface DefinitionSources {
+  files: readonly ScannedFile[];
+}
+const definitionCache = new WeakMap<readonly ScannedFile[], ClausewitzEvaluationDefinitions>();
 
 export interface ClausewitzDefinition<T> {
   id: string;
@@ -64,12 +65,14 @@ export class ClausewitzEvaluationDefinitions {
   public readonly localConstants = new Map<string, Map<string, ClausewitzDefinition<string>>>();
 
   public static build(snapshot: DefinitionSources): ClausewitzEvaluationDefinitions {
-    const cached = definitionCache.get(snapshot);
+    const cached = definitionCache.get(snapshot.files);
     if (cached !== undefined) return cached;
     const result = new ClausewitzEvaluationDefinitions();
     for (const file of snapshot.files.filter(
-      ({ shadowedBy, relativePath }) =>
-        shadowedBy === undefined && relativePath.toLowerCase().endsWith('.txt'),
+      ({ shadowedBy, relativePath, bytes }) =>
+        shadowedBy === undefined &&
+        relativePath.toLowerCase().endsWith('.txt') &&
+        bytes.includes(0x40),
     )) {
       const document = parseClausewitz(file.bytes, file.displayPath);
       const locals = new Map<string, ClausewitzDefinition<string>>();
@@ -115,7 +118,7 @@ export class ClausewitzEvaluationDefinitions {
         });
       }
     }
-    definitionCache.set(snapshot, result);
+    definitionCache.set(snapshot.files, result);
     return result;
   }
 }

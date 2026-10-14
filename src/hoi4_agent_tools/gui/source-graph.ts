@@ -3,7 +3,7 @@ import { compareCodeUnits, deterministicId } from '../core/canonical.js';
 import { DiagnosticCollector } from '../core/diagnostic-collector.js';
 import type { Diagnostic, SourceLocation } from '../core/diagnostics.js';
 import { sortDiagnostics } from '../core/diagnostics.js';
-import type { SymbolIndex } from '../core/index.js';
+import { SymbolIndex } from '../core/index.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { ServiceError } from '../core/result.js';
 import { GUI_GRAPH_MAX_EDGES, GUI_GRAPH_MAX_ELEMENTS, GUI_GRAPH_MAX_NODES } from './limits.js';
@@ -1705,9 +1705,11 @@ function referenceLabel(edge: GuiSourceEdge): string {
 
 export function buildGuiSourceGraph(
   files: readonly ScannedFile[],
-  sharedIndex: SymbolIndex,
+  providedIndex?: SymbolIndex,
   additionalLocalisationKeys: readonly string[] = [],
+  limits: { maximumLocalisationCandidates?: number } = {},
 ): GuiSourceGraph {
+  const sharedIndex = providedIndex ?? new SymbolIndex();
   const activeFiles = files.filter(({ shadowedBy }) => shadowedBy === undefined);
   const nodes: GuiSourceNode[] = [];
   const edges: GuiSourceEdge[] = [];
@@ -1724,26 +1726,6 @@ export function buildGuiSourceGraph(
     category: 'layout',
     message: 'GUI source graph diagnostics exceeded the fixed global result ceiling',
   });
-  diagnostics.pushMany(sharedIndex.diagnostics);
-  if (!sharedIndex.complete) {
-    diagnostics.push({
-      code: 'GUI_INVENTORY_PARTIAL',
-      severity: 'warning',
-      category: 'reference',
-      message:
-        sharedIndex.skippedSourceCount === 0
-          ? 'The GUI inventory is incomplete because the shared index reached a fixed record limit'
-          : `The GUI inventory skipped ${sharedIndex.skippedSourceCount} over-limit source${sharedIndex.skippedSourceCount === 1 ? '' : 's'}`,
-      details: {
-        skippedSourceCount: sharedIndex.skippedSourceCount,
-        retainedSkippedSources: sharedIndex.skippedSources.length,
-        skippedSources: sharedIndex.skippedSources.slice(0, 10).map(({ path, reasonCodes }) => ({
-          path,
-          reasonCodes,
-        })),
-      },
-    });
-  }
   const sourceHashes: Record<string, string> = {};
   const textureNodes = new Map<string, string>();
   const fontAssetNodes = new Map<string, string>();
@@ -1831,13 +1813,24 @@ export function buildGuiSourceGraph(
     if (kind === undefined || fileNodeId === undefined) {
       if (/\.(?:txt|gui|gfx)$/u.test(normalized)) {
         const document = parseClausewitz(file.bytes, file.displayPath);
+        if (
+          providedIndex === undefined &&
+          !sharedIndex.recordSourceCoverage(file, document.diagnostics)
+        )
+          continue;
         if (file.rootKind === 'mod' || file.rootKind === 'fixture')
           diagnostics.pushMany(document.diagnostics);
-        indexDecisionEntries(document, file, nodes, pendingDecisionEdges);
+        if (/^common\/decision(?:s|_categories)\//u.test(normalized))
+          indexDecisionEntries(document, file, nodes, pendingDecisionEdges);
       }
       continue;
     }
     const document = parseClausewitz(file.bytes, file.displayPath);
+    if (
+      providedIndex === undefined &&
+      !sharedIndex.recordSourceCoverage(file, document.diagnostics)
+    )
+      continue;
     if (file.rootKind === 'mod' || file.rootKind === 'fixture')
       diagnostics.pushMany(document.diagnostics);
     if (kind === 'gui_file') indexGuiElements(document, file, fileNodeId, nodes, edges, elements);
@@ -1857,16 +1850,40 @@ export function buildGuiSourceGraph(
 
   const referencedLocalisationKeys = referencedGuiLocalisationKeys(elements, scriptedLocalisation);
   for (const key of additionalLocalisationKeys) referencedLocalisationKeys.add(key);
+  const maximumCandidates = Math.min(
+    GUI_GRAPH_MAX_NODES,
+    limits.maximumLocalisationCandidates ?? GUI_GRAPH_MAX_NODES,
+  );
+  if (!Number.isSafeInteger(maximumCandidates) || maximumCandidates < 1)
+    throw new ServiceError(
+      'GUI_LOCALISATION_BUDGET_INVALID',
+      'Localisation candidate limit must be a positive safe integer',
+    );
+  let candidateCount = 0;
+  const localisationCandidates = new Map<
+    string,
+    Array<{ value: GuiLocalisationValue; fileNodeId: string }>
+  >();
   for (const { file, fileNodeId } of localisationFiles.sort(
     (left, right) =>
       right.file.loadOrder - left.file.loadOrder ||
       compareCodeUnits(left.file.displayPath, right.file.displayPath),
   )) {
     const document = parseLocalisation(file.bytes, file.displayPath);
+    if (
+      providedIndex === undefined &&
+      !sharedIndex.recordSourceCoverage(file, document.diagnostics)
+    )
+      continue;
     if (file.rootKind === 'mod' || file.rootKind === 'fixture')
       diagnostics.pushMany(document.diagnostics);
     for (const entry of document.entries) {
-      if (!referencedLocalisationKeys.has(entry.key)) continue;
+      if (++candidateCount > maximumCandidates)
+        throw new ServiceError(
+          'GUI_LOCALISATION_BUDGET_BLOCKED',
+          'Localisation dependency inventory exceeds the fixed candidate ceiling',
+          { maximumCandidates },
+        );
       const value: GuiLocalisationValue = {
         key: entry.key,
         language: entry.language,
@@ -1874,17 +1891,32 @@ export function buildGuiSourceGraph(
         sourcePath: file.displayPath,
         location: locationFor(file.displayPath, document.lineIndex, entry.start, entry.end),
       };
+      const candidates = localisationCandidates.get(entry.key) ?? [];
+      candidates.push({ value, fileNodeId });
+      localisationCandidates.set(entry.key, candidates);
+    }
+  }
+  const pendingKeys = [...referencedLocalisationKeys];
+  for (const key of pendingKeys) {
+    for (const { value, fileNodeId } of localisationCandidates.get(key) ?? []) {
       addDomainEntry(localisation, value, 'localisation');
       const id = deterministicId('gui_loc', value);
       addNode(nodes, {
         id,
         kind: 'localisation',
-        name: entry.key,
-        path: file.displayPath,
+        name: key,
+        path: value.sourcePath,
         ...(value.location === undefined ? {} : { location: value.location }),
-        metadata: { language: entry.language, value: entry.value },
+        metadata: { language: value.language, value: value.value },
       });
       addEdge(edges, 'contains', fileNodeId, id, true, {}, value.location);
+      for (const match of value.value.matchAll(/\$([A-Za-z0-9_.-]+)(?:\|[^$]*)?\$/gu)) {
+        const dependency = match[1]!;
+        if (!referencedLocalisationKeys.has(dependency)) {
+          referencedLocalisationKeys.add(dependency);
+          pendingKeys.push(dependency);
+        }
+      }
     }
   }
 
@@ -1902,6 +1934,26 @@ export function buildGuiSourceGraph(
     pendingDecisionEdges,
   );
   linkAnimationSources(nodes, edges, animationSources, sprites, textureNodes, animationFrameNodes);
+  diagnostics.pushMany(sharedIndex.diagnostics);
+  if (!sharedIndex.complete) {
+    diagnostics.push({
+      code: 'GUI_INVENTORY_PARTIAL',
+      severity: 'warning',
+      category: 'reference',
+      message:
+        sharedIndex.skippedSourceCount === 0
+          ? 'The GUI inventory is incomplete because the shared index reached a fixed record limit'
+          : `The GUI inventory skipped ${sharedIndex.skippedSourceCount} over-limit source${sharedIndex.skippedSourceCount === 1 ? '' : 's'}`,
+      details: {
+        skippedSourceCount: sharedIndex.skippedSourceCount,
+        retainedSkippedSources: sharedIndex.skippedSources.length,
+        skippedSources: sharedIndex.skippedSources.slice(0, 10).map(({ path, reasonCodes }) => ({
+          path,
+          reasonCodes,
+        })),
+      },
+    });
+  }
   markPartialReferenceEdges(edges, sharedIndex);
   diagnostics.pushMany(referenceDiagnostics(edges));
   if (

@@ -435,7 +435,12 @@ function evaluateAssignmentCore(
       : { state: value ? 'true' : 'false', unresolved: [] };
   }
   if (key === 'has_country_flag' || key === 'has_global_flag' || key === 'has_state_flag') {
-    const explicit = bool(scopeStateValue(scenario, `flag.${right}`, scopeContext));
+    const stored =
+      key === 'has_global_flag'
+        ? (scopeStateValue(scenario, `global_flag.${right}`, scopeContext) ??
+          scopeStateValue(scenario, `flag.${right}`, scopeContext))
+        : scopeStateValue(scenario, `flag.${right}`, scopeContext);
+    const explicit = typeof stored === 'number' && Number.isFinite(stored) ? true : bool(stored);
     if (explicit !== undefined) return { state: explicit ? 'true' : 'false', unresolved: [] };
     const flags =
       key === 'has_global_flag' && scenario.globalFlags !== undefined

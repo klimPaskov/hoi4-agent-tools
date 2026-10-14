@@ -3,6 +3,7 @@ import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sd
 import type { ServerContext } from '@modelcontextprotocol/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  jobProgressReporter,
   modernProgressReporter,
   progressReporter,
   withProgressHeartbeat,
@@ -37,7 +38,7 @@ describe('MCP progress reporting', () => {
       const reporter = modernProgressReporter(context);
       expect(modernProgressReporter({ ...context })).toBe(reporter);
       await reporter.report(0, 3, 'started');
-      await modernProgressReporter(context).report(0, 3, 'duplicate');
+      await modernProgressReporter(context).report(0, 3, 'started');
       await reporter.report(2, 3, 'retrieving');
       await reporter.report(3, 3, 'complete');
       expect(notifications).toEqual(
@@ -48,6 +49,24 @@ describe('MCP progress reporting', () => {
       );
     },
   );
+
+  it('forwards worker phase changes without duplicate pulses or consuming completion steps', async () => {
+    const notify = vi.fn(async (_notification: ProgressNotification) => undefined);
+    const reporter = modernProgressReporter(modernContext(notify, 'phases'));
+    const progress = jobProgressReporter(reporter);
+    await progress(1, 4, 'Scanning');
+    await progress(1, 4, 'Decoding');
+    const count = notify.mock.calls.length;
+    await progress(1, 4, 'Decoding');
+    expect(notify).toHaveBeenCalledTimes(count);
+    expect(notify.mock.calls.at(-1)?.[0].params.message).toBe('Decoding');
+    await progress(4, 4, 'Worker complete');
+    await reporter.report(2, 3, 'Retrieving');
+    await reporter.report(3, 3, 'Complete');
+    const values = notify.mock.calls.map(([notification]) => notification.params.progress);
+    expect(values.every((value, index) => index === 0 || value > values[index - 1]!)).toBe(true);
+    expect(values.at(-1)).toBe(3);
+  });
 
   it('does not notify an unrequested modern token or share state between request contexts', async () => {
     const notify = vi.fn(async (_notification: ProgressNotification) => undefined);

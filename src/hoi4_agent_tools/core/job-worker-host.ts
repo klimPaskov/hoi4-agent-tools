@@ -358,7 +358,7 @@ export class JobWorkerHost {
             id,
             {
               code: 'JOB_DEADLINE_EXCEEDED',
-              message: `The job ran longer than ${jobDeadlineSeconds} seconds and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds`,
+              message: `The job ran longer than ${jobDeadlineSeconds} seconds and was stopped${record.progress === undefined ? '' : ` during: ${record.progress.message.slice(0, 160)}`}; narrow its selector or limits, or raise jobDeadlineSeconds`,
             },
             principal,
           );

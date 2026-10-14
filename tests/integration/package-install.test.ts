@@ -391,7 +391,14 @@ describe('clean npm-pack installation', () => {
     expect(qualified.promptNames).toEqual(['hoi4.probability_analysis']);
     // A busy installation may emit heartbeat increments between the phase milestones.
     expect(qualified.progress[0]).toBe(0);
-    expect(qualified.progress.filter(Number.isInteger)).toEqual([0, 2, 3]);
+    expect(qualified.progress[0]).toBe(0);
+    expect(qualified.progress.at(-1)).toBe(3);
+    expect(qualified.progress).toEqual(expect.arrayContaining([0, 2, 3]));
+    expect(
+      qualified.progress.every(
+        (value, index) => index === 0 || value > qualified.progress[index - 1]!,
+      ),
+    ).toBe(true);
     expect(qualified.progress.at(-1)).toBe(3);
     expect(
       qualified.progress.every(

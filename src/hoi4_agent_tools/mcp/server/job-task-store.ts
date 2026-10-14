@@ -17,7 +17,7 @@ import {
 } from '../../core/operation-tasks.js';
 import { ServiceError } from '../../core/result.js';
 import type { ServerContext } from './base-tools.js';
-import { currentTaskRequestSignal } from './task-request-context.js';
+import { currentTaskRequestSignal, currentTaskRequestProgress } from './task-request-context.js';
 
 function legacyTask(record: JobRecord): Task {
   if (record.request.protocolTask === undefined)
@@ -72,6 +72,12 @@ export class PersistentJobTaskStore implements TaskStore {
 
   async getTask(value: string, _sessionId?: string): Promise<Task | null> {
     const record = await this.tasks.get(value, this.context());
+    if (record?.progress !== undefined)
+      await currentTaskRequestProgress()?.(
+        record.progress.completed,
+        record.progress.total ?? 1,
+        record.progress.message,
+      );
     return record === null ? null : legacyTask(record);
   }
 
