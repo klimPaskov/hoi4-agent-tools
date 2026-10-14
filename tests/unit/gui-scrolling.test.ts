@@ -83,6 +83,69 @@ async function sceneFor(files: ScannedFile[], scenario: Record<string, unknown> 
 }
 
 describe('native container scrolling', () => {
+  it.each(['clipping = yes', ''])(
+    'scrolls a background-free container (%s) and ignores private namesakes of a public template',
+    async (clipping) => {
+      const files = await fixture(
+        `containerWindowType = { name = "owner" size = { width = 100 height = 80 } ${clipping} verticalScrollbar = "vertical"
+      containerWindowType = { name = "content" size = { width = 60 height = 160 }
+        iconType = { name = "bottom" position = { x = 0 y = 140 } size = { width = 8 height = 8 } spriteType = "GFX_thumb" }
+      }
+    }`,
+        `${scrollbar('vertical')} containerWindowType = { name = "unrelated" iconType = { name = "vertical" size = { width = 1 height = 1 } } }`,
+      );
+      const minimum = await sceneFor(files);
+      const maximum = await sceneFor(files, { scrollOffsets: { owner: 1000 } });
+      expect(minimum.elements.find(({ name }) => name === 'owner')!.scroll).toMatchObject({
+        maximumY: 80,
+        offsetY: 0,
+      });
+      expect(maximum.elements.find(({ name }) => name === 'owner')!.scroll).toMatchObject({
+        maximumY: 80,
+        offsetY: 80,
+      });
+      expect(minimum.elements.find(({ name }) => name === 'bottom')!.visible).toBe(false);
+      expect(maximum.elements.find(({ name }) => name === 'bottom')).toMatchObject({
+        visible: true,
+        unclippedRect: { y: 60 },
+      });
+      expect(maximum.elements.find(({ name }) => name === 'vertical')!.visible).toBe(true);
+      expect(maximum.diagnostics.some(({ code }) => code.startsWith('GUI_SCROLLBAR_'))).toBe(false);
+      const { images } = await renderGuiScene(maximum);
+      expect(images.find(({ variant }) => variant === 'full')!.png.length).toBeGreaterThan(100);
+    },
+  );
+
+  it('attaches scrollbars to an expanded dropdown panel without leaking rows while closed', async () => {
+    const files =
+      await fixture(`dropDownBoxType = { name = "dropdown" size = { width = 100 height = 20 }
+      expandedWindow = { name = "expanded" show_position = { x = 0 y = 20 } size = { width = 100 height = 80 } clipping = yes verticalScrollbar = "vertical"
+        background = { name = "expanded_background" spriteType = "GFX_tile" }
+        containerWindowType = { name = "rows" size = { width = 60 height = 160 } }
+      }
+    }`);
+    const closed = await sceneFor(files);
+    expect(closed.elements.find(({ name }) => name === 'vertical')!.visible).toBe(false);
+    expect(closed.elements.find(({ name }) => name === 'expanded_background')!.visible).toBe(false);
+    const open = await sceneFor(files, {
+      values: { 'dropdown.expanded': true },
+      scrollOffsets: { expanded: 80 },
+    });
+    expect(open.elements.find(({ name }) => name === 'expanded')!.scroll).toMatchObject({
+      maximumY: 80,
+      offsetY: 80,
+    });
+    expect(open.elements.find(({ name }) => name === 'vertical')!.visible).toBe(true);
+    expect(open.elements.find(({ name }) => name === 'expanded_background')).toMatchObject({
+      visible: true,
+      sprite: { supported: true },
+      unclippedRect: { x: 0, y: 20, width: 100, height: 80 },
+    });
+    expect(open.fidelity.unsupported.some(({ field }) => field === 'attached_scrollbar')).toBe(
+      false,
+    );
+  });
+
   it('reserves gutters only for visible axes and honours explicit visibility over native autohide', async () => {
     const files =
       await fixture(`containerWindowType = { name = "owner" size = { width = 100 height = 80 }
@@ -502,12 +565,12 @@ describe('native container scrolling', () => {
       );
       expect(scene.diagnostics.map(({ code }) => code)).toContain(expected);
     }
-    const missingBackground = await sceneFor(
+    const missingBoundary = await sceneFor(
       await fixture(
-        'containerWindowType = { name = "owner" size = { width = 100 height = 80 } clipping = yes verticalScrollbar = "vertical" }',
+        'containerWindowType = { name = "owner" size = { width = 0 height = 80 } verticalScrollbar = "vertical" }',
       ),
     );
-    expect(missingBackground.diagnostics.map(({ code }) => code)).toContain(
+    expect(missingBoundary.diagnostics.map(({ code }) => code)).toContain(
       'GUI_SCROLLBAR_CONTAINER_BOUNDARY_MISSING',
     );
   });

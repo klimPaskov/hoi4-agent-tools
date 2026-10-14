@@ -2339,7 +2339,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     });
   });
 
-  it('matches Clausewitz anchor inheritance, centerposition, percentages, clipping defaults, and local scale placement', async () => {
+  it('keeps child anchors independent of parent origo, with percentages, clipping and scale', async () => {
     const png = await sharp({
       create: { width: 8, height: 8, channels: 4, background: '#ffffff' },
     })
@@ -2389,7 +2389,7 @@ char id=66 x=8 y=0 width=8 height=12 xadvance=8 page=0
     expect(rect('percent')).toEqual({ x: 100, y: 0, width: 100, height: 10 });
     expect(rect('percent_edge')).toEqual({ x: 100, y: 0, width: 60, height: 10 });
     expect(rect('empty_percent_edge')).toEqual({ x: 100, y: 0, width: 0, height: 10 });
-    expect(rect('inherited_center')).toEqual({ x: 100, y: 50, width: 20, height: 10 });
+    expect(rect('inherited_center')).toEqual({ x: 0, y: 0, width: 20, height: 10 });
     expect(scene.elements.find(({ name }) => name === 'bounded_text')).toMatchObject({
       unclippedRect: { x: 0, y: 70, width: 100, height: 20 },
       text: { fixedSize: true, overflowY: true },

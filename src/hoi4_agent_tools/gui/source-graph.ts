@@ -168,7 +168,7 @@ export function guiElementAttributeFidelity(
   )
     return 'modelled';
   if (
-    /^(?:containerwindowtype|windowtype)$/iu.test(elementType ?? '') &&
+    /^(?:containerwindowtype|windowtype|expandedwindow)$/iu.test(elementType ?? '') &&
     ['verticalScrollbar', 'horizontalScrollbar', 'autohide_scrollbars', 'margin'].some(
       (candidate) => candidate.toLowerCase() === key.toLowerCase(),
     )
@@ -356,8 +356,13 @@ function raw(document: SourceDocument, node: { start: number; end: number }): st
   return document.text.slice(node.start, node.end);
 }
 
-function isGuiElement(assignment: AssignmentNode): boolean {
+function isGuiElement(assignment: AssignmentNode, parentType?: string): boolean {
   if (assignment.value.type !== 'block') return false;
+  if (
+    parentType?.toLowerCase() === 'dropdownboxtype' &&
+    /^(?:expandedwindow|expandbutton)$/iu.test(assignment.key.value)
+  )
+    return true;
   if (explicitGuiElementTypes.has(assignment.key.value.toLowerCase())) return true;
   return (
     /type$/iu.test(assignment.key.value) && firstScalar(assignment.value, 'name') !== undefined
@@ -455,10 +460,10 @@ function indexGuiElements(
   const constants = constantsFor(document);
   const firstFileElement = elements.length;
   let order = 0;
-  const walk = (block: BlockNode, parentId?: string): void => {
+  const walk = (block: BlockNode, parentId?: string, parentType?: string): void => {
     for (const assignment of assignments(block)) {
       if (assignment.value.type !== 'block') continue;
-      if (isGuiElement(assignment)) {
+      if (isGuiElement(assignment, parentType)) {
         const name = firstScalar(assignment.value, 'name')?.value;
         if (name === undefined) continue;
         order += 1;
@@ -475,7 +480,7 @@ function indexGuiElements(
           childIds: [],
           attributes: attributes,
           unsupportedAttributes: assignments(assignment.value)
-            .filter((child) => !isGuiElement(child))
+            .filter((child) => !isGuiElement(child, assignment.key.value))
             .map(({ key }) => key.value)
             .filter(
               (key) => guiElementAttributeFidelity(key, assignment.key.value) === 'unsupported',
@@ -500,7 +505,7 @@ function indexGuiElements(
         addEdge(edges, 'contains', parentId ?? fileNodeId, id, true, {}, element.location);
         if (parentId !== undefined)
           addEdge(edges, 'parent', id, parentId, true, {}, element.location);
-        walk(assignment.value, id);
+        walk(assignment.value, id, assignment.key.value);
       } else {
         walk(assignment.value, parentId);
       }
