@@ -18,7 +18,7 @@ import type {
 } from './types.js';
 
 const countryNames = ['Germany', 'France', 'Poland', 'Italy', 'Brazil', 'India', 'Canada'];
-const countryTags = ['GER', 'FRA', 'POL', 'ITA', 'BRA', 'RAJ', 'CAN'];
+export const generatedCountryTags = ['GER', 'FRA', 'POL', 'ITA', 'BRA', 'RAJ', 'CAN'];
 const countryIdeologies = [
   'fascism',
   'democratic',
@@ -584,7 +584,7 @@ function generatedRows(
   return Array.from({ length: count }, (_unused, index) => {
     const countryIndex = (countryOffset + index) % countryNames.length;
     const name = countryNames[countryIndex]!;
-    const tag = countryTags[countryIndex]!;
+    const tag = generatedCountryTags[countryIndex]!;
     const ideology = countryIdeologies[countryIndex]!;
     const value = generatedNumber(options, random);
     return {
@@ -765,7 +765,7 @@ export function generateGuiPreviewScenarios(
     const elementStates = { ...base.elementStates };
     const scopedCountries = new Map<string, string>();
     const generatedCountryIndex = random.integer(0, countryNames.length - 1);
-    const generatedCountryTag = countryTags[generatedCountryIndex]!;
+    const generatedCountryTag = generatedCountryTags[generatedCountryIndex]!;
     for (const key of tokens.numeric)
       setIfMissing(
         values,

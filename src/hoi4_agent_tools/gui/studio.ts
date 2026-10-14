@@ -23,6 +23,7 @@ import type { SymbolIndex } from '../core/index.js';
 import { ClausewitzEvaluationDefinitions } from '../core/clausewitz-evaluation.js';
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
 import { escapeFileGlob } from '../core/file-glob.js';
+import { renderStage, type RenderProgress } from '../core/render-progress.js';
 import { ServiceError, type ArtifactLink } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { WorkspaceScanner } from '../core/scanner.js';
@@ -58,6 +59,7 @@ import {
   type GalleryItem,
 } from './renderer.js';
 import {
+  generatedCountryTags,
   generateGuiPreviewScenarios,
   resolveScenarioScriptedLocalisation,
 } from './scenario-generator.js';
@@ -359,17 +361,24 @@ const FALLBACK_NAMES_PER_PATTERN = 100;
 function basenameFallbackPatterns(
   exactPaths: readonly string[],
   exactFiles: readonly ScannedFile[],
+  assetRoots: readonly string[] = ['gfx', 'interface', 'fonts'],
 ): string[] {
   const resolved = new Set(
     exactFiles
       .filter(({ shadowedBy }) => shadowedBy === undefined)
       .map(({ relativePath }) => relativePath.replaceAll('\\', '/').toLowerCase()),
   );
+  const stem = (value: string) =>
+    value.toLowerCase().replace(/\.(?:png|bmp|tga|dds|svg|fnt|ttf|otf|woff2?)$/u, '');
+  const resolvedStems = new Set([...resolved].map(stem));
   const names = [
     ...new Set(
       exactPaths
         .filter(
-          (candidate) => !/[*?[\]{}!]/u.test(candidate) && !resolved.has(candidate.toLowerCase()),
+          (candidate) =>
+            !/[*?[\]{}!]/u.test(candidate) &&
+            !resolved.has(candidate.toLowerCase()) &&
+            !resolvedStems.has(stem(candidate)),
         )
         .map((candidate) => path.posix.basename(candidate)),
     ),
@@ -384,7 +393,11 @@ function basenameFallbackPatterns(
     const chunk = grouped.slice(start, start + FALLBACK_NAMES_PER_PATTERN).map(escapeFileGlob);
     patterns.push(chunk.length === 1 ? `**/${chunk[0]!}` : `**/{${chunk.join(',')}}`);
   }
-  return patterns.sort((left, right) => compareCodeUnits(left, right));
+  return [...new Set(assetRoots)]
+    .flatMap((root) =>
+      patterns.map((pattern) => `${escapeFileGlob(normalizeConfiguredRoot(root))}/${pattern}`),
+    )
+    .sort(compareCodeUnits);
 }
 
 function selectedElements(
@@ -739,11 +752,15 @@ export function scenarioCountryFlagPatterns(scenarios: readonly GuiPreviewScenar
     for (const values of [
       scenario.values,
       scenario.scriptedGui,
+      scenario.country ?? {},
       ...Object.values(scenario.lists).flat(),
     ]) {
       for (const [key, value] of Object.entries(values)) {
         if (
-          key.endsWith('.countryTag') &&
+          (key.endsWith('.countryTag') ||
+            key.endsWith('.tag') ||
+            /(?:^|\.)GetFlag$/u.test(key) ||
+            ['countryTag', 'GetTag', 'tag'].includes(key)) &&
           typeof value === 'string' &&
           /^[A-Za-z0-9_]{2,64}$/u.test(value)
         )
@@ -769,8 +786,19 @@ function scenarioCountryHistoryPatterns(scenarios: readonly GuiPreviewScenario[]
   return scenarios.some(scenarioNeedsCountryHistory) ? ['history/countries/*.txt'] : [];
 }
 
-function scenarioCountryAssetPatterns(scenarios: readonly GuiPreviewScenario[]): string[] {
-  return [...scenarioCountryFlagPatterns(scenarios), ...scenarioCountryHistoryPatterns(scenarios)];
+function scenarioCountryAssetPatterns(
+  scenarios: readonly GuiPreviewScenario[],
+  generated = false,
+): string[] {
+  const flags = generated
+    ? [
+        ...scenarios,
+        ...generatedCountryTags.map((tag) =>
+          parsePreviewScenario({ id: `generated-${tag}`, country: { tag } }),
+        ),
+      ]
+    : scenarios;
+  return [...scenarioCountryFlagPatterns(flags), ...scenarioCountryHistoryPatterns(scenarios)];
 }
 
 function bmFontPagePatterns(files: readonly ScannedFile[]): string[] {
@@ -856,7 +884,7 @@ export interface GuiStudioScanResult {
   index?: SymbolIndex;
 }
 
-export interface GuiStudioRenderInput {
+export interface GuiStudioRenderInput extends RenderProgress {
   workspaceId: string;
   windowName: string;
   scenario: unknown;
@@ -870,7 +898,7 @@ export interface GuiStudioRenderInput {
   signal?: AbortSignal;
 }
 
-export interface GuiStudioLintInput {
+export interface GuiStudioLintInput extends RenderProgress {
   workspaceId: string;
   windowName: string;
   scenario: unknown;
@@ -1315,15 +1343,9 @@ export class ScriptedGuiStudio {
       return cached;
     }
     const retainedFiles = [...files];
-    // The previous graph of this scope still indexes every unchanged file.
-    const previous = [...this.#graphCache].find(([existing]) =>
-      existing.startsWith(`${scope}:`),
-    )?.[1].index;
-    const index = this.engine.indexFiles(retainedFiles, previous);
     const scanned = {
       files: retainedFiles,
-      graph: buildGuiSourceGraph(retainedFiles, index, additionalLocalisationKeys),
-      index,
+      graph: buildGuiSourceGraph(retainedFiles, undefined, additionalLocalisationKeys),
     };
     // One graph per scope: a preview builds layout, game-layout and definition graphs, and a
     // single shared slot made each repeat call rebuild all of them.
@@ -1353,19 +1375,17 @@ export class ScriptedGuiStudio {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
     const [snapshot, localisationFiles] = await Promise.all([
-      this.engine.scan(
-        workspaceId,
-        { patterns: guiDefinitionPatterns(workspace) },
-        principal,
-        signal,
-      ),
+      this.scanner.scan(workspace, {
+        patterns: guiDefinitionPatterns(workspace),
+        ...(signal === undefined ? {} : { signal }),
+      }),
       this.scanner.scan(workspace, {
         patterns: guiLocalisationPatterns(workspace, languages),
         ...(signal === undefined ? {} : { signal }),
       }),
     ]);
     signal?.throwIfAborted();
-    const files = mergeScannedFiles(snapshot.files, localisationFiles);
+    const files = mergeScannedFiles(snapshot, localisationFiles);
     return this.graphForFiles(files, `workspace:${workspaceId}`);
   }
 
@@ -1380,19 +1400,25 @@ export class ScriptedGuiStudio {
     additionalAssetPatterns: readonly string[] = [],
     additionalLocalisationKeys: readonly string[] = [],
     includeImmediateTooltip = false,
+    progress?: RenderProgress['progress'],
   ): Promise<GuiStudioScanResult> {
+    const stage = (phase: string) =>
+      renderStage(
+        {
+          ...(signal === undefined ? {} : { signal }),
+          ...(progress === undefined ? {} : { progress }),
+        },
+        phase,
+      );
+    await stage('Scanning GUI layouts');
     const workspace = this.resolver.get(workspaceId, principal);
     const layoutPatterns = guiLayoutPatterns(workspace);
-    const overlayLayouts = await this.engine.scan(
-      workspaceId,
-      {
-        patterns: layoutPatterns,
-        rootKinds: ['mod', 'dependency', 'fixture'],
-      },
-      principal,
-      signal,
-    );
-    let layoutFiles = overlayLayouts.files;
+    const overlayLayouts = await this.scanner.scan(workspace, {
+      patterns: layoutPatterns,
+      rootKinds: ['mod', 'dependency', 'fixture'],
+      ...(signal === undefined ? {} : { signal }),
+    });
+    let layoutFiles = overlayLayouts;
     let layoutGraph = this.graphForFiles(layoutFiles, `layout:${workspaceId}`).graph;
     const selectedLayoutElements = selectedElements(
       layoutGraph,
@@ -1408,13 +1434,12 @@ export class ScriptedGuiStudio {
       );
     const availableNames = new Set(layoutGraph.elements.map(({ name }) => name));
     if ([...requiredNames].some((name) => !availableNames.has(name))) {
-      const gameLayouts = await this.engine.scan(
-        workspaceId,
-        { patterns: layoutPatterns, rootKinds: ['game', 'dlc'] },
-        principal,
-        signal,
-      );
-      const gameGraph = this.graphForFiles(gameLayouts.files, `game-layout:${workspaceId}`).graph;
+      const gameLayouts = await this.scanner.scan(workspace, {
+        patterns: layoutPatterns,
+        rootKinds: ['game', 'dlc'],
+        ...(signal === undefined ? {} : { signal }),
+      });
+      const gameGraph = this.graphForFiles(gameLayouts, `game-layout:${workspaceId}`).graph;
       const selectedPaths = new Set(
         selectedElements(gameGraph, windowName, [...requiredNames]).map(
           ({ sourcePath }) => sourcePath,
@@ -1422,31 +1447,25 @@ export class ScriptedGuiStudio {
       );
       layoutFiles = mergeScannedFiles(
         layoutFiles,
-        gameLayouts.files.filter(({ displayPath }) => selectedPaths.has(displayPath)),
+        gameLayouts.filter(({ displayPath }) => selectedPaths.has(displayPath)),
       );
       layoutGraph = this.graphForFiles(layoutFiles, `merged-layout:${workspaceId}`).graph;
     }
     if (!layoutGraph.elements.some(({ name }) => name === windowName))
       assertTargetWindowAvailable(layoutGraph, windowName);
+    await stage('Scanning GUI definitions and localisation');
     const [linkedDefinitions, localisation] = await Promise.all([
-      this.engine.scan(
-        workspaceId,
-        { patterns: guiLinkedDefinitionPatterns(workspace) },
-        principal,
-        signal,
-      ),
-      this.engine.scan(
-        workspaceId,
-        { patterns: guiLocalisationPatterns(workspace, languages) },
-        principal,
-        signal,
-      ),
+      this.scanner.scan(workspace, {
+        patterns: guiLinkedDefinitionPatterns(workspace),
+        ...(signal === undefined ? {} : { signal }),
+      }),
+      this.scanner.scan(workspace, {
+        patterns: guiLocalisationPatterns(workspace, languages),
+        ...(signal === undefined ? {} : { signal }),
+      }),
     ]);
-    const definitionFiles = mergeScannedFiles(
-      layoutFiles,
-      linkedDefinitions.files,
-      localisation.files,
-    );
+    const definitionFiles = mergeScannedFiles(layoutFiles, linkedDefinitions, localisation);
+    await stage('Building GUI source graph');
     const definitions = this.graphForFiles(
       definitionFiles,
       `definitions:${workspaceId}`,
@@ -1461,9 +1480,10 @@ export class ScriptedGuiStudio {
         languages,
         additionalTemplateNames,
         includeImmediateTooltip,
-      ),
+      ).filter((pattern) => !pattern.startsWith('gfx/flags/')),
       ...additionalAssetPatterns,
     ];
+    await stage('Loading selected GUI assets');
     const exactReferenced =
       referencedPatterns.length === 0
         ? []
@@ -1472,7 +1492,11 @@ export class ScriptedGuiStudio {
             ...(signal === undefined ? {} : { signal }),
           });
     signal?.throwIfAborted();
-    const fallbackPatterns = basenameFallbackPatterns(referencedPatterns, exactReferenced);
+    const fallbackPatterns = basenameFallbackPatterns(referencedPatterns, exactReferenced, [
+      ...workspace.registration.roots.gfx,
+      ...workspace.registration.roots.interface,
+      'fonts',
+    ]);
     const fallbackReferenced =
       fallbackPatterns.length === 0
         ? []
@@ -1490,7 +1514,11 @@ export class ScriptedGuiStudio {
             ...(signal === undefined ? {} : { signal }),
           });
     signal?.throwIfAborted();
-    const fontPageFallbackPatterns = basenameFallbackPatterns(fontPagePatterns, exactFontPages);
+    const fontPageFallbackPatterns = basenameFallbackPatterns(fontPagePatterns, exactFontPages, [
+      ...workspace.registration.roots.gfx,
+      ...workspace.registration.roots.interface,
+      'fonts',
+    ]);
     const fallbackFontPages =
       fontPageFallbackPatterns.length === 0
         ? []
@@ -1500,7 +1528,46 @@ export class ScriptedGuiStudio {
           });
     const fontPages = mergeScannedFiles(exactFontPages, fallbackFontPages);
     signal?.throwIfAborted();
-    const files = mergeScannedFiles(definitions.files, referenced, fontPages);
+    const windowElements = selectedElements(definitions.graph, windowName, additionalTemplateNames);
+    const selectedPaths = new Set(windowElements.map(({ sourcePath }) => sourcePath));
+    const namedSprites = new Set(additionalSpriteNames);
+    const namedFonts = new Set<string>();
+    for (const element of windowElements) {
+      collectNamedAttributes(
+        element.attributes,
+        new Set(['spriteType', 'quadTextureSprite']),
+        namedSprites,
+      );
+      collectNamedAttributes(element.attributes, new Set(['font', 'buttonFont']), namedFonts);
+    }
+    const assetPaths = new Set(referencedPatterns.map((value) => value.toLowerCase()));
+    for (const sprite of definitions.graph.sprites)
+      if (
+        namedSprites.has(sprite.name) ||
+        [sprite.texturePath, sprite.texturePath2, sprite.effectFile].some(
+          (value) =>
+            value !== undefined &&
+            referenceVariants(value).some((variant) => assetPaths.has(variant.toLowerCase())),
+        )
+      )
+        selectedPaths.add(sprite.sourcePath);
+    for (const font of definitions.graph.fonts)
+      if (
+        namedFonts.has(font.name) ||
+        font.assetPaths.some((value) =>
+          referenceVariants(value).some((variant) => assetPaths.has(variant.toLowerCase())),
+        )
+      )
+        selectedPaths.add(font.sourcePath);
+    const files = mergeScannedFiles(
+      definitions.files.filter(
+        (file) =>
+          !/\.(?:gui|gfx)$/iu.test(file.relativePath) || selectedPaths.has(file.displayPath),
+      ),
+      referenced,
+      fontPages,
+    );
+    await stage('Resolving selected GUI assets');
     return this.graphForFiles(
       files,
       `window:${workspaceId}:${windowName}`,
@@ -1529,11 +1596,15 @@ export class ScriptedGuiStudio {
         generatedOptions?.textSamples,
       ),
       scenarioTemplateNames([placeholderScenario, ...explicitRelatedScenarios]),
-      scenarioCountryAssetPatterns([placeholderScenario, ...explicitRelatedScenarios]),
+      scenarioCountryAssetPatterns(
+        [placeholderScenario, ...explicitRelatedScenarios],
+        generatedOptions?.enabled === true,
+      ),
       scenarioLocalisationKeys([placeholderScenario, ...explicitRelatedScenarios]),
       [placeholderScenario, ...explicitRelatedScenarios].some(
         ({ tooltip }) => tooltip !== undefined,
       ),
+      input.progress,
     );
     let builtDefinitions: ClausewitzEvaluationDefinitions | undefined;
     const evaluationDefinitions = () =>
@@ -1567,6 +1638,7 @@ export class ScriptedGuiStudio {
     assertUniqueScenarioIds([scenario, ...relatedScenarios]);
     const budget = new RenderBudget();
     const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
+    await renderStage(input, 'Laying out GUI and decoding visible assets');
     const scene = await buildGuiScene(
       scanned.graph,
       scanned.files,
@@ -1701,11 +1773,14 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
       ]),
-      scenarioCountryAssetPatterns([
-        placeholderScenario,
-        ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
-        ...explicitRelatedScenarios,
-      ]),
+      scenarioCountryAssetPatterns(
+        [
+          placeholderScenario,
+          ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
+          ...explicitRelatedScenarios,
+        ],
+        generatedOptions?.enabled === true,
+      ),
       scenarioLocalisationKeys([
         placeholderScenario,
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
@@ -1716,6 +1791,7 @@ export class ScriptedGuiStudio {
         ...(requestedBaselineScenario === undefined ? [] : [requestedBaselineScenario]),
         ...explicitRelatedScenarios,
       ].some(({ tooltip }) => tooltip !== undefined),
+      input.progress,
     );
     let builtDefinitions: ClausewitzEvaluationDefinitions | undefined;
     const evaluationDefinitions = () =>
@@ -1751,6 +1827,7 @@ export class ScriptedGuiStudio {
       requestedBaselineScenario ??
       parsePreviewScenario({ ...scenario, id: `${scenario.id}-comparison`, state: 'normal' });
     const catalog = new GuiAssetCatalog(scanned.graph, scanned.files, budget, scenario.language);
+    await renderStage(input, 'Laying out GUI and decoding visible assets');
     const scene = await buildGuiScene(
       scanned.graph,
       scanned.files,
@@ -1758,6 +1835,7 @@ export class ScriptedGuiStudio {
       scenario,
       catalog,
     );
+    await renderStage(input, 'Rasterizing GUI views');
     const render = await renderGuiScene(scene, undefined, input.signal, budget);
     const fullRenderCache = new Map<string, GuiRenderResult['images'][number]>([
       [visualSceneKey(scene), fullImage(render)],
@@ -1936,6 +2014,7 @@ export class ScriptedGuiStudio {
     validation.checks.push(...stateValidation.checks, ...resolutionValidation.checks);
     const completeValidation = withGraphDiagnostics(validationGraph, validation);
 
+    await renderStage(input, 'Writing GUI galleries and evidence');
     const scenarioGallerySvg = renderGallerySvg(
       `${input.windowName} scripted scenario matrix`,
       scenarioItems,

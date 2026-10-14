@@ -16,6 +16,7 @@ import {
   type ArtifactWrite,
   type StoredArtifact,
 } from '../core/artifacts.js';
+import { renderStage, type RenderProgress } from '../core/render-progress.js';
 import { RenderBudget } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
@@ -106,7 +107,7 @@ export interface TechnologyAnalysisResult {
   helperExpansion?: HelperExpansionSummary;
 }
 
-export interface TechnologyRenderServiceInput {
+export interface TechnologyRenderServiceInput extends RenderProgress {
   workspaceId: string;
   view: TechnologyRenderView;
   folderId?: string;
@@ -252,62 +253,31 @@ function technologyScanPatterns(workspace: ReturnType<CoreEngine['resolver']['ge
   ].sort(compareCodeUnits);
 }
 
-function recomputeTechnologyShadowing(files: ScannedFile[]): void {
-  const groups = new Map<string, ScannedFile[]>();
-  for (const file of files) {
-    delete file.shadowedBy;
-    const key = file.relativePath.replaceAll('\\', '/').toLowerCase();
-    const group = groups.get(key) ?? [];
-    group.push(file);
-    groups.set(key, group);
-  }
-  for (const group of groups.values()) {
-    group.sort(
-      (left, right) =>
-        right.loadOrder - left.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
-    );
-    const active = group[0]!;
-    for (const shadowed of group.slice(1)) shadowed.shadowedBy = active.displayPath;
-  }
-}
-
 async function scanTechnologySources(
   engine: CoreEngine,
   workspaceId: string,
   workspace: ReturnType<CoreEngine['resolver']['get']>,
   principal?: string,
   signal?: AbortSignal,
+  renderOnly = false,
 ): Promise<ScanSnapshot> {
-  const patterns = technologyScanPatterns(workspace);
-  const scans = await Promise.all([
-    engine.scan(
-      workspaceId,
-      { patterns, rootKinds: ['mod', 'dependency', 'fixture'] },
-      principal,
-      signal,
-    ),
-    ...(workspace.roots.some(({ kind }) => kind === 'game')
-      ? [engine.scan(workspaceId, { patterns, rootKinds: ['game', 'dlc'] }, principal, signal)]
-      : []),
-  ]);
-  const files = scans.flatMap(({ files }) => files.map((file) => ({ ...file })));
-  recomputeTechnologyShadowing(files);
-  files.sort(
-    (left, right) =>
-      left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+  const patterns = technologyScanPatterns(workspace).filter(
+    (pattern) =>
+      !renderOnly ||
+      !/^(?:events|history|common\/(?:national_focus|decisions|scripted_effects|on_actions|ideas|characters))\//u.test(
+        pattern,
+      ),
   );
-  const index = engine.indexFiles(files);
+  const snapshot = await engine.scan(workspaceId, { patterns }, principal, signal);
   return {
-    workspaceId,
+    ...snapshot,
     revision: hashCanonical(
-      files.map(({ displayPath, loadOrder, sha256 }) => ({ displayPath, loadOrder, sha256 })),
+      snapshot.files.map(({ displayPath, loadOrder, sha256 }) => ({
+        displayPath,
+        loadOrder,
+        sha256,
+      })),
     ),
-    files,
-    index,
-    complete: scans.every(({ complete }) => complete) && index.complete,
-    skippedSourceCount: index.skippedSourceCount,
-    skippedSources: index.skippedSources,
-    diagnostics: [...scans.flatMap(({ diagnostics }) => diagnostics), ...index.diagnostics],
   };
 }
 
@@ -780,7 +750,12 @@ export class TechnologyTreeViewer {
 
   public async scan(
     workspaceId: string,
-    options: { refresh?: boolean; principal?: string; signal?: AbortSignal } = {},
+    options: {
+      refresh?: boolean;
+      principal?: string;
+      signal?: AbortSignal;
+      renderOnly?: boolean;
+    } = {},
   ): Promise<TechnologyGraphSnapshot> {
     options.signal?.throwIfAborted();
     const workspace = this.engine.resolver.get(workspaceId, options.principal);
@@ -792,6 +767,7 @@ export class TechnologyTreeViewer {
       workspace,
       options.principal,
       options.signal,
+      options.renderOnly,
     );
     const analysisMode =
       workspace.roots.some(({ kind }) => kind === 'game') || snapshot.files.length > 1_000
@@ -859,6 +835,10 @@ export class TechnologyTreeViewer {
       ...(analysisMode === undefined ? {} : { analysisMode }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
+    if (options.renderOnly === true)
+      graph.analysisBoundary.assumptions.push(
+        'Folder renders scan technology definitions, layouts, unlock targets and assets; inbound grants and references require technology inspection.',
+      );
     this.#state.current.set(workspaceId, { generation, snapshot, assetFiles, graph });
     rememberGraph(this.#state, graph);
     return graph;
@@ -1026,7 +1006,9 @@ export class TechnologyTreeViewer {
   public async renderAndStore(
     input: TechnologyRenderServiceInput,
   ): Promise<TechnologyRenderServiceResult> {
+    await renderStage(input, 'Indexing technology view sources');
     const graph = await this.scan(input.workspaceId, {
+      renderOnly: input.view === 'folder',
       ...(input.refresh === undefined ? {} : { refresh: input.refresh }),
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
@@ -1066,10 +1048,12 @@ export class TechnologyTreeViewer {
         }),
       ),
     ]);
+    await renderStage(input, 'Decoding selected technology assets');
     const { dataUris: iconDataUris, dimensions: spriteDimensions } =
       await resolveTechnologyIconDataUris(cached, requestedIconSprites, budget, input.signal);
     renderOptions.iconDataUris = iconDataUris;
     renderOptions.spriteDimensions = spriteDimensions;
+    await renderStage(input, 'Laying out and rasterizing technology view');
     const render = await renderTechnologyGraph(graph, renderOptions);
     const focused: TechnologyRenderBundle[] = [];
     for (const folder of focusedFolders) {

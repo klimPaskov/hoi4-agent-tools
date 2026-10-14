@@ -187,6 +187,7 @@ export class JobExecutor {
     const controller = new AbortController();
     const watchStop = new AbortController();
     let watchFailure: unknown;
+    let lastProgressMessage = claimed.record.progress?.message;
     const deadlineTimer =
       options.deadlineMs === undefined || operation.mutation
         ? undefined
@@ -194,7 +195,7 @@ export class JobExecutor {
             () => {
               watchFailure = new ServiceError(
                 'JOB_DEADLINE_EXCEEDED',
-                'The job ran past its deadline and was stopped; narrow its selector or limits, or raise jobDeadlineSeconds',
+                `The job ran past its deadline and was stopped${lastProgressMessage === undefined ? '' : ` during: ${lastProgressMessage.slice(0, 160)}`}; narrow its selector or limits, or raise jobDeadlineSeconds`,
               );
               controller.abort(watchFailure);
             },
@@ -223,6 +224,7 @@ export class JobExecutor {
       signal: controller.signal,
       checkpoint: claimed.record.checkpoint,
       progress: async (progress) => {
+        lastProgressMessage = progress.message;
         await this.jobs.store.updateOwned(scope, id, owner.token, { progress }, controller.signal);
       },
       saveCheckpoint: async (checkpoint) => {

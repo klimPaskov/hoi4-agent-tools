@@ -523,6 +523,18 @@ export class SymbolIndex {
     });
   }
 
+  /** Record parser coverage without allocating symbols for a domain that builds its own graph. */
+  recordSourceCoverage(file: ScannedFile, diagnostics: readonly Diagnostic[]): boolean {
+    const limits = sourcePartialLimitDiagnostics(diagnostics);
+    if (limits.length > 0) {
+      this.recordSkippedSource(file, limits);
+      return false;
+    }
+    if (isWorkspaceOwnedSource(file) && file.shadowedBy === undefined)
+      this.addDiagnostics(diagnostics);
+    return true;
+  }
+
   private addSymbol(record: Omit<SymbolRecord, 'overridden' | 'sourceShadowed'>): void {
     if (this.symbols.length >= INDEX_RECORD_LIMIT) {
       this.#complete = false;

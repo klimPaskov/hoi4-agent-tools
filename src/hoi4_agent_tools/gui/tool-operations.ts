@@ -166,11 +166,14 @@ export async function inspectGui(
           const linted = await studio.lint({
             workspaceId: context.workspaceId,
             windowName: input.windowName!,
+            progress: (phase) => context.progress(1, 3, phase),
             scenario: input.scenario!,
             ...(input.relatedScenarios === undefined
               ? {}
               : { relatedScenarios: input.relatedScenarios }),
-            generatedScenarios: input.generatedScenarios ?? {},
+            ...(input.generatedScenarios === undefined
+              ? {}
+              : { generatedScenarios: input.generatedScenarios }),
             ...(context.principal === undefined ? {} : { principal: context.principal }),
             ...(context.signal === undefined ? {} : { signal: context.signal }),
           });
@@ -283,6 +286,7 @@ export async function renderGui(
 ) {
   await context.progress(0, 4, 'Building GUI source graph');
   const rendered = await studio.renderAndStore({
+    progress: (phase) => context.progress(1, 4, phase),
     workspaceId: context.workspaceId,
     windowName: input.windowName,
     scenario: input.scenario,
@@ -297,7 +301,9 @@ export async function renderGui(
           })),
         }),
     ...(input.relatedScenarios === undefined ? {} : { relatedScenarios: input.relatedScenarios }),
-    generatedScenarios: input.generatedScenarios ?? {},
+    ...(input.generatedScenarios === undefined
+      ? {}
+      : { generatedScenarios: input.generatedScenarios }),
     ...(input.comparisonScenario === undefined
       ? {}
       : { comparisonScenario: input.comparisonScenario }),

@@ -29,7 +29,7 @@ import { isReferenceTool, ReferenceToolService } from '../../reference/operation
 import type { createChaosxToolOperations } from '../tools/chaosx.js';
 import { ModernTaskAdapter, TASKS_EXTENSION } from './modern-tasks.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
-import { modernProgressReporter, withProgressHeartbeat } from './progress.js';
+import { jobProgressReporter, modernProgressReporter, withProgressHeartbeat } from './progress.js';
 import { taskToolCatalog } from './task-tool-catalog.js';
 import type { ToolDefinition } from './task-tool-definition.js';
 
@@ -252,6 +252,7 @@ export function createModernOperationServer(
           capabilities,
           operationContext,
           {
+            progress: jobProgressReporter(progress),
             requestId: extra.mcpReq.id,
             signal: extra.mcpReq.signal,
             ...(extra.sessionId === undefined ? {} : { sessionId: extra.sessionId }),

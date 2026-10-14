@@ -132,3 +132,17 @@ export async function withProgressHeartbeat<T>(
     heartbeatOwners.delete(reporter);
   }
 }
+
+/** Reserve the outer request's final two steps for retrieval/completion while forwarding worker phases. */
+export function jobProgressReporter(
+  reporter: ProgressReporter,
+): (completed: number, total: number, message: string) => Promise<void> {
+  let previous: string | undefined;
+  return async (completed, total, message) => {
+    const identity = JSON.stringify([completed, total, message]);
+    if (identity === previous) return;
+    previous = identity;
+    await reporter.report(Math.min(1, completed / Math.max(1, total)), 3, message);
+    await reporter.pulse(message);
+  };
+}

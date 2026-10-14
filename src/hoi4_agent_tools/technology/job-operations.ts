@@ -43,6 +43,7 @@ export function registerTechnologyJobs(operations: JobOperations, engine: CoreEn
           workspaceId: context.workspaceId,
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: context.signal,
+          progress: (phase: string) => context.progress({ completed: 1, total: 3, message: phase }),
         });
         await context.progress({
           completed: 3,

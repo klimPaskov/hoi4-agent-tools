@@ -11,6 +11,14 @@ Dashed amber regions are potential controls with unresolved visibility or enabli
 The scene retains the reason so the agent can supply the missing facts instead of guessing.
 These are source-model results, not proof of native click execution.
 
+## Render one supplied state
+
+For a focused render, use `states: []`, one `resolutions` entry matching `scenario.resolution`, and the flags, variables and list rows needed to open the window. Inspection and rendering preserve the supplied scenario; `generatedScenarios` is opt-in. A full state/resolution matrix still runs when those arrays are omitted.
+
+Progress reports scanning, graph construction, selected asset loading, layout and rasterization. Deadline errors name the last phase. Missing texture fallback searches configured graphics/interface roots and fonts, never documentation or unrelated workspace folders. Move assets under a configured asset root if they previously depended on a workspace-wide basename search.
+
+Nested `$KEY$` localisation references resolve across files. Scenario values can supply runtime tokens; cycles, more than 16 nested substitutions, and missing values remain unresolved. Animated sprites use `animationTimeSeconds` (and `visibleTimeSeconds` for play-on-show timing); each PNG is a deterministic frame at that time, not an animation.
+
 ## Preview immediate tooltip text
 
 An explicit tooltip request uses a visible element's `pdx_tooltip` localisation key. Supply `tooltip.target` with its inspected instance ID or a unique element name, plus viewport `x`, `y`, `width` and `padding` values.

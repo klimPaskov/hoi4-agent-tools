@@ -433,7 +433,13 @@ export async function qualifyInstalledHttpBinary(
       'Installed HTTP event-chain inspection returned no JSON artifact resource link',
     );
     requireCondition(
-      JSON.stringify(eventProgress) === JSON.stringify([0, 2, 3]),
+      eventProgress[0] === 0 &&
+        eventProgress.at(-1) === 3 &&
+        eventProgress.includes(2) &&
+        eventProgress.every(
+          (value, index) =>
+            Number.isFinite(value) && (index === 0 || value > eventProgress[index - 1]!),
+        ),
       `Installed HTTP event-chain progress was unexpected: ${eventProgress.join(', ')}`,
     );
 

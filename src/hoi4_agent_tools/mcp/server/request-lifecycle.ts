@@ -8,7 +8,7 @@ import { jobControlTools } from '../tools/job.js';
 import { invalidArgumentsResult } from './argument-errors.js';
 import { taskToolCatalog } from './task-tool-catalog.js';
 import type { ToolDefinition } from './task-tool-definition.js';
-import { progressReporter, withProgressHeartbeat } from './progress.js';
+import { jobProgressReporter, progressReporter, withProgressHeartbeat } from './progress.js';
 import { withTaskRequestSignal } from './task-request-context.js';
 import { slimToolList } from './tool-listing.js';
 
@@ -60,7 +60,11 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
         return handler(request, extra);
       if (taskCall.success && backgroundTools.has(taskCall.data.params.name)) {
         return withProgressHeartbeat(async () => {
-          const result = await withTaskRequestSignal(extra.signal, () => handler(request, extra));
+          const result = await withTaskRequestSignal(
+            extra.signal,
+            () => handler(request, extra),
+            jobProgressReporter(progress),
+          );
           if (taskCall.data.params.task === undefined) {
             await progress.report(2, 3, 'Retrieving persistent operation result');
             await progress.report(3, 3, 'Persistent operation complete');

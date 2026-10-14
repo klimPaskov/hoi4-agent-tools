@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 4.0.4 - 2026-10-14
+
+- Preview individual GUI windows without redundant full symbol indexes, workspace-wide asset fallback or unbound country-flag inventories; reuse condition definitions across render variants.
+- Index technology sources once across layers and scope folder rendering to definitions, layouts and unlock targets. Full inspection retains inbound grants and references.
+- Report render phases and include the last phase in worker deadline errors. Existing parsing, raster-memory, canonical-path and stale-source limits remain enforced.
+- Resolve transitive localisation `$KEY$` references across files and bounded scenario substitutions; retain diagnostics for cycles and missing runtime values.
+- Honour numeric flag presence in scalar visibility checks, matching valued-flag super-event localisation conditions.
+- Preserve supplied GUI scenarios by default; exploratory `generatedScenarios` is now opt-in. Explicit state/resolution matrices and public schema shapes are unchanged.
+- Retain regression coverage for hidden sub-windows, timed animated-sprite frames, 16-bit DDS portraits, declared font colours, worker recovery and render-memory ceilings.
+
 ## 4.0.3 - 2026-10-12
 
 - Publish the README with the supplied HOI4 MCP Server thumbnail and direct links to the demo video on YouTube.

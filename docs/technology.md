@@ -127,3 +127,5 @@ The comparison render is produced unless `render` is `false`; `maxRenderNodes` r
 For an unfamiliar technology system, an agent can scan it, discover folders, trace or explain the relevant path, render only the needed views, edit Clausewitz source through its normal repository workflow, and compare the result. The same graph and revision back every query and artifact, so folder placement, dependency structure, unlock impact, and cross-file references stay aligned.
 
 This is static analysis. Exact runtime research time, AI choices, balance, arbitrary dynamic grants, and unsupported visibility behavior are not inferred. Dynamic expressions remain in the results with their confidence and blockers, and no destination is invented.
+
+Folder rendering scans technology definitions, GUI layouts, unlock targets, localisation and assets. It omits inbound event, decision, focus and history references; use `hoi4.tech_inspect` for grants, bonuses, impact and complete reference evidence. The render manifest records this source scope.

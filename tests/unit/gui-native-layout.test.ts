@@ -328,11 +328,10 @@ describe('native GUI geometry and composition', () => {
         .every(({ sprite }) => sprite?.spriteName === 'GFX_tile'),
     ).toBe(true);
     const patterns = scenarioCountryFlagPatterns([scenario]);
-    expect(patterns).toHaveLength(12);
+    expect(patterns).toHaveLength(18);
     expect(patterns).toContain('gfx/flags/medium/AAA_*.{bmp,dds,png,tga}');
-    expect(patterns.every((pattern) => !pattern.includes('..') && !pattern.includes('ZZZ'))).toBe(
-      true,
-    );
+    expect(patterns.every((pattern) => !pattern.includes('..'))).toBe(true);
+    expect(patterns).toContain('gfx/flags/ZZZ.{bmp,dds,png,tga}');
     expect(
       scenarioCountryFlagPatterns([
         parsePreviewScenario({
