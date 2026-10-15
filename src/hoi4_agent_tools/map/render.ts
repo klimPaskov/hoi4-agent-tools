@@ -668,9 +668,17 @@ export async function renderMap(
     'map PNG output',
   );
   const raw = Buffer.alloc(raster.width * raster.height * 4);
+  // A base layer assigns one color to each province. Resolve that color once for this
+  // immutable render, rather than repeating state lookups and color hashes for every pixel.
+  const provinceColors = new Map<number, RgbColor>();
   for (let offset = 0; offset < raster.provinceIds.length; offset += 1) {
     if (offset % Math.max(raster.width * 32, 1) === 0) await renderCheckpoint(options.signal);
-    const color = baseColor(index, raster.provinceIds[offset] ?? -1, resolved.layer);
+    const provinceId = raster.provinceIds[offset] ?? -1;
+    let color = provinceColors.get(provinceId);
+    if (color === undefined) {
+      color = baseColor(index, provinceId, resolved.layer);
+      provinceColors.set(provinceId, color);
+    }
     const target = offset * 4;
     raw[target] = color.r;
     raw[target + 1] = color.g;

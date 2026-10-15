@@ -22,6 +22,12 @@ import {
 } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
+import {
+  TRANSACTION_MAX_ARTIFACTS,
+  TRANSACTION_MAX_FILES,
+  TRANSACTION_MAX_MANIFEST_BYTES,
+} from '../../src/hoi4_agent_tools/core/transaction-limits.js';
 import {
   TransactionManager,
   transactionRootFingerprint,
@@ -2083,7 +2089,7 @@ describe('transaction manager', () => {
         workspaceId: 'test',
         operationKind: 'test',
         operations,
-        changes: Array.from({ length: 1_001 }, () => change),
+        changes: Array.from({ length: TRANSACTION_MAX_FILES + 1 }, () => change),
       }),
     ).rejects.toMatchObject({ code: 'TRANSACTION_STRUCTURE_LIMIT' });
     await expect(
@@ -2108,13 +2114,348 @@ describe('transaction manager', () => {
         operationKind: 'test',
         operations,
         changes: [change],
-        artifacts: Array.from({ length: 513 }, (_, index) => ({
+        artifacts: Array.from({ length: TRANSACTION_MAX_ARTIFACTS + 1 }, (_, index) => ({
           uri: `https://example.test/${index}`,
           name: `artifact-${index}`,
           mimeType: 'application/json',
         })),
       }),
     ).rejects.toMatchObject({ code: 'TRANSACTION_STRUCTURE_LIMIT' });
+  });
+
+  it('writes more than a thousand files while retaining stale-source protection and bounded manifests', async () => {
+    const { mod, manager } = await setup();
+    const changes = [
+      {
+        relativePath: 'common/one.txt',
+        content: Buffer.from('large rewrite\n'),
+        operationIds: ['op-1'],
+      },
+      ...Array.from({ length: 1_000 }, (_, index) => ({
+        relativePath: `generated/file-${String(index).padStart(4, '0')}.txt`,
+        content: Buffer.from('synthetic generated file\n'),
+        operationIds: ['op-1'],
+      })),
+    ];
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'synthetic-large-world',
+      operations,
+      changes,
+    });
+    expect(plan.files).toHaveLength(1_001);
+    expect(plan.artifacts).toHaveLength(1);
+    expect(plan.files.every(({ diffArtifact }) => diffArtifact === undefined)).toBe(true);
+    const bundle = plan.artifacts[0]!;
+    const review = JSON.parse(
+      await readFile(
+        path.join(
+          mod,
+          '.hoi4-agent/artifacts',
+          bundle.sha256!.slice(0, 2),
+          bundle.sha256!,
+          bundle.name,
+        ),
+        'utf8',
+      ),
+    ) as {
+      type: string;
+      files: Array<{
+        relativePath: string;
+        beforeSha256: string | null;
+        afterSha256: string;
+        diff: string;
+      }>;
+    };
+    expect(review.type).toBe('hoi4-agent.source-diff-bundle');
+    expect(review.files).toHaveLength(1_001);
+    expect(review.files.map(({ relativePath }) => relativePath)).toEqual(
+      plan.files.map(({ relativePath }) => relativePath),
+    );
+    for (const [index, entry] of review.files.entries()) {
+      expect(entry.beforeSha256).toBe(plan.files[index]!.beforeSha256);
+      expect(entry.afterSha256).toBe(plan.files[index]!.afterSha256);
+      expect(entry.diff).toContain(`+++ b/${entry.relativePath}`);
+    }
+    expect(review.files[0]).toMatchObject({
+      relativePath: 'common/one.txt',
+      beforeSha256: sha256Bytes('value = before\n'),
+      afterSha256: sha256Bytes('large rewrite\n'),
+      diff: '--- a/common/one.txt\n+++ b/common/one.txt\n@@ -1,1 +1,1 @@\n+large rewrite\n-value = before',
+    });
+    expect(review.files.at(-1)).toMatchObject({
+      relativePath: 'generated/file-0999.txt',
+      beforeSha256: null,
+      afterSha256: sha256Bytes('synthetic generated file\n'),
+      diff: expect.stringContaining('+synthetic generated file'),
+    });
+    expect(Buffer.byteLength(canonicalJson(plan))).toBeLessThan(TRANSACTION_MAX_MANIFEST_BYTES);
+
+    const existing = path.join(mod, 'common/one.txt');
+    await writeFile(existing, 'external edit\n');
+    await expect(manager.apply('test', plan.transactionId, plan.planHash)).rejects.toMatchObject({
+      code: 'TRANSACTION_STALE',
+    });
+    expect(await readFile(existing, 'utf8')).toBe('external edit\n');
+    expect(await readdir(mod)).not.toContain('generated');
+
+    await writeFile(existing, 'value = before\n');
+    const applied = await manager.apply('test', plan.transactionId, plan.planHash);
+    expect(applied).toMatchObject({ state: 'applied', validation: { passed: true } });
+    expect(applied.appliedFiles).toHaveLength(1_001);
+    expect(await readFile(existing, 'utf8')).toBe('large rewrite\n');
+    expect(await readdir(path.join(mod, 'generated'))).toHaveLength(1_000);
+    expect(
+      await Promise.all(
+        changes.slice(1).map(({ relativePath }) => readFile(path.join(mod, relativePath), 'utf8')),
+      ),
+    ).toEqual(Array.from({ length: 1_000 }, () => 'synthetic generated file\n'));
+    expect(await manager.status('test', plan.transactionId)).toEqual(applied);
+  }, 600_000);
+
+  it('restores existing files and removes new files after a large rewrite fails partway through', async () => {
+    const { mod, manager, resolver } = await setup();
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'synthetic-large-world',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('large rewrite\n'),
+          operationIds: ['op-1'],
+        },
+        ...Array.from({ length: 1_000 }, (_, index) => ({
+          relativePath: `generated/file-${String(index).padStart(4, '0')}.txt`,
+          content: Buffer.from('synthetic generated file\n'),
+          operationIds: ['op-1'],
+        })),
+      ],
+    });
+    await expect(
+      manager.apply('test', plan.transactionId, plan.planHash, {
+        hooks: {
+          afterReplace: async (_relativePath, index) => {
+            if (index === 2) throw new Error('Synthetic replacement failure');
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_APPLY_FAILED' });
+    expect(await readFile(path.join(mod, 'common/one.txt'), 'utf8')).toBe('value = before\n');
+    expect(await readdir(path.join(mod, 'generated'))).toEqual([]);
+    expect(await manager.status('test', plan.transactionId)).toMatchObject({
+      state: 'rolled_back',
+      rollbackStatus: 'applied',
+    });
+    const restarted = new TransactionManager(resolver);
+    expect(await restarted.recover('test')).toEqual([]);
+  }, 600_000);
+
+  it('joins a rejected staging batch before cleaning every stage and commits no source writes', async () => {
+    const { mod, manager } = await setup();
+    const changes = [
+      {
+        relativePath: 'common/one.txt',
+        content: Buffer.from('staged replacement\n'),
+        operationIds: ['op-1'],
+      },
+      ...Array.from({ length: 19 }, (_, index) => ({
+        relativePath: `generated/file-${String(index).padStart(2, '0')}.txt`,
+        content: Buffer.from(`synthetic file ${index}\n`),
+        operationIds: ['op-1'],
+      })),
+    ];
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'staging-batch',
+      operations,
+      changes,
+    });
+    const corrupt = plan.files[5]!;
+    await writeFile(
+      path.join(mod, '.hoi4-agent/cache/transactions', plan.transactionId, corrupt.afterBlob!),
+      'corrupt blob',
+    );
+    const afterStage = vi.fn();
+    await expect(
+      manager.apply('test', plan.transactionId, plan.planHash, { hooks: { afterStage } }),
+    ).rejects.toMatchObject({ code: 'TRANSACTION_BLOB_INTEGRITY_FAILED' });
+    expect(afterStage).not.toHaveBeenCalled();
+    expect(await readFile(path.join(mod, 'common/one.txt'), 'utf8')).toBe('value = before\n');
+    expect(await readdir(path.join(mod, 'common'))).toEqual(['one.txt']);
+    expect(await readdir(path.join(mod, 'generated'))).toEqual([]);
+    expect(await manager.status('test', plan.transactionId)).toMatchObject({
+      state: 'rolled_back',
+      appliedFiles: [],
+    });
+  });
+
+  it('joins pending path checks before refusing a plan and never writes across workspace boundaries', async () => {
+    const { base, mod, resolver, manager } = await setup();
+    const original = resolver.resolvePath.bind(resolver);
+    let release!: () => void;
+    let started!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const inFlight = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    vi.spyOn(resolver, 'resolvePath').mockImplementation(async (...args) => {
+      if (args[1] === 'generated/pending.txt') {
+        started();
+        await pending;
+      }
+      return original(...args);
+    });
+    const validate = vi.fn(validDryRun);
+    let settled = false;
+    const planned = manager.plan({
+      workspaceId: 'test',
+      operationKind: 'path-check-join',
+      operations,
+      validate,
+      changes: [
+        {
+          relativePath: '../outside.txt',
+          content: Buffer.from('must not be written'),
+          operationIds: ['op-1'],
+        },
+        {
+          relativePath: 'generated/pending.txt',
+          content: Buffer.from('must not be written'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    void planned.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await inFlight;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    release();
+    await expect(planned).rejects.toBeInstanceOf(ServiceError);
+    expect(validate).not.toHaveBeenCalled();
+    expect(await readFile(path.join(mod, 'common/one.txt'), 'utf8')).toBe('value = before\n');
+    await expect(readFile(path.join(base, 'outside.txt'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    expect(await readdir(mod)).not.toContain('generated');
+  });
+
+  it('joins all current-source checks before a stale refusal and starts no replacement', async () => {
+    const { mod, resolver, manager } = await setup();
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'verification-join',
+      operations,
+      changes: [
+        {
+          relativePath: 'common/one.txt',
+          content: Buffer.from('replacement\n'),
+          operationIds: ['op-1'],
+        },
+        {
+          relativePath: 'generated/pending.txt',
+          content: Buffer.from('new file\n'),
+          operationIds: ['op-1'],
+        },
+      ],
+    });
+    await writeFile(path.join(mod, 'common/one.txt'), 'external edit\n');
+    const original = resolver.resolvePath.bind(resolver);
+    let release!: () => void;
+    let started!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const inFlight = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    vi.spyOn(resolver, 'resolvePath').mockImplementation(async (...args) => {
+      if (args[1] === 'generated/pending.txt') {
+        started();
+        await pending;
+      }
+      return original(...args);
+    });
+    let settled = false;
+    const applying = manager.apply('test', plan.transactionId, plan.planHash);
+    void applying.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await inFlight;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(settled).toBe(false);
+    release();
+    await expect(applying).rejects.toMatchObject({ code: 'TRANSACTION_STALE' });
+    expect(await readFile(path.join(mod, 'common/one.txt'), 'utf8')).toBe('external edit\n');
+    expect(await readdir(mod)).not.toContain('generated');
+    expect(await manager.status('test', plan.transactionId)).toMatchObject({
+      state: 'planned',
+      appliedFiles: [],
+    });
+  });
+
+  it('chunks a large diff bundle without exceeding artifact admission budgets', async () => {
+    const { mod, resolver } = await setup();
+    const changes = Array.from({ length: 1_001 }, (_, index) => ({
+      relativePath: `generated/file-${String(index).padStart(4, '0')}.txt`,
+      content: Buffer.from('synthetic bundled file\n'),
+      operationIds: ['op-1'],
+    }));
+    const limited = testManager(
+      new TransactionManager(resolver, new ArtifactStore(8_388_608, 2, 16_384)),
+    );
+    await expect(
+      limited.plan({ workspaceId: 'test', operationKind: 'chunked-review', operations, changes }),
+    ).rejects.toMatchObject({ code: 'ARTIFACT_STORAGE_LIMIT' });
+    expect(await readdir(mod)).not.toContain('generated');
+
+    const manager = testManager(
+      new TransactionManager(resolver, new ArtifactStore(8_388_608, 100, 16_384)),
+    );
+    const plan = await manager.plan({
+      workspaceId: 'test',
+      operationKind: 'chunked-review',
+      operations,
+      changes,
+    });
+    expect(plan.artifacts).toHaveLength(1);
+    const artifact = plan.artifacts[0]!;
+    const readArtifact = (sha256: string, name: string) =>
+      readFile(path.join(mod, '.hoi4-agent/artifacts', sha256.slice(0, 2), sha256, name));
+    const index = JSON.parse(String(await readArtifact(artifact.sha256!, artifact.name))) as {
+      type: string;
+      original: { sha256: string };
+      chunks: Array<{ name: string; sha256: string; length: number }>;
+    };
+    expect(index.type).toBe('hoi4-agent.chunked-artifact');
+    expect(index.chunks.length).toBeGreaterThan(1);
+    expect(index.chunks.every(({ length }) => length <= 16_384)).toBe(true);
+    const bytes = Buffer.concat(
+      await Promise.all(index.chunks.map(({ sha256, name }) => readArtifact(sha256, name))),
+    );
+    expect(sha256Bytes(bytes)).toBe(index.original.sha256);
+    const review = JSON.parse(String(bytes)) as {
+      type: string;
+      files: Array<{ relativePath: string }>;
+    };
+    expect(review.type).toBe('hoi4-agent.source-diff-bundle');
+    expect(review.files.map(({ relativePath }) => relativePath)).toEqual(
+      plan.files.map(({ relativePath }) => relativePath),
+    );
   });
 
   it('renders legacy source diffs with the detected encoding', async () => {

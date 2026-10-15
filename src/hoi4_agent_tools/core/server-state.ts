@@ -15,6 +15,7 @@ import path from 'node:path';
 import { z } from 'zod/v4';
 import { compareCodeUnits, canonicalJson, secureId } from './canonical.js';
 import { ServiceError } from './result.js';
+import { TRANSACTION_MAX_MANIFEST_BYTES } from './transaction-limits.js';
 
 const journalKeyFile = 'journal-hmac.key';
 const journalKeyBytes = 32;
@@ -210,7 +211,18 @@ export class ServerState {
   }
 
   authenticateJournal(payload: unknown): string {
-    return createHmac('sha256', this.journalKey).update(canonicalJson(payload)).digest('hex');
+    return this.authenticateCanonicalJournal(canonicalJson(payload));
+  }
+
+  /** Internal canonical-byte path; the signature is identical to authenticateJournal. */
+  authenticateCanonicalJournal(payload: string): string {
+    if (Buffer.byteLength(payload, 'utf8') > TRANSACTION_MAX_MANIFEST_BYTES) {
+      throw stateError(
+        'TRANSACTION_MANIFEST_LIMIT',
+        'Transaction manifest exceeds its fixed byte limit',
+      );
+    }
+    return createHmac('sha256', this.journalKey).update(payload).digest('hex');
   }
 
   verifyJournal(payload: unknown, authenticationTag: string): boolean {

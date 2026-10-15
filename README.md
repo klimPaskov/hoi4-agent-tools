@@ -17,6 +17,8 @@ Make focus trees, events and decisions. Edit maps and generate a new world. Prev
 ## What it does
 
 Your agent can build and edit focus trees, events, decisions and maps, and generate a new world.
+
+For a new map, give it a cleaned local reference image and preview the interpreted geography before writing. The [map workflow](docs/map.md#generate-a-world-from-one-image) creates provinces, states, terrain, cities, countries, supply and a provisional starting scenario. Reviewed names and masks refine ambiguous artwork; offline validation is separate from [native campaign acceptance](https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.1.0/docs/evaluations/worldgen_acceptance_2026-10-15.md).
 It previews focus trees, technology folders, windows and maps, finds the right rule in the game's documentation, fixes broken script and tunes AI choices.
 You describe what you want; the agent picks the right tools.
 

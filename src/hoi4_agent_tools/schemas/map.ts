@@ -1,8 +1,16 @@
 import { z } from 'zod/v4';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
+import { workspaceRelativePathSchema } from './common.js';
 
 const identifier = z.string().min(1).max(256);
+// eslint-disable-next-line no-control-regex -- portable JSON Schema pattern rejects grammar-breaking controls.
+const worldNamePattern = /^[^\u0000-\u001f\u007f]+$/u;
+const worldName = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(worldNamePattern, 'World names must not contain control characters');
 const stateId = z.number().int().positive();
 const provinceId = z.number().int().min(0);
 const provinceTypeSchema = z.enum(['land', 'sea', 'lake']);
@@ -19,6 +27,95 @@ const operationBase = {
   id: identifier,
   summary: z.string().max(1000).optional(),
 };
+
+const referencePointSchema = z
+  .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
+  .strict();
+const referenceKindSchema = z.enum([
+  'sea',
+  'land',
+  'plains',
+  'forest',
+  'desert',
+  'mountain',
+  'snow',
+  'lake',
+  'volcano',
+  'hills',
+  'marsh',
+  'jungle',
+]);
+const referencePolygonSchema = z.array(referencePointSchema).min(3).max(1_000);
+const referenceImagePathSchema = workspaceRelativePathSchema.refine(
+  (value) => !value.includes(':') && /\.(?:png|jpe?g|webp)$/iu.test(value),
+  'Reference must be a workspace-relative PNG, JPEG or WebP file',
+);
+
+/** Optional controls refine automatic interpretation; a single imagePath is sufficient. */
+export const worldReferenceSchema = z
+  .object({
+    imagePath: referenceImagePathSchema,
+    politicalImagePath: referenceImagePathSchema.optional(),
+    terrainImagePath: referenceImagePathSchema.optional(),
+    heightImagePath: referenceImagePathSchema.optional(),
+    mode: z
+      .enum(['auto', 'illustrated', 'satellite', 'sketch', 'political', 'grayscale'])
+      .optional(),
+    crop: z
+      .object({
+        x: z.number().int().min(0),
+        y: z.number().int().min(0),
+        width: z.number().int().positive().max(65_536),
+        height: z.number().int().positive().max(65_536),
+      })
+      .strict()
+      .optional(),
+    ignoreMasks: z.array(referencePolygonSchema).max(64).optional(),
+    annotations: z
+      .array(z.object({ kind: referenceKindSchema, polygon: referencePolygonSchema }).strict())
+      .max(128)
+      .optional(),
+    riverAnnotations: z.array(z.array(referencePointSchema).min(2).max(1_000)).max(128).optional(),
+    palette: z
+      .array(z.object({ kind: referenceKindSchema, color: rgbSchema }).strict())
+      .max(64)
+      .optional(),
+    coastDetail: z.number().min(0).max(1).optional(),
+    labels: z
+      .array(
+        z
+          .object({
+            name: worldName,
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            kind: z.enum(['state', 'country', 'city', 'sea', 'region', 'mountain', 'geography']),
+          })
+          .strict(),
+      )
+      .max(2_048)
+      .optional(),
+    cities: z
+      .array(
+        z
+          .object({
+            name: worldName,
+            x: z.number().min(0).max(1),
+            y: z.number().min(0).max(1),
+            countryTag: z
+              .string()
+              .regex(/^[A-Z][A-Z0-9]{2}$/u)
+              .optional(),
+          })
+          .strict(),
+      )
+      .max(200)
+      .optional(),
+  })
+  .strict()
+  .describe(
+    'Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement.',
+  );
+export type WorldReferenceInput = z.infer<typeof worldReferenceSchema>;
 
 const moveStateDistributionSchema = z
   .object({
@@ -498,8 +595,17 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
     .object({
       ...operationBase,
       kind: z.literal('create_world'),
-      width: z.number().int().min(256).max(8_192).multipleOf(256).default(1_024),
-      height: z.number().int().min(256).max(4_096).multipleOf(256).default(512),
+      worldName: worldName.optional(),
+      startingScenario: z
+        .boolean()
+        .optional()
+        .describe(
+          'Include basic starting units and stockpiles and replace old-world startup/AI geography. Defaults on for reference-image worlds.',
+        ),
+      id: identifier.default('world'),
+      reference: worldReferenceSchema.optional(),
+      width: z.number().int().min(256).max(8_192).multipleOf(256).optional(),
+      height: z.number().int().min(256).max(4_096).multipleOf(256).optional(),
       seed: z.number().int().min(0).max(2_147_483_647).default(1),
       landCoverage: z.number().min(0.05).max(0.9).default(0.35),
       continents: z.number().int().min(1).max(12).default(3),
@@ -510,16 +616,16 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe('Land outlines in top-left pixel coordinates; omit for generated continents.'),
       landProvincePixels: z.number().int().min(60).max(50_000).default(400),
       seaProvincePixels: z.number().int().min(200).max(200_000).default(2_500),
-      provincesPerState: z.number().int().min(1).max(64).default(5),
-      landProvincesPerRegion: z.number().int().min(2).max(400).default(25),
-      seaProvincesPerRegion: z.number().int().min(1).max(200).default(10),
+      provincesPerState: z.number().int().min(1).max(64).optional(),
+      landProvincesPerRegion: z.number().int().min(2).max(400).optional(),
+      seaProvincesPerRegion: z.number().int().min(1).max(200).optional(),
       countries: z
         .array(
           z
             .object({
               tag: z.string().regex(/^[A-Z][A-Z0-9]{2}$/u),
-              name: z.string().min(1).max(64),
-              adjective: z.string().min(1).max(64).optional(),
+              name: worldName,
+              adjective: worldName.optional(),
               color: rgbSchema.optional(),
               share: z.number().min(0.05).max(100).optional(),
               ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
@@ -527,13 +633,14 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
             .strict(),
         )
         .min(1)
-        .max(200),
-      continentNames: z.array(z.string().min(1).max(64)).max(12).optional(),
+        .max(200)
+        .optional(),
+      continentNames: z.array(worldName).max(12).optional(),
       startDate: z
         .string()
         .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)
         .default('1936.1.1'),
-      rivers: z.number().int().min(0).max(500).default(8),
+      rivers: z.number().int().min(0).max(500).optional(),
       replaceBaseGame: z
         .boolean()
         .default(true)

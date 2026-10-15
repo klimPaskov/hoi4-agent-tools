@@ -571,10 +571,41 @@ export function errorResult(
     ? `REWRITE_${serviceError.code.slice('TRANSACTION_'.length)}`
     : serviceError.code;
   const publicMessage = internalWriteError
-    ? 'Rewrite could not be completed'
+    ? serviceError.code === 'TRANSACTION_STRUCTURE_LIMIT'
+      ? 'Rewrite exceeds the supported file, operation, validation, or evidence limits'
+      : serviceError.code === 'TRANSACTION_JOURNAL_LIMIT'
+        ? 'The requested rewrite exceeds the bounded rollback storage allowance'
+        : 'Rewrite could not be completed'
     : serviceError.message;
   const publicDetails = internalWriteError
-    ? {}
+    ? ['TRANSACTION_STRUCTURE_LIMIT', 'TRANSACTION_JOURNAL_LIMIT'].includes(serviceError.code)
+      ? Object.fromEntries(
+          Object.entries(serviceError.details).filter(
+            ([key, value]) =>
+              [
+                'files',
+                'filesLimit',
+                'operations',
+                'operationsLimit',
+                'readDependencies',
+                'readDependenciesLimit',
+                'artifacts',
+                'artifactsLimit',
+                'diagnostics',
+                'diagnosticsLimit',
+                'checks',
+                'checksLimit',
+                'requestedWorkBytes',
+                'plannedJournalBytes',
+                'retainedBytes',
+                'maximumBytes',
+              ].includes(key) &&
+              typeof value === 'number' &&
+              Number.isSafeInteger(value) &&
+              value >= 0,
+          ),
+        )
+      : {}
     : Object.fromEntries(
         Object.entries(serviceError.details).filter(
           ([key]) =>

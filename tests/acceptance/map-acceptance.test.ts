@@ -1468,6 +1468,7 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
       'application/json',
       'application/json',
       'application/json',
+      'application/json',
       'image/png',
       'image/png',
       'image/png',
@@ -1485,6 +1486,7 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
       'map-proposed.html',
       'map-proposed.json',
       'map-proposed.png',
+      'map-validation.json',
     ]);
 
     const allocationHarness = await createHarness(

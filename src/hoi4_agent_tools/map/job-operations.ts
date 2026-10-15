@@ -17,6 +17,7 @@ import {
   normalizeMapRenderRequest,
   normalizeMapRewriteRequest,
   prepareMapRewrite,
+  previewMapRewrite,
   renderMapView,
   type MapOperationContext,
 } from './tool-operations.js';
@@ -102,12 +103,24 @@ export function registerMapJobs(operations: JobOperations, engine: CoreEngine): 
         );
       const release = lifetime.begin();
       try {
-        return await prepareMapRewrite(nudger, normalizeMapRewriteRequest(input), {
+        const operationContext: MapOperationContext = {
           workspaceId: context.workspaceId,
           ...(context.principal === undefined ? {} : { principal: context.principal }),
           signal: context.signal,
           progress: (completed, total, message) => context.progress({ completed, total, message }),
-        });
+        };
+        const normalized = normalizeMapRewriteRequest(input);
+        if (normalized.preview)
+          return {
+            readOnlyPreview: wireResult.parse(
+              JSON.parse(
+                JSON.stringify(
+                  toolResult(await previewMapRewrite(nudger, normalized, operationContext)),
+                ),
+              ) as unknown,
+            ),
+          };
+        return await prepareMapRewrite(nudger, normalized, operationContext);
       } finally {
         release();
       }

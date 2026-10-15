@@ -250,6 +250,7 @@ describe('offline package and Registry metadata', () => {
       'docs/focus.md',
       'docs/gui.md',
       'docs/map.md',
+      'docs/images/reference-maps/',
       'docs/reference.md',
       'docs/research/reference-benchmark.md',
       'docs/http.md',

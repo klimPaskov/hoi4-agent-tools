@@ -163,6 +163,12 @@ export const mapRewriteRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
     operations: z.array(compactMapOperationSchema).min(1).max(100),
+    preview: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Return generated reference, terrain and political previews and counts without changing mod files.',
+      ),
     diffScale: z.number().int().min(1).max(16).optional(),
     requestKey: backgroundRequestKeySchema.optional(),
   })

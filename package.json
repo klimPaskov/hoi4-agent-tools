@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "4.0.5",
+  "version": "4.1.0",
   "description": "Build HOI4 mods: focus trees, events, decisions, worlds, GUI previews, docs and AI balance.",
   "type": "module",
   "license": "Apache-2.0",
@@ -52,6 +52,7 @@
     "docs/focus.md",
     "docs/gui.md",
     "docs/map.md",
+    "docs/images/reference-maps/",
     "docs/reference.md",
     "docs/research/reference-benchmark.md",
     "docs/http.md",
@@ -119,12 +120,14 @@
     "@modelcontextprotocol/node": "2.1.1",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@modelcontextprotocol/server": "2.3.1",
+    "@tesseract.js-data/eng": "1.0.0",
     "express": "5.2.1",
     "fontkit": "2.0.4",
     "glob": "13.0.6",
     "iconv-lite": "0.7.3",
     "jose": "6.2.8",
     "sharp": "0.35.5",
+    "tesseract.js": "7.0.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

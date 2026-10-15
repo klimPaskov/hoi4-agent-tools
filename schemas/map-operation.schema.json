@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.0.5/schemas/map-operation.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.1.0/schemas/map-operation.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "oneOf": [
     {
@@ -746,6 +746,7 @@
       "type": "object",
       "properties": {
         "id": {
+          "default": "world",
           "$ref": "#/$defs/__schema0"
         },
         "summary": {
@@ -755,15 +756,69 @@
           "type": "string",
           "const": "create_world"
         },
+        "worldName": {
+          "$ref": "#/$defs/__schema49"
+        },
+        "startingScenario": {
+          "description": "Include basic starting units and stockpiles and replace old-world startup/AI geography. Defaults on for reference-image worlds.",
+          "$ref": "#/$defs/__schema50"
+        },
+        "reference": {
+          "type": "object",
+          "properties": {
+            "imagePath": {
+              "$ref": "#/$defs/__schema51"
+            },
+            "politicalImagePath": {
+              "$ref": "#/$defs/__schema52"
+            },
+            "terrainImagePath": {
+              "$ref": "#/$defs/__schema53"
+            },
+            "heightImagePath": {
+              "$ref": "#/$defs/__schema54"
+            },
+            "mode": {
+              "$ref": "#/$defs/__schema55"
+            },
+            "crop": {
+              "$ref": "#/$defs/__schema56"
+            },
+            "ignoreMasks": {
+              "$ref": "#/$defs/__schema57"
+            },
+            "annotations": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "riverAnnotations": {
+              "$ref": "#/$defs/__schema63"
+            },
+            "palette": {
+              "$ref": "#/$defs/__schema65"
+            },
+            "coastDetail": {
+              "$ref": "#/$defs/__schema67"
+            },
+            "labels": {
+              "$ref": "#/$defs/__schema68"
+            },
+            "cities": {
+              "$ref": "#/$defs/__schema70"
+            }
+          },
+          "required": [
+            "imagePath"
+          ],
+          "additionalProperties": false,
+          "description": "Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement."
+        },
         "width": {
-          "default": 1024,
           "type": "integer",
           "minimum": 256,
           "maximum": 8192,
           "multipleOf": 256
         },
         "height": {
-          "default": 512,
           "type": "integer",
           "minimum": 256,
           "maximum": 4096,
@@ -789,7 +844,7 @@
         },
         "landPolygons": {
           "description": "Land outlines in top-left pixel coordinates; omit for generated continents.",
-          "$ref": "#/$defs/__schema49"
+          "$ref": "#/$defs/__schema72"
         },
         "landProvincePixels": {
           "default": 400,
@@ -804,19 +859,16 @@
           "maximum": 200000
         },
         "provincesPerState": {
-          "default": 5,
           "type": "integer",
           "minimum": 1,
           "maximum": 64
         },
         "landProvincesPerRegion": {
-          "default": 25,
           "type": "integer",
           "minimum": 2,
           "maximum": 400
         },
         "seaProvincesPerRegion": {
-          "default": 10,
           "type": "integer",
           "minimum": 1,
           "maximum": 200
@@ -826,14 +878,14 @@
           "maxItems": 200,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema51"
+            "$ref": "#/$defs/__schema74"
           }
         },
         "continentNames": {
           "maxItems": 12,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema52"
+            "$ref": "#/$defs/__schema49"
           }
         },
         "startDate": {
@@ -842,7 +894,6 @@
           "pattern": "^\\d{3,4}\\.\\d{1,2}\\.\\d{1,2}$"
         },
         "rivers": {
-          "default": 8,
           "type": "integer",
           "minimum": 0,
           "maximum": 500
@@ -850,13 +901,11 @@
         "replaceBaseGame": {
           "default": true,
           "description": "Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.",
-          "$ref": "#/$defs/__schema53"
+          "$ref": "#/$defs/__schema75"
         }
       },
       "required": [
-        "id",
-        "kind",
-        "countries"
+        "kind"
       ],
       "additionalProperties": false
     },
@@ -886,19 +935,19 @@
           "maxItems": 1000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema54"
+            "$ref": "#/$defs/__schema76"
           }
         },
         "readOnlySources": {
           "default": "refuse",
           "description": "override copies game or dependency files that need the change into the mod.",
-          "$ref": "#/$defs/__schema59"
+          "$ref": "#/$defs/__schema81"
         },
         "pathPrefixes": {
           "maxItems": 32,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema60"
+            "$ref": "#/$defs/__schema82"
           }
         }
       },
@@ -933,7 +982,7 @@
           "maxItems": 3,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema61"
+            "$ref": "#/$defs/__schema83"
           }
         },
         "stateIds": {
@@ -954,13 +1003,13 @@
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema62"
+            "$ref": "#/$defs/__schema84"
           }
         },
         "mode": {
           "default": "missing",
           "description": "missing adds only absent positions; replace rewrites them for the selection.",
-          "$ref": "#/$defs/__schema63"
+          "$ref": "#/$defs/__schema85"
         }
       },
       "required": [
@@ -992,7 +1041,7 @@
         "mode": {
           "default": "connect",
           "description": "connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.",
-          "$ref": "#/$defs/__schema64"
+          "$ref": "#/$defs/__schema86"
         },
         "railwayLevel": {
           "default": 1,
@@ -1023,22 +1072,22 @@
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema65"
+          "$ref": "#/$defs/__schema87"
         },
         "entity": {
-          "$ref": "#/$defs/__schema66"
+          "$ref": "#/$defs/__schema88"
         },
         "fromId": {
-          "$ref": "#/$defs/__schema67"
+          "$ref": "#/$defs/__schema89"
         },
         "toId": {
-          "$ref": "#/$defs/__schema68"
+          "$ref": "#/$defs/__schema90"
         },
         "collision": {
-          "$ref": "#/$defs/__schema69"
+          "$ref": "#/$defs/__schema91"
         },
         "renameLocalisation": {
-          "$ref": "#/$defs/__schema70"
+          "$ref": "#/$defs/__schema92"
         }
       },
       "required": [
@@ -1291,7 +1340,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -1372,7 +1421,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -1414,7 +1463,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -1495,7 +1544,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -1537,7 +1586,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -1610,7 +1659,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema71"
+              "$ref": "#/$defs/__schema93"
             }
           },
           "required": [
@@ -2714,13 +2763,276 @@
       "additionalProperties": false
     },
     "__schema49": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "__schema50": {
+      "type": "boolean"
+    },
+    "__schema51": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "__schema52": {
+      "$ref": "#/$defs/__schema51"
+    },
+    "__schema53": {
+      "$ref": "#/$defs/__schema51"
+    },
+    "__schema54": {
+      "$ref": "#/$defs/__schema51"
+    },
+    "__schema55": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "illustrated",
+        "satellite",
+        "sketch",
+        "political",
+        "grayscale"
+      ]
+    },
+    "__schema56": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 65536
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 65536
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "__schema57": {
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema50"
+        "$ref": "#/$defs/__schema58"
       }
     },
-    "__schema50": {
+    "__schema58": {
+      "minItems": 3,
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema59"
+      }
+    },
+    "__schema59": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "__schema60": {
+      "maxItems": 128,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema61"
+      }
+    },
+    "__schema61": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/__schema62"
+        },
+        "polygon": {
+          "$ref": "#/$defs/__schema58"
+        }
+      },
+      "required": [
+        "kind",
+        "polygon"
+      ],
+      "additionalProperties": false
+    },
+    "__schema62": {
+      "type": "string",
+      "enum": [
+        "sea",
+        "land",
+        "plains",
+        "forest",
+        "desert",
+        "mountain",
+        "snow",
+        "lake",
+        "volcano",
+        "hills",
+        "marsh",
+        "jungle"
+      ]
+    },
+    "__schema63": {
+      "maxItems": 128,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema64"
+      }
+    },
+    "__schema64": {
+      "minItems": 2,
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema59"
+      }
+    },
+    "__schema65": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema66"
+      }
+    },
+    "__schema66": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/__schema62"
+        },
+        "color": {
+          "$ref": "#/$defs/__schema44"
+        }
+      },
+      "required": [
+        "kind",
+        "color"
+      ],
+      "additionalProperties": false
+    },
+    "__schema67": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema68": {
+      "maxItems": 2048,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema69"
+      }
+    },
+    "__schema69": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/__schema49"
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "state",
+            "country",
+            "city",
+            "sea",
+            "region",
+            "mountain",
+            "geography"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "x",
+        "y",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "__schema70": {
+      "maxItems": 200,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema71"
+      }
+    },
+    "__schema71": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/__schema49"
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "countryTag": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{2}$"
+        }
+      },
+      "required": [
+        "name",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "__schema72": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema73"
+      }
+    },
+    "__schema73": {
       "minItems": 3,
       "maxItems": 10000,
       "type": "array",
@@ -2728,7 +3040,7 @@
         "$ref": "#/$defs/__schema29"
       }
     },
-    "__schema51": {
+    "__schema74": {
       "type": "object",
       "properties": {
         "tag": {
@@ -2736,14 +3048,10 @@
           "pattern": "^[A-Z][A-Z0-9]{2}$"
         },
         "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64
+          "$ref": "#/$defs/__schema49"
         },
         "adjective": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64
+          "$ref": "#/$defs/__schema49"
         },
         "color": {
           "$ref": "#/$defs/__schema44"
@@ -2769,15 +3077,10 @@
       ],
       "additionalProperties": false
     },
-    "__schema52": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64
-    },
-    "__schema53": {
+    "__schema75": {
       "type": "boolean"
     },
-    "__schema54": {
+    "__schema76": {
       "type": "object",
       "properties": {
         "from": {
@@ -2788,13 +3091,13 @@
         "to": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema55"
+              "$ref": "#/$defs/__schema77"
             },
             {
-              "$ref": "#/$defs/__schema56"
+              "$ref": "#/$defs/__schema78"
             },
             {
-              "$ref": "#/$defs/__schema58"
+              "$ref": "#/$defs/__schema80"
             }
           ],
           "description": "One ID replaces; several IDs copy the referencing assignment once per ID; null removes it."
@@ -2806,40 +3109,40 @@
       ],
       "additionalProperties": false
     },
-    "__schema55": {
+    "__schema77": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema56": {
+    "__schema78": {
       "minItems": 1,
       "maxItems": 16,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema57"
+        "$ref": "#/$defs/__schema79"
       }
     },
-    "__schema57": {
+    "__schema79": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema58": {
+    "__schema80": {
       "type": "null"
     },
-    "__schema59": {
+    "__schema81": {
       "type": "string",
       "enum": [
         "refuse",
         "override"
       ]
     },
-    "__schema60": {
+    "__schema82": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "__schema61": {
+    "__schema83": {
       "type": "string",
       "enum": [
         "buildings",
@@ -2847,30 +3150,30 @@
         "weather"
       ]
     },
-    "__schema62": {
+    "__schema84": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema63": {
+    "__schema85": {
       "type": "string",
       "enum": [
         "missing",
         "replace"
       ]
     },
-    "__schema64": {
+    "__schema86": {
       "type": "string",
       "enum": [
         "connect",
         "replace"
       ]
     },
-    "__schema65": {
+    "__schema87": {
       "type": "string",
       "const": "renumber_map_entity"
     },
-    "__schema66": {
+    "__schema88": {
       "type": "string",
       "enum": [
         "province",
@@ -2878,17 +3181,17 @@
         "strategic-region"
       ]
     },
-    "__schema67": {
+    "__schema89": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema68": {
+    "__schema90": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema69": {
+    "__schema91": {
       "default": "swap",
       "type": "string",
       "enum": [
@@ -2896,11 +3199,11 @@
         "reject"
       ]
     },
-    "__schema70": {
+    "__schema92": {
       "default": true,
       "type": "boolean"
     },
-    "__schema71": {
+    "__schema93": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
