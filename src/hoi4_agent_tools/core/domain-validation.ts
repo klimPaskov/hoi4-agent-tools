@@ -6,6 +6,7 @@ import {
   mapChangeScanPatterns,
 } from './domain-scan-patterns.js';
 import type { Diagnostic } from './diagnostics.js';
+import { rollupRepeatedSoftDiagnostics } from './diagnostic-rollup.js';
 import type { CoreEngine } from './engine.js';
 import type { ArtifactLink } from './result.js';
 import { parseClausewitz } from './source/index.js';
@@ -231,6 +232,17 @@ export async function postValidateTransaction(
       .slice(0, retainedLimit - retainedHard.length);
     const omittedHard = hard.length - retainedHard.length;
     const artifactLink = publicArtifactLink(artifact);
+    if (transaction.operationKind === 'agent-nudger-map-changes') {
+      const rolled = rollupRepeatedSoftDiagnostics(diagnostics, artifactLink);
+      if (rolled.length <= availableDiagnostics) {
+        checks.push({
+          id: 'post-write-diagnostics-artifact',
+          passed: true,
+          message: `Complete bounded post-write diagnostics are stored at ${artifactLink.uri}`,
+        });
+        return { diagnostics: rolled, checks, artifacts: [artifactLink] };
+      }
+    }
     checks.push({
       id: 'post-write-diagnostics-artifact',
       passed: omittedHard === 0,

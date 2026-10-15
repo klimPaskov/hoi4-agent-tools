@@ -3,6 +3,51 @@
 Generate a new world, split states and reshape provinces. Preview the map and update the scripts that refer to it.
 Use `hoi4.map_inspect` and `hoi4.map_rewrite` for provinces, states, regions, supply, railways, positions, ownership, resources, buildings and localisation.
 
+## Generate a world from one image
+
+Put a PNG, JPEG or WebP reference in your mod workspace, then call `hoi4.map_rewrite`:
+
+```json
+{
+  "operations": [{ "kind": "create_world", "reference": { "imagePath": "references/sketch.png" } }]
+}
+```
+
+For a first run, copy the project-owned [synthetic hand sketch](images/reference-maps/sketch.png) to `references/sketch.png` in your mod. The [synthetic flat political map](images/reference-maps/political.png) is another ready-made input; copy it to `references/political.png` and change `imagePath` accordingly. The examples are intentionally small and contain no third-party artwork.
+
+The server generates the complete map and supporting country/state files in one validated atomic rewrite. No country list, manual masks, coordinates or separate apply call is required. `workspaceId` defaults to the current mod, and the operation ID defaults to `world`. The default reference world is 5632 by 2048 pixels; the artwork retains its aspect ratio within sea padding. Set `width` and `height` to choose other multiples of 256 within the map pixel budget. Reference defaults group 12 provinces per state, 60 land provinces or 30 sea provinces per strategic region, and request 80 rivers; explicit values override these defaults.
+
+Add `"preview": true` at the top level to return offline reference, terrain and political PNGs, a comparison and counts without changing mod files. Repeat the request without `preview` to apply it. Preview uses the same extraction, generation and validation as application, and never launches the game.
+
+Use a cleaned, unlabelled raster for production generation. Handwriting, sheet joins and map frames can become false islands or relief. Keep the original unchanged, remove these marks in a separate reference, compare its coastlines with the original, then inspect the terrain preview before writing. Supply reviewed names through `reference.labels` and `reference.cities`; an explicit label list, including an empty list, prevents OCR from adding unreviewed names. The server does not automatically redraw artwork or promise lossless interpretation of every map.
+
+Reference worlds enable `startingScenario` by default; procedural worlds keep it off unless requested. The starter includes a bookmark, country histories, provisional councils, recruitable infantry templates, two equipped divisions per country, stockpiles, an infantry production line, supply and building positions. `worldName` sets the bookmark title. Demographics, industry and ownership remain provisional. Existing world events, decisions, startup hooks and country-specific AI strategy folders are replaced; shared game systems remain dependencies and can report unused-definition warnings. Generated names use the localisation replacement folder, and explicit country color declarations match the flags. Inherited country tags receive inactive histories. The adjacent launcher `.mod` file must mirror the generated `descriptor.mod` replacement paths. The server cannot enable a launcher playset or test a campaign.
+
+Regeneration records generated paths and hashes in `.hoi4-agent-world.json`. It removes obsolete recorded outputs through the same atomic rewrite and refuses to overwrite recorded files edited since generation. Preserve that inventory. Unrelated authored files are not deleted; validation can block a rebuild if they conflict with the generated world. Large world diffs remain linked evidence so counts and preview images fit within the MCP response budget.
+
+Automatic interpretation recognizes visual land/water and terrain cues, derives relief and drainage, and uses flat political colors when available. Offline English OCR supplies candidate names and city locations; recognized text bounds are masked before terrain classification so ocean labels do not become islands. Masks near a coastline can soften its detail and produce a review warning. Decorative text, handwriting, unknown languages and visually ambiguous borders may be missed or misclassified; diagnostics identify uncertain interpretation and deterministic defaults. Population, resources, buildings and country ownership inferred from artwork are generated assumptions, not historical facts or a balance assessment.
+
+Optional `reference` controls refine the same call:
+
+| Field                                                       | Meaning                                                                                                                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `politicalImagePath`, `terrainImagePath`, `heightImagePath` | Additional aligned workspace images for political regions, terrain cues or grayscale height.                                                             |
+| `mode`                                                      | `auto`, `illustrated`, `satellite`, `sketch`, `political` or `grayscale`.                                                                                |
+| `crop`                                                      | `{x,y,width,height}` in original source pixels.                                                                                                          |
+| `ignoreMasks`                                               | Polygons that exclude legends, frames or decorative areas.                                                                                               |
+| `annotations`                                               | `{kind,polygon}` semantic polygons: sea, land, plains, lake, forest, desert, mountain, snow, volcano, hills, marsh or jungle.                            |
+| `riverAnnotations`                                          | Paths for known rivers.                                                                                                                                  |
+| `palette`                                                   | `{kind,color:{r,g,b}}` color cues for the same semantic kinds.                                                                                           |
+| `coastDetail`                                               | Detail preservation from 0 to 1.                                                                                                                         |
+| `cities`                                                    | `{name,x,y,countryTag?}` reviewed city and optional capital anchors. `countryTag` must name a generated country.                                         |
+| `labels`                                                    | `{name,x,y,kind}` reviewed names for `state`, `country`, `city`, `sea`, `region`, `mountain` or `geography`; useful for handwritten or ambiguous labels. |
+
+Reviewed geography labels preserve names for lakes, rivers, forests and other features in localisation and generated-world provenance. They do not invent a native HOI4 map entity or turn a geographic label into a city or victory point.
+
+All annotation positions and polygons use normalized 0 to 1 coordinates relative to the original, uncropped reference, with the origin at its top left. Crop uses source pixels instead. Explicit `countries` on the operation supplies reviewed country tags, names, colors and relative shares. If borders or names cannot be inferred reliably, the server generates named defaults and reports the assumptions. Manual controls are optional and never change the original image.
+
+Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side. The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
+
 ## Inspect and navigate the complete map
 
 `hoi4.map_inspect` finds map problems and returns a full-map PNG plus a searchable, clickable HTML navigator by default. The navigator supports pan, zoom, fit-to-map, search by numeric ID, localisation key, or localised name, and exact click lookup for province, state, and strategic-region IDs. Hovering reports both top-left bitmap coordinates and bottom-left HOI4 map coordinates.

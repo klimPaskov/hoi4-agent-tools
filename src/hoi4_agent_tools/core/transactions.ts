@@ -1,9 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import { access, mkdir, open, readFile, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
+import {
+  access,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  unlink,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
 import { hostname } from 'node:os';
-import { ArtifactStore, publicArtifactLink, type ArtifactWrite } from './artifacts.js';
+import {
+  ArtifactStore,
+  publicArtifactLink,
+  type ArtifactWrite,
+  type StoredArtifact,
+} from './artifacts.js';
 import {
   compareCodeUnits,
   canonicalJson,
@@ -14,6 +30,7 @@ import {
 import type { Diagnostic } from './diagnostics.js';
 import { binaryDiff, unifiedTextDiff } from './diff.js';
 import type { ScannedFile } from './scanner.js';
+import { hashSourceBytes, prepareSource, verifySource } from './scanner.js';
 import type { ServerState } from './server-state.js';
 import type { ArtifactLink, ValidationSummary } from './result.js';
 import { ServiceError } from './result.js';
@@ -25,13 +42,16 @@ import {
   TRANSACTION_MAX_ARTIFACTS,
   TRANSACTION_MAX_DIAGNOSTICS,
   TRANSACTION_MAX_FILES,
+  TRANSACTION_MAX_JOURNAL_BYTES,
   TRANSACTION_MAX_MANIFEST_BYTES,
   TRANSACTION_MAX_OPERATIONS,
+  TRANSACTION_MAX_PENDING_FILES,
   TRANSACTION_MAX_READ_DEPENDENCIES,
   TRANSACTION_MAX_VALIDATION_CHECKS,
 } from './transaction-limits.js';
 import { PACKAGE_VERSION, TRANSACTION_VERSION } from '../version.js';
 import { transactionManifestSchema } from '../schemas/transaction.js';
+import { TransactionCanonicalSnapshot } from './transaction-canonical.js';
 
 /**
  * A file name usable as an artifact name: mod files may contain spaces and other characters
@@ -73,6 +93,17 @@ export interface TransactionReadDependency {
   loadOrder: number;
   relativePath: string;
   sha256: string;
+}
+
+export interface TransactionFileIdentity {
+  device: string;
+  inode: string;
+}
+
+export interface TransactionPendingFile {
+  relativePath: string;
+  beforeIdentity: TransactionFileIdentity | null;
+  stagedIdentity: TransactionFileIdentity | null;
 }
 
 export function readDependenciesFromScannedFiles(
@@ -123,6 +154,8 @@ export interface TransactionManifest {
   /** Post-write evidence, excluded from the immutable pre-write plan hash. */
   executionArtifacts?: ArtifactLink[];
   appliedFiles: string[];
+  /** Authenticated write-ahead intent; absent on legacy journals, never defaulted on load. */
+  pendingFiles?: TransactionPendingFile[];
   rollbackStatus: 'available' | 'applied' | 'failed';
   failure?: { code: string; message: string };
 }
@@ -163,6 +196,9 @@ interface TransactionManifestByteCacheEntry {
 const transactionManifestRangeMaxBytes = 1_048_576;
 const transactionManifestCacheMaxBytes = TRANSACTION_MAX_MANIFEST_BYTES;
 const transactionManifestCacheMaxEntries = 8;
+const transactionPerFileDiffLimit = 1_000;
+const transactionStageConcurrency = 16;
+const transactionVerificationConcurrency = 16;
 
 function transactionManifestFileIdentity(value: {
   dev: number;
@@ -217,6 +253,8 @@ export interface PlanTransactionInput {
 }
 
 export interface TransactionHooks {
+  afterBatchIntent?: (relativePaths: readonly string[], batchIndex: number) => Promise<void>;
+  beforeBatchCheckpoint?: (relativePaths: readonly string[], batchIndex: number) => Promise<void>;
   afterStage?: (relativePath: string, index: number) => Promise<void>;
   afterBackup?: (relativePath: string, index: number) => Promise<void>;
   afterReplace?: (relativePath: string, index: number) => Promise<void>;
@@ -251,6 +289,30 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function fileIdentity(filePath: string): Promise<TransactionFileIdentity | null> {
+  try {
+    const metadata = await lstat(filePath, { bigint: true });
+    if (!metadata.isFile())
+      throw new ServiceError(
+        'TRANSACTION_SOURCE_TYPE_INVALID',
+        'Transaction source or stage is not a regular file',
+      );
+    return { device: metadata.dev.toString(), inode: metadata.ino.toString() };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function sameFileIdentity(
+  left: TransactionFileIdentity | null,
+  right: TransactionFileIdentity | null,
+): boolean {
+  return left === null || right === null
+    ? left === right
+    : left.device === right.device && left.inode === right.inode;
 }
 
 function inferMediaType(relativePath: string): string {
@@ -349,7 +411,7 @@ export class TransactionManager {
     private readonly resolver: WorkspaceResolver,
     private readonly artifacts = new ArtifactStore(),
     private readonly ttlSeconds = 3600,
-    private readonly maxJournalBytes = 536_870_912,
+    private readonly maxJournalBytes = TRANSACTION_MAX_JOURNAL_BYTES,
     private readonly maxJournals = 128,
     private readonly serverState: ServerState | undefined = resolver.serverState(),
   ) {}
@@ -396,6 +458,18 @@ export class TransactionManager {
       throw new ServiceError(
         'TRANSACTION_STRUCTURE_LIMIT',
         'Transaction input exceeds the supported review structure limits',
+        {
+          files: input.changes.length,
+          filesLimit: TRANSACTION_MAX_FILES,
+          operations: input.operations.length,
+          operationsLimit: TRANSACTION_MAX_OPERATIONS,
+          readDependencies: input.readDependencies?.length ?? 0,
+          readDependenciesLimit: TRANSACTION_MAX_READ_DEPENDENCIES,
+          artifacts: input.artifacts?.length ?? 0,
+          artifactsLimit: TRANSACTION_MAX_ARTIFACTS,
+          diagnostics: input.diagnostics?.length ?? 0,
+          diagnosticsLimit: TRANSACTION_MAX_DIAGNOSTICS,
+        },
       );
     }
     if (typeof input.validate !== 'function') {
@@ -414,39 +488,53 @@ export class TransactionManager {
       change: ProposedFileChange;
       resolved: Awaited<ReturnType<WorkspaceResolver['resolvePath']>>;
     }> = [];
-    for (const change of sortedChanges) {
+    for (
+      let offset = 0;
+      offset < sortedChanges.length;
+      offset += transactionVerificationConcurrency
+    ) {
       input.signal?.throwIfAborted();
-      if (seen.has(change.relativePath)) {
-        throw new ServiceError(
-          'TRANSACTION_DUPLICATE_FILE',
-          `Transaction changes a file more than once: ${change.relativePath}`,
-        );
-      }
-      seen.add(change.relativePath);
-      const resolved = await this.resolver.resolvePath(
-        input.workspaceId,
-        change.relativePath,
-        'write',
-        ['mod'],
-        input.principal,
+      const batch = sortedChanges.slice(offset, offset + transactionVerificationConcurrency);
+      const resolvedBatch = await Promise.allSettled(
+        batch.map((change) =>
+          this.resolver.resolvePath(
+            input.workspaceId,
+            change.relativePath,
+            'write',
+            ['mod'],
+            input.principal,
+          ),
+        ),
       );
-      const targetKey =
-        process.platform === 'win32' ? resolved.path.toLocaleLowerCase('en-US') : resolved.path;
-      const targetAlias = seenTargets.get(targetKey);
-      if (targetAlias !== undefined) {
-        throw new ServiceError(
-          'TRANSACTION_DUPLICATE_FILE',
-          `Transaction path aliases target the same file: ${targetAlias} and ${change.relativePath}`,
-        );
+      for (const [index, change] of batch.entries()) {
+        if (seen.has(change.relativePath)) {
+          throw new ServiceError(
+            'TRANSACTION_DUPLICATE_FILE',
+            `Transaction changes a file more than once: ${change.relativePath}`,
+          );
+        }
+        seen.add(change.relativePath);
+        const result = resolvedBatch[index]!;
+        if (result.status === 'rejected') throw result.reason;
+        const resolved = result.value;
+        const targetKey =
+          process.platform === 'win32' ? resolved.path.toLocaleLowerCase('en-US') : resolved.path;
+        const targetAlias = seenTargets.get(targetKey);
+        if (targetAlias !== undefined) {
+          throw new ServiceError(
+            'TRANSACTION_DUPLICATE_FILE',
+            `Transaction path aliases target the same file: ${targetAlias} and ${change.relativePath}`,
+          );
+        }
+        seenTargets.set(targetKey, change.relativePath);
+        if (!isWithin(workspace.modRoot, resolved.path)) {
+          throw new ServiceError(
+            'TRANSACTION_PATH_OUTSIDE_MOD',
+            'Transaction targets a path outside the mod root',
+          );
+        }
+        resolvedChanges.push({ change, resolved });
       }
-      seenTargets.set(targetKey, change.relativePath);
-      if (!isWithin(workspace.modRoot, resolved.path)) {
-        throw new ServiceError(
-          'TRANSACTION_PATH_OUTSIDE_MOD',
-          'Transaction targets a path outside the mod root',
-        );
-      }
-      resolvedChanges.push({ change, resolved });
     }
     const transactionId = secureId('txn');
     const pendingBlobs = new Map<string, Buffer>();
@@ -508,14 +596,24 @@ export class TransactionManager {
       );
     }
     const diagnostics = [...(input.diagnostics ?? []), ...validation.diagnostics];
+    const bundledDiffs = files.length > transactionPerFileDiffLimit;
+    const diffArtifactCount = bundledDiffs ? 1 : files.length;
     if (
       validation.checks.length > TRANSACTION_MAX_VALIDATION_CHECKS ||
       diagnostics.length > TRANSACTION_MAX_DIAGNOSTICS ||
-      suppliedArtifacts.length + files.length > TRANSACTION_MAX_ARTIFACTS
+      suppliedArtifacts.length + diffArtifactCount > TRANSACTION_MAX_ARTIFACTS
     ) {
       throw new ServiceError(
         'TRANSACTION_STRUCTURE_LIMIT',
         'Transaction validation or evidence exceeds the supported review structure limits',
+        {
+          checks: validation.checks.length,
+          checksLimit: TRANSACTION_MAX_VALIDATION_CHECKS,
+          diagnostics: diagnostics.length,
+          diagnosticsLimit: TRANSACTION_MAX_DIAGNOSTICS,
+          artifacts: suppliedArtifacts.length + diffArtifactCount,
+          artifactsLimit: TRANSACTION_MAX_ARTIFACTS,
+        },
       );
     }
     const passed =
@@ -568,60 +666,87 @@ export class TransactionManager {
       };
     });
 
-    return this.artifacts.withAtomicWrites(
-      workspace,
-      diffWrites,
-      async (storedDiffs) => {
-        input.signal?.throwIfAborted();
-        const diffArtifacts = storedDiffs.map(publicArtifactLink);
-        const filesWithDiffs = files.map((file, index) => ({
-          ...file,
-          diffArtifact: diffArtifacts[index]!,
-        }));
-        const artifacts = [...suppliedArtifacts, ...diffArtifacts];
-        const now = Date.now();
-        const manifestWithoutHashes: Omit<
-          TransactionManifest,
-          'planHash' | 'planPayload' | 'integrityHash' | 'authenticationTag'
-        > = {
-          version: TRANSACTION_VERSION,
-          revision: 1,
-          transactionId,
-          workspaceId: input.workspaceId,
-          ...(input.principal === undefined ? {} : { principal: input.principal }),
-          rootFingerprint: this.rootFingerprint(workspace),
-          createdAt: new Date(now).toISOString(),
-          expiresAt: new Date(now + this.ttlSeconds * 1000).toISOString(),
-          state: 'planned',
-          operationKind: input.operationKind,
-          operations: input.operations,
-          readDependencies: [...(input.readDependencies ?? [])].sort(
-            (left, right) =>
-              left.loadOrder - right.loadOrder ||
-              compareCodeUnits(left.rootKind, right.rootKind) ||
-              compareCodeUnits(left.relativePath, right.relativePath),
-          ),
-          files: filesWithDiffs,
-          diagnostics,
-          validation: { passed, checks: validation.checks },
-          artifacts,
-          executionArtifacts: [],
-          appliedFiles: [],
-          rollbackStatus: 'available',
-        };
-        const planPayload = manifestPlanPayload(manifestWithoutHashes);
-        const manifest: TransactionManifest = {
-          ...manifestWithoutHashes,
-          planPayload,
-          planHash: hashCanonical(planPayload),
-          integrityHash: '',
-          authenticationTag: '',
-        };
-        await this.commitPlannedJournal(workspace, manifest, pendingBlobs);
-        return manifest;
-      },
-      input.signal,
-    );
+    const reviewWrites: ArtifactWrite[] = bundledDiffs
+      ? [
+          {
+            name: 'rewrite-source-diffs.json',
+            mimeType: 'application/json',
+            content: `${canonicalJson({
+              schemaVersion: 1,
+              type: 'hoi4-agent.source-diff-bundle',
+              files: files.map((file, index) => ({
+                relativePath: file.relativePath,
+                beforeSha256: file.beforeSha256,
+                afterSha256: file.afterSha256,
+                mediaType: file.mediaType,
+                diffMimeType: diffWrites[index]!.mimeType,
+                diff: String(diffWrites[index]!.content),
+              })),
+            })}\n`,
+            provenance: {
+              kind: 'source-diff-bundle',
+              toolVersion: PACKAGE_VERSION,
+              schemaVersion: 'transaction-diff-bundle.v1',
+              sourceHashes: {},
+              metadata: { fileCount: files.length, byteExactDiffs: true },
+            },
+            description: `Complete before/after hashes and review diffs for ${files.length} changed files`,
+          },
+        ]
+      : diffWrites;
+    const commitReview = async (
+      storedDiffs: readonly StoredArtifact[],
+    ): Promise<TransactionManifest> => {
+      input.signal?.throwIfAborted();
+      const diffArtifacts = storedDiffs.map(publicArtifactLink);
+      const filesWithDiffs = bundledDiffs
+        ? files
+        : files.map((file, index) => ({ ...file, diffArtifact: diffArtifacts[index]! }));
+      const artifacts = [...suppliedArtifacts, ...diffArtifacts];
+      const now = Date.now();
+      const manifestWithoutHashes: Omit<
+        TransactionManifest,
+        'planHash' | 'planPayload' | 'integrityHash' | 'authenticationTag'
+      > = {
+        version: TRANSACTION_VERSION,
+        revision: 1,
+        transactionId,
+        workspaceId: input.workspaceId,
+        ...(input.principal === undefined ? {} : { principal: input.principal }),
+        rootFingerprint: this.rootFingerprint(workspace),
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + this.ttlSeconds * 1000).toISOString(),
+        state: 'planned',
+        operationKind: input.operationKind,
+        operations: input.operations,
+        readDependencies: [...(input.readDependencies ?? [])].sort(
+          (left, right) =>
+            left.loadOrder - right.loadOrder ||
+            compareCodeUnits(left.rootKind, right.rootKind) ||
+            compareCodeUnits(left.relativePath, right.relativePath),
+        ),
+        files: filesWithDiffs,
+        diagnostics,
+        validation: { passed, checks: validation.checks },
+        artifacts,
+        executionArtifacts: [],
+        appliedFiles: [],
+        rollbackStatus: 'available',
+      };
+      const planPayload = manifestPlanPayload(manifestWithoutHashes);
+      const manifest: TransactionManifest = {
+        ...manifestWithoutHashes,
+        planPayload,
+        planHash: hashCanonical(planPayload),
+        integrityHash: '',
+        authenticationTag: '',
+      };
+      await this.commitPlannedJournal(workspace, manifest, pendingBlobs);
+      return manifest;
+    };
+    return bundledDiffs
+      ? this.artifacts.withAtomicChunkedWrites(workspace, reviewWrites, commitReview, input.signal)
+      : this.artifacts.withAtomicWrites(workspace, reviewWrites, commitReview, input.signal);
   }
 
   async apply(
@@ -681,65 +806,175 @@ export class TransactionManager {
       try {
         manifest.state = 'applying';
         await this.writeManifest(workspace, manifest, options.hooks);
-        for (const [index, file] of manifest.files.entries()) {
+        // Staging independent targets can share bounded I/O concurrency. Join the entire
+        // batch before hooks, replacement, or failure cleanup, so no writer can outlive
+        // recovery. Replacement and durable journal advancement remain sequential.
+        for (
+          let offset = 0;
+          offset < manifest.files.length;
+          offset += transactionStageConcurrency
+        ) {
           options.signal?.throwIfAborted();
-          const { path: target } = await this.resolver.resolvePath(
-            workspaceId,
-            file.relativePath,
-            'write',
-            ['mod'],
-            options.principal,
+          const files = manifest.files.slice(offset, offset + transactionStageConcurrency);
+          const stagedBatch = await Promise.allSettled(
+            files.map(async (file) => {
+              options.signal?.throwIfAborted();
+              const { path: target } = await this.resolver.resolvePath(
+                workspaceId,
+                file.relativePath,
+                'write',
+                ['mod'],
+                options.principal,
+              );
+              await mkdir(path.dirname(target), { recursive: true });
+              const staged =
+                file.afterBlob === null ? null : `${target}.hoi4-agent-${transactionId}.stage`;
+              const backup = `${target}.hoi4-agent-${transactionId}.backup`;
+              if (staged !== null && file.afterBlob !== null) {
+                const bytes = await this.readVerifiedBlob(workspace, manifest, file, 'after');
+                await durableWrite(staged, bytes);
+              }
+              return { target, staged, backup };
+            }),
           );
-          await mkdir(path.dirname(target), { recursive: true });
-          const staged =
-            file.afterBlob === null ? null : `${target}.hoi4-agent-${transactionId}.stage`;
-          const backup = `${target}.hoi4-agent-${transactionId}.backup`;
-          if (staged !== null && file.afterBlob !== null) {
-            const bytes = await this.readVerifiedBlob(workspace, manifest, file, 'after');
-            await durableWrite(staged, bytes);
+          const rejected = stagedBatch.find((entry) => entry.status === 'rejected');
+          if (rejected?.status === 'rejected') throw rejected.reason;
+          for (const [index, staged] of stagedBatch.entries()) {
+            if (staged.status !== 'fulfilled')
+              throw new Error('Unreachable rejected staging batch');
+            targets.push(staged.value);
+            await options.hooks?.afterStage?.(files[index]!.relativePath, offset + index);
           }
-          targets.push({ target, staged, backup });
-          await options.hooks?.afterStage?.(file.relativePath, index);
         }
 
-        for (const [index, file] of manifest.files.entries()) {
-          options.signal?.throwIfAborted();
-          const target = targets[index]!;
-          const existsBeforeReplace = await fileExists(target.target);
-          const actualBeforeReplace = existsBeforeReplace
-            ? sha256Bytes(await readFile(target.target))
-            : null;
-          if (actualBeforeReplace !== file.beforeSha256) {
-            throw new ServiceError(
-              'TRANSACTION_STALE',
-              'Source changed while transaction output was being staged',
-            );
-          }
-          if (existsBeforeReplace) {
-            await rename(target.target, target.backup);
-            // An edit between the hash check and the rename would otherwise be discarded with
-            // the backup after a successful apply.
-            if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
-              await rename(target.backup, target.target);
-              throw new ServiceError(
-                'TRANSACTION_STALE',
-                'Source changed while transaction output was being staged',
+        {
+          const canonicalSnapshot = new TransactionCanonicalSnapshot(manifest, [
+            'revision',
+            'state',
+            'appliedFiles',
+            'pendingFiles',
+            'failure',
+            'integrityHash',
+            'authenticationTag',
+          ]);
+          const batchSize = manifest.version >= 2 ? TRANSACTION_MAX_PENDING_FILES : 1;
+          for (let offset = 0; offset < manifest.files.length; offset += batchSize) {
+            const batch = manifest.files.slice(offset, offset + batchSize);
+            if (manifest.version >= 2) {
+              const captured = await Promise.allSettled(
+                batch.map(async (file, index) => {
+                  const target = targets[offset + index]!;
+                  if (await fileExists(target.backup))
+                    throw new ServiceError(
+                      'TRANSACTION_STALE',
+                      'Unexpected backup exists before replacement',
+                    );
+                  const beforeIdentity = await fileIdentity(target.target);
+                  const stagedIdentity =
+                    target.staged === null ? null : await fileIdentity(target.staged);
+                  if (
+                    (beforeIdentity === null) !== (file.beforeSha256 === null) ||
+                    (stagedIdentity === null) !== (file.afterSha256 === null)
+                  ) {
+                    throw new ServiceError(
+                      'TRANSACTION_STALE',
+                      'Source or stage presence changed before replacement',
+                    );
+                  }
+                  return { relativePath: file.relativePath, beforeIdentity, stagedIdentity };
+                }),
+              );
+              const rejected = captured.find((entry) => entry.status === 'rejected');
+              if (rejected?.status === 'rejected') throw rejected.reason;
+              manifest.pendingFiles = captured.map((entry) => {
+                if (entry.status !== 'fulfilled')
+                  throw new Error('Unreachable rejected intent batch');
+                return entry.value;
+              });
+              await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+              await options.hooks?.afterBatchIntent?.(
+                batch.map(({ relativePath }) => relativePath),
+                offset / batchSize,
               );
             }
-          }
-          await options.hooks?.afterBackup?.(file.relativePath, index);
-          if (target.staged !== null) {
-            if (await fileExists(target.target)) {
-              throw new ServiceError(
-                'TRANSACTION_STALE',
-                'Source target was recreated during atomic replacement',
+            for (const [batchIndex, file] of batch.entries()) {
+              const index = offset + batchIndex;
+              options.signal?.throwIfAborted();
+              const target = targets[index]!;
+              const currentPath = await this.resolver.resolvePath(
+                workspaceId,
+                file.relativePath,
+                'write',
+                ['mod'],
+                options.principal,
               );
+              if (currentPath.path !== target.target)
+                throw new ServiceError(
+                  'TRANSACTION_STALE',
+                  'Canonical source path changed before replacement',
+                );
+              const existsBeforeReplace = await fileExists(target.target);
+              const actualBeforeReplace = existsBeforeReplace
+                ? sha256Bytes(await readFile(target.target))
+                : null;
+              if (actualBeforeReplace !== file.beforeSha256) {
+                throw new ServiceError(
+                  'TRANSACTION_STALE',
+                  'Source changed while transaction output was being staged',
+                );
+              }
+              const pending = manifest.pendingFiles?.find(
+                ({ relativePath }) => relativePath === file.relativePath,
+              );
+              if (
+                pending !== undefined &&
+                (!sameFileIdentity(await fileIdentity(target.target), pending.beforeIdentity) ||
+                  !sameFileIdentity(
+                    target.staged === null ? null : await fileIdentity(target.staged),
+                    pending.stagedIdentity,
+                  ))
+              ) {
+                throw new ServiceError(
+                  'TRANSACTION_STALE',
+                  'Source or stage identity changed before replacement',
+                );
+              }
+              if (existsBeforeReplace) {
+                await rename(target.target, target.backup);
+                // An edit between the hash check and the rename would otherwise be discarded with
+                // the backup after a successful apply.
+                if (sha256Bytes(await readFile(target.backup)) !== file.beforeSha256) {
+                  await rename(target.backup, target.target);
+                  throw new ServiceError(
+                    'TRANSACTION_STALE',
+                    'Source changed while transaction output was being staged',
+                  );
+                }
+              }
+              await options.hooks?.afterBackup?.(file.relativePath, index);
+              if (target.staged !== null) {
+                if (await fileExists(target.target)) {
+                  throw new ServiceError(
+                    'TRANSACTION_STALE',
+                    'Source target was recreated during atomic replacement',
+                  );
+                }
+                await rename(target.staged, target.target);
+              }
+              manifest.appliedFiles.push(file.relativePath);
+              if (manifest.version < 2)
+                await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+              await options.hooks?.afterReplace?.(file.relativePath, index);
             }
-            await rename(target.staged, target.target);
+            if (manifest.version >= 2) {
+              await options.hooks?.beforeBatchCheckpoint?.(
+                batch.map(({ relativePath }) => relativePath),
+                offset / batchSize,
+              );
+              manifest.pendingFiles = [];
+              await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+            }
           }
-          manifest.appliedFiles.push(file.relativePath);
-          await this.writeManifest(workspace, manifest, options.hooks);
-          await options.hooks?.afterReplace?.(file.relativePath, index);
         }
 
         await options.hooks?.beforePostValidation?.();
@@ -760,6 +995,15 @@ export class TransactionManager {
           throw new ServiceError(
             'TRANSACTION_STRUCTURE_LIMIT',
             'Post-write validation exceeds the supported transaction review or artifact limits',
+            {
+              checks: manifest.validation.checks.length + result.checks.length,
+              checksLimit: TRANSACTION_MAX_VALIDATION_CHECKS,
+              diagnostics: manifest.diagnostics.length + result.diagnostics.length,
+              diagnosticsLimit: TRANSACTION_MAX_DIAGNOSTICS,
+              artifacts:
+                (manifest.executionArtifacts?.length ?? 0) + (result.artifacts?.length ?? 0),
+              artifactsLimit: TRANSACTION_MAX_ARTIFACTS,
+            },
           );
         }
         manifest.diagnostics.push(...result.diagnostics);
@@ -1091,6 +1335,10 @@ export class TransactionManager {
     // Prove that every required rollback source is intact before changing any
     // current file. This keeps a corrupt cache from turning a safe refusal into
     // source loss halfway through rollback.
+    const appliedFiles = new Set(manifest.appliedFiles);
+    const pendingFiles = new Map(
+      (manifest.pendingFiles ?? []).map((pending) => [pending.relativePath, pending]),
+    );
     for (const file of manifest.files) {
       const { path: target } = await this.resolver.resolvePath(
         workspace.id,
@@ -1104,6 +1352,9 @@ export class TransactionManager {
       const current = (await fileExists(target)) ? await readFile(target) : null;
       const currentHash = current === null ? null : sha256Bytes(current);
       const backupExists = await fileExists(backup);
+      const pending = pendingFiles.get(file.relativePath);
+      const currentIdentity = pending === undefined ? null : await fileIdentity(target);
+      const stagedIdentity = pending === undefined ? null : await fileIdentity(staged);
       let backupValid = false;
       if (backupExists) {
         if (file.beforeSha256 === null) {
@@ -1120,15 +1371,45 @@ export class TransactionManager {
           );
         }
         backupValid = true;
+        if (
+          pending !== undefined &&
+          !sameFileIdentity(await fileIdentity(backup), pending.beforeIdentity)
+        ) {
+          throw new ServiceError(
+            'TRANSACTION_ROLLBACK_STALE',
+            'Rollback backup identity differs from its authenticated intent',
+          );
+        }
       }
       // A file this transaction never replaced keeps whatever it holds now, including an
       // edit made while the transaction ran; it does not block restoring the others.
-      const untouched = !manifest.appliedFiles.includes(file.relativePath) && !backupExists;
+      const pendingStageIntact = Boolean(
+        pending?.stagedIdentity && sameFileIdentity(stagedIdentity, pending.stagedIdentity),
+      );
+      const pendingUntouched =
+        pending !== undefined &&
+        !appliedFiles.has(file.relativePath) &&
+        !backupExists &&
+        (file.afterSha256 === null || pendingStageIntact) &&
+        !(
+          pending.stagedIdentity !== null &&
+          sameFileIdentity(currentIdentity, pending.stagedIdentity)
+        );
+      const untouched =
+        pending === undefined
+          ? !appliedFiles.has(file.relativePath) && !backupExists
+          : pendingUntouched;
       if (currentHash === file.beforeSha256 || untouched) {
         restorations.push({ file, target, backup, staged, mode: 'keep' });
         continue;
       }
-      const matchesAfter = currentHash === file.afterSha256;
+      const matchesAfter =
+        currentHash === file.afterSha256 &&
+        (pending === undefined ||
+          (file.afterSha256 === null
+            ? backupValid
+            : stagedIdentity === null &&
+              sameFileIdentity(currentIdentity, pending.stagedIdentity)));
       const missingAfterBackup = currentHash === null && file.afterSha256 !== null && backupValid;
       // Versions before the atomic replacement fix could crash after unlinking an
       // applied target but before restoring its persisted before-blob. A durable
@@ -1196,6 +1477,7 @@ export class TransactionManager {
       ),
     );
     manifest.rollbackStatus = 'applied';
+    if (manifest.pendingFiles !== undefined) manifest.pendingFiles = [];
   }
 
   private safeFailure(
@@ -1245,26 +1527,49 @@ export class TransactionManager {
     signal?: AbortSignal,
     only?: ReadonlySet<string>,
   ): Promise<void> {
-    for (const file of manifest.files) {
+    const selected =
+      only === undefined
+        ? manifest.files
+        : manifest.files.filter(({ relativePath }) => only.has(relativePath));
+    for (let offset = 0; offset < selected.length; offset += transactionVerificationConcurrency) {
       signal?.throwIfAborted();
-      if (only !== undefined && !only.has(file.relativePath)) continue;
-      const { path: target } = await this.resolver.resolvePath(
-        workspace.id,
-        file.relativePath,
-        'write',
-        ['mod'],
-        principal,
+      const verified = await Promise.allSettled(
+        selected.slice(offset, offset + transactionVerificationConcurrency).map(async (file) => {
+          signal?.throwIfAborted();
+          const resolved = await this.resolver.resolvePath(
+            workspace.id,
+            file.relativePath,
+            'write',
+            ['mod'],
+            principal,
+          );
+          const exists = await fileExists(resolved.path);
+          let actual: string | null = null;
+          if (exists) {
+            const source = await prepareSource(
+              resolved.root,
+              path.relative(resolved.root.path, resolved.path),
+              signal,
+            );
+            try {
+              actual = await hashSourceBytes(source, signal);
+              await verifySource(resolved.root, source);
+            } finally {
+              await source.handle.close();
+            }
+          }
+          const expected = phase === 'before' ? file.beforeSha256 : file.afterSha256;
+          if (actual !== expected) {
+            throw new ServiceError(
+              phase === 'before' ? 'TRANSACTION_STALE' : 'TRANSACTION_WRITE_MISMATCH',
+              `${file.relativePath} does not match the ${phase} hash`,
+              { relativePath: file.relativePath, expected, actual },
+            );
+          }
+        }),
       );
-      const exists = await fileExists(target);
-      const actual = exists ? sha256Bytes(await readFile(target)) : null;
-      const expected = phase === 'before' ? file.beforeSha256 : file.afterSha256;
-      if (actual !== expected) {
-        throw new ServiceError(
-          phase === 'before' ? 'TRANSACTION_STALE' : 'TRANSACTION_WRITE_MISMATCH',
-          `${file.relativePath} does not match the ${phase} hash`,
-          { relativePath: file.relativePath, expected, actual },
-        );
-      }
+      const rejected = verified.find((entry) => entry.status === 'rejected');
+      if (rejected?.status === 'rejected') throw rejected.reason;
     }
   }
 
@@ -1274,40 +1579,54 @@ export class TransactionManager {
     principal?: string,
     signal?: AbortSignal,
   ): Promise<void> {
-    for (const dependency of manifest.readDependencies) {
+    for (
+      let offset = 0;
+      offset < manifest.readDependencies.length;
+      offset += transactionVerificationConcurrency
+    ) {
       signal?.throwIfAborted();
-      let actual: string | null;
-      try {
-        const resolved = await this.resolver.resolvePathInRoot(
-          workspace.id,
-          dependency.relativePath,
-          dependency.rootKind,
-          dependency.loadOrder,
-          principal,
-        );
-        const bytes =
-          signal === undefined
-            ? await readFile(resolved.path)
-            : await readFile(resolved.path, { signal });
-        signal?.throwIfAborted();
-        actual = sha256Bytes(bytes);
-      } catch (error) {
-        if (error instanceof ServiceError && error.code.startsWith('PATH_')) actual = null;
-        else throw error;
-      }
-      if (actual !== dependency.sha256) {
-        throw new ServiceError(
-          'TRANSACTION_SOURCE_STALE',
-          `${dependency.relativePath} changed in a source root after planning`,
-          {
-            relativePath: dependency.relativePath,
-            rootKind: dependency.rootKind,
-            loadOrder: dependency.loadOrder,
-            expected: dependency.sha256,
-            actual,
-          },
-        );
-      }
+      const verified = await Promise.allSettled(
+        manifest.readDependencies
+          .slice(offset, offset + transactionVerificationConcurrency)
+          .map(async (dependency) => {
+            signal?.throwIfAborted();
+            let actual: string | null;
+            try {
+              const resolved = await this.resolver.resolvePathInRoot(
+                workspace.id,
+                dependency.relativePath,
+                dependency.rootKind,
+                dependency.loadOrder,
+                principal,
+              );
+              const source = await prepareSource(resolved.root, dependency.relativePath, signal);
+              try {
+                actual = await hashSourceBytes(source, signal);
+                await verifySource(resolved.root, source);
+              } finally {
+                await source.handle.close();
+              }
+            } catch (error) {
+              if (error instanceof ServiceError && error.code.startsWith('PATH_')) actual = null;
+              else throw error;
+            }
+            if (actual !== dependency.sha256) {
+              throw new ServiceError(
+                'TRANSACTION_SOURCE_STALE',
+                `${dependency.relativePath} changed in a source root after planning`,
+                {
+                  relativePath: dependency.relativePath,
+                  rootKind: dependency.rootKind,
+                  loadOrder: dependency.loadOrder,
+                  expected: dependency.sha256,
+                  actual,
+                },
+              );
+            }
+          }),
+      );
+      const rejected = verified.find((entry) => entry.status === 'rejected');
+      if (rejected?.status === 'rejected') throw rejected.reason;
     }
   }
 
@@ -1358,6 +1677,12 @@ export class TransactionManager {
         throw new ServiceError(
           'TRANSACTION_JOURNAL_LIMIT',
           'Transaction journal retention limit has been reached',
+          {
+            requestedWorkBytes: transactionWorkBytes,
+            plannedJournalBytes: prospectiveBytes,
+            retainedBytes: usage.bytes,
+            maximumBytes: this.maxJournalBytes,
+          },
         );
       }
 
@@ -1368,8 +1693,17 @@ export class TransactionManager {
       try {
         const blobsDirectory = await containedGeneratedPath(transactionDirectory, 'blobs');
         await mkdir(blobsDirectory, { recursive: true });
-        for (const [hash, bytes] of blobs) {
-          await durableWrite(await containedGeneratedPath(blobsDirectory, hash), bytes);
+        const entries = [...blobs];
+        for (let offset = 0; offset < entries.length; offset += transactionStageConcurrency) {
+          const prepared = await Promise.allSettled(
+            entries
+              .slice(offset, offset + transactionStageConcurrency)
+              .map(async ([hash, bytes]) => {
+                await durableWrite(await containedGeneratedPath(blobsDirectory, hash), bytes);
+              }),
+          );
+          const rejected = prepared.find((entry) => entry.status === 'rejected');
+          if (rejected?.status === 'rejected') throw rejected.reason;
         }
         await durableWrite(
           await containedGeneratedPath(transactionDirectory, 'manifest.json'),
@@ -1676,9 +2010,10 @@ export class TransactionManager {
   private async recordManifestSuccessor(
     workspace: ResolvedWorkspace,
     manifest: TransactionManifest,
+    manifestHash?: string,
   ): Promise<void> {
     await this.requireServerState().recordJournalSuccessor(
-      this.journalHeadInput(workspace, manifest),
+      this.journalHeadInput(workspace, manifest, manifestHash),
     );
   }
 
@@ -1742,11 +2077,25 @@ export class TransactionManager {
     workspace: ResolvedWorkspace,
     manifest: TransactionManifest,
     hooks?: TransactionHooks,
+    canonicalSnapshot?: TransactionCanonicalSnapshot,
   ): Promise<void> {
-    const candidate = structuredClone(manifest);
+    const candidate =
+      canonicalSnapshot === undefined
+        ? structuredClone(manifest)
+        : { ...manifest, appliedFiles: [...manifest.appliedFiles] };
     candidate.revision += 1;
-    this.authenticateManifest(candidate);
-    const serializedCandidate = `${canonicalJson(candidate)}\n`;
+    if (canonicalSnapshot === undefined) {
+      this.authenticateManifest(candidate);
+    } else {
+      candidate.integrityHash = sha256Bytes(
+        canonicalSnapshot.serialize(candidate, ['integrityHash', 'authenticationTag']),
+      );
+      candidate.authenticationTag = this.requireServerState().authenticateCanonicalJournal(
+        canonicalSnapshot.serialize(candidate, ['authenticationTag']),
+      );
+    }
+    const canonicalCandidate = canonicalSnapshot?.serialize(candidate) ?? canonicalJson(candidate);
+    const serializedCandidate = `${canonicalCandidate}\n`;
     if (Buffer.byteLength(serializedCandidate, 'utf8') > TRANSACTION_MAX_MANIFEST_BYTES) {
       throw new ServiceError(
         'TRANSACTION_MANIFEST_LIMIT',
@@ -1765,7 +2114,7 @@ export class TransactionManager {
     );
     await hooks?.afterManifestCacheWrite?.();
     await hooks?.beforeProtectedHeadCommit?.();
-    await this.recordManifestSuccessor(workspace, candidate);
+    await this.recordManifestSuccessor(workspace, candidate, sha256Bytes(canonicalCandidate));
     Object.assign(manifest, candidate);
     await hooks?.afterProtectedHeadCommit?.();
   }
@@ -1843,6 +2192,23 @@ export class TransactionManager {
       );
     }
     signal?.throwIfAborted();
+    const pendingPaths = new Set<string>();
+    const filesByPath = new Map(manifest.files.map((file) => [file.relativePath, file]));
+    for (const pending of manifest.pendingFiles ?? []) {
+      const file = filesByPath.get(pending.relativePath);
+      if (
+        pendingPaths.has(pending.relativePath) ||
+        file === undefined ||
+        (pending.beforeIdentity === null) !== (file.beforeSha256 === null) ||
+        (pending.stagedIdentity === null) !== (file.afterSha256 === null)
+      ) {
+        throw new ServiceError(
+          'TRANSACTION_MANIFEST_INVALID',
+          'Pending replacement intent does not match the authenticated file plan',
+        );
+      }
+      pendingPaths.add(pending.relativePath);
+    }
     if (manifest.transactionId !== transactionId || manifest.workspaceId !== workspace.id) {
       throw new ServiceError(
         'TRANSACTION_WORKSPACE_MISMATCH',

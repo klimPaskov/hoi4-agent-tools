@@ -13,6 +13,79 @@ import {
 } from '../../src/hoi4_agent_tools/mcp/server/result.js';
 
 describe('MCP error privacy', () => {
+  it('explains rewrite structure limits using only bounded numeric counts', () => {
+    const output = errorResult(
+      new ServiceError('TRANSACTION_STRUCTURE_LIMIT', 'Private internal failure', {
+        files: 5_001,
+        filesLimit: 5_000,
+        diagnostics: 120,
+        diagnosticsLimit: 100,
+        artifacts: 'private source contents',
+        checks: Number.POSITIVE_INFINITY,
+        checksLimit: -1,
+        operations: 1.5,
+        readDependencies: Number.MAX_SAFE_INTEGER + 1,
+        transactionId: 'txn_private',
+        planHash: 'private hash',
+        absolutePath: 'C:/private/path',
+        cause: 'private cause',
+      }),
+      'test',
+    );
+    expect(output.structuredContent).toMatchObject({
+      code: 'REWRITE_STRUCTURE_LIMIT',
+      blockers: [
+        {
+          message: 'Rewrite exceeds the supported file, operation, validation, or evidence limits',
+          details: { files: 5_001, filesLimit: 5_000, diagnostics: 120, diagnosticsLimit: 100 },
+        },
+      ],
+    });
+    expect(JSON.stringify(output)).not.toContain('private');
+    expect((output.structuredContent.blockers as Array<{ details: object }>)[0]!.details).toEqual({
+      files: 5_001,
+      filesLimit: 5_000,
+      diagnostics: 120,
+      diagnosticsLimit: 100,
+    });
+    const otherFailure = errorResult(
+      new ServiceError('TRANSACTION_STALE', 'Private internal failure', { files: 1 }),
+      'test',
+    );
+    expect(otherFailure.structuredContent).toMatchObject({
+      blockers: [{ message: 'Rewrite could not be completed', details: {} }],
+    });
+  });
+
+  it('reports rollback storage bounds without exposing journal paths or identities', () => {
+    const output = errorResult(
+      new ServiceError('TRANSACTION_JOURNAL_LIMIT', 'private', {
+        requestedWorkBytes: 554_000_000,
+        maximumBytes: 536_870_912,
+        retainedBytes: 100,
+        plannedJournalBytes: 200,
+        absolutePath: '/private/journal',
+        transactionId: 'private',
+        files: -1,
+      }),
+      'test',
+    );
+    expect(output.structuredContent).toMatchObject({
+      code: 'REWRITE_JOURNAL_LIMIT',
+      blockers: [
+        {
+          details: {
+            requestedWorkBytes: 554_000_000,
+            maximumBytes: 536_870_912,
+            retainedBytes: 100,
+            plannedJournalBytes: 200,
+          },
+        },
+      ],
+    });
+    expect(JSON.stringify(output)).not.toContain('private');
+  });
+
   it('does not expose unknown exception messages or path-bearing causes', () => {
     const secretPath =
       process.platform === 'win32' ? 'C:\\Users\\secret\\workspace' : '/home/secret/workspace';

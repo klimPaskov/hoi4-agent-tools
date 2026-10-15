@@ -93,6 +93,10 @@ async function fixture(): Promise<{
     http: {
       host: '127.0.0.1',
       port: 0,
+      // This suite isolates task expiry and principal binding. Slow CI polling must not
+      // retire its keep-alive socket first (Node returns 503 beyond that quota).
+      // Production connection limits are exercised separately in http-limits.test.ts.
+      maxRequestsPerSocket: 10_000,
       allowedOrigins: ['https://agent.example.test'],
       tokens: [
         {
@@ -156,7 +160,7 @@ describe('authenticated native MCP tasks over Streamable HTTP', () => {
           (await reconnectedAlpha.experimental.tasks.getTask(created.task.taskId)).status,
         ).toBe('completed');
       },
-      { timeout: 15_000, interval: 50 },
+      { timeout: 15_000, interval: 250 },
     );
     expect(
       await reconnectedAlpha.experimental.tasks.getTaskResult(
@@ -204,7 +208,7 @@ describe('authenticated native MCP tasks over Streamable HTTP', () => {
           (await reconnectedAlpha.experimental.tasks.getTask(created.task.taskId)).status,
         ).toBe('completed');
       },
-      { timeout: 60_000, interval: 50 },
+      { timeout: 60_000, interval: 250 },
     );
     const result = await reconnectedAlpha.experimental.tasks.getTaskResult(
       created.task.taskId,

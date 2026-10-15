@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 4.1.0 - 2026-10-15
+
+- Add reference-image `create_world` requests with automatic dimensions, countries, biomes, coastline interpretation, drainage, offline English label recognition, optional aligned layers and reviewed semantic hints.
+- Add `preview: true` to map rewrites. Previews validate and render without creating or applying a rewrite transaction; failed generation is never illustrated using the unchanged base-game map.
+- Guard local reference inputs with canonical workspace checks, bounded decoding, fixed-memory original-source hashing and stale-source verification. OCR uses packaged local model data and bounded worker lifetimes.
+- Generate smoother relief, connected terrain-dependent provinces and downhill rivers; use installed palette conventions, distinct country filenames and actual urban footprints.
+- Cache map colors per province instead of hashing them for every rendered pixel. Retain deterministic pixels and artifact contents.
+- Preserve reviewed city, state, sea and region names and report uncertain interpretation. Map generation remains an offline foundation, with live acceptance evidence reported separately.
+- Add starter bookmarks, country histories, infantry templates, units, stockpiles and production; isolate old-world AI and startup hooks while retaining shared continent identifiers.
+- Track generated outputs and safely remove obsolete files on regeneration; reject edited outputs and malformed inventories. Bound complete-world inline diffs so preview links remain available.
+- Clean detached water speckles without turning lake islands into ocean pockets, preserve native province extent limits, and emit building positions without a spurious final record.
+
 ## 4.0.5 - 2026-10-14
 
 - Keep child anchors independent of parent `origo`, so centered native windows place their controls inside the frame.

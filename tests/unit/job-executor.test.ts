@@ -18,7 +18,7 @@ const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
-async function fixture() {
+async function fixture(principals?: Array<{ principal: string; workspaceIds: string[] }>) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-job-executor-'));
   roots.push(root);
   const mod = path.join(root, 'mod');
@@ -32,6 +32,7 @@ async function fixture() {
       maxConcurrentTools: 1,
       maxSharedTools: 1,
       workspaces: [{ id: 'test', name: 'Synthetic executor', root: mod }],
+      ...(principals === undefined ? {} : { http: { principals } }),
     }),
   );
   const engine = new CoreEngine(resolver);
@@ -48,6 +49,106 @@ const request = {
 };
 
 describe('typed job execution', () => {
+  it('retains principal grants and result isolation for rewrite previews', async () => {
+    const { jobs, operations, executor } = await fixture([
+      { principal: 'alice', workspaceIds: ['test'] },
+      { principal: 'bob', workspaceIds: ['test'] },
+    ]);
+    const prepare = vi.fn(
+      async (_input: Record<string, never>, context: { principal: string | undefined }) => {
+        expect(context.principal).toBe('alice');
+        return { readOnlyPreview: { execution: 'preview' } };
+      },
+    );
+    operations.registerWrite('hoi4.map_rewrite', emptyInput, prepare);
+    const input = {
+      toolName: 'hoi4.map_rewrite',
+      mutation: true,
+      arguments: {},
+      requestKey: 'private-preview',
+    };
+    await expect(jobs.submit('test', input, 'ungranted')).rejects.toThrow();
+    const { record } = await jobs.submit('test', input, 'alice');
+    await expect(executor.run('test', record.id, 'bob')).rejects.toMatchObject({
+      code: 'JOB_NOT_FOUND',
+    });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(await executor.run('test', record.id, 'alice')).toMatchObject({
+      status: 'completed',
+      result: { execution: 'preview' },
+    });
+    await expect(jobs.get('test', record.id, 'bob')).rejects.toMatchObject({
+      code: 'JOB_NOT_FOUND',
+    });
+  });
+
+  it('completes an artifact-only rewrite preview without a transaction or source writes', async () => {
+    const { target, engine, jobs, operations, executor } = await fixture();
+    const original = await readFile(target);
+    const plan = vi.spyOn(engine.transactions, 'plan');
+    const apply = vi.spyOn(engine.transactions, 'apply');
+    const complete = vi.fn(async () => ({ applied: true }));
+    let calls = 0;
+    operations.registerWrite(
+      'hoi4.map_rewrite',
+      z.object({ preview: z.literal(true) }).strict(),
+      async (_input, context) => {
+        calls += 1;
+        expect(context.workspaceId).toBe('test');
+        const snapshot = await context.engine.scan(
+          context.workspaceId,
+          { patterns: ['common/test.txt'] },
+          context.principal,
+          context.signal,
+        );
+        return { readOnlyPreview: { execution: 'preview', filesScanned: snapshot.files.length } };
+      },
+      complete,
+    );
+    const input = {
+      toolName: 'hoi4.map_rewrite',
+      mutation: true,
+      arguments: { preview: true },
+      requestKey: 'preview',
+    };
+    const { record } = await jobs.submit('test', input);
+    expect(await executor.run('test', record.id)).toMatchObject({
+      status: 'completed',
+      result: { execution: 'preview', filesScanned: 1 },
+    });
+    const persisted = await jobs.get('test', record.id);
+    expect(persisted.transaction).toBeUndefined();
+    expect(persisted.writeRecipe).toBeUndefined();
+    await executor.run('test', (await jobs.submit('test', input)).record.id);
+    expect(calls).toBe(1);
+    expect(plan).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(await readFile(target)).toEqual(original);
+  });
+
+  it('rejects malformed rewrite-preview arguments before any preparation or write', async () => {
+    const { target, engine, jobs, operations, executor } = await fixture();
+    const original = await readFile(target);
+    const apply = vi.spyOn(engine.transactions, 'apply');
+    const prepare = vi.fn(async () => ({ readOnlyPreview: { execution: 'preview' } }));
+    operations.registerWrite(
+      'hoi4.map_rewrite',
+      z.object({ preview: z.boolean() }).strict(),
+      prepare,
+    );
+    const { record } = await jobs.submit('test', {
+      toolName: 'hoi4.map_rewrite',
+      mutation: true,
+      arguments: { preview: 'true' },
+      requestKey: 'invalid-preview',
+    });
+    expect(await executor.run('test', record.id)).toMatchObject({ status: 'failed' });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    expect(await readFile(target)).toEqual(original);
+  });
+
   it('stops a read-only job at its deadline and records why as its owner', async () => {
     const { jobs, operations, executor } = await fixture();
     operations.registerRead(request.toolName, emptyInput, async (_, context) => {

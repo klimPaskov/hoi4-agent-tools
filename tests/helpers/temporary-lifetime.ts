@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import type * as FileSystem from 'node:fs/promises';
 import {
   TemporaryDirectoryLifetime,
@@ -16,8 +17,18 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     ...actual,
     mkdtemp: async (...args: Parameters<typeof actual.mkdtemp>) => {
       const directory = await actual.mkdtemp(...args);
+      // A fixture root owns its descendants; do not inject markers into product-managed snapshots.
       // Test fixtures use string paths; retain Buffer overload behavior unchanged.
-      if (typeof directory === 'string') await lifetime.own(directory);
+      if (
+        typeof directory === 'string' &&
+        !lifetime.paths().some((parent) => {
+          const relative = path.relative(parent, directory);
+          return (
+            relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+          );
+        })
+      )
+        await lifetime.own(directory);
       return directory;
     },
     open: async (...args: Parameters<typeof actual.open>) => {

@@ -240,6 +240,118 @@ describe('script references to map entities', () => {
 });
 
 describe('derived positions and supply', () => {
+  it.each([
+    ['land', 191, 'MAP_FLOATING_HARBOR_POSITION_REVIEW'],
+    ['outside the raster', 256, 'MAP_FLOATING_HARBOR_POSITION_REVIEW'],
+  ] as const)(
+    'still diagnoses an existing floating harbor placed on %s',
+    async (_label, x, code) => {
+      const source = baseMap();
+      source['map/buildings.txt'] = `2;floating_harbor;${x};9.5;127;0;2\n`;
+      const { scan } = await workspace(source);
+      const { index } = await scan();
+      expect(validateMap(index).diagnostics.map((diagnostic) => diagnostic.code)).toContain(code);
+    },
+  );
+
+  it.each([
+    ['one-pixel inlet', 192],
+    ['right map edge', 255],
+    ['left map edge', 0],
+  ] as const)('keeps floating harbors on verified sea pixels at a %s', async (_label, waterX) => {
+    const pixels: RgbColor[] = [];
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        const id = x === waterX ? 3 : x < 64 ? 4 : x < waterX ? 2 : 1;
+        pixels.push(colors[id]!);
+      }
+    }
+    const source = baseMap();
+    source['map/provinces.bmp'] = createBmp({
+      width: 256,
+      height: 256,
+      bitsPerPixel: 24,
+      rgbPixels: pixels,
+    });
+    const { scan } = await workspace(source);
+    const { index } = await scan();
+    const result = plan(index, [
+      {
+        id: 'ports',
+        kind: 'regenerate_map_positions',
+        positions: ['buildings'],
+        mode: 'replace',
+      },
+    ]);
+    expect(result.blockers).toEqual([]);
+    const final = result.finalIndex;
+    const floating = final.buildingPositions.filter(
+      ({ building }) => building === 'floating_harbor',
+    );
+    expect(floating.length).toBeGreaterThan(0);
+    for (const harbor of floating) {
+      expect(harbor.x).toBeGreaterThanOrEqual(0);
+      expect(harbor.x).toBeLessThan(256);
+      expect(harbor.z).toBeGreaterThanOrEqual(0);
+      expect(harbor.z).toBeLessThan(256);
+      expect(final.provinceAtMapCoordinate(harbor.x, harbor.z)).toBe(3);
+      expect(final.definitionsById.get(harbor.adjacentSeaProvince)?.type).toBe('land');
+      expect(final.statesById.get(harbor.stateId)?.provinces).toContain(harbor.adjacentSeaProvince);
+    }
+    const diagnostics = validateMap(final).diagnostics;
+    expect(diagnostics.filter(({ code }) => code.startsWith('MAP_FLOATING_HARBOR'))).toEqual([]);
+    for (const port of final.buildingPositions.filter(
+      ({ building }) => building === 'naval_base_spawn',
+    )) {
+      const land = final.provinceAtMapCoordinate(port.x, port.z)!;
+      expect(final.definitionsById.get(land)?.type).toBe('land');
+      expect(port.adjacentSeaProvince).toBe(3);
+      expect(final.raster!.adjacency.get(land)?.has(3)).toBe(true);
+    }
+  });
+
+  it.each([0, 255])(
+    'keeps floating harbor water placements inside vertical edge row %i',
+    async (waterY) => {
+      const pixels: RgbColor[] = [];
+      for (let y = 0; y < 256; y++)
+        for (let x = 0; x < 256; x++)
+          pixels.push(colors[y === waterY ? 3 : x < 64 ? 1 : x < 128 ? 4 : 2]!);
+      const source = baseMap();
+      source['map/provinces.bmp'] = createBmp({
+        width: 256,
+        height: 256,
+        bitsPerPixel: 24,
+        rgbPixels: pixels,
+      });
+      const { scan } = await workspace(source);
+      const { index } = await scan();
+      const result = plan(index, [
+        {
+          id: 'ports',
+          kind: 'regenerate_map_positions',
+          positions: ['buildings'],
+          mode: 'replace',
+        },
+      ]);
+      expect(result.blockers).toEqual([]);
+      const floating = result.finalIndex.buildingPositions.filter(
+        ({ building }) => building === 'floating_harbor',
+      );
+      expect(floating.length).toBeGreaterThan(0);
+      for (const harbor of floating) {
+        expect(result.finalIndex.provinceAtMapCoordinate(harbor.x, harbor.z)).toBe(3);
+        expect(harbor.z).toBeGreaterThanOrEqual(0);
+        expect(harbor.z).toBeLessThan(256);
+      }
+      expect(
+        validateMap(result.finalIndex).diagnostics.filter(({ code }) =>
+          code.startsWith('MAP_FLOATING_HARBOR'),
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it('adds only the missing building, unit and weather positions', async () => {
     const { scan } = await workspace(baseMap());
     const { index } = await scan();
@@ -339,7 +451,7 @@ describe('a new world', () => {
       'history/countries/AUR - Aurelia.txt',
       'gfx/flags/small/BOR.tga',
       'common/bookmarks/world.txt',
-      'localisation/english/world_l_english.yml',
+      'localisation/replace/world_l_english.yml',
     ])
       expect(paths).toContain(expected);
     expect(text(result, 'descriptor.mod')).toContain('replace_path="history/states"');
@@ -366,7 +478,8 @@ describe('a new world', () => {
     expect(prepared.plan.finalIndex.states.every(({ owner }) => owner !== 'AAA')).toBe(true);
     expect(prepared.validation.passed).toBe(true);
     expect(prepared.artifacts.map(({ name }) => name)).toContain('map-diff.png');
-    expect(prepared.artifacts.map(({ name }) => name)).toContain('map-before.png');
+    expect(prepared.artifacts.map(({ name }) => name)).toContain('map-proposed.png');
+    expect(prepared.artifacts.map(({ name }) => name)).not.toContain('map-before.png');
   });
 
   it('reviews a new world over sources that hold no map without a before picture', async () => {

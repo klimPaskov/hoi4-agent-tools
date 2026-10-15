@@ -7,6 +7,9 @@
  */
 import { ServiceError } from '../core/result.js';
 import { createBmp, type RgbColor } from './bmp.js';
+import type { ReferenceWorldRaster } from './reference-world.js';
+import { generateWorldDrainage } from './world-drainage.js';
+import { generateWorldProvinces } from './world-provinces.js';
 
 export interface WorldCountry {
   tag: string;
@@ -19,6 +22,8 @@ export interface WorldCountry {
 }
 
 export interface WorldSpec {
+  worldName?: string;
+  startingScenario?: boolean;
   width: number;
   height: number;
   seed: number;
@@ -35,6 +40,15 @@ export interface WorldSpec {
   continentNames?: readonly string[];
   startDate: string;
   rivers: number;
+  /** Resolved reference data is internal; callers provide a guarded workspace image path. */
+  referenceSurface?: ReferenceWorldRaster;
+  referenceCities?: ReadonlyArray<{ name: string; x: number; y: number; countryTag?: string }>;
+  referenceLabels?: ReadonlyArray<{
+    name: string;
+    x: number;
+    y: number;
+    kind: 'state' | 'country' | 'city' | 'sea' | 'region' | 'mountain' | 'geography';
+  }>;
 }
 
 /** Installed base-game data that makes generated files match the game's conventions. */
@@ -43,6 +57,9 @@ export interface WorldContext {
   /** Graphical terrain palette index for each provincial terrain type. */
   terrainIndex?: ReadonlyMap<string, number>;
   stateCategories?: ReadonlySet<string>;
+  /** Existing identifiers remain declared for shared portrait and script references. */
+  continentKeys?: readonly string[];
+  inheritedCountryTags?: readonly string[];
   mapRoot: string;
   statesRoot: string;
   localisationRoot: string;
@@ -56,6 +73,7 @@ export interface WorldFile {
 
 export interface GeneratedWorld {
   files: WorldFile[];
+  warnings: string[];
   summary: {
     width: number;
     height: number;
@@ -272,219 +290,16 @@ function generateSurface(spec: WorldSpec, random: Random): Surface {
       }
   }
   for (let pixel = 0; pixel < total; pixel += 1) {
-    const inland = Math.min(1, (coastDistance[pixel] ?? 0) / 40);
+    const inland = Math.min(1, (coastDistance[pixel] ?? 0) / 80);
     const x = pixel % width;
     const y = (pixel - x) / width;
     const ridges = Math.abs(fractal(spec.seed + 104729, x, y, scale / 2, 4) - 0.5) * 2;
     elevation[pixel] =
       kind[pixel] === LAND
-        ? Math.min(1, 0.08 + inland * 0.35 + Math.pow(1 - ridges, 3) * 0.6 * inland)
+        ? Math.min(1, inland * (0.12 + Math.pow(1 - ridges, 5) * 0.65))
         : -Math.min(1, (coastDistance[pixel] ?? 0) / 30);
   }
   return { kind, elevation, moisture };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Provinces
-
-interface Provinces {
-  /** Province number for each pixel, 0-based; -1 never remains after generation. */
-  pixel: Int32Array;
-  kind: number[];
-  size: number[];
-  sumX: number[];
-  sumY: number[];
-  neighbors: Array<Set<number>>;
-}
-
-function seedsFor(
-  surface: Surface,
-  spec: WorldSpec,
-  random: Random,
-  wanted: number,
-  cellPixels: number,
-): number[] {
-  const { width, height } = spec;
-  const cell = Math.max(3, Math.round(Math.sqrt(cellPixels)));
-  const seeds: number[] = [];
-  for (let cy = 0; cy < height; cy += cell)
-    for (let cx = 0; cx < width; cx += cell) {
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        const x = Math.min(width - 1, cx + random.int(cell));
-        const y = Math.min(height - 1, cy + random.int(cell));
-        const pixel = y * width + x;
-        if (surface.kind[pixel] === wanted) {
-          seeds.push(pixel);
-          break;
-        }
-      }
-    }
-  return seeds;
-}
-
-function generateProvinces(surface: Surface, spec: WorldSpec, random: Random): Provinces {
-  const { width, height } = spec;
-  const total = width * height;
-  const pixel = new Int32Array(total).fill(-1);
-  const seeds = [
-    ...seedsFor(surface, spec, random, LAND, spec.landProvincePixels),
-    ...seedsFor(surface, spec, random, SEA, spec.seaProvincePixels),
-    ...seedsFor(surface, spec, random, LAKE, spec.landProvincePixels * 2),
-  ];
-  // Every connected patch of one kind needs at least one seed.
-  const parts = components(surface.kind, width, height);
-  const seeded = new Set(seeds.map((seed) => parts.component[seed]!));
-  for (let start = 0; start < total; start += 1)
-    if (!seeded.has(parts.component[start]!)) {
-      seeds.push(start);
-      seeded.add(parts.component[start]!);
-    }
-  // Grow every province at the same pace, only through pixels of its own kind, so each
-  // province is connected and its shape approximates a Voronoi cell.
-  let frontier: number[] = [];
-  for (const [id, seed] of seeds.entries()) {
-    if (pixel[seed] !== -1) continue;
-    pixel[seed] = id;
-    frontier.push(seed);
-  }
-  while (frontier.length > 0) {
-    const next: number[] = [];
-    for (const current of frontier)
-      for (const neighbor of neighbors4(width, height, current))
-        if (pixel[neighbor] === -1 && surface.kind[neighbor] === surface.kind[current]) {
-          pixel[neighbor] = pixel[current]!;
-          next.push(neighbor);
-        }
-    frontier = next;
-  }
-  removeCrossings(pixel, surface.kind, width, height);
-  return compactProvinces(pixel, surface.kind, spec, width, height);
-}
-
-/**
- * Remove "X crossings", where four provinces meet at one pixel corner, by giving one pixel of
- * the 2x2 block to a neighbour of the same kind.
- */
-function removeCrossings(pixel: Int32Array, kind: Uint8Array, width: number, height: number): void {
-  for (let pass = 0; pass < 4; pass += 1) {
-    let changed = false;
-    for (let y = 0; y + 1 < height; y += 1)
-      // The map wraps east to west, so the last column meets the first.
-      for (let x = 0; x < width; x += 1) {
-        const a = y * width + x;
-        const b = x + 1 < width ? a + 1 : y * width;
-        const c = a + width;
-        const d = x + 1 < width ? c + 1 : (y + 1) * width;
-        const ids = new Set([pixel[a], pixel[b], pixel[c], pixel[d]]);
-        if (ids.size < 4) continue;
-        if (kind[d] === kind[b]) pixel[d] = pixel[b]!;
-        else if (kind[d] === kind[c]) pixel[d] = pixel[c]!;
-        else if (kind[a] === kind[b]) pixel[a] = pixel[b]!;
-        else if (kind[a] === kind[c]) pixel[a] = pixel[c]!;
-        else continue;
-        changed = true;
-      }
-    if (!changed) return;
-  }
-}
-
-/**
- * Keep each province's largest connected piece, give smaller pieces and tiny provinces to a
- * neighbour of the same kind, and renumber the survivors densely.
- */
-function compactProvinces(
-  pixel: Int32Array,
-  kind: Uint8Array,
-  spec: WorldSpec,
-  width: number,
-  height: number,
-): Provinces {
-  const total = width * height;
-  for (let pass = 0; pass < 3; pass += 1) {
-    const seen = new Int32Array(total).fill(-1);
-    const best = new Map<number, { piece: number; size: number }>();
-    const pieceSizes: number[] = [];
-    const pieceOwner: number[] = [];
-    const queue = new Int32Array(total);
-    for (let start = 0; start < total; start += 1) {
-      if (seen[start] !== -1) continue;
-      const piece = pieceSizes.length;
-      let head = 0;
-      let tail = 0;
-      queue[tail++] = start;
-      seen[start] = piece;
-      while (head < tail) {
-        const current = queue[head++]!;
-        for (const next of neighbors4(width, height, current))
-          if (seen[next] === -1 && pixel[next] === pixel[start]) {
-            seen[next] = piece;
-            queue[tail++] = next;
-          }
-      }
-      pieceSizes.push(tail);
-      pieceOwner.push(pixel[start]!);
-      const current = best.get(pixel[start]!);
-      if (current === undefined || tail > current.size)
-        best.set(pixel[start]!, { piece, size: tail });
-    }
-    const minimum = 20;
-    let changed = false;
-    for (let current = 0; current < total; current += 1) {
-      const piece = seen[current]!;
-      const owner = pieceOwner[piece]!;
-      const keep = best.get(owner)!.piece === piece && pieceSizes[piece]! >= minimum;
-      if (keep) continue;
-      for (const next of neighbors4(width, height, current))
-        if (seen[next] !== piece && kind[next] === kind[current]) {
-          pixel[current] = pixel[next]!;
-          changed = true;
-          break;
-        }
-    }
-    if (!changed) break;
-  }
-  removeCrossings(pixel, kind, width, height);
-  // Dense renumbering in reading order of each province's first pixel.
-  const renumber = new Map<number, number>();
-  const result: Provinces = {
-    pixel: new Int32Array(total),
-    kind: [],
-    size: [],
-    sumX: [],
-    sumY: [],
-    neighbors: [],
-  };
-  for (let current = 0; current < total; current += 1) {
-    let id = renumber.get(pixel[current]!);
-    if (id === undefined) {
-      id = result.kind.length;
-      renumber.set(pixel[current]!, id);
-      result.kind.push(kind[current]!);
-      result.size.push(0);
-      result.sumX.push(0);
-      result.sumY.push(0);
-      result.neighbors.push(new Set());
-    }
-    result.pixel[current] = id;
-    result.size[id]! += 1;
-    result.sumX[id]! += current % width;
-    result.sumY[id]! += Math.floor(current / width);
-  }
-  for (let current = 0; current < total; current += 1) {
-    const id = result.pixel[current]!;
-    for (const next of neighbors4(width, height, current)) {
-      const other = result.pixel[next]!;
-      if (other !== id) result.neighbors[id]!.add(other);
-    }
-  }
-  if (result.kind.length > 65_000)
-    throw new ServiceError(
-      'MAP_WORLD_TOO_MANY_PROVINCES',
-      'The world would have more provinces than the game can draw; raise landProvincePixels or seaProvincePixels',
-      { provinces: result.kind.length },
-    );
-  void spec;
-  return result;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -536,6 +351,11 @@ function growClusters(
       }
     }
   }
+  // Absorption can empty a cluster. Native region identifiers and reported counts must agree.
+  const dense = new Map(
+    [...new Set(cluster.values())].sort((a, b) => a - b).map((id, index) => [id, index]),
+  );
+  for (const [member, id] of cluster) cluster.set(member, dense.get(id)!);
   return cluster;
 }
 
@@ -601,7 +421,12 @@ function text(value: string): Buffer {
 }
 
 function localisation(entries: ReadonlyArray<readonly [string, string]>): Buffer {
-  const escape = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  const escape = (value: string) =>
+    value
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\r', '\\r')
+      .replaceAll('\n', '\\n');
   return Buffer.from(
     `\ufeffl_english:\n${entries.map(([key, value]) => ` ${key}: "${escape(value)}"`).join('\n')}\n`,
     'utf8',
@@ -615,7 +440,7 @@ function slug(value: string): string {
 const DEFAULT_TERRAIN_INDEX = new Map<string, number>([
   ['plains', 0],
   ['forest', 1],
-  ['hills', 2],
+  ['hills', 17],
   ['desert', 3],
   ['mountain', 6],
   ['marsh', 9],
@@ -625,13 +450,14 @@ const DEFAULT_TERRAIN_INDEX = new Map<string, number>([
   ['jungle', 21],
 ]);
 
-/** Approximate 1936 weather for a latitude between 0 (equator) and 1 (pole). */
-function weatherBlock(latitude: number, desert: boolean): string {
+/** Approximate seasonal weather: signed latitude is positive north of the equator. */
+function weatherBlock(signedLatitude: number, desert: boolean): string {
+  const latitude = Math.abs(signedLatitude);
   const periods: string[] = [];
   const days = [30, 27, 30, 29, 30, 29, 30, 30, 29, 30, 29, 30];
   for (let month = 0; month < 12; month += 1) {
     const season = Math.cos(((month - 6.5) / 12) * Math.PI * 2);
-    const mean = 30 - latitude * 45 - season * (6 + latitude * 18);
+    const mean = 30 - latitude * 45 + season * (6 + latitude * 18) * Math.sign(signedLatitude);
     const low = Math.round(mean - 8);
     const high = Math.round(mean + 8);
     const snow = Math.max(0, Math.min(0.6, (-mean + 2) / 20));
@@ -710,8 +536,40 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     landProvincePixels: Math.min(spec.landProvincePixels, cellLimit),
     seaProvincePixels: Math.min(spec.seaProvincePixels, cellLimit),
   };
-  const surface = generateSurface(spec, random);
-  const provinces = generateProvinces(surface, spec, random);
+  const reference = spec.referenceSurface;
+  if (reference !== undefined && (reference.width !== width || reference.height !== height))
+    throw new ServiceError(
+      'MAP_WORLD_REFERENCE_DIMENSIONS',
+      'Reference raster dimensions do not match the world',
+    );
+  const surface: Surface =
+    reference === undefined
+      ? generateSurface(spec, random)
+      : {
+          kind: new Uint8Array(reference.kind),
+          elevation: new Float32Array(reference.elevation),
+          moisture: new Float32Array(reference.moisture),
+        };
+  const drainage = generateWorldDrainage({
+    width,
+    height,
+    kind: surface.kind,
+    elevation: surface.elevation,
+    seed: spec.seed,
+    count: spec.rivers,
+    ...(reference === undefined ? {} : { referenceRivers: reference.rivers }),
+  });
+  surface.elevation = drainage.elevation;
+  const provinces = generateWorldProvinces({
+    width,
+    height,
+    seed: spec.seed,
+    kind: surface.kind,
+    elevation: surface.elevation,
+    moisture: surface.moisture,
+    landProvincePixels: spec.landProvincePixels,
+    seaProvincePixels: spec.seaProvincePixels,
+  });
   const count = provinces.kind.length;
   const center = (id: number) => ({
     x: provinces.sumX[id]! / provinces.size[id]!,
@@ -771,6 +629,35 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   }
   for (const id of seaIds) terrain.set(id, 'ocean');
   for (const id of lakeIds) terrain.set(id, 'lakes');
+  const referenceTerrainNames = [
+    'plains',
+    'forest',
+    'desert',
+    'mountain',
+    'plains',
+    'mountain',
+    'hills',
+    'marsh',
+    'jungle',
+  ] as const;
+  if (reference !== undefined) {
+    const votes = new Uint32Array(count * referenceTerrainNames.length);
+    for (let pixel = 0; pixel < width * height; pixel += 1)
+      if (surface.kind[pixel] === LAND)
+        votes[
+          provinces.pixel[pixel]! * referenceTerrainNames.length + reference.terrain[pixel]!
+        ]! += 1;
+    for (const id of landIds) {
+      let selected = 0;
+      for (let type = 1; type < referenceTerrainNames.length; type += 1)
+        if (
+          votes[id * referenceTerrainNames.length + type]! >
+          votes[id * referenceTerrainNames.length + selected]!
+        )
+          selected = type;
+      terrain.set(id, referenceTerrainNames[selected]!);
+    }
+  }
   // Continents: the largest land masses, with islands joining the nearest one.
   const landParts = new Map<number, number>();
   {
@@ -834,12 +721,130 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // Countries: grow territories from spread-out capitals in proportion to their shares.
   const owner = new Map<number, number>();
   const countryCount = spec.countries.length;
+  const interpretationWarnings: string[] = [];
+  const referenceOwners = new Map<number, number>();
+  if (reference?.inferredCountries.length === countryCount && countryCount > 1) {
+    const indexes = new Map<number, number>();
+    const unresolved: number[] = [];
+    for (const [index, country] of spec.countries.entries()) {
+      const color = country.color;
+      const matches =
+        color === undefined
+          ? []
+          : reference.inferredCountries
+              .map((region) => ({
+                id: region.id,
+                distance:
+                  (region.color.r - color.r) ** 2 +
+                  (region.color.g - color.g) ** 2 +
+                  (region.color.b - color.b) ** 2,
+              }))
+              .sort((a, b) => a.distance - b.distance || a.id - b.id);
+      const colorId =
+        matches[0] !== undefined &&
+        matches[0].distance <= 3 * 24 ** 2 &&
+        (matches[1] === undefined || matches[0].distance < matches[1].distance)
+          ? matches[0].id
+          : undefined;
+      const city = spec.referenceCities?.find(({ countryTag }) => countryTag === country.tag);
+      const cityId =
+        city !== undefined && city.x >= 0 && city.y >= 0 && city.x < width && city.y < height
+          ? reference.country[Math.floor(city.y) * width + Math.floor(city.x)]
+          : undefined;
+      if (colorId !== undefined && cityId !== undefined && cityId > 0 && colorId !== cityId)
+        throw new ServiceError(
+          'MAP_WORLD_COUNTRY_REFERENCE_CONFLICT',
+          'A country color and its capital anchor identify different political regions',
+          { countryTag: country.tag },
+        );
+      const selected = colorId ?? (cityId === 0 ? undefined : cityId);
+      if (selected === undefined) {
+        unresolved.push(index);
+        continue;
+      }
+      if (indexes.has(selected))
+        throw new ServiceError(
+          'MAP_WORLD_COUNTRY_REFERENCE_CONFLICT',
+          'Two supplied countries identify the same political region',
+          { countryTag: country.tag },
+        );
+      indexes.set(selected, index);
+    }
+    const remaining = reference.inferredCountries.filter(({ id }) => !indexes.has(id));
+    for (const [position, index] of unresolved.entries())
+      indexes.set(remaining[position]!.id, index);
+    if (unresolved.length > 0)
+      interpretationWarnings.push(
+        `${unresolved.length} country name(s) had no distinct matching color or capital anchor; remaining political regions were assigned in deterministic reference order.`,
+      );
+    const votes = new Uint32Array(count * countryCount);
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      const selected = indexes.get(reference.country[pixel]!);
+      if (selected !== undefined && surface.kind[pixel] === LAND)
+        votes[provinces.pixel[pixel]! * countryCount + selected]! += 1;
+    }
+    for (const id of landIds) {
+      let selected = 0;
+      for (let country = 1; country < countryCount; country += 1)
+        if (votes[id * countryCount + country]! > votes[id * countryCount + selected]!)
+          selected = country;
+      if (votes[id * countryCount + selected]! > 0) referenceOwners.set(id, selected);
+    }
+  }
+  const nearestProvince = (point: { x: number; y: number }, candidates: readonly number[]) => {
+    let selected = candidates[0]!;
+    let distance = Number.POSITIVE_INFINITY;
+    for (const id of candidates) {
+      const c = center(id);
+      const next = (c.x - point.x) ** 2 + (c.y - point.y) ** 2;
+      if (next < distance) {
+        selected = id;
+        distance = next;
+      }
+    }
+    return selected;
+  };
+  const namedCities = (spec.referenceCities ?? []).map((city) => {
+    const pixel =
+      city.x >= 0 && city.y >= 0 && city.x < width && city.y < height
+        ? Math.floor(city.y) * width + Math.floor(city.x)
+        : undefined;
+    return {
+      ...city,
+      province:
+        pixel !== undefined && surface.kind[pixel] === LAND
+          ? provinces.pixel[pixel]!
+          : nearestProvince(city, landIds),
+    };
+  });
   const capitals: number[] = [];
   const largest = [...landIds].sort(
     (left, right) => provinces.size[right]! - provinces.size[left]! || left - right,
   );
-  capitals.push(largest[random.int(Math.min(largest.length, 8))]!);
   while (capitals.length < countryCount) {
+    const countryIndex = capitals.length;
+    const regionCandidates = largest.filter(
+      (id) => referenceOwners.get(id) === countryIndex && !capitals.includes(id),
+    );
+    const candidates =
+      regionCandidates.length > 0
+        ? regionCandidates
+        : largest.filter((id) => !capitals.includes(id));
+    const named = namedCities.find((city) => city.countryTag === spec.countries[countryIndex]!.tag);
+    if (named !== undefined) {
+      capitals.push(
+        candidates.includes(named.province) ? named.province : nearestProvince(named, candidates),
+      );
+      continue;
+    }
+    if (regionCandidates.length > 0) {
+      capitals.push(regionCandidates[0]!);
+      continue;
+    }
+    if (capitals.length === 0) {
+      capitals.push(candidates[random.int(Math.min(candidates.length, 8))]!);
+      continue;
+    }
     let best = -1;
     let bestDistance = -1;
     for (const id of landIds) {
@@ -857,9 +862,13 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   }
   const shares = spec.countries.map((country) => Math.max(0.05, country.share ?? 1));
   const owned = new Array<number>(countryCount).fill(0);
+  for (const [id, country] of referenceOwners) {
+    owner.set(id, country);
+    owned[country]! += provinces.size[id]!;
+  }
   const frontiers = capitals.map((capital, index) => {
     owner.set(capital, index);
-    owned[index] = provinces.size[capital]!;
+    if (!referenceOwners.has(capital)) owned[index]! += provinces.size[capital]!;
     return [...provinces.neighbors[capital]!];
   });
   for (;;) {
@@ -983,8 +992,11 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     metropolis: 10,
   };
   const countryCapitalState = new Map<string, StateDraft>();
-  for (const [index, capital] of capitals.entries())
-    countryCapitalState.set(spec.countries[index]!.tag, stateOf.get(capital)!);
+  for (const [index, capital] of capitals.entries()) {
+    const state = stateOf.get(capital)!;
+    state.capital = capital;
+    countryCapitalState.set(spec.countries[index]!.tag, state);
+  }
   for (const state of states) {
     const pixels = state.provinces.reduce((sum, id) => sum + provinces.size[id]!, 0);
     const habitability =
@@ -1048,6 +1060,59 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       isCapital ? 25 : Math.max(1, Math.round(development * 8)),
     );
   }
+  const cityNames = new Map<number, string>();
+  for (const city of namedCities) {
+    const state = stateOf.get(city.province)!;
+    cityNames.set(city.province, city.name);
+    state.victoryPoints.set(
+      city.province,
+      Math.max(5, state.victoryPoints.get(city.province) ?? 0),
+    );
+    terrain.set(city.province, 'urban');
+  }
+  // Each coastal territory needs a port even when its capital lies inland or on another island.
+  const portChecked = new Set<number>();
+  for (const start of landIds) {
+    if (portChecked.has(start)) continue;
+    const queue = [start];
+    portChecked.add(start);
+    let bestCoast: number | undefined;
+    let hasPort = false;
+    for (const id of queue) {
+      if (stateOf.get(id)!.navalBases.has(id)) hasPort = true;
+      if (
+        coastal(id) &&
+        (bestCoast === undefined || provinces.size[id]! > provinces.size[bestCoast]!)
+      )
+        bestCoast = id;
+      for (const next of provinces.neighbors[id]!)
+        if (
+          !portChecked.has(next) &&
+          provinces.kind[next] === LAND &&
+          owner.get(next) === owner.get(start)
+        ) {
+          portChecked.add(next);
+          queue.push(next);
+        }
+    }
+    if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
+  }
+  const stateNames = new Map<number, string>();
+  const regionNames = new Map<number, string>();
+  for (const label of spec.referenceLabels ?? []) {
+    if (label.kind === 'state') {
+      const nearby = nearestProvince(label, landIds);
+      const state = stateOf.get(nearby)!;
+      const previous = stateNames.get(state.id);
+      stateNames.set(state.id, previous === undefined ? label.name : `${previous} / ${label.name}`);
+    } else if (label.kind === 'sea' || label.kind === 'region') {
+      const members = label.kind === 'sea' ? seaIds : landIds;
+      if (members.length === 0) continue;
+      const region = regionOf.get(nearestProvince(label, members))!;
+      const previous = regionNames.get(region);
+      regionNames.set(region, previous === undefined ? label.name : `${previous} / ${label.name}`);
+    }
+  }
   // Province IDs: 1-based in reading order of the province's first pixel; 0 is the null row.
   const provinceId = (index: number) => index + 1;
   // Unique colours, never black.
@@ -1063,6 +1128,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const files: WorldFile[] = [];
   const add = (relativePath: string, content: Buffer, mediaType = 'text/plain') =>
     files.push({ relativePath, content, mediaType });
+  const countryNames = new Map(spec.countries.map(({ tag, name }) => [tag, name]));
   const map = context.mapRoot;
   // provinces.bmp
   const rgb = new Array<RgbColor>(width * height);
@@ -1112,7 +1178,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   add(
     `${map}/continent.txt`,
     text(
-      `continents = {\n${continentNames.map((_, index) => `\tworld_continent_${index + 1}`).join('\n')}\n}\n`,
+      `continents = {\n${[...new Set([...continentNames.map((_, index) => `world_continent_${index + 1}`), ...(context.continentKeys ?? [])])].map((key) => `\t${key}`).join('\n')}\n}\n`,
     ),
   );
   add(
@@ -1127,6 +1193,48 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     `${map}/ambient_object.txt`,
     text('# No ambient objects: the base-game map frame does not fit this map.\n'),
   );
+  // City groups use palette 15 only for urban footprints. Water and undeveloped land stay 0.
+  const cityPixels = new Uint8Array(width * height);
+  const nearestCenter = new Int32Array(count).fill(-1);
+  const centerDistance = new Float64Array(count).fill(Number.POSITIVE_INFINITY);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    if (surface.kind[pixel] !== LAND) continue;
+    const id = provinces.pixel[pixel]!;
+    const x = pixel % width,
+      y = Math.floor(pixel / width);
+    const distance =
+      (x - provinces.sumX[id]! / provinces.size[id]!) ** 2 +
+      (y - provinces.sumY[id]! / provinces.size[id]!) ** 2;
+    if (distance < centerDistance[id]!) {
+      nearestCenter[id] = pixel;
+      centerDistance[id] = distance;
+    }
+  }
+  for (const state of states)
+    for (const [id, value] of state.victoryPoints) {
+      const pixel = nearestCenter[id]!;
+      const cx = pixel % width,
+        cy = Math.floor(pixel / width);
+      const radius = value >= 20 ? 6 : value >= 5 ? 4 : 2;
+      for (let dy = -radius; dy <= radius; dy += 1)
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const x = cx + dx,
+            y = cy + dy;
+          if (x < 0 || x >= width || y < 0 || y >= height || dx * dx + dy * dy > radius * radius)
+            continue;
+          const target = y * width + x;
+          if (provinces.pixel[target] === id && surface.kind[target] === LAND)
+            cityPixels[target] = 15;
+        }
+    }
+  const visualTerrain = (pixel: number): string => {
+    if (cityPixels[pixel] === 15) return 'urban';
+    if (surface.kind[pixel] !== LAND) return surface.kind[pixel] === LAKE ? 'lakes' : 'ocean';
+    if (reference !== undefined)
+      return referenceTerrainNames[reference.terrain[pixel]!] ?? 'plains';
+    const type = terrain.get(provinces.pixel[pixel]!) ?? 'plains';
+    return type === 'urban' ? 'plains' : type;
+  };
   // heightmap.bmp: sea below 95, land from 96 up.
   const heights = new Uint8Array(width * height);
   for (let pixel = 0; pixel < width * height; pixel += 1) {
@@ -1149,10 +1257,15 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const terrainPixels = new Uint8Array(width * height);
   for (let pixel = 0; pixel < width * height; pixel += 1) {
     const id = provinces.pixel[pixel]!;
-    const type = terrain.get(id)!;
-    const snowy = type === 'mountain' && latitude(id) > 0.7;
+    const type = visualTerrain(pixel);
+    const snowy =
+      reference === undefined
+        ? type === 'mountain' && latitude(id) > 0.7
+        : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
     terrainPixels[pixel] = snowy
-      ? 16
+      ? reference === undefined
+        ? 16
+        : 19
       : (terrainIndex.get(type) ?? DEFAULT_TERRAIN_INDEX.get(type) ?? 0);
   }
   add(
@@ -1171,46 +1284,8 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     'image/bmp',
   );
   // rivers.bmp: 255 on land, 254 at sea, rivers flowing downhill to the coast.
-  const riverPixels = new Uint8Array(width * height);
-  for (let pixel = 0; pixel < width * height; pixel += 1)
-    riverPixels[pixel] = surface.kind[pixel] === LAND ? 255 : 254;
-  let riverCount = 0;
-  for (let attempt = 0; attempt < spec.rivers * 30 && riverCount < spec.rivers; attempt += 1) {
-    let current = random.int(width * height);
-    if (surface.kind[current] !== LAND || surface.elevation[current]! < 0.45) continue;
-    const path: number[] = [current];
-    const visited = new Set(path);
-    let reachedCoast = false;
-    for (let step = 0; step < width; step += 1) {
-      const options = neighbors4(width, height, current).filter((next) => !visited.has(next));
-      if (options.some((next) => surface.kind[next] === SEA)) {
-        reachedCoast = true;
-        break;
-      }
-      const landOptions = options.filter(
-        (next) => surface.kind[next] === LAND && riverPixels[next] === 255,
-      );
-      // A river must not touch another river except at its own previous pixel.
-      const clear = landOptions.filter((next) =>
-        neighbors4(width, height, next).every(
-          (around) =>
-            around === current || (riverPixels[around] ?? 255) >= 254 || path.includes(around),
-        ),
-      );
-      if (clear.length === 0) break;
-      clear.sort(
-        (left, right) => surface.elevation[left]! - surface.elevation[right]! || left - right,
-      );
-      current = clear[0]!;
-      path.push(current);
-      visited.add(current);
-    }
-    if (!reachedCoast || path.length < 12) continue;
-    for (const [position, pixel] of path.entries())
-      riverPixels[pixel] =
-        position === 0 ? 0 : Math.min(6, 3 + Math.floor((position / path.length) * 4));
-    riverCount += 1;
-  }
+  const riverPixels = drainage.riverPixels;
+  const riverCount = drainage.count;
   const riverPalette = bmpPalette(context.palettes.rivers, (index) =>
     index === 0
       ? { r: 0, g: 255, b: 0 }
@@ -1244,10 +1319,20 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     for (let x = 0; x < treeWidth; x += 1) {
       const source =
         Math.floor((y * height) / treeHeight) * width + Math.floor((x * width) / treeWidth);
-      const type = terrain.get(provinces.pixel[source]!);
+      const type = visualTerrain(source);
       const dense = surface.moisture[source]! > 0.6;
       treePixels[y * treeWidth + x] =
-        type === 'forest' ? (dense ? 6 : 5) : type === 'jungle' ? (dense ? 29 : 28) : 0;
+        lattice(spec.seed + 32452843, x, y) > (dense ? 0.5 : 0.3)
+          ? 0
+          : type === 'forest'
+            ? dense
+              ? 6
+              : 5
+            : type === 'jungle'
+              ? dense
+                ? 29
+                : 28
+              : 0;
     }
   add(
     `${map}/trees.bmp`,
@@ -1264,10 +1349,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }),
     'image/bmp',
   );
-  // cities.bmp: the city-type map cities.txt reads (land 0, water 15 in the base game).
-  const cityPixels = new Uint8Array(width * height);
-  for (let pixel = 0; pixel < width * height; pixel += 1)
-    cityPixels[pixel] = surface.kind[pixel] === LAND ? 0 : 15;
+  // cities.bmp: sparse city footprints agree with the terrain and light maps.
   add(
     `${map}/cities.bmp`,
     createBmp({
@@ -1319,14 +1401,13 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     for (let x = 0; x < halfWidth; x += 1) {
       // DDS rows run top to bottom, like the bitmaps' top-left coordinates used here.
       const source = y * 2 * width + x * 2;
-      const id = provinces.pixel[source]!;
-      const color = tint[terrain.get(id) ?? 'plains']!;
+      const color = tint[visualTerrain(source)]!;
       const shade = 0.85 + surface.moisture[source]! * 0.3;
       const offset = (y * halfWidth + x) * 4;
       colormap[offset] = Math.min(255, Math.round(color.b * shade));
       colormap[offset + 1] = Math.min(255, Math.round(color.g * shade));
       colormap[offset + 2] = Math.min(255, Math.round(color.r * shade));
-      colormap[offset + 3] = terrain.get(id) === 'urban' ? 200 : 0;
+      colormap[offset + 3] = cityPixels[source] === 15 ? 200 : 0;
     }
   add(
     `${map}/terrain/colormap_rgb_cityemissivemask_a.dds`,
@@ -1362,11 +1443,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   }
   for (const [region, members] of [...regionMembers].sort((left, right) => left[0] - right[0])) {
     const indexes = members.map((member) => member - 1);
-    const meanLatitude = indexes.reduce((sum, id) => sum + latitude(id), 0) / indexes.length;
+    const meanLatitude =
+      indexes.reduce((sum, id) => sum + 1 - (2 * center(id).y) / height, 0) / indexes.length;
     const desert = indexes.filter((id) => terrain.get(id) === 'desert').length > indexes.length / 2;
     const naval = indexes.every((id) => provinces.kind[id] !== LAND);
     add(
-      `${map}/strategicregions/${region}-World region ${region}.txt`,
+      `${map}/strategicregions/${region}-${slug(regionNames.get(region) ?? `World region ${region}`).slice(0, 80)}.txt`,
       text(
         [
           'strategic_region={',
@@ -1398,7 +1480,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       ),
     ];
     add(
-      `${context.statesRoot}/${state.id}-STATE_${state.id}.txt`,
+      `${context.statesRoot}/${state.id}-${slug(stateNames.get(state.id) ?? `STATE_${state.id}`).slice(0, 80)}.txt`,
       text(
         [
           'state = {',
@@ -1431,14 +1513,24 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // Countries.
   const countryLocalisation: Array<readonly [string, string]> = [];
   const countryLines: string[] = [];
+  const countryColors: string[] = [];
   for (const [index, country] of spec.countries.entries()) {
     const color = country.color ?? {
       r: 60 + random.int(170),
       g: 60 + random.int(170),
       b: 60 + random.int(170),
     };
-    const fileName = slug(country.name);
+    const fileName = `${country.tag} - ${slug(country.name)}`;
     const ideology = country.ideology ?? 'neutrality';
+    countryColors.push(
+      `${country.tag} = { color = rgb { ${color.r} ${color.g} ${color.b} } color_ui = rgb { ${color.r} ${color.g} ${color.b} } }`,
+    );
+    const leaderIdeology = {
+      neutrality: 'despotism',
+      democratic: 'liberalism',
+      communism: 'leninism',
+      fascism: 'fascism_ideology',
+    }[ideology];
     const capitalState = countryCapitalState.get(country.tag)!;
     countryLines.push(`${country.tag} = "countries/${fileName}.txt"`);
     add(
@@ -1450,10 +1542,16 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     const popularity = { democratic: 10, communism: 10, fascism: 10, neutrality: 10 };
     popularity[ideology] = 70;
     add(
-      `history/countries/${country.tag} - ${fileName}.txt`,
+      `history/countries/${country.tag} - ${slug(country.name)}.txt`,
       text(
         [
           `capital = ${capitalState.id}`,
+          ...(spec.startingScenario
+            ? [
+                `oob = "${country.tag}_world"`,
+                'add_ideas = { limited_conscription civilian_economy export_focus }',
+              ]
+            : []),
           '',
           'set_research_slots = 3',
           'set_stability = 0.6',
@@ -1461,6 +1559,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           '',
           'set_technology = {',
           '\tinfantry_weapons = 1',
+          ...(spec.startingScenario ? ['\tinfantry_weapons1 = 1', '\tbasic_train = 1'] : []),
           '\ttech_support = 1',
           '\ttech_recon = 1',
           '}',
@@ -1474,14 +1573,54 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           'set_popularities = {',
           ...Object.entries(popularity).map(([name, value]) => `\t${name} = ${value}`),
           '}',
+          ...(spec.startingScenario
+            ? [
+                `create_country_leader = { name = "${country.tag}_WORLD_LEADER" picture = "gfx/leaders/leader_unknown.dds" ideology = ${leaderIdeology} expire = "1965.1.1" traits = { } }`,
+              ]
+            : []),
           '',
         ].join('\n'),
       ),
     );
+    if (spec.startingScenario) {
+      add(
+        `history/units/${country.tag}_world.txt`,
+        text(
+          [
+            '# Minimal map-acceptance scenario; no authored campaign or national content.',
+            'division_template = {',
+            '\tname = "Infantry Division"',
+            '\tregiments = {',
+            ...Array.from(
+              { length: 6 },
+              (_, i) => `\t\tinfantry = { x = ${Math.floor(i / 3)} y = ${i % 3} }`,
+            ),
+            '\t}',
+            '}',
+            'units = {',
+            ...[1, 2].map(
+              (i) =>
+                `\tdivision = { name = "${country.tag} Infantry ${i}" location = ${provinceId(capitalState.capital)} division_template = "Infantry Division" start_experience_factor = 0.1 start_equipment_factor = 1 }`,
+            ),
+            '}',
+            'instant_effect = {',
+            `\tadd_equipment_to_stockpile = { type = infantry_equipment_1 amount = 3000 producer = ${country.tag} }`,
+            `\tadd_equipment_to_stockpile = { type = convoy amount = 100 producer = ${country.tag} }`,
+            `\tadd_equipment_to_stockpile = { type = train_equipment_1 amount = 100 producer = ${country.tag} }`,
+            `\tadd_equipment_production = { equipment = { type = infantry_equipment_1 creator = ${country.tag} } requested_factories = 1 progress = 0.5 efficiency = 50 }`,
+            '}',
+            '',
+          ].join('\n'),
+        ),
+      );
+    }
     countryLocalisation.push(
       [country.tag, country.name],
       [`${country.tag}_DEF`, country.name],
       [`${country.tag}_ADJ`, country.adjective ?? country.name],
+      ...(spec.startingScenario
+        ? [[`${country.tag}_WORLD_LEADER`, 'Provisional Council'] as const]
+        : []),
     );
     // A three-band flag in the country colour, in the three sizes the game draws.
     const dark = {
@@ -1509,6 +1648,29 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     void index;
   }
   add('common/country_tags/zz_world_countries.txt', text(`${countryLines.join('\n')}\n`));
+  add('common/countries/colors.txt', text(`${countryColors.join('\n')}\n`));
+  if (spec.startingScenario) {
+    for (const tag of context.inheritedCountryTags ?? [])
+      if (!countryNames.has(tag))
+        add(
+          `history/countries/${tag} - inactive world.txt`,
+          text('# Inherited tag has no territory or active starting country in this world.\n'),
+        );
+    add(
+      'common/on_actions/world.txt',
+      text('# Old-world startup hooks are replaced for this generated map.\non_actions = { }\n'),
+    );
+    add(
+      'common/ai_strategy_plans/world.txt',
+      text('# No country-specific old-world AI plans apply.\n'),
+    );
+    add(
+      'common/ai_areas/world.txt',
+      text(
+        `areas = { world = { strategic_regions = { ${[...regionMembers.keys()].sort((a, b) => a - b).join(' ')} } } }\n`,
+      ),
+    );
+  }
   // The start bookmark lists the largest countries as majors.
   const ranked = [...spec.countries].sort(
     (left, right) =>
@@ -1546,21 +1708,38 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   );
   // Localisation for everything named above.
   add(
-    `${context.localisationRoot}/english/world_l_english.yml`,
+    `${context.localisationRoot}/replace/world_l_english.yml`,
     localisation([
-      ...states.map((state) => [`STATE_${state.id}`, `${state.owner} ${state.id}`] as const),
+      ...states.map(
+        (state) =>
+          [
+            `STATE_${state.id}`,
+            stateNames.get(state.id) ??
+              `${countryNames.get(state.owner) ?? state.owner} District ${state.id}`,
+          ] as const,
+      ),
       ...states.flatMap((state) =>
         [...state.victoryPoints.keys()].map(
           (id) =>
-            [`VICTORY_POINTS_${provinceId(id)}`, `${state.owner} City ${provinceId(id)}`] as const,
+            [
+              `VICTORY_POINTS_${provinceId(id)}`,
+              cityNames.get(id) ??
+                `${countryNames.get(state.owner) ?? state.owner} Settlement ${provinceId(id)}`,
+            ] as const,
         ),
       ),
       ...[...regionMembers.keys()]
         .sort((a, b) => a - b)
-        .map((region) => [`STRATEGICREGION_${region}`, `Region ${region}`] as const),
+        .map(
+          (region) =>
+            [`STRATEGICREGION_${region}`, regionNames.get(region) ?? `Region ${region}`] as const,
+        ),
+      ...(spec.referenceLabels ?? []).map(
+        (label, index) => [`WORLD_GEOGRAPHY_${index + 1}`, label.name] as const,
+      ),
       ...continentNames.map((name, index) => [`world_continent_${index + 1}`, name] as const),
       ...countryLocalisation,
-      ['WORLD_BOOKMARK_NAME', 'A New World'],
+      ['WORLD_BOOKMARK_NAME', spec.worldName ?? 'A New World'],
       ['WORLD_BOOKMARK_DESC', 'Nations of an unfamiliar map at the dawn of the war.'],
       ['WORLD_OTHER_DESC', 'Any other nation of this world.'],
       ...majors.map(
@@ -1574,6 +1753,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   );
   return {
     files,
+    warnings: [...interpretationWarnings, ...drainage.warnings],
     summary: {
       width,
       height,

@@ -1,5 +1,6 @@
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { iterateFiles } from './file-glob.js';
 import { compareCodeUnits, sha256Bytes } from './canonical.js';
@@ -20,6 +21,31 @@ export interface PreparedSource {
   canonicalPath: string;
   handle: FileHandle;
   metadata: Stats;
+}
+
+/** Hash an open source using fixed memory; callers verify its canonical identity afterwards. */
+export async function hashSourceBytes(
+  source: PreparedSource,
+  signal?: AbortSignal,
+): Promise<string> {
+  const hash = createHash('sha256');
+  const chunk = Buffer.alloc(Math.max(1, Math.min(1_048_576, source.metadata.size)));
+  let offset = 0;
+  while (offset < source.metadata.size) {
+    signal?.throwIfAborted();
+    const read = await source.handle.read(
+      chunk,
+      0,
+      Math.min(chunk.length, source.metadata.size - offset),
+      offset,
+    );
+    if (!read.bytesRead)
+      throw new ServiceError('SCAN_SOURCE_CHANGED', 'Source changed while being hashed');
+    hash.update(chunk.subarray(0, read.bytesRead));
+    offset += read.bytesRead;
+  }
+  signal?.throwIfAborted();
+  return hash.digest('hex');
 }
 
 export async function verifySource(

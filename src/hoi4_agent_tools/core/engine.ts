@@ -15,6 +15,7 @@ import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity } from './shared-request-capacity.js';
 import { JobStore } from './job-store.js';
 import { ServiceError } from './result.js';
+import { TRANSACTION_MAX_JOURNAL_BYTES } from './transaction-limits.js';
 
 /**
  * Completed scans kept per workspace. One tool call often scans several pattern sets (a GUI
@@ -23,7 +24,7 @@ import { ServiceError } from './result.js';
  */
 const SCAN_CACHE_ENTRIES_PER_WORKSPACE = 4;
 const RECOVERY_TTL_SECONDS = 3_600;
-const RECOVERY_MAX_BYTES = 536_870_912;
+const RECOVERY_MAX_BYTES = TRANSACTION_MAX_JOURNAL_BYTES;
 const RECOVERY_MAX_RECORDS = 128;
 
 export interface ScanSnapshot {

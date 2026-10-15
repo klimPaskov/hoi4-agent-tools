@@ -122,7 +122,7 @@ const mapInspectOutputSchema = strictOperationResultSchema(
 const mapPlanOutputSchema = strictOperationResultSchema(
   z
     .object({
-      execution: z.enum(['applied', 'blocked', 'unchanged']),
+      execution: z.enum(['applied', 'blocked', 'unchanged', 'preview']),
       allocations: z.array(allocationEvidenceSchema).max(100),
       operationBlockers: z.array(operationBlockerDataSchema).max(100),
       expectedChangedBounds: changedBoundsSchema.nullable(),
@@ -133,6 +133,19 @@ const mapPlanOutputSchema = strictOperationResultSchema(
       semanticDiffTruncated: z.boolean(),
       fileCount: nonNegativeIntegerSchema,
       artifactCount: nonNegativeIntegerSchema,
+      preview: z
+        .object({
+          offlineRepresentation: z.literal(true),
+          width: nonNegativeIntegerSchema,
+          height: nonNegativeIntegerSchema,
+          provinces: nonNegativeIntegerSchema,
+          states: nonNegativeIntegerSchema,
+          regions: nonNegativeIntegerSchema,
+          countries: nonNegativeIntegerSchema,
+          warningCount: nonNegativeIntegerSchema,
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
 );
@@ -158,7 +171,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_rewrite',
     title: 'Build a world or edit the map',
     description:
-      'Build a world, split or merge states, move or renumber provinces, and update script references. Regenerate building positions and supply networks. Example: {"operations":[{"id":"s1","kind":"create_state","provinceIds":[120,121],"displayName":"New State"}]}. Returns changed IDs, a summary of edits and a render.',
+      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {

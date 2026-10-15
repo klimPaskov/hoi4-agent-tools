@@ -5,6 +5,7 @@ import {
   TRANSACTION_MAX_DIAGNOSTICS,
   TRANSACTION_MAX_FILES,
   TRANSACTION_MAX_OPERATIONS,
+  TRANSACTION_MAX_PENDING_FILES,
   TRANSACTION_MAX_READ_DEPENDENCIES,
   TRANSACTION_MAX_VALIDATION_CHECKS,
 } from '../core/transaction-limits.js';
@@ -12,6 +13,13 @@ import { TRANSACTION_VERSION } from '../version.js';
 import { diagnosticSchema, workspaceIdSchema, workspaceRelativePathSchema } from './common.js';
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
+const compatibleTransactionVersion = z.union([z.literal(1), z.literal(TRANSACTION_VERSION)]);
+const fileIdentitySchema = z
+  .object({
+    device: z.string().regex(/^(0|[1-9][0-9]{0,39})$/u),
+    inode: z.string().regex(/^(0|[1-9][0-9]{0,39})$/u),
+  })
+  .strict();
 const identifierSchema = z.string().min(1).max(256);
 const summarySchema = z.string().max(4096);
 const mediaTypeSchema = z.string().min(1).max(255);
@@ -72,7 +80,7 @@ const transactionFileSchema = z
 
 const transactionPlanPayloadSchema = z
   .object({
-    version: z.literal(TRANSACTION_VERSION),
+    version: compatibleTransactionVersion,
     workspaceId: workspaceIdSchema,
     principal: z.string().max(1024).nullable(),
     rootFingerprint: sha256Schema,
@@ -90,7 +98,7 @@ const transactionPlanPayloadSchema = z
 
 export const transactionManifestSchema = z
   .object({
-    version: z.literal(TRANSACTION_VERSION),
+    version: compatibleTransactionVersion,
     revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
     transactionId: z.string().regex(/^txn_[0-9a-f-]{36}$/u),
     workspaceId: workspaceIdSchema,
@@ -116,6 +124,18 @@ export const transactionManifestSchema = z
     artifacts: z.array(artifactLinkSchema).max(TRANSACTION_MAX_ARTIFACTS),
     executionArtifacts: z.array(artifactLinkSchema).max(TRANSACTION_MAX_ARTIFACTS).optional(),
     appliedFiles: z.array(workspaceRelativePathSchema).max(TRANSACTION_MAX_APPLIED_FILES),
+    pendingFiles: z
+      .array(
+        z
+          .object({
+            relativePath: workspaceRelativePathSchema,
+            beforeIdentity: fileIdentitySchema.nullable(),
+            stagedIdentity: fileIdentitySchema.nullable(),
+          })
+          .strict(),
+      )
+      .max(TRANSACTION_MAX_PENDING_FILES)
+      .optional(),
     rollbackStatus: z.enum(['available', 'applied', 'failed']),
     failure: z.object({ code: identifierSchema, message: summarySchema }).strict().optional(),
   })

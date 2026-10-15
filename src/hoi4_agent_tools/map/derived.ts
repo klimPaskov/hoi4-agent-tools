@@ -184,9 +184,9 @@ function coastPoint(
       [0, 1],
       [0, -1],
     ] as const) {
-      const nx = x + dx;
+      const nx = (x + dx + raster.width) % raster.width;
       const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= raster.width || ny >= raster.height) continue;
+      if (ny < 0 || ny >= raster.height) continue;
       const other = raster.provinceIds[ny * raster.width + nx]!;
       if (other < 0 || !isSea(other)) continue;
       const list = contacts.get(other) ?? [];
@@ -201,6 +201,24 @@ function coastPoint(
   if (sea === undefined || points === undefined) return undefined;
   const middle = points[Math.floor(points.length / 2)]!;
   return { ...middle, sea };
+}
+
+/** A sea pixel next to the landing province, staying inside narrow inlets and map edges. */
+function floatingHarborPoint(
+  raster: ProvinceRaster,
+  coast: { x: number; y: number; dx: number; dy: number; sea: number },
+): { x: number; y: number } {
+  for (const distance of [2, 1]) {
+    const x = (coast.x + coast.dx * distance + raster.width) % raster.width;
+    const y = coast.y + coast.dy * distance;
+    if (y < 0 || y >= raster.height) continue;
+    // Keep the same sea association selected from the real coastal contact.
+    if (raster.provinceIds[y * raster.width + x] === coast.sea) return { x, y };
+  }
+  throw new ServiceError(
+    'MAP_FLOATING_HARBOR_WATER_UNAVAILABLE',
+    'The selected coastal contact has no adjacent sea pixel for a floating harbor',
+  );
 }
 
 function rotationFor(dx: number, dy: number): number {
@@ -376,9 +394,8 @@ function planBuildingPositions(index: MapWorkspaceIndex, request: PositionsReque
             copy += 1, produced += 1
           ) {
             const floating = slot.name === 'floating_harbor';
-            // A floating harbour sits on the water two pixels out and names its land province.
-            const x = floating ? coast.x + coast.dx * 2 : coast.x;
-            const y = floating ? coast.y + coast.dy * 2 : coast.y;
+            // Prefer two pixels offshore, with a verified adjacent-water fallback.
+            const { x, y } = floating ? floatingHarborPoint(raster, coast) : coast;
             added.push(
               [
                 state.id,
@@ -414,7 +431,13 @@ function planBuildingPositions(index: MapWorkspaceIndex, request: PositionsReque
   }
   return {
     relativePath: document?.file.relativePath ?? `${mapRoot(index)}/buildings.txt`,
-    content: rewriteLines(document, drop, added),
+    // The native building-position reader treats a trailing newline as an empty CSV record.
+    content: Buffer.from(
+      rewriteLines(document, drop, added)
+        .toString('utf8')
+        .replace(/\r?\n$/u, ''),
+      'utf8',
+    ),
   };
 }
 

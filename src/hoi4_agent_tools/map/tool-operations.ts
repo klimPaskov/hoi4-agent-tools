@@ -4,6 +4,7 @@ import {
   type ArtifactWrite,
 } from '../core/artifacts.js';
 import { canonicalJson, hashCanonical } from '../core/canonical.js';
+import { diagnosticSeverityCounts } from '../core/diagnostic-rollup.js';
 import type { CoreEngine } from '../core/engine.js';
 import {
   autonomousResultArtifacts,
@@ -28,6 +29,7 @@ import { buildMapCatalog, lookupMapCoordinate, searchMapCatalog } from './catalo
 import { renderMap, type MapOverlay, type MapSemanticDiff } from './render.js';
 import { exportProvinceGeometryRowRuns, type AgentNudger } from './service.js';
 import type { MapValidationResult } from './validation.js';
+import { generatedWorldOperationIds } from './world-preview.js';
 
 export interface MapOperationContext {
   workspaceId: string;
@@ -86,7 +88,7 @@ function compactRecordDiffs(
   }));
 }
 
-function compactMapSemanticDiff(semantic: MapSemanticDiff) {
+export function compactMapSemanticDiff(semantic: MapSemanticDiff) {
   const counts = {
     definitions: semantic.definitions.length,
     stateMembership: semantic.stateMembership.length,
@@ -102,7 +104,7 @@ function compactMapSemanticDiff(semantic: MapSemanticDiff) {
     adjacencies: semantic.adjacencies.length,
     normalAdjacencies: semantic.normalAdjacencies.length,
   };
-  return {
+  const result = {
     semantic: {
       definitions: semantic.definitions
         .slice(0, mapInlineDiffLimit)
@@ -165,6 +167,14 @@ function compactMapSemanticDiff(semantic: MapSemanticDiff) {
           (after?.length ?? 0) > mapInlineTextLimit,
       ),
   };
+  // Bound the aggregate, not just each collection: a complete world replaces every category.
+  // Full diffs remain in map-diff.json; leave enough wire space for preview image links.
+  while (Buffer.byteLength(canonicalJson(result.semantic), 'utf8') > 8_192) {
+    for (const value of Object.values(result.semantic))
+      if (Array.isArray(value)) value.splice(Math.floor(value.length / 2));
+    result.truncated = true;
+  }
+  return result;
 }
 
 function validationSummary(validation: MapValidationResult) {
@@ -377,6 +387,71 @@ export function completeMapRewrite(
         ...(details === undefined ? {} : { details }),
       })),
   ].slice(0, 100);
+  return result;
+}
+
+/** Generate and validate the same proposed map without creating a write transaction. */
+export async function previewMapRewrite(
+  nudger: AgentNudger,
+  input: MapRewriteToolRequest,
+  context: MapOperationContext,
+) {
+  await context.progress(0, 5, 'Generating and validating an offline map preview');
+  const planned = await nudger.previewRewriteWithDiff({
+    workspaceId: context.workspaceId,
+    operations: input.operations as MapOperation[],
+    ...(input.diffScale === undefined ? {} : { diffScale: input.diffScale }),
+    ...(context.principal === undefined ? {} : { principal: context.principal }),
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+  });
+  const compactSemantic = compactMapSemanticDiff(planned.bundle.semantic);
+  const index = planned.plan.finalIndex;
+  const result = emptyServiceResult(context.workspaceId, {
+    execution: 'preview' as const,
+    allocations: planned.plan.allocations.slice(0, 100).map(compactAllocationEvidence),
+    operationBlockers: planned.plan.blockers
+      .slice(0, 100)
+      .map(({ code, message, operationId }) => ({ code, message, operationId })),
+    expectedChangedBounds: planned.plan.expectedChangedBounds ?? null,
+    changedProvinceIds: planned.bundle.changedProvinceIds.slice(0, 256),
+    changedProvinceCount: planned.bundle.changedProvinceIds.length,
+    semanticDiff: compactSemantic.semantic,
+    semanticDiffCounts: compactSemantic.counts,
+    semanticDiffTruncated: compactSemantic.truncated,
+    fileCount: planned.plan.changes.length,
+    artifactCount: planned.artifacts.length,
+    ...(input.operations.some(({ kind }) => kind === 'create_world') &&
+    generatedWorldOperationIds(planned.plan).size === 0
+      ? {}
+      : {
+          preview: {
+            offlineRepresentation: true as const,
+            width: index.raster?.width ?? 0,
+            height: index.raster?.height ?? 0,
+            provinces: index.definitions.filter(({ id }) => id !== 0).length,
+            states: index.states.length,
+            regions: index.regions.length,
+            countries: new Set(
+              index.states.flatMap(({ owner }) => (owner === undefined ? [] : [owner])),
+            ).size,
+            warningCount: diagnosticSeverityCounts(planned.diagnostics).warning,
+          },
+        }),
+  });
+  result.status = planned.validation.passed ? 'ok' : 'blocked';
+  result.code = planned.validation.passed ? 'MAP_PREVIEW_READY' : 'MAP_PREVIEW_BLOCKED';
+  setInlineFilesScanned(result, planned.filesScanned);
+  result.proposedFiles = planned.plan.changes.slice(0, 100).map(({ relativePath }) => relativePath);
+  result.diagnostics = planned.diagnostics.slice(0, 100);
+  result.artifacts = planned.artifacts.map(publicArtifactLink);
+  result.validation = validationSummary(planned.validation);
+  result.blockers = [
+    ...planned.plan.blockers.map(({ code, message }) => ({ code, message })),
+    ...planned.diagnostics
+      .filter(({ severity }) => severity === 'error' || severity === 'blocker')
+      .map(({ code, message }) => ({ code, message })),
+  ].slice(0, 100);
+  await context.progress(5, 5, 'Offline map preview complete; workspace files were not changed');
   return result;
 }
 

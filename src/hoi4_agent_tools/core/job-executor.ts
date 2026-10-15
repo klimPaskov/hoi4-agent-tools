@@ -30,7 +30,10 @@ type Operation =
   | { mutation: false; run(input: unknown, context: JobExecutionContext): Promise<JobOutput> }
   | {
       mutation: true;
-      prepare(input: unknown, context: JobExecutionContext): Promise<ValidatedPreparedJobWrite>;
+      prepare(
+        input: unknown,
+        context: JobExecutionContext,
+      ): Promise<ValidatedPreparedJobWrite | PreparedJobPreview>;
       complete(
         input: unknown,
         execution: TransactionExecutionResult,
@@ -43,6 +46,11 @@ type Operation =
 export interface PreparedJobWrite {
   transaction: TransactionManifest;
   recipe?: unknown;
+}
+
+/** A validated artifact-only result from a rewrite request; no transaction is created or applied. */
+export interface PreparedJobPreview {
+  readOnlyPreview: JobOutput;
 }
 
 interface ValidatedPreparedJobWrite {
@@ -86,7 +94,7 @@ export class JobOperations {
     prepare: (
       input: Input,
       context: JobExecutionContext,
-    ) => Promise<TransactionManifest | PreparedJobWrite>,
+    ) => Promise<TransactionManifest | PreparedJobWrite | PreparedJobPreview>,
     complete: (
       input: Input,
       execution: TransactionExecutionResult,
@@ -100,6 +108,8 @@ export class JobOperations {
       mutation: true,
       prepare: async (input, context) => {
         const prepared = await prepare(schema.parse(input), context);
+        if ('readOnlyPreview' in prepared)
+          return { readOnlyPreview: jsonObject.parse(prepared.readOnlyPreview) };
         if (!('transaction' in prepared)) return { transaction: prepared };
         return {
           transaction: prepared.transaction,
@@ -280,6 +290,13 @@ export class JobExecutor {
                     ),
                 );
               const prepared = await operation.prepare(initial.request.arguments, context);
+              if ('readOnlyPreview' in prepared) {
+                controller.signal.throwIfAborted();
+                return this.jobs.store.updateOwned(scope, id, owner.token, {
+                  status: 'completed',
+                  result: prepared.readOnlyPreview,
+                });
+              }
               return writes.execute(
                 workspaceId,
                 id,

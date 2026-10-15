@@ -50,6 +50,42 @@ async function fixture() {
 }
 
 describe('temporary directory ownership and recovery', () => {
+  it('sweeps only abandoned owned image snapshots in the private snapshot scope', async () => {
+    const { parent } = await fixture();
+    const make = async (suffix: string, pid?: number) => {
+      const directory = path.join(parent, `.reference-snapshot-${suffix}`);
+      await mkdir(directory);
+      await writeFile(path.join(directory, 'source.raster'), 'private synthetic data');
+      if (pid !== undefined)
+        await writeFile(
+          path.join(directory, '.hoi4-temp-owner.json'),
+          JSON.stringify({ version: 1, pid, host: hostname(), token: randomUUID() }),
+        );
+      return directory;
+    };
+    const dead = await make('deadAA', 101);
+    const live = await make('liveAA', 202);
+    const unowned = await make('noneAA');
+    const protectedRoot = await make('rootAA', 101);
+    const unrelated = path.join(parent, 'hoi4-reference-source-otherA');
+    await mkdir(unrelated);
+    await writeFile(path.join(unrelated, 'evidence'), 'retained');
+    const result = await sweepTemporaryDirectories(parent, {
+      referenceSnapshotsOnly: true,
+      staleMs: 0,
+      now: Date.now() + 1000,
+      isAlive: (pid) => pid === 202,
+      protectedRoots: [protectedRoot],
+    });
+    expect(result.removed).toBe(1);
+    await expect(lstat(dead)).rejects.toMatchObject({ code: 'ENOENT' });
+    for (const directory of [live, unowned, protectedRoot])
+      expect(await readFile(path.join(directory, 'source.raster'), 'utf8')).toBe(
+        'private synthetic data',
+      );
+    expect(await readFile(path.join(unrelated, 'evidence'), 'utf8')).toBe('retained');
+  });
+
   it('removes owned fixtures on normal and idle-style shutdown, even after a failed operation', async () => {
     const { parent } = await fixture();
     for (const reason of ['normal', 'idle', 'failure']) {

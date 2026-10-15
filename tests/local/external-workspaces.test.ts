@@ -293,9 +293,18 @@ local('local installed-game and external-mod integration', () => {
   it('analyzes a large vanilla and external-mod event family without copying or changing sources', async () => {
     const core = await engine();
     const viewer = new EventChainViewer(core);
-    const graph = await viewer.scan('external', { refresh: true });
-    expect(graph.analysisMode).toBe('full');
-    expect(graph.complete).toBe(true);
+    // Qualify direct event families without projecting every helper across a large mod.
+    // The deferred workspace-wide analysis must remain explicit, never labelled complete.
+    const graph = await viewer.scan('external', { refresh: true, analysisMode: 'focused' });
+    expect(graph.analysisMode).toBe('focused');
+    expect(graph.complete).toBe(false);
+    expect(graph.unresolved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          blockers: [expect.objectContaining({ code: 'EVENT_FOCUSED_ANALYSIS_DEFERRED' })],
+        }),
+      ]),
+    );
     // External mods may be edited by another agent while this opt-in suite runs; the
     // installed game is the immutable source set for the end-to-end no-write assertion.
     const gameSourceHashesBefore = Object.fromEntries(
@@ -378,7 +387,7 @@ local('local installed-game and external-mod integration', () => {
       expect(eventIds.length).toBeGreaterThan(0);
     }
 
-    const after = await viewer.scan('external', { refresh: true });
+    const after = await viewer.scan('external', { refresh: true, analysisMode: 'focused' });
     expect(
       Object.fromEntries(
         Object.entries(after.sourceHashes).filter(([sourcePath]) => sourcePath.startsWith('game:')),
@@ -390,8 +399,17 @@ local('local installed-game and external-mod integration', () => {
     const core = await engine();
     const viewer = new TechnologyTreeViewer(core);
     const graph = await viewer.scan('external', { refresh: true });
-    expect(graph.analysisMode).toBe('full');
-    expect(graph.complete).toBe(true);
+    expect(graph.analysisMode).toBe('focused');
+    if (graph.helperCalls.length > 0) {
+      expect(graph.complete).toBe(false);
+      expect(graph.unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            blockers: [expect.objectContaining({ code: 'TECH_HELPER_EXPANSION_DEFERRED' })],
+          }),
+        ]),
+      );
+    }
     const relevantSourceHashes = Object.fromEntries(
       Object.entries(graph.sourceHashes).filter(([sourcePath]) =>
         /:(?:common\/(?:technologies|technology_tags|doctrines)\/|interface\/.*(?:technolog|doctrine)|localisation\/.*(?:technolog|doctrine))/iu.test(

@@ -11,6 +11,10 @@ import {
 import type { ArtifactLink } from '../core/result.js';
 import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../core/canonical.js';
 import { sortDiagnostics, type Diagnostic } from '../core/diagnostics.js';
+import {
+  diagnosticSeverityCounts,
+  rollupRepeatedSoftDiagnostics,
+} from '../core/diagnostic-rollup.js';
 import { CoreEngine } from '../core/engine.js';
 import { SymbolIndex } from '../core/index.js';
 import { RenderBudget } from '../core/render-budget.js';
@@ -36,7 +40,15 @@ import {
   type ProvinceGeometry,
   type ProvinceRaster,
 } from './model.js';
-import { planMapOperationsAsync, type MapOperation, type MapOperationPlan } from './operations.js';
+import {
+  planMapOperationsAsync,
+  type MapOperation,
+  type MapOperationPlan,
+  type PreparedReferenceWorld,
+} from './operations.js';
+import { prepareReferenceWorld } from './reference-preparation.js';
+import { WORLD_OUTPUT_MANIFEST } from './world-outputs.js';
+import type { ReferenceSourceEvidence } from '../core/bounded-source.js';
 import {
   renderMap,
   renderMapDiff,
@@ -46,12 +58,14 @@ import {
   type MapRenderOptions,
 } from './render.js';
 import { validateMapAsync, type MapValidationResult } from './validation.js';
+import { buildWorldPreviewArtifacts, generatedWorldOperationIds } from './world-preview.js';
 
 export interface MapScanSnapshot {
   workspaceId: string;
   revision: string;
   files: ScannedFile[];
   index: MapWorkspaceIndex;
+  referenceSources?: ReferenceSourceEvidence[];
 }
 
 export interface MapPlanInput {
@@ -100,6 +114,7 @@ interface PreparedMapOperations {
   snapshot: MapScanSnapshot;
   plan: MapOperationPlan;
   validation: MapValidationResult;
+  referenceImages: Array<{ operationId: string; bytes: Buffer; source: ReferenceSourceEvidence }>;
 }
 
 export interface MapValidationAttributionInput {
@@ -580,6 +595,7 @@ function sourceTextPatterns(roots: {
     'common/terrain/*.txt',
     'common/buildings/*.txt',
     'descriptor.mod',
+    WORLD_OUTPUT_MANIFEST,
     ...roots.map.flatMap((root) => {
       const normalized = normalizeSourceRoot(root);
       return ['map', 'csv', 'txt'].map((extension) => `${normalized}/**/*.${extension}`);
@@ -587,7 +603,11 @@ function sourceTextPatterns(roots: {
     ...roots.states.map((root) => `${normalizeSourceRoot(root)}/**/*.txt`),
     ...roots.localisation.flatMap((root) => {
       const normalized = normalizeSourceRoot(root);
-      return [`${normalized}/english/**/*.{yml,yaml}`, `${normalized}/*.{yml,yaml}`];
+      return [
+        `${normalized}/english/**/*.{yml,yaml}`,
+        `${normalized}/replace/**/*.{yml,yaml}`,
+        `${normalized}/*.{yml,yaml}`,
+      ];
     }),
   ];
 }
@@ -643,8 +663,53 @@ function provinceBitmapPatterns(
   return [...patterns].sort((left, right) => compareCodeUnits(left, right));
 }
 
+function mapSourceEvidence(snapshot: MapScanSnapshot): ReferenceSourceEvidence[] {
+  if (snapshot.referenceSources === undefined) return snapshot.files;
+  return [
+    ...new Map(
+      [...snapshot.files, ...(snapshot.referenceSources ?? [])].map((source) => [
+        source.displayPath,
+        source,
+      ]),
+    ).values(),
+  ].sort(
+    (left, right) =>
+      left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+  );
+}
+
 function sourceHashes(snapshot: MapScanSnapshot): Record<string, string> {
-  return Object.fromEntries(snapshot.files.map(({ displayPath, sha256 }) => [displayPath, sha256]));
+  return Object.fromEntries(
+    mapSourceEvidence(snapshot).map(({ displayPath, sha256 }) => [displayPath, sha256]),
+  );
+}
+
+function mapValidationEvidence(
+  snapshot: MapScanSnapshot,
+  validation: MapValidationResult,
+): ArtifactWrite {
+  const evidence = boundedSourceHashEvidence(sourceHashes(snapshot));
+  const counts = diagnosticSeverityCounts(validation.diagnostics);
+  const omissions = validation.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'MAP_DIAGNOSTICS_TRUNCATED')
+    .map((diagnostic) => diagnostic.details ?? {});
+  return {
+    name: 'map-validation.json',
+    mimeType: 'application/json',
+    content: `${canonicalJson({ schemaVersion: 1, passed: validation.passed, checks: validation.checks, diagnosticCount: validation.diagnostics.length, counts, diagnostics: validation.diagnostics, omissionEvidence: omissions })}\n`,
+    description: 'Complete bounded map validation diagnostics, counts and omission evidence',
+    provenance: {
+      kind: 'map-validation',
+      toolVersion: PACKAGE_VERSION,
+      schemaVersion: 'map-validation.v1',
+      sourceHashes: evidence.sourceHashes,
+      metadata: {
+        sourceRevision: snapshot.revision,
+        sourceHashInventory: evidence.inventory,
+        diagnosticCount: validation.diagnostics.length,
+      },
+    },
+  };
 }
 
 function mapBundleWithSourceHashes<T extends MapRenderBundle>(
@@ -764,6 +829,7 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     includeExternalScriptReferences = false,
+    includeWorldContext = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -801,11 +867,58 @@ export class AgentNudger {
           signal,
         )
       : undefined;
+    const worldContextSnapshot = includeWorldContext
+      ? await this.engine.scan(
+          workspaceId,
+          {
+            patterns: [
+              'common/state_category/**/*.txt',
+              'common/country_tags/*.txt',
+              ...sourceRoots.map.flatMap((root) =>
+                ['terrain', 'rivers', 'trees', 'cities'].map((name) => `${root}/${name}.bmp`),
+              ),
+            ],
+          },
+          principal,
+          signal,
+        )
+      : undefined;
+    const generatedOutputsSnapshot = includeWorldContext
+      ? await this.engine.scan(
+          workspaceId,
+          {
+            rootKinds: ['mod'],
+            patterns: [
+              'common/countries/*.txt',
+              'common/country_tags/*.txt',
+              'history/countries/*.txt',
+              'history/units/*.txt',
+              'common/on_actions/world.txt',
+              'common/ai_areas/world.txt',
+              'common/ai_strategy_plans/world.txt',
+              'gfx/flags/**/*.tga',
+              ...sourceRoots.map.flatMap((root) => [`${root}/**/*.bmp`, `${root}/terrain/*.dds`]),
+            ],
+          },
+          principal,
+          signal,
+        )
+      : undefined;
     signal?.throwIfAborted();
     const files = [
       ...contentSnapshot.files,
       ...locatorSnapshot.files,
       ...(externalScriptSnapshot?.files ?? []),
+      ...(worldContextSnapshot?.files ?? []).filter(
+        (file) =>
+          !contentSnapshot.files.some((existing) => existing.displayPath === file.displayPath),
+      ),
+      ...(generatedOutputsSnapshot?.files ?? []).filter(
+        (file) =>
+          ![...contentSnapshot.files, ...(worldContextSnapshot?.files ?? [])].some(
+            (existing) => existing.displayPath === file.displayPath,
+          ),
+      ),
     ].sort(
       (left, right) =>
         left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
@@ -877,14 +990,54 @@ export class AgentNudger {
           operation.kind === 'remap_map_references' ||
           'remapReferences' in operation,
       ),
+      operations.some((operation) => operation.kind === 'create_world'),
     );
-    const plan = await planMapOperationsAsync(snapshot.index, operations, signal);
-    const baselineValidation = await validateMapAsync(
-      snapshot.index,
-      signal === undefined ? {} : { signal },
+    const referenceWorlds = new Map<string, PreparedReferenceWorld>();
+    const referenceImages: PreparedMapOperations['referenceImages'] = [];
+    for (const operation of operations) {
+      if (operation.kind !== 'create_world' || operation.reference === undefined) continue;
+      const loaded = await prepareReferenceWorld(
+        this.resolver,
+        workspaceId,
+        operation,
+        principal,
+        signal,
+      );
+      referenceWorlds.set(operation.id, loaded.prepared);
+      referenceImages.push({
+        operationId: operation.id,
+        bytes: loaded.images[0]!.bytes,
+        source: loaded.images[0]!.source,
+      });
+      for (const image of loaded.images) {
+        snapshot.referenceSources ??= [];
+        const previous = snapshot.referenceSources.findIndex(
+          (file) => file.displayPath === image.source.displayPath,
+        );
+        if (previous < 0) snapshot.referenceSources.push(image.source);
+        else snapshot.referenceSources[previous] = image.source;
+      }
+    }
+    snapshot.files.sort(
+      (left, right) =>
+        left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
     );
-    // A new world has nothing to compare its bitmap format and pixels with.
+    snapshot.revision = hashCanonical(
+      mapSourceEvidence(snapshot).map(({ displayPath, loadOrder, sha256 }) => ({
+        displayPath,
+        loadOrder,
+        sha256,
+      })),
+    );
+    const plan = await planMapOperationsAsync(snapshot.index, operations, signal, {
+      referenceWorlds,
+    });
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
+    const freshWorld = newWorld && snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
+    const baselineValidation = freshWorld
+      ? { passed: true, diagnostics: [], checks: [] }
+      : await validateMapAsync(snapshot.index, signal === undefined ? {} : { signal });
+    // A new world has nothing to compare its bitmap format and pixels with.
     const rawValidation = await validateMapAsync(plan.finalIndex, {
       ...(newWorld ? {} : { baseline: snapshot.index }),
       ...(signal === undefined ? {} : { signal }),
@@ -905,6 +1058,7 @@ export class AgentNudger {
       snapshot,
       plan,
       validation: validationWithPlan(attributedValidation, plan),
+      referenceImages,
     };
   }
 
@@ -930,15 +1084,38 @@ export class AgentNudger {
         'Prepared map operations belong to another workspace',
       );
     }
+    const reportWrite = mapValidationEvidence(snapshot, validation);
+    const existingReport = input.artifacts?.find(
+      ({ name }) =>
+        name === reportWrite.name ||
+        (name.startsWith(`${reportWrite.name}.`) && name.endsWith('.chunks.json')),
+    );
+    const report =
+      existingReport ??
+      publicArtifactLink(
+        await this.artifacts.putChunked(
+          this.resolver.get(input.workspaceId, input.principal),
+          reportWrite.name,
+          reportWrite.mimeType,
+          reportWrite.content,
+          reportWrite.provenance,
+          reportWrite.description,
+          input.signal,
+        ),
+      );
+    const journalDiagnostics = rollupRepeatedSoftDiagnostics(validation.diagnostics, report);
+    const artifacts = [
+      ...(input.artifacts ?? []),
+      ...(existingReport === undefined ? [report] : []),
+    ];
     const transaction = await this.transactions.plan({
       workspaceId: input.workspaceId,
       ...(input.principal === undefined ? {} : { principal: input.principal }),
       operationKind: 'agent-nudger-map-changes',
       operations: plan.operations,
       changes: plan.changes,
-      readDependencies: readDependenciesFromScannedFiles(snapshot.files),
-      ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts }),
-      diagnostics: plan.diagnostics,
+      readDependencies: readDependenciesFromScannedFiles(mapSourceEvidence(snapshot)),
+      artifacts,
       validate: (proposed, signal) => {
         signal?.throwIfAborted();
         const expected = new Map(
@@ -961,9 +1138,9 @@ export class AgentNudger {
           }) &&
           [...proposed.keys()].every((relativePath) => expected.has(relativePath));
         const diagnostics = exactProposedBytes
-          ? validation.diagnostics
+          ? journalDiagnostics
           : [
-              ...validation.diagnostics,
+              ...journalDiagnostics,
               {
                 code: 'MAP_TRANSACTION_BYTES_MISMATCH',
                 severity: 'blocker' as const,
@@ -1053,7 +1230,7 @@ export class AgentNudger {
       bundle,
       artifacts,
       revision: snapshot.revision,
-      filesScanned: snapshot.files.map(({ displayPath }) => displayPath),
+      filesScanned: mapSourceEvidence(snapshot).map(({ displayPath }) => displayPath),
     };
   }
 
@@ -1100,6 +1277,38 @@ export class AgentNudger {
     return { ...diff, ...planned };
   }
 
+  /** Build validated offline evidence without planning or applying a write transaction. */
+  async previewRewriteWithDiff(
+    input: MapRewritePlanInput,
+  ): Promise<StoredMapDiff & { validation: MapValidationResult; diagnostics: Diagnostic[] }> {
+    const prepared = await this.prepareOperations(
+      input.workspaceId,
+      input.operations,
+      input.principal,
+      input.signal,
+    );
+    const diff = await this.renderPreparedDiffAndStore(prepared, input.operations, {
+      ...(input.diffScale === undefined ? {} : { scale: input.diffScale }),
+      ...(input.principal === undefined ? {} : { principal: input.principal }),
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+    });
+    return {
+      ...diff,
+      validation: prepared.validation,
+      diagnostics: rollupRepeatedSoftDiagnostics(
+        prepared.validation.diagnostics,
+        publicArtifactLink(
+          diff.artifacts.find(
+            (artifact) =>
+              artifact.name === 'map-validation.json' ||
+              (artifact.name.startsWith('map-validation.json.') &&
+                artifact.name.endsWith('.chunks.json')),
+          )!,
+        ),
+      ),
+    };
+  }
+
   private async renderPreparedDiffAndStore(
     prepared: PreparedMapOperations,
     operations: readonly MapOperation[],
@@ -1107,6 +1316,12 @@ export class AgentNudger {
   ): Promise<StoredMapDiff> {
     const budget = new RenderBudget();
     const { snapshot, plan, validation } = prepared;
+    const failedWorld =
+      operations.some(({ kind }) => kind === 'create_world') &&
+      generatedWorldOperationIds(plan).size === 0 &&
+      plan.changes.length === 0;
+    // A rolled-back generation has no proposed world. Never present inherited game geography
+    // or all its province IDs as the result of a failed operation.
     const review: MapDiffReviewContext = {
       operationIds: plan.operations.map(({ id }) => id),
       affectedFiles: plan.changes.map(({ relativePath, operationIds, mediaType, content }) => ({
@@ -1124,6 +1339,68 @@ export class AgentNudger {
       allocations: plan.allocations,
       validation,
     };
+    if (failedWorld) {
+      const report = mapValidationEvidence(snapshot, validation);
+      const json = canonicalJson({ generated: false, blockers: plan.blockers });
+      const emptyHash = sha256Bytes('');
+      // No raster exists after a failed first generation. This empty internal bundle is never
+      // published as an image; it carries only zero changed IDs to the normal result adapter.
+      const bundle: MapDiffBundle = {
+        width: 0,
+        height: 0,
+        png: Buffer.alloc(0),
+        json,
+        html: '',
+        hashes: { png: emptyHash, json: sha256Bytes(json), html: emptyHash },
+        changedProvinceIds: [],
+        review,
+        semantic: {
+          definitions: [],
+          stateMembership: [],
+          regionMembership: [],
+          states: [],
+          ports: [],
+          buildingPositions: [],
+          unitPositions: [],
+          weatherPositions: [],
+          entityLocators: [],
+          supplyNodes: [],
+          railways: [],
+          adjacencies: [],
+          normalAdjacencies: [],
+          supplyNodesChanged: false,
+          railwaysChanged: false,
+          adjacenciesChanged: false,
+          normalAdjacenciesChanged: false,
+        },
+      };
+      const artifacts = await this.artifacts.withAtomicChunkedWrites(
+        this.resolver.get(snapshot.workspaceId, options.principal),
+        [
+          report,
+          {
+            name: 'map-generation-failure.json',
+            mimeType: 'application/json',
+            content: json,
+            provenance: {
+              ...report.provenance,
+              kind: 'map-generation-failure',
+              schemaVersion: 'map-generation-failure.v1',
+            },
+          },
+        ],
+        (stored) => Promise.resolve([...stored]),
+        options.signal,
+      );
+      return {
+        bundle,
+        proposedBundle: bundle,
+        plan,
+        artifacts,
+        revision: snapshot.revision,
+        filesScanned: mapSourceEvidence(snapshot).map(({ displayPath }) => displayPath),
+      };
+    }
     const comparisonOverlays = [
       'adjacencies',
       'building-positions',
@@ -1138,15 +1415,19 @@ export class AgentNudger {
       'victory-points',
       'weather-positions',
     ] as const;
+    const freshWorld =
+      operations.some(({ kind }) => kind === 'create_world') &&
+      snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
     const hasBeforeMap =
-      snapshot.index.raster !== undefined ||
-      snapshot.index.diagnostics.some(({ code }) => code.startsWith('RENDER_'));
+      !freshWorld &&
+      (snapshot.index.raster !== undefined ||
+        snapshot.index.diagnostics.some(({ code }) => code.startsWith('RENDER_')));
     const sameSize =
       snapshot.index.provinceBitmap !== undefined &&
       snapshot.index.provinceBitmap.width === plan.finalIndex.provinceBitmap?.width &&
       snapshot.index.provinceBitmap.height === plan.finalIndex.provinceBitmap.height;
     const [rawBundle, rawBeforeBundle, rawProposedBundle] = await Promise.all([
-      sameSize
+      sameSize && !freshWorld
         ? renderMapDiff(snapshot.index, plan.finalIndex, {
             ...(options.scale === undefined ? {} : { scale: options.scale }),
             ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -1217,6 +1498,7 @@ export class AgentNudger {
       },
     });
     const writes: ArtifactWrite[] = [
+      mapValidationEvidence(snapshot, validation),
       {
         name: 'map-diff.png',
         mimeType: 'image/png',
@@ -1277,6 +1559,20 @@ export class AgentNudger {
           provenance: comparisonProvenance('before'),
         },
       );
+    const generatedWorlds = generatedWorldOperationIds(plan);
+    if (generatedWorlds.size > 0)
+      writes.push(
+        ...(await buildWorldPreviewArtifacts({
+          index: plan.finalIndex,
+          references: prepared.referenceImages.filter(({ operationId }) =>
+            generatedWorlds.has(operationId),
+          ),
+          diagnostics: validation.diagnostics,
+          provenance,
+          budget,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        })),
+      );
     const artifacts = await this.artifacts.withAtomicChunkedWrites(
       workspace,
       writes,
@@ -1290,7 +1586,7 @@ export class AgentNudger {
       plan,
       artifacts,
       revision: snapshot.revision,
-      filesScanned: snapshot.files.map(({ displayPath }) => displayPath),
+      filesScanned: mapSourceEvidence(snapshot).map(({ displayPath }) => displayPath),
     };
   }
 }

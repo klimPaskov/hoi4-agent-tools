@@ -44,6 +44,27 @@ import {
 import { planReferenceRemap, ReferenceRemapError } from './references.js';
 import { generateWorld, type WorldCountry } from './world.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
+import { buildWorldContext } from './world-context.js';
+import { reconcileWorldOutputs } from './world-outputs.js';
+import type { WorldReferenceInput } from '../schemas/map.js';
+import type { ReferenceWorldRaster } from './reference-world.js';
+
+export interface PreparedReferenceWorld {
+  surface: ReferenceWorldRaster;
+  countries: WorldCountry[];
+  cities: Array<{ name: string; x: number; y: number; countryTag?: string }>;
+  labels: Array<{
+    name: string;
+    x: number;
+    y: number;
+    kind: 'state' | 'country' | 'city' | 'sea' | 'region' | 'mountain' | 'geography';
+  }>;
+  diagnostics: string[];
+}
+
+export interface MapPlanningContext {
+  referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
+}
 
 type MapOperationSteps<T> = Generator<void, T, void>;
 
@@ -428,6 +449,8 @@ export interface RenumberMapEntityOperation extends MapOperationBase {
 
 export interface CreateWorldOperation extends MapOperationBase {
   kind: 'create_world';
+  worldName?: string;
+  startingScenario?: boolean;
   width?: number;
   height?: number;
   seed?: number;
@@ -439,7 +462,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   provincesPerState?: number;
   landProvincesPerRegion?: number;
   seaProvincesPerRegion?: number;
-  countries: WorldCountry[];
+  countries?: WorldCountry[];
+  reference?: WorldReferenceInput;
   continentNames?: string[];
   startDate?: string;
   rivers?: number;
@@ -5392,6 +5416,14 @@ export const WORLD_REPLACED_ROOTS = [
   'map/supplyareas',
   'common/bookmarks',
 ] as const;
+const STARTING_SCENARIO_REPLACED_ROOTS = [
+  'common/on_actions',
+  'common/ai_areas',
+  'common/ai_strategy_plans',
+  'common/ai_strategy',
+  'common/decisions',
+  'events',
+] as const;
 
 /** Add replace_path lines to descriptor.mod, creating a minimal descriptor when none exists. */
 function descriptorWithReplacePaths(index: MapWorkspaceIndex, roots: readonly string[]): Buffer {
@@ -5420,39 +5452,72 @@ function applyCreateWorld(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
   operation: CreateWorldOperation,
+  context: MapPlanningContext,
 ): Diagnostic[] {
+  const reference = context.referenceWorlds?.get(operation.id);
+  if (operation.reference !== undefined && reference === undefined)
+    throw new ServiceError(
+      'MAP_REFERENCE_NOT_PREPARED',
+      'Reference worlds must be prepared by the authorized workspace service',
+    );
   const mapRoot = base.sourceRoots.map[0] ?? 'map';
+  const startingScenario = operation.startingScenario ?? reference !== undefined;
   const world = generateWorld(
     {
-      width: operation.width ?? 1_024,
-      height: operation.height ?? 512,
+      startingScenario,
+      ...(operation.worldName === undefined ? {} : { worldName: operation.worldName }),
+      width: operation.width ?? reference?.surface.width ?? 1_024,
+      height: operation.height ?? reference?.surface.height ?? 512,
       seed: operation.seed ?? 1,
       landCoverage: operation.landCoverage ?? 0.35,
       continents: operation.continents ?? 3,
       ...(operation.landPolygons === undefined ? {} : { landPolygons: operation.landPolygons }),
       landProvincePixels: operation.landProvincePixels ?? 400,
       seaProvincePixels: operation.seaProvincePixels ?? 2_500,
-      provincesPerState: operation.provincesPerState ?? 5,
-      landProvincesPerRegion: operation.landProvincesPerRegion ?? 25,
-      seaProvincesPerRegion: operation.seaProvincesPerRegion ?? 10,
-      countries: operation.countries,
+      provincesPerState: operation.provincesPerState ?? (reference === undefined ? 5 : 12),
+      landProvincesPerRegion:
+        operation.landProvincesPerRegion ?? (reference === undefined ? 25 : 60),
+      seaProvincesPerRegion: operation.seaProvincesPerRegion ?? (reference === undefined ? 10 : 30),
+      countries: operation.countries ??
+        reference?.countries ?? [
+          { tag: 'X01', name: 'Aster' },
+          { tag: 'X02', name: 'Brum' },
+          { tag: 'X03', name: 'Corvel' },
+          { tag: 'X04', name: 'Doran' },
+        ],
+      ...(reference === undefined
+        ? {}
+        : {
+            referenceSurface: reference.surface,
+            referenceCities: reference.cities,
+            referenceLabels: reference.labels,
+          }),
       ...(operation.continentNames === undefined
         ? {}
         : { continentNames: operation.continentNames }),
       startDate: operation.startDate ?? '1936.1.1',
-      rivers: operation.rivers ?? 8,
+      rivers: operation.rivers ?? (reference === undefined ? 8 : 80),
     },
-    {
-      palettes: {},
-      mapRoot,
-      statesRoot: base.sourceRoots.states[0] ?? 'history/states',
-      localisationRoot: base.sourceRoots.localisation[0] ?? 'localisation',
-    },
+    buildWorldContext(base),
   );
-  const roots = operation.replaceBaseGame === false ? [] : [...WORLD_REPLACED_ROOTS];
+  const roots =
+    operation.replaceBaseGame === false
+      ? []
+      : [...WORLD_REPLACED_ROOTS, ...(startingScenario ? STARTING_SCENARIO_REPLACED_ROOTS : [])];
   replacedRootsByPlan.set(changes, roots);
   for (const file of world.files)
     addChange(changes, file.relativePath, file.content, operation.id, file.mediaType);
+  // Remove only unchanged outputs recorded by a previous generation, before indexing new IDs.
+  for (const file of reconcileWorldOutputs(
+    base.sourceFiles,
+    proposedChanges(changes),
+    operation.id,
+    mapRoot,
+    base.sourceRoots.states,
+    base.sourceRoots.localisation,
+  ))
+    if (file.content === null)
+      addChange(changes, file.relativePath, null, operation.id, 'text/plain');
   // Start from empty derived files so no base-game position or supply line survives.
   for (const name of [
     'buildings.txt',
@@ -5476,7 +5541,41 @@ function applyCreateWorld(
   const positioned = currentIndex(base, changes);
   for (const file of planSupplyRebuild(positioned, { mode: 'replace' }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
+  for (const file of reconcileWorldOutputs(
+    base.sourceFiles,
+    proposedChanges(changes),
+    operation.id,
+    mapRoot,
+    base.sourceRoots.states,
+    base.sourceRoots.localisation,
+  ))
+    addChange(
+      changes,
+      file.relativePath,
+      file.content,
+      operation.id,
+      file.mediaType ?? 'text/plain',
+    );
   return [
+    ...(reference?.diagnostics ?? []).map((message): Diagnostic => ({
+      code: 'MAP_REFERENCE_INTERPRETATION',
+      severity: 'warning',
+      category: 'map',
+      operationId: operation.id,
+      message,
+    })),
+    ...(world.warnings.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_GENERATION_REVIEW',
+            severity: 'warning' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message: `Drainage generation reported ${world.warnings.length} review notes`,
+            details: { warningCount: world.warnings.length, samples: world.warnings.slice(0, 5) },
+          },
+        ]),
     {
       code: 'MAP_WORLD_CREATED',
       severity: 'info',
@@ -5631,6 +5730,7 @@ function* planMapOperationSteps(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
   signal?: AbortSignal,
+  context: MapPlanningContext = {},
 ): MapOperationSteps<MapOperationPlan> {
   yield* cancellationCheckpoint(signal);
   const changes = new Map<string, MutableChange>();
@@ -5671,7 +5771,7 @@ function* planMapOperationSteps(
     const boundsCheckpoint = expectedChangedBounds;
     try {
       if (operation.kind === 'create_world')
-        diagnostics.push(...applyCreateWorld(base, changes, operation));
+        diagnostics.push(...applyCreateWorld(base, changes, operation, context));
       else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
@@ -5770,8 +5870,9 @@ export function planMapOperations(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
   signal?: AbortSignal,
+  context: MapPlanningContext = {},
 ): MapOperationPlan {
-  return completeSynchronously(planMapOperationSteps(base, operations, signal));
+  return completeSynchronously(planMapOperationSteps(base, operations, signal, context));
 }
 
 /** Plans map mutations while periodically yielding so protocol cancellation can be delivered. */
@@ -5779,8 +5880,9 @@ export async function planMapOperationsAsync(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
   signal?: AbortSignal,
+  context: MapPlanningContext = {},
 ): Promise<MapOperationPlan> {
-  return completeCooperatively(planMapOperationSteps(base, operations, signal), signal);
+  return completeCooperatively(planMapOperationSteps(base, operations, signal, context), signal);
 }
 
 export function mapOperationId(
