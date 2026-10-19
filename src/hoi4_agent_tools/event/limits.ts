@@ -18,6 +18,10 @@ export const EVENT_GRAPH_WORK_LIMIT = 10_000_000;
 export const EVENT_FRAGMENT_CACHE_MAX_ENTRIES = 10_000;
 export const EVENT_FRAGMENT_CACHE_MAX_SOURCE_BYTES = 134_217_728;
 export const EVENT_PROPOSED_SOURCE_MAX_FILES = 64;
+// The full graph snapshot of a scan is retained only up to this size. Larger graphs, such as a
+// mod with several thousand events and hundreds of thousands of state accesses, would exceed a
+// JavaScript string and the artifact preparation ceiling.
+export const EVENT_GRAPH_SNAPSHOT_MAX_BYTES = 134_217_728;
 export const EVENT_PROPOSED_SOURCE_MAX_BYTES = 67_108_864;
 
 /** One cooperative, deterministic work ceiling shared by extraction and graph construction. */

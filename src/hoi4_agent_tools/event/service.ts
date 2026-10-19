@@ -6,9 +6,17 @@ import type {
 } from '../schemas/helper-expansion.js';
 import { eventHelperInventory } from './helper-expansion.js';
 import { clearSemanticDependencies } from '../core/semantic-dependencies.js';
-import { canonicalJson, compareCodeUnits, hashCanonical, sha256Bytes } from '../core/canonical.js';
+import {
+  type JsonValue,
+  canonicalJson,
+  canonicalJsonByteLength,
+  compareCodeUnits,
+  hashCanonical,
+  sha256Bytes,
+} from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
+import type { SymbolKind } from '../core/index.js';
 import type { ScannedFile } from '../core/scanner.js';
 import {
   boundedSourceHashEvidence,
@@ -24,8 +32,16 @@ import { isPortablePathSegment } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { buildEventGraph, buildEventGraphAsync } from './graph.js';
 import {
+  summarizeEventImpact,
+  summarizeEventIssues,
+  summarizeEventPath,
+  summarizeEventRoots,
+  summarizeEventTrace,
+} from './summary.js';
+import {
   EVENT_FRAGMENT_CACHE_MAX_ENTRIES,
   EVENT_FRAGMENT_CACHE_MAX_SOURCE_BYTES,
+  EVENT_GRAPH_SNAPSHOT_MAX_BYTES,
   EVENT_PROPOSED_SOURCE_MAX_BYTES,
   EVENT_PROPOSED_SOURCE_MAX_FILES,
 } from './limits.js';
@@ -97,6 +113,10 @@ export interface EventInspectResult {
   reportJson: string;
   artifacts: StoredArtifact[];
   helperExpansion?: HelperExpansionSummary;
+  /** The scan graph exceeded EVENT_GRAPH_SNAPSHOT_MAX_BYTES and was not retained as an artifact. */
+  graphSnapshotOmitted?: true;
+  /** Bounded counts and most severe findings of the selection, returned inline. */
+  summary?: Record<string, JsonValue>;
 }
 
 export interface EventRenderServiceInput {
@@ -119,6 +139,8 @@ export interface EventRenderServiceResult {
   graphHash: string;
   render: EventRenderBundle;
   branches: EventRenderBundle[];
+  /** Branch renders left out because the request's raster budget was spent. */
+  budgetOmittedBranches: number;
   manifestJson: string;
   artifacts: StoredArtifact[];
 }
@@ -399,8 +421,23 @@ async function scanEventSources(
     complete: index.complete,
     skippedSourceCount: index.skippedSourceCount,
     skippedSources: index.skippedSources,
-    diagnostics: index.diagnostics,
+    diagnostics: diagnosticsWithinScannedKinds(index),
   };
+}
+
+/**
+ * Event analysis indexes only event-relevant folders, so it holds no sprite, interface or
+ * scripted-trigger definitions. A reference to a kind with no definition in this file set says
+ * nothing about the workspace and is left to the full index, which scans those folders.
+ */
+function diagnosticsWithinScannedKinds(index: ScanSnapshot['index']): Diagnostic[] {
+  const indexedKinds = new Set(index.symbols.map(({ kind }) => kind));
+  return index.diagnostics.filter(({ code, details }) => {
+    if (code !== 'INDEX_UNRESOLVED_REFERENCE' && code !== 'INDEX_UNRESOLVED_REFERENCE_PARTIAL')
+      return true;
+    const toKind = details?.toKind;
+    return typeof toKind !== 'string' || indexedKinds.has(toKind as SymbolKind);
+  });
 }
 
 function rememberGraph(
@@ -1198,17 +1235,21 @@ export class EventChainViewer {
       refresh: input.refresh ?? input.mode === 'scan',
     };
     let report: unknown;
+    let summary: Record<string, JsonValue> | undefined;
     switch (input.mode) {
       case 'scan':
         report = eventScanReport(graph);
+        summary = summarizeEventIssues(graph.issues);
         break;
       case 'roots':
         {
           const unresolved = boundedUnresolved(graph);
+          const roots = discoverEventRoots(graph, input.signal);
+          summary = summarizeEventRoots(roots);
           report = {
             graphRevision: graph.revision,
             sourceHashes: graph.sourceHashes,
-            roots: discoverEventRoots(graph, input.signal),
+            roots,
             unresolved: unresolved.values,
             ...(unresolved.inventory === undefined
               ? {}
@@ -1233,6 +1274,10 @@ export class EventChainViewer {
             input.signal,
           );
           const unresolved = boundedUnresolved(graph, new Set(trace.nodes.map(({ id }) => id)));
+          summary = {
+            trace: summarizeEventTrace(trace),
+            ...summarizeEventIssues(lintEventGraph(graph, input.selector, input.signal)),
+          };
           report = {
             graphRevision: graph.revision,
             sourceHashes: graph.sourceHashes,
@@ -1250,26 +1295,30 @@ export class EventChainViewer {
             'EVENT_PATH_SELECTORS_REQUIRED',
             'Path explanation requires from and to selectors',
           );
-        report = {
-          graphRevision: graph.revision,
-          sourceHashes: graph.sourceHashes,
-          explanation: explainEventPath(
+        {
+          const explanation = explainEventPath(
             graph,
             input.from,
             input.to,
             { maxDepth, maxNodes, expandHelpers: input.expandHelpers ?? true },
             input.signal,
-          ),
-        };
+          );
+          summary = summarizeEventPath(explanation);
+          report = {
+            graphRevision: graph.revision,
+            sourceHashes: graph.sourceHashes,
+            explanation,
+          };
+        }
         break;
       case 'state_flow':
         {
           const unresolved = boundedUnresolved(graph);
-          const issues = boundedEvidence(
-            lintEventGraph(graph, input.selector, input.signal).filter(({ code }) =>
-              /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE)/u.test(code),
-            ),
+          const stateIssues = lintEventGraph(graph, input.selector, input.signal).filter(
+            ({ code }) => /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE|WRITER)/u.test(code),
           );
+          summary = summarizeEventIssues(stateIssues);
+          const issues = boundedEvidence(stateIssues);
           report = {
             graphRevision: graph.revision,
             sourceHashes: graph.sourceHashes,
@@ -1285,7 +1334,9 @@ export class EventChainViewer {
         break;
       case 'lint':
         {
-          const issues = boundedEvidence(lintEventGraph(graph, input.selector, input.signal));
+          const selectedIssues = lintEventGraph(graph, input.selector, input.signal);
+          summary = summarizeEventIssues(selectedIssues);
+          const issues = boundedEvidence(selectedIssues);
           const unresolved = boundedUnresolved(graph);
           report = {
             graphRevision: graph.revision,
@@ -1308,10 +1359,12 @@ export class EventChainViewer {
           );
         {
           const unresolved = boundedUnresolved(graph);
+          const impact = analyzeEventImpact(graph, input.impactSubject, input.signal);
+          summary = summarizeEventImpact(impact);
           report = {
             graphRevision: graph.revision,
             sourceHashes: graph.sourceHashes,
-            impact: analyzeEventImpact(graph, input.impactSubject, input.signal),
+            impact,
             unresolved: unresolved.values,
             ...(unresolved.inventory === undefined
               ? {}
@@ -1323,6 +1376,15 @@ export class EventChainViewer {
     const graphHash = cachedEventGraphHash(graph, input.signal);
     const name = `${safeSlug(`event-${input.mode}`)}-${graph.revision.slice(0, 12)}.json`;
     const graphSnapshotName = `event-graph-${graph.revision}.json`;
+    // A large workspace graph cannot be held as one JSON string or artifact. Measure it first and
+    // retain it only when it fits; comparisons then use the in-memory revision history.
+    const graphSnapshot =
+      input.mode === 'scan' ? { schemaVersion: 'event-graph-snapshot.v1', graph } : undefined;
+    const graphSnapshotBytes =
+      graphSnapshot === undefined
+        ? undefined
+        : canonicalJsonByteLength(graphSnapshot, EVENT_GRAPH_SNAPSHOT_MAX_BYTES);
+    const snapshotOmitted = graphSnapshot !== undefined && graphSnapshotBytes === undefined;
     const projectedScan =
       input.mode === 'scan' &&
       typeof report === 'object' &&
@@ -1361,10 +1423,13 @@ export class EventChainViewer {
         : {}),
       resources: [
         { name, mimeType: 'application/json' },
-        ...(input.mode === 'scan'
+        ...(input.mode === 'scan' && !snapshotOmitted
           ? [{ name: graphSnapshotName, mimeType: 'application/json' }]
           : []),
       ],
+      ...(snapshotOmitted
+        ? { graphSnapshotOmitted: { maximumBytes: EVENT_GRAPH_SNAPSHOT_MAX_BYTES } }
+        : {}),
       report,
     })}\n`;
     const workspace = this.engine.resolver.get(input.workspaceId, input.principal);
@@ -1386,12 +1451,12 @@ export class EventChainViewer {
       input.signal,
     );
     const graphArtifact =
-      input.mode === 'scan'
+      graphSnapshot !== undefined && !snapshotOmitted
         ? await this.engine.artifacts.putChunked(
             workspace,
             graphSnapshotName,
             'application/json',
-            `${canonicalJson({ schemaVersion: 'event-graph-snapshot.v1', graph })}\n`,
+            `${canonicalJson(graphSnapshot)}\n`,
             eventProvenance(
               graph,
               'event-graph-snapshot',
@@ -1409,6 +1474,8 @@ export class EventChainViewer {
       report,
       reportJson,
       artifacts: [artifact, ...(graphArtifact === undefined ? [] : [graphArtifact])],
+      ...(snapshotOmitted ? { graphSnapshotOmitted: true } : {}),
+      summary,
     };
   }
 
@@ -1442,11 +1509,14 @@ export class EventChainViewer {
       graph.nodes.length > render.selectedNodeIds.length
         ? coherentBranchPartitions(graph, branchNodeLimit, 64, input.signal)
         : { groups: [], omittedNodeIds: [] };
-    const branchGroups = partitions.groups;
-    for (const [branchIndex, nodeIds] of branchGroups.entries()) {
+    // Branch images share the request's raster budget with the overview. When it is spent, the
+    // remaining branches are listed as omitted instead of failing the whole render.
+    let budgetOmittedBranches = 0;
+    for (const [branchIndex, nodeIds] of partitions.groups.entries()) {
       input.signal?.throwIfAborted();
-      branches.push(
-        await renderEventGraph(graph, {
+      let branch: EventRenderBundle;
+      try {
+        branch = await renderEventGraph(graph, {
           view: 'neighborhood',
           selector: {
             kind: 'manifest',
@@ -1460,9 +1530,16 @@ export class EventChainViewer {
           compactLayout: true,
           budget,
           ...(input.signal === undefined ? {} : { signal: input.signal }),
-        }),
-      );
+        });
+      } catch (error) {
+        if (!(error instanceof ServiceError) || error.code !== 'RENDER_AGGREGATE_BLOCKED')
+          throw error;
+        budgetOmittedBranches = partitions.groups.length - branchIndex;
+        break;
+      }
+      branches.push(branch);
     }
+    const branchGroups = partitions.groups.slice(0, branches.length);
     const prefix = safeSlug(`event-${input.view}-${graph.revision.slice(0, 12)}`);
     const manifestName = `${prefix}-manifest.json`;
     const resourceNames = {
@@ -1621,7 +1698,8 @@ export class EventChainViewer {
         omittedNodeCount: partitions.omittedNodeIds.length,
         omittedNodeIds: partitions.omittedNodeIds,
         omittedNodeHash: hashCanonical(partitions.omittedNodeIds),
-        truncated: partitions.omittedNodeIds.length > 0,
+        budgetOmittedBranches,
+        truncated: partitions.omittedNodeIds.length > 0 || budgetOmittedBranches > 0,
       },
     })}\n`;
     const manifestArtifact = await this.engine.artifacts.putChunked(
@@ -1639,6 +1717,7 @@ export class EventChainViewer {
       graphHash: cachedEventGraphHash(graph, input.signal),
       render,
       branches,
+      budgetOmittedBranches,
       manifestJson,
       artifacts,
     };

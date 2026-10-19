@@ -140,6 +140,37 @@ describe('revision-pinned impact graph', () => {
     expect(result.complete).toBe(false);
   });
 
+  it('ignores dynamic references to kinds the selection never reaches', () => {
+    const files = [
+      file('common/ideas/ideas.txt', 'ideas = { country = { rationing = { } } }'),
+      file(
+        'common/decisions/policy.txt',
+        'policy = { ration = { complete_effect = { add_political_power = 1 } } }',
+      ),
+      file(
+        'events/policy.txt',
+        'country_event = { id = policy.2 immediate = { activate_decision = event_target:choice } }',
+      ),
+    ];
+    const index = SymbolIndex.build(files);
+    const scan: ScanSnapshot = {
+      workspaceId: 'fixture',
+      revision: 'scoped-dynamic-revision',
+      files,
+      index,
+      complete: index.complete,
+      skippedSourceCount: index.skippedSourceCount,
+      skippedSources: index.skippedSources,
+      diagnostics: index.diagnostics,
+    };
+    const idea = inspectImpactGraph(scan, { symbols: [{ kind: 'idea', id: 'rationing' }] });
+    expect(idea.dynamicReferences).toEqual([]);
+    expect(idea.complete).toBe(true);
+    const decision = inspectImpactGraph(scan, { symbols: [{ kind: 'decision', id: 'ration' }] });
+    expect(decision.dynamicReferences.map(({ toKind }) => toKind)).toEqual(['decision']);
+    expect(decision.complete).toBe(false);
+  });
+
   it('tracks observed state-key reads and writes without inventing a winning definition', () => {
     const files = [
       file(

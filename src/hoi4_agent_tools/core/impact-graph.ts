@@ -327,6 +327,10 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
       queue.push({ key: consumerKey, depth: depth + 1 });
     }
   }
+  // A dynamic reference can only reach a symbol of the kind it names, so references to other
+  // kinds neither hide consumers of this selection nor make its evidence incomplete.
+  const traversedKinds = new Set([...visited].map((key) => key.slice(0, key.indexOf('\0'))));
+  const dynamicReferences = semantic.unresolved.filter(({ toKind }) => traversedKinds.has(toKind));
   const { cycles, omittedCycles } = reachedCycleEdges(visited, [
     ...directConsumers,
     ...transitiveConsumers,
@@ -341,14 +345,14 @@ export function inspectImpactGraph(snapshot: ScanSnapshot, query: ImpactQuery): 
       omittedCycles === 0 &&
       !stoppedAtDepth &&
       unresolved.length === 0 &&
-      semantic.unresolved.length === 0,
+      dynamicReferences.length === 0,
     definitions,
     missingSymbols,
     directConsumers: directConsumers.sort(edgeOrder),
     transitiveConsumers: transitiveConsumers.sort(edgeOrder),
     affectedFiles: [...affectedFiles].sort(compareCodeUnits),
     unresolved,
-    dynamicReferences: semantic.unresolved,
+    dynamicReferences,
     cycles,
     coverage: {
       scannedSymbols: snapshot.index.symbols.length,

@@ -58,6 +58,8 @@ Malformed, missing, or oversized suite files produce explicit partial coverage.
 The graph includes active and overridden definitions, direct and transitive consumers, source locations, state-key reads and writes, and coverage limits.
 It connects source-backed event, focus, decision, idea, technology, scripted-helper, localisation, GUI, sprite, and texture references where a typed static edge can be established.
 Unresolved dynamic names, missing definitions, skipped sources, cycles, and traversal limits remain explicit in the report.
+A dynamic reference counts against completeness only when it names a symbol kind the traversal reaches, so `activate_decision = event_target:choice` affects the impact of a decision but not of an idea that no decision consumes.
+`data.affectedFilePaths` lists up to 64 affected files; the result's `changedFiles` stays empty because the analysis never writes.
 An affected file is a source dependency lead, not a claim that the game executed that path.
 
 ## Decisions and missions
@@ -99,6 +101,8 @@ The inventory lists active decisions, category fragments, overridden source defi
 Category and decision `allowed`, `visible`, and `available` results remain separate; mission visibility is reported as ignored where documented.
 Target selection covers explicit lists and arrays plus supported state ownership, control, and continent filters.
 When a target, flag, variable, or helper input is unknown, the corresponding gate remains unresolved.
+This includes `has_variable` and `has_event_target`: an undeclared variable or event target is unknown, not absent, unless the scenario sets `closedFlags: true`.
+AI weights use probability adapters verified for one game version. On another installed version the report keeps the gate, cost and lifecycle evidence, marks the AI part unresolved and returns a `PROBABILITY_GAME_VERSION_UNSUPPORTED` warning.
 
 Costs distinguish automatic engine political-power payment from a custom affordability trigger and its separate `complete_effect` payment.
 The report identifies direct deductions, possible double payment, missing direct payment, conditional or helper-dependent paths, repeatability, cooldowns, removal, activation, cancellation, and mission timeout paths.

@@ -46,6 +46,7 @@ import {
   type EventType,
   type EventUnresolvedAnalysis,
 } from './model.js';
+import { compatibleProducerKeys, hasUnknownSavedScopeStorage, stateKey } from './state-keys.js';
 import { iterativeStronglyConnectedComponents } from './scc.js';
 import { analyzeEventSource, eventSemanticFragmentCacheKey } from './source-analysis.js';
 
@@ -204,11 +205,14 @@ function locationKey(location: SourceLocation | undefined): string {
 }
 
 function issueKey(issue: EventIssue): string {
-  const subjectIds = issue.details.subjectIds;
+  // One finding per owner and subject: repeated accesses to the same named state collapse,
+  // while different events, targets, flags or expressions in one owner stay separate findings.
+  const { subjectIds, accessId: _accessId, stateLinkId: _stateLinkId, ...subject } = issue.details;
   return hashCanonical({
     code: issue.code,
     classification: issue.classification,
     subjectIds: Array.isArray(subjectIds) ? subjectIds : [],
+    subject,
   });
 }
 
@@ -484,6 +488,7 @@ function helperWalkInput(graph: MutableGraph, revision: string): DependencyWalkI
     maximumSteps: EVENT_GRAPH_WORK_LIMIT,
     visitPolicy: 'node',
     reverseEdges: true,
+    onWorkLimit: 'truncate',
   };
 }
 
@@ -524,10 +529,16 @@ function helperProjections(
     const final = structural.at(-1)!;
     const helpers = structural.slice(0, -1).map(({ to }) => nodes.get(to)!);
     if (record.kind === 'cycle' || record.kind === 'depth') {
-      const key = `${record.kind}:${start.id}:${final.to}`;
+      const cycle = record.kind === 'cycle';
+      // One finding per recursive loop, identified by its member helpers, rather than one per
+      // caller that reaches it.
+      const chain = helpers.map(({ id }) => id);
+      const members = chain.slice(Math.max(0, chain.indexOf(final.to)));
+      const key = cycle
+        ? `cycle:${[...members].sort(compareCodeUnits).join('\0')}`
+        : `depth:${start.id}:${final.to}`;
       if (reported.has(key)) continue;
       reported.add(key);
-      const cycle = record.kind === 'cycle';
       addIssue(graph.issues, {
         code: cycle ? 'EVENT_HELPER_CYCLE' : 'EVENT_HELPER_DEPTH_LIMIT',
         classification: 'unresolved_analysis',
@@ -547,9 +558,7 @@ function helperProjections(
             ...(cycle ? {} : { details: { maximumDepth: EVENT_GRAPH_MAX_HELPER_DEPTH } }),
           },
         ],
-        subjectIds: cycle
-          ? [start.from, ...helpers.map(({ id }) => id), final.to]
-          : [start.from, final.to],
+        subjectIds: cycle ? members : [start.from, final.to],
       });
       continue;
     }
@@ -771,44 +780,6 @@ function addTerminalNodes(graph: MutableGraph): void {
       subjectIds: [optionParent.get(owner.id) ?? owner.id],
     });
   }
-}
-
-function stateKey(value: Pick<EventStateAccess, 'kind' | 'name' | 'scope' | 'metadata'>): string {
-  const scope = value.kind === 'variable' || value.kind === 'array' ? `:${value.scope}` : '';
-  const storage =
-    value.kind === 'saved_scope'
-      ? `:${
-          value.metadata.storage === 'global' || value.metadata.storage === 'local'
-            ? value.metadata.storage
-            : 'unknown'
-        }`
-      : '';
-  return `${value.kind}:${value.name}${scope}${storage}`;
-}
-
-function compatibleProducerKeys(
-  value: Pick<EventStateAccess, 'kind' | 'name' | 'scope' | 'metadata'>,
-): string[] {
-  if (
-    value.kind !== 'saved_scope' ||
-    value.metadata.storage === 'global' ||
-    value.metadata.storage === 'local'
-  ) {
-    return [stateKey(value)];
-  }
-  return [
-    `saved_scope:${value.name}:global`,
-    `saved_scope:${value.name}:local`,
-    `saved_scope:${value.name}:unknown`,
-  ];
-}
-
-function hasUnknownSavedScopeStorage(value: Pick<EventStateAccess, 'kind' | 'metadata'>): boolean {
-  return (
-    value.kind === 'saved_scope' &&
-    value.metadata.storage !== 'global' &&
-    value.metadata.storage !== 'local'
-  );
 }
 
 function collapsedFlowEdges(
@@ -1196,9 +1167,21 @@ function structuralCallIssues(graph: MutableGraph, budget: EventAnalysisBudget):
     cyclicOutgoing,
     () => budget.spend('event_cycle'),
   );
-  for (const component of flowComponents) {
-    const members = new Set(component);
-    const internal = collapsed.filter(({ from, to }) => members.has(from) && members.has(to));
+  // Group each edge under its component once instead of filtering every edge per component.
+  const componentOf = new Map<string, number>();
+  flowComponents.forEach((component, index) => {
+    for (const member of component) componentOf.set(member, index);
+  });
+  const internalEdges = new Map<number, typeof collapsed>();
+  for (const edge of collapsed) {
+    const component = componentOf.get(edge.from);
+    if (component === undefined || componentOf.get(edge.to) !== component) continue;
+    const values = internalEdges.get(component) ?? [];
+    values.push(edge);
+    internalEdges.set(component, values);
+  }
+  for (const [componentIndex, component] of flowComponents.entries()) {
+    const internal = internalEdges.get(componentIndex) ?? [];
     const cyclic = component.length > 1 || internal.some(({ from, to }) => from === to);
     if (!cyclic) continue;
     const immediateOnly = internal.every(
@@ -1769,6 +1752,28 @@ function* eventGraphAnalysis(
   ensureReferencedNodes(graph);
   if (options.projectHelpers !== false) {
     const walk = yield helperWalkInput(graph, snapshot.revision);
+    if (walk.state.truncated === true)
+      addIssue(graph.issues, {
+        code: 'EVENT_HELPER_PROJECTION_LIMIT',
+        classification: 'unresolved_analysis',
+        severity: 'blocker',
+        message:
+          'Helper expansion reached its fixed work ceiling; helper calls from the remaining roots stay structural.',
+        confidence: 'unresolved',
+        blockers: [
+          {
+            code: 'HELPER_PROJECTION_LIMIT',
+            message:
+              'Select a namespace, event or file, or use helper_expansion mode, for paths beyond the ceiling.',
+            details: {
+              maximum: EVENT_GRAPH_WORK_LIMIT,
+              completedRoots: walk.state.root,
+              totalRoots: walk.input.roots.length,
+            },
+          },
+        ],
+        details: { completedRoots: walk.state.root, totalRoots: walk.input.roots.length },
+      });
     for (const edge of helperProjections(graph, budget, walk)) graph.edges.push(edge);
     for (const access of projectHelperStateAccesses(graph, budget, walk))
       graph.stateAccesses.push(access);

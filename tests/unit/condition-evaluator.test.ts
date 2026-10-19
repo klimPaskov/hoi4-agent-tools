@@ -80,6 +80,24 @@ describe('shared structured condition evaluation', () => {
     expect(evaluate('has_global_flag = absent', { closedFlags: false }).state).toBe('unresolved');
   });
 
+  it('leaves undeclared variables and event targets unknown unless the world is closed', () => {
+    const open = evaluate('has_variable = missing_value', { closedFlags: false });
+    expect(open.state).toBe('unresolved');
+    expect(open.unresolved[0]?.details?.scenarioInput).toBe('variable.missing_value');
+    expect(evaluate('has_variable = missing_value', { closedFlags: true }).state).toBe('false');
+    expect(evaluate('has_variable = a', { closedFlags: false }).state).toBe('true');
+    expect(evaluate('has_event_target = absent_target', { closedFlags: false }).state).toBe(
+      'unresolved',
+    );
+    expect(evaluate('has_event_target = absent_target', { closedFlags: true }).state).toBe('false');
+    expect(
+      evaluate('has_event_target = chosen', {
+        closedFlags: false,
+        eventTargets: { chosen: 'GER' },
+      }).state,
+    ).toBe('true');
+  });
+
   it('identifies the scenario field that can resolve a missing flag or variable', () => {
     expect(
       evaluate('has_country_flag = research_gate', { closedFlags: false, flags: [] }).unresolved[0]

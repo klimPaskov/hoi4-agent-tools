@@ -26,6 +26,18 @@ For a large helper closure, use [bounded helper expansion](helper-expansion.md) 
 
 The compact response summarizes the result. Small scan resources contain the complete graph; large scan resources contain exact totals, grouped inventories, representative diagnostics, and the revision needed for focused follow-up queries. Large focused scans keep direct event and on-action evidence, call sites, state accesses, and source locations while leaving helper expansion and workspace-wide lifecycle analysis explicit as deferred boundaries. This keeps an agent's prompt and artifact storage bounded without allowing a broad scan to exhaust the MCP process.
 
+`data.summary` answers the request inline before the linked report is opened. `scan`, `lint` and `state_flow` return the number of findings in the selection, counts by classification, the ten most frequent codes and the ten most severe findings with their path, line and subject. `trace` adds the traced node, edge and event counts with up to twenty event IDs. `roots` returns entry-point counts by kind, automatic and callerless triggered events, and cycle counts. `data.counts` still describes the whole analyzed graph, including vanilla events.
+
+`explain_path` adds whether a route was found, its step count, event IDs and failure reason; `impact` adds direct, upstream, downstream, affected-root and disconnection counts.
+
+Workspace-wide modes expand scripted helpers up to a fixed work ceiling. On a very large mod the expansion stops there with an `EVENT_HELPER_PROJECTION_LIMIT` finding that names the completed and total roots; calls from the remaining roots stay structural, and a namespace, event or file selector or `helper_expansion` mode covers them. An unselected overview render returns the overview and as many branch renders as the request's raster budget allows, reporting the rest in `omittedBranchRenders`.
+
+A `scan` retains the complete graph as a snapshot artifact only up to 128 MiB of canonical JSON. A larger graph, such as a mod with thousands of events and hundreds of thousands of state accesses, returns the scan report with the info diagnostic `EVENT_GRAPH_SNAPSHOT_OMITTED`; comparisons then use the revisions this server holds in memory.
+
+An assignment such as `custom_effect = yes` is reported as a missing helper only where it can execute: in effect blocks of events, decisions, focuses and on-actions, inside scope and loop effects, and in conventionally named effect blocks (`on_*`, `*_effect`, `*_effects`) of other definition files. Arguments of native effects such as `add_building_construction = { instant_build = yes }`, condition blocks such as `visible`, `available`, `allowed`, `ai_will_do`, `NOT` or `any_*`, and data fields of ideas, raids, special projects and scripted GUIs are not calls.
+
+A read is linked to a writer of the same name when the writer is a temporary variable, a write inside a scripted helper (whose scope is decided by its caller), a scope-prefixed name such as `GER.value`, or the array behind `entries^num`. `event_target:name` reads targets saved by `save_event_target_as` and `save_global_event_target_as`; `global_event_target:name` reads only global targets. A finding is kept per owner and subject, so different flags or targets read in one event remain separate findings.
+
 Selectors use one of these forms:
 
 ```json

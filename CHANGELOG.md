@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 4.2.0 - 2026-10-19
+
+- Keep job workers running when a discovered mod folder is removed after server start. Workers now resolve only workspaces whose roots still exist, while a job for the removed workspace still fails with `WORKSPACE_ROOT_MISSING`.
+- Stop `hoi4.event_inspect` `scan` from failing with `RangeError: Invalid string length` on large mods. The graph snapshot is measured before serialization and omitted above 128 MiB with the info diagnostic `EVENT_GRAPH_SNAPSHOT_OMITTED`.
+- Return `data.summary` from event inspection: selection finding counts by classification and code with the ten most severe source-linked findings, trace sizes and event IDs, and root counts.
+- Resolve `event_target:name` reads against `save_global_event_target_as` producers; `global_event_target:name` reads still require a global producer. This removes false `EVENT_TARGET_READ_BEFORE_SAVE` probable defects.
+- Record temporary-variable and temporary-array writes, `round_variable`, `modulo_variable`, `randomize_variable`, `set_variable_to_random` and `resize_array`. Link variable reads to writers inside scripted helpers, scope-prefixed names and `array^index` elements, removing most false `EVENT_GATE_WITHOUT_WRITER` warnings.
+- Stop inferring missing scripted helpers from native effect arguments, condition blocks of decisions, ideas, focuses and raids, trigger iterators and data fields of definition files.
+- Report unresolved references in event analysis only for symbol kinds that analysis indexes; sprite and interface references are left to the full index.
+- Keep distinct event findings in one owner separate instead of collapsing them to the first finding per code.
+- Report impact dynamic references only for symbol kinds the traversal reaches, list affected files in `data.affectedFilePaths`, and leave `changedFiles` empty for this read-only analysis.
+- Treat undeclared `has_variable` and `has_event_target` inputs as unresolved in open decision scenarios, matching flags; `closedFlags: true` keeps them absent.
+- Complete workspace-wide event `lint`, `state_flow`, `impact` and unselected renders on large mods. Helper expansion stops at its fixed work ceiling with an `EVENT_HELPER_PROJECTION_LIMIT` finding instead of failing with `DEPENDENCY_WORK_LIMIT`, and dependency checkpoints are spaced by the size of the previous save so their cost stays linear.
+- Remove quadratic passes from root discovery, event cycle checks, selector-scoped lint and terminal or unresolved renders. Root discovery on Chaos Redux with vanilla falls from minutes to under a second.
+- Report each recursive scripted-helper loop once instead of once per caller, and read `event_target:founder.values` as the target `founder`.
+- Return the overview and the branch renders that fit when an unselected overview spends its raster budget, with `omittedBranchRenders` and `coverage.budgetOmittedBranches`, instead of `RENDER_AGGREGATE_BLOCKED`.
+- Add `data.summary` to `explain_path` (route found, steps, event IDs, failure reason) and event `impact` (reach counts); root summaries list the mod's own callerless events first with counts by layer, and finding summaries rank the mod's files first with `byLayer` counts.
+- Keep decision gate, cost and lifecycle evidence when the installed game version is not verified for AI-weight adapters; the AI part is unresolved with a `PROBABILITY_GAME_VERSION_UNSUPPORTED` warning.
+- Raise the semantic reference ceiling for impact analysis and source lookup to its supported maximum of 1,000,000, so a large mod with the base game is analyzed completely.
+
 ## 4.1.0 - 2026-10-15
 
 - Add reference-image `create_world` requests with automatic dimensions, countries, biomes, coastline interpretation, drainage, offline English label recognition, optional aligned layers and reviewed semantic hints.

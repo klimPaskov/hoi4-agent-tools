@@ -663,6 +663,199 @@ country_event = {
     ).toEqual([]);
   });
 
+  it('resolves event_target reads against global event target producers only', async () => {
+    const { engine, sourcePath } = await fixture();
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = no
+	immediate = {
+		save_global_event_target_as = shared_target
+		save_event_target_as = local_target
+		country_event = service.2
+		country_event = service.3
+		country_event = service.4
+	}
+	option = { name = service.1.a }
+}
+
+country_event = {
+	id = service.2
+	title = service.2.t
+	is_triggered_only = yes
+	immediate = {
+		event_target:shared_target = { set_country_flag = service_global_read }
+		event_target:local_target = { set_country_flag = service_local_read }
+	}
+	option = { name = service.2.a }
+}
+
+country_event = {
+	id = service.3
+	title = service.3.t
+	is_triggered_only = yes
+	immediate = {
+		global_event_target:local_target = { set_country_flag = service_wrong_kind_read }
+	}
+	option = { name = service.3.a }
+}
+
+country_event = {
+	id = service.4
+	title = service.4.t
+	is_triggered_only = yes
+	immediate = {
+		event_target:never_saved = { set_country_flag = service_unproduced_read }
+	}
+	option = { name = service.4.a }
+}
+`,
+      'utf8',
+    );
+    const viewer = new EventChainViewer(engine);
+    const graph = await viewer.scan('event-service', { refresh: true });
+    const reads = (kind: string, name: string) =>
+      graph.stateAccesses.filter(
+        (access) => access.kind === kind && access.name === name && access.access === 'read',
+      );
+    const unproduced = (kind: string, name: string) =>
+      graph.issues.filter(
+        ({ code, details }) =>
+          code === 'EVENT_TARGET_READ_BEFORE_SAVE' &&
+          reads(kind, name).some(({ id }) => id === details.accessId),
+      );
+    const sharedRead = reads('event_target', 'shared_target')[0];
+    const sharedWrite = graph.stateAccesses.find(
+      ({ kind, name, access }) =>
+        kind === 'global_event_target' && name === 'shared_target' && access !== 'read',
+    );
+
+    expect(sharedRead).toBeDefined();
+    expect(sharedWrite).toBeDefined();
+    expect(unproduced('event_target', 'shared_target')).toEqual([]);
+    expect(graph.stateLinks).toContainEqual(
+      expect.objectContaining({
+        stateKind: 'event_target',
+        name: 'shared_target',
+        producerId: sharedWrite?.id,
+        consumerId: sharedRead?.id,
+        pathConfirmed: true,
+      }),
+    );
+    expect(unproduced('event_target', 'local_target')).toEqual([]);
+    expect(unproduced('global_event_target', 'local_target')).toHaveLength(1);
+    expect(unproduced('event_target', 'never_saved')).toHaveLength(1);
+
+    const flow = inspectEventStateFlow(graph, undefined, {
+      kind: 'event_target',
+      name: 'shared_target',
+    });
+    expect(flow.unproducedReads).toEqual([]);
+  });
+
+  it('matches variable reads to temporary and helper-scope writers', async () => {
+    const { engine, sourcePath } = await fixture();
+    const helperPath = path.join(
+      path.dirname(path.dirname(sourcePath)),
+      'common',
+      'scripted_effects',
+      'service_effects.txt',
+    );
+    await mkdir(path.dirname(helperPath), { recursive: true });
+    await writeFile(
+      helperPath,
+      'service_record_helper = { set_variable = { service_helper_value = 1 } }\n',
+      'utf8',
+    );
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = no
+	immediate = {
+		set_temp_variable = { service_temp_value = 2 }
+		if = { limit = { check_variable = { service_temp_value > 1 } } add_political_power = 1 }
+		service_record_helper = yes
+		if = { limit = { has_variable = service_helper_value } add_political_power = 1 }
+		if = { limit = { has_variable = service_never_written } add_political_power = 1 }
+	}
+	option = { name = service.1.a }
+}
+`,
+      'utf8',
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service', { refresh: true });
+    const unwritten = graph.issues
+      .filter(({ code }) => code === 'EVENT_GATE_WITHOUT_WRITER')
+      .map(({ details }) => details.name);
+
+    expect(unwritten).toEqual(['service_never_written']);
+    expect(
+      graph.stateAccesses.find(
+        ({ name, access }) => name === 'service_temp_value' && access === 'write',
+      )?.metadata,
+    ).toEqual({ temporary: true });
+  });
+
+  it('reports a recursive helper loop once and reads dotted targets by their target name', async () => {
+    const { engine, sourcePath } = await fixture();
+    const helperPath = path.join(
+      path.dirname(path.dirname(sourcePath)),
+      'common',
+      'scripted_effects',
+      'service_loop.txt',
+    );
+    await mkdir(path.dirname(helperPath), { recursive: true });
+    await writeFile(
+      helperPath,
+      'service_loop_a = { service_loop_b = yes }\nservice_loop_b = { service_loop_a = yes }\n',
+      'utf8',
+    );
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = no
+	immediate = {
+		save_event_target_as = service_founder
+		service_loop_a = yes
+		country_event = service.2
+	}
+	option = { name = service.1.a }
+}
+
+country_event = {
+	id = service.2
+	title = service.2.t
+	is_triggered_only = yes
+	immediate = {
+		service_loop_b = yes
+		if = { limit = { is_in_array = { array = event_target:service_founder.service_states value = THIS } } add_political_power = 1 }
+	}
+	option = { name = service.2.a }
+}
+`,
+      'utf8',
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service', { refresh: true });
+
+    expect(graph.issues.filter(({ code }) => code === 'EVENT_HELPER_CYCLE')).toHaveLength(1);
+    expect(
+      graph.stateAccesses.filter(({ kind }) => kind === 'event_target').map(({ name }) => name),
+    ).not.toContain('service_founder.service_states');
+    expect(graph.issues.filter(({ code }) => code === 'EVENT_TARGET_READ_BEFORE_SAVE')).toEqual([]);
+  });
+
   it('renders removed nodes and edges as source-linked tombstones', async () => {
     const { engine } = await fixture();
     const viewer = new EventChainViewer(engine);

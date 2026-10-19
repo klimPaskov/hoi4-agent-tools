@@ -118,6 +118,8 @@ interface StateRule {
   access: EventStateAccessKind;
   nameField?: string;
   storage?: 'local' | 'global';
+  /** A temporary variable or array lives only while the current effect runs. */
+  temporary?: true;
 }
 
 const STATE_RULES: Readonly<Record<string, StateRule>> = {
@@ -136,6 +138,21 @@ const STATE_RULES: Readonly<Record<string, StateRule>> = {
   multiply_variable: { kind: 'variable', access: 'read_write' },
   divide_variable: { kind: 'variable', access: 'read_write' },
   clamp_variable: { kind: 'variable', access: 'read_write' },
+  round_variable: { kind: 'variable', access: 'read_write' },
+  modulo_variable: { kind: 'variable', access: 'read_write' },
+  randomize_variable: { kind: 'variable', access: 'read_write' },
+  set_variable_to_random: { kind: 'variable', access: 'write' },
+  // `check_variable` and `has_variable` read a temporary variable of the same name as well.
+  set_temp_variable: { kind: 'variable', access: 'write', temporary: true },
+  set_temp_variable_to_random: { kind: 'variable', access: 'write', temporary: true },
+  add_to_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  subtract_from_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  multiply_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  divide_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  clamp_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  round_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  modulo_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
+  randomize_temp_variable: { kind: 'variable', access: 'read_write', temporary: true },
   check_variable: { kind: 'variable', access: 'read' },
   has_variable: { kind: 'variable', access: 'read' },
   is_variable_equal: { kind: 'variable', access: 'read' },
@@ -151,6 +168,16 @@ const STATE_RULES: Readonly<Record<string, StateRule>> = {
   remove_from_array: { kind: 'array', access: 'read_write', nameField: 'array' },
   is_in_array: { kind: 'array', access: 'read', nameField: 'array' },
   clear_array: { kind: 'array', access: 'clear' },
+  resize_array: { kind: 'array', access: 'write', nameField: 'array' },
+  add_to_temp_array: { kind: 'array', access: 'write', nameField: 'array', temporary: true },
+  remove_from_temp_array: {
+    kind: 'array',
+    access: 'read_write',
+    nameField: 'array',
+    temporary: true,
+  },
+  resize_temp_array: { kind: 'array', access: 'write', nameField: 'array', temporary: true },
+  clear_temp_array: { kind: 'array', access: 'clear', temporary: true },
   save_event_target_as: { kind: 'event_target', access: 'replace' },
   has_event_target: { kind: 'event_target', access: 'read' },
   save_global_event_target_as: { kind: 'global_event_target', access: 'replace' },
@@ -191,6 +218,13 @@ interface WalkContext {
   scopeExpression?: string;
   /** Whether an unknown effect-shaped assignment can be a scripted helper call. */
   effectContext?: boolean;
+  /** True inside a native effect's argument block, where `key = yes` is an argument. */
+  nativeArguments?: boolean;
+  /**
+   * False in definition files whose structure is not modelled, such as ideas, raids or scripted
+   * GUIs, where `key = yes` is usually a data field; effect blocks there enable it again.
+   */
+  inferMissingHelpers?: boolean;
   /** True inside display-only constructs such as effect_tooltip. */
   suppressSemantics?: boolean;
 }
@@ -243,7 +277,65 @@ const NON_EXECUTING_BLOCKS = new Set([
   'mean_time_to_happen',
   'effect_tooltip',
   'custom_effect_tooltip',
+  // Condition blocks of decisions, missions, ideas, focuses, raids and characters.
+  'visible',
+  'available',
+  'allowed',
+  'allowed_civil_war',
+  'allowed_to_remove',
+  'cancel_trigger',
+  'remove_trigger',
+  'target_trigger',
+  'target_root_trigger',
+  'activation',
+  'ai_will_do',
+  'bypass',
+  'allow_branch',
+  'hidden_trigger',
+  'custom_trigger_tooltip',
+  'and',
+  'or',
+  'not',
+  'nor',
+  'nand',
 ]);
+
+/** Native effects whose body holds further effects rather than named arguments. */
+const NATIVE_EFFECT_CONTAINERS = new Set([
+  'create_dynamic_country',
+  'custom_override_tooltip',
+  'effect_tooltip',
+  'for_each_loop',
+  'for_each_scope_loop',
+  'for_loop_effect',
+  'hidden_effect',
+  'if',
+  'random',
+  'random_list',
+  'random_scope_in_array',
+  'while_loop_effect',
+]);
+
+/** Inside a native effect such as `add_building_construction`, `key = yes` is an argument. */
+function isNativeArgumentBlock(normalizedKey: string): boolean {
+  return (
+    nativeEffectKeys.has(normalizedKey) &&
+    !NATIVE_EFFECT_CONTAINERS.has(normalizedKey) &&
+    !CONTROL_BLOCKS.has(normalizedKey) &&
+    SCOPE_BLOCKS[normalizedKey] === undefined &&
+    !/^(?:every|random|global_every)_/u.test(normalizedKey)
+  );
+}
+
+/** Effect blocks of definition files by naming convention: `on_add`, `complete_effect`, `effects`. */
+function isConventionalEffectBlock(normalizedKey: string): boolean {
+  return /^on_[a-z0-9_]+$|(?:^|_)effects?$/u.test(normalizedKey);
+}
+
+/** Trigger iterators such as `any_owned_state` hold conditions, never effects. */
+function isTriggerIterator(normalizedKey: string): boolean {
+  return /^(?:any|all)_/u.test(normalizedKey);
+}
 
 const TOOLTIP_ONLY_BLOCKS = new Set(['effect_tooltip', 'custom_effect_tooltip']);
 
@@ -999,6 +1091,7 @@ class FragmentAnalyzer {
       helperStack: [],
       semanticPath: ['other'],
       effectContext: true,
+      inferMissingHelpers: false,
     });
     if (this.edges.length + this.stateAccesses.length > before) {
       this.addNode({
@@ -1096,6 +1189,8 @@ class FragmentAnalyzer {
       }
       if (
         this.context.inventoryComplete !== false &&
+        context.nativeArguments !== true &&
+        context.inferMissingHelpers !== false &&
         missingHelperCandidate(key, entry.value, effectContext)
       ) {
         const target = this.unresolvedNode(
@@ -1240,7 +1335,14 @@ class FragmentAnalyzer {
         conditions,
         sourceScope: scope,
         phase,
-        effectContext: NON_EXECUTING_BLOCKS.has(normalizedKey) ? false : effectContext,
+        effectContext:
+          NON_EXECUTING_BLOCKS.has(normalizedKey) || isTriggerIterator(normalizedKey)
+            ? false
+            : effectContext,
+        nativeArguments: context.nativeArguments === true || isNativeArgumentBlock(normalizedKey),
+        ...(context.inferMissingHelpers === false && isConventionalEffectBlock(normalizedKey)
+          ? { inferMissingHelpers: true }
+          : {}),
         suppressSemantics:
           context.suppressSemantics === true || TOOLTIP_ONLY_BLOCKS.has(normalizedKey),
         semanticPath,
@@ -1563,9 +1665,11 @@ class FragmentAnalyzer {
     context: WalkContext,
     semanticPath: string[],
   ): void {
-    const keyedTarget = /^(event_target|global_event_target|scope):([A-Za-z0-9_.-]+)$/u.exec(
-      assignment.key.value,
-    );
+    // `event_target:founder.districts` names the target `founder`; the rest is a value in its scope.
+    const keyedTarget =
+      /^(event_target|global_event_target|scope):([A-Za-z0-9_-]+)(?:\.[A-Za-z0-9_.-]+)?$/u.exec(
+        assignment.key.value,
+      );
     if (keyedTarget !== null) {
       this.addState(
         context,
@@ -1584,9 +1688,7 @@ class FragmentAnalyzer {
     const rule = STATE_RULES[assignment.key.value];
     if (rule === undefined) {
       const raw = valueText(this.document, assignment.value);
-      for (const match of raw.matchAll(
-        /\b(event_target|global_event_target):([A-Za-z0-9_.-]+)/gu,
-      )) {
+      for (const match of raw.matchAll(/\b(event_target|global_event_target):([A-Za-z0-9_-]+)/gu)) {
         this.addState(
           context,
           match[1] === 'global_event_target' ? 'global_event_target' : 'event_target',
@@ -1624,16 +1726,10 @@ class FragmentAnalyzer {
     } else if (access === 'write') {
       this.#seenStateWriters.add(writerKey);
     }
-    this.addState(
-      context,
-      kind,
-      name,
-      access,
-      assignment,
-      semanticPath,
-      isDynamic(name),
-      rule.storage === undefined ? {} : { storage: rule.storage },
-    );
+    this.addState(context, kind, name, access, assignment, semanticPath, isDynamic(name), {
+      ...(rule.storage === undefined ? {} : { storage: rule.storage }),
+      ...(rule.temporary === true ? { temporary: true } : {}),
+    });
   }
 
   private addState(

@@ -113,6 +113,74 @@ const renderHashSchema = z
   })
   .strict();
 
+const countMapSchema = z.record(z.string().max(256), nonNegativeIntegerSchema);
+const inlineIdsSchema = z.array(z.string().max(256)).max(20);
+
+/** Bounded inline answer of an inspection; see docs/events.md. */
+const eventInspectSummarySchema = z
+  .object({
+    issues: nonNegativeIntegerSchema.optional(),
+    byClassification: countMapSchema.optional(),
+    byLayer: countMapSchema.optional(),
+    topCodes: countMapSchema.optional(),
+    findings: z
+      .array(
+        z
+          .object({
+            code: z.string().max(256),
+            classification: z.enum([
+              'confirmed_error',
+              'probable_defect',
+              'design_warning',
+              'unresolved_analysis',
+            ]),
+            confidence: z.enum(['confirmed', 'high', 'medium', 'low', 'unresolved']),
+            message: z.string().max(300),
+            path: z.string().max(1024).optional(),
+            line: nonNegativeIntegerSchema.optional(),
+            subject: z.string().max(1024).optional(),
+          })
+          .strict(),
+      )
+      .max(10)
+      .optional(),
+    trace: z
+      .object({
+        nodes: nonNegativeIntegerSchema,
+        edges: nonNegativeIntegerSchema,
+        events: nonNegativeIntegerSchema,
+        eventIds: inlineIdsSchema,
+        boundaryNodes: nonNegativeIntegerSchema,
+        truncated: z.boolean(),
+      })
+      .strict()
+      .optional(),
+    entryPoints: nonNegativeIntegerSchema.optional(),
+    entryKinds: countMapSchema.optional(),
+    automaticEvents: nonNegativeIntegerSchema.optional(),
+    callerlessTriggeredEvents: nonNegativeIntegerSchema.optional(),
+    callerlessTriggeredByLayer: countMapSchema.optional(),
+    callerlessTriggeredEventIds: inlineIdsSchema.optional(),
+    cycles: nonNegativeIntegerSchema.optional(),
+    found: z.boolean().optional(),
+    steps: nonNegativeIntegerSchema.optional(),
+    eventIds: inlineIdsSchema.optional(),
+    failureReason: z.string().max(64).optional(),
+    failureMessage: z.string().max(1024).optional(),
+    unresolvedAssumptions: nonNegativeIntegerSchema.optional(),
+    direct: nonNegativeIntegerSchema.optional(),
+    upstream: nonNegativeIntegerSchema.optional(),
+    downstream: nonNegativeIntegerSchema.optional(),
+    stateAccesses: nonNegativeIntegerSchema.optional(),
+    affectedRoots: nonNegativeIntegerSchema.optional(),
+    affectedTerminals: nonNegativeIntegerSchema.optional(),
+    wouldDisconnect: nonNegativeIntegerSchema.optional(),
+    wouldDisconnectTerminals: nonNegativeIntegerSchema.optional(),
+    unresolved: nonNegativeIntegerSchema.optional(),
+    sampleDownstream: z.array(z.string().max(1024)).max(20).optional(),
+  })
+  .strict();
+
 const eventInspectDataSchema = z
   .object({
     mode: eventInspectModeSchema,
@@ -121,6 +189,7 @@ const eventInspectDataSchema = z
     graphHash: sha256Schema,
     counts: eventGraphCountsSchema,
     helperExpansion: helperExpansionSummarySchema.optional(),
+    summary: eventInspectSummarySchema.optional(),
     boundary: inspectBoundarySchema,
   })
   .strict();
@@ -138,6 +207,7 @@ const eventRenderOutputSchema = strictOperationResultSchema(
         selectedNodes: nonNegativeIntegerSchema,
         omittedNodes: nonNegativeIntegerSchema,
         branchRenders: nonNegativeIntegerSchema,
+        omittedBranchRenders: nonNegativeIntegerSchema,
       }),
       boundary: z
         .object({
