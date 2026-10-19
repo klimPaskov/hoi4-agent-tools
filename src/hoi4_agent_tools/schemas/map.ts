@@ -200,6 +200,73 @@ export const worldColormapSchema = z
   .strict();
 export type WorldColormapInput = z.infer<typeof worldColormapSchema>;
 
+/** Feature-aware provinces, states and strategic regions (ADR 0058). */
+export const worldPartitionSchema = z
+  .enum(['legacy', 'feature-aware'])
+  .describe(
+    'legacy (default) keeps the warped Voronoi provinces and breadth-first clusters, so a seed gives the same world as before; feature-aware cuts provinces along rivers, ridges, steep slopes and shores, sizes them by terrain, fertility and coast, and clusters states and regions along natural lines. A world given a geography defaults to feature-aware.',
+  );
+export type WorldPartitionInput = z.infer<typeof worldPartitionSchema>;
+
+const partitionAreaPixels = z.number().int().min(20).max(50_000);
+export const worldPartitionTuningSchema = z
+  .object({
+    landArea: z
+      .object({
+        fertile: partitionAreaPixels.optional(),
+        hills: partitionAreaPixels.optional(),
+        mountain: partitionAreaPixels.optional(),
+        waste: partitionAreaPixels.optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Typical land province area in pixels by ground. Defaults follow landProvincePixels (0.35, 1, 2.2 and 3.4 times, scaled so the mean stays landProvincePixels). fertile must not exceed hills, nor hills mountain.',
+      ),
+    seaArea: z
+      .object({
+        coastal: z.number().int().min(20).max(200_000).optional(),
+        open: z.number().int().min(20).max(200_000).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Sea province area in pixels near a coast and on the open sea. Defaults follow seaProvincePixels (0.5 and 2.4 times, scaled so the mean stays seaProvincePixels).',
+      ),
+    provincesPerState: z
+      .tuple([z.number().int().min(1).max(64), z.number().int().min(1).max(64)])
+      .optional()
+      .describe(
+        '[smallest, largest] land provinces per state; the preferred size is the geometric mean.',
+      ),
+    regionSize: z
+      .tuple([z.number().int().min(1).max(400), z.number().int().min(1).max(400)])
+      .optional()
+      .describe('[smallest, largest] land provinces per strategic region.'),
+    barrierStrength: z
+      .number()
+      .min(0)
+      .max(60)
+      .optional()
+      .describe('How strongly borders are pulled onto natural lines, 0 to 60; default 20.'),
+    minProvincePixels: z
+      .number()
+      .int()
+      .min(20)
+      .max(2_000)
+      .optional()
+      .describe('No province is planned smaller than this; default 40. The engine floor is 8.'),
+    narrowStraitPx: z
+      .number()
+      .int()
+      .min(4)
+      .max(64)
+      .optional()
+      .describe('A sea channel at most this wide gets two sea provinces across it; default 24.'),
+  })
+  .strict();
+export type WorldPartitionTuningInput = z.infer<typeof worldPartitionTuningSchema>;
+
 const moveStateDistributionSchema = z
   .object({
     stateValues: z.enum(['retain-in-current-states', 'proportional-by-land-pixels']),
@@ -743,6 +810,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         ),
       look: worldLookSchema.optional(),
       colormap: worldColormapSchema.optional(),
+      partition: worldPartitionSchema.optional(),
+      partitionTuning: worldPartitionTuningSchema
+        .optional()
+        .describe(
+          'Size bands and strengths of the feature-aware partition; refused with partition legacy.',
+        ),
       replaceBaseGame: z
         .boolean()
         .default(true)

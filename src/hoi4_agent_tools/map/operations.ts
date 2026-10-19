@@ -53,10 +53,14 @@ import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
+import { resolvePartitionMode } from './partition.js';
+import type { PartitionTuning } from './partition-tuning.js';
 import type {
   WorldColormapInput,
   WorldEdgeInput,
   WorldLookInput,
+  WorldPartitionInput,
+  WorldPartitionTuningInput,
   WorldReferenceInput,
 } from '../schemas/map.js';
 import type { GeographyModelInput } from '../schemas/geography.js';
@@ -489,6 +493,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   ambientFrame?: boolean;
   look?: WorldLookInput;
   colormap?: WorldColormapInput;
+  partition?: WorldPartitionInput;
+  partitionTuning?: WorldPartitionTuningInput;
   replaceBaseGame?: boolean;
 }
 
@@ -5487,7 +5493,8 @@ function applyCreateWorld(
   context: MapPlanningContext,
 ): Diagnostic[] {
   const geography = context.geographyModels?.get(operation.id);
-  if (operation.geography !== undefined || operation.geographyPath !== undefined) {
+  const hasGeography = operation.geography !== undefined || operation.geographyPath !== undefined;
+  if (hasGeography) {
     if (geography === undefined)
       throw new ServiceError(
         'MAP_GEOGRAPHY_NOT_PREPARED',
@@ -5529,6 +5536,12 @@ function applyCreateWorld(
       'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
       'look selects a calibrated palette; remove colormap.profile "legacy" or look',
     );
+  const partitionMode = resolvePartitionMode(operation.partition, hasGeography);
+  if (partitionMode === 'legacy' && operation.partitionTuning !== undefined)
+    throw new ServiceError(
+      'MAP_PARTITION_TUNING_REQUIRES_FEATURE_AWARE',
+      'partitionTuning applies to the feature-aware partition; set partition to "feature-aware" or remove it',
+    );
   const world = generateWorld(
     {
       startingScenario,
@@ -5567,6 +5580,16 @@ function applyCreateWorld(
       ...(edge.mode === 'none' ? {} : { edge }),
       ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
       colormapProfile,
+      ...(partitionMode === 'legacy'
+        ? {}
+        : {
+            partition: {
+              mode: partitionMode,
+              ...(operation.partitionTuning === undefined
+                ? {}
+                : { tuning: operation.partitionTuning as PartitionTuning }),
+            },
+          }),
       ...(look === undefined ? {} : { look }),
       ...(operation.colormap?.palette === undefined
         ? {}
