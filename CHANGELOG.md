@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Measure border naturalness. `hoi4.map_inspect` accepts `quality: true` (full inspection) and returns `data.quality` for the province, state, strategic-region and country borders: alignment with rivers, steep gradients, lake shores and terrain-class changes, enrichment over chance, the plain natural share of border length, locally straight samples, long straight runs and the worst artificial runs, with the artifact `map-border-quality.<revision>.json` and the diagnostics `MAP_BORDER_ARTIFICIAL_REVIEW`, `MAP_BORDER_NOT_MEANINGFUL`, `MAP_BORDER_INPUT_MISSING` and `MAP_BORDER_QUALITY_UNAVAILABLE` (none fail validation). The new `border-quality` overlay draws natural and artificial state borders and the worst runs. Both are additive and optional, so existing requests are unchanged (compatibility review: new optional input field, new overlay value and new optional output field; next release is a minor version). See ADR 0059.
+
 ## 4.3.0 - 2026-10-19
 
 - Run probability analysis on every installed HOI4 version. `metadata.gameVersionVerification` records the observed build as `workspace_verified`, `workspace_observed` or `version_unknown` instead of refusing with `PROBABILITY_GAME_VERSION_UNSUPPORTED` or `PROBABILITY_GAME_VERSION_UNVERIFIED`; decision inspection evaluates AI weights on any version.

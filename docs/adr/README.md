@@ -59,3 +59,4 @@ Implementation rationale for contributors. For using the server, start with the 
 50. [Scoped render source work](0050-scoped-render-source-work.md)
 51. [Native panel boundaries](0051-native-panel-boundaries.md)
 52. [Generated world lifecycle and starting scenarios](0052-generated-world-lifecycle.md)
+53. [Border naturalness metric and validator](0059-border-naturalness-metric.md)
