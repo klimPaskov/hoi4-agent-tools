@@ -193,7 +193,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_rewrite',
     title: 'Build a world or edit the map',
     description:
-      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. create_world also accepts a typed geography model (geography inline or geographyPath to a workspace .json): with preview:true it returns a model overlay PNG and map-geography-report.json; synthesis from the model is not yet available. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
+      'Build a world from a reference image or a geography model (geography, geographyPath), or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and countries, or a model overlay and report; omit preview to write the generated map and starting scenario (models are not written yet). Returns counts, diagnostics and linked PNGs.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {

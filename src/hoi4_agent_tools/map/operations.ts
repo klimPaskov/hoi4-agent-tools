@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
-import { compareCodeUnits, deterministicId, sha256Bytes } from '../core/canonical.js';
+import {
+  canonicalJson,
+  compareCodeUnits,
+  deterministicId,
+  sha256Bytes,
+} from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -5751,6 +5756,23 @@ function applyEntityLocator(
   addChange(changes, locator.file.relativePath, output, operation.id, 'text/plain');
 }
 
+/**
+ * The operation as the transaction manifest records it. An inline geography model can hold
+ * megabytes; the manifest keeps its SHA-256 and size instead, which still bind the plan hash to
+ * the exact model, and a model given by path is bound by the file's read dependency.
+ */
+function manifestOperationData(operation: MapOperation): Record<string, unknown> {
+  const data = JSON.parse(JSON.stringify(operation)) as Record<string, unknown>;
+  if (operation.kind === 'create_world' && operation.geography !== undefined) {
+    const canonical = canonicalJson(operation.geography);
+    data.geography = {
+      sha256: sha256Bytes(canonical),
+      bytes: Buffer.byteLength(canonical, 'utf8'),
+    };
+  }
+  return data;
+}
+
 function* planMapOperationSteps(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
@@ -5780,7 +5802,7 @@ function* planMapOperationSteps(
       id: operation.id,
       kind: operation.kind,
       summary: operation.summary ?? operation.kind.replaceAll('_', ' '),
-      data: JSON.parse(JSON.stringify(operation)) as Record<string, unknown>,
+      data: manifestOperationData(operation),
     });
     const changesCheckpoint = new Map(
       [...changes].map(([key, change]) => [
