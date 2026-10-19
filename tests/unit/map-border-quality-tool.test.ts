@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { toolResult } from '../../src/hoi4_agent_tools/core/operation-result.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createBmp, type RgbColor } from '../../src/hoi4_agent_tools/map/bmp.js';
 import {
@@ -22,6 +23,7 @@ import { measureIndexBorderNaturalness } from '../../src/hoi4_agent_tools/map/bo
 import { renderMap } from '../../src/hoi4_agent_tools/map/render.js';
 import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
 import { inspectMap, renderMapView } from '../../src/hoi4_agent_tools/map/tool-operations.js';
+import { mapTaskTools } from '../../src/hoi4_agent_tools/mcp/tools/map.js';
 import { mapInspectRequestSchema } from '../../src/hoi4_agent_tools/schemas/map-requests.js';
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -162,7 +164,7 @@ async function workspace(options: WorkspaceOptions) {
     ),
   );
   await engine.initialize();
-  return { engine, nudger: new AgentNudger(engine) };
+  return { engine, nudger: new AgentNudger(engine), mod };
 }
 
 const context = {
@@ -245,6 +247,45 @@ describe('border quality in hoi4.map_inspect', () => {
       worstRuns: [],
     });
     expect(terrainQuality.layers[1]!.naturalShare as number).toBeGreaterThan(0.9);
+  });
+
+  it('returns a result the published output schema accepts', async () => {
+    const { engine, nudger } = await workspace({ border: 'river', terrain: true });
+    const outputSchema = mapTaskTools.find(({ name }) => name === 'hoi4.map_inspect')!.outputSchema;
+    for (const quality of [true, false]) {
+      const result = await inspectMap(
+        engine,
+        nudger,
+        mapInspectRequestSchema.parse({ workspaceId: 'test', quality }),
+        context,
+      );
+      const wire = JSON.parse(JSON.stringify(toolResult(result).structuredContent)) as unknown;
+      const parsed = outputSchema.safeParse(wire);
+      expect(parsed.success ? [] : parsed.error.issues, `quality ${String(quality)}`).toEqual([]);
+    }
+  });
+
+  it('does not read a river bitmap that default.map points outside the map folder', async () => {
+    const { engine, nudger, mod } = await workspace({ border: 'river' });
+    const secret = await readFile(path.join(mod, 'map/rivers.bmp'));
+    await writeFile(path.join(mod, 'secret.bmp'), secret);
+    await writeFile(
+      path.join(mod, 'map/default.map'),
+      'definitions = "definition.csv"\nprovinces = "provinces.bmp"\nheightmap = "heightmap.bmp"\nrivers = "../secret.bmp"\n',
+    );
+    await rm(path.join(mod, 'map/rivers.bmp'));
+    const result = await inspectMap(
+      engine,
+      nudger,
+      mapInspectRequestSchema.parse({ workspaceId: 'test', quality: true }),
+      context,
+    );
+    const quality = (result.data as { quality?: { inputs: { rivers: boolean } } }).quality!;
+    expect(quality.inputs.rivers).toBe(false);
+    const snapshot = await nudger.scan('test', undefined, undefined, false, false, true);
+    expect(snapshot.files.some(({ relativePath }) => relativePath.endsWith('secret.bmp'))).toBe(
+      false,
+    );
   });
 
   it('leaves requests without the quality flag unchanged', async () => {
