@@ -82,6 +82,14 @@ export function buildWorldContext(base: MapWorkspaceIndex): WorldContext {
     .filter((file) => /^common\/terrain\/[^/]+\.txt$/u.test(normalized(file.relativePath)))
     .sort((a, b) => compareCodeUnits(normalized(a.relativePath), normalized(b.relativePath)));
   const terrainIndex = new Map<string, number>();
+  const unrendered: Array<{ name: string; index: number; type: string; reason: string }> = [];
+  const entries: Array<{
+    name: string;
+    index: number;
+    type: string;
+    texture?: number;
+    permSnow: boolean;
+  }> = [];
   for (const file of terrainFiles) {
     const candidates = new Map<string, { index: number; rank: number }>();
     const terrain = assignments(documentFor(file).root, 'terrain');
@@ -117,9 +125,25 @@ export function buildWorldContext(base: MapWorkspaceIndex): WorldContext {
             invalid(file, 'Graphical terrain refers to a missing terrain palette entry.');
           index = Math.min(index, value);
         }
+        const name = entry.key.value;
+        const textureValue = firstScalar(entry.value, 'texture')?.value;
+        entries.push({
+          name,
+          index,
+          type,
+          ...(textureValue !== undefined && /^\d+$/u.test(textureValue)
+            ? { texture: Number(textureValue) }
+            : {}),
+          permSnow: firstScalar(entry.value, 'perm_snow')?.value === 'yes',
+        });
+        // Texture 255 names no atlas tile: the engine draws nothing useful for that index, so it
+        // is never chosen to represent a category (the base game's `lakes` entry is one).
+        if (firstScalar(entry.value, 'texture')?.value === '255') {
+          unrendered.push({ name, index, type, reason: 'texture = 255 selects no atlas tile' });
+          continue;
+        }
         // Prefer ordinary category variants over cross-category names or permanent snow.
         // Within an equal rank, the lowest declared index is the stable representative.
-        const name = entry.key.value;
         let rank =
           name === type ? 0 : name.startsWith(`${type}_`) || /^terrain_\d+$/u.test(name) ? 1 : 2;
         if (firstScalar(entry.value, 'perm_snow')?.value === 'yes') rank += 4;
@@ -135,6 +159,12 @@ export function buildWorldContext(base: MapWorkspaceIndex): WorldContext {
     // Later active filenames replace an earlier file's representative for that category.
     for (const [type, candidate] of candidates) terrainIndex.set(type, candidate.index);
   }
+  if (entries.length > 0)
+    context.terrainEntries = entries.sort(
+      (a, b) => a.index - b.index || compareCodeUnits(a.name, b.name),
+    );
+  const gaps = unrendered.filter(({ type }) => !terrainIndex.has(type));
+  if (gaps.length > 0) context.unrenderedTerrain = gaps;
   if (terrainIndex.size > 0)
     context.terrainIndex = new Map([...terrainIndex].sort(([a], [b]) => compareCodeUnits(a, b)));
 

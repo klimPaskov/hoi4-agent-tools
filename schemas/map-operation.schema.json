@@ -898,10 +898,60 @@
           "minimum": 0,
           "maximum": 500
         },
+        "edge": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "description": "sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam; none keeps the picture and warns about land cut by the wrapping seam.",
+              "$ref": "#/$defs/__schema75"
+            },
+            "bandPx": {
+              "description": "East and west sea band in pixels; default max(192, 4% of the width), at most a quarter of the width.",
+              "$ref": "#/$defs/__schema76"
+            },
+            "polarPx": {
+              "description": "North and south sea band in pixels; default 64, at most a quarter of the height.",
+              "$ref": "#/$defs/__schema77"
+            },
+            "rimPx": {
+              "description": "Rim range width in pixels for mode rim; default 160, at most a quarter of the width.",
+              "$ref": "#/$defs/__schema78"
+            }
+          },
+          "additionalProperties": false
+        },
+        "ambientFrame": {
+          "description": "Write the base map's north and south frame borders and logo frame into ambient_object.txt, placed for the world size. Off by default.",
+          "$ref": "#/$defs/__schema79"
+        },
+        "look": {
+          "type": "string",
+          "enum": [
+            "vanilla-temperate",
+            "fertile",
+            "arid",
+            "custom"
+          ],
+          "description": "Colour palette set for the calibrated land colour map: the base game, a greener fertile palette, a drier arid palette, or custom with colormap.palette. Setting it selects the calibrated colour map."
+        },
+        "colormap": {
+          "type": "object",
+          "properties": {
+            "profile": {
+              "description": "calibrated writes a dark, varied colour map calibrated to the base game; legacy keeps the original flat tints. Defaults to calibrated when look is set, otherwise legacy.",
+              "$ref": "#/$defs/__schema80"
+            },
+            "palette": {
+              "description": "Class colours for look custom: the intended colour map value of each class.",
+              "$ref": "#/$defs/__schema81"
+            }
+          },
+          "additionalProperties": false
+        },
         "replaceBaseGame": {
           "default": true,
           "description": "Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.",
-          "$ref": "#/$defs/__schema75"
+          "$ref": "#/$defs/__schema82"
         }
       },
       "required": [
@@ -935,19 +985,19 @@
           "maxItems": 1000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema76"
+            "$ref": "#/$defs/__schema83"
           }
         },
         "readOnlySources": {
           "default": "refuse",
           "description": "override copies game or dependency files that need the change into the mod.",
-          "$ref": "#/$defs/__schema81"
+          "$ref": "#/$defs/__schema88"
         },
         "pathPrefixes": {
           "maxItems": 32,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema82"
+            "$ref": "#/$defs/__schema89"
           }
         }
       },
@@ -982,7 +1032,7 @@
           "maxItems": 3,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema83"
+            "$ref": "#/$defs/__schema90"
           }
         },
         "stateIds": {
@@ -1003,13 +1053,13 @@
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema84"
+            "$ref": "#/$defs/__schema91"
           }
         },
         "mode": {
           "default": "missing",
           "description": "missing adds only absent positions; replace rewrites them for the selection.",
-          "$ref": "#/$defs/__schema85"
+          "$ref": "#/$defs/__schema92"
         }
       },
       "required": [
@@ -1041,7 +1091,7 @@
         "mode": {
           "default": "connect",
           "description": "connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.",
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema93"
         },
         "railwayLevel": {
           "default": 1,
@@ -1072,22 +1122,22 @@
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema94"
         },
         "entity": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema95"
         },
         "fromId": {
-          "$ref": "#/$defs/__schema89"
+          "$ref": "#/$defs/__schema96"
         },
         "toId": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema97"
         },
         "collision": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema98"
         },
         "renameLocalisation": {
-          "$ref": "#/$defs/__schema92"
+          "$ref": "#/$defs/__schema99"
         }
       },
       "required": [
@@ -1340,7 +1390,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -1421,7 +1471,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -1463,7 +1513,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -1544,7 +1594,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -1586,7 +1636,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -1659,7 +1709,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema100"
             }
           },
           "required": [
@@ -3078,9 +3128,84 @@
       "additionalProperties": false
     },
     "__schema75": {
-      "type": "boolean"
+      "type": "string",
+      "enum": [
+        "sea-band",
+        "rim",
+        "none"
+      ]
     },
     "__schema76": {
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 2048
+    },
+    "__schema77": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1024
+    },
+    "__schema78": {
+      "type": "integer",
+      "minimum": 16,
+      "maximum": 2048
+    },
+    "__schema79": {
+      "type": "boolean"
+    },
+    "__schema80": {
+      "type": "string",
+      "enum": [
+        "calibrated",
+        "legacy"
+      ]
+    },
+    "__schema81": {
+      "type": "object",
+      "properties": {
+        "plains": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "farmland": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "forest": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "hills": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "desert": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "mountain": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "marsh": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "jungle": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "snow": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "urban": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "lakes": {
+          "$ref": "#/$defs/__schema44"
+        },
+        "ocean": {
+          "$ref": "#/$defs/__schema44"
+        }
+      },
+      "additionalProperties": false
+    },
+    "__schema82": {
+      "type": "boolean"
+    },
+    "__schema83": {
       "type": "object",
       "properties": {
         "from": {
@@ -3091,13 +3216,13 @@
         "to": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema77"
+              "$ref": "#/$defs/__schema84"
             },
             {
-              "$ref": "#/$defs/__schema78"
+              "$ref": "#/$defs/__schema85"
             },
             {
-              "$ref": "#/$defs/__schema80"
+              "$ref": "#/$defs/__schema87"
             }
           ],
           "description": "One ID replaces; several IDs copy the referencing assignment once per ID; null removes it."
@@ -3109,40 +3234,40 @@
       ],
       "additionalProperties": false
     },
-    "__schema77": {
+    "__schema84": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema78": {
+    "__schema85": {
       "minItems": 1,
       "maxItems": 16,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema79"
+        "$ref": "#/$defs/__schema86"
       }
     },
-    "__schema79": {
+    "__schema86": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema80": {
+    "__schema87": {
       "type": "null"
     },
-    "__schema81": {
+    "__schema88": {
       "type": "string",
       "enum": [
         "refuse",
         "override"
       ]
     },
-    "__schema82": {
+    "__schema89": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "__schema83": {
+    "__schema90": {
       "type": "string",
       "enum": [
         "buildings",
@@ -3150,30 +3275,30 @@
         "weather"
       ]
     },
-    "__schema84": {
+    "__schema91": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema85": {
+    "__schema92": {
       "type": "string",
       "enum": [
         "missing",
         "replace"
       ]
     },
-    "__schema86": {
+    "__schema93": {
       "type": "string",
       "enum": [
         "connect",
         "replace"
       ]
     },
-    "__schema87": {
+    "__schema94": {
       "type": "string",
       "const": "renumber_map_entity"
     },
-    "__schema88": {
+    "__schema95": {
       "type": "string",
       "enum": [
         "province",
@@ -3181,17 +3306,17 @@
         "strategic-region"
       ]
     },
-    "__schema89": {
+    "__schema96": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema90": {
+    "__schema97": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema91": {
+    "__schema98": {
       "default": "swap",
       "type": "string",
       "enum": [
@@ -3199,11 +3324,11 @@
         "reject"
       ]
     },
-    "__schema92": {
+    "__schema99": {
       "default": true,
       "type": "boolean"
     },
-    "__schema93": {
+    "__schema100": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991

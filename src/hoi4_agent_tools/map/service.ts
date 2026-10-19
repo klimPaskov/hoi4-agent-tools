@@ -612,9 +612,20 @@ function sourceTextPatterns(roots: {
   ];
 }
 
+const PROVINCE_BITMAP_SELECTORS = [
+  ['provinces', 'provinces.bmp'],
+  ['heightmap', 'heightmap.bmp'],
+] as const;
+const APPEARANCE_BITMAP_SELECTORS = [
+  ['terrain', 'terrain.bmp'],
+  ['rivers', 'rivers.bmp'],
+  ['tree_definition', 'trees.bmp'],
+] as const;
+
 function provinceBitmapPatterns(
   defaultMaps: readonly ScannedFile[],
   mapRoots: readonly string[],
+  selectors: ReadonlyArray<readonly [string, string]> = PROVINCE_BITMAP_SELECTORS,
 ): string[] {
   const activeByPath = new Map(
     defaultMaps
@@ -623,10 +634,7 @@ function provinceBitmapPatterns(
   );
   // The province bitmap, and the heightmap that gives generated positions their height.
   const names = new Set<string>();
-  for (const [selector, fallback] of [
-    ['provinces', 'provinces.bmp'],
-    ['heightmap', 'heightmap.bmp'],
-  ] as const) {
+  for (const [selector, fallback] of selectors) {
     let activeName: string = fallback;
     for (const root of mapRoots) {
       const relativePath = `${normalizeSourceRoot(root)}/default.map`.toLowerCase();
@@ -830,6 +838,7 @@ export class AgentNudger {
     signal?: AbortSignal,
     includeExternalScriptReferences = false,
     includeWorldContext = false,
+    includeAppearance = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -904,6 +913,32 @@ export class AgentNudger {
           signal,
         )
       : undefined;
+    // Appearance validation reads the bitmaps and colour maps the mod itself ships.
+    const appearanceSnapshot = includeAppearance
+      ? await this.engine.scan(
+          workspaceId,
+          {
+            rootKinds: ['mod', 'fixture'],
+            patterns: [
+              ...provinceBitmapPatterns(
+                selectorSnapshot.files,
+                sourceRoots.map,
+                APPEARANCE_BITMAP_SELECTORS,
+              ),
+              ...sourceRoots.map.flatMap((root) => {
+                const normalized = normalizeSourceRoot(root);
+                return [
+                  `${normalized}/cities.bmp`,
+                  `${normalized}/world_normal.bmp`,
+                  `${normalized}/terrain/colormap_*.dds`,
+                ];
+              }),
+            ],
+          },
+          principal,
+          signal,
+        )
+      : undefined;
     signal?.throwIfAborted();
     const files = [
       ...contentSnapshot.files,
@@ -912,6 +947,12 @@ export class AgentNudger {
       ...(worldContextSnapshot?.files ?? []).filter(
         (file) =>
           !contentSnapshot.files.some((existing) => existing.displayPath === file.displayPath),
+      ),
+      ...(appearanceSnapshot?.files ?? []).filter(
+        (file) =>
+          ![...contentSnapshot.files, ...(worldContextSnapshot?.files ?? [])].some(
+            (existing) => existing.displayPath === file.displayPath,
+          ),
       ),
       ...(generatedOutputsSnapshot?.files ?? []).filter(
         (file) =>
@@ -944,7 +985,7 @@ export class AgentNudger {
     validation: MapValidationResult;
     scriptReferences?: { references: number; missing: number };
   }> {
-    const snapshot = await this.scan(workspaceId, principal, signal, scripts);
+    const snapshot = await this.scan(workspaceId, principal, signal, scripts, false, true);
     const validation = await validateMapAsync(
       snapshot.index,
       signal === undefined ? {} : { signal },
@@ -1038,8 +1079,12 @@ export class AgentNudger {
       ? { passed: true, diagnostics: [], checks: [] }
       : await validateMapAsync(snapshot.index, signal === undefined ? {} : { signal });
     // A new world has nothing to compare its bitmap format and pixels with.
+    const worldOperation = operations.find((operation) => operation.kind === 'create_world');
     const rawValidation = await validateMapAsync(plan.finalIndex, {
       ...(newWorld ? {} : { baseline: snapshot.index }),
+      ...(worldOperation?.kind === 'create_world' && worldOperation.edge !== undefined
+        ? { edgeMode: worldOperation.edge.mode ?? 'sea-band' }
+        : {}),
       ...(signal === undefined ? {} : { signal }),
       ...(plan.expectedChangedBounds === undefined
         ? {}

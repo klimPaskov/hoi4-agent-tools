@@ -117,6 +117,88 @@ export const worldReferenceSchema = z
   );
 export type WorldReferenceInput = z.infer<typeof worldReferenceSchema>;
 
+/** World edge and seam policy (ADR 0061). Omit `edge` to keep land and sea as drawn. */
+export const worldEdgeSchema = z
+  .object({
+    mode: z
+      .enum(['sea-band', 'rim', 'none'])
+      .optional()
+      .describe(
+        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam; none keeps the picture and warns about land cut by the wrapping seam.',
+      ),
+    bandPx: z
+      .number()
+      .int()
+      .min(8)
+      .max(2_048)
+      .optional()
+      .describe(
+        'East and west sea band in pixels; default max(192, 4% of the width), at most a quarter of the width.',
+      ),
+    polarPx: z
+      .number()
+      .int()
+      .min(0)
+      .max(1_024)
+      .optional()
+      .describe('North and south sea band in pixels; default 64, at most a quarter of the height.'),
+    rimPx: z
+      .number()
+      .int()
+      .min(16)
+      .max(2_048)
+      .optional()
+      .describe(
+        'Rim range width in pixels for mode rim; default 160, at most a quarter of the width.',
+      ),
+  })
+  .strict();
+export type WorldEdgeInput = z.infer<typeof worldEdgeSchema>;
+
+export const worldLookSchema = z
+  .enum(['vanilla-temperate', 'fertile', 'arid', 'custom'])
+  .describe(
+    'Colour palette set for the calibrated land colour map: the base game, a greener fertile palette, a drier arid palette, or custom with colormap.palette. Setting it selects the calibrated colour map.',
+  );
+
+export type WorldLookInput = z.infer<typeof worldLookSchema>;
+
+const colourClassNames = [
+  'plains',
+  'farmland',
+  'forest',
+  'hills',
+  'desert',
+  'mountain',
+  'marsh',
+  'jungle',
+  'snow',
+  'urban',
+  'lakes',
+  'ocean',
+] as const;
+export const worldColormapSchema = z
+  .object({
+    profile: z
+      .enum(['calibrated', 'legacy'])
+      .optional()
+      .describe(
+        'calibrated writes a dark, varied colour map calibrated to the base game; legacy keeps the original flat tints. Defaults to calibrated when look is set, otherwise legacy.',
+      ),
+    palette: z
+      .object(
+        Object.fromEntries(colourClassNames.map((name) => [name, rgbSchema.optional()])) as Record<
+          (typeof colourClassNames)[number],
+          z.ZodOptional<typeof rgbSchema>
+        >,
+      )
+      .strict()
+      .optional()
+      .describe('Class colours for look custom: the intended colour map value of each class.'),
+  })
+  .strict();
+export type WorldColormapInput = z.infer<typeof worldColormapSchema>;
+
 const moveStateDistributionSchema = z
   .object({
     stateValues: z.enum(['retain-in-current-states', 'proportional-by-land-pixels']),
@@ -641,6 +723,15 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)
         .default('1936.1.1'),
       rivers: z.number().int().min(0).max(500).optional(),
+      edge: worldEdgeSchema.optional(),
+      ambientFrame: z
+        .boolean()
+        .optional()
+        .describe(
+          "Write the base map's north and south frame borders and logo frame into ambient_object.txt, placed for the world size. Off by default.",
+        ),
+      look: worldLookSchema.optional(),
+      colormap: worldColormapSchema.optional(),
       replaceBaseGame: z
         .boolean()
         .default(true)

@@ -43,10 +43,17 @@ import {
 } from './model.js';
 import { planReferenceRemap, ReferenceRemapError } from './references.js';
 import { generateWorld, type WorldCountry } from './world.js';
+import type { ColourClass } from './colormap.js';
+import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
-import type { WorldReferenceInput } from '../schemas/map.js';
+import type {
+  WorldColormapInput,
+  WorldEdgeInput,
+  WorldLookInput,
+  WorldReferenceInput,
+} from '../schemas/map.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -467,6 +474,10 @@ export interface CreateWorldOperation extends MapOperationBase {
   continentNames?: string[];
   startDate?: string;
   rivers?: number;
+  edge?: WorldEdgeInput;
+  ambientFrame?: boolean;
+  look?: WorldLookInput;
+  colormap?: WorldColormapInput;
   replaceBaseGame?: boolean;
 }
 
@@ -5448,6 +5459,16 @@ function descriptorWithReplacePaths(index: MapWorkspaceIndex, roots: readonly st
   );
 }
 
+function colormapPaletteOverrides(
+  palette: NonNullable<WorldColormapInput['palette']>,
+): Partial<Record<ColourClass, readonly [number, number, number]>> {
+  return Object.fromEntries(
+    Object.entries(palette).flatMap(([name, color]) =>
+      color === undefined ? [] : [[name, [color.r, color.g, color.b] as const] as const],
+    ),
+  );
+}
+
 function applyCreateWorld(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -5462,12 +5483,28 @@ function applyCreateWorld(
     );
   const mapRoot = base.sourceRoots.map[0] ?? 'map';
   const startingScenario = operation.startingScenario ?? reference !== undefined;
+  const worldWidth = operation.width ?? reference?.surface.width ?? 1_024;
+  const worldHeight = operation.height ?? reference?.surface.height ?? 512;
+  const edge = resolveEdge(operation.edge, worldWidth, worldHeight);
+  const look = operation.look;
+  const colormapProfile =
+    operation.colormap?.profile ?? (look === undefined ? 'legacy' : 'calibrated');
+  if (look === 'custom' && operation.colormap?.palette === undefined)
+    throw new ServiceError(
+      'MAP_LOOK_CUSTOM_PALETTE_REQUIRED',
+      'look "custom" needs colormap.palette with at least one class colour',
+    );
+  if (colormapProfile === 'legacy' && look !== undefined)
+    throw new ServiceError(
+      'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
+      'look selects a calibrated palette; remove colormap.profile "legacy" or look',
+    );
   const world = generateWorld(
     {
       startingScenario,
       ...(operation.worldName === undefined ? {} : { worldName: operation.worldName }),
-      width: operation.width ?? reference?.surface.width ?? 1_024,
-      height: operation.height ?? reference?.surface.height ?? 512,
+      width: worldWidth,
+      height: worldHeight,
       seed: operation.seed ?? 1,
       landCoverage: operation.landCoverage ?? 0.35,
       continents: operation.continents ?? 3,
@@ -5497,6 +5534,13 @@ function applyCreateWorld(
         : { continentNames: operation.continentNames }),
       startDate: operation.startDate ?? '1936.1.1',
       rivers: operation.rivers ?? (reference === undefined ? 8 : 80),
+      ...(edge.mode === 'none' ? {} : { edge }),
+      ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
+      colormapProfile,
+      ...(look === undefined ? {} : { look }),
+      ...(operation.colormap?.palette === undefined
+        ? {}
+        : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
   );
@@ -5563,6 +5607,14 @@ function applyCreateWorld(
       category: 'map',
       operationId: operation.id,
       message,
+    })),
+    ...world.notes.map((note): Diagnostic => ({
+      code: note.code,
+      severity: note.severity,
+      category: 'map',
+      operationId: operation.id,
+      message: note.message,
+      ...(note.details === undefined ? {} : { details: note.details }),
     })),
     ...(world.warnings.length === 0
       ? []

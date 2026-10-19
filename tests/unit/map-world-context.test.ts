@@ -150,6 +150,43 @@ describe('installed world context', () => {
     expect(second).toEqual(first);
   });
 
+  it('never chooses a graphical terrain that selects no atlas tile, and records why', () => {
+    const context = buildWorldContext(
+      MapWorkspaceIndex.build([
+        file(
+          'common/terrain/synthetic.txt',
+          `terrain = {
+            terrain_0 = { type = plains color = { 0 } texture = 1 }
+            forest_14 = { type = lakes color = { 14 } texture = 255 }
+            ocean_15 = { type = ocean color = { 15 } texture = 9 }
+          }`,
+        ),
+      ]),
+    );
+    expect(context.terrainIndex?.has('lakes')).toBe(false);
+    expect(context.terrainIndex?.get('ocean')).toBe(15);
+    expect(context.unrenderedTerrain).toEqual([
+      expect.objectContaining({ name: 'forest_14', index: 14, type: 'lakes' }),
+    ]);
+    expect(context.unrenderedTerrain?.[0]?.reason).toContain('255');
+    expect(context.terrainEntries?.map(({ index }) => index)).toEqual([0, 14, 15]);
+    // A later file that gives the category a drawable entry removes the gap.
+    const repaired = buildWorldContext(
+      MapWorkspaceIndex.build([
+        file(
+          'common/terrain/synthetic.txt',
+          'terrain = { forest_14 = { type = lakes color = { 14 } texture = 255 } }',
+        ),
+        file(
+          'common/terrain/z_repair.txt',
+          'terrain = { lakes = { type = lakes color = { 15 } texture = 9 } }',
+        ),
+      ]),
+    );
+    expect(repaired.terrainIndex?.get('lakes')).toBe(15);
+    expect(repaired.unrenderedTerrain).toBeUndefined();
+  });
+
   it('retains fallback conventions when no installed sources were scanned', () => {
     expect(buildWorldContext(MapWorkspaceIndex.build([]))).toEqual({
       palettes: {},
