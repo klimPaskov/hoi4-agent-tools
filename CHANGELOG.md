@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the geography model, version 1, as an optional input of `create_world`: `geography` (inline) or `geographyPath` (a workspace-relative `.json` file of at most 4 MiB, loaded with the canonical-path guard, a verified single read and a stale-source dependency like `reference.imagePath`). A strict, versioned schema describes seas, lands, regions, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites, roads, places and climate in normalized world coordinates; `schemas/geography-model.schema.json` is published. The public `hoi4.map_rewrite` schema change is additive (a minor version).
+- Resolve the model deterministically (features sorted by id, rings oriented, defaults filled, areas, containment and cross-references derived, one canonical hash) and validate it with `MAP_GEOGRAPHY_*` diagnostics. `hoi4.map_rewrite` with `preview: true` returns `map-geography-overlay.png`, `map-geography-report.json` and a `data.geography` summary without planning any map. Without `preview`, a model is loaded and validated and the write is blocked with `MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE` until relief, hydrology and biome synthesis exist. See ADR 0055.
+
 ## 4.3.0 - 2026-10-19
 
 - Run probability analysis on every installed HOI4 version. `metadata.gameVersionVerification` records the observed build as `workspace_verified`, `workspace_observed` or `version_unknown` instead of refusing with `PROBABILITY_GAME_VERSION_UNSUPPORTED` or `PROBABILITY_GAME_VERSION_UNVERIFIED`; decision inspection evaluates AI weights on any version.

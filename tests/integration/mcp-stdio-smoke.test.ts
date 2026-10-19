@@ -19,6 +19,7 @@ import {
 import { buildSyntheticSmokeWorkspace } from '../helpers/smoke-fixture.js';
 import { SmokeLedger } from '../helpers/smoke-ledger.js';
 import { runWorldFlow } from '../helpers/smoke-world.js';
+import { syntheticGeography } from '../helpers/geography-fixture.js';
 
 /**
  * End-to-end smoke over the real stdio entry point: every exposed tool is called once with a
@@ -170,6 +171,31 @@ describe('stdio smoke: synthetic fixture', () => {
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);
     expect(rows.flatMap(({ problems }) => problems)).toEqual([]);
   }, 1_800_000);
+
+  it('previews a geography model, inline and from a workspace file, without changing the mod', async () => {
+    const worldMod = path.join(temporary, 'world-mod');
+    await mkdir(path.join(worldMod, 'geography'), { recursive: true });
+    const model = syntheticGeography();
+    await writeFile(path.join(worldMod, 'geography', 'smoke.json'), JSON.stringify(model));
+    for (const [label, source] of [
+      ['inline geography', { geography: model }],
+      ['geographyPath file', { geographyPath: 'geography/smoke.json' }],
+    ] as const) {
+      const previewed = await server.call('hoi4.map_rewrite', `preview a model: ${label}`, {
+        workspaceId: 'world',
+        preview: true,
+        operations: [{ id: 'erdae', kind: 'create_world', width: 4096, height: 2048, ...source }],
+      });
+      const problems = successProblems(previewed);
+      ledger.record(previewed, 'rewrite', problems);
+      expect(problems).toEqual([]);
+      expect(previewed.structured.code).toBe('MAP_GEOGRAPHY_PREVIEW_READY');
+      expect(previewed.structured.artifacts?.map(({ name }) => name)).toEqual([
+        'map-geography-overlay.png',
+        'map-geography-report.json',
+      ]);
+    }
+  }, 300_000);
 
   it('inspects and cancels a background job created through a native task', async () => {
     const created = await server.client.request(

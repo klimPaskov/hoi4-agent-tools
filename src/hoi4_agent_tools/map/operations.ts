@@ -47,6 +47,8 @@ import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
 import type { WorldReferenceInput } from '../schemas/map.js';
+import type { GeographyModelInput } from '../schemas/geography.js';
+import type { PreparedGeography } from './geography/preparation.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -64,6 +66,8 @@ export interface PreparedReferenceWorld {
 
 export interface MapPlanningContext {
   referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
+  /** Geography models prepared and validated by the authorized workspace service. */
+  geographyModels?: ReadonlyMap<string, PreparedGeography>;
 }
 
 type MapOperationSteps<T> = Generator<void, T, void>;
@@ -464,6 +468,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   seaProvincesPerRegion?: number;
   countries?: WorldCountry[];
   reference?: WorldReferenceInput;
+  geography?: GeographyModelInput;
+  geographyPath?: string;
   continentNames?: string[];
   startDate?: string;
   rivers?: number;
@@ -5454,6 +5460,25 @@ function applyCreateWorld(
   operation: CreateWorldOperation,
   context: MapPlanningContext,
 ): Diagnostic[] {
+  const geography = context.geographyModels?.get(operation.id);
+  if (operation.geography !== undefined || operation.geographyPath !== undefined) {
+    if (geography === undefined)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_NOT_PREPARED',
+        'Geography models must be prepared by the authorized workspace service',
+      );
+    if (!geography.valid)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_INVALID',
+        'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
+        { modelHash: geography.geography.hash },
+      );
+    throw new ServiceError(
+      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+      'The geography model is valid, but this version cannot synthesize relief, rivers or biomes from it yet; use preview:true to review the model overlay and report',
+      { modelHash: geography.geography.hash },
+    );
+  }
   const reference = context.referenceWorlds?.get(operation.id);
   if (operation.reference !== undefined && reference === undefined)
     throw new ServiceError(

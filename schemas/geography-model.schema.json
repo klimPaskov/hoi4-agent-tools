@@ -1,0 +1,1136 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.3.0/schemas/geography-model.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "name": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "description": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "seas": {
+      "$ref": "#/$defs/__schema4"
+    },
+    "lands": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "regions": {
+      "$ref": "#/$defs/__schema20"
+    },
+    "ranges": {
+      "$ref": "#/$defs/__schema23"
+    },
+    "passes": {
+      "$ref": "#/$defs/__schema26"
+    },
+    "volcanoes": {
+      "$ref": "#/$defs/__schema28"
+    },
+    "plateaus": {
+      "$ref": "#/$defs/__schema30"
+    },
+    "rivers": {
+      "$ref": "#/$defs/__schema32"
+    },
+    "lakes": {
+      "$ref": "#/$defs/__schema34"
+    },
+    "biomes": {
+      "$ref": "#/$defs/__schema36"
+    },
+    "straits": {
+      "$ref": "#/$defs/__schema38"
+    },
+    "sites": {
+      "$ref": "#/$defs/__schema41"
+    },
+    "roads": {
+      "$ref": "#/$defs/__schema43"
+    },
+    "places": {
+      "$ref": "#/$defs/__schema45"
+    },
+    "climate": {
+      "$ref": "#/$defs/__schema47"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false,
+  "description": "Geography model version 1. Normalized 0..1 coordinates over the whole world frame, origin top-left; lengths are fractions of the map width.",
+  "$defs": {
+    "__schema0": {
+      "type": "number",
+      "const": 1
+    },
+    "__schema1": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "__schema3": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema4": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema5"
+      }
+    },
+    "__schema5": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "depthClass": {
+          "$ref": "#/$defs/__schema16"
+        },
+        "ice": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ocean",
+            "sea",
+            "gulf",
+            "fjord"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "polygons"
+      ],
+      "additionalProperties": false
+    },
+    "__schema6": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+    },
+    "__schema7": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema8": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema9"
+      }
+    },
+    "__schema9": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48
+    },
+    "__schema10": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema11": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema12"
+      }
+    },
+    "__schema12": {
+      "minItems": 3,
+      "maxItems": 2000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema13"
+      }
+    },
+    "__schema13": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "y": {
+              "$ref": "#/$defs/__schema14"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema14"
+            },
+            {
+              "$ref": "#/$defs/__schema14"
+            }
+          ]
+        }
+      ]
+    },
+    "__schema14": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema15": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema12"
+      }
+    },
+    "__schema16": {
+      "type": "string",
+      "enum": [
+        "shelf",
+        "open",
+        "abyss"
+      ]
+    },
+    "__schema17": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema18"
+      }
+    },
+    "__schema18": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "continent",
+            "island",
+            "archipelago",
+            "peninsula"
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "biome": {
+          "$ref": "#/$defs/__schema19"
+        },
+        "fertility": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "elevationBase": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "coastDetail": {
+          "$ref": "#/$defs/__schema14"
+        }
+      },
+      "required": [
+        "id",
+        "polygons"
+      ],
+      "additionalProperties": false
+    },
+    "__schema19": {
+      "type": "string",
+      "enum": [
+        "forest",
+        "desert",
+        "marsh",
+        "ice",
+        "plains",
+        "farmland",
+        "jungle",
+        "steppe",
+        "tundra",
+        "hills"
+      ]
+    },
+    "__schema20": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema21"
+      }
+    },
+    "__schema21": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "terrain": {
+          "type": "object",
+          "properties": {
+            "plains": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "forest": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "hills": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "mountain": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "desert": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "marsh": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "jungle": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "urban": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "snow": {
+              "$ref": "#/$defs/__schema14"
+            }
+          },
+          "additionalProperties": false
+        },
+        "density": {
+          "type": "object",
+          "properties": {
+            "provincesPerState": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/__schema22"
+                },
+                {
+                  "$ref": "#/$defs/__schema22"
+                },
+                {
+                  "$ref": "#/$defs/__schema22"
+                }
+              ]
+            },
+            "provinceAreaPx": {
+              "type": "integer",
+              "minimum": 20,
+              "maximum": 50000
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "__schema22": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    },
+    "__schema23": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema24"
+      }
+    },
+    "__schema24": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "path": {
+          "minItems": 2,
+          "maxItems": 2000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema25"
+          }
+        },
+        "closed": {
+          "type": "boolean"
+        },
+        "halfWidth": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.25
+        },
+        "peak": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "profile": {
+          "type": "string",
+          "enum": [
+            "ridge",
+            "massif",
+            "escarpment",
+            "wall"
+          ]
+        },
+        "asymmetry": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "snowline": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "spurs": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "barrier": {
+          "type": "string",
+          "enum": [
+            "none",
+            "impassable",
+            "fort-line"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "__schema25": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "y": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "halfWidth": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 0.25
+            },
+            "peak": {
+              "$ref": "#/$defs/__schema14"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema14"
+            },
+            {
+              "$ref": "#/$defs/__schema14"
+            }
+          ]
+        }
+      ]
+    },
+    "__schema26": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema27"
+      }
+    },
+    "__schema27": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "range": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "at": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "position": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.1
+        },
+        "depth": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "fort": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "__schema28": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema29"
+      }
+    },
+    "__schema29": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "at": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.25
+        },
+        "peak": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "crater": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.25
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "__schema30": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema31"
+      }
+    },
+    "__schema31": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "height": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "edge": {
+          "type": "string",
+          "enum": [
+            "cliff",
+            "ramp"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "polygons",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "__schema32": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema33"
+      }
+    },
+    "__schema33": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema13"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "lake": {
+                  "$ref": "#/$defs/__schema6"
+                }
+              },
+              "required": [
+                "lake"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "mouth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema13"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sea": {
+                  "$ref": "#/$defs/__schema6"
+                }
+              },
+              "required": [
+                "sea"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "lake": {
+                  "$ref": "#/$defs/__schema6"
+                }
+              },
+              "required": [
+                "lake"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "river": {
+                  "$ref": "#/$defs/__schema6"
+                }
+              },
+              "required": [
+                "river"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "via": {
+          "maxItems": 512,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema13"
+          }
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "delta": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "mouth"
+      ],
+      "additionalProperties": false
+    },
+    "__schema34": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema35"
+      }
+    },
+    "__schema35": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "center": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.25
+        },
+        "depthClass": {
+          "$ref": "#/$defs/__schema16"
+        },
+        "outflow": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "gameplay": {
+          "type": "string",
+          "enum": [
+            "lake",
+            "inland-sea"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "__schema36": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema37"
+      }
+    },
+    "__schema37": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "polygons": {
+          "$ref": "#/$defs/__schema11"
+        },
+        "holes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "kind": {
+          "$ref": "#/$defs/__schema19"
+        },
+        "density": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "fertility": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "z": {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "id",
+        "polygons",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "__schema38": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema39"
+      }
+    },
+    "__schema39": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "between": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema40"
+            },
+            {
+              "$ref": "#/$defs/__schema40"
+            }
+          ]
+        },
+        "path": {
+          "minItems": 2,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema13"
+          }
+        },
+        "rule": {
+          "type": "string",
+          "enum": [
+            "open",
+            "army-closed",
+            "navy-closed"
+          ]
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.1
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "__schema40": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema13"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "land": {
+              "$ref": "#/$defs/__schema6"
+            }
+          },
+          "required": [
+            "land"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema41": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema42"
+      }
+    },
+    "__schema42": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "capital",
+            "city",
+            "fortress",
+            "port",
+            "ruin",
+            "temple",
+            "mine",
+            "landmark"
+          ]
+        },
+        "at": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "importance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{2}$"
+        },
+        "onWater": {
+          "type": "boolean"
+        },
+        "lake": {
+          "$ref": "#/$defs/__schema6"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "__schema43": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema44"
+      }
+    },
+    "__schema44": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "path": {
+          "minItems": 2,
+          "maxItems": 2000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema13"
+          }
+        },
+        "importance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        }
+      },
+      "required": [
+        "id",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "__schema45": {
+      "maxItems": 4000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema46"
+      }
+    },
+    "__schema46": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "tags": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "note": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cape",
+            "bay",
+            "gulf",
+            "peninsula",
+            "reef",
+            "landmark",
+            "other"
+          ]
+        },
+        "at": {
+          "$ref": "#/$defs/__schema13"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "__schema47": {
+      "type": "object",
+      "properties": {
+        "windFrom": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "temperature": {
+          "type": "object",
+          "properties": {
+            "warm": {
+              "type": "number",
+              "minimum": -60,
+              "maximum": 60
+            },
+            "cold": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 40
+            }
+          },
+          "required": [
+            "warm",
+            "cold"
+          ],
+          "additionalProperties": false
+        },
+        "warmBandY": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "rainScale": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 4
+        },
+        "seasonality": {
+          "$ref": "#/$defs/__schema14"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

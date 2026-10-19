@@ -1,0 +1,52 @@
+# ADR 0055: Geography model input for world generation
+
+## Context
+
+`create_world` accepted noise or one reference picture. A picture classifies pixels into a few terrain classes and has no place for a range with a crest, a volcano, a named river from a lake to a sea, a pass, a strait, a fertile plain, a site or a climate. The ZIN overhaul describes its world as exactly that typed feature list, and the planned relief, hydrology, climate, partition and naming stages (sections C6 to C13 of `docs/plans/zin-map-pipeline.md`) all need one validated, deterministic description of the world to build on. This ADR adds that description and its review step. It does not add synthesis: no relief, river, biome or province is generated from it yet.
+
+## Decision
+
+### Input
+
+`create_world` gains two optional, mutually exclusive fields. `geography` holds the model inline; `geographyPath` names a workspace-relative `.json` file. Both are optional beside `reference`: a picture may supply the coast while the model supplies relief, hydrology, biomes and names. Existing requests are unchanged; the public tool schema change is additive and a minor version.
+
+The model is a strict, versioned object (`version: 1`, unknown keys rejected). Arrays are optional and hold typed features: `seas`, `lands`, `regions`, `ranges`, `passes`, `volcanoes`, `plateaus`, `rivers`, `lakes`, `biomes`, `straits`, `sites`, `roads`, `places`, plus one `climate` object. Every feature has an `id` (unique across the whole model), an optional `name` of at most 64 characters, `tags` and a `note`. Coordinates are normalised to the whole world frame, origin top-left, as `reference.labels` already are; a point is `{x, y}` or `[x, y]`. Lengths (radii, half-widths, strait widths) are fractions of the map width, so shapes keep their proportions at any aspect ratio. Heights are 0 to 1 of the relief scale. Rings have 3 to 2,000 vertices, paths 2 to 2,000; a model has at most 4,000 features and 200,000 vertices and points, and at most 4 MiB.
+
+Deviations from the plan's table, all additive: a `region` and a `lake` use `polygons` and optional `holes` (several outer rings and cut-outs) instead of one polygon; a river names its tributaries from the tributary's side (`mouth: { river: id }`) instead of listing them on the parent, and the resolved model derives the parent's list; a pass is a range id plus `at`, or a `position` point from which the tool finds the range and the position along it; a strait is `between` two lands or points, a `path` through the water, or both; sites gain `onWater` and `lake`; the model gains `roads` and `places` (named capes, bays, gulfs, reefs and landmarks) and regions gain target `terrain` shares and `density`. The schema is published as `schemas/geography-model.schema.json`.
+
+### Loading
+
+`geographyPath` takes the same road as `reference.imagePath`: the workspace resolver authorises the path for the principal against the writable mod root, symlink and junction escape and traversal are refused, the file is opened once, its identity is verified before and after reading, and its size is bounded at 4 MiB. The very bytes that are hashed are the bytes that are parsed, so no file swap can happen between the hash and its use. The SHA-256 and identity join the transaction read dependencies, so a changed file blocks a write as stale. An inline model is hashed from its canonical JSON. Both are validated by the same strict schema; a file that is not JSON or does not match is an error, not a partial model.
+
+### Resolution and validation
+
+`resolveGeography(model, { frame, hasReference, edge })` is pure and deterministic. It sorts features by id (biomes by priority then id), orients rings (outer shoelace sum positive, holes negative), fills documented defaults (`GEOGRAPHY_DEFAULTS`), derives areas, interior points, arc-length tables, containing lands and regions, pass positions, tributary lists and strait shores, and returns a `ResolvedGeography`, its diagnostics and its canonical hash (SHA-256 of the sorted, defaulted, oriented model and the frame). The same model in any order, with points as objects or pairs, with defaults spelled out or omitted, gives one hash. The frame comes from `width` and `height` of the operation, defaulting as `create_world` does (1,024 by 512, or 5,632 by 2,048 beside a reference image).
+
+Validation reports `MAP_GEOGRAPHY_*` diagnostics. Errors block a write and make a preview `MAP_GEOGRAPHY_PREVIEW_BLOCKED`: duplicate ids across kinds, degenerate, self-crossing or overlapping rings, holes outside their polygon, unknown or mistyped references, a river that starts in water or ends on land, flows into itself or through a cycle, a lake without a shape, outside the land or outside the frame, a volcano or site in water (a site may say `onWater`, a lake port `lake`), a strait whose end is not on land or that joins a land to itself, a pass off its range, contradictory biomes (different kinds overlapping at the same priority `z`), a biome other than ice or marsh mostly over water, climate temperatures out of order, no land when no reference supplies a coast, and the feature and vertex limits. Warnings do not block: overlapping lands, a sea over land, small lakes, overlapping passes or volcanoes, a range mostly over water, repeated names, empty regions, a strait path over land and a feature inside the edge band. Points within 0.003 map widths of a coast count as land, so a point drawn on a shore does not fail on a simplified coastline. Diagnostics are sorted, bounded at 1,000 with a counted truncation marker that keeps the worst severity, and name the feature (`details.featureId`).
+
+The edge band reports land that reaches the east and west bands (`max(192 px, 4% of width)`) and the polar bands (64 px). Because the `edge` option (ADR 0061) is not implemented yet, the check is a warning; a caller passing `edge.mode: 'sea-band'` makes it an error, and `'rim'` or `'none'` skip it.
+
+### Preview and write
+
+`hoi4.map_rewrite` with `preview: true` and a `create_world` that carries a model validates and draws the model without scanning or planning any map. It returns `MAP_GEOGRAPHY_PREVIEW_READY` or `MAP_GEOGRAPHY_PREVIEW_BLOCKED`, a `data.geography` summary (hash, counts, error and warning counts), and two content-addressed artifacts: `map-geography-overlay.png`, an offline drawing of every feature with its id, defects outlined in red (errors) and orange (warnings), at most 1,536 by 1,024 pixels with a fixed bitmap font; and `map-geography-report.json`, with the resolved ids, areas in frame units and pixels, lengths, resolved references, the climate, the diagnostics and the overlay legend. The overlay is an offline drawing of the model, never a game screenshot and never a synthesised map. Other operations in the same preview request are not evaluated, and an info diagnostic says so.
+
+A request without `preview` loads and validates the model, stores the same artifacts, records the file as a read dependency and then blocks with `MAP_GEOGRAPHY_INVALID` (errors) or `MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE` (valid model), changing nothing. Synthesis from the model is the work of the relief, hydrology and climate stages; this decision gives them the interface below and nothing else.
+
+### The resolved model as an interface for later stages
+
+`src/hoi4_agent_tools/map/geography/` exports:
+
+- `ResolvedGeography`: `frame`, `hash`, one sorted array per kind (`seas`, `lands`, `regions`, `ranges`, `passes`, `volcanoes`, `plateaus`, `rivers`, `lakes`, `biomes`, `straits`, `sites`, `roads`, `places`), `climate`, `features()`, `find(id)`, `get(kind, id)`, `list(kind)`, `landIdAt(x, y)`, `surfaceAt(x, y)` (lake, land, sea or open water; lakes carve land, land beats sea) and `isLandAt`.
+- Immutable shapes with typed arrays: `ResolvedArea` (outer rings, holes, bounds, fraction of the frame, an interior point), `ResolvedPolyline` (vertices, per-vertex half-width and crest height, arc length in map-width units, closed flag) and per-kind features with their derived references (`passIds` of a range, `tributaryIds` of a river, `regionId` and `landId` of a land, site, lake or volcano, `ends` of a strait).
+- Rasterisation on the map grid in horizontal strips, so a 13-million pixel map needs no full-size scratch buffer: `rowStrips`, `scanAreaStrip` (spans of an area per row), `fillAreaStrip`, `countAreaStrip`, `forEachPolylinePixel` (8-connected run with arc fraction), `rasterizeBandStrip` (nearest-segment distance, arc fraction and side for ridge and valley profiles), `forEachDiscPixel`, `pointToPixel`, `sampleAlong` (point, tangent, half-width and crest at an arc fraction), `nearestOnPolyline` and `analysisGrid`. Pixel `(i, j)` covers `[i/w, (i+1)/w) x [j/h, (j+1)/h)` and is sampled at its centre. Strip results equal whole-map results for every strip height.
+- Only `+ - * /` and `sqrt` are used, and the 64-gon of a disc lake is built by rotation with literal constants, so results are identical on every platform.
+
+`prepareGeography` loads, resolves and validates one operation; `buildGeographyArtifacts` makes the overlay and the report from a prepared model, so the full world preview can include them later. The planner receives the prepared models through `MapPlanningContext.geographyModels`, which is where a synthesis stage replaces the `MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE` blocker.
+
+## Consequences
+
+An agent can check a whole world description, with ids, areas and defects, before any generation, and the ZIN geography can be converted to schema version 1 and reviewed without a game. The schema is a contract: later stages add optional fields, and a breaking change raises `version`.
+
+Invalid and valid models never write anything yet. The model's world frame must be mapped by its author: a drawing that does not fill the frame needs an affine transform before the model is written, because the tool does not pad or crop a model the way it does a picture. Lengths in map-width units make a model independent of the pixel size but tie it to the frame's aspect ratio.
+
+Tests use synthetic, project-owned models only: strict-schema accept and reject cases, traversal, junction escape, principal isolation, oversize, cancellation, stale source, canonical hash and sorted-order determinism, every diagnostic code, rasteriser equality across strip heights, overlay determinism and an MCP preview and write over the in-memory transport and stdio.

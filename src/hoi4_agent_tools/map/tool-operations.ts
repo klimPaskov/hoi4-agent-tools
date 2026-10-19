@@ -5,6 +5,7 @@ import {
 } from '../core/artifacts.js';
 import { canonicalJson, hashCanonical } from '../core/canonical.js';
 import { diagnosticSeverityCounts } from '../core/diagnostic-rollup.js';
+import { sortDiagnostics, type Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine } from '../core/engine.js';
 import {
   autonomousResultArtifacts,
@@ -26,6 +27,8 @@ import {
   type MapOperation,
 } from './operations.js';
 import { buildMapCatalog, lookupMapCoordinate, searchMapCatalog } from './catalog.js';
+import { GEOGRAPHY_FEATURE_KINDS } from './geography/model.js';
+import { operationHasGeography, type PreparedGeography } from './geography/preparation.js';
 import { renderMap, type MapOverlay, type MapSemanticDiff } from './render.js';
 import { exportProvinceGeometryRowRuns, type AgentNudger } from './service.js';
 import type { MapValidationResult } from './validation.js';
@@ -390,12 +393,146 @@ export function completeMapRewrite(
   return result;
 }
 
+const EMPTY_SEMANTIC_DIFF: MapSemanticDiff = {
+  definitions: [],
+  stateMembership: [],
+  regionMembership: [],
+  states: [],
+  ports: [],
+  buildingPositions: [],
+  unitPositions: [],
+  weatherPositions: [],
+  entityLocators: [],
+  supplyNodes: [],
+  railways: [],
+  adjacencies: [],
+  normalAdjacencies: [],
+  supplyNodesChanged: false,
+  railwaysChanged: false,
+  adjacenciesChanged: false,
+  normalAdjacenciesChanged: false,
+};
+
+function geographySummary(prepared: PreparedGeography) {
+  const counts = Object.fromEntries(
+    GEOGRAPHY_FEATURE_KINDS.map((kind) => [kind, prepared.geography.list(kind).length]),
+  );
+  const severities = diagnosticSeverityCounts(prepared.diagnostics);
+  return {
+    operationId: prepared.operationId,
+    modelHash: prepared.geography.hash,
+    valid: prepared.valid,
+    source: prepared.source.kind,
+    sourceSha256: prepared.source.sha256,
+    width: prepared.frame.width,
+    height: prepared.frame.height,
+    featureCount: prepared.geography.featureCount,
+    pointCount: prepared.geography.pointCount,
+    counts,
+    errorCount: severities.error,
+    warningCount: severities.warning,
+    synthesis: 'unavailable' as const,
+  };
+}
+
+/**
+ * Review the geography model of a `create_world` operation: validate it, resolve its ids and areas
+ * and return an overlay and a report. No map is planned or generated and no file changes.
+ */
+async function previewGeographyRewrite(
+  nudger: AgentNudger,
+  input: MapRewriteToolRequest,
+  context: MapOperationContext,
+) {
+  await context.progress(0, 3, 'Validating the geography model and drawing its overlay');
+  const planned = await nudger.previewGeographyModels({
+    workspaceId: context.workspaceId,
+    operations: input.operations as MapOperation[],
+    ...(context.principal === undefined ? {} : { principal: context.principal }),
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+  });
+  const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
+  const diagnostics = planned.geography.flatMap(({ diagnostics: found }) => found);
+  const ignored = input.operations.filter(
+    (operation) => operation.kind !== 'create_world' || !operationHasGeography(operation),
+  ).length;
+  const notes: Diagnostic[] = [
+    {
+      code: 'MAP_GEOGRAPHY_PREVIEW_MODEL_ONLY',
+      severity: 'info',
+      category: 'map',
+      message:
+        'This preview checks the geography model only. No map was planned and no relief, river or biome was synthesized, and a request without preview is blocked until synthesis exists.',
+    },
+    ...(ignored === 0
+      ? []
+      : [
+          {
+            code: 'MAP_GEOGRAPHY_PREVIEW_OTHER_OPERATIONS_SKIPPED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            message: `${ignored} other operation(s) in the request were not evaluated by this model preview`,
+          },
+        ]),
+  ];
+  const all = sortDiagnostics([...diagnostics, ...notes]);
+  const valid = planned.geography.every(({ valid: ok }) => ok);
+  const result = emptyServiceResult(context.workspaceId, {
+    execution: 'preview' as const,
+    allocations: [],
+    operationBlockers: [],
+    expectedChangedBounds: null,
+    changedProvinceIds: [],
+    changedProvinceCount: 0,
+    semanticDiff: compactSemantic.semantic,
+    semanticDiffCounts: compactSemantic.counts,
+    semanticDiffTruncated: compactSemantic.truncated,
+    fileCount: 0,
+    artifactCount: planned.artifacts.length,
+    geography: planned.geography.slice(0, 16).map(geographySummary),
+  });
+  result.status = valid ? 'ok' : 'blocked';
+  result.code = valid ? 'MAP_GEOGRAPHY_PREVIEW_READY' : 'MAP_GEOGRAPHY_PREVIEW_BLOCKED';
+  setInlineFilesScanned(result, planned.filesScanned);
+  result.proposedFiles = [];
+  result.diagnostics = all.slice(0, 100);
+  result.artifacts = planned.artifacts.map(publicArtifactLink);
+  result.validation = {
+    passed: valid,
+    checks: [
+      {
+        id: 'geography-model',
+        passed: valid,
+        message: valid
+          ? 'The geography model resolves without errors'
+          : 'The geography model has errors; see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json',
+      },
+    ],
+  };
+  result.blockers = all
+    .filter(({ severity }) => severity === 'error' || severity === 'blocker')
+    .slice(0, 100)
+    .map(({ code, message }) => ({ code, message }));
+  await context.progress(
+    3,
+    3,
+    'Geography model preview complete; workspace files were not changed',
+  );
+  return result;
+}
+
 /** Generate and validate the same proposed map without creating a write transaction. */
 export async function previewMapRewrite(
   nudger: AgentNudger,
   input: MapRewriteToolRequest,
   context: MapOperationContext,
 ) {
+  if (
+    input.operations.some(
+      (operation) => operation.kind === 'create_world' && operationHasGeography(operation),
+    )
+  )
+    return previewGeographyRewrite(nudger, input, context);
   await context.progress(0, 5, 'Generating and validating an offline map preview');
   const planned = await nudger.previewRewriteWithDiff({
     workspaceId: context.workspaceId,

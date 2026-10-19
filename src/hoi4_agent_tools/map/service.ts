@@ -47,6 +47,12 @@ import {
   type PreparedReferenceWorld,
 } from './operations.js';
 import { prepareReferenceWorld } from './reference-preparation.js';
+import { buildGeographyArtifacts } from './geography/preview.js';
+import {
+  operationHasGeography,
+  prepareGeography,
+  type PreparedGeography,
+} from './geography/preparation.js';
 import { WORLD_OUTPUT_MANIFEST } from './world-outputs.js';
 import type { ReferenceSourceEvidence } from '../core/bounded-source.js';
 import {
@@ -115,6 +121,7 @@ interface PreparedMapOperations {
   plan: MapOperationPlan;
   validation: MapValidationResult;
   referenceImages: Array<{ operationId: string; bytes: Buffer; source: ReferenceSourceEvidence }>;
+  geography: PreparedGeography[];
 }
 
 export interface MapValidationAttributionInput {
@@ -1018,6 +1025,27 @@ export class AgentNudger {
         else snapshot.referenceSources[previous] = image.source;
       }
     }
+    const geographyModels = new Map<string, PreparedGeography>();
+    for (const operation of operations) {
+      if (operation.kind !== 'create_world' || !operationHasGeography(operation)) continue;
+      const geography = await prepareGeography(
+        this.resolver,
+        workspaceId,
+        operation,
+        principal,
+        signal,
+      );
+      geographyModels.set(operation.id, geography);
+      if (geography.source.kind === 'file') {
+        const evidence = geography.source.evidence;
+        snapshot.referenceSources ??= [];
+        const previous = snapshot.referenceSources.findIndex(
+          (file) => file.displayPath === evidence.displayPath,
+        );
+        if (previous < 0) snapshot.referenceSources.push(evidence);
+        else snapshot.referenceSources[previous] = evidence;
+      }
+    }
     snapshot.files.sort(
       (left, right) =>
         left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
@@ -1031,7 +1059,11 @@ export class AgentNudger {
     );
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal, {
       referenceWorlds,
+      geographyModels,
     });
+    // Model diagnostics (including warnings of a model that is otherwise usable) travel with the plan.
+    for (const geography of geographyModels.values())
+      plan.diagnostics.push(...geography.diagnostics);
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
     const freshWorld = newWorld && snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
     const baselineValidation = freshWorld
@@ -1059,6 +1091,7 @@ export class AgentNudger {
       plan,
       validation: validationWithPlan(attributedValidation, plan),
       referenceImages,
+      geography: [...geographyModels.values()],
     };
   }
 
@@ -1309,6 +1342,72 @@ export class AgentNudger {
     };
   }
 
+  private async geographyArtifacts(
+    prepared: Pick<PreparedMapOperations, 'geography'>,
+    signal?: AbortSignal,
+    budget?: RenderBudget,
+  ): Promise<ArtifactWrite[]> {
+    const writes: ArtifactWrite[] = [];
+    for (const [ordinal, geography] of prepared.geography.entries())
+      writes.push(
+        ...(await buildGeographyArtifacts({
+          prepared: geography,
+          ordinal,
+          sourceHashes:
+            geography.source.kind === 'file'
+              ? { [geography.source.evidence.displayPath]: geography.source.sha256 }
+              : { 'inline:geography': geography.source.sha256 },
+          ...(budget === undefined ? {} : { budget }),
+          ...(signal === undefined ? {} : { signal }),
+        })),
+      );
+    return writes;
+  }
+
+  /**
+   * Validate and draw the geography model of every `create_world` operation without scanning or
+   * planning the map: the review step before any synthesis. Nothing in the mod changes.
+   */
+  async previewGeographyModels(input: {
+    workspaceId: string;
+    operations: readonly MapOperation[];
+    principal?: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    geography: PreparedGeography[];
+    artifacts: StoredArtifact[];
+    filesScanned: string[];
+  }> {
+    input.signal?.throwIfAborted();
+    const geography: PreparedGeography[] = [];
+    for (const operation of input.operations) {
+      if (operation.kind !== 'create_world' || !operationHasGeography(operation)) continue;
+      geography.push(
+        await prepareGeography(
+          this.resolver,
+          input.workspaceId,
+          operation,
+          input.principal,
+          input.signal,
+        ),
+      );
+    }
+    const writes = await this.geographyArtifacts({ geography }, input.signal, new RenderBudget());
+    const artifacts = await this.artifacts.withAtomicChunkedWrites(
+      this.resolver.get(input.workspaceId, input.principal),
+      writes,
+      (stored) => Promise.resolve([...stored]),
+      input.signal,
+    );
+    return {
+      geography,
+      artifacts,
+      filesScanned: geography.flatMap(({ source }) =>
+        source.kind === 'file' ? [source.evidence.displayPath] : [],
+      ),
+    };
+  }
+
   private async renderPreparedDiffAndStore(
     prepared: PreparedMapOperations,
     operations: readonly MapOperation[],
@@ -1378,6 +1477,7 @@ export class AgentNudger {
         this.resolver.get(snapshot.workspaceId, options.principal),
         [
           report,
+          ...(await this.geographyArtifacts(prepared, options.signal, budget)),
           {
             name: 'map-generation-failure.json',
             mimeType: 'application/json',
@@ -1559,6 +1659,7 @@ export class AgentNudger {
           provenance: comparisonProvenance('before'),
         },
       );
+    writes.push(...(await this.geographyArtifacts(prepared, options.signal, budget)));
     const generatedWorlds = generatedWorldOperationIds(plan);
     if (generatedWorlds.size > 0)
       writes.push(

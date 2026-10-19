@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
 import { workspaceRelativePathSchema } from './common.js';
+import { geographyModelSchema, geographyPathSchema } from './geography.js';
 
 const identifier = z.string().min(1).max(256);
 // eslint-disable-next-line no-control-regex -- portable JSON Schema pattern rejects grammar-breaking controls.
@@ -604,6 +605,16 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         ),
       id: identifier.default('world'),
       reference: worldReferenceSchema.optional(),
+      geography: geographyModelSchema
+        .optional()
+        .describe(
+          'Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json; world synthesis from the model is not yet available.',
+        ),
+      geographyPath: geographyPathSchema
+        .optional()
+        .describe(
+          'Workspace-relative .json file holding a geography model (at most 4 MiB). Alternative to the inline geography field; give one of them.',
+        ),
       width: z.number().int().min(256).max(8_192).multipleOf(256).optional(),
       height: z.number().int().min(256).max(4_096).multipleOf(256).optional(),
       seed: z.number().int().min(0).max(2_147_483_647).default(1),
@@ -648,7 +659,14 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
           'Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.',
         ),
     })
-    .strict(),
+    .strict()
+    .refine(
+      (operation) => operation.geography === undefined || operation.geographyPath === undefined,
+      {
+        path: ['geographyPath'],
+        message: 'Give the geography inline (geography) or by file (geographyPath), not both',
+      },
+    ),
   z
     .object({
       ...operationBase,

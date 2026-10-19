@@ -48,6 +48,58 @@ All annotation positions and polygons use normalized 0 to 1 coordinates relative
 
 Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side. The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
+## Describe a world as a geography model
+
+A reference picture says where land and water are. A geography model says what the world is: seas, lands, mountain ranges with passes, volcanoes, rivers from a lake to a sea, lakes, forests and deserts, straits, sites and climate, each with an id and a name. `create_world` accepts one as `geography` (inline) or `geographyPath` (a workspace-relative `.json` file of at most 4 MiB; prefer the file for anything beyond a few hundred vertices). It may stand alone or accompany a `reference` picture. [geography-model.schema.json](../schemas/geography-model.schema.json) is the complete schema; [ADR 0055](adr/0055-geography-model-input.md) records the design.
+
+Preview it before anything else:
+
+```json
+{
+  "preview": true,
+  "operations": [
+    {
+      "kind": "create_world",
+      "width": 5120,
+      "height": 2560,
+      "geographyPath": "geography/world.json"
+    }
+  ]
+}
+```
+
+The preview validates the model, resolves its ids and areas, and returns `map-geography-overlay.png` (every feature drawn with its id; defects outlined in red for errors and orange for warnings) and `map-geography-report.json` (resolved ids, areas in frame units and pixels, lengths, resolved references, climate and every diagnostic), with a summary in `data.geography`. It reads only the model: no map is planned and no mod file changes. The overlay is an offline drawing, not a game screenshot.
+
+**World synthesis from the model is not available yet.** A request without `preview` loads and validates the model and is then blocked with `MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE` (or `MAP_GEOGRAPHY_INVALID` when the model has errors); nothing is written. Relief, rivers, climate and biomes are generated from the model by later stages.
+
+A model is one object with `"version": 1` and any of these arrays. Unknown keys are refused.
+
+| Array       | Feature and main fields                                                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seas`      | `polygons` (outer rings), optional `holes`, `depthClass` (`shelf`, `open`, `abyss`), `ice` 0 to 1, `kind` (`ocean`, `sea`, `gulf`, `fjord`)                                                                                       |
+| `lands`     | `polygons`, `holes`, `kind` (`continent`, `island`, `archipelago`, `peninsula`), `region`, default `biome` and `fertility`, `elevationBase`, `coastDetail`                                                                        |
+| `regions`   | `polygons` (optional), `terrain` target shares, `density` (`provincesPerState` as `[smallest, usual, largest]`, `provinceAreaPx`)                                                                                                 |
+| `ranges`    | `path` (points, each optionally with `halfWidth` and `peak`), `closed`, `halfWidth`, `peak`, `profile` (`ridge`, `massif`, `escarpment`, `wall`), `asymmetry`, `snowline`, `spurs`, `barrier` (`none`, `impassable`, `fort-line`) |
+| `passes`    | `range` with `at` (0 to 1 along the range), or a `position` point (the range is found for you), `width`, `depth`, `fort` 0 to 5                                                                                                   |
+| `volcanoes` | `at`, `radius`, `peak`, `crater`, `active`                                                                                                                                                                                        |
+| `plateaus`  | `polygons`, `height` (a low value makes a basin or chasm), `edge` (`cliff`, `ramp`)                                                                                                                                               |
+| `rivers`    | `source` (point or `{lake}`), `mouth` (point, `{sea}`, `{lake}` or `{river}` for a tributary), `via` points, `size` 1 to 5, `delta`                                                                                               |
+| `lakes`     | `polygons` or `center` with `radius`, `depthClass`, `outflow` (a river id), `gameplay` (`lake`, `inland-sea`)                                                                                                                     |
+| `biomes`    | `kind` (`forest`, `desert`, `marsh`, `ice`, `plains`, `farmland`, `jungle`, `steppe`, `tundra`, `hills`), `polygons`, `density`, `fertility`, `z` priority                                                                        |
+| `straits`   | `between` (two points on land or `{land}` ids), a `path` through the water, or both; `rule` (`open`, `army-closed`, `navy-closed`), `width`                                                                                       |
+| `sites`     | `kind` (`capital`, `city`, `fortress`, `port`, `ruin`, `temple`, `mine`, `landmark`), `at`, `importance` 1 to 5, `country`, `onWater`, `lake`                                                                                     |
+| `roads`     | `path`, `importance` 1 to 3                                                                                                                                                                                                       |
+| `places`    | `kind` (`cape`, `bay`, `gulf`, `peninsula`, `reef`, `landmark`, `other`), `at`: a name for later naming stages, on any surface                                                                                                    |
+| `climate`   | `windFrom` (compass bearing the wind comes from), `temperature` (`warm` and `cold` degrees Celsius), `warmBandY`, `rainScale`, `seasonality`                                                                                      |
+
+Every feature also takes `id` (letters, digits, `_`, `.`, `-`; unique across the whole model), `name`, `tags` and `note`. Coordinates are normalised to the whole world frame, origin top left, x east and y south, like `reference.labels`; a point is `{"x":0.3,"y":0.4}` or `[0.3, 0.4]`. Lengths (`radius`, `halfWidth`, `width`) are fractions of the map width, so a circle stays round at any aspect ratio. Heights (`peak`, `height`, `elevationBase`) are 0 to 1 of the relief scale. A polygon has 3 to 2,000 vertices, a path 2 to 2,000; a model has at most 4,000 features and 200,000 vertices and points. Order does not matter: features are sorted by id, rings oriented and defaults filled, and the report carries a `modelHash` that is the same for the same world however it was written.
+
+A model that needs an edit is reported by `MAP_GEOGRAPHY_*` diagnostics that name the feature. Errors: `ID_DUPLICATE`, `RING_DEGENERATE`, `RING_SELF_INTERSECTION`, `POLYGONS_OVERLAP`, `HOLE_OUTSIDE`, `HOLES_WITHOUT_POLYGONS`, `REF_UNKNOWN`, `REF_KIND`, `PASS_SHAPE`, `PASS_OFF_RANGE`, `RIVER_SOURCE_NOT_LAND`, `RIVER_MOUTH_NOT_WATER`, `RIVER_CYCLE`, `LAKE_SHAPE`, `LAKE_NOT_IN_LAND`, `LAKE_OUT_OF_FRAME`, `VOLCANO_NOT_ON_LAND`, `VOLCANO_CRATER_RADIUS`, `STRAIT_SHAPE`, `STRAIT_ENDPOINT`, `STRAIT_SAME_LAND`, `SITE_IN_WATER`, `BIOME_CONFLICT` (different kinds overlap at the same `z`), `BIOME_OVER_WATER`, `PATH_DEGENERATE`, `CLIMATE_TEMPERATURE_ORDER`, `REGION_DENSITY_ORDER`, `NO_LAND` (no lands and no reference picture), `LIMIT_FEATURES` and `LIMIT_POINTS`. Warnings: `LAND_OVERLAP`, `SEA_OVER_LAND`, `LAKE_TOO_SMALL`, `LAKE_OUTFLOW_MISMATCH`, `PASS_OVERLAP`, `VOLCANO_OVERLAP`, `RANGE_ON_WATER`, `PATH_SELF_INTERSECTION`, `RIVER_VIA_NOT_LAND`, `STRAIT_PATH_ON_LAND`, `STRAIT_NO_WATER`, `SITE_DUPLICATE_POSITION`, `REGION_EMPTY`, `REGION_TERRAIN_SUM`, `NAME_DUPLICATE`, `RING_DUPLICATE_VERTEX`, `PATH_DUPLICATE_VERTEX`, `FEATURE_IN_EDGE_BAND` and `DIAGNOSTICS_TRUNCATED` (more than 1,000 findings; the worst severity is kept). A file that cannot be used at all fails the call instead, with `MAP_GEOGRAPHY_PATH_INVALID`, `SOURCE_TOO_LARGE`, `JSON_INVALID`, `SCHEMA_INVALID` or `SOURCE_AMBIGUOUS`. A point within 0.003 map widths of a coast counts as land, so a river mouth or a port drawn on the shore does not fail on a simplified coastline; the error for an inland mouth reports its `inlandDistance` so it can be snapped.
+
+`FEATURE_IN_EDGE_BAND` marks land, plateaus, ranges, volcanoes, sites, passes and river points inside `max(192 pixels, 4% of the width)` east and west or 64 pixels north and south of the frame, because the game wraps the map horizontally. Until the `edge` option exists it is a warning.
+
+`geographyPath` follows the rules of `reference.imagePath`: relative paths inside the authorized mod workspace only; URLs, absolute paths, traversal, symlink and junction escapes are refused; the file is read once, its SHA-256 is taken from the bytes that are parsed, and a change after preparation blocks the write as stale. A file that is not JSON or does not match the schema is an error, not a partial preview. CI models are synthetic and project-owned.
+
 ## Inspect and navigate the complete map
 
 `hoi4.map_inspect` finds map problems and returns a full-map PNG plus a searchable, clickable HTML navigator by default. The navigator supports pan, zoom, fit-to-map, search by numeric ID, localisation key, or localised name, and exact click lookup for province, state, and strategic-region IDs. Hovering reports both top-left bitmap coordinates and bottom-left HOI4 map coordinates.

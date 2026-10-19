@@ -133,6 +133,28 @@ const mapPlanOutputSchema = strictOperationResultSchema(
       semanticDiffTruncated: z.boolean(),
       fileCount: nonNegativeIntegerSchema,
       artifactCount: nonNegativeIntegerSchema,
+      geography: z
+        .array(
+          z
+            .object({
+              operationId: z.string().min(1).max(256),
+              modelHash: sha256Schema,
+              valid: z.boolean(),
+              source: z.enum(['inline', 'file']),
+              sourceSha256: sha256Schema,
+              width: nonNegativeIntegerSchema,
+              height: nonNegativeIntegerSchema,
+              featureCount: nonNegativeIntegerSchema,
+              pointCount: nonNegativeIntegerSchema,
+              counts: z.record(z.string().max(32), nonNegativeIntegerSchema),
+              errorCount: nonNegativeIntegerSchema,
+              warningCount: nonNegativeIntegerSchema,
+              synthesis: z.literal('unavailable'),
+            })
+            .strict(),
+        )
+        .max(16)
+        .optional(),
       preview: z
         .object({
           offlineRepresentation: z.literal(true),
@@ -171,7 +193,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_rewrite',
     title: 'Build a world or edit the map',
     description:
-      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
+      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. create_world also accepts a typed geography model (geography inline or geographyPath to a workspace .json): with preview:true it returns a model overlay PNG and map-geography-report.json; synthesis from the model is not yet available. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {
