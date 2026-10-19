@@ -6,12 +6,7 @@
  * rivers that `river-raster.ts` turns into the one-pixel paths of `rivers.bmp`.
  */
 import { ServiceError } from '../../core/result.js';
-import {
-  fillAreaStrip,
-  resolvedAreaContains,
-  type ResolvedGeography,
-  type ResolvedRiver,
-} from '../geography/index.js';
+import { fillAreaStrip, type ResolvedGeography, type ResolvedRiver } from '../geography/index.js';
 import { LAKE, LAND, MinHeap, NEIGHBOUR_DX, NEIGHBOUR_DY, NEIGHBOUR_LENGTH, SEA } from './grid.js';
 import { LAND_FLOOR, type MacroRelief } from './macro-relief.js';
 import { SQRT2, clamp, hash01, log2Approx, noise2, seedFromString, smoothstep } from './math.js';
@@ -474,13 +469,16 @@ function meanderRoute(
     sy[i] = y / (hi - lo + 1);
   }
   const arc = new Float64Array(n);
-  for (let i = 1; i < n; i += 1)
-    arc[i] = arc[i - 1]! + Math.hypot(sx[i]! - sx[i - 1]!, sy[i]! - sy[i - 1]!);
+  for (let i = 1; i < n; i += 1) {
+    const ex = sx[i]! - sx[i - 1]!;
+    const ey = sy[i]! - sy[i - 1]!;
+    arc[i] = arc[i - 1]! + Math.sqrt(ex * ex + ey * ey);
+  }
   const originalClimb = climbOf(context.height, cells);
   const seed = seedFromString(context.seed, `meander:${name}`);
   const keep = 4;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const amplitude = clamp(0.09 * n, 2, 13) / 2 ** attempt;
+    const amplitude = clamp(0.09 * n, 2, 13) / (1 << attempt);
     const points: Array<[number, number]> = [];
     for (let i = keep; i < n - keep; i += 1) {
       const a = Math.max(0, i - 2);
@@ -609,7 +607,8 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
             const score =
               firstVia === undefined
                 ? conditioned[cell]!
-                : (x + 0.5 - firstVia.x * mw) ** 2 + (y + 0.5 - firstVia.y * mh) ** 2;
+                : (x + 0.5 - firstVia.x * mw) * (x + 0.5 - firstVia.x * mw) +
+                  (y + 0.5 - firstVia.y * mh) * (y + 0.5 - firstVia.y * mh);
             if (score < bestScore) {
               bestScore = score;
               best = cell;
@@ -1052,6 +1051,8 @@ function decomposeStreams(input: {
       },
     ];
     while (stack.length > 0) {
+      // River ids are 16 bits wide; the network stops growing long before that matters.
+      if (rivers.length >= 30_000) return;
       const item = stack.pop()!;
       let chain: number[] = [];
       let cell = item.cell;
@@ -1109,7 +1110,9 @@ function decomposeStreams(input: {
             let nearest = spawned.join;
             let best = Infinity;
             for (const c of chain) {
-              const d = ((c % mw) - jx) ** 2 + (Math.floor(c / mw) - jy) ** 2;
+              const d =
+                ((c % mw) - jx) * ((c % mw) - jx) +
+                (Math.floor(c / mw) - jy) * (Math.floor(c / mw) - jy);
               if (d < best) {
                 best = d;
                 nearest = c;
@@ -1332,13 +1335,23 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
 
   // Lakes by cell, for sources and mouths.
   const lakeOf = new Int16Array(total);
-  geography.lakes.forEach((lake, index) => {
+  if (geography.lakes.length > 0) {
     const mask = new Int16Array(total);
-    fillAreaStrip(lake.area, { width: mw, height: mh }, { y0: 0, y1: mh }, mask, index + 1);
-    for (let cell = 0; cell < total; cell += 1)
-      if (mask[cell] !== 0 && kind[cell] === LAKE) lakeOf[cell] = index + 1;
-  });
-  void resolvedAreaContains;
+    geography.lakes.forEach((lake, index) => {
+      fillAreaStrip(lake.area, { width: mw, height: mh }, { y0: 0, y1: mh }, mask, index + 1);
+      const x0 = Math.max(0, Math.floor(lake.area.bounds.x0 * mw) - 1);
+      const x1 = Math.min(mw - 1, Math.ceil(lake.area.bounds.x1 * mw) + 1);
+      const y0 = Math.max(0, Math.floor(lake.area.bounds.y0 * mh) - 1);
+      const y1 = Math.min(mh - 1, Math.ceil(lake.area.bounds.y1 * mh) + 1);
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const cell = y * mw + x;
+          if (mask[cell] !== 0 && kind[cell] === LAKE) lakeOf[cell] = index + 1;
+        }
+        mask.fill(0, y * mw + x0, y * mw + x1 + 1);
+      }
+    });
+  }
 
   // Named rivers, parents first, each as a least-cost route over the conditioned heights.
   const occupant = new Int16Array(total);

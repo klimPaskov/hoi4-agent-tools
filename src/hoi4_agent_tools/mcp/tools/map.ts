@@ -194,7 +194,12 @@ const mapPlanOutputSchema = strictOperationResultSchema(
               counts: z.record(z.string().max(32), nonNegativeIntegerSchema),
               errorCount: nonNegativeIntegerSchema,
               warningCount: nonNegativeIntegerSchema,
-              synthesis: z.literal('unavailable'),
+              synthesis: z
+                .enum(['available', 'unavailable'])
+                .describe(
+                  'available: a request without preview builds relief, rivers and lakes from the model; unavailable: the model declares parts the synthesis cannot use yet (see unsupported) and such a request is blocked',
+                ),
+              unsupported: z.array(z.string().max(128)).max(16),
             })
             .strict(),
         )

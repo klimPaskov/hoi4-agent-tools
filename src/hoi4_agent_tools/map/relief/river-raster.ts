@@ -423,7 +423,9 @@ function smoothedPoints(
   let length = 0;
   const arc = new Float64Array(n);
   for (let i = 1; i < n; i += 1) {
-    length += Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]);
+    const ex = points[i]![0] - points[i - 1]![0];
+    const ey = points[i]![1] - points[i - 1]![1];
+    length += Math.sqrt(ex * ex + ey * ey);
     arc[i] = length;
   }
   const amplitude = Math.min(9, 3 + 0.02 * length);
@@ -553,7 +555,7 @@ export function rasterizeRivers(input: RiverRasterInput): RiverRasterResult {
             const pixel = sy * width + sx;
             if (kind[pixel] !== LAND || owner[pixel] !== 0) continue;
             if (!singleContact(context, sx, sy, parent)) continue;
-            const score = (sx - aim[0]) ** 2 + (sy - aim[1]) ** 2;
+            const score = (sx - aim[0]) * (sx - aim[0]) + (sy - aim[1]) * (sy - aim[1]);
             if (score < best) {
               best = score;
               start = pixel;
@@ -609,6 +611,12 @@ export function rasterizeRivers(input: RiverRasterInput): RiverRasterResult {
             self,
             parent,
           });
+          // A detour much longer than the gap it closes would draw a loop around the obstacle.
+          if (
+            found !== undefined &&
+            found.length > 2.2 * (Math.abs(tx - hx) + Math.abs(ty - hy)) + 14
+          )
+            found = undefined;
           if (found !== undefined) break;
         }
       // Nothing to rejoin: the trace ran into water or another river, and the end search takes over.

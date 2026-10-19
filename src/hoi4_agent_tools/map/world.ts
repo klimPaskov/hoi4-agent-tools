@@ -371,19 +371,16 @@ function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeog
       modelHash: geography.hash,
       relief,
       rivers: riverStatistics,
+      // The first of the named rivers only: the response budget is shared with everything else the
+      // world reports, and a river that did not complete is always listed.
       namedRivers: terrain.rivers
-        .filter((river) => river.named)
-        .slice(0, 200)
-        .map(({ id, name, pixels, mouth, width, order, complete, sinuosity }) => ({
-          id,
-          ...(name === undefined ? {} : { name }),
-          pixels,
-          mouth,
-          width,
-          order,
-          complete,
-          sinuosity,
-        })),
+        .filter((river) => river.named && river.junction !== 'distributary')
+        .slice(0, 24)
+        .map(({ id, pixels, mouth, complete }) => ({ id, pixels, mouth, complete })),
+      incompleteRivers: terrain.rivers
+        .filter((river) => river.named && !river.complete)
+        .slice(0, 24)
+        .map(({ id }) => id),
     },
   };
 }

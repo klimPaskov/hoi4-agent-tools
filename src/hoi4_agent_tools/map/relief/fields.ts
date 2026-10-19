@@ -87,7 +87,11 @@ export interface RiverStatistics {
   /** Share of land pixels. */
   readonly landShare: number;
   readonly count: number;
+  /** Rivers the model names, not counting their distributaries. */
   readonly named: number;
+  /** Distributary channels of named deltas. */
+  readonly distributaries: number;
+  /** Rivers of the accumulation network. */
   readonly streams: number;
   /** Share of river pixels on straight 41-pixel stretches (the base game: 0.011). */
   readonly straightShare: number;

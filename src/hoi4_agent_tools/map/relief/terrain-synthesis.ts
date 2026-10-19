@@ -49,7 +49,11 @@ export interface TerrainSynthesisInput {
   rivers?: { density?: number | undefined; count?: number | undefined } | undefined;
   /** Rain per macro cell (half the map size), a multiplier of one; later stages supply it. */
   rainfall?: Float32Array | undefined;
-  /** A last change to land heights in map values, applied after the rivers are carved (the world rim). */
+  /**
+   * A change to land heights in map values, applied to the macro relief before the hydrology so
+   * that rivers route around it (the world rim, ADR 0061): `x` and `y` are the full-resolution
+   * pixel at the centre of the macro cell.
+   */
   adjustHeight?: ((x: number, y: number, height: number) => number) | undefined;
   signal?: AbortSignal | undefined;
   /** Called when a stage starts, for progress heartbeats and timing. */
@@ -202,6 +206,14 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     relief,
     signal: input.signal,
   });
+  const adjust = input.adjustHeight;
+  if (adjust !== undefined)
+    for (let y = 0; y < macro.height; y += 1)
+      for (let x = 0; x < macro.width; x += 1) {
+        const cell = y * macro.width + x;
+        if (macro.kind[cell] === LAND)
+          macro.heights[cell] = adjust(2 * x + 1, 2 * y + 1, macro.heights[cell]!);
+      }
   stage('hydrology');
   const hydrology = synthesizeHydrology({
     geography,
@@ -245,14 +257,12 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
   const heights = new Uint8Array(total);
   const elevation = new Float32Array(total);
   const snow = new Uint8Array(total);
-  const adjust = input.adjustHeight;
   for (let y = 0; y < height; y += 1) {
     if (y % 64 === 0) input.signal?.throwIfAborted();
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
       if (kind[index] === LAND) {
         let value = floats[index]!;
-        if (adjust !== undefined) value = adjust(x, y, value);
         value = value < LAND_FLOOR ? LAND_FLOOR : value > HEIGHT_CEILING ? HEIGHT_CEILING : value;
         floats[index] = value;
         const quantised = Math.round(value);
@@ -317,19 +327,20 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
   const paths: RiverPath[] = [];
   let riverCount = 0;
   let named = 0;
+  let distributaries = 0;
   hydrology.rivers.forEach((river, index) => {
     const pixelRiver = raster.rivers[index]!;
     const path = pixelRiver.pixels;
     if (path.length === 0) return;
     riverCount += 1;
     paths.push({ id: river.id, pixels: path });
-    if (river.named && river.junction !== 'distributary') named += 1;
+    if (river.junction === 'distributary') distributaries += 1;
+    else if (river.named) named += 1;
     const first = path[0]!;
     const last = path[path.length - 1]!;
-    const chord = Math.hypot(
-      (first % width) - (last % width),
-      Math.floor(first / width) - Math.floor(last / width),
-    );
+    const chordX = (first % width) - (last % width);
+    const chordY = Math.floor(first / width) - Math.floor(last / width);
+    const chord = Math.sqrt(chordX * chordX + chordY * chordY);
     let widest = 3;
     for (const value of river.width) if (value > widest) widest = value;
     const parentId = river.parent >= 0 ? hydrology.rivers[river.parent]!.id : undefined;
@@ -372,7 +383,8 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     landShare: share,
     count: riverCount,
     named,
-    streams: riverCount - named,
+    distributaries,
+    streams: riverCount - named - distributaries,
     straightShare: Math.round(straightShare * 10_000) / 10_000,
   };
   return {

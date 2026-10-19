@@ -150,6 +150,21 @@ export function normalResponse(
   return -covariance / variance;
 }
 
+/** The palette indices of an 8-bit bitmap, top row first. */
+export function indexedPixels(file: Buffer): Uint8Array {
+  const offset = file.readUInt32LE(10);
+  const width = file.readInt32LE(18);
+  const signedHeight = file.readInt32LE(22);
+  const height = Math.abs(signedHeight);
+  const stride = Math.ceil(width / 4) * 4;
+  const out = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const row = signedHeight > 0 ? height - 1 - y : y;
+    out.set(file.subarray(offset + row * stride, offset + row * stride + width), y * width);
+  }
+  return out;
+}
+
 export function percentile(values: ArrayLike<number>, share: number): number {
   const sorted = Array.from(values).sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))]!;
