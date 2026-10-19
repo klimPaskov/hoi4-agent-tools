@@ -617,6 +617,174 @@ const createProvinceOperation = z
   .strict();
 const occurrenceSchema = z.number().int().min(0).optional();
 
+const stateChangesSchema = z
+  .object({
+    capital: provinceId
+      .nullable()
+      .optional()
+      .describe(
+        'Assertion for the capital derived from the exact victoryPoints payload; never writes a state capital field',
+      ),
+    manpower: z.number().min(0).optional(),
+    category: z.string().min(1).optional(),
+    resources: nonnegativeMap.optional(),
+    stateBuildings: nonnegativeMap.optional(),
+    owner: z.string().min(1).nullable().optional(),
+    controller: z.string().min(1).nullable().optional(),
+    cores: z.array(z.string().min(1)).max(10_000).optional(),
+    claims: z.array(z.string().min(1)).max(10_000).optional(),
+    victoryPoints: z
+      .array(z.object({ provinceId, value: z.number().min(0) }).strict())
+      .max(100_000)
+      .optional(),
+    provinceBuildings: z.record(z.string().regex(/^\d+$/u), nonnegativeMap).optional(),
+  })
+  .strict();
+
+const tagSchema = z
+  .string()
+  .regex(/^[A-Z0-9]{3}$/u, 'A country tag is three capital letters or digits');
+const territoryRefSchema = z.union([
+  z.object({ state: stateId }).strict(),
+  z.object({ province: provinceId }).strict(),
+  z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
+]);
+const territorySelectionSchema = z
+  .object({
+    stateIds: z.array(stateId).max(100_000).optional(),
+    provinceIds: z.array(provinceId).max(100_000).optional(),
+    regionIds: z.array(z.number().int().positive()).max(10_000).optional(),
+  })
+  .strict();
+const borderQualityModeSchema = z
+  .enum(['off', 'report', 'enforce'])
+  .describe(
+    'off skips the measurement; report adds border naturalness to the result; enforce blocks the write when the borders miss the targets.',
+  );
+const borderTargetsSchema = z
+  .object({
+    minEnrichment: z.number().min(0).max(20).optional(),
+    maxStraightness: z.number().min(0).max(1).optional(),
+    minNaturalShare: z.number().min(0).max(1).optional(),
+  })
+  .strict()
+  .describe(
+    'Override the targets (enrichment 1.6; straightness 0.12 for country borders and 0.25 for state borders).',
+  );
+const territoryCountrySchema = z
+  .object({
+    tag: tagSchema,
+    weight: z
+      .number()
+      .positive()
+      .max(1_000_000)
+      .optional()
+      .describe('Relative target size; default 1.'),
+    seeds: z
+      .array(territoryRefSchema)
+      .min(1)
+      .max(64)
+      .describe('{ state }, { province } or a pixel { x, y }. The first is the capital.'),
+    forced: territorySelectionSchema.optional(),
+    blocked: territorySelectionSchema.optional(),
+    regions: z
+      .array(z.number().int().positive())
+      .max(1_000)
+      .optional()
+      .describe('Strategic regions this country prefers to grow in.'),
+    overlord: tagSchema.optional().describe('Grow this country inside its overlord.'),
+    mergeInto: tagSchema
+      .optional()
+      .describe(
+        'Relabel the finished territory to another listed country (this tag stays a core).',
+      ),
+    cores: territorySelectionSchema.optional(),
+    claims: territorySelectionSchema.optional(),
+  })
+  .strict();
+const territoryOperation = z
+  .object({
+    ...operationBase,
+    kind: z.literal('assign_territory'),
+    unit: z
+      .enum(['state', 'province'])
+      .default('state')
+      .describe(
+        'state assigns whole states. province assigns provinces and regroups the states a border cuts (conserving population, resources and buildings).',
+      ),
+    countries: z.array(territoryCountrySchema).min(1).max(512),
+    scope: z
+      .object({
+        stateIds: z.array(stateId).max(100_000).optional(),
+        regionIds: z.array(z.number().int().positive()).max(10_000).optional(),
+        owners: z.array(z.string().min(1).max(32)).max(1_000).optional(),
+      })
+      .strict()
+      .optional()
+      .describe('Only these states take part; the rest keep their owners.'),
+    unowned: territorySelectionSchema.optional(),
+    barriers: z
+      .enum(['natural', 'none'])
+      .default('natural')
+      .describe('none ignores rivers, ranges and shores (nearest seed).'),
+    rules: z
+      .object({
+        connectedMainland: z.boolean().default(true),
+        islandPolicy: z.enum(['one-owner', 'nearest', 'unowned']).default('one-owner'),
+      })
+      .strict()
+      .optional(),
+    smoothing: z
+      .object({
+        passes: z.number().int().min(0).max(20).default(4),
+        maxShareChange: z.number().min(0).max(1).default(0.15),
+      })
+      .strict()
+      .optional(),
+    shareTolerance: z.number().min(0.01).max(1).default(0.15),
+    seed: z.number().int().min(0).max(2_147_483_647).default(0),
+    ownership: z
+      .object({
+        controller: z.enum(['owner', 'keep']).default('owner'),
+        cores: z.enum(['keep', 'owner', 'add-owner']).default('keep'),
+        claims: z.enum(['keep', 'clear']).default('keep'),
+        unowned: z.enum(['clear', 'keep']).default('clear'),
+      })
+      .strict()
+      .optional(),
+    stateSize: z
+      .object({
+        min: z.number().int().min(1).max(1_000),
+        max: z.number().int().min(1).max(10_000).optional(),
+      })
+      .strict()
+      .optional()
+      .describe('Province unit: fragments below min provinces join a neighbour of the same owner.'),
+    remapReferences: z.enum(['refuse', 'override']).optional(),
+    borderQuality: borderQualityModeSchema.default('report'),
+    borderTargets: borderTargetsSchema.optional(),
+  })
+  .strict();
+const repartitionOperation = z
+  .object({
+    ...operationBase,
+    kind: z.literal('repartition_states'),
+    countries: z.array(tagSchema).min(1).max(512).optional(),
+    stateIds: z.array(stateId).max(100_000).optional(),
+    provincesPerState: z
+      .object({
+        min: z.number().int().min(1).max(1_000).optional(),
+        target: z.number().int().min(1).max(1_000).optional(),
+        max: z.number().int().min(1).max(10_000).optional(),
+      })
+      .strict()
+      .optional(),
+    remapReferences: z.enum(['refuse', 'override']).optional(),
+    borderQuality: borderQualityModeSchema.default('report'),
+    borderTargets: borderTargetsSchema.optional(),
+  })
+  .strict();
+
 export const mapOperationSchema = z.discriminatedUnion('kind', [
   z
     .object({
@@ -681,31 +849,24 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       ...operationBase,
       kind: z.literal('update_state'),
       stateId,
-      changes: z
-        .object({
-          capital: provinceId
-            .nullable()
-            .optional()
-            .describe(
-              'Assertion for the capital derived from the exact victoryPoints payload; never writes a state capital field',
-            ),
-          manpower: z.number().min(0).optional(),
-          category: z.string().min(1).optional(),
-          resources: nonnegativeMap.optional(),
-          stateBuildings: nonnegativeMap.optional(),
-          owner: z.string().min(1).nullable().optional(),
-          controller: z.string().min(1).nullable().optional(),
-          cores: z.array(z.string().min(1)).max(10_000).optional(),
-          claims: z.array(z.string().min(1)).max(10_000).optional(),
-          victoryPoints: z
-            .array(z.object({ provinceId, value: z.number().min(0) }).strict())
-            .max(100_000)
-            .optional(),
-          provinceBuildings: z.record(z.string().regex(/^\d+$/u), nonnegativeMap).optional(),
-        })
-        .strict(),
+      changes: stateChangesSchema,
     })
     .strict(),
+  z
+    .object({
+      ...operationBase,
+      kind: z.literal('update_states'),
+      updates: z
+        .array(z.object({ stateId, changes: stateChangesSchema }).strict())
+        .min(1)
+        .max(5_000)
+        .describe(
+          'One entry per state, each with the changes update_state takes. The whole list is one validated rewrite; a state may appear once.',
+        ),
+    })
+    .strict(),
+  territoryOperation,
+  repartitionOperation,
   splitStateOperation('split_state'),
   createStateOperation,
   z
@@ -858,6 +1019,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe(
           'Size bands and strengths of the feature-aware partition; refused with partition legacy.',
         ),
+      borderQuality: borderQualityModeSchema
+        .optional()
+        .describe(
+          'Measure how well the new world’s province, state, region and country borders follow rivers, slopes and shores. enforce blocks the write below the targets and needs the feature-aware partition; omitted measures nothing.',
+        ),
+      borderTargets: borderTargetsSchema.optional(),
       replaceBaseGame: z
         .boolean()
         .default(true)

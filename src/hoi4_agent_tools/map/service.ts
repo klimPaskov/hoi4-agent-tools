@@ -65,6 +65,12 @@ import {
 } from './render.js';
 import { validateMapAsync, type MapValidationResult } from './validation.js';
 import { buildWorldPreviewArtifacts, generatedWorldOperationIds } from './world-preview.js';
+import type { TerritoryReport } from './territory-operations.js';
+import {
+  evaluateTerritoryQuality,
+  territoryArtifactContent,
+  type TerritoryQuality,
+} from './territory-quality.js';
 
 export interface MapScanSnapshot {
   workspaceId: string;
@@ -122,6 +128,7 @@ interface PreparedMapOperations {
   validation: MapValidationResult;
   referenceImages: Array<{ operationId: string; bytes: Buffer; source: ReferenceSourceEvidence }>;
   geography: PreparedGeography[];
+  territory: { reports: TerritoryReport[]; quality: TerritoryQuality | undefined };
 }
 
 export interface MapValidationAttributionInput {
@@ -854,6 +861,7 @@ export class AgentNudger {
     includeExternalScriptReferences = false,
     includeWorldContext = false,
     includeAppearance = false,
+    includeBorderInputs = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -871,7 +879,9 @@ export class AgentNudger {
     const bitmapPatterns = provinceBitmapPatterns(
       selectorSnapshot.files,
       sourceRoots.map,
-      includeAppearance ? BORDER_BITMAP_SELECTORS : PROVINCE_BITMAP_SELECTORS,
+      includeAppearance || includeBorderInputs
+        ? BORDER_BITMAP_SELECTORS
+        : PROVINCE_BITMAP_SELECTORS,
     );
     const contentSnapshot = await this.engine.scan(
       workspaceId,
@@ -1059,6 +1069,11 @@ export class AgentNudger {
           'remapReferences' in operation,
       ),
       operations.some((operation) => operation.kind === 'create_world'),
+      false,
+      operations.some(
+        (operation) =>
+          operation.kind === 'assign_territory' || operation.kind === 'repartition_states',
+      ),
     );
     const referenceWorlds = new Map<string, PreparedReferenceWorld>();
     const referenceImages: PreparedMapOperations['referenceImages'] = [];
@@ -1125,6 +1140,28 @@ export class AgentNudger {
     // Model diagnostics (including warnings of a model that is otherwise usable) travel with the plan.
     for (const geography of geographyModels.values())
       plan.diagnostics.push(...geography.diagnostics);
+    // Border naturalness of what would be written, for the operations that ask for it.
+    const territoryQuality = await evaluateTerritoryQuality(plan, signal);
+    if (territoryQuality !== undefined) {
+      plan.diagnostics.push(...territoryQuality.diagnostics);
+      plan.blockers.push(...territoryQuality.blockers);
+      for (const report of plan.territory ?? []) {
+        const found = territoryQuality.operations.find(
+          ({ operationId }) => operationId === report.operationId,
+        );
+        if (found !== undefined)
+          report.borderQuality.verdicts = found.layers.map(
+            ({ layer, report: measured, check }) => ({
+              layer,
+              status: measured.status,
+              enrichment: measured.barrier.enrichment,
+              naturalShare: measured.natural.share,
+              straightFraction: measured.straightness.fraction,
+              passed: check.passed,
+            }),
+          );
+      }
+    }
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
     const freshWorld = newWorld && snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
     const baselineValidation = freshWorld
@@ -1157,6 +1194,7 @@ export class AgentNudger {
       validation: validationWithPlan(attributedValidation, plan),
       referenceImages,
       geography: [...geographyModels.values()],
+      territory: { reports: plan.territory ?? [], quality: territoryQuality },
     };
   }
 
@@ -1732,6 +1770,17 @@ export class AgentNudger {
         },
       );
     writes.push(...(await this.geographyArtifacts(prepared, options.signal, budget)));
+    if (prepared.territory.reports.length > 0 || prepared.territory.quality !== undefined)
+      writes.push({
+        name: 'map-territory-report.json',
+        mimeType: 'application/json',
+        content: `${canonicalJson(territoryArtifactContent(prepared.territory.reports, prepared.territory.quality))}\n`,
+        provenance: {
+          ...provenance,
+          kind: 'map-territory-report',
+          schemaVersion: 'map-territory.v1',
+        },
+      });
     const generatedWorlds = generatedWorldOperationIds(plan);
     if (generatedWorlds.size > 0)
       writes.push(

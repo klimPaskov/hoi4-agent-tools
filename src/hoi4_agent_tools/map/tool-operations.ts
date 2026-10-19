@@ -26,6 +26,7 @@ import {
   type MapAllocationRequest,
   type MapOperation,
 } from './operations.js';
+import { compactTerritoryReport } from './territory-operations.js';
 import { borderQualityDiagnostics, type BorderQualityReport } from './border-quality.js';
 import {
   measureIndexBorderNaturalness,
@@ -352,6 +353,9 @@ export async function prepareMapRewrite(
         semanticDiff: compactSemantic.semantic,
         semanticDiffCounts: compactSemantic.counts,
         semanticDiffTruncated: compactSemantic.truncated,
+        ...(planned.plan.territory === undefined
+          ? {}
+          : { territory: planned.plan.territory.map(compactTerritoryReport) }),
       }),
       filesScanned: planned.filesScanned,
       planBlockers: planned.plan.blockers
@@ -564,6 +568,9 @@ export async function previewMapRewrite(
     semanticDiff: compactSemantic.semantic,
     semanticDiffCounts: compactSemantic.counts,
     semanticDiffTruncated: compactSemantic.truncated,
+    ...(planned.plan.territory === undefined
+      ? {}
+      : { territory: planned.plan.territory.map(compactTerritoryReport) }),
     fileCount: planned.plan.changes.length,
     artifactCount: planned.artifacts.length,
     ...(input.operations.some(({ kind }) => kind === 'create_world') &&
