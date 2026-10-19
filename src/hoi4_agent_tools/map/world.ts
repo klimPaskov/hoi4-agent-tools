@@ -9,7 +9,19 @@ import { ServiceError } from '../core/result.js';
 import { createBmp, type RgbColor } from './bmp.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 import { generateWorldDrainage } from './world-drainage.js';
-import { generateWorldProvinces } from './world-provinces.js';
+import { generateWorldProvinces, type WorldProvinces } from './world-provinces.js';
+import {
+  clusterRegions,
+  clusterStates,
+  partitionWorldFromRequest,
+  type WorldPartition,
+} from './partition.js';
+import { smoothDiagonalContacts } from './partition-fields.js';
+import {
+  provinceCountNote,
+  surfacePartitionFields,
+  type WorldPartitionSpec,
+} from './world-partition.js';
 import { fractal, lattice } from './world-noise.js';
 import {
   calibratedColourMap,
@@ -31,6 +43,10 @@ import {
   type EdgeSpec,
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
+import type { ResolvedGeography } from './geography/index.js';
+import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
+import { synthesizeTerrain, type SynthesizedTerrain } from './relief/terrain-synthesis.js';
+import type { ReliefSettings } from './relief/macro-relief.js';
 
 export interface WorldCountry {
   tag: string;
@@ -74,9 +90,25 @@ export interface WorldSpec {
   edge?: EdgeSpec;
   /** Write the base map's north and south frame borders in `ambient_object.txt`. */
   ambientFrame?: boolean;
+  /**
+   * A resolved geography model (ADR 0056): land, relief and rivers are synthesised from it. The
+   * model must have been resolved for this map size. A reference picture, when given, still
+   * supplies the coast and the terrain classes.
+   */
+  geography?: ResolvedGeography;
+  relief?: Partial<ReliefSettings>;
+  /** Share of land pixels the river network covers (geography worlds); default 2%. */
+  riverDensity?: number;
+  /** Largest number of unnamed river systems (geography worlds); absent keeps every system. */
+  riverCount?: number;
   /** `legacy` keeps the original flat tints; `calibrated` follows ADR 0054. */
   colormapProfile?: ColourMapProfile;
   look?: WorldLook;
+  /**
+   * Opt-in feature-aware provinces, states and regions (ADR 0058). Absent or `legacy` keeps the
+   * warped Voronoi provinces and breadth-first clusters, byte for byte.
+   */
+  partition?: WorldPartitionSpec;
   /** Colour overrides by class for `look: 'custom'`. */
   colormapPalette?: Partial<Record<ColourClass, readonly [number, number, number]>>;
 }
@@ -121,6 +153,8 @@ export interface WorldNote {
 
 export interface GeneratedWorld {
   files: WorldFile[];
+  /** The synthesised terrain and its fields, for worlds built from a geography model (ADR 0056). */
+  terrain?: SynthesizedTerrain;
   warnings: string[];
   notes: WorldNote[];
   summary: {
@@ -140,7 +174,7 @@ export interface GeneratedWorld {
 // ---------------------------------------------------------------------------------------------
 // Deterministic randomness and noise
 
-class Random {
+export class Random {
   #state: number;
   constructor(seed: number) {
     this.#state = (seed ^ 0x9e3779b9) >>> 0;
@@ -315,11 +349,64 @@ function generateSurface(spec: WorldSpec, random: Random): Surface {
   return { kind, elevation, moisture };
 }
 
+/**
+ * Surface of a world described by a geography model: land and lakes from the model (or lakes laid
+ * over a reference picture's coast); elevation is filled in by the terrain synthesis later.
+ */
+function geographySurface(
+  spec: WorldSpec,
+  geography: ResolvedGeography,
+  reference: ReferenceWorldRaster | undefined,
+): Surface {
+  const { width, height } = spec;
+  const total = width * height;
+  const options = { width, height, seed: spec.seed };
+  let kind: Uint8Array;
+  let moisture: Float32Array;
+  if (reference === undefined) {
+    kind = rasterizeGeographyKind(geography, options);
+    moisture = new Float32Array(total);
+    const scale = Math.max(width, height) / 6;
+    for (let y = 0; y < height; y += 1)
+      for (let x = 0; x < width; x += 1)
+        moisture[y * width + x] = fractal(spec.seed + 7919, x, y, scale * 0.8, 4);
+  } else {
+    kind = new Uint8Array(reference.kind);
+    overlayGeographyLakes(kind, geography, options);
+    moisture = new Float32Array(reference.moisture);
+  }
+  return { kind, elevation: new Float32Array(total), moisture };
+}
+
+function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeography): WorldNote {
+  const { relief, riverStatistics } = terrain;
+  return {
+    code: 'MAP_RELIEF_SYNTHESIZED',
+    severity: 'info',
+    message: `Synthesised relief and rivers from the geography model: land height median ${relief.median}, 99th percentile ${relief.p99}, maximum ${relief.maximum}, mean step ${relief.meanStep.toFixed(2)} per half-resolution pixel; ${riverStatistics.count} rivers (${riverStatistics.named} named) on ${(riverStatistics.landShare * 100).toFixed(2)}% of the land`,
+    details: {
+      modelHash: geography.hash,
+      relief,
+      rivers: riverStatistics,
+      // The first of the named rivers only: the response budget is shared with everything else the
+      // world reports, and a river that did not complete is always listed.
+      namedRivers: terrain.rivers
+        .filter((river) => river.named && river.junction !== 'distributary')
+        .slice(0, 24)
+        .map(({ id, pixels, mouth, complete }) => ({ id, pixels, mouth, complete })),
+      incompleteRivers: terrain.rivers
+        .filter((river) => river.named && !river.complete)
+        .slice(0, 24)
+        .map(({ id }) => id),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Grouping provinces into regions and states
 
 /** Grow clusters of about `target` members over a graph from spread-out seeds. */
-function growClusters(
+export function growClusters(
   members: readonly number[],
   neighbors: (id: number) => Iterable<number>,
   target: number,
@@ -571,14 +658,29 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       'MAP_WORLD_REFERENCE_DIMENSIONS',
       'Reference raster dimensions do not match the world',
     );
+  const geography = spec.geography;
+  if (
+    geography !== undefined &&
+    (geography.frame.width !== width || geography.frame.height !== height)
+  )
+    throw new ServiceError(
+      'MAP_GEOGRAPHY_FRAME_MISMATCH',
+      'The geography model was resolved for a different map size than the world being created',
+      {
+        model: { width: geography.frame.width, height: geography.frame.height },
+        world: { width, height },
+      },
+    );
   const surface: Surface =
-    reference === undefined
-      ? generateSurface(spec, random)
-      : {
-          kind: new Uint8Array(reference.kind),
-          elevation: new Float32Array(reference.elevation),
-          moisture: new Float32Array(reference.moisture),
-        };
+    geography !== undefined
+      ? geographySurface(spec, geography, reference)
+      : reference === undefined
+        ? generateSurface(spec, random)
+        : {
+            kind: new Uint8Array(reference.kind),
+            elevation: new Float32Array(reference.elevation),
+            moisture: new Float32Array(reference.moisture),
+          };
   const notes: WorldNote[] = [];
   const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
   if (edge.mode !== 'none') {
@@ -607,27 +709,113 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       message: `${note.message} near (${note.x}, ${note.y})`,
       details: { pixels: note.pixels, x: note.x, y: note.y },
     });
-  const drainage = generateWorldDrainage({
-    width,
-    height,
-    kind: surface.kind,
-    elevation: surface.elevation,
-    seed: spec.seed,
-    count: spec.rivers,
-    ...(reference === undefined ? {} : { referenceRivers: reference.rivers }),
-  });
+  // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
+  // keeps the original elevation classes and drainage, byte for byte.
+  const synthesized =
+    geography === undefined
+      ? undefined
+      : synthesizeTerrain({
+          geography,
+          width,
+          height,
+          seed: spec.seed,
+          kind: surface.kind,
+          relief: spec.relief,
+          rivers: { density: spec.riverDensity, count: spec.riverCount },
+          adjustHeight:
+            edge.mode === 'rim'
+              ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+              : undefined,
+        });
+  if (synthesized !== undefined) {
+    for (const note of synthesized.notes) {
+      if (note.severity === 'error') throw new ServiceError(note.code, note.message, note.details);
+      notes.push({
+        code: note.code,
+        severity: note.severity,
+        message: note.message,
+        ...(note.details === undefined ? {} : { details: note.details }),
+      });
+    }
+    notes.push(terrainSummaryNote(synthesized, geography!));
+  }
+  const drainage =
+    synthesized === undefined
+      ? generateWorldDrainage({
+          width,
+          height,
+          kind: surface.kind,
+          elevation: surface.elevation,
+          seed: spec.seed,
+          count: spec.rivers,
+          ...(reference === undefined ? {} : { referenceRivers: reference.rivers }),
+        })
+      : {
+          riverPixels: synthesized.riverBitmap,
+          elevation: synthesized.elevation,
+          count: synthesized.riverStatistics.count,
+          warnings: [] as string[],
+        };
   surface.elevation = drainage.elevation;
-  const provinces = generateWorldProvinces({
-    width,
-    height,
-    seed: spec.seed,
-    kind: surface.kind,
-    elevation: surface.elevation,
-    moisture: surface.moisture,
-    landProvincePixels: spec.landProvincePixels,
-    seaProvincePixels: spec.seaProvincePixels,
-  });
+  let featurePartition: WorldPartition | undefined;
+  let provinces: WorldProvinces;
+  if (spec.partition?.mode === 'feature-aware') {
+    if (spec.partition.fields === undefined) {
+      // A coast that touches itself only at corners cannot be cut into valid provinces.
+      const smoothed = smoothDiagonalContacts(surface.kind, width, height);
+      for (const pixel of smoothed) {
+        const isLand = surface.kind[pixel] === LAND;
+        surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+        drainage.riverPixels[pixel] = isLand ? 255 : 254;
+      }
+      if (smoothed.length > 0)
+        notes.push({
+          code: 'MAP_PARTITION_MASK_SMOOTHED',
+          severity: 'info',
+          message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
+          details: { pixels: smoothed.length },
+        });
+    }
+    featurePartition = partitionWorldFromRequest(
+      spec.partition.fields ??
+        surfacePartitionFields({
+          width,
+          height,
+          kind: surface.kind,
+          elevation: surface.elevation,
+          moisture: surface.moisture,
+          riverPixels: drainage.riverPixels,
+          ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
+        }),
+      spec.seed,
+      spec.partition.tuning,
+      {
+        landProvincePixels: spec.landProvincePixels,
+        seaProvincePixels: spec.seaProvincePixels,
+        provincesPerState: spec.provincesPerState,
+        landProvincesPerRegion: spec.landProvincesPerRegion,
+        seaProvincesPerRegion: spec.seaProvincesPerRegion,
+      },
+    );
+    provinces = featurePartition.provinces;
+    for (const note of featurePartition.notes) notes.push(note);
+  } else
+    provinces = generateWorldProvinces({
+      width,
+      height,
+      seed: spec.seed,
+      kind: surface.kind,
+      elevation: surface.elevation,
+      moisture: surface.moisture,
+      landProvincePixels: spec.landProvincePixels,
+      seaProvincePixels: spec.seaProvincePixels,
+    });
   const count = provinces.kind.length;
+  const countNote = provinceCountNote(
+    count,
+    featurePartition === undefined ? 'legacy' : 'feature-aware',
+  );
+  if (countNote !== undefined) notes.push(countNote);
   const center = (id: number) => ({
     x: provinces.sumX[id]! / provinces.size[id]!,
     y: provinces.sumY[id]! / provinces.size[id]!,
@@ -961,8 +1149,14 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }
   // Strategic regions: land regions over the land graph, sea regions over the sea graph.
   const graph = (id: number) => provinces.neighbors[id]!;
-  const landRegion = growClusters(landIds, graph, spec.landProvincesPerRegion, random);
-  const seaRegion = growClusters(seaIds, graph, spec.seaProvincesPerRegion, random);
+  const landRegion =
+    featurePartition === undefined
+      ? growClusters(landIds, graph, spec.landProvincesPerRegion, random)
+      : clusterRegions(featurePartition, landIds, 'land');
+  const seaRegion =
+    featurePartition === undefined
+      ? growClusters(seaIds, graph, spec.seaProvincesPerRegion, random)
+      : clusterRegions(featurePartition, seaIds, 'sea');
   const regionOf = new Map<number, number>();
   const landRegionCount = Math.max(-1, ...landRegion.values()) + 1;
   for (const [id, region] of landRegion) regionOf.set(id, region + 1);
@@ -992,7 +1186,10 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const stateOf = new Map<number, StateDraft>();
   for (const key of [...groups.keys()].sort()) {
     const members = groups.get(key)!;
-    const clusters = growClusters(members, graph, spec.provincesPerState, random);
+    const clusters =
+      featurePartition === undefined
+        ? growClusters(members, graph, spec.provincesPerState, random)
+        : clusterStates(featurePartition, members);
     const byCluster = new Map<number, number[]>();
     for (const [id, cluster] of clusters) {
       const list = byCluster.get(cluster) ?? [];
@@ -1315,19 +1512,20 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // heightmap.bmp: sea below 95, land from 96 up. Lakes sit at the sea's interior height with a
   // one to two pixel translucent bank, so the water layer draws them opaque (ADR 0053).
   const landDistance = landDistanceField(surface.kind, width, height);
-  const heights = new Uint8Array(width * height);
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
-    const value = surface.elevation[pixel]!;
-    heights[pixel] =
-      surface.kind[pixel] === LAND
-        ? rimHeight(
-            Math.min(255, Math.round(96 + value * 110)),
-            rimStrength(edge, width, pixel % width),
-          )
-        : surface.kind[pixel] === LAKE
-          ? lakeHeight(landDistance[pixel]!)
-          : Math.max(60, Math.round(94 + value * 30));
-  }
+  const heights = synthesized?.heights ?? new Uint8Array(width * height);
+  if (synthesized === undefined)
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      const value = surface.elevation[pixel]!;
+      heights[pixel] =
+        surface.kind[pixel] === LAND
+          ? rimHeight(
+              Math.min(255, Math.round(96 + value * 110)),
+              rimStrength(edge, width, pixel % width),
+            )
+          : surface.kind[pixel] === LAKE
+            ? lakeHeight(landDistance[pixel]!)
+            : Math.max(60, Math.round(94 + value * 30));
+    }
   const grey = Array.from({ length: 256 }, (_, index) => ({ r: index, g: index, b: index }));
   add(
     `${map}/heightmap.bmp`,
@@ -1358,9 +1556,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     const id = provinces.pixel[pixel]!;
     const type = visualTerrain(pixel);
     const snowy =
-      reference === undefined
-        ? type === 'mountain' && latitude(id) > 0.7
-        : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
+      synthesized !== undefined
+        ? (synthesized.snow[pixel] === 1 || reference?.terrain[pixel] === 4) &&
+          surface.kind[pixel] === LAND
+        : reference === undefined
+          ? type === 'mountain' && latitude(id) > 0.7
+          : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
     const x = pixel % width;
     const rimmed = rimStrength(edge, width, x) > 0.35 && surface.kind[pixel] === LAND;
     let index = snowy
@@ -1504,28 +1705,42 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }),
     'image/bmp',
   );
-  // world_normal.bmp at half size from the height gradient.
+  // world_normal.bmp at half size. Geography worlds shade from the float height field at the
+  // base game's response; every other world from the quantised heights.
   const halfWidth = width / 2;
   const halfHeight = height / 2;
-  const normals = new Array<RgbColor>(halfWidth * halfHeight);
-  const heightAt = (x: number, y: number) =>
-    heights[Math.min(height - 1, Math.max(0, y)) * width + Math.min(width - 1, Math.max(0, x))]!;
-  for (let y = 0; y < halfHeight; y += 1)
-    for (let x = 0; x < halfWidth; x += 1) {
-      const dx = (heightAt(x * 2 + 2, y * 2) - heightAt(x * 2 - 2, y * 2)) / 4;
-      const dy = (heightAt(x * 2, y * 2 - 2) - heightAt(x * 2, y * 2 + 2)) / 4;
-      const length = Math.hypot(dx, dy, 8);
-      normals[y * halfWidth + x] = {
-        r: Math.round(128 - (dx / length) * 127),
-        g: Math.round(128 + (dy / length) * 127),
-        b: Math.round(128 + (8 / length) * 127),
-      };
-    }
-  add(
-    `${map}/world_normal.bmp`,
-    createBmp({ width: halfWidth, height: halfHeight, bitsPerPixel: 24, rgbPixels: normals }),
-    'image/bmp',
-  );
+  if (synthesized !== undefined)
+    add(
+      `${map}/world_normal.bmp`,
+      createBmp({
+        width: halfWidth,
+        height: halfHeight,
+        bitsPerPixel: 24,
+        rgbBytes: synthesized.normals,
+      }),
+      'image/bmp',
+    );
+  else {
+    const normals = new Array<RgbColor>(halfWidth * halfHeight);
+    const heightAt = (x: number, y: number) =>
+      heights[Math.min(height - 1, Math.max(0, y)) * width + Math.min(width - 1, Math.max(0, x))]!;
+    for (let y = 0; y < halfHeight; y += 1)
+      for (let x = 0; x < halfWidth; x += 1) {
+        const dx = (heightAt(x * 2 + 2, y * 2) - heightAt(x * 2 - 2, y * 2)) / 4;
+        const dy = (heightAt(x * 2, y * 2 - 2) - heightAt(x * 2, y * 2 + 2)) / 4;
+        const length = Math.hypot(dx, dy, 8);
+        normals[y * halfWidth + x] = {
+          r: Math.round(128 - (dx / length) * 127),
+          g: Math.round(128 + (dy / length) * 127),
+          b: Math.round(128 + (8 / length) * 127),
+        };
+      }
+    add(
+      `${map}/world_normal.bmp`,
+      createBmp({ width: halfWidth, height: halfHeight, bitsPerPixel: 24, rgbPixels: normals }),
+      'image/bmp',
+    );
+  }
   // Colour maps: land tint and city lights at half size; water at half, quarter and eighth.
   const tint: Record<string, RgbColor> = {
     plains: { r: 121, g: 133, b: 76 },
@@ -1931,6 +2146,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     files,
     warnings: [...interpretationWarnings, ...drainage.warnings],
     notes,
+    ...(synthesized === undefined ? {} : { terrain: synthesized }),
     summary: {
       width,
       height,

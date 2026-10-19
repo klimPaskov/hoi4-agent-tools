@@ -64,3 +64,5 @@ Implementation rationale for contributors. For using the server, start with the 
 55. [World edge and seam policy](0061-world-edge-and-seam-policy.md)
 56. [Geography model input for world generation](0055-geography-model-input.md)
 57. [Border naturalness metric and validator](0059-border-naturalness-metric.md)
+58. [Terrain relief and hydrology synthesis](0056-terrain-relief-and-hydrology-synthesis.md)
+59. [Feature-aware province, state and region partition](0058-feature-aware-province-state-and-region-partition.md)
