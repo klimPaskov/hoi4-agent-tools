@@ -4,7 +4,9 @@ import { sortDiagnostics } from '../core/diagnostics.js';
 import { assertRenderDimensions } from '../core/render-budget.js';
 import { addActiveMapDiagnostic, addMapDiagnostic } from './diagnostic-limit.js';
 import type { ValidationSummary } from '../core/result.js';
+import { validateAppearance } from './appearance-validation.js';
 import { rgbKey } from './bmp.js';
+import type { EdgeMode } from './world-edge.js';
 import { MAP_PROVINCE_ENGINE_MAX_PIXELS } from './model.js';
 import type {
   ProvinceDefinition,
@@ -20,6 +22,8 @@ export interface MapValidationOptions {
   expectedChangedBounds?: { minX: number; minY: number; maxX: number; maxY: number };
   baseline?: MapWorkspaceIndex;
   includeBaselineDiagnostics?: boolean;
+  /** The world edge policy of a world being created, which sets seam severities. */
+  edgeMode?: EdgeMode;
   signal?: AbortSignal;
 }
 
@@ -1343,6 +1347,12 @@ function* validateMapSteps(
   yield* cancellationCheckpoint(options.signal);
   yield* validatePositions(index, diagnostics, options);
   yield* cancellationCheckpoint(options.signal);
+  yield* validateAppearance(
+    index,
+    (diagnostic) => addDiagnostic(diagnostics, options, { ...diagnostic, category: 'map' }),
+    { signal: options.signal, edgeMode: options.edgeMode },
+  );
+  yield* cancellationCheckpoint(options.signal);
   const sorted = sortDiagnostics(diagnostics);
   const checks = [
     {
@@ -1408,6 +1418,18 @@ function* validateMapSteps(
             code.startsWith('MAP_ENTITY_LOCATOR')),
       ),
       message: 'Map positions, ports, and entity locators are valid',
+    },
+    {
+      id: 'map-appearance-files',
+      passed: !sorted.some(
+        ({ code, severity }) =>
+          (severity === 'error' || severity === 'blocker') &&
+          /^MAP_(RIVER|TERRAIN_BITMAP|HEIGHT|TREES|COLORMAP|WATER|NORMAL|CITIES|LAKE|EDGE|SEAM|POLAR)_/u.test(
+            code,
+          ),
+      ),
+      message:
+        'Heightmap, terrain, river, tree, colour, normal and city bitmaps, lakes and the world edge are valid',
     },
   ];
   const passed =

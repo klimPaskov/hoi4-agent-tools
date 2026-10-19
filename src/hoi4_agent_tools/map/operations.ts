@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
-import { compareCodeUnits, deterministicId, sha256Bytes } from '../core/canonical.js';
+import {
+  canonicalJson,
+  compareCodeUnits,
+  deterministicId,
+  sha256Bytes,
+} from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -43,10 +48,19 @@ import {
 } from './model.js';
 import { planReferenceRemap, ReferenceRemapError } from './references.js';
 import { generateWorld, type WorldCountry } from './world.js';
+import type { ColourClass } from './colormap.js';
+import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
-import type { WorldReferenceInput } from '../schemas/map.js';
+import type {
+  WorldColormapInput,
+  WorldEdgeInput,
+  WorldLookInput,
+  WorldReferenceInput,
+} from '../schemas/map.js';
+import type { GeographyModelInput } from '../schemas/geography.js';
+import type { PreparedGeography } from './geography/preparation.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -64,6 +78,8 @@ export interface PreparedReferenceWorld {
 
 export interface MapPlanningContext {
   referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
+  /** Geography models prepared and validated by the authorized workspace service. */
+  geographyModels?: ReadonlyMap<string, PreparedGeography>;
 }
 
 type MapOperationSteps<T> = Generator<void, T, void>;
@@ -464,9 +480,15 @@ export interface CreateWorldOperation extends MapOperationBase {
   seaProvincesPerRegion?: number;
   countries?: WorldCountry[];
   reference?: WorldReferenceInput;
+  geography?: GeographyModelInput;
+  geographyPath?: string;
   continentNames?: string[];
   startDate?: string;
   rivers?: number;
+  edge?: WorldEdgeInput;
+  ambientFrame?: boolean;
+  look?: WorldLookInput;
+  colormap?: WorldColormapInput;
   replaceBaseGame?: boolean;
 }
 
@@ -5448,12 +5470,41 @@ function descriptorWithReplacePaths(index: MapWorkspaceIndex, roots: readonly st
   );
 }
 
+function colormapPaletteOverrides(
+  palette: NonNullable<WorldColormapInput['palette']>,
+): Partial<Record<ColourClass, readonly [number, number, number]>> {
+  return Object.fromEntries(
+    Object.entries(palette).flatMap(([name, color]) =>
+      color === undefined ? [] : [[name, [color.r, color.g, color.b] as const] as const],
+    ),
+  );
+}
+
 function applyCreateWorld(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
   operation: CreateWorldOperation,
   context: MapPlanningContext,
 ): Diagnostic[] {
+  const geography = context.geographyModels?.get(operation.id);
+  if (operation.geography !== undefined || operation.geographyPath !== undefined) {
+    if (geography === undefined)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_NOT_PREPARED',
+        'Geography models must be prepared by the authorized workspace service',
+      );
+    if (!geography.valid)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_INVALID',
+        'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
+        { modelHash: geography.geography.hash },
+      );
+    throw new ServiceError(
+      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+      'The geography model is valid, but this version cannot synthesize relief, rivers or biomes from it yet; use preview:true to review the model overlay and report',
+      { modelHash: geography.geography.hash },
+    );
+  }
   const reference = context.referenceWorlds?.get(operation.id);
   if (operation.reference !== undefined && reference === undefined)
     throw new ServiceError(
@@ -5462,12 +5513,28 @@ function applyCreateWorld(
     );
   const mapRoot = base.sourceRoots.map[0] ?? 'map';
   const startingScenario = operation.startingScenario ?? reference !== undefined;
+  const worldWidth = operation.width ?? reference?.surface.width ?? 1_024;
+  const worldHeight = operation.height ?? reference?.surface.height ?? 512;
+  const edge = resolveEdge(operation.edge, worldWidth, worldHeight);
+  const look = operation.look;
+  const colormapProfile =
+    operation.colormap?.profile ?? (look === undefined ? 'legacy' : 'calibrated');
+  if (look === 'custom' && operation.colormap?.palette === undefined)
+    throw new ServiceError(
+      'MAP_LOOK_CUSTOM_PALETTE_REQUIRED',
+      'look "custom" needs colormap.palette with at least one class colour',
+    );
+  if (colormapProfile === 'legacy' && look !== undefined)
+    throw new ServiceError(
+      'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
+      'look selects a calibrated palette; remove colormap.profile "legacy" or look',
+    );
   const world = generateWorld(
     {
       startingScenario,
       ...(operation.worldName === undefined ? {} : { worldName: operation.worldName }),
-      width: operation.width ?? reference?.surface.width ?? 1_024,
-      height: operation.height ?? reference?.surface.height ?? 512,
+      width: worldWidth,
+      height: worldHeight,
       seed: operation.seed ?? 1,
       landCoverage: operation.landCoverage ?? 0.35,
       continents: operation.continents ?? 3,
@@ -5497,6 +5564,13 @@ function applyCreateWorld(
         : { continentNames: operation.continentNames }),
       startDate: operation.startDate ?? '1936.1.1',
       rivers: operation.rivers ?? (reference === undefined ? 8 : 80),
+      ...(edge.mode === 'none' ? {} : { edge }),
+      ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
+      colormapProfile,
+      ...(look === undefined ? {} : { look }),
+      ...(operation.colormap?.palette === undefined
+        ? {}
+        : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
   );
@@ -5563,6 +5637,14 @@ function applyCreateWorld(
       category: 'map',
       operationId: operation.id,
       message,
+    })),
+    ...world.notes.map((note): Diagnostic => ({
+      code: note.code,
+      severity: note.severity,
+      category: 'map',
+      operationId: operation.id,
+      message: note.message,
+      ...(note.details === undefined ? {} : { details: note.details }),
     })),
     ...(world.warnings.length === 0
       ? []
@@ -5726,6 +5808,23 @@ function applyEntityLocator(
   addChange(changes, locator.file.relativePath, output, operation.id, 'text/plain');
 }
 
+/**
+ * The operation as the transaction manifest records it. An inline geography model can hold
+ * megabytes; the manifest keeps its SHA-256 and size instead, which still bind the plan hash to
+ * the exact model, and a model given by path is bound by the file's read dependency.
+ */
+function manifestOperationData(operation: MapOperation): Record<string, unknown> {
+  const data = JSON.parse(JSON.stringify(operation)) as Record<string, unknown>;
+  if (operation.kind === 'create_world' && operation.geography !== undefined) {
+    const canonical = canonicalJson(operation.geography);
+    data.geography = {
+      sha256: sha256Bytes(canonical),
+      bytes: Buffer.byteLength(canonical, 'utf8'),
+    };
+  }
+  return data;
+}
+
 function* planMapOperationSteps(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
@@ -5755,7 +5854,7 @@ function* planMapOperationSteps(
       id: operation.id,
       kind: operation.kind,
       summary: operation.summary ?? operation.kind.replaceAll('_', ' '),
-      data: JSON.parse(JSON.stringify(operation)) as Record<string, unknown>,
+      data: manifestOperationData(operation),
     });
     const changesCheckpoint = new Map(
       [...changes].map(([key, change]) => [

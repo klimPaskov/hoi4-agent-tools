@@ -10,6 +10,27 @@ import { createBmp, type RgbColor } from './bmp.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 import { generateWorldDrainage } from './world-drainage.js';
 import { generateWorldProvinces } from './world-provinces.js';
+import { fractal, lattice } from './world-noise.js';
+import {
+  calibratedColourMap,
+  COLOUR_CLASSES,
+  type ColourClass,
+  type ColourMapProfile,
+  type WorldLook,
+} from './colormap.js';
+import {
+  ambientObjectText,
+  applyEdgePolicy,
+  assertFeaturesOutsideBand,
+  edgeWaterDarkness,
+  RIM_COLOUR_FACTOR,
+  rimAdjacencyRows,
+  rimHeight,
+  rimStrength,
+  type EdgeNote,
+  type EdgeSpec,
+} from './world-edge.js';
+import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
 
 export interface WorldCountry {
   tag: string;
@@ -49,6 +70,15 @@ export interface WorldSpec {
     y: number;
     kind: 'state' | 'country' | 'city' | 'sea' | 'region' | 'mountain' | 'geography';
   }>;
+  /** Resolved world edge policy (ADR 0061); absent keeps the previous behaviour. */
+  edge?: EdgeSpec;
+  /** Write the base map's north and south frame borders in `ambient_object.txt`. */
+  ambientFrame?: boolean;
+  /** `legacy` keeps the original flat tints; `calibrated` follows ADR 0054. */
+  colormapProfile?: ColourMapProfile;
+  look?: WorldLook;
+  /** Colour overrides by class for `look: 'custom'`. */
+  colormapPalette?: Partial<Record<ColourClass, readonly [number, number, number]>>;
 }
 
 /** Installed base-game data that makes generated files match the game's conventions. */
@@ -57,6 +87,16 @@ export interface WorldContext {
   /** Graphical terrain palette index for each provincial terrain type. */
   terrainIndex?: ReadonlyMap<string, number>;
   stateCategories?: ReadonlySet<string>;
+  /** Every graphical terrain entry of the active `common/terrain` files, by index. */
+  terrainEntries?: ReadonlyArray<{
+    name: string;
+    index: number;
+    type: string;
+    texture?: number;
+    permSnow: boolean;
+  }>;
+  /** Entries never chosen because the engine draws no atlas tile for them (`texture = 255`). */
+  unrenderedTerrain?: ReadonlyArray<{ name: string; index: number; type: string; reason: string }>;
   /** Existing identifiers remain declared for shared portrait and script references. */
   continentKeys?: readonly string[];
   inheritedCountryTags?: readonly string[];
@@ -71,9 +111,18 @@ export interface WorldFile {
   mediaType: string;
 }
 
+/** A diagnostic raised while generating; the planner reports it with its code. */
+export interface WorldNote {
+  code: string;
+  severity: 'warning' | 'info';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export interface GeneratedWorld {
   files: WorldFile[];
   warnings: string[];
+  notes: WorldNote[];
   summary: {
     width: number;
     height: number;
@@ -106,42 +155,6 @@ class Random {
   int(limit: number): number {
     return Math.floor(this.next() * limit);
   }
-}
-
-function lattice(seed: number, x: number, y: number): number {
-  let hash = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 982451653);
-  hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
-  return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296;
-}
-
-function smooth(t: number): number {
-  return t * t * (3 - 2 * t);
-}
-
-function valueNoise(seed: number, x: number, y: number): number {
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const tx = smooth(x - x0);
-  const ty = smooth(y - y0);
-  const a = lattice(seed, x0, y0);
-  const b = lattice(seed, x0 + 1, y0);
-  const c = lattice(seed, x0, y0 + 1);
-  const d = lattice(seed, x0 + 1, y0 + 1);
-  return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
-}
-
-function fractal(seed: number, x: number, y: number, scale: number, octaves = 5): number {
-  let total = 0;
-  let amplitude = 1;
-  let weight = 0;
-  let frequency = 1 / scale;
-  for (let octave = 0; octave < octaves; octave += 1) {
-    total += valueNoise(seed + octave * 101, x * frequency, y * frequency) * amplitude;
-    weight += amplitude;
-    amplitude *= 0.5;
-    frequency *= 2;
-  }
-  return total / weight;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -445,10 +458,26 @@ const DEFAULT_TERRAIN_INDEX = new Map<string, number>([
   ['mountain', 6],
   ['marsh', 9],
   ['urban', 13],
-  ['lakes', 14],
+  ['lakes', 15],
   ['ocean', 15],
   ['jungle', 21],
 ]);
+
+/**
+ * A graphical terrain index of the base game's numbering (farmland 5, sparse forest 4, mountain
+ * with grass 20), used only when the active terrain files confirm that index still has that
+ * category and draws a tile. Without any terrain files the base game's numbering is assumed.
+ */
+function terrainVariant(context: WorldContext, index: number, type: string): number | undefined {
+  const entries = context.terrainEntries;
+  if (entries === undefined) return context.terrainIndex === undefined ? index : undefined;
+  return entries.some(
+    (entry) =>
+      entry.index === index && entry.type === type && entry.texture !== 255 && !entry.permSnow,
+  )
+    ? index
+    : undefined;
+}
 
 /** Approximate seasonal weather: signed latitude is positive north of the equator. */
 function weatherBlock(signedLatitude: number, desert: boolean): string {
@@ -550,6 +579,34 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           elevation: new Float32Array(reference.elevation),
           moisture: new Float32Array(reference.moisture),
         };
+  const notes: WorldNote[] = [];
+  const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
+  if (edge.mode !== 'none') {
+    assertFeaturesOutsideBand(
+      edge,
+      width,
+      height,
+      (spec.referenceCities ?? []).map(({ name, x, y }) => ({ name, x, y, kind: 'city' })),
+    );
+    const applied = applyEdgePolicy(
+      surface.kind,
+      surface.elevation,
+      width,
+      height,
+      edge,
+      spec.seed,
+      Math.max(40, Math.round(spec.landProvincePixels / 4)),
+    );
+    notes.push(...applied.notes.map((note: EdgeNote): WorldNote => note));
+  }
+  // Lakes need a minimum size and may not touch the open sea (ADR 0053).
+  for (const note of normalizeLakes(surface.kind, surface.elevation, width, height))
+    notes.push({
+      code: note.code,
+      severity: 'warning',
+      message: `${note.message} near (${note.x}, ${note.y})`,
+      details: { pixels: note.pixels, x: note.x, y: note.y },
+    });
   const drainage = generateWorldDrainage({
     width,
     height,
@@ -1181,17 +1238,37 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       `continents = {\n${[...new Set([...continentNames.map((_, index) => `world_continent_${index + 1}`), ...(context.continentKeys ?? [])])].map((key) => `\t${key}`).join('\n')}\n}\n`,
     ),
   );
+  const rimRows =
+    edge.mode === 'rim'
+      ? rimAdjacencyRows({
+          provincePixels: provinces.pixel,
+          provinceKinds: provinces.kind,
+          width,
+          height,
+        })
+      : [];
+  if (rimRows.length > 0)
+    notes.push({
+      code: 'MAP_EDGE_RIM_ADJACENCIES',
+      severity: 'info',
+      message: `The rim edge policy wrote ${rimRows.length} impassable adjacency row(s) for provinces that meet across the seam`,
+      details: { rows: rimRows.length },
+    });
   add(
     `${map}/adjacencies.csv`,
     text(
-      'From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n-1;-1;;-1;-1;-1;-1;-1;-1\r\n',
+      `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n${rimRows.map((row) => `${row}\r\n`).join('')}-1;-1;;-1;-1;-1;-1;-1;-1\r\n`,
     ),
   );
   add(`${map}/adjacency_rules.txt`, text('# No straits or canals in this world yet.\n'));
   add(`${map}/positions.txt`, text(''));
   add(
     `${map}/ambient_object.txt`,
-    text('# No ambient objects: the base-game map frame does not fit this map.\n'),
+    text(
+      spec.ambientFrame === true
+        ? ambientObjectText(width, height)
+        : '# No ambient objects: the base-game map frame does not fit this map.\n',
+    ),
   );
   // City groups use palette 15 only for urban footprints. Water and undeveloped land stay 0.
   const cityPixels = new Uint8Array(width * height);
@@ -1235,15 +1312,20 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     const type = terrain.get(provinces.pixel[pixel]!) ?? 'plains';
     return type === 'urban' ? 'plains' : type;
   };
-  // heightmap.bmp: sea below 95, land from 96 up.
+  // heightmap.bmp: sea below 95, land from 96 up. Lakes sit at the sea's interior height with a
+  // one to two pixel translucent bank, so the water layer draws them opaque (ADR 0053).
+  const landDistance = landDistanceField(surface.kind, width, height);
   const heights = new Uint8Array(width * height);
   for (let pixel = 0; pixel < width * height; pixel += 1) {
     const value = surface.elevation[pixel]!;
     heights[pixel] =
       surface.kind[pixel] === LAND
-        ? Math.min(255, Math.round(96 + value * 110))
+        ? rimHeight(
+            Math.min(255, Math.round(96 + value * 110)),
+            rimStrength(edge, width, pixel % width),
+          )
         : surface.kind[pixel] === LAKE
-          ? 93
+          ? lakeHeight(landDistance[pixel]!)
           : Math.max(60, Math.round(94 + value * 30));
   }
   const grey = Array.from({ length: 256 }, (_, index) => ({ r: index, g: index, b: index }));
@@ -1254,7 +1336,24 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   );
   // terrain.bmp from province terrain, with snow on high-latitude mountains.
   const terrainIndex = context.terrainIndex ?? DEFAULT_TERRAIN_INDEX;
+  // Lake pixels use the ocean's graphical terrain: the lake entry names no atlas tile.
+  const lakeIndex = terrainIndex.get('lakes') ?? terrainIndex.get('ocean') ?? 15;
+  const calibrated = spec.colormapProfile === 'calibrated';
+  const farmlandIndex = calibrated ? terrainVariant(context, 5, 'plains') : undefined;
+  const sparseForestIndex = calibrated ? terrainVariant(context, 4, 'forest') : undefined;
+  const mountainGrassIndex = calibrated ? terrainVariant(context, 20, 'mountain') : undefined;
   const terrainPixels = new Uint8Array(width * height);
+  const colourClasses = calibrated ? new Uint8Array(width * height) : undefined;
+  const classCode = (name: ColourClass): number => COLOUR_CLASSES.indexOf(name);
+  const flatSlope = (x: number, y: number): boolean =>
+    Math.abs(
+      heights[y * width + Math.min(width - 1, x + 1)]! - heights[y * width + Math.max(0, x - 1)]!,
+    ) +
+      Math.abs(
+        heights[Math.min(height - 1, y + 1) * width + x]! -
+          heights[Math.max(0, y - 1) * width + x]!,
+      ) <=
+    2;
   for (let pixel = 0; pixel < width * height; pixel += 1) {
     const id = provinces.pixel[pixel]!;
     const type = visualTerrain(pixel);
@@ -1262,11 +1361,55 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       reference === undefined
         ? type === 'mountain' && latitude(id) > 0.7
         : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
-    terrainPixels[pixel] = snowy
+    const x = pixel % width;
+    const rimmed = rimStrength(edge, width, x) > 0.35 && surface.kind[pixel] === LAND;
+    let index = snowy
       ? reference === undefined
         ? 16
         : 19
-      : (terrainIndex.get(type) ?? DEFAULT_TERRAIN_INDEX.get(type) ?? 0);
+      : rimmed
+        ? 16
+        : type === 'lakes'
+          ? lakeIndex
+          : (terrainIndex.get(type) ?? DEFAULT_TERRAIN_INDEX.get(type) ?? 0);
+    let colour: ColourClass =
+      type === 'lakes' || type === 'ocean' || type === 'urban'
+        ? type === 'urban'
+          ? 'urban'
+          : type
+        : snowy || rimmed
+          ? 'snow'
+          : (type as ColourClass);
+    if (calibrated && !snowy && !rimmed && surface.kind[pixel] === LAND) {
+      // Variant graphical terrains by rule, so one class is not one flat texture.
+      const y = (pixel - x) / width;
+      if (
+        type === 'plains' &&
+        farmlandIndex !== undefined &&
+        surface.moisture[pixel]! >= 0.6 &&
+        flatSlope(x, y)
+      ) {
+        index = farmlandIndex;
+        colour = 'farmland';
+      } else if (
+        type === 'forest' &&
+        sparseForestIndex !== undefined &&
+        fractal(spec.seed + 7001, x, y, Math.max(16, width / 30), 3) < 0.42
+      )
+        index = sparseForestIndex;
+      else if (
+        type === 'mountain' &&
+        mountainGrassIndex !== undefined &&
+        surface.moisture[pixel]! > 0.45 &&
+        fractal(spec.seed + 7919, x, y, Math.max(16, width / 20), 3) > 0.5
+      )
+        index = mountainGrassIndex;
+    }
+    terrainPixels[pixel] = index;
+    if (colourClasses !== undefined) {
+      if (!COLOUR_CLASSES.includes(colour)) colour = 'plains';
+      colourClasses[pixel] = classCode(colour);
+    }
   }
   add(
     `${map}/terrain.bmp`,
@@ -1396,44 +1539,77 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     lakes: { r: 70, g: 96, b: 110 },
     ocean: { r: 50, g: 70, b: 92 },
   };
-  const colormap = new Uint8Array(halfWidth * halfHeight * 4);
-  for (let y = 0; y < halfHeight; y += 1)
-    for (let x = 0; x < halfWidth; x += 1) {
-      // DDS rows run top to bottom, like the bitmaps' top-left coordinates used here.
-      const source = y * 2 * width + x * 2;
-      const color = tint[visualTerrain(source)]!;
-      const shade = 0.85 + surface.moisture[source]! * 0.3;
-      const offset = (y * halfWidth + x) * 4;
-      colormap[offset] = Math.min(255, Math.round(color.b * shade));
-      colormap[offset + 1] = Math.min(255, Math.round(color.g * shade));
-      colormap[offset + 2] = Math.min(255, Math.round(color.r * shade));
-      colormap[offset + 3] = cityPixels[source] === 15 ? 200 : 0;
-    }
+  let colormap: Uint8Array;
+  if (colourClasses !== undefined) {
+    const lights = new Uint8Array(width * height);
+    for (let pixel = 0; pixel < lights.length; pixel += 1)
+      if (cityPixels[pixel] === 15) lights[pixel] = 200;
+    colormap = calibratedColourMap({
+      width,
+      height,
+      seed: spec.seed,
+      classes: colourClasses,
+      moisture: surface.moisture,
+      heights,
+      lights,
+      look: spec.look ?? 'vanilla-temperate',
+      ...(spec.colormapPalette === undefined ? {} : { overrides: spec.colormapPalette }),
+    });
+  } else {
+    colormap = new Uint8Array(halfWidth * halfHeight * 4);
+    for (let y = 0; y < halfHeight; y += 1)
+      for (let x = 0; x < halfWidth; x += 1) {
+        // DDS rows run top to bottom, like the bitmaps' top-left coordinates used here.
+        const source = y * 2 * width + x * 2;
+        const color = tint[visualTerrain(source)]!;
+        const shade = 0.85 + surface.moisture[source]! * 0.3;
+        const offset = (y * halfWidth + x) * 4;
+        colormap[offset] = Math.min(255, Math.round(color.b * shade));
+        colormap[offset + 1] = Math.min(255, Math.round(color.g * shade));
+        colormap[offset + 2] = Math.min(255, Math.round(color.r * shade));
+        colormap[offset + 3] = cityPixels[source] === 15 ? 200 : 0;
+      }
+  }
+  if (edge.mode === 'rim')
+    for (let y = 0; y < halfHeight; y += 1)
+      for (let x = 0; x < halfWidth; x += 1) {
+        const strength = rimStrength(edge, width, x * 2);
+        if (strength === 0 || surface.kind[y * 2 * width + x * 2] !== LAND) continue;
+        const factor = 1 - (1 - RIM_COLOUR_FACTOR) * strength;
+        const offset = (y * halfWidth + x) * 4;
+        colormap[offset] = Math.round(colormap[offset]! * factor);
+        colormap[offset + 1] = Math.round(colormap[offset + 1]! * factor);
+        colormap[offset + 2] = Math.round(colormap[offset + 2]! * factor);
+      }
   add(
     `${map}/terrain/colormap_rgb_cityemissivemask_a.dds`,
     encodeDds(halfWidth, halfHeight, colormap),
     'image/vnd-ms.dds',
   );
-  for (const level of [0, 1, 2]) {
-    const factor = 2 ** (level + 1);
-    const levelWidth = width / factor;
-    const levelHeight = height / factor;
-    const water = new Uint8Array(levelWidth * levelHeight * 4);
-    for (let y = 0; y < levelHeight; y += 1)
-      for (let x = 0; x < levelWidth; x += 1) {
-        const depth = Math.max(0, -surface.elevation[y * factor * width + x * factor]!);
-        const offset = (y * levelWidth + x) * 4;
-        water[offset] = Math.round(120 - depth * 50);
-        water[offset + 1] = Math.round(90 - depth * 40);
-        water[offset + 2] = Math.round(40 - depth * 20);
-        water[offset + 3] = 255;
-      }
+  // Water colour maps: sea tint by distance from land, lake tint with a shore gradient, and the
+  // darkest tint at the world edge (ADR 0053, 0061).
+  for (const level of [0, 1, 2])
     add(
       `${map}/terrain/colormap_water_${level}.dds`,
-      encodeDds(levelWidth, levelHeight, water),
+      encodeDds(
+        width / 2 ** (level + 1),
+        height / 2 ** (level + 1),
+        waterColourLevel(
+          {
+            width,
+            height,
+            kind: surface.kind,
+            landDistance,
+            seed: spec.seed,
+            ...(edge.mode === 'none'
+              ? {}
+              : { darken: (x, y) => edgeWaterDarkness(edge, width, height, x, y) }),
+          },
+          level,
+        ),
+      ),
       'image/vnd-ms.dds',
     );
-  }
   // Strategic regions with weather by latitude.
   const regionMembers = new Map<number, number[]>();
   for (const [id, region] of regionOf) {
@@ -1754,6 +1930,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   return {
     files,
     warnings: [...interpretationWarnings, ...drainage.warnings],
+    notes,
     summary: {
       width,
       height,

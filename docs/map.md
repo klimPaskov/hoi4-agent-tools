@@ -48,6 +48,58 @@ All annotation positions and polygons use normalized 0 to 1 coordinates relative
 
 Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side. The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
+## Describe a world as a geography model
+
+A reference picture says where land and water are. A geography model says what the world is: seas, lands, mountain ranges with passes, volcanoes, rivers from a lake to a sea, lakes, forests and deserts, straits, sites and climate, each with an id and a name. `create_world` accepts one as `geography` (inline) or `geographyPath` (a workspace-relative `.json` file of at most 4 MiB; prefer the file for anything beyond a few hundred vertices). It may stand alone or accompany a `reference` picture. [geography-model.schema.json](../schemas/geography-model.schema.json) is the complete schema; [ADR 0055](adr/0055-geography-model-input.md) records the design.
+
+Preview it before anything else:
+
+```json
+{
+  "preview": true,
+  "operations": [
+    {
+      "kind": "create_world",
+      "width": 5120,
+      "height": 2560,
+      "geographyPath": "geography/world.json"
+    }
+  ]
+}
+```
+
+The preview validates the model, resolves its ids and areas, and returns `map-geography-overlay.png` (every feature drawn with its id; defects outlined in red for errors and orange for warnings) and `map-geography-report.json` (resolved ids, areas in frame units and pixels, lengths, resolved references, climate and every diagnostic), with a summary in `data.geography`. It reads only the model: no map is planned and no mod file changes. The overlay is an offline drawing, not a game screenshot.
+
+**World synthesis from the model is not available yet.** A request without `preview` loads and validates the model and is then blocked with `MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE` (or `MAP_GEOGRAPHY_INVALID` when the model has errors); nothing is written. Relief, rivers, climate and biomes are generated from the model by later stages.
+
+A model is one object with `"version": 1` and any of these arrays. Unknown keys are refused.
+
+| Array       | Feature and main fields                                                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seas`      | `polygons` (outer rings), optional `holes`, `depthClass` (`shelf`, `open`, `abyss`), `ice` 0 to 1, `kind` (`ocean`, `sea`, `gulf`, `fjord`)                                                                                       |
+| `lands`     | `polygons`, `holes`, `kind` (`continent`, `island`, `archipelago`, `peninsula`), `region`, default `biome` and `fertility`, `elevationBase`, `coastDetail`                                                                        |
+| `regions`   | `polygons` (optional), `terrain` target shares, `density` (`provincesPerState` as `[smallest, usual, largest]`, `provinceAreaPx`)                                                                                                 |
+| `ranges`    | `path` (points, each optionally with `halfWidth` and `peak`), `closed`, `halfWidth`, `peak`, `profile` (`ridge`, `massif`, `escarpment`, `wall`), `asymmetry`, `snowline`, `spurs`, `barrier` (`none`, `impassable`, `fort-line`) |
+| `passes`    | `range` with `at` (0 to 1 along the range), or a `position` point (the range is found for you), `width`, `depth`, `fort` 0 to 5                                                                                                   |
+| `volcanoes` | `at`, `radius`, `peak`, `crater`, `active`                                                                                                                                                                                        |
+| `plateaus`  | `polygons`, `height` (a low value makes a basin or chasm), `edge` (`cliff`, `ramp`)                                                                                                                                               |
+| `rivers`    | `source` (point or `{lake}`), `mouth` (point, `{sea}`, `{lake}` or `{river}` for a tributary), `via` points, `size` 1 to 5, `delta`                                                                                               |
+| `lakes`     | `polygons` or `center` with `radius`, `depthClass`, `outflow` (a river id), `gameplay` (`lake`, `inland-sea`)                                                                                                                     |
+| `biomes`    | `kind` (`forest`, `desert`, `marsh`, `ice`, `plains`, `farmland`, `jungle`, `steppe`, `tundra`, `hills`), `polygons`, `density`, `fertility`, `z` priority                                                                        |
+| `straits`   | `between` (two points on land or `{land}` ids), a `path` through the water, or both; `rule` (`open`, `army-closed`, `navy-closed`), `width`                                                                                       |
+| `sites`     | `kind` (`capital`, `city`, `fortress`, `port`, `ruin`, `temple`, `mine`, `landmark`), `at`, `importance` 1 to 5, `country`, `onWater`, `lake`                                                                                     |
+| `roads`     | `path`, `importance` 1 to 3                                                                                                                                                                                                       |
+| `places`    | `kind` (`cape`, `bay`, `gulf`, `peninsula`, `reef`, `landmark`, `other`), `at`: a name for later naming stages, on any surface                                                                                                    |
+| `climate`   | `windFrom` (compass bearing the wind comes from), `temperature` (`warm` and `cold` degrees Celsius), `warmBandY`, `rainScale`, `seasonality`                                                                                      |
+
+Every feature also takes `id` (letters, digits, `_`, `.`, `-`; unique across the whole model), `name`, `tags` and `note`. Coordinates are normalised to the whole world frame, origin top left, x east and y south, like `reference.labels`; a point is `{"x":0.3,"y":0.4}` or `[0.3, 0.4]`. Lengths (`radius`, `halfWidth`, `width`) are fractions of the map width, so a circle stays round at any aspect ratio. Heights (`peak`, `height`, `elevationBase`) are 0 to 1 of the relief scale. A polygon has 3 to 2,000 vertices, a path 2 to 2,000; a model has at most 4,000 features and 200,000 vertices and points. Order does not matter: features are sorted by id, rings oriented and defaults filled, and the report carries a `modelHash` that is the same for the same world however it was written.
+
+A model that needs an edit is reported by `MAP_GEOGRAPHY_*` diagnostics that name the feature. Errors: `ID_DUPLICATE`, `RING_DEGENERATE`, `RING_SELF_INTERSECTION`, `POLYGONS_OVERLAP`, `HOLE_OUTSIDE`, `HOLES_WITHOUT_POLYGONS`, `REF_UNKNOWN`, `REF_KIND`, `PASS_SHAPE`, `PASS_OFF_RANGE`, `RIVER_SOURCE_NOT_LAND`, `RIVER_MOUTH_NOT_WATER`, `RIVER_CYCLE`, `LAKE_SHAPE`, `LAKE_NOT_IN_LAND`, `LAKE_OUT_OF_FRAME`, `VOLCANO_NOT_ON_LAND`, `VOLCANO_CRATER_RADIUS`, `STRAIT_SHAPE`, `STRAIT_ENDPOINT`, `STRAIT_SAME_LAND`, `SITE_IN_WATER`, `BIOME_CONFLICT` (different kinds overlap at the same `z`), `BIOME_OVER_WATER`, `PATH_DEGENERATE`, `CLIMATE_TEMPERATURE_ORDER`, `REGION_DENSITY_ORDER`, `NO_LAND` (no lands and no reference picture), `LIMIT_FEATURES` and `LIMIT_POINTS`. Warnings: `LAND_OVERLAP`, `SEA_OVER_LAND`, `LAKE_TOO_SMALL`, `LAKE_OUTFLOW_MISMATCH`, `PASS_OVERLAP`, `VOLCANO_OVERLAP`, `RANGE_ON_WATER`, `PATH_SELF_INTERSECTION`, `RIVER_VIA_NOT_LAND`, `STRAIT_PATH_ON_LAND`, `STRAIT_NO_WATER`, `SITE_DUPLICATE_POSITION`, `REGION_EMPTY`, `REGION_TERRAIN_SUM`, `NAME_DUPLICATE`, `RING_DUPLICATE_VERTEX`, `PATH_DUPLICATE_VERTEX`, `FEATURE_IN_EDGE_BAND` and `DIAGNOSTICS_TRUNCATED` (more than 1,000 findings; the worst severity is kept). A file that cannot be used at all fails the call instead, with `MAP_GEOGRAPHY_PATH_INVALID`, `SOURCE_TOO_LARGE`, `JSON_INVALID`, `SCHEMA_INVALID` or `SOURCE_AMBIGUOUS`. A point within 0.003 map widths of a coast counts as land, so a river mouth or a port drawn on the shore does not fail on a simplified coastline; the error for an inland mouth reports its `inlandDistance` so it can be snapped.
+
+`FEATURE_IN_EDGE_BAND` marks land, plateaus, ranges, volcanoes, sites, passes and river points inside `max(192 pixels, 4% of the width)` east and west or 64 pixels north and south of the frame, because the game wraps the map horizontally. Until the `edge` option exists it is a warning.
+
+`geographyPath` follows the rules of `reference.imagePath`: relative paths inside the authorized mod workspace only; URLs, absolute paths, traversal, symlink and junction escapes are refused; the file is read once, its SHA-256 is taken from the bytes that are parsed, and a change after preparation blocks the write as stale. A file that is not JSON or does not match the schema is an error, not a partial preview. CI models are synthetic and project-owned.
+
 ## Inspect and navigate the complete map
 
 `hoi4.map_inspect` finds map problems and returns a full-map PNG plus a searchable, clickable HTML navigator by default. The navigator supports pan, zoom, fit-to-map, search by numeric ID, localisation key, or localised name, and exact click lookup for province, state, and strategic-region IDs. Hovering reports both top-left bitmap coordinates and bottom-left HOI4 map coordinates.
@@ -71,14 +123,51 @@ Set `lookupOnly: true` for coordinate, query, and selected-ID lookups without fu
 | `lookupOnly`         | `false`                          | Return only the requested lookups, as described above.                                                                                                                                                                  |
 | `includeOverview`    | `true`                           | Render the full-map PNG and navigator; set `false` to skip the overview render.                                                                                                                                         |
 | `allocationRequests` | `[]`, at most 100                | Preview the next free identifiers: `{ "kind": "state", "requestedId"? }` or `{ "kind": "province", "requestedId"?, "requestedColor"? }`, where `requestedColor` is `{ "r", "g", "b" }`. Not accepted with `lookupOnly`. |
+| `quality`            | `false`                          | Also measure border naturalness (see [Border naturalness](#border-naturalness)). Full inspection only; not accepted with `lookupOnly` or a rendered view.                                                               |
 
-Give `hoi4.map_inspect` a `layer`, `overlays`, `scale`, `tile` or `area` to render that view instead of validating; the result is the same complete catalog and navigator drawn with the chosen base layer and overlays, and lookups (`query`, `coordinates`, IDs) belong in a separate call. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, and building, unit, and weather positions.
+Give `hoi4.map_inspect` a `layer`, `overlays`, `scale`, `tile` or `area` to render that view instead of validating; the result is the same complete catalog and navigator drawn with the chosen base layer and overlays, and lookups (`query`, `coordinates`, IDs) belong in a separate call. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, building, unit, and weather positions, and `border-quality` (see [Border naturalness](#border-naturalness)).
 
 A rendered view takes `layer` (default `province`), up to 12 `overlays`, and an integer `scale` from 1 to 16 (default 1).
 
 Pass `tile: { x, y, width, height }` for a reusable bounded PNG, JSON, and HTML view of one top-left bitmap area. The tile preserves the selected base layer and overlays, and its JSON records raster dimensions and province IDs in the area. Identical source revisions and render settings produce identical artifact hashes.
 
 Pass `area: { provinceIds, stateIds, regionIds, padding }` to render the exact bounding area of those map entities with optional pixel padding. The result reports the resolved tile coordinates. An unknown ID or an area larger than 2,048 pixels in either direction is explicit, so a narrower selection can be requested.
+
+## Border naturalness
+
+A map can be structurally valid and still look artificial because its borders ignore the land. `hoi4.map_inspect` with `quality: true` measures how well province, state, strategic-region and country borders follow natural lines, and the `border-quality` overlay shows where they do not. The measurement is offline, deterministic and bounded; it reads `provinces.bmp` and the definitions, the states and regions, and (when present and the size of the province map) `heightmap.bmp`, `rivers.bmp` and `terrain.bmp` with the `common/terrain` entries. A bitmap that is absent or of another size is skipped, listed in `data.quality.skippedInputs` and reported as `MAP_BORDER_INPUT_MISSING`.
+
+A **border** is a land-to-land pixel edge between two different groups of provinces (the east-west seam counts); the coast is counted apart. A border lies on a **natural feature** when it is within 2 pixels of a river, within 1 pixel of a steep height gradient (central difference of at least 2 per pixel), within 1 pixel of a lake, or within 1 pixel of a change between obstacle terrain classes (mountain, forest, jungle, marsh) in `terrain.bmp`. Each layer reports:
+
+| Field                    | Meaning                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `alignment`              | Share of border length in the barrier set (rivers, slopes, lake shores).                                                                                                                      |
+| `baseRate`, `enrichment` | Share of all land on the same features, and `alignment / baseRate`. 1 is chance; vanilla is 1.35 to 1.46, the engineering target 1.6. Null (`not-meaningful`) when the base rate is under 2%. |
+| `naturalShare`           | The plain share of border length on any natural feature, terrain changes included; `naturalShareWithCoast` also counts the coast as a natural line.                                           |
+| `straightFraction`       | Share of samples (every seventh border pixel) whose 24-pixel window of the same border is a straight line (RMS under 0.9 pixel). Vanilla country borders 0.11, target at most 0.12.           |
+| `longRunShare`           | Share of border length in straight segments longer than 60 pixels after simplification (tolerance 3).                                                                                         |
+| `artificialRuns`         | Count and longest length of stretches that follow no feature.                                                                                                                                 |
+| `worstRuns`              | The longest artificial runs (three inline, twenty in the artifact) with both sides, ends, length and chord, so a fix can target them.                                                         |
+
+`MAP_BORDER_ARTIFICIAL_REVIEW` (warning) names a layer below the targets (enrichment 1.6 for every layer; straightness 0.12 for region and country, 0.25 for state, none for province because province borders are shorter than the window). `MAP_BORDER_NOT_MEANINGFUL` (info) means the map has almost no rivers or slopes to align to. `MAP_BORDER_QUALITY_UNAVAILABLE` (warning) means the map has no raster or exceeds the border-edge budget (8 million edges; a vanilla-size map has about 0.4 million). These diagnostics never fail validation. The complete report is the artifact `map-border-quality.<revision>.json`.
+
+Measured with this implementation (the plan's script gave the enrichment values in brackets):
+
+| Map                                           | Layer    | Enrichment  | Natural share | Straight samples |
+| --------------------------------------------- | -------- | ----------- | ------------- | ---------------- |
+| Installed vanilla 1.19.3 (earliest bookmark)  | province | 1.35 (1.37) | 0.69          | 0.67             |
+|                                               | state    | 1.40 (1.42) | 0.70          | 0.20             |
+|                                               | region   | 1.39        | 0.70          | 0.11             |
+|                                               | country  | 1.46 (1.53) | 0.73          | 0.11 (0.093)     |
+| ZIN map of 2026-10-18                         | province | 0.94 (0.94) | 0.08          | 0.99             |
+|                                               | state    | 0.70 (0.69) | 0.07          | 0.37             |
+|                                               | region   | 0.59        | 0.06          | 0.13             |
+|                                               | country  | 0.50 (0.52) | 0.09          | 0.22 (0.178)     |
+| Procedural `create_world`, 1024 x 512, seed 7 | state    | 1.03        | 0.32          | 0.24             |
+
+A 13.1 million pixel map takes about 1.5 seconds and 100 MB of additional memory. The ZIN rows use the installed game's `common/terrain` for the terrain classes. The last row is the repository's own procedural output: its borders sit at chance level against rivers and slopes, which is what the metric exists to show. The same functions are available to other code: `measureBorderNaturalness` for a full report, `buildBorderEdgeTable` and `scoreBorderAssignment` to score many candidate groupings of provinces without reading the raster again, and `checkBorderTargets` for an acceptance check such as the ZIN rule that at least 85% of state-border length and 70% of country-border length follows nature (vanilla itself reaches 0.70 and 0.73 with the default feature radii, so fix the radii in the check).
+
+The `border-quality` overlay is added to any base layer (state is the natural choice): state borders are green where they follow a feature and orange where they do not, and the worst artificial run of each layer is drawn two pixels wide (province white, state red, region yellow, country magenta). It works with `tile` and `area`, and scans the river and terrain bitmaps for that render only.
 
 ## Catalog consistency
 
@@ -273,11 +362,71 @@ Keys that take exactly one value (`capital`, `state`, `to_state`, `start_state`,
 }
 ```
 
-Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea. Provinces grow evenly from spread seeds (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
+Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
+
+## Water, colour and the world edge
+
+Three behaviours shape how a generated map looks in the game. The tool computes them offline from the engine's own formulas; it never runs the game, so the first in-game look still needs your review.
+
+### Lakes
+
+The engine draws water everywhere with an opacity that depends on the heightmap: a pixel at height 91 or lower is fully opaque, 93 is 56% opaque and 95 or higher is invisible. Every `create_world` therefore writes lake interiors at the sea height 89, with a one to two pixel bank toward the shore (93, then 91), and gives lake pixels the graphical terrain of the ocean (index 15 in the base game). A graphical terrain entry with `texture = 255`, such as the base game's `lakes` entry, names no atlas tile and is never chosen for a category.
+
+Water that does not read as a lake is not written as one. Enclosed water below 60 pixels becomes land (`MAP_LAKE_TOO_SMALL`), and lake water that touches the open sea becomes sea (`MAP_LAKE_CONNECTED_TO_SEA`). Both appear as warnings with the pixel count and a location, so a reference picture's pond is never silently lost. The water colour maps use a shelf-to-deep gradient fitted to the base game and a lighter lake tint. This changes the output of every request that has lakes; the old output was a defect (see the changelog).
+
+### Colour map and graphical terrain
+
+`colormap.profile` is `legacy` (the original flat tints, kept so existing requests do not change) or `calibrated`. `look` (`vanilla-temperate`, `fertile`, `arid` or `custom`) chooses a palette set and selects the calibrated profile; `custom` needs `colormap.palette` with `{ "plains": { "r", "g", "b" }, ... }` for any of plains, farmland, forest, hills, desert, mountain, marsh, jungle, snow, urban, lakes and ocean. The calibrated map follows the base game's measurements (land mean value about 74, over a thousand distinct colours): dark class colours varied by low-frequency noise, hillshade, wetness and a slow hue drift, with permanent snow tinted as snow instead of plains. It also writes farmland (index 5) on wet flat plains, sparse forest (4) in thinned forest and grassy mountain (20) on wet mountains, when the active terrain files define those indices.
+
+```json
+{
+  "id": "world",
+  "kind": "create_world",
+  "reference": { "imagePath": "references/world.png" },
+  "look": "fertile",
+  "edge": {},
+  "ambientFrame": true
+}
+```
+
+### The world edge
+
+The engine wraps the map horizontally, so land that touches the first or last column is cut by a straight line where the world repeats. Without `edge` nothing changes and validation reports `MAP_EDGE_LAND_CUT` for such rows. With `edge`:
+
+| `edge` field | Default                                                     | Meaning                                                                                                                                                                            |
+| ------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`       | `sea-band` when `edge` is given                             | `sea-band` clears land from the east and west edges and the poles to open sea with a ragged outline; `rim` ends land at the seam in an impassable snow range; `none` opts out.     |
+| `bandPx`     | `max(192, 4% of the width)`, at most a quarter of the width | East and west sea band.                                                                                                                                                            |
+| `polarPx`    | 64, at most a quarter of the height                         | North and south sea band.                                                                                                                                                          |
+| `rimPx`      | 160, at most a quarter of the width                         | Width of the rim range for `rim`. Heights rise from 150 to 230, the colour map darkens and `adjacencies.csv` gets one `impassable` row per pair of land provinces across the seam. |
+
+A band wider than a quarter of the world is refused (`MAP_EDGE_BAND_TOO_WIDE`). A city inside a band that would be cleared is an error (`MAP_EDGE_FEATURE_IN_BAND`) naming it; land that is cleared is reported with its pixel count (`MAP_EDGE_LAND_CLEARED`). `ambientFrame: true` writes the north and south frame borders and the logo frame into `ambient_object.txt` at the base map's positions scaled to the world height (the north frame at `z = height + 142`, the south frame at `z = -140`); by default the file is a comment, which drops the frame. The wrap cannot be removed with data; the band makes it invisible and the rim makes it a wall. Which looks better in the game is for you to judge with a probe map. Rivers are routed before the rim is raised, so keep them out of a rim.
+
+### Appearance validation
+
+`hoi4.map_inspect` and every `create_world` check the files that decide the look, for the files the mod ships: `heightmap.bmp`, `terrain.bmp`, `rivers.bmp`, `trees.bmp`, `cities.bmp`, `world_normal.bmp` and the colour maps. Format and size defects are errors; statistical deviations are warnings. Severities are set so the installed base game raises no error.
+
+| Code                                                                                   | Severity         | Meaning                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MAP_LAKE_SURFACE_TOO_HIGH`                                                            | error or warning | Lake pixels above height 91 away from the shore; an error when more than 5% of the lake.                                                                                       |
+| `MAP_LAKE_TEXTURE_UNRENDERED`                                                          | error            | A pixel uses a graphical terrain with `texture = 255`.                                                                                                                         |
+| `MAP_LAKE_TOO_SMALL`, `MAP_LAKE_CONNECTED_TO_SEA`, `MAP_HEIGHT_LAKE_ABOVE_SURFACE`     | warning          | A lake body under 60 pixels, a lake province bordering the sea, lake pixels at or above the water surface.                                                                     |
+| `MAP_HEIGHT_FORMAT`, `_SIZE`, `_LAND_BELOW_COAST`, `_SEA_ABOVE_SURFACE`, `_SEAM_STEP`  | error or warning | Heightmap depth and size, land under 94, sea above 94 and a step between the first and last column.                                                                            |
+| `MAP_TERRAIN_BITMAP_FORMAT`, `_SIZE`, `_INDEX_UNDEFINED`                               | error or warning | Terrain bitmap depth, size and palette indices no `common/terrain` entry defines (an error when widespread).                                                                   |
+| `MAP_RIVER_FORMAT`, `_SIZE`, `_INDEX_INVALID`, `_BLOCK`                                | error            | River bitmap depth, size, indices other than 0 to 11, 254 and 255, and 2 x 2 blocks of river pixels (a warning when rare).                                                     |
+| `MAP_RIVER_PALETTE_COUNT`, `_NOT_ORTHOGONAL`, `_SOURCE_COUNT`, `_ON_WATER`, `_DENSITY` | warning          | Header colour count other than 0, pixels with no orthogonal river neighbour, rivers without exactly one source, river pixels on sea, more than 2.5% of land or 130,000 pixels. |
+| `MAP_TREES_FORMAT`, `_SIZE`, `_INDEX_INVALID`, `_ON_WATER`                             | error or warning | Tree bitmap depth, size (75/256 of the map), indices beyond the palette and trees over open water.                                                                             |
+| `MAP_COLORMAP_SIZE`                                                                    | error            | A colour map that is not half (land) or 1/2, 1/4, 1/8 (water) of the province map.                                                                                             |
+| `MAP_COLORMAP_RANGE`, `MAP_WATER_COLORMAP_FLAT`                                        | warning          | Land mean value outside 50 to 100, fewer than 400 distinct 5-bit colours or a deviation under 15; a flat water map.                                                            |
+| `MAP_NORMAL_SIZE`, `_NOT_UNIT`, `_RESPONSE`, `MAP_CITIES_SIZE`, `_INDEX_UNDEFINED`     | error or warning | Normal map size and unit length, its response to the height step (the base game's is about 2.6) and the city map.                                                              |
+| `MAP_EDGE_LAND_CUT`                                                                    | warning or error | Land on the first or last column; an error when the world was created with `sea-band`.                                                                                         |
+| `MAP_SEAM_LAND_ADJACENCY`, `MAP_POLAR_LAND`, `MAP_COLORMAP_ALPHA_CITY`                 | info             | Land provinces that meet across the seam (and how many are blocked), land in the top and bottom rows, city lights over water.                                                  |
+
+Not implemented: a check that river widths never narrow downstream (it needs a flow direction the file does not hold), and a mesh check for `trees.bmp` beyond the declared palette. Bitmaps are read in row strips and validation yields between strips, so a 13-million-pixel map stays cancellable and within memory.
 
 ## Worked example: build a world, then reshape it
 

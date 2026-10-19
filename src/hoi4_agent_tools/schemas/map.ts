@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-budget.js';
 import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
 import { workspaceRelativePathSchema } from './common.js';
+import { geographyModelSchema, geographyPathSchema } from './geography.js';
 
 const identifier = z.string().min(1).max(256);
 // eslint-disable-next-line no-control-regex -- portable JSON Schema pattern rejects grammar-breaking controls.
@@ -116,6 +117,88 @@ export const worldReferenceSchema = z
     'Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement.',
   );
 export type WorldReferenceInput = z.infer<typeof worldReferenceSchema>;
+
+/** World edge and seam policy (ADR 0061). Omit `edge` to keep land and sea as drawn. */
+export const worldEdgeSchema = z
+  .object({
+    mode: z
+      .enum(['sea-band', 'rim', 'none'])
+      .optional()
+      .describe(
+        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam; none keeps the picture and warns about land cut by the wrapping seam.',
+      ),
+    bandPx: z
+      .number()
+      .int()
+      .min(8)
+      .max(2_048)
+      .optional()
+      .describe(
+        'East and west sea band in pixels; default max(192, 4% of the width), at most a quarter of the width.',
+      ),
+    polarPx: z
+      .number()
+      .int()
+      .min(0)
+      .max(1_024)
+      .optional()
+      .describe('North and south sea band in pixels; default 64, at most a quarter of the height.'),
+    rimPx: z
+      .number()
+      .int()
+      .min(16)
+      .max(2_048)
+      .optional()
+      .describe(
+        'Rim range width in pixels for mode rim; default 160, at most a quarter of the width.',
+      ),
+  })
+  .strict();
+export type WorldEdgeInput = z.infer<typeof worldEdgeSchema>;
+
+export const worldLookSchema = z
+  .enum(['vanilla-temperate', 'fertile', 'arid', 'custom'])
+  .describe(
+    'Colour palette set for the calibrated land colour map: the base game, a greener fertile palette, a drier arid palette, or custom with colormap.palette. Setting it selects the calibrated colour map.',
+  );
+
+export type WorldLookInput = z.infer<typeof worldLookSchema>;
+
+const colourClassNames = [
+  'plains',
+  'farmland',
+  'forest',
+  'hills',
+  'desert',
+  'mountain',
+  'marsh',
+  'jungle',
+  'snow',
+  'urban',
+  'lakes',
+  'ocean',
+] as const;
+export const worldColormapSchema = z
+  .object({
+    profile: z
+      .enum(['calibrated', 'legacy'])
+      .optional()
+      .describe(
+        'calibrated writes a dark, varied colour map calibrated to the base game; legacy keeps the original flat tints. Defaults to calibrated when look is set, otherwise legacy.',
+      ),
+    palette: z
+      .object(
+        Object.fromEntries(colourClassNames.map((name) => [name, rgbSchema.optional()])) as Record<
+          (typeof colourClassNames)[number],
+          z.ZodOptional<typeof rgbSchema>
+        >,
+      )
+      .strict()
+      .optional()
+      .describe('Class colours for look custom: the intended colour map value of each class.'),
+  })
+  .strict();
+export type WorldColormapInput = z.infer<typeof worldColormapSchema>;
 
 const moveStateDistributionSchema = z
   .object({
@@ -604,6 +687,16 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         ),
       id: identifier.default('world'),
       reference: worldReferenceSchema.optional(),
+      geography: geographyModelSchema
+        .optional()
+        .describe(
+          'Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json; world synthesis from the model is not yet available.',
+        ),
+      geographyPath: geographyPathSchema
+        .optional()
+        .describe(
+          'Workspace-relative .json file holding a geography model (at most 4 MiB). Alternative to the inline geography field; give one of them.',
+        ),
       width: z.number().int().min(256).max(8_192).multipleOf(256).optional(),
       height: z.number().int().min(256).max(4_096).multipleOf(256).optional(),
       seed: z.number().int().min(0).max(2_147_483_647).default(1),
@@ -641,6 +734,15 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)
         .default('1936.1.1'),
       rivers: z.number().int().min(0).max(500).optional(),
+      edge: worldEdgeSchema.optional(),
+      ambientFrame: z
+        .boolean()
+        .optional()
+        .describe(
+          "Write the base map's north and south frame borders and logo frame into ambient_object.txt, placed for the world size. Off by default.",
+        ),
+      look: worldLookSchema.optional(),
+      colormap: worldColormapSchema.optional(),
       replaceBaseGame: z
         .boolean()
         .default(true)
@@ -648,7 +750,14 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
           'Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.',
         ),
     })
-    .strict(),
+    .strict()
+    .refine(
+      (operation) => operation.geography === undefined || operation.geographyPath === undefined,
+      {
+        path: ['geographyPath'],
+        message: 'Give the geography inline (geography) or by file (geographyPath), not both',
+      },
+    ),
   z
     .object({
       ...operationBase,

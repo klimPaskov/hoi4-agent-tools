@@ -5,6 +5,7 @@ import {
 } from '../core/artifacts.js';
 import { canonicalJson, hashCanonical } from '../core/canonical.js';
 import { diagnosticSeverityCounts } from '../core/diagnostic-rollup.js';
+import { sortDiagnostics, type Diagnostic } from '../core/diagnostics.js';
 import type { CoreEngine } from '../core/engine.js';
 import {
   autonomousResultArtifacts,
@@ -25,7 +26,15 @@ import {
   type MapAllocationRequest,
   type MapOperation,
 } from './operations.js';
+import { borderQualityDiagnostics, type BorderQualityReport } from './border-quality.js';
+import {
+  measureIndexBorderNaturalness,
+  summarizeBorderQuality,
+  type BorderQualitySummary,
+} from './border-quality-input.js';
 import { buildMapCatalog, lookupMapCoordinate, searchMapCatalog } from './catalog.js';
+import { GEOGRAPHY_FEATURE_KINDS } from './geography/model.js';
+import { operationHasGeography, type PreparedGeography } from './geography/preparation.js';
 import { renderMap, type MapOverlay, type MapSemanticDiff } from './render.js';
 import { exportProvinceGeometryRowRuns, type AgentNudger } from './service.js';
 import type { MapValidationResult } from './validation.js';
@@ -390,12 +399,146 @@ export function completeMapRewrite(
   return result;
 }
 
+const EMPTY_SEMANTIC_DIFF: MapSemanticDiff = {
+  definitions: [],
+  stateMembership: [],
+  regionMembership: [],
+  states: [],
+  ports: [],
+  buildingPositions: [],
+  unitPositions: [],
+  weatherPositions: [],
+  entityLocators: [],
+  supplyNodes: [],
+  railways: [],
+  adjacencies: [],
+  normalAdjacencies: [],
+  supplyNodesChanged: false,
+  railwaysChanged: false,
+  adjacenciesChanged: false,
+  normalAdjacenciesChanged: false,
+};
+
+function geographySummary(prepared: PreparedGeography) {
+  const counts = Object.fromEntries(
+    GEOGRAPHY_FEATURE_KINDS.map((kind) => [kind, prepared.geography.list(kind).length]),
+  );
+  const severities = diagnosticSeverityCounts(prepared.diagnostics);
+  return {
+    operationId: prepared.operationId,
+    modelHash: prepared.geography.hash,
+    valid: prepared.valid,
+    source: prepared.source.kind,
+    sourceSha256: prepared.source.sha256,
+    width: prepared.frame.width,
+    height: prepared.frame.height,
+    featureCount: prepared.geography.featureCount,
+    pointCount: prepared.geography.pointCount,
+    counts,
+    errorCount: severities.error,
+    warningCount: severities.warning,
+    synthesis: 'unavailable' as const,
+  };
+}
+
+/**
+ * Review the geography model of a `create_world` operation: validate it, resolve its ids and areas
+ * and return an overlay and a report. No map is planned or generated and no file changes.
+ */
+async function previewGeographyRewrite(
+  nudger: AgentNudger,
+  input: MapRewriteToolRequest,
+  context: MapOperationContext,
+) {
+  await context.progress(0, 3, 'Validating the geography model and drawing its overlay');
+  const planned = await nudger.previewGeographyModels({
+    workspaceId: context.workspaceId,
+    operations: input.operations as MapOperation[],
+    ...(context.principal === undefined ? {} : { principal: context.principal }),
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+  });
+  const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
+  const diagnostics = planned.geography.flatMap(({ diagnostics: found }) => found);
+  const ignored = input.operations.filter(
+    (operation) => operation.kind !== 'create_world' || !operationHasGeography(operation),
+  ).length;
+  const notes: Diagnostic[] = [
+    {
+      code: 'MAP_GEOGRAPHY_PREVIEW_MODEL_ONLY',
+      severity: 'info',
+      category: 'map',
+      message:
+        'This preview checks the geography model only. No map was planned and no relief, river or biome was synthesized, and a request without preview is blocked until synthesis exists.',
+    },
+    ...(ignored === 0
+      ? []
+      : [
+          {
+            code: 'MAP_GEOGRAPHY_PREVIEW_OTHER_OPERATIONS_SKIPPED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            message: `${ignored} other operation(s) in the request were not evaluated by this model preview`,
+          },
+        ]),
+  ];
+  const all = sortDiagnostics([...diagnostics, ...notes]);
+  const valid = planned.geography.every(({ valid: ok }) => ok);
+  const result = emptyServiceResult(context.workspaceId, {
+    execution: 'preview' as const,
+    allocations: [],
+    operationBlockers: [],
+    expectedChangedBounds: null,
+    changedProvinceIds: [],
+    changedProvinceCount: 0,
+    semanticDiff: compactSemantic.semantic,
+    semanticDiffCounts: compactSemantic.counts,
+    semanticDiffTruncated: compactSemantic.truncated,
+    fileCount: 0,
+    artifactCount: planned.artifacts.length,
+    geography: planned.geography.slice(0, 16).map(geographySummary),
+  });
+  result.status = valid ? 'ok' : 'blocked';
+  result.code = valid ? 'MAP_GEOGRAPHY_PREVIEW_READY' : 'MAP_GEOGRAPHY_PREVIEW_BLOCKED';
+  setInlineFilesScanned(result, planned.filesScanned);
+  result.proposedFiles = [];
+  result.diagnostics = all.slice(0, 100);
+  result.artifacts = planned.artifacts.map(publicArtifactLink);
+  result.validation = {
+    passed: valid,
+    checks: [
+      {
+        id: 'geography-model',
+        passed: valid,
+        message: valid
+          ? 'The geography model resolves without errors'
+          : 'The geography model has errors; see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json',
+      },
+    ],
+  };
+  result.blockers = all
+    .filter(({ severity }) => severity === 'error' || severity === 'blocker')
+    .slice(0, 100)
+    .map(({ code, message }) => ({ code, message }));
+  await context.progress(
+    3,
+    3,
+    'Geography model preview complete; workspace files were not changed',
+  );
+  return result;
+}
+
 /** Generate and validate the same proposed map without creating a write transaction. */
 export async function previewMapRewrite(
   nudger: AgentNudger,
   input: MapRewriteToolRequest,
   context: MapOperationContext,
 ) {
+  if (
+    input.operations.some(
+      (operation) => operation.kind === 'create_world' && operationHasGeography(operation),
+    )
+  )
+    return previewGeographyRewrite(nudger, input, context);
   await context.progress(0, 5, 'Generating and validating an offline map preview');
   const planned = await nudger.previewRewriteWithDiff({
     workspaceId: context.workspaceId,
@@ -552,8 +695,35 @@ export async function inspectMap(
     context.principal,
     context.signal,
     input.references,
+    input.quality,
   );
   const sharedRevision = snapshot.revision;
+  let borderQuality: { report: BorderQualityReport; summary: BorderQualitySummary } | undefined;
+  const qualityDiagnostics: Diagnostic[] = [];
+  if (input.quality) {
+    await context.progress(1, 3, 'Measuring how natural the borders are');
+    try {
+      const measured = await measureIndexBorderNaturalness(
+        snapshot.index,
+        context.signal === undefined ? {} : { signal: context.signal },
+      );
+      borderQuality = {
+        report: measured.report,
+        summary: summarizeBorderQuality(measured.report, measured.skipped),
+      };
+      qualityDiagnostics.push(...borderQualityDiagnostics(measured.report));
+    } catch (error) {
+      if (!(error instanceof ServiceError) || !error.code.startsWith('MAP_BORDER_QUALITY_'))
+        throw error;
+      qualityDiagnostics.push({
+        code: 'MAP_BORDER_QUALITY_UNAVAILABLE',
+        severity: 'warning',
+        category: 'map',
+        message: `Border naturalness could not be measured: ${error.message}`,
+        details: { reason: error.code, ...error.details },
+      });
+    }
+  }
   const catalog = buildMapCatalog(snapshot.index);
   const queryMatches =
     input.query === undefined ? [] : searchMapCatalog(catalog, input.query, input.queryLimit);
@@ -628,6 +798,7 @@ export async function inspectMap(
         selected,
         allocationPreviews,
         validation,
+        ...(borderQuality === undefined ? {} : { borderQuality: borderQuality.report }),
         sourceHashes: sourceEvidence.complete,
       })}\n`,
       provenance: inspectionProvenance,
@@ -635,6 +806,27 @@ export async function inspectMap(
         'Complete searchable map catalog, inspection, validation, selected records, and allocation previews',
     },
   ];
+  if (borderQuality !== undefined)
+    artifactWrites.push({
+      name: `map-border-quality.${snapshot.revision.slice(0, 16)}.json`,
+      mimeType: 'application/json',
+      content: `${canonicalJson({
+        schemaVersion: 1,
+        revision: snapshot.revision,
+        report: borderQuality.report,
+        skippedInputs: borderQuality.summary.skippedInputs,
+        sourceHashes: sourceEvidence.complete,
+      })}\n`,
+      provenance: {
+        kind: 'map-border-quality',
+        toolVersion: PACKAGE_VERSION,
+        schemaVersion: 'map-border-quality.v1',
+        sourceHashes: sourceEvidence.bounded.sourceHashes,
+        metadata: { sharedRevision, sourceHashInventory: sourceEvidence.bounded.inventory },
+      },
+      description:
+        'Border naturalness: alignment with rivers, slopes, lake shores and terrain changes, enrichment over chance, straightness and the worst artificial runs for each border layer',
+    });
   if (overviewRendered) {
     const overviewLayer = 'state' as const;
     const overviewOverlays: MapOverlay[] = [
@@ -747,13 +939,18 @@ export async function inspectMap(
     unknownProvinceIds: provinceGeometry?.unknownProvinceIds ?? [],
     missingGeometryProvinceIds: provinceGeometry?.missingGeometryProvinceIds ?? [],
     ...(scriptReferences === undefined ? {} : { scriptReferences }),
+    ...(borderQuality === undefined ? {} : { quality: borderQuality.summary }),
   });
   result.code = 'MAP_INSPECTED';
   setInlineFilesScanned(
     result,
     snapshot.files.map(({ displayPath }) => displayPath),
   );
-  result.diagnostics = validation.diagnostics.slice(0, 100);
+  result.diagnostics = (
+    qualityDiagnostics.length === 0
+      ? validation.diagnostics
+      : sortDiagnostics([...validation.diagnostics, ...qualityDiagnostics])
+  ).slice(0, 100);
   result.artifacts = artifacts.map(publicArtifactLink);
   result.validation = validationSummary(validation);
   await context.progress(3, 3, 'Map inspection complete');
