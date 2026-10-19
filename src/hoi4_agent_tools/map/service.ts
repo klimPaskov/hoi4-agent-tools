@@ -615,18 +615,27 @@ function sourceTextPatterns(roots: {
 function provinceBitmapPatterns(
   defaultMaps: readonly ScannedFile[],
   mapRoots: readonly string[],
+  includeAppearance = false,
 ): string[] {
   const activeByPath = new Map(
     defaultMaps
       .filter(({ shadowedBy }) => shadowedBy === undefined)
       .map((file) => [file.relativePath.replaceAll('\\', '/').toLowerCase(), file] as const),
   );
-  // The province bitmap, and the heightmap that gives generated positions their height.
+  // The province bitmap, and the heightmap that gives generated positions their height. Border
+  // naturalness (opt-in) also reads the river and terrain bitmaps.
   const names = new Set<string>();
-  for (const [selector, fallback] of [
+  const selectors: readonly (readonly [string, string])[] = [
     ['provinces', 'provinces.bmp'],
     ['heightmap', 'heightmap.bmp'],
-  ] as const) {
+    ...(includeAppearance
+      ? ([
+          ['rivers', 'rivers.bmp'],
+          ['terrain', 'terrain.bmp'],
+        ] as const)
+      : []),
+  ];
+  for (const [selector, fallback] of selectors) {
     let activeName: string = fallback;
     for (const root of mapRoots) {
       const relativePath = `${normalizeSourceRoot(root)}/default.map`.toLowerCase();
@@ -830,6 +839,7 @@ export class AgentNudger {
     signal?: AbortSignal,
     includeExternalScriptReferences = false,
     includeWorldContext = false,
+    includeAppearance = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -844,7 +854,11 @@ export class AgentNudger {
       principal,
       signal,
     );
-    const bitmapPatterns = provinceBitmapPatterns(selectorSnapshot.files, sourceRoots.map);
+    const bitmapPatterns = provinceBitmapPatterns(
+      selectorSnapshot.files,
+      sourceRoots.map,
+      includeAppearance,
+    );
     const contentSnapshot = await this.engine.scan(
       workspaceId,
       { patterns: [...sourceTextPatterns(sourceRoots), ...bitmapPatterns] },
@@ -939,12 +953,20 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     scripts = false,
+    includeAppearance = false,
   ): Promise<{
     snapshot: MapScanSnapshot;
     validation: MapValidationResult;
     scriptReferences?: { references: number; missing: number };
   }> {
-    const snapshot = await this.scan(workspaceId, principal, signal, scripts);
+    const snapshot = await this.scan(
+      workspaceId,
+      principal,
+      signal,
+      scripts,
+      false,
+      includeAppearance,
+    );
     const validation = await validateMapAsync(
       snapshot.index,
       signal === undefined ? {} : { signal },
@@ -1171,7 +1193,14 @@ export class AgentNudger {
     workspaceId: string,
     options: MapRenderOptions & { principal?: string; signal?: AbortSignal } = {},
   ): Promise<StoredMapRender> {
-    const snapshot = await this.scan(workspaceId, options.principal, options.signal);
+    const snapshot = await this.scan(
+      workspaceId,
+      options.principal,
+      options.signal,
+      false,
+      false,
+      options.overlays?.includes('border-quality') === true,
+    );
     const rawBundle = await renderMap(snapshot.index, {
       ...options,
       budget: options.budget ?? new RenderBudget(),

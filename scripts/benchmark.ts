@@ -146,6 +146,7 @@ const mapOverlayCoverage = {
   'building-positions': true,
   'unit-positions': true,
   'weather-positions': true,
+  'border-quality': true,
 } as const satisfies Record<MapOverlay, true>;
 const mapOverlays = Object.keys(mapOverlayCoverage) as MapOverlay[];
 

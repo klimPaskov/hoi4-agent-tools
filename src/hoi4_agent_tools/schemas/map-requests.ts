@@ -35,6 +35,7 @@ export const mapOverlaySchema = z.enum([
   'building-positions',
   'unit-positions',
   'weather-positions',
+  'border-quality',
 ]);
 
 const mapTileSchema = z
@@ -113,10 +114,22 @@ export const mapInspectRequestSchema = z
       .describe(
         'Also check events, focuses, decisions, history and AI areas for states, provinces and regions the map lacks, and state tags without a country.',
       ),
+    quality: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Also measure how well province, state, region and country borders follow rivers, slopes, lake shores and terrain changes: enrichment over chance, the natural share of border length, straightness, and the worst artificial runs. Reads the height, river and terrain bitmaps; full inspection only.',
+      ),
     layer: mapLayerSchema
       .optional()
       .describe('Render this base layer; combine with overlays, tile or area.'),
-    overlays: z.array(mapOverlaySchema).max(12).optional(),
+    overlays: z
+      .array(mapOverlaySchema)
+      .max(12)
+      .optional()
+      .describe(
+        'Render these overlays on the base layer. border-quality colours state borders by whether they follow a natural feature and highlights the worst artificial runs.',
+      ),
     scale: z.number().int().min(1).max(16).optional(),
     tile: mapTileSchema.optional().describe('Render one top-left bitmap area.'),
     area: mapAreaSchema
@@ -131,7 +144,16 @@ export const mapInspectRequestSchema = z
         path: ['area'],
         message: 'Choose tile or area, not both',
       });
-    if (!MAP_VIEW_FIELDS.some((field) => value[field] !== undefined)) return;
+    const viewRequested = MAP_VIEW_FIELDS.some((field) => value[field] !== undefined);
+    if (value.quality && (viewRequested || value.lookupOnly))
+      context.addIssue({
+        code: 'custom',
+        path: ['quality'],
+        message: viewRequested
+          ? 'quality belongs to full inspection; request the border-quality overlay for a rendered view'
+          : 'quality needs full inspection; remove lookupOnly',
+      });
+    if (!viewRequested) return;
     for (const field of MAP_LOOKUP_FIELDS) {
       const fieldValue = value[field];
       if (fieldValue !== undefined && !(Array.isArray(fieldValue) && fieldValue.length === 0))

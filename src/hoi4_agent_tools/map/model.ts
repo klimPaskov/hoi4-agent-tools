@@ -1542,6 +1542,9 @@ export class MapWorkspaceIndex {
   readonly railwayFile: ScannedFile | undefined;
   /** The active heightmap, when the scan included it; decoded on first use. */
   readonly heightmapFile: ScannedFile | undefined;
+  /** The active river and terrain bitmaps, when the scan included them (border quality). */
+  readonly riversFile: ScannedFile | undefined;
+  readonly terrainBitmapFile: ScannedFile | undefined;
   #heightmap: BmpImage | null | undefined;
 
   /**
@@ -1771,6 +1774,16 @@ export class MapWorkspaceIndex {
     this.heightmapFile = mapFile(
       this.activeFiles,
       defaultMapSelectorValue(this.defaultMapFile, 'heightmap', 'heightmap.bmp'),
+      this.sourceRoots.map,
+    );
+    this.riversFile = mapFile(
+      this.activeFiles,
+      defaultMapSelectorValue(this.defaultMapFile, 'rivers', 'rivers.bmp'),
+      this.sourceRoots.map,
+    );
+    this.terrainBitmapFile = mapFile(
+      this.activeFiles,
+      defaultMapSelectorValue(this.defaultMapFile, 'terrain', 'terrain.bmp'),
       this.sourceRoots.map,
     );
     const buildingFiles = this.activeFiles.all.filter((file) =>
