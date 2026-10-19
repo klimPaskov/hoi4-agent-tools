@@ -171,7 +171,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_rewrite',
     title: 'Build a world or edit the map',
     description:
-      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
+      'Build a world from a local reference image or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and provisional countries; omit preview to write the generated map and starting scenario. Reviewed masks and labels refine ambiguous artwork. Optional look, colormap, edge and ambientFrame set the colour palette, the wrapping-seam policy and the map frame. Returns counts, diagnostics and linked PNGs. Offline validation does not prove game playability.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {
