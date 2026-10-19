@@ -73,10 +73,12 @@ function schemaFailure(error: {
 export async function readGeographyModelSource(
   resolver: WorkspaceResolver,
   workspaceId: string,
-  relativePath: string,
+  requestedPath: string,
   principal?: string,
   signal?: AbortSignal,
 ): Promise<{ model: GeographyModelInput; evidence: ReferenceSourceEvidence; bytes: number }> {
+  // Backslashes separate directories on every platform, so the same request resolves the same way everywhere.
+  const relativePath = requestedPath.replaceAll('\\', '/');
   if (!/\.json$/iu.test(relativePath) || relativePath.includes(':'))
     throw new ServiceError(
       'MAP_GEOGRAPHY_PATH_INVALID',
