@@ -56,11 +56,13 @@ import { reconcileWorldOutputs } from './world-outputs.js';
 import type {
   WorldColormapInput,
   WorldEdgeInput,
+  WorldReliefInput,
   WorldLookInput,
   WorldReferenceInput,
 } from '../schemas/map.js';
 import type { GeographyModelInput } from '../schemas/geography.js';
 import type { PreparedGeography } from './geography/preparation.js';
+import { unsupportedGeographyParts } from './relief/index.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -484,7 +486,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   geographyPath?: string;
   continentNames?: string[];
   startDate?: string;
-  rivers?: number;
+  rivers?: number | { density: number };
+  relief?: WorldReliefInput;
   edge?: WorldEdgeInput;
   ambientFrame?: boolean;
   look?: WorldLookInput;
@@ -5499,11 +5502,28 @@ function applyCreateWorld(
         'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
         { modelHash: geography.geography.hash },
       );
-    throw new ServiceError(
-      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
-      'The geography model is valid, but this version cannot synthesize relief, rivers or biomes from it yet; use preview:true to review the model overlay and report',
-      { modelHash: geography.geography.hash },
-    );
+    const pending = unsupportedGeographyParts(geography.geography);
+    if (pending.length > 0)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+        `The geography model is valid and its relief, rivers and lakes can be synthesized, but this version cannot yet use ${pending.join(', ')} (the climate and biome stage); remove them from the model to generate relief and rivers only, or use preview:true to review the model overlay and report`,
+        {
+          modelHash: geography.geography.hash,
+          available: ['relief', 'rivers', 'lakes'],
+          unavailable: pending,
+        },
+      );
+  } else {
+    if (operation.relief !== undefined)
+      throw new ServiceError(
+        'MAP_RELIEF_REQUIRES_GEOGRAPHY',
+        'relief shapes the terrain synthesised from a geography model; give geography or geographyPath, or remove relief',
+      );
+    if (typeof operation.rivers === 'object')
+      throw new ServiceError(
+        'MAP_RIVER_DENSITY_REQUIRES_GEOGRAPHY',
+        'rivers { density } sets the river network of a geography world; give geography or geographyPath, or use an integer count',
+      );
   }
   const reference = context.referenceWorlds?.get(operation.id);
   if (operation.reference !== undefined && reference === undefined)
@@ -5563,7 +5583,30 @@ function applyCreateWorld(
         ? {}
         : { continentNames: operation.continentNames }),
       startDate: operation.startDate ?? '1936.1.1',
-      rivers: operation.rivers ?? (reference === undefined ? 8 : 80),
+      rivers:
+        typeof operation.rivers === 'number' ? operation.rivers : reference === undefined ? 8 : 80,
+      ...(geography === undefined
+        ? {}
+        : {
+            geography: geography.geography,
+            ...(operation.relief === undefined
+              ? {}
+              : {
+                  relief: {
+                    ...(operation.relief.scale === undefined
+                      ? {}
+                      : { scale: operation.relief.scale }),
+                    ...(operation.relief.detail === undefined
+                      ? {}
+                      : { detail: operation.relief.detail }),
+                  },
+                }),
+            ...(typeof operation.rivers === 'object'
+              ? { riverDensity: operation.rivers.density }
+              : typeof operation.rivers === 'number'
+                ? { riverCount: operation.rivers }
+                : {}),
+          }),
       ...(edge.mode === 'none' ? {} : { edge }),
       ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
       colormapProfile,

@@ -11,6 +11,7 @@ import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import { syntheticGeography } from '../helpers/geography-fixture.js';
+import { reliefGeography } from '../helpers/relief-fixture.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -18,12 +19,17 @@ afterEach(async () => {
   for (const action of cleanup.splice(0).reverse()) await action();
 });
 
-async function fixture() {
+async function fixture(options: { emptyMod?: boolean } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-map-geography-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const fixtureRoot = path.resolve('fixtures', 'map', 'roots');
   for (const kind of ['mod', 'game', 'dependency'])
     await cp(path.join(fixtureRoot, kind), path.join(root, kind), { recursive: true });
+  if (options.emptyMod === true) {
+    // A world replaces the whole map; start from a mod with none of the fixture's states.
+    await rm(path.join(root, 'mod'), { recursive: true, force: true });
+    await mkdir(path.join(root, 'mod'));
+  }
   const runtimeRoot = path.join(root, 'runtime');
   const engine = new CoreEngine(
     await WorkspaceResolver.create(
@@ -140,6 +146,7 @@ describe('geography model through hoi4.map_rewrite', () => {
         errorCount: 0,
         warningCount: 0,
         synthesis: 'unavailable',
+        unsupported: expect.arrayContaining([expect.stringContaining('biome')]) as string[],
         counts: expect.objectContaining({ land: 2, sea: 1, river: 2, range: 1, pass: 1 }),
       }),
     ]);
@@ -220,7 +227,51 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect(await sourceInventory(modRoot)).toEqual(before);
   });
 
-  it('blocks a write because synthesis from the model is not available yet', async () => {
+  it('writes relief, rivers and lakes for a model without biomes or climate', async () => {
+    const { client, modRoot } = await fixture({ emptyMod: true });
+    const preview = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [create({ geography: reliefGeography(), width: 1024, height: 512 })],
+      },
+    });
+    expect(
+      (preview.structuredContent as unknown as PublicResult).data.geography?.[0],
+    ).toMatchObject({ valid: true, synthesis: 'available', unsupported: [] });
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [
+          create({
+            geography: reliefGeography(),
+            width: 1024,
+            height: 512,
+            landProvincePixels: 4000,
+            seaProvincePixels: 15000,
+            rivers: { density: 0.015 },
+            relief: { scale: 'vanilla', detail: 0.6 },
+            countries: [{ tag: 'AAA', name: 'Aster' }],
+          }),
+        ],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    // The list of written files is long enough that the response is cut to its essentials.
+    expect(content.status).toBe('ok');
+    expect(JSON.stringify(content)).not.toMatch(/transactionId|planHash/u);
+    const heights = await readFile(path.join(modRoot, 'map', 'heightmap.bmp'));
+    expect(heights.readInt32LE(18)).toBe(1024);
+    const rivers = await readFile(path.join(modRoot, 'map', 'rivers.bmp'));
+    expect(rivers.readUInt32LE(46)).toBe(0);
+    expect((await readFile(path.join(modRoot, 'map', 'world_normal.bmp'))).readInt32LE(18)).toBe(
+      512,
+    );
+  }, 180_000);
+
+  it('blocks a write of a model with biomes because the climate stage is not implemented yet', async () => {
     const { client, modRoot } = await fixture();
     const before = await sourceInventory(modRoot);
     const result = await client.callTool({
