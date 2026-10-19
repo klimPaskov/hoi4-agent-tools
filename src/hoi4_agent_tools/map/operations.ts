@@ -50,13 +50,16 @@ import { planReferenceRemap, ReferenceRemapError } from './references.js';
 import { generateWorld, type WorldCountry } from './world.js';
 import type { ColourClass } from './colormap.js';
 import { resolveEdge } from './world-edge.js';
+import { DEFAULT_AUTO_STRAIT_GAP_PX } from './gameplay/crossings.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
 import { resolvePartitionMode } from './partition.js';
 import type { PartitionTuning } from './partition-tuning.js';
 import type {
+  WorldAutoStraitsInput,
   WorldColormapInput,
+  WorldDevelopmentInput,
   WorldEdgeInput,
   WorldReliefInput,
   WorldLookInput,
@@ -497,6 +500,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   look?: WorldLookInput;
   colormap?: WorldColormapInput;
   partition?: WorldPartitionInput;
+  development?: WorldDevelopmentInput;
+  autoStraits?: WorldAutoStraitsInput;
   partitionTuning?: WorldPartitionTuningInput;
   replaceBaseGame?: boolean;
 }
@@ -5556,6 +5561,25 @@ function applyCreateWorld(
       'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
       'look selects a calibrated palette; remove colormap.profile "legacy" or look',
     );
+  if (!hasGeography && operation.development?.model === 'geography')
+    throw new ServiceError(
+      'MAP_DEVELOPMENT_REQUIRES_GEOGRAPHY',
+      'development.model "geography" plans the economy from a geography model; give geography or geographyPath, or use "legacy"',
+    );
+  if (!hasGeography && operation.autoStraits !== undefined && operation.autoStraits !== false)
+    throw new ServiceError(
+      'MAP_AUTO_STRAITS_REQUIRES_GEOGRAPHY',
+      'autoStraits detects channels between the landmasses of a geography world; give geography or geographyPath, or remove autoStraits',
+    );
+  const autoStraits =
+    operation.autoStraits === undefined || operation.autoStraits === false
+      ? undefined
+      : {
+          maxGapPx:
+            operation.autoStraits === true
+              ? DEFAULT_AUTO_STRAIT_GAP_PX
+              : (operation.autoStraits.maxGapPx ?? DEFAULT_AUTO_STRAIT_GAP_PX),
+        };
   const partitionMode = resolvePartitionMode(operation.partition, hasGeography);
   if (partitionMode === 'legacy' && operation.partitionTuning !== undefined)
     throw new ServiceError(
@@ -5622,6 +5646,10 @@ function applyCreateWorld(
           }),
       ...(edge.mode === 'none' ? {} : { edge }),
       ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
+      ...(autoStraits === undefined ? {} : { autoStraits }),
+      ...(operation.development?.model === undefined
+        ? {}
+        : { developmentModel: operation.development.model }),
       colormapProfile,
       ...(partitionMode === 'legacy'
         ? {}
@@ -5679,7 +5707,10 @@ function applyCreateWorld(
   for (const file of planMapPositions(generated, { mode: 'replace' }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
   const positioned = currentIndex(base, changes);
-  for (const file of planSupplyRebuild(positioned, { mode: 'replace' }))
+  for (const file of planSupplyRebuild(positioned, {
+    mode: 'replace',
+    ...(world.railCost === undefined ? {} : { railCost: world.railCost }),
+  }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
   for (const file of reconcileWorldOutputs(
     base.sourceFiles,

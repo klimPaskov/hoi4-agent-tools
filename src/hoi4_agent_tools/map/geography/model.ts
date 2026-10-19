@@ -2,6 +2,7 @@ import type {
   GeographyBiomeKind,
   GeographyDepthClass,
   GeographyPlaceKind,
+  GeographyResource,
   GeographySiteKind,
 } from '../../schemas/geography.js';
 import { boundsContain, pointSegment, ringContains, type Bounds } from './geometry.js';
@@ -239,6 +240,8 @@ export interface ResolvedSite extends FeatureBase<'site'> {
   readonly at: GeoPoint;
   readonly importance: number;
   readonly country?: string;
+  /** What a `mine` site yields. */
+  readonly resource?: GeographyResource;
   readonly onWater: boolean;
   readonly landId?: string;
   readonly regionId?: string;

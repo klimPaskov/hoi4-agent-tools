@@ -5,6 +5,7 @@ import { assertRenderDimensions } from '../core/render-budget.js';
 import { addActiveMapDiagnostic, addMapDiagnostic } from './diagnostic-limit.js';
 import type { ValidationSummary } from '../core/result.js';
 import { validateAppearance } from './appearance-validation.js';
+import { validateCrossings } from './gameplay/crossing-validation.js';
 import { rgbKey } from './bmp.js';
 import type { EdgeMode } from './world-edge.js';
 import { MAP_PROVINCE_ENGINE_MAX_PIXELS } from './model.js';
@@ -1345,6 +1346,10 @@ function* validateMapSteps(
   yield* cancellationCheckpoint(options.signal);
   yield* validateNetworksAndAdjacencies(index, diagnostics, options);
   yield* cancellationCheckpoint(options.signal);
+  yield* validateCrossings(index, (diagnostic) =>
+    addDiagnostic(diagnostics, options, { ...diagnostic, category: 'map' }),
+  );
+  yield* cancellationCheckpoint(options.signal);
   yield* validatePositions(index, diagnostics, options);
   yield* cancellationCheckpoint(options.signal);
   yield* validateAppearance(
@@ -1400,6 +1405,7 @@ function* validateMapSteps(
           (severity === 'error' || severity === 'blocker') &&
           (code.startsWith('MAP_ADJACENCY') ||
             code.startsWith('MAP_IMPASSABLE') ||
+            code.startsWith('MAP_STRAIT') ||
             code.startsWith('MAP_SEA_ADJACENCY') ||
             code.startsWith('MAP_SUPPLY') ||
             code.startsWith('MAP_RAILWAY')),

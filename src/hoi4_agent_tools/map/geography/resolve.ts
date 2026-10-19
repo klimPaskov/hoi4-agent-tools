@@ -1573,6 +1573,7 @@ export function resolveGeography(
       importance: input.importance ?? GEOGRAPHY_DEFAULTS.site.importance,
       onWater,
       ...opt('country', input.country),
+      ...opt('resource', input.resource),
       ...(landId === undefined ? {} : { landId }),
       ...(regionId === undefined ? {} : { regionId }),
       ...(lakeId === undefined ? {} : { lakeId }),

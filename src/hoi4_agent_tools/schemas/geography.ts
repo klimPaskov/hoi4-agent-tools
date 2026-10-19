@@ -90,6 +90,15 @@ export const geographySiteKindSchema = z.enum([
   'mine',
   'landmark',
 ]);
+/** The strategic resources of the game that a mine site can yield. */
+export const geographyResourceSchema = z.enum([
+  'steel',
+  'aluminium',
+  'tungsten',
+  'chromium',
+  'oil',
+  'rubber',
+]);
 export const geographyPlaceKindSchema = z.enum([
   'cape',
   'bay',
@@ -290,6 +299,8 @@ const siteSchema = z
     onWater: z.boolean().optional(),
     /** A lake the site belongs to, for a port on a lake shore. */
     lake: geographyFeatureIdSchema.optional(),
+    /** What a `mine` site yields in the world's economy (steel when it names none). */
+    resource: geographyResourceSchema.optional(),
   })
   .strict();
 
@@ -364,4 +375,5 @@ export type GeographyPathPointInput = z.infer<typeof geographyPathPointSchema>;
 export type GeographyDepthClass = z.infer<typeof geographyDepthClassSchema>;
 export type GeographyBiomeKind = z.infer<typeof geographyBiomeKindSchema>;
 export type GeographySiteKind = z.infer<typeof geographySiteKindSchema>;
+export type GeographyResource = z.infer<typeof geographyResourceSchema>;
 export type GeographyPlaceKind = z.infer<typeof geographyPlaceKindSchema>;
