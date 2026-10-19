@@ -9,7 +9,19 @@ import { ServiceError } from '../core/result.js';
 import { createBmp, type RgbColor } from './bmp.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 import { generateWorldDrainage } from './world-drainage.js';
-import { generateWorldProvinces } from './world-provinces.js';
+import { generateWorldProvinces, type WorldProvinces } from './world-provinces.js';
+import {
+  clusterRegions,
+  clusterStates,
+  partitionWorldFromRequest,
+  type WorldPartition,
+} from './partition.js';
+import { smoothDiagonalContacts } from './partition-fields.js';
+import {
+  provinceCountNote,
+  surfacePartitionFields,
+  type WorldPartitionSpec,
+} from './world-partition.js';
 import { fractal, lattice } from './world-noise.js';
 import {
   calibratedColourMap,
@@ -92,6 +104,11 @@ export interface WorldSpec {
   /** `legacy` keeps the original flat tints; `calibrated` follows ADR 0054. */
   colormapProfile?: ColourMapProfile;
   look?: WorldLook;
+  /**
+   * Opt-in feature-aware provinces, states and regions (ADR 0058). Absent or `legacy` keeps the
+   * warped Voronoi provinces and breadth-first clusters, byte for byte.
+   */
+  partition?: WorldPartitionSpec;
   /** Colour overrides by class for `look: 'custom'`. */
   colormapPalette?: Partial<Record<ColourClass, readonly [number, number, number]>>;
 }
@@ -157,7 +174,7 @@ export interface GeneratedWorld {
 // ---------------------------------------------------------------------------------------------
 // Deterministic randomness and noise
 
-class Random {
+export class Random {
   #state: number;
   constructor(seed: number) {
     this.#state = (seed ^ 0x9e3779b9) >>> 0;
@@ -389,7 +406,7 @@ function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeog
 // Grouping provinces into regions and states
 
 /** Grow clusters of about `target` members over a graph from spread-out seeds. */
-function growClusters(
+export function growClusters(
   members: readonly number[],
   neighbors: (id: number) => Iterable<number>,
   target: number,
@@ -740,17 +757,65 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           warnings: [] as string[],
         };
   surface.elevation = drainage.elevation;
-  const provinces = generateWorldProvinces({
-    width,
-    height,
-    seed: spec.seed,
-    kind: surface.kind,
-    elevation: surface.elevation,
-    moisture: surface.moisture,
-    landProvincePixels: spec.landProvincePixels,
-    seaProvincePixels: spec.seaProvincePixels,
-  });
+  let featurePartition: WorldPartition | undefined;
+  let provinces: WorldProvinces;
+  if (spec.partition?.mode === 'feature-aware') {
+    if (spec.partition.fields === undefined) {
+      // A coast that touches itself only at corners cannot be cut into valid provinces.
+      const smoothed = smoothDiagonalContacts(surface.kind, width, height);
+      for (const pixel of smoothed) {
+        const isLand = surface.kind[pixel] === LAND;
+        surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+        drainage.riverPixels[pixel] = isLand ? 255 : 254;
+      }
+      if (smoothed.length > 0)
+        notes.push({
+          code: 'MAP_PARTITION_MASK_SMOOTHED',
+          severity: 'info',
+          message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
+          details: { pixels: smoothed.length },
+        });
+    }
+    featurePartition = partitionWorldFromRequest(
+      spec.partition.fields ??
+        surfacePartitionFields({
+          width,
+          height,
+          kind: surface.kind,
+          elevation: surface.elevation,
+          moisture: surface.moisture,
+          riverPixels: drainage.riverPixels,
+          ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
+        }),
+      spec.seed,
+      spec.partition.tuning,
+      {
+        landProvincePixels: spec.landProvincePixels,
+        seaProvincePixels: spec.seaProvincePixels,
+        provincesPerState: spec.provincesPerState,
+        landProvincesPerRegion: spec.landProvincesPerRegion,
+        seaProvincesPerRegion: spec.seaProvincesPerRegion,
+      },
+    );
+    provinces = featurePartition.provinces;
+    for (const note of featurePartition.notes) notes.push(note);
+  } else
+    provinces = generateWorldProvinces({
+      width,
+      height,
+      seed: spec.seed,
+      kind: surface.kind,
+      elevation: surface.elevation,
+      moisture: surface.moisture,
+      landProvincePixels: spec.landProvincePixels,
+      seaProvincePixels: spec.seaProvincePixels,
+    });
   const count = provinces.kind.length;
+  const countNote = provinceCountNote(
+    count,
+    featurePartition === undefined ? 'legacy' : 'feature-aware',
+  );
+  if (countNote !== undefined) notes.push(countNote);
   const center = (id: number) => ({
     x: provinces.sumX[id]! / provinces.size[id]!,
     y: provinces.sumY[id]! / provinces.size[id]!,
@@ -1084,8 +1149,14 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }
   // Strategic regions: land regions over the land graph, sea regions over the sea graph.
   const graph = (id: number) => provinces.neighbors[id]!;
-  const landRegion = growClusters(landIds, graph, spec.landProvincesPerRegion, random);
-  const seaRegion = growClusters(seaIds, graph, spec.seaProvincesPerRegion, random);
+  const landRegion =
+    featurePartition === undefined
+      ? growClusters(landIds, graph, spec.landProvincesPerRegion, random)
+      : clusterRegions(featurePartition, landIds, 'land');
+  const seaRegion =
+    featurePartition === undefined
+      ? growClusters(seaIds, graph, spec.seaProvincesPerRegion, random)
+      : clusterRegions(featurePartition, seaIds, 'sea');
   const regionOf = new Map<number, number>();
   const landRegionCount = Math.max(-1, ...landRegion.values()) + 1;
   for (const [id, region] of landRegion) regionOf.set(id, region + 1);
@@ -1115,7 +1186,10 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const stateOf = new Map<number, StateDraft>();
   for (const key of [...groups.keys()].sort()) {
     const members = groups.get(key)!;
-    const clusters = growClusters(members, graph, spec.provincesPerState, random);
+    const clusters =
+      featurePartition === undefined
+        ? growClusters(members, graph, spec.provincesPerState, random)
+        : clusterStates(featurePartition, members);
     const byCluster = new Map<number, number[]>();
     for (const [id, cluster] of clusters) {
       const list = byCluster.get(cluster) ?? [];

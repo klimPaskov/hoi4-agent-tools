@@ -12,6 +12,25 @@ export interface WorldProvinceInput {
   seaProvincePixels: number;
 }
 
+/** The part of the input the shared finishing passes need: the exact land, sea and lake mask. */
+export interface ProvinceGeometryInput {
+  width: number;
+  height: number;
+  /** 0 = sea, 1 = land, 2 = lake; the mask is preserved exactly. */
+  kind: Uint8Array;
+  /**
+   * Optional group per pixel (a geography region, say). The finishing passes merge and move pixels
+   * inside one group whenever they can and cross a group border only when the engine rules leave
+   * no other repair. Without it they behave exactly as the legacy partition always did.
+   */
+  group?: Uint16Array;
+  /**
+   * Optional line pixels (a river, a wall). Slivers are absorbed across a line only when no
+   * neighbour on their own side can take them.
+   */
+  line?: Uint8Array;
+}
+
 export interface WorldProvinces {
   pixel: Int32Array;
   kind: number[];
@@ -180,10 +199,12 @@ interface Parts {
   maxX: number[];
   minY: number[];
   maxY: number[];
+  /** The group of the pixel a part started from; empty without `ProvinceGeometryInput.group`. */
+  group: number[];
 }
 
 /** Split disconnected Voronoi pieces and any unusually long coastal cells in one scan. */
-function connectedParts(input: WorldProvinceInput, labels: Int32Array): Parts {
+function connectedParts(input: ProvinceGeometryInput, labels: Int32Array): Parts {
   const { width, height, kind } = input;
   const pixel = new Int32Array(labels.length).fill(-1);
   const queue = new Int32Array(labels.length);
@@ -197,6 +218,7 @@ function connectedParts(input: WorldProvinceInput, labels: Int32Array): Parts {
     maxX: [],
     minY: [],
     maxY: [],
+    group: [],
   };
   const limitX = Math.max(1, Math.floor(width / 8));
   const limitY = Math.max(1, Math.floor(height / 8));
@@ -205,6 +227,7 @@ function connectedParts(input: WorldProvinceInput, labels: Int32Array): Parts {
     const id = parts.parent.length;
     parts.parent.push(id);
     parts.kind.push(kind[start]!);
+    if (input.group !== undefined) parts.group.push(input.group[start]!);
     const origin = start % width;
     let minX = 0;
     let maxX = 0;
@@ -261,11 +284,19 @@ function root(parts: Parts, id: number): number {
   return r;
 }
 
-function merge(parts: Parts, a: number, b: number, width: number, height: number): boolean {
+function merge(
+  parts: Parts,
+  a: number,
+  b: number,
+  width: number,
+  height: number,
+  sameGroup = false,
+): boolean {
   a = root(parts, a);
   b = root(parts, b);
   if (a === b) return true;
   if (parts.kind[a] !== parts.kind[b]) return false;
+  if (sameGroup && parts.group[a] !== parts.group[b]) return false;
   const shift = parts.origin[b]! - parts.origin[a]!;
   const minX = Math.min(parts.minX[a]!, parts.minX[b]! + shift);
   const maxX = Math.max(parts.maxX[a]!, parts.maxX[b]! + shift);
@@ -283,24 +314,35 @@ function merge(parts: Parts, a: number, b: number, width: number, height: number
   return true;
 }
 
-function absorbSlivers(input: WorldProvinceInput, parts: Parts): void {
+function absorbSlivers(input: ProvinceGeometryInput, parts: Parts): void {
   const { width, height } = input;
   // Every successful operation removes a whole connected component. The scan is
-  // repeated because a previously isolated fragment may become mergeable afterwards.
-  for (let pass = 0; pass < 4; pass++) {
-    let changed = false;
-    for (let p = 0; p < parts.pixel.length; p++) {
-      const x = p % width;
-      const adjacent = [x + 1 < width ? p + 1 : p + 1 - width, p + width];
-      for (const q of adjacent) {
-        if (q >= parts.pixel.length) continue;
-        const a = root(parts, parts.pixel[p]!);
-        const b = root(parts, parts.pixel[q]!);
-        if (a === b || (parts.size[a]! >= 20 && parts.size[b]! >= 20)) continue;
-        if (merge(parts, a, b, width, height)) changed = true;
+  // repeated because a previously isolated fragment may become mergeable afterwards. With groups
+  // or lines, the first stages merge inside a group and not across a line, and the last stage
+  // takes what is left.
+  const stages: Array<{ sameGroup: boolean; avoidLine: boolean }> = [];
+  if (input.group !== undefined && input.line !== undefined)
+    stages.push({ sameGroup: true, avoidLine: true });
+  if (input.line !== undefined) stages.push({ sameGroup: false, avoidLine: true });
+  if (input.group !== undefined) stages.push({ sameGroup: true, avoidLine: false });
+  stages.push({ sameGroup: false, avoidLine: false });
+  for (const { sameGroup, avoidLine } of stages) {
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = false;
+      for (let p = 0; p < parts.pixel.length; p++) {
+        const x = p % width;
+        const adjacent = [x + 1 < width ? p + 1 : p + 1 - width, p + width];
+        for (const q of adjacent) {
+          if (q >= parts.pixel.length) continue;
+          if (avoidLine && (input.line![p] !== 0 || input.line![q] !== 0)) continue;
+          const a = root(parts, parts.pixel[p]!);
+          const b = root(parts, parts.pixel[q]!);
+          if (a === b || (parts.size[a]! >= 20 && parts.size[b]! >= 20)) continue;
+          if (merge(parts, a, b, width, height, sameGroup)) changed = true;
+        }
       }
+      if (!changed) break;
     }
-    if (!changed) break;
   }
 }
 
@@ -336,7 +378,7 @@ function removable(parts: Parts, p: number, width: number, height: number): bool
 }
 
 /** Grow a small fragment from removable neighboring cells when whole-province unions exceed bounds. */
-function rebalanceSlivers(input: WorldProvinceInput, parts: Parts): void {
+function rebalanceSlivers(input: ProvinceGeometryInput, parts: Parts): void {
   const { width, height, kind } = input;
   const fragments = new Map<number, number[]>();
   for (let p = 0; p < parts.pixel.length; p++) {
@@ -381,8 +423,14 @@ function rebalanceSlivers(input: WorldProvinceInput, parts: Parts): void {
   }
 }
 
-function repairCrossings(input: WorldProvinceInput, parts: Parts): void {
+function repairCrossings(input: ProvinceGeometryInput, parts: Parts): void {
   const { width, height, kind } = input;
+  const repairStages: Array<{ sameGroup: boolean; avoidLine: boolean }> = [];
+  if (input.group !== undefined && input.line !== undefined)
+    repairStages.push({ sameGroup: true, avoidLine: true });
+  if (input.line !== undefined) repairStages.push({ sameGroup: false, avoidLine: true });
+  if (input.group !== undefined) repairStages.push({ sameGroup: true, avoidLine: false });
+  repairStages.push({ sameGroup: false, avoidLine: false });
   for (let pass = 0; pass < 12; pass++) {
     let changed = false;
     for (let y = 0; y + 1 < height; y++) {
@@ -399,21 +447,31 @@ function repairCrossings(input: WorldProvinceInput, parts: Parts): void {
           [2, 3],
         ] as const;
         let repaired = false;
-        // Whole-cell unions cannot introduce crossings or disconnected provinces.
-        for (const [i, j] of edges) {
-          if (merge(parts, ids[i]!, ids[j]!, width, height)) {
-            repaired = true;
-            break;
+        // Whole-cell unions cannot introduce crossings or disconnected provinces. With groups or
+        // lines, the repairs inside one group and not across a line come first.
+        for (const { sameGroup, avoidLine } of repairStages) {
+          for (const [i, j] of edges) {
+            if (avoidLine && (input.line![corners[i]!] !== 0 || input.line![corners[j]!] !== 0))
+              continue;
+            if (merge(parts, ids[i]!, ids[j]!, width, height, sameGroup)) {
+              repaired = true;
+              break;
+            }
           }
-        }
-        if (!repaired) {
+          if (repaired) break;
           for (const [i, j] of edges.flatMap(([i, j]) => [
             [i, j],
             [j, i],
           ])) {
             const p = corners[i!]!;
             const q = corners[j!]!;
+            if (avoidLine && (input.line![p] !== 0 || input.line![q] !== 0)) continue;
             if (kind[p] !== kind[q] || !removable(parts, p, width, height)) continue;
+            if (
+              sameGroup &&
+              parts.group[root(parts, ids[i!]!)] !== parts.group[root(parts, ids[j!]!)]
+            )
+              continue;
             const target = ids[j!]!;
             const dx = (p % width) - parts.origin[target]!;
             const py = Math.floor(p / width);
@@ -432,6 +490,7 @@ function repairCrossings(input: WorldProvinceInput, parts: Parts): void {
             repaired = true;
             break;
           }
+          if (repaired) break;
         }
         if (!repaired)
           throw new ServiceError(
@@ -451,36 +510,13 @@ function repairCrossings(input: WorldProvinceInput, parts: Parts): void {
 }
 
 /**
- * Deterministic province geometry with periodic adjacency, but separate province IDs at the seam.
- * Native province bounding boxes use bitmap coordinates, not circular spans. Work is proportional to pixels
- * with bounded local candidate searches; no retained per-pixel objects or global site scans.
+ * Refuse a mask that needs more provinces than the engine tolerates before any site is built:
+ * a singleton component of one kind necessarily needs its own province, which is an inexpensive
+ * lower bound for a hostile fragmented mask.
  */
-export function generateWorldProvinces(input: WorldProvinceInput): WorldProvinces {
-  const { width, height, kind, elevation, moisture, seed } = input;
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 16 || height < 16)
-    invalid('Province dimensions must be integers of at least 16 pixels');
-  const total = width * height;
-  if (!Number.isSafeInteger(total) || total > 13_238_272)
-    invalid('Province dimensions exceed the 13,238,272-pixel map limit');
-  if (!Number.isSafeInteger(seed)) invalid('The province seed must be a safe integer');
-  if (
-    !(kind instanceof Uint8Array) ||
-    !(elevation instanceof Float32Array) ||
-    !(moisture instanceof Float32Array)
-  )
-    invalid('Province fields must use the specified typed arrays');
-  if (kind.length !== total || elevation.length !== total || moisture.length !== total)
-    invalid('Province fields must match the map dimensions');
-  if (
-    ![input.landProvincePixels, input.seaProvincePixels].every((v) => Number.isFinite(v) && v >= 20)
-  )
-    invalid('Province target areas must be finite and at least 20 pixels');
-  for (let p = 0; p < total; p++) {
-    if (kind[p]! > 2 || !Number.isFinite(elevation[p]) || !Number.isFinite(moisture[p]))
-      invalid('Province fields contain an unsupported kind or non-finite terrain value');
-  }
-  // A singleton kind component necessarily needs its own province. Count that
-  // inexpensive lower bound before building sites for a hostile fragmented mask.
+export function assertProvinceMaskFeasible(input: ProvinceGeometryInput): void {
+  const { width, kind } = input;
+  const total = width * input.height;
   let isolated = 0;
   for (let p = 0; p < total; p++) {
     const x = p % width;
@@ -500,7 +536,22 @@ export function generateWorldProvinces(input: WorldProvinceInput): WorldProvince
       'The kind mask requires more than 65,000 isolated provinces',
       { isolated },
     );
-  const parts = connectedParts(input, nearestPartition(input));
+}
+
+/**
+ * Turn one label per pixel into provinces: split disconnected and over-wide parts, absorb slivers,
+ * keep every province at least 20 pixels where the mask allows, repair four-province corners and
+ * number the provinces by their first pixel. Both partitions finish through this function, so the
+ * engine rules (connected provinces, the bounding box limit, no X crossing, the 65,000 cap) hold
+ * whichever one made the labels.
+ */
+export function assembleWorldProvinces(
+  input: ProvinceGeometryInput,
+  labels: Int32Array,
+): WorldProvinces {
+  const { width, height, kind } = input;
+  const total = width * height;
+  const parts = connectedParts(input, labels);
   absorbSlivers(input, parts);
   rebalanceSlivers(input, parts);
   repairCrossings(input, parts);
@@ -570,4 +621,37 @@ export function generateWorldProvinces(input: WorldProvinceInput): WorldProvince
       );
   }
   return result;
+}
+
+/**
+ * Deterministic province geometry with periodic adjacency, but separate province IDs at the seam.
+ * Native province bounding boxes use bitmap coordinates, not circular spans. Work is proportional to pixels
+ * with bounded local candidate searches; no retained per-pixel objects or global site scans.
+ */
+export function generateWorldProvinces(input: WorldProvinceInput): WorldProvinces {
+  const { width, height, kind, elevation, moisture, seed } = input;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 16 || height < 16)
+    invalid('Province dimensions must be integers of at least 16 pixels');
+  const total = width * height;
+  if (!Number.isSafeInteger(total) || total > 13_238_272)
+    invalid('Province dimensions exceed the 13,238,272-pixel map limit');
+  if (!Number.isSafeInteger(seed)) invalid('The province seed must be a safe integer');
+  if (
+    !(kind instanceof Uint8Array) ||
+    !(elevation instanceof Float32Array) ||
+    !(moisture instanceof Float32Array)
+  )
+    invalid('Province fields must use the specified typed arrays');
+  if (kind.length !== total || elevation.length !== total || moisture.length !== total)
+    invalid('Province fields must match the map dimensions');
+  if (
+    ![input.landProvincePixels, input.seaProvincePixels].every((v) => Number.isFinite(v) && v >= 20)
+  )
+    invalid('Province target areas must be finite and at least 20 pixels');
+  for (let p = 0; p < total; p++) {
+    if (kind[p]! > 2 || !Number.isFinite(elevation[p]) || !Number.isFinite(moisture[p]))
+      invalid('Province fields contain an unsupported kind or non-finite terrain value');
+  }
+  assertProvinceMaskFeasible(input);
+  return assembleWorldProvinces(input, nearestPartition(input));
 }
