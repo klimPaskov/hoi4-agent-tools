@@ -623,6 +623,13 @@ const PROVINCE_BITMAP_SELECTORS = [
   ['provinces', 'provinces.bmp'],
   ['heightmap', 'heightmap.bmp'],
 ] as const;
+// Border quality (opt-in) also reads the river and terrain bitmaps in the main snapshot.
+const BORDER_BITMAP_SELECTORS = [
+  ['provinces', 'provinces.bmp'],
+  ['heightmap', 'heightmap.bmp'],
+  ['rivers', 'rivers.bmp'],
+  ['terrain', 'terrain.bmp'],
+] as const;
 const APPEARANCE_BITMAP_SELECTORS = [
   ['terrain', 'terrain.bmp'],
   ['rivers', 'rivers.bmp'],
@@ -639,7 +646,8 @@ function provinceBitmapPatterns(
       .filter(({ shadowedBy }) => shadowedBy === undefined)
       .map((file) => [file.relativePath.replaceAll('\\', '/').toLowerCase(), file] as const),
   );
-  // The province bitmap, and the heightmap that gives generated positions their height.
+  // The province bitmap, and the heightmap that gives generated positions their height. Border
+  // naturalness (opt-in) also reads the river and terrain bitmaps.
   const names = new Set<string>();
   for (const [selector, fallback] of selectors) {
     let activeName: string = fallback;
@@ -860,7 +868,11 @@ export class AgentNudger {
       principal,
       signal,
     );
-    const bitmapPatterns = provinceBitmapPatterns(selectorSnapshot.files, sourceRoots.map);
+    const bitmapPatterns = provinceBitmapPatterns(
+      selectorSnapshot.files,
+      sourceRoots.map,
+      includeAppearance ? BORDER_BITMAP_SELECTORS : PROVINCE_BITMAP_SELECTORS,
+    );
     const contentSnapshot = await this.engine.scan(
       workspaceId,
       { patterns: [...sourceTextPatterns(sourceRoots), ...bitmapPatterns] },
@@ -987,6 +999,7 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     scripts = false,
+    includeAppearance = false,
   ): Promise<{
     snapshot: MapScanSnapshot;
     validation: MapValidationResult;
@@ -1249,7 +1262,14 @@ export class AgentNudger {
     workspaceId: string,
     options: MapRenderOptions & { principal?: string; signal?: AbortSignal } = {},
   ): Promise<StoredMapRender> {
-    const snapshot = await this.scan(workspaceId, options.principal, options.signal);
+    const snapshot = await this.scan(
+      workspaceId,
+      options.principal,
+      options.signal,
+      false,
+      false,
+      options.overlays?.includes('border-quality') === true,
+    );
     const rawBundle = await renderMap(snapshot.index, {
       ...options,
       budget: options.budget ?? new RenderBudget(),

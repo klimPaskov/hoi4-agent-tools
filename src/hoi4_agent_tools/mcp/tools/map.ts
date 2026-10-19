@@ -69,6 +69,50 @@ const mapSemanticDiffSchema = z
     normalAdjacenciesChanged: z.boolean(),
   })
   .strict();
+const borderRunSchema = z
+  .object({
+    sides: z.tuple([z.string().max(64), z.string().max(64)]),
+    from: z.object({ x: nonNegativeIntegerSchema, y: nonNegativeIntegerSchema }).strict(),
+    to: z.object({ x: nonNegativeIntegerSchema, y: nonNegativeIntegerSchema }).strict(),
+    edges: nonNegativeIntegerSchema,
+    chord: z.number().nonnegative(),
+  })
+  .strict();
+const borderLayerSummarySchema = z
+  .object({
+    layer: z.string().max(32),
+    status: z.enum(['ok', 'not-meaningful', 'too-short', 'no-borders']),
+    groups: nonNegativeIntegerSchema,
+    borderEdges: nonNegativeIntegerSchema,
+    coastEdges: nonNegativeIntegerSchema,
+    alignment: z.number().nullable(),
+    baseRate: z.number(),
+    enrichment: z.number().nullable(),
+    naturalShare: z.number().nullable(),
+    naturalShareWithCoast: z.number().nullable(),
+    straightFraction: z.number().nullable(),
+    longRunShare: z.number().nullable(),
+    artificialRuns: nonNegativeIntegerSchema,
+    longestArtificialRunEdges: nonNegativeIntegerSchema,
+    worstRuns: z.array(borderRunSchema).max(3),
+  })
+  .strict();
+const borderQualitySummarySchema = z
+  .object({
+    inputs: z
+      .object({
+        heights: z.boolean(),
+        rivers: z.boolean(),
+        terrain: z.boolean(),
+        extra: z.boolean(),
+      })
+      .strict(),
+    skippedInputs: z
+      .array(z.object({ input: z.string().max(32), reason: z.string().max(256) }).strict())
+      .max(8),
+    layers: z.array(borderLayerSummarySchema).max(8),
+  })
+  .strict();
 const mapWorkspaceInspectDataSchema = z
   .object({
     revision: sha256Schema,
@@ -96,6 +140,7 @@ const mapWorkspaceInspectDataSchema = z
       .object({ references: nonNegativeIntegerSchema, missing: nonNegativeIntegerSchema })
       .strict()
       .optional(),
+    quality: borderQualitySummarySchema.optional(),
   })
   .strict();
 const mapRenderDataSchema = z

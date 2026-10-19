@@ -93,11 +93,11 @@ export const GEOGRAPHY_DEFAULTS = {
 
 /** Edge policy the validator may enforce; mirrors the `edge` option of world generation. */
 export interface GeographyEdgePolicy {
-  mode?: 'sea-band' | 'rim' | 'none';
+  mode?: 'sea-band' | 'rim' | 'none' | undefined;
   /** Pixels kept free of land east and west; default `max(192, 4% of width)`. */
-  bandPx?: number;
+  bandPx?: number | undefined;
   /** Pixels kept free of land north and south; default 64. */
-  polarPx?: number;
+  polarPx?: number | undefined;
 }
 
 export interface GeographyResolveOptions {

@@ -3,6 +3,8 @@ import { compareCodeUnits, canonicalJson, sha256Bytes } from '../core/canonical.
 import { assertRenderDimensions, RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
 import { ServiceError } from '../core/result.js';
 import type { PixelDiffBounds, RgbColor } from './bmp.js';
+import { borderQualityInputFromIndex } from './border-quality-input.js';
+import { borderEdgePixels, forEachBorderEdge, measureBorderNaturalness } from './border-quality.js';
 import { buildMapCatalog } from './catalog.js';
 import type { MapWorkspaceIndex, ProvinceGeometry, StateRecord } from './model.js';
 import { validateMapAsync, type MapValidationResult } from './validation.js';
@@ -31,7 +33,8 @@ export type MapOverlay =
   | 'adjacencies'
   | 'building-positions'
   | 'unit-positions'
-  | 'weather-positions';
+  | 'weather-positions'
+  | 'border-quality';
 
 export interface MapRenderOptions {
   layer?: MapBaseLayer;
@@ -307,6 +310,58 @@ function mapCoordinateToPixel(
     : pixel;
 }
 
+const borderRunColors: Record<string, RgbColor> = {
+  province: { r: 255, g: 255, b: 255 },
+  state: { r: 255, g: 64, b: 64 },
+  region: { r: 255, g: 224, b: 64 },
+  country: { r: 255, g: 64, b: 255 },
+};
+
+/**
+ * Border naturalness: the state borders (the province borders when there are no states) in green
+ * where they follow a river, slope, lake shore or terrain change and in orange where they do not,
+ * and the worst artificial run of every layer drawn two pixels wide in the layer's colour.
+ */
+async function paintBorderQuality(
+  index: MapWorkspaceIndex,
+  bytes: Buffer,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const raster = index.raster!;
+  const { input } = borderQualityInputFromIndex(index);
+  const measured = await measureBorderNaturalness(input, {
+    collectPaint: true,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  const surface = input.layers.find(({ name }) => name === 'state') ?? input.layers[0];
+  if (surface !== undefined)
+    forEachBorderEdge(measured.table, surface.labels, (key, natural) => {
+      const [pixel] = borderEdgePixels(raster.width, key);
+      setPixel(
+        bytes,
+        raster.width,
+        raster.height,
+        pixel % raster.width,
+        Math.floor(pixel / raster.width),
+        natural ? { r: 86, g: 214, b: 126 } : { r: 226, g: 128, b: 48 },
+      );
+    });
+  for (const layer of input.layers) {
+    const color = borderRunColors[layer.name] ?? { r: 255, g: 255, b: 255 };
+    for (const keys of measured.paint?.get(layer.name) ?? [])
+      for (const key of keys)
+        for (const pixel of borderEdgePixels(raster.width, key))
+          setPixel(
+            bytes,
+            raster.width,
+            raster.height,
+            pixel % raster.width,
+            Math.floor(pixel / raster.width),
+            color,
+          );
+  }
+}
+
 async function applyOverlays(
   index: MapWorkspaceIndex,
   bytes: Buffer,
@@ -315,6 +370,7 @@ async function applyOverlays(
 ): Promise<void> {
   const raster = index.raster;
   if (raster === undefined) return;
+  if (overlays.has('border-quality')) await paintBorderQuality(index, bytes, signal);
   if (overlays.has('coastlines')) {
     for (let y = 0; y < raster.height; y += 1) {
       if (y % 32 === 0) await renderCheckpoint(signal);

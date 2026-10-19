@@ -62,3 +62,5 @@ Implementation rationale for contributors. For using the server, start with the 
 53. [Lake and water rendering conventions](0053-lake-and-water-rendering-conventions.md)
 54. [Calibrated colour map, graphical terrain rules and appearance validation](0054-calibrated-colour-map-and-appearance-validation.md)
 55. [World edge and seam policy](0061-world-edge-and-seam-policy.md)
+56. [Geography model input for world generation](0055-geography-model-input.md)
+57. [Border naturalness metric and validator](0059-border-naturalness-metric.md)

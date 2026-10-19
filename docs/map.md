@@ -123,14 +123,51 @@ Set `lookupOnly: true` for coordinate, query, and selected-ID lookups without fu
 | `lookupOnly`         | `false`                          | Return only the requested lookups, as described above.                                                                                                                                                                  |
 | `includeOverview`    | `true`                           | Render the full-map PNG and navigator; set `false` to skip the overview render.                                                                                                                                         |
 | `allocationRequests` | `[]`, at most 100                | Preview the next free identifiers: `{ "kind": "state", "requestedId"? }` or `{ "kind": "province", "requestedId"?, "requestedColor"? }`, where `requestedColor` is `{ "r", "g", "b" }`. Not accepted with `lookupOnly`. |
+| `quality`            | `false`                          | Also measure border naturalness (see [Border naturalness](#border-naturalness)). Full inspection only; not accepted with `lookupOnly` or a rendered view.                                                               |
 
-Give `hoi4.map_inspect` a `layer`, `overlays`, `scale`, `tile` or `area` to render that view instead of validating; the result is the same complete catalog and navigator drawn with the chosen base layer and overlays, and lookups (`query`, `coordinates`, IDs) belong in a separate call. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, and building, unit, and weather positions.
+Give `hoi4.map_inspect` a `layer`, `overlays`, `scale`, `tile` or `area` to render that view instead of validating; the result is the same complete catalog and navigator drawn with the chosen base layer and overlays, and lookups (`query`, `coordinates`, IDs) belong in a separate call. Base layers include province, state, strategic region, terrain, continent, owner, controller, cores, claims, and coast. Overlays include coastlines, ports, victory points, resources, state and province buildings, supply nodes, railways, adjacencies, building, unit, and weather positions, and `border-quality` (see [Border naturalness](#border-naturalness)).
 
 A rendered view takes `layer` (default `province`), up to 12 `overlays`, and an integer `scale` from 1 to 16 (default 1).
 
 Pass `tile: { x, y, width, height }` for a reusable bounded PNG, JSON, and HTML view of one top-left bitmap area. The tile preserves the selected base layer and overlays, and its JSON records raster dimensions and province IDs in the area. Identical source revisions and render settings produce identical artifact hashes.
 
 Pass `area: { provinceIds, stateIds, regionIds, padding }` to render the exact bounding area of those map entities with optional pixel padding. The result reports the resolved tile coordinates. An unknown ID or an area larger than 2,048 pixels in either direction is explicit, so a narrower selection can be requested.
+
+## Border naturalness
+
+A map can be structurally valid and still look artificial because its borders ignore the land. `hoi4.map_inspect` with `quality: true` measures how well province, state, strategic-region and country borders follow natural lines, and the `border-quality` overlay shows where they do not. The measurement is offline, deterministic and bounded; it reads `provinces.bmp` and the definitions, the states and regions, and (when present and the size of the province map) `heightmap.bmp`, `rivers.bmp` and `terrain.bmp` with the `common/terrain` entries. A bitmap that is absent or of another size is skipped, listed in `data.quality.skippedInputs` and reported as `MAP_BORDER_INPUT_MISSING`.
+
+A **border** is a land-to-land pixel edge between two different groups of provinces (the east-west seam counts); the coast is counted apart. A border lies on a **natural feature** when it is within 2 pixels of a river, within 1 pixel of a steep height gradient (central difference of at least 2 per pixel), within 1 pixel of a lake, or within 1 pixel of a change between obstacle terrain classes (mountain, forest, jungle, marsh) in `terrain.bmp`. Each layer reports:
+
+| Field                    | Meaning                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `alignment`              | Share of border length in the barrier set (rivers, slopes, lake shores).                                                                                                                      |
+| `baseRate`, `enrichment` | Share of all land on the same features, and `alignment / baseRate`. 1 is chance; vanilla is 1.35 to 1.46, the engineering target 1.6. Null (`not-meaningful`) when the base rate is under 2%. |
+| `naturalShare`           | The plain share of border length on any natural feature, terrain changes included; `naturalShareWithCoast` also counts the coast as a natural line.                                           |
+| `straightFraction`       | Share of samples (every seventh border pixel) whose 24-pixel window of the same border is a straight line (RMS under 0.9 pixel). Vanilla country borders 0.11, target at most 0.12.           |
+| `longRunShare`           | Share of border length in straight segments longer than 60 pixels after simplification (tolerance 3).                                                                                         |
+| `artificialRuns`         | Count and longest length of stretches that follow no feature.                                                                                                                                 |
+| `worstRuns`              | The longest artificial runs (three inline, twenty in the artifact) with both sides, ends, length and chord, so a fix can target them.                                                         |
+
+`MAP_BORDER_ARTIFICIAL_REVIEW` (warning) names a layer below the targets (enrichment 1.6 for every layer; straightness 0.12 for region and country, 0.25 for state, none for province because province borders are shorter than the window). `MAP_BORDER_NOT_MEANINGFUL` (info) means the map has almost no rivers or slopes to align to. `MAP_BORDER_QUALITY_UNAVAILABLE` (warning) means the map has no raster or exceeds the border-edge budget (8 million edges; a vanilla-size map has about 0.4 million). These diagnostics never fail validation. The complete report is the artifact `map-border-quality.<revision>.json`.
+
+Measured with this implementation (the plan's script gave the enrichment values in brackets):
+
+| Map                                           | Layer    | Enrichment  | Natural share | Straight samples |
+| --------------------------------------------- | -------- | ----------- | ------------- | ---------------- |
+| Installed vanilla 1.19.3 (earliest bookmark)  | province | 1.35 (1.37) | 0.69          | 0.67             |
+|                                               | state    | 1.40 (1.42) | 0.70          | 0.20             |
+|                                               | region   | 1.39        | 0.70          | 0.11             |
+|                                               | country  | 1.46 (1.53) | 0.73          | 0.11 (0.093)     |
+| ZIN map of 2026-10-18                         | province | 0.94 (0.94) | 0.08          | 0.99             |
+|                                               | state    | 0.70 (0.69) | 0.07          | 0.37             |
+|                                               | region   | 0.59        | 0.06          | 0.13             |
+|                                               | country  | 0.50 (0.52) | 0.09          | 0.22 (0.178)     |
+| Procedural `create_world`, 1024 x 512, seed 7 | state    | 1.03        | 0.32          | 0.24             |
+
+A 13.1 million pixel map takes about 1.5 seconds and 100 MB of additional memory. The ZIN rows use the installed game's `common/terrain` for the terrain classes. The last row is the repository's own procedural output: its borders sit at chance level against rivers and slopes, which is what the metric exists to show. The same functions are available to other code: `measureBorderNaturalness` for a full report, `buildBorderEdgeTable` and `scoreBorderAssignment` to score many candidate groupings of provinces without reading the raster again, and `checkBorderTargets` for an acceptance check such as the ZIN rule that at least 85% of state-border length and 70% of country-border length follows nature (vanilla itself reaches 0.70 and 0.73 with the default feature radii, so fix the radii in the check).
+
+The `border-quality` overlay is added to any base layer (state is the natural choice): state borders are green where they follow a feature and orange where they do not, and the worst artificial run of each layer is drawn two pixels wide (province white, state red, region yellow, country magenta). It works with `tile` and `area`, and scans the river and terrain bitmaps for that render only.
 
 ## Catalog consistency
 

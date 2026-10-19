@@ -43,10 +43,10 @@ MCP clients may ask for approval to create review files.
 
 ## Maps
 
-| Tool               | Purpose                                                                                                                                      | Writes       |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `hoi4.map_inspect` | Find map problems, search and look up places; render a layer, overlays, tile or area; check script references to map entities.               | review files |
-| `hoi4.map_rewrite` | Create a new world, or create, split, merge and renumber states and provinces, regenerate positions and supply, and remap script references. | mod files    |
+| Tool               | Purpose                                                                                                                                                                                    | Writes       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `hoi4.map_inspect` | Find map problems, search and look up places; render a layer, overlays, tile or area; check script references to map entities; measure how well borders follow rivers, slopes and terrain. | review files |
+| `hoi4.map_rewrite` | Create a new world, or create, split, merge and renumber states and provinces, regenerate positions and supply, and remap script references.                                               | mod files    |
 
 ## Events
 
