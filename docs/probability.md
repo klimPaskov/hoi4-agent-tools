@@ -12,7 +12,7 @@ Use them for event timing and option weights, decision and mission scores, focus
 
 ## Game version
 
-When `gameRoot` is configured, `launcher-settings.json` must identify the supported HOI4 build and checksum for evaluation to run. Without a game root, results identify the adapter version. Proposed source is evaluated in memory.
+The adapters apply the documented weighting rules of `ai_will_do`, `ai_chance`, mean time to happen, `random_list` and AI strategies, which are the same in every game version, so evaluation runs on whatever HOI4 version is installed. When `gameRoot` is configured, `metadata.gameVersionVerification` records the build read from `launcher-settings.json`: `workspace_verified` for the build the adapters were last reviewed against, `workspace_observed` for any other build, and `version_unknown` with a `reason` when the file cannot be read. Without a game root, results identify the adapter version (`adapter_target_only`). Proposed source is evaluated in memory.
 
 ## One call for current weights
 

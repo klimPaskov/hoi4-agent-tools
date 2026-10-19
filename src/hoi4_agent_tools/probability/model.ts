@@ -91,8 +91,15 @@ export interface AdapterDescriptor {
   limitations: string[];
 }
 
+/**
+ * How the installed game relates to the version the adapters were last checked against.
+ * Adapters apply the documented weighting rules to every version; an observed version that
+ * differs from the target is recorded, never refused, so the tools keep working after patches.
+ */
 export interface GameVersionVerification {
-  status: 'workspace_verified' | 'adapter_target_only';
+  status: 'workspace_verified' | 'workspace_observed' | 'version_unknown' | 'adapter_target_only';
+  /** Why the installed version could not be read, for `version_unknown`. */
+  reason?: string;
   adapterTarget: typeof VERIFIED_GAME_VERSION;
   sourcePath?: string;
   observedVersion?: string;

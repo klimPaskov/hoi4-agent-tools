@@ -194,7 +194,7 @@ describe('AI and MTTH analyzer', () => {
     ).rejects.toMatchObject({ code: 'PROBABILITY_SOURCE_PATH_INVALID' });
   });
 
-  it('records the verified installed game identity and rejects unsupported versions', async () => {
+  it('records the installed game identity and analyzes any game version', async () => {
     const verified = await fixture({ rawVersion: '1.19.2.0', checksum: 'd245' });
     const verifiedResult = await new ProbabilityAnalyzer(verified.engine).evaluate({
       workspaceId: verified.workspaceId,
@@ -215,20 +215,26 @@ describe('AI and MTTH analyzer', () => {
     });
     expect(verifiedResult.metadata.requestedMetrics).toEqual(['raw_value']);
 
-    const unsupported = await fixture({ rawVersion: '1.20.0.0', checksum: 'ffff' });
-    await expect(
-      new ProbabilityAnalyzer(unsupported.engine).evaluate({
-        workspaceId: unsupported.workspaceId,
-        adapter: 'direct_random',
-        source: { inlineClausewitz: 'random = { chance = 50 }' },
-        scenarioSet: {
-          schemaVersion: '1.0',
-          id: 'unsupported-game',
-          scenarios: [{ id: 'baseline', state: {} }],
-        },
-        outputs: ['json'],
-      }),
-    ).rejects.toMatchObject({ code: 'PROBABILITY_GAME_VERSION_UNSUPPORTED' });
+    // A later game version is analyzed with the same documented rules and recorded as observed.
+    const later = await fixture({ rawVersion: '1.20.0.0', checksum: 'ffff' });
+    const laterResult = await new ProbabilityAnalyzer(later.engine).evaluate({
+      workspaceId: later.workspaceId,
+      adapter: 'direct_random',
+      source: { inlineClausewitz: 'random = { chance = 50 }' },
+      scenarioSet: {
+        schemaVersion: '1.0',
+        id: 'later-game',
+        scenarios: [{ id: 'baseline', state: {} }],
+      },
+      metrics: ['raw_value'],
+      outputs: ['json'],
+    });
+    expect(laterResult.metadata.gameVersionVerification).toMatchObject({
+      status: 'workspace_observed',
+      observedRawVersion: '1.20.0.0',
+      observedChecksum: 'ffff',
+    });
+    expect(JSON.stringify(laterResult.metadata)).not.toContain('UNSUPPORTED');
   });
 
   it('evaluates focus score races and event option proportional pools independently', async () => {

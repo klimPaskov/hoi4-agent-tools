@@ -1,5 +1,6 @@
 import { compareCodeUnits, hashCanonical } from './canonical.js';
 import type { Diagnostic } from './diagnostics.js';
+import { installedEffectCommands, type DocumentedCommands } from './game-documentation.js';
 import { SymbolIndex, type IndexSkippedSource } from './index.js';
 import { IndexSegmentCache } from './index-segments.js';
 import {
@@ -36,6 +37,8 @@ export interface ScanSnapshot {
   skippedSourceCount: number;
   skippedSources: readonly IndexSkippedSource[];
   diagnostics: Diagnostic[];
+  /** Effect names the installed game documents, when its documentation is readable. */
+  documentedEffects?: DocumentedCommands;
 }
 
 export interface WorkspaceStatus {
@@ -359,6 +362,7 @@ export class CoreEngine {
             this.indexSegments,
             controller.signal,
           );
+          const documentedEffects = await installedEffectCommands(workspace.gameRoot);
           const snapshot = {
             workspaceId,
             revision,
@@ -368,6 +372,7 @@ export class CoreEngine {
             skippedSourceCount: index.skippedSourceCount,
             skippedSources: index.skippedSources,
             diagnostics: index.diagnostics,
+            ...(documentedEffects === undefined ? {} : { documentedEffects }),
           } satisfies ScanSnapshot;
           if ((this.#scanGenerations.get(workspaceId) ?? 0) === generation) {
             // Replace this request's earlier revision and drop earlier generations; keep the

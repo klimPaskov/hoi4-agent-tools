@@ -37,8 +37,8 @@ async function fixture() {
   return { engine, analyzer: new DecisionAnalyzer(engine), sourcePath };
 }
 
-describe('decision analysis on an unverified game version', () => {
-  it('keeps gate evidence and leaves only the AI weights unresolved', async () => {
+describe('decision analysis on a later game version', () => {
+  it('evaluates gates and AI weights on a game version newer than the adapter target', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-decision-version-'));
     temporaryRoots.push(temporary);
     const mod = path.join(temporary, 'mod');
@@ -70,21 +70,24 @@ describe('decision analysis on an unverified game version', () => {
         mode: 'inspect',
         id: 'fund',
         scenarios: [
-          { id: 'approved', actor: 'AAA', state: {}, flags: ['approved'], closedFlags: true },
+          {
+            id: 'approved',
+            actor: 'AAA',
+            state: { political_power: 15 },
+            flags: ['approved'],
+            closedFlags: true,
+          },
         ],
       }),
     );
 
-    expect(inspected.code).toBe('DECISION_ANALYZED_PARTIAL');
+    expect(inspected.code).toBe('DECISION_ANALYZED');
     expect(inspected.data).toMatchObject({
-      complete: false,
+      complete: true,
       outcomes: [{ scenarioId: 'approved', found: true, available: 'true' }],
     });
-    expect(inspected.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: 'PROBABILITY_GAME_VERSION_UNSUPPORTED',
-        severity: 'warning',
-      }),
+    expect(inspected.diagnostics.map(({ code }) => code)).not.toContain(
+      'PROBABILITY_GAME_VERSION_UNSUPPORTED',
     );
   });
 });

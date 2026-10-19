@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 4.3.0 - 2026-10-19
+
+- Run probability analysis on every installed HOI4 version. `metadata.gameVersionVerification` records the observed build as `workspace_verified`, `workspace_observed` or `version_unknown` instead of refusing with `PROBABILITY_GAME_VERSION_UNSUPPORTED` or `PROBABILITY_GAME_VERSION_UNVERIFIED`; decision inspection evaluates AI weights on any version.
+- Recognize every effect the installed game documents in `documentation/effects_documentation.md` as native in event and focus analysis, so effects added by later patches are not reported as missing scripted helpers.
+
 ## 4.2.0 - 2026-10-19
 
 - Keep job workers running when a discovered mod folder is removed after server start. Workers now resolve only workspaces whose roots still exist, while a job for the removed workspace still fails with `WORKSPACE_ROOT_MISSING`.

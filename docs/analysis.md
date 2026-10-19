@@ -102,7 +102,7 @@ Category and decision `allowed`, `visible`, and `available` results remain separ
 Target selection covers explicit lists and arrays plus supported state ownership, control, and continent filters.
 When a target, flag, variable, or helper input is unknown, the corresponding gate remains unresolved.
 This includes `has_variable` and `has_event_target`: an undeclared variable or event target is unknown, not absent, unless the scenario sets `closedFlags: true`.
-AI weights use probability adapters verified for one game version. On another installed version the report keeps the gate, cost and lifecycle evidence, marks the AI part unresolved and returns a `PROBABILITY_GAME_VERSION_UNSUPPORTED` warning.
+AI weights use the probability adapters, which run on any installed game version and record the observed build in their evidence.
 
 Costs distinguish automatic engine political-power payment from a custom affordability trigger and its separate `complete_effect` payment.
 The report identifies direct deductions, possible double payment, missing direct payment, conditional or helper-dependent paths, repeatability, cooldowns, removal, activation, cancellation, and mission timeout paths.

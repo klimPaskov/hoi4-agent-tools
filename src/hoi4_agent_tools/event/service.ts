@@ -15,6 +15,7 @@ import {
   sha256Bytes,
 } from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
+import { installedEffectCommands, type DocumentedCommands } from '../core/game-documentation.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import type { SymbolKind } from '../core/index.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -1100,6 +1101,8 @@ function coherentBranchPartitions(
 
 export class EventChainViewer {
   readonly #state: SharedEventServiceState;
+  /** Effect names the installed game documented at each workspace's last scan. */
+  readonly #documentedEffects = new Map<string, DocumentedCommands | undefined>();
 
   public constructor(private readonly engine: CoreEngine) {
     this.#state = sharedState(engine);
@@ -1160,8 +1163,11 @@ export class EventChainViewer {
       return cached.graph;
     const buildAnalysisMode = requestedAnalysisMode;
     const projectHelpers = buildAnalysisMode === 'focused' ? false : requestedProjectHelpers;
+    const documentedEffects = await installedEffectCommands(workspace.gameRoot);
+    this.#documentedEffects.set(workspaceId, documentedEffects);
     const graph = await buildEventGraphAsync(snapshot, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(documentedEffects === undefined ? {} : { documentedEffects }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
       projectHelpers,
@@ -1842,8 +1848,10 @@ export class EventChainViewer {
       skippedSources: index.skippedSources,
       diagnostics: index.diagnostics,
     };
+    const documentedEffects = this.#documentedEffects.get(workspaceId);
     return buildEventGraph(snapshot, {
       ...(signal === undefined ? {} : { signal }),
+      ...(documentedEffects === undefined ? {} : { documentedEffects }),
       cache: this.#state.fragments,
       workspaceIdentity: workspace.workspaceIdentity,
       projectHelpers: false,

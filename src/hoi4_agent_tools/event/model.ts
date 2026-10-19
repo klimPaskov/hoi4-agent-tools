@@ -261,6 +261,8 @@ export interface EventGraphBuildOptions {
   workspaceIdentity?: string;
   /** Tests or long-lived services may provide their own bounded fragment cache. */
   cache?: EventSemanticFragmentCacheLike;
+  /** Effect names the installed game documents, recognized in addition to the built-in list. */
+  documentedEffects?: { names: ReadonlySet<string>; sha256: string };
 }
 
 export interface EventSemanticFragmentCacheLike {

@@ -1102,59 +1102,40 @@ export class ProbabilityAnalyzer {
     if (adapter === 'custom_weighted_pool' || workspace.gameRoot === undefined)
       return { status: 'adapter_target_only', adapterTarget: VERIFIED_GAME_VERSION };
     const sourcePath = path.join(workspace.gameRoot, 'launcher-settings.json');
+    const unknown = (reason: string): GameVersionVerification => ({
+      status: 'version_unknown',
+      adapterTarget: VERIFIED_GAME_VERSION,
+      sourcePath,
+      reason,
+    });
     let parsed: unknown;
     try {
       parsed = JSON.parse(await readFile(sourcePath, 'utf8')) as unknown;
     } catch (error) {
-      throw new ServiceError(
-        'PROBABILITY_GAME_VERSION_UNVERIFIED',
-        'The configured game version could not be verified from launcher-settings.json',
-        { sourcePath, reason: error instanceof Error ? error.message : String(error) },
-      );
+      return unknown(error instanceof Error ? error.message : String(error));
     }
     if (typeof parsed !== 'object' || parsed === null)
-      throw new ServiceError(
-        'PROBABILITY_GAME_VERSION_UNVERIFIED',
-        'The configured launcher-settings.json does not contain a version object',
-        { sourcePath },
-      );
+      return unknown('launcher-settings.json does not contain a version object');
     const settings = parsed as Record<string, unknown>;
     const observedVersion = typeof settings.version === 'string' ? settings.version : undefined;
     const observedRawVersion =
       typeof settings.rawVersion === 'string' ? settings.rawVersion : undefined;
-    const observedChecksum = observedVersion?.match(/\(([a-z0-9]+)\)\s*$/iu)?.[1];
-    if (
-      observedVersion === undefined ||
-      observedRawVersion === undefined ||
-      observedChecksum === undefined
-    )
-      throw new ServiceError(
-        'PROBABILITY_GAME_VERSION_UNVERIFIED',
-        'The configured launcher-settings.json is missing version, rawVersion, or checksum data',
-        { sourcePath, observedVersion, observedRawVersion, observedChecksum },
-      );
-    if (
-      observedRawVersion !== VERIFIED_GAME_RAW_VERSION ||
-      observedChecksum.toLowerCase() !== VERIFIED_GAME_CHECKSUM
-    )
-      throw new ServiceError(
-        'PROBABILITY_GAME_VERSION_UNSUPPORTED',
-        `Probability adapters are verified for ${VERIFIED_GAME_VERSION}, not the configured game version`,
-        {
-          sourcePath,
-          observedVersion,
-          observedRawVersion,
-          observedChecksum,
-          adapterTarget: VERIFIED_GAME_VERSION,
-        },
-      );
+    const observedChecksum = observedVersion?.match(/\(([a-z0-9]+)\)\s*$/iu)?.[1]?.toLowerCase();
+    if (observedVersion === undefined || observedRawVersion === undefined)
+      return unknown('launcher-settings.json is missing version or rawVersion');
+    // Any installed version is analyzed with the documented rules; the observed identity is
+    // recorded so a result can be traced to the game it describes.
     return {
-      status: 'workspace_verified',
+      status:
+        observedRawVersion === VERIFIED_GAME_RAW_VERSION &&
+        observedChecksum === VERIFIED_GAME_CHECKSUM
+          ? 'workspace_verified'
+          : 'workspace_observed',
       adapterTarget: VERIFIED_GAME_VERSION,
       sourcePath,
       observedVersion,
       observedRawVersion,
-      observedChecksum: observedChecksum.toLowerCase(),
+      ...(observedChecksum === undefined ? {} : { observedChecksum }),
     };
   }
 
