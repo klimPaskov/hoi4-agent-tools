@@ -1005,7 +1005,14 @@ export class AgentNudger {
     validation: MapValidationResult;
     scriptReferences?: { references: number; missing: number };
   }> {
-    const snapshot = await this.scan(workspaceId, principal, signal, scripts, false, true);
+    const snapshot = await this.scan(
+      workspaceId,
+      principal,
+      signal,
+      scripts,
+      false,
+      includeAppearance,
+    );
     const validation = await validateMapAsync(
       snapshot.index,
       signal === undefined ? {} : { signal },
