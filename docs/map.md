@@ -273,11 +273,71 @@ Keys that take exactly one value (`capital`, `state`, `to_state`, `start_state`,
 }
 ```
 
-Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea. Provinces grow evenly from spread seeds (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
+Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
+
+## Water, colour and the world edge
+
+Three behaviours shape how a generated map looks in the game. The tool computes them offline from the engine's own formulas; it never runs the game, so the first in-game look still needs your review.
+
+### Lakes
+
+The engine draws water everywhere with an opacity that depends on the heightmap: a pixel at height 91 or lower is fully opaque, 93 is 56% opaque and 95 or higher is invisible. Every `create_world` therefore writes lake interiors at the sea height 89, with a one to two pixel bank toward the shore (93, then 91), and gives lake pixels the graphical terrain of the ocean (index 15 in the base game). A graphical terrain entry with `texture = 255`, such as the base game's `lakes` entry, names no atlas tile and is never chosen for a category.
+
+Water that does not read as a lake is not written as one. Enclosed water below 60 pixels becomes land (`MAP_LAKE_TOO_SMALL`), and lake water that touches the open sea becomes sea (`MAP_LAKE_CONNECTED_TO_SEA`). Both appear as warnings with the pixel count and a location, so a reference picture's pond is never silently lost. The water colour maps use a shelf-to-deep gradient fitted to the base game and a lighter lake tint. This changes the output of every request that has lakes; the old output was a defect (see the changelog).
+
+### Colour map and graphical terrain
+
+`colormap.profile` is `legacy` (the original flat tints, kept so existing requests do not change) or `calibrated`. `look` (`vanilla-temperate`, `fertile`, `arid` or `custom`) chooses a palette set and selects the calibrated profile; `custom` needs `colormap.palette` with `{ "plains": { "r", "g", "b" }, ... }` for any of plains, farmland, forest, hills, desert, mountain, marsh, jungle, snow, urban, lakes and ocean. The calibrated map follows the base game's measurements (land mean value about 74, over a thousand distinct colours): dark class colours varied by low-frequency noise, hillshade, wetness and a slow hue drift, with permanent snow tinted as snow instead of plains. It also writes farmland (index 5) on wet flat plains, sparse forest (4) in thinned forest and grassy mountain (20) on wet mountains, when the active terrain files define those indices.
+
+```json
+{
+  "id": "world",
+  "kind": "create_world",
+  "reference": { "imagePath": "references/world.png" },
+  "look": "fertile",
+  "edge": {},
+  "ambientFrame": true
+}
+```
+
+### The world edge
+
+The engine wraps the map horizontally, so land that touches the first or last column is cut by a straight line where the world repeats. Without `edge` nothing changes and validation reports `MAP_EDGE_LAND_CUT` for such rows. With `edge`:
+
+| `edge` field | Default                                                     | Meaning                                                                                                                                                                            |
+| ------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`       | `sea-band` when `edge` is given                             | `sea-band` clears land from the east and west edges and the poles to open sea with a ragged outline; `rim` ends land at the seam in an impassable snow range; `none` opts out.     |
+| `bandPx`     | `max(192, 4% of the width)`, at most a quarter of the width | East and west sea band.                                                                                                                                                            |
+| `polarPx`    | 64, at most a quarter of the height                         | North and south sea band.                                                                                                                                                          |
+| `rimPx`      | 160, at most a quarter of the width                         | Width of the rim range for `rim`. Heights rise from 150 to 230, the colour map darkens and `adjacencies.csv` gets one `impassable` row per pair of land provinces across the seam. |
+
+A band wider than a quarter of the world is refused (`MAP_EDGE_BAND_TOO_WIDE`). A city inside a band that would be cleared is an error (`MAP_EDGE_FEATURE_IN_BAND`) naming it; land that is cleared is reported with its pixel count (`MAP_EDGE_LAND_CLEARED`). `ambientFrame: true` writes the north and south frame borders and the logo frame into `ambient_object.txt` at the base map's positions scaled to the world height (the north frame at `z = height + 142`, the south frame at `z = -140`); by default the file is a comment, which drops the frame. The wrap cannot be removed with data; the band makes it invisible and the rim makes it a wall. Which looks better in the game is for you to judge with a probe map. Rivers are routed before the rim is raised, so keep them out of a rim.
+
+### Appearance validation
+
+`hoi4.map_inspect` and every `create_world` check the files that decide the look, for the files the mod ships: `heightmap.bmp`, `terrain.bmp`, `rivers.bmp`, `trees.bmp`, `cities.bmp`, `world_normal.bmp` and the colour maps. Format and size defects are errors; statistical deviations are warnings. Severities are set so the installed base game raises no error.
+
+| Code                                                                                   | Severity         | Meaning                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MAP_LAKE_SURFACE_TOO_HIGH`                                                            | error or warning | Lake pixels above height 91 away from the shore; an error when more than 5% of the lake.                                                                                       |
+| `MAP_LAKE_TEXTURE_UNRENDERED`                                                          | error            | A pixel uses a graphical terrain with `texture = 255`.                                                                                                                         |
+| `MAP_LAKE_TOO_SMALL`, `MAP_LAKE_CONNECTED_TO_SEA`, `MAP_HEIGHT_LAKE_ABOVE_SURFACE`     | warning          | A lake body under 60 pixels, a lake province bordering the sea, lake pixels at or above the water surface.                                                                     |
+| `MAP_HEIGHT_FORMAT`, `_SIZE`, `_LAND_BELOW_COAST`, `_SEA_ABOVE_SURFACE`, `_SEAM_STEP`  | error or warning | Heightmap depth and size, land under 94, sea above 94 and a step between the first and last column.                                                                            |
+| `MAP_TERRAIN_BITMAP_FORMAT`, `_SIZE`, `_INDEX_UNDEFINED`                               | error or warning | Terrain bitmap depth, size and palette indices no `common/terrain` entry defines (an error when widespread).                                                                   |
+| `MAP_RIVER_FORMAT`, `_SIZE`, `_INDEX_INVALID`, `_BLOCK`                                | error            | River bitmap depth, size, indices other than 0 to 11, 254 and 255, and 2 x 2 blocks of river pixels (a warning when rare).                                                     |
+| `MAP_RIVER_PALETTE_COUNT`, `_NOT_ORTHOGONAL`, `_SOURCE_COUNT`, `_ON_WATER`, `_DENSITY` | warning          | Header colour count other than 0, pixels with no orthogonal river neighbour, rivers without exactly one source, river pixels on sea, more than 2.5% of land or 130,000 pixels. |
+| `MAP_TREES_FORMAT`, `_SIZE`, `_INDEX_INVALID`, `_ON_WATER`                             | error or warning | Tree bitmap depth, size (75/256 of the map), indices beyond the palette and trees over open water.                                                                             |
+| `MAP_COLORMAP_SIZE`                                                                    | error            | A colour map that is not half (land) or 1/2, 1/4, 1/8 (water) of the province map.                                                                                             |
+| `MAP_COLORMAP_RANGE`, `MAP_WATER_COLORMAP_FLAT`                                        | warning          | Land mean value outside 50 to 100, fewer than 400 distinct 5-bit colours or a deviation under 15; a flat water map.                                                            |
+| `MAP_NORMAL_SIZE`, `_NOT_UNIT`, `_RESPONSE`, `MAP_CITIES_SIZE`, `_INDEX_UNDEFINED`     | error or warning | Normal map size and unit length, its response to the height step (the base game's is about 2.6) and the city map.                                                              |
+| `MAP_EDGE_LAND_CUT`                                                                    | warning or error | Land on the first or last column; an error when the world was created with `sea-band`.                                                                                         |
+| `MAP_SEAM_LAND_ADJACENCY`, `MAP_POLAR_LAND`, `MAP_COLORMAP_ALPHA_CITY`                 | info             | Land provinces that meet across the seam (and how many are blocked), land in the top and bottom rows, city lights over water.                                                  |
+
+Not implemented: a check that river widths never narrow downstream (it needs a flow direction the file does not hold), and a mesh check for `trees.bmp` beyond the declared palette. Bitmaps are read in row strips and validation yields between strips, so a 13-million-pixel map stays cancellable and within memory.
 
 ## Worked example: build a world, then reshape it
 

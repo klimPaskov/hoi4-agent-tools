@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix lakes in generated worlds (ADR 0053). Lake pixels are written at the sea height 89 with a one to two pixel bank instead of height 93, where the engine draws water only 56% opaque, and use the ocean's graphical terrain instead of index 14, whose `lakes` entry names no atlas tile (`texture = 255`). `buildWorldContext` never selects such an entry and reports it in `unrenderedTerrain`. Enclosed water below 60 pixels becomes land (`MAP_LAKE_TOO_SMALL`) and lake water that touches the open sea becomes sea (`MAP_LAKE_CONNECTED_TO_SEA`). The water colour maps now follow the base game (shelf-to-deep gradient, lake tint). This changes the heightmap, terrain bitmap and water colour maps of every `create_world` request that has lakes, so their file hashes change; provinces, states, countries and the other files are unchanged for a seed.
+- Add optional `create_world.look` (`vanilla-temperate`, `fertile`, `arid`, `custom`) and `colormap` (`profile`: `calibrated` or `legacy`, `palette`) for a dark, varied land colour map calibrated to the base game, permanent-snow tint, and farmland, sparse-forest and grassy-mountain terrain indices (ADR 0054). Without them the colour map is unchanged.
+- Add optional `create_world.edge` (`mode`: `sea-band`, `rim`, `none`; `bandPx`, `polarPx`, `rimPx`) and `ambientFrame` for the wrapping world seam and the north and south frame borders (ADR 0061), with the diagnostics `MAP_EDGE_LAND_CLEARED`, `MAP_EDGE_FEATURE_IN_BAND`, `MAP_EDGE_BAND_TOO_WIDE` and `MAP_EDGE_RIM_ADJACENCIES`. Without them nothing changes.
+- Validate the appearance files (`MAP_RIVER_*`, `MAP_TERRAIN_BITMAP_*`, `MAP_HEIGHT_*`, `MAP_TREES_*`, `MAP_COLORMAP_*`, `MAP_WATER_COLORMAP_FLAT`, `MAP_NORMAL_*`, `MAP_CITIES_*`, `MAP_LAKE_*`, `MAP_EDGE_LAND_CUT`, `MAP_SEAM_LAND_ADJACENCY`, `MAP_POLAR_LAND`) in `hoi4.map_inspect` and in every world being created. Thresholds are set so the installed base game raises no error. Existing mods can see new warnings; only a defect that covers a whole lake, river or file is an error.
+- Public schema change: new optional fields on `create_world` (minor version at release; the schemas are regenerated).
+
 ## 4.3.0 - 2026-10-19
 
 - Run probability analysis on every installed HOI4 version. `metadata.gameVersionVerification` records the observed build as `workspace_verified`, `workspace_observed` or `version_unknown` instead of refusing with `PROBABILITY_GAME_VERSION_UNSUPPORTED` or `PROBABILITY_GAME_VERSION_UNVERIFIED`; decision inspection evaluates AI weights on any version.
