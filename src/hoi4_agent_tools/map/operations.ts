@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
-import { compareCodeUnits, deterministicId, sha256Bytes } from '../core/canonical.js';
+import {
+  canonicalJson,
+  compareCodeUnits,
+  deterministicId,
+  sha256Bytes,
+} from '../core/canonical.js';
 import type { Diagnostic } from '../core/diagnostics.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
@@ -54,6 +59,8 @@ import type {
   WorldLookInput,
   WorldReferenceInput,
 } from '../schemas/map.js';
+import type { GeographyModelInput } from '../schemas/geography.js';
+import type { PreparedGeography } from './geography/preparation.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -71,6 +78,8 @@ export interface PreparedReferenceWorld {
 
 export interface MapPlanningContext {
   referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
+  /** Geography models prepared and validated by the authorized workspace service. */
+  geographyModels?: ReadonlyMap<string, PreparedGeography>;
 }
 
 type MapOperationSteps<T> = Generator<void, T, void>;
@@ -471,6 +480,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   seaProvincesPerRegion?: number;
   countries?: WorldCountry[];
   reference?: WorldReferenceInput;
+  geography?: GeographyModelInput;
+  geographyPath?: string;
   continentNames?: string[];
   startDate?: string;
   rivers?: number;
@@ -5475,6 +5486,25 @@ function applyCreateWorld(
   operation: CreateWorldOperation,
   context: MapPlanningContext,
 ): Diagnostic[] {
+  const geography = context.geographyModels?.get(operation.id);
+  if (operation.geography !== undefined || operation.geographyPath !== undefined) {
+    if (geography === undefined)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_NOT_PREPARED',
+        'Geography models must be prepared by the authorized workspace service',
+      );
+    if (!geography.valid)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_INVALID',
+        'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
+        { modelHash: geography.geography.hash },
+      );
+    throw new ServiceError(
+      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+      'The geography model is valid, but this version cannot synthesize relief, rivers or biomes from it yet; use preview:true to review the model overlay and report',
+      { modelHash: geography.geography.hash },
+    );
+  }
   const reference = context.referenceWorlds?.get(operation.id);
   if (operation.reference !== undefined && reference === undefined)
     throw new ServiceError(
@@ -5778,6 +5808,23 @@ function applyEntityLocator(
   addChange(changes, locator.file.relativePath, output, operation.id, 'text/plain');
 }
 
+/**
+ * The operation as the transaction manifest records it. An inline geography model can hold
+ * megabytes; the manifest keeps its SHA-256 and size instead, which still bind the plan hash to
+ * the exact model, and a model given by path is bound by the file's read dependency.
+ */
+function manifestOperationData(operation: MapOperation): Record<string, unknown> {
+  const data = JSON.parse(JSON.stringify(operation)) as Record<string, unknown>;
+  if (operation.kind === 'create_world' && operation.geography !== undefined) {
+    const canonical = canonicalJson(operation.geography);
+    data.geography = {
+      sha256: sha256Bytes(canonical),
+      bytes: Buffer.byteLength(canonical, 'utf8'),
+    };
+  }
+  return data;
+}
+
 function* planMapOperationSteps(
   base: MapWorkspaceIndex,
   operations: readonly MapOperation[],
@@ -5807,7 +5854,7 @@ function* planMapOperationSteps(
       id: operation.id,
       kind: operation.kind,
       summary: operation.summary ?? operation.kind.replaceAll('_', ' '),
-      data: JSON.parse(JSON.stringify(operation)) as Record<string, unknown>,
+      data: manifestOperationData(operation),
     });
     const changesCheckpoint = new Map(
       [...changes].map(([key, change]) => [

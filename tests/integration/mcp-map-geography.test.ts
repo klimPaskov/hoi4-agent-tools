@@ -1,0 +1,370 @@
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { CallToolResultSchema, CreateTaskResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import sharp from 'sharp';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
+import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
+import { syntheticGeography } from '../helpers/geography-fixture.js';
+
+const cleanup: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+  for (const action of cleanup.splice(0).reverse()) await action();
+});
+
+async function fixture() {
+  const root = await mkdtemp(path.join(tmpdir(), 'hoi4-map-geography-'));
+  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  const fixtureRoot = path.resolve('fixtures', 'map', 'roots');
+  for (const kind of ['mod', 'game', 'dependency'])
+    await cp(path.join(fixtureRoot, kind), path.join(root, kind), { recursive: true });
+  const runtimeRoot = path.join(root, 'runtime');
+  const engine = new CoreEngine(
+    await WorkspaceResolver.create(
+      serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(root, 'state'),
+        storageRoots: [runtimeRoot],
+        workspaces: [
+          {
+            id: 'test',
+            name: 'Map geography fixture',
+            root: path.join(root, 'mod'),
+            gameRoot: path.join(root, 'game'),
+            dependencyRoots: [path.join(root, 'dependency')],
+            artifactRoot: path.join(runtimeRoot, 'artifacts'),
+            cacheRoot: path.join(runtimeRoot, 'cache'),
+          },
+        ],
+      }),
+    ),
+  );
+  await engine.initialize();
+  const server = createMcpServer(engine);
+  const client = new Client({ name: 'map-geography-test', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  cleanup.push(async () => {
+    await client.close();
+    await server.close();
+  });
+  return { client, root, modRoot: path.join(root, 'mod') };
+}
+
+async function sourceInventory(root: string): Promise<Record<string, string>> {
+  const files: Record<string, string> = {};
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      for (const [relative, content] of Object.entries(await sourceInventory(target)))
+        files[`${entry.name}/${relative}`] = content;
+    } else if (entry.isFile()) files[entry.name] = (await readFile(target)).toString('base64');
+  }
+  return files;
+}
+
+async function completedTask(client: Client, name: string, arguments_: Record<string, unknown>) {
+  const created = await client.request(
+    { method: 'tools/call', params: { name, arguments: arguments_ } },
+    CreateTaskResultSchema,
+    { task: { ttl: 60_000 } },
+  );
+  await vi.waitFor(
+    async () => {
+      expect((await client.experimental.tasks.getTask(created.task.taskId)).status).toBe(
+        'completed',
+      );
+    },
+    { timeout: 60_000, interval: 50 },
+  );
+  return client.experimental.tasks.getTaskResult(created.task.taskId, CallToolResultSchema);
+}
+
+interface PublicResult {
+  status: string;
+  code: string;
+  changedFiles: string[];
+  data: {
+    execution: string;
+    geography?: Array<Record<string, unknown>>;
+    fileCount: number;
+    artifactCount: number;
+  };
+  artifacts: Array<{ name: string; mimeType: string }>;
+  blockers: Array<{ code: string; message: string }>;
+  diagnostics: Array<{ code: string; severity: string }>;
+}
+
+const create = (extra: Record<string, unknown>) => ({
+  id: 'world',
+  kind: 'create_world',
+  width: 4096,
+  height: 2048,
+  ...extra,
+});
+
+describe('geography model through hoi4.map_rewrite', () => {
+  it('previews an inline model: overlay, report and counts, without touching the mod', async () => {
+    const { client, modRoot } = await fixture();
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [create({ geography: syntheticGeography() })],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content).toMatchObject({
+      status: 'ok',
+      code: 'MAP_GEOGRAPHY_PREVIEW_READY',
+      changedFiles: [],
+      data: { execution: 'preview', fileCount: 0, artifactCount: 2 },
+    });
+    expect(content.data.geography).toEqual([
+      expect.objectContaining({
+        operationId: 'world',
+        valid: true,
+        source: 'inline',
+        width: 4096,
+        height: 2048,
+        featureCount: 16,
+        errorCount: 0,
+        warningCount: 0,
+        synthesis: 'unavailable',
+        counts: expect.objectContaining({ land: 2, sea: 1, river: 2, range: 1, pass: 1 }),
+      }),
+    ]);
+    expect(content.artifacts.map(({ name, mimeType }) => [name, mimeType])).toEqual([
+      ['map-geography-overlay.png', 'image/png'],
+      ['map-geography-report.json', 'application/json'],
+    ]);
+    expect(content.diagnostics.map(({ code }) => code)).toContain(
+      'MAP_GEOGRAPHY_PREVIEW_MODEL_ONLY',
+    );
+    expect(JSON.stringify(content)).not.toMatch(/transactionId|planHash/u);
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+
+  it('previews a model read from a workspace file and links its hash into the report', async () => {
+    const { client, modRoot } = await fixture();
+    await mkdir(path.join(modRoot, 'geography'), { recursive: true });
+    const text = JSON.stringify(syntheticGeography(), null, 2);
+    await writeFile(path.join(modRoot, 'geography', 'world.json'), text);
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [create({ geographyPath: 'geography/world.json' })],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('ok');
+    expect(content.data.geography?.[0]).toMatchObject({ source: 'file', valid: true });
+    expect(content.data.geography?.[0]?.sourceSha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+
+  it('serves the overlay and report as readable resources', async () => {
+    const { client } = await fixture();
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [create({ geography: syntheticGeography() })],
+      },
+    });
+    const content = result.structuredContent as unknown as {
+      artifacts: Array<{ name: string; uri: string }>;
+    };
+    const overlay = content.artifacts.find(({ name }) => name === 'map-geography-overlay.png')!;
+    const report = content.artifacts.find(({ name }) => name === 'map-geography-report.json')!;
+    const png = await client.readResource({ uri: overlay.uri });
+    const blob = (png.contents[0] as { blob?: string }).blob!;
+    const metadata = await sharp(Buffer.from(blob, 'base64')).metadata();
+    expect([metadata.width, metadata.height]).toEqual([1536, 768]);
+    const json = await client.readResource({ uri: report.uri });
+    const parsed = JSON.parse((json.contents[0] as { text: string }).text) as {
+      valid: boolean;
+      features: Array<{ id: string }>;
+    };
+    expect(parsed.valid).toBe(true);
+    expect(parsed.features.map(({ id }) => id)).toContain('spine_gap');
+  });
+
+  it('returns a blocked preview with the defects of an invalid model', async () => {
+    const { client, modRoot } = await fixture();
+    const model = syntheticGeography();
+    model.sites?.push({ id: 'buoy', kind: 'port', at: [0.65, 0.3] });
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: { workspaceId: 'test', preview: true, operations: [create({ geography: model })] },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content).toMatchObject({ status: 'blocked', code: 'MAP_GEOGRAPHY_PREVIEW_BLOCKED' });
+    expect(content.blockers.map(({ code }) => code)).toContain('MAP_GEOGRAPHY_SITE_IN_WATER');
+    expect(content.data.geography?.[0]).toMatchObject({ valid: false, errorCount: 1 });
+    expect(content.artifacts.map(({ name }) => name)).toContain('map-geography-overlay.png');
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+
+  it('blocks a write because synthesis from the model is not available yet', async () => {
+    const { client, modRoot } = await fixture();
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: { workspaceId: 'test', operations: [create({ geography: syntheticGeography() })] },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('blocked');
+    expect(content.changedFiles).toEqual([]);
+    expect(content.blockers.map(({ code }) => code)).toContain(
+      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+    );
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+
+  it('blocks a write of an invalid model with its own code', async () => {
+    const { client, modRoot } = await fixture();
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: { workspaceId: 'test', operations: [create({ geography: { version: 1 } })] },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('blocked');
+    expect(content.blockers.map(({ code }) => code)).toEqual(
+      expect.arrayContaining(['MAP_GEOGRAPHY_INVALID', 'MAP_GEOGRAPHY_NO_LAND']),
+    );
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+
+  it('runs the same preview as a background task with an identical result', async () => {
+    const { client } = await fixture();
+    const input = {
+      workspaceId: 'test',
+      preview: true,
+      operations: [create({ geography: syntheticGeography() })],
+    };
+    const ordinary = await client.callTool({ name: 'hoi4.map_rewrite', arguments: input });
+    const task = await completedTask(client, 'hoi4.map_rewrite', {
+      ...input,
+      requestKey: 'geography-preview',
+    });
+    expect(task.structuredContent).toEqual(ordinary.structuredContent);
+  }, 60_000);
+
+  async function failure(client: Client, operation: Record<string, unknown>, preview = true) {
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: { workspaceId: 'test', preview, operations: [operation] },
+    });
+    const content = result.structuredContent as unknown as { status: string; code: string };
+    return { isError: result.isError, status: content.status, code: content.code };
+  }
+
+  it.each([
+    ['a parent traversal', '../outside.json'],
+    ['an absolute path', 'C:\\outside.json'],
+    ['a non-json file', 'geography/world.txt'],
+    ['an alternate data stream', 'geography/world.json:stream'],
+  ])('rejects %s in geographyPath before reading anything', async (_label, geographyPath) => {
+    const { client } = await fixture();
+    expect(await failure(client, create({ geographyPath }))).toEqual({
+      isError: true,
+      status: 'error',
+      code: 'INVALID_ARGUMENTS',
+    });
+  });
+
+  it('rejects both sources, an unknown key and a model that fails its schema', async () => {
+    const { client } = await fixture();
+    const expected = { isError: true, status: 'error', code: 'INVALID_ARGUMENTS' };
+    expect(
+      await failure(
+        client,
+        create({ geography: syntheticGeography(), geographyPath: 'geography/world.json' }),
+      ),
+    ).toEqual(expected);
+    expect(await failure(client, create({ geography: { version: 1, mountains: [] } }))).toEqual(
+      expected,
+    );
+    expect(
+      await failure(
+        client,
+        create({
+          geography: {
+            version: 1,
+            lands: [
+              {
+                id: 'a',
+                polygons: [
+                  [
+                    [0, 0],
+                    [2, 0],
+                    [0, 1],
+                  ],
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual(expected);
+  });
+
+  it('refuses a model file that escapes the workspace through a junction', async () => {
+    const { client, root, modRoot } = await fixture();
+    const outside = path.join(root, 'outside');
+    await mkdir(outside, { recursive: true });
+    await writeFile(path.join(outside, 'world.json'), JSON.stringify(syntheticGeography()));
+    await mkdir(path.join(modRoot, 'geography'), { recursive: true });
+    await symlink(
+      outside,
+      path.join(modRoot, 'geography', 'escape'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    expect(await failure(client, create({ geographyPath: 'geography/escape/world.json' }))).toEqual(
+      {
+        isError: true,
+        status: 'error',
+        code: 'PATH_NOT_FOUND_IN_ROOTS',
+      },
+    );
+  });
+
+  it('reports unusable model files as errors, never as a partial preview or write', async () => {
+    const { client, modRoot } = await fixture();
+    await mkdir(path.join(modRoot, 'geography'), { recursive: true });
+    await writeFile(path.join(modRoot, 'geography', 'broken.json'), '{ "version": 1, ');
+    await writeFile(
+      path.join(modRoot, 'geography', 'wrong.json'),
+      JSON.stringify({ version: 2, lands: [] }),
+    );
+    const before = await sourceInventory(modRoot);
+    for (const preview of [true, false]) {
+      expect(
+        await failure(client, create({ geographyPath: 'geography/broken.json' }), preview),
+      ).toEqual({ isError: true, status: 'error', code: 'MAP_GEOGRAPHY_JSON_INVALID' });
+      expect(
+        await failure(client, create({ geographyPath: 'geography/wrong.json' }), preview),
+      ).toEqual({ isError: true, status: 'error', code: 'MAP_GEOGRAPHY_SCHEMA_INVALID' });
+      expect(
+        await failure(client, create({ geographyPath: 'geography/missing.json' }), preview),
+      ).toMatchObject({ isError: true, status: 'error' });
+    }
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  });
+});

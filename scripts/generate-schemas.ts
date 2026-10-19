@@ -17,6 +17,7 @@ import {
   focusPlanningSidecarSchema,
   focusTreePlanSchema,
 } from '../src/hoi4_agent_tools/schemas/focus.js';
+import { geographyModelSchema } from '../src/hoi4_agent_tools/schemas/geography.js';
 import { mapOperationSchema } from '../src/hoi4_agent_tools/schemas/map.js';
 import {
   mechanicTestRequestSchema,
@@ -78,6 +79,7 @@ const schemas: (readonly [string, z.ZodType])[] = [
   ['gui-helper.schema.json', GuiHelperDocumentSchema],
   ['gui-animation-source.schema.json', GuiAnimationSourceManifestSchema],
   ['gui-scenario.schema.json', GuiPreviewScenarioSchema],
+  ['geography-model.schema.json', geographyModelSchema],
   ['map-operation.schema.json', mapOperationSchema],
   ['event-feature-manifest.schema.json', eventFeatureManifestSchema],
   ['reference-context-input.schema.json', referenceContextRequestSchema],
