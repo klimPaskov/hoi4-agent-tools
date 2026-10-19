@@ -13,9 +13,22 @@ import {
   type SourceDocument,
 } from './source/index.js';
 
+/**
+ * Semantic references retained per workspace scan. A large mod with the base game holds several
+ * hundred thousand (one measured mod with vanilla held about 660,000), so the ceiling is the supported
+ * maximum rather than a fraction of it.
+ */
+export const IMPACT_SEMANTIC_MAX_REFERENCES = 1_000_000;
+
 export interface ImpactSemanticResult {
   references: ReferenceRecord[];
-  unresolved: Array<{ path: string; location?: SourceLocation; reason: string }>;
+  /** References whose target cannot be named statically, with the kind they would reach. */
+  unresolved: Array<{
+    path: string;
+    location?: SourceLocation;
+    reason: string;
+    toKind: SymbolKind;
+  }>;
   scannedFiles: number;
   complete: boolean;
 }
@@ -164,10 +177,14 @@ function staticTarget(value: string): boolean {
 /** Extracts typed script edges while preserving unknown dynamic references. */
 export function scanImpactSemanticReferences(
   snapshot: ScanSnapshot,
-  maxReferences = 200_000,
+  maxReferences = IMPACT_SEMANTIC_MAX_REFERENCES,
   options: { includeOnActions?: boolean } = {},
 ): ImpactSemanticResult {
-  if (!Number.isSafeInteger(maxReferences) || maxReferences < 1 || maxReferences > 1_000_000)
+  if (
+    !Number.isSafeInteger(maxReferences) ||
+    maxReferences < 1 ||
+    maxReferences > IMPACT_SEMANTIC_MAX_REFERENCES
+  )
     throw new RangeError('Semantic reference limit is outside the supported range');
   const references: ReferenceRecord[] = [];
   const unresolved: ImpactSemanticResult['unresolved'] = [];
@@ -188,6 +205,7 @@ export function scanImpactSemanticReferences(
           path: file.displayPath,
           location: nodeLocation(document, node, owner.id),
           reason: `Dynamic ${referenceKind} target ${target} cannot be resolved statically`,
+          toKind,
         });
       else complete = false;
       return;
@@ -284,6 +302,7 @@ export function scanImpactSemanticReferences(
                 path: file.displayPath,
                 location: nodeLocation(document, assignment, current.id),
                 reason: `Cannot identify ${key} state key`,
+                toKind: stateOperation.kind,
               });
             else complete = false;
           } else

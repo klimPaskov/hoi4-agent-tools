@@ -181,16 +181,16 @@ function boundedSelection(
       graph.nodes.filter(({ kind }) => kind === 'terminal').map(({ id }) => id),
     );
     add(terminals);
-    add(
-      graph.edges.filter(({ to }) => terminals.includes(to)).flatMap(({ from, to }) => [from, to]),
-    );
+    const terminalIds = new Set(terminals);
+    add(graph.edges.filter(({ to }) => terminalIds.has(to)).flatMap(({ from, to }) => [from, to]));
   } else if (options.view === 'unresolved') {
     const unresolved = withinSelector(
       graph.nodes.filter(({ kind }) => kind === 'unresolved').map(({ id }) => id),
     );
     add(unresolved);
+    const unresolvedIds = new Set(unresolved);
     add(
-      graph.edges.filter(({ to }) => unresolved.includes(to)).flatMap(({ from, to }) => [from, to]),
+      graph.edges.filter(({ to }) => unresolvedIds.has(to)).flatMap(({ from, to }) => [from, to]),
     );
   } else if (options.view === 'neighborhood' || options.view === 'reachability') {
     add(selectorTrace);

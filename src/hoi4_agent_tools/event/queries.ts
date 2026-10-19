@@ -17,6 +17,7 @@ import type {
   EventIssue,
   EventStateAccess,
 } from './model.js';
+import { compatibleProducerKeys, hasUnknownSavedScopeStorage, stateKey } from './state-keys.js';
 
 export interface EventFeatureManifest {
   id?: string;
@@ -525,44 +526,6 @@ export function explainEventPath(
   };
 }
 
-function stateKey(access: Pick<EventStateAccess, 'kind' | 'name' | 'scope' | 'metadata'>): string {
-  const scope = access.kind === 'variable' || access.kind === 'array' ? `:${access.scope}` : '';
-  const storage =
-    access.kind === 'saved_scope'
-      ? `:${
-          access.metadata.storage === 'global' || access.metadata.storage === 'local'
-            ? access.metadata.storage
-            : 'unknown'
-        }`
-      : '';
-  return `${access.kind}:${access.name}${scope}${storage}`;
-}
-
-function compatibleProducerKeys(
-  access: Pick<EventStateAccess, 'kind' | 'name' | 'scope' | 'metadata'>,
-): string[] {
-  if (
-    access.kind !== 'saved_scope' ||
-    access.metadata.storage === 'global' ||
-    access.metadata.storage === 'local'
-  ) {
-    return [stateKey(access)];
-  }
-  return [
-    `saved_scope:${access.name}:global`,
-    `saved_scope:${access.name}:local`,
-    `saved_scope:${access.name}:unknown`,
-  ];
-}
-
-function hasUnknownSavedScopeStorage(access: Pick<EventStateAccess, 'kind' | 'metadata'>): boolean {
-  return (
-    access.kind === 'saved_scope' &&
-    access.metadata.storage !== 'global' &&
-    access.metadata.storage !== 'local'
-  );
-}
-
 function compatibleProducers(
   producers: ReadonlyMap<string, EventStateAccess[]>,
   consumer: Pick<EventStateAccess, 'kind' | 'name' | 'scope' | 'metadata'>,
@@ -765,21 +728,23 @@ export function lintEventGraph(
   signal?.throwIfAborted();
   if (selector === undefined) return [...graph.issues];
   const selected = selectedOwnershipIds(graph, selector, signal);
-  const selectedNodes = graph.nodes.filter(({ id }, index) => {
+  // Source ranges of the selected nodes, grouped by file so each issue checks only its own file.
+  const selectedRanges = new Map<string, Array<{ start: number; end: number }>>();
+  for (const [index, { id, location }] of graph.nodes.entries()) {
     if ((index & 255) === 0) signal?.throwIfAborted();
-    return selected.has(id);
-  });
+    if (location === undefined || !selected.has(id)) continue;
+    const ranges = selectedRanges.get(location.path) ?? [];
+    ranges.push({ start: location.start.offset, end: location.end.offset });
+    selectedRanges.set(location.path, ranges);
+  }
   return graph.issues.filter((issue, index) => {
     if ((index & 255) === 0) signal?.throwIfAborted();
+    const location = issue.location;
     return (
       issueSubjectIds(issue).some((id) => selected.has(id)) ||
-      (issue.location !== undefined &&
-        selectedNodes.some(
-          ({ location }) =>
-            location !== undefined &&
-            location.path === issue.location?.path &&
-            issue.location.start.offset >= location.start.offset &&
-            issue.location.end.offset <= location.end.offset,
+      (location !== undefined &&
+        (selectedRanges.get(location.path) ?? []).some(
+          ({ start, end }) => location.start.offset >= start && location.end.offset <= end,
         ))
     );
   });

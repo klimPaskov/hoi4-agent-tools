@@ -4,7 +4,10 @@ import { decodeSource } from '../core/source/encoding.js';
 import type { z } from 'zod/v4';
 import type { sourceLookupRequestSchema, sourceLookupDataSchema } from '../schemas/reference.js';
 import { readBoundedJsonLines } from './lines.js';
-import { scanImpactSemanticReferences } from '../core/impact-semantic.js';
+import {
+  IMPACT_SEMANTIC_MAX_REFERENCES,
+  scanImpactSemanticReferences,
+} from '../core/impact-semantic.js';
 import { parseClausewitz } from '../core/source/parser.js';
 import { navigateSource } from './source-navigation.js';
 import { locatePatterns, locateSource } from './source-locate.js';
@@ -184,7 +187,9 @@ export async function sourceLookup(
     });
   let semantic = input.includeReferences ? semanticCache.get(snapshot) : undefined;
   if (input.includeReferences && semantic === undefined) {
-    semantic = scanImpactSemanticReferences(snapshot, 200_000, { includeOnActions: true });
+    semantic = scanImpactSemanticReferences(snapshot, IMPACT_SEMANTIC_MAX_REFERENCES, {
+      includeOnActions: true,
+    });
     semanticCache.set(snapshot, semantic);
   }
   const referenceIdentities = new Set<string>();

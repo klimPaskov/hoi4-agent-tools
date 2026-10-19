@@ -10,6 +10,7 @@ import {
   eventCompareRequestSchema,
 } from '../schemas/event.js';
 import type { EventGraphSnapshot } from './model.js';
+import { EVENT_GRAPH_SNAPSHOT_MAX_BYTES } from './limits.js';
 import {
   eventDiagnostics,
   type EventChainViewer,
@@ -117,6 +118,7 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
     ...(inspected.helperExpansion === undefined
       ? {}
       : { helperExpansion: inspected.helperExpansion }),
+    ...(inspected.summary === undefined ? {} : { summary: inspected.summary }),
     boundary: {
       direction: input.direction ?? 'both',
       maxDepth: inspected.helperExpansion?.maxDepth ?? input.maxDepth ?? 8,
@@ -134,6 +136,15 @@ export async function inspectEvents(viewer: EventChainViewer, input: EventInspec
       : 'EVENT_INSPECTED_PARTIAL';
   setInlineFilesScanned(result, inspected.graph.filesScanned);
   result.artifacts = inspected.artifacts.map(publicArtifactLink);
+  if (inspected.graphSnapshotOmitted === true)
+    result.diagnostics.push({
+      category: 'configuration',
+      code: 'EVENT_GRAPH_SNAPSHOT_OMITTED',
+      severity: 'info',
+      message:
+        'The workspace graph is too large to retain as a snapshot artifact; the scan report is linked, and comparisons use revisions held by this server',
+      details: { maximumBytes: EVENT_GRAPH_SNAPSHOT_MAX_BYTES },
+    });
   result.validation = eventGraphValidation(inspected.graph);
   if (inspected.helperExpansion !== undefined)
     result.validation = helperExpansionValidation(inspected.helperExpansion);
@@ -154,6 +165,7 @@ export async function renderEvents(viewer: EventChainViewer, input: EventRenderS
       selectedNodes: rendered.render.selectedNodeIds.length,
       omittedNodes: rendered.render.omittedNodeCount,
       branchRenders: rendered.branches.length,
+      omittedBranchRenders: rendered.budgetOmittedBranches,
     },
     boundary: {
       direction: input.direction ?? 'both',

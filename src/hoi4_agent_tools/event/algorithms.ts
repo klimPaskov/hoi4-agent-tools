@@ -470,10 +470,11 @@ export function eventStronglyConnectedComponents(
     budget.spend('strongly_connected_components'),
   );
   budget.check();
+  // Collect self-loops once: scanning every edge per component is quadratic on large mods.
+  const selfLoops = new Set(edges.filter(({ from, to }) => from === to).map(({ from }) => from));
   return components
     .map((nodeIds) => {
-      const members = new Set(nodeIds);
-      const selfLoop = edges.some(({ from, to }) => from === to && members.has(from));
+      const selfLoop = nodeIds.some((nodeId) => selfLoops.has(nodeId));
       return {
         id: `scc:${nodeIds.join('|')}`,
         nodeIds,

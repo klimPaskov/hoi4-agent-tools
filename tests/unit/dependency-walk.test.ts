@@ -73,6 +73,57 @@ describe('revision-bound dependency frontiers', () => {
     expect(snapshot(cancelled)).toEqual(original);
   });
 
+  it('keeps completed records and resumes as complete when a truncating walk hits its ceiling', () => {
+    const truncating: DependencyWalkInput = { ...input, maximumSteps: 6, onWorkLimit: 'truncate' };
+    const walk = walkDependencies(truncating);
+    expect(walk.state).toMatchObject({ complete: true, truncated: true, started: false });
+    expect(walk.state.stack).toEqual([]);
+    expect(walk.state.root).toBeLessThan(input.roots.length);
+    expect(walk.state.records.length).toBeGreaterThan(0);
+    for (const record of walk.state.records)
+      expect(walk.path(record.path)[0]!.id).toBe(input.roots[record.root]);
+    const restored = new DependencyWalk(truncating, snapshot(walk));
+    expect(restored.state.truncated).toBe(true);
+    // A walk that fails at its ceiling never accepts a truncated checkpoint.
+    expect(
+      () => new DependencyWalk({ ...truncating, onWorkLimit: 'error' }, snapshot(walk)),
+    ).toThrow(expect.objectContaining({ code: 'DEPENDENCY_CHECKPOINT_STALE' }));
+    expect(walkDependencies(input).state.truncated).toBeUndefined();
+  });
+
+  it('spaces checkpoints by the size of the last save so a growing frontier saves rarely', async () => {
+    const wide: DependencyWalkInput = {
+      ...input,
+      roots: ['root'],
+      branches: ['a'],
+      maximumSteps: 100_000,
+      edges: [
+        input.edges[0]!,
+        ...Array.from({ length: 20_000 }, (_, index) => ({
+          id: `leaf-${index}`,
+          from: 'a',
+          to: `outcome-${index}`,
+        })),
+      ],
+    };
+    const steps: number[] = [];
+    const checkpoints: AnalysisCheckpoints = {
+      load: () => Promise.resolve(undefined),
+      save: (_key, _revision, state) => {
+        steps.push((state as DependencyWalkState).steps);
+        return Promise.resolve();
+      },
+    };
+    await withAnalysisCheckpoints(checkpoints, () => walkDependenciesAsync(wide));
+    expect(steps[0]).toBe(2_048);
+    // Without spacing, 20,000 steps would save about ten times.
+    expect(steps.length).toBeLessThanOrEqual(5);
+    for (let index = 1; index < steps.length - 1; index += 1)
+      expect(steps[index]! - steps[index - 1]!).toBeGreaterThan(
+        steps[index - 1]! - (steps[index - 2] ?? 0),
+      );
+  });
+
   it('validates the version, root, adjacency cursor and path continuity before resuming', () => {
     const walk = new DependencyWalk(input);
     walk.advance(5);

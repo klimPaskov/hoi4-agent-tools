@@ -415,6 +415,57 @@ describe('event source protocol semantics', () => {
     );
   });
 
+  it('treats native effect arguments and condition blocks as non-calls but keeps nested effects', () => {
+    const fragment = analyze(
+      containingEvent(`\timmediate = {
+\t\tadd_building_construction = { type = industrial_complex level = 1 instant_build = yes }
+\t\traid_damage_units = { org_damage = 5 ratio = yes }
+\t\tif = { limit = { always = yes NOT = { is_subject = yes } } add_political_power = 1 }
+\t\tany_owned_state = { is_coastal = yes }
+\t\tevery_owned_state = { removed_state_effect = yes }
+\t\thidden_effect = { removed_hidden_effect = yes }
+\t}
+`),
+    );
+    const missing = fragment.unresolved
+      .filter(({ kind }) => kind === 'missing_helper')
+      .map(({ expression }) => expression)
+      .sort();
+
+    expect(missing).toEqual(['removed_hidden_effect', 'removed_state_effect']);
+  });
+
+  it('infers absent helpers in definition files only inside effect blocks', () => {
+    const fragment = analyzeEventSource(
+      sourceFile(
+        `ideas = {
+\tcountry = {
+\t\tsample_idea = {
+\t\t\tallowed_civil_war = { always = yes }
+\t\t\tcancel = { has_war = yes }
+\t\t\tequipment_bonus = { fighter_equipment = { instant = yes } }
+\t\t\tdesigner = yes
+\t\t\ton_add = { removed_on_add_effect = yes country_event = stable.2 }
+\t\t}
+\t}
+}
+`,
+        'common/ideas/sample.txt',
+      ),
+      {
+        knownEventIds,
+        knownEventTypes: new Map([...knownEventIds].map((id) => [id, 'country_event'] as const)),
+      },
+    );
+
+    expect(
+      fragment.unresolved
+        .filter(({ kind }) => kind === 'missing_helper')
+        .map(({ expression }) => expression),
+    ).toEqual(['removed_on_add_effect']);
+    expect(fragment.edges.some(({ metadata }) => metadata.targetEventId === 'stable.2')).toBe(true);
+  });
+
   it('extracts dynamic title and description keys and indexes their gate state', () => {
     const fragment = analyze(
       `country_event = {

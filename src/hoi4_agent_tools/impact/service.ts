@@ -129,6 +129,8 @@ export class ImpactAnalyzer {
       directConsumers: graph.directConsumers.length,
       transitiveConsumers: graph.transitiveConsumers.length,
       affectedFiles: graph.affectedFiles.length,
+      // Affected files are evidence, not writes: this read-only analysis never changes a file.
+      affectedFilePaths: graph.affectedFiles.slice(0, 64),
       cycles: graph.cycles.length,
       scenarioSuites: scenarioSuites.scannedSuites,
       affectedCases: scenarioSuites.matches.length,
@@ -144,7 +146,6 @@ export class ImpactAnalyzer {
     result.code = complete ? 'IMPACT_ANALYZED' : 'IMPACT_ANALYZED_PARTIAL';
     result.artifacts = [publicArtifactLink(artifact)];
     result.proposedFiles = overlay?.changes.map(({ path }) => path).slice(0, 64) ?? [];
-    result.changedFiles = graph.affectedFiles.slice(0, 64);
     setInlineFilesScanned(
       result,
       before.files.map(({ displayPath }) => displayPath),

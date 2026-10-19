@@ -44,6 +44,45 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(canonicalize(value));
 }
 
+/**
+ * UTF-8 byte length of `canonicalJson(value)`, or `undefined` as soon as it would exceed
+ * `limit`. The value is measured without building the string, so a caller can decline output
+ * that would exceed a JavaScript string or an artifact ceiling before allocating it.
+ */
+export function canonicalJsonByteLength(value: unknown, limit: number): number | undefined {
+  let total = 0;
+  const add = (bytes: number): boolean => (total += bytes) <= limit;
+  const visit = (current: unknown): boolean => {
+    if (current === null || typeof current === 'string' || typeof current === 'boolean') {
+      return add(Buffer.byteLength(JSON.stringify(current)));
+    }
+    if (typeof current === 'number') {
+      if (!Number.isFinite(current))
+        throw new TypeError('Canonical JSON cannot contain non-finite numbers');
+      return add(Buffer.byteLength(JSON.stringify(Object.is(current, -0) ? 0 : current)));
+    }
+    if (Array.isArray(current)) {
+      if (!add(2 + Math.max(0, current.length - 1))) return false;
+      for (let index = 0; index < current.length; index += 1) {
+        // A hole stays a hole in the canonical copy, which JSON writes as null.
+        if (!(index in current) ? !add(4) : !visit(current[index])) return false;
+      }
+      return true;
+    }
+    if (typeof current === 'object') {
+      const object = current as Record<string, unknown>;
+      const keys = Object.keys(object).filter((key) => object[key] !== undefined);
+      if (!add(2 + Math.max(0, keys.length - 1))) return false;
+      for (const key of keys) {
+        if (!add(Buffer.byteLength(JSON.stringify(key)) + 1) || !visit(object[key])) return false;
+      }
+      return true;
+    }
+    throw new TypeError(`Canonical JSON cannot contain ${typeof current}`);
+  };
+  return visit(value) ? total : undefined;
+}
+
 export function sha256Bytes(value: Uint8Array | string): string {
   return createHash('sha256').update(value).digest('hex');
 }

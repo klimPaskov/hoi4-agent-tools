@@ -19,6 +19,11 @@ export interface DependencyWalkInput {
   visitPolicy: 'node' | 'path';
   reverseEdges: boolean;
   maximumSteps: number;
+  /**
+   * `truncate` ends the walk at `maximumSteps` and keeps the records found so far, marking the
+   * state truncated, for callers that report partial projections. The default fails the walk.
+   */
+  onWorkLimit?: 'error' | 'truncate';
 }
 
 const ordinal = z.number().int().nonnegative();
@@ -43,6 +48,8 @@ const stateSchema = z
     current: z.object({ path: ordinal, edge: ordinal }).strict().nullable(),
     started: z.boolean(),
     complete: z.boolean(),
+    /** Set when a `truncate` walk stopped at its work ceiling before visiting every root. */
+    truncated: z.boolean().optional(),
   })
   .strict();
 
@@ -123,7 +130,10 @@ export class DependencyWalk {
       throw new ServiceError('DEPENDENCY_CHECKPOINT_INVALID', message);
     };
     if (
-      this.state.complete !== (this.state.root === this.input.roots.length) ||
+      (this.state.truncated === true &&
+        (this.input.onWorkLimit !== 'truncate' || !this.state.complete)) ||
+      this.state.complete !==
+        (this.state.root === this.input.roots.length || this.state.truncated === true) ||
       (!this.state.started && (this.state.current !== null || this.state.stack.length !== 0)) ||
       (this.state.complete && this.state.started) ||
       this.state.paths.length > this.state.steps ||
@@ -215,6 +225,15 @@ export class DependencyWalk {
     const end = this.state.steps + maximumSteps;
     while (!this.state.complete && this.state.steps < end) {
       signal?.throwIfAborted();
+      if (this.state.steps >= this.input.maximumSteps && this.input.onWorkLimit === 'truncate') {
+        // Records found so far are complete paths; the unfinished frontier is dropped.
+        this.state.truncated = true;
+        this.state.complete = true;
+        this.state.started = false;
+        this.state.current = null;
+        this.state.stack = [];
+        break;
+      }
       if (this.state.steps >= this.input.maximumSteps)
         throw new ServiceError(
           'DEPENDENCY_WORK_LIMIT',
@@ -312,9 +331,14 @@ export async function walkDependenciesAsync(
   const restored = await checkpoints?.load(key, input.sourceRevision, stateSchema);
   const walk = new DependencyWalk(input, restored);
   let savedAt = walk.state.steps;
+  // Each save serializes the whole frontier. Spacing saves by the size written last time
+  // doubles the gaps as the frontier grows, so total checkpoint work stays linear.
+  let savedSize = 0;
   while (!walk.state.complete) {
     const complete = walk.advance(256, signal);
-    if ((complete && savedAt > 0) || walk.state.steps - savedAt >= checkpointSteps) {
+    const interval = Math.max(checkpointSteps, savedSize);
+    if ((complete && savedAt > 0) || walk.state.steps - savedAt >= interval) {
+      savedSize = walk.state.paths.length + walk.state.records.length;
       await checkpoints?.save(
         key,
         input.sourceRevision,

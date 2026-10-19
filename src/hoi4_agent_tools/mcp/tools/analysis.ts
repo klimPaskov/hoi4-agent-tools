@@ -30,6 +30,7 @@ const impactOutputSchema = strictOperationResultSchema(
       directConsumers: nonNegativeIntegerSchema,
       transitiveConsumers: nonNegativeIntegerSchema,
       affectedFiles: nonNegativeIntegerSchema,
+      affectedFilePaths: z.array(z.string().max(1024)).max(64).optional(),
       cycles: nonNegativeIntegerSchema,
       scenarioSuites: nonNegativeIntegerSchema,
       affectedCases: nonNegativeIntegerSchema,

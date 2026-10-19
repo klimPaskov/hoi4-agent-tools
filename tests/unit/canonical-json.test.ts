@@ -1,6 +1,10 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { canonicalJson, compareCodeUnits } from '../../src/hoi4_agent_tools/core/canonical.js';
+import {
+  canonicalJson,
+  canonicalJsonByteLength,
+  compareCodeUnits,
+} from '../../src/hoi4_agent_tools/core/canonical.js';
 
 /** The canonical copy as it was built from entry arrays: the reference the loop must equal. */
 function reference(value: unknown): string {
@@ -85,5 +89,36 @@ describe('canonical JSON serialization', () => {
     expect(() => canonicalJson({ nested: { value: Number.NaN } })).toThrowError(/non-finite/u);
     expect(() => canonicalJson(() => 1)).toThrowError(/function/u);
     expect(() => canonicalJson(BigInt(1))).toThrowError(/bigint/u);
+  });
+});
+
+describe('canonical JSON byte length', () => {
+  it('equals the UTF-8 length of the serialized text, including every error', () => {
+    fc.assert(
+      fc.property(values.value, (value) => {
+        const measured = outcome(() => String(canonicalJsonByteLength(value, Infinity)));
+        const serialized = outcome(() => canonicalJson(value));
+        expect(measured).toEqual(
+          'text' in serialized
+            ? { text: String(Buffer.byteLength(serialized.text)) }
+            : { error: serialized.error },
+        );
+      }),
+      { numRuns: 4000 },
+    );
+  });
+
+  it('measures holes, non-ASCII text and negative zero like the serializer', () => {
+    // eslint-disable-next-line no-sparse-arrays
+    const value = { é: [1, , -0], 'emoji 🙂': 'ü' };
+    expect(canonicalJsonByteLength(value, Infinity)).toBe(Buffer.byteLength(canonicalJson(value)));
+  });
+
+  it('stops at the first byte past the limit instead of measuring the rest', () => {
+    const value = { items: Array.from({ length: 1_000 }, (_, index) => ({ index })) };
+    const size = Buffer.byteLength(canonicalJson(value));
+    expect(canonicalJsonByteLength(value, size)).toBe(size);
+    expect(canonicalJsonByteLength(value, size - 1)).toBeUndefined();
+    expect(canonicalJsonByteLength(value, 0)).toBeUndefined();
   });
 });

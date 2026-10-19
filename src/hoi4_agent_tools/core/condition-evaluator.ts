@@ -457,20 +457,32 @@ function evaluateAssignmentCore(
       );
     return { state: flags?.includes(right) === true ? 'true' : 'false', unresolved: [] };
   }
+  // Like flags, an undeclared variable or event target is unknown in an open scenario and
+  // absent only when the scenario closes its world with `closedFlags`.
   if (key === 'has_event_target') {
     const eventTargets = scopeContext.binding.eventTargets ?? scenario.eventTargets;
-    return {
-      state: Object.hasOwn(eventTargets ?? {}, right) ? 'true' : 'false',
-      unresolved: [],
-    };
+    if (Object.hasOwn(eventTargets ?? {}, right)) return { state: 'true', unresolved: [] };
+    if (scenario.closedFlags === false)
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not declare event target ${right}`,
+        `eventTarget.${right}`,
+      );
+    return { state: 'false', unresolved: [] };
   }
   if (key === 'has_variable') {
     const state = scopeContext.expression === 'ROOT' ? scenario.state : scopeContext.binding.state;
-    return {
-      state:
-        Object.hasOwn(state, right) || Object.hasOwn(state, `variable.${right}`) ? 'true' : 'false',
-      unresolved: [],
-    };
+    if (Object.hasOwn(state, right) || Object.hasOwn(state, `variable.${right}`))
+      return { state: 'true', unresolved: [] };
+    if (scenario.closedFlags === false)
+      return unresolved(
+        assignment,
+        candidate,
+        `Scenario does not declare variable ${right}`,
+        `variable.${right}`,
+      );
+    return { state: 'false', unresolved: [] };
   }
   if (key === 'tag' || key === 'original_tag') {
     const actor =

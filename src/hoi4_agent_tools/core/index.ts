@@ -1605,6 +1605,7 @@ export class SymbolIndex {
         ...(reference.location === undefined ? {} : { location: reference.location }),
         details: {
           referenceKind: reference.kind,
+          toKind: reference.toKind,
           from: reference.from,
           ...(mayResolveFromSkippedSource ? { skippedSourceCount: this.#skippedSourceCount } : {}),
         },

@@ -37,6 +37,58 @@ async function fixture() {
   return { engine, analyzer: new DecisionAnalyzer(engine), sourcePath };
 }
 
+describe('decision analysis on an unverified game version', () => {
+  it('keeps gate evidence and leaves only the AI weights unresolved', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-decision-version-'));
+    temporaryRoots.push(temporary);
+    const mod = path.join(temporary, 'mod');
+    const game = path.join(temporary, 'game');
+    await mkdir(path.join(mod, 'common', 'decisions'), { recursive: true });
+    await mkdir(game, { recursive: true });
+    await writeFile(
+      path.join(mod, relativePath),
+      baselineSource.replace('cost = 10', 'cost = 10\n\tai_will_do = { base = 5 }'),
+    );
+    await writeFile(
+      path.join(game, 'launcher-settings.json'),
+      `${JSON.stringify({ version: 'Future v9.9.9.9 (beef)', rawVersion: '9.9.9.9' })}\n`,
+    );
+    const engine = new CoreEngine(
+      await WorkspaceResolver.create(
+        serverConfigurationSchema.parse({
+          version: 1,
+          serverStateRoot: path.join(temporary, 'state'),
+          gameRoot: game,
+          workspaces: [{ id: 'fixture', name: 'Decision fixture', root: mod }],
+        }),
+      ),
+    );
+
+    const inspected = await new DecisionAnalyzer(engine).inspect(
+      decisionInspectRequestSchema.parse({
+        workspaceId: 'fixture',
+        mode: 'inspect',
+        id: 'fund',
+        scenarios: [
+          { id: 'approved', actor: 'AAA', state: {}, flags: ['approved'], closedFlags: true },
+        ],
+      }),
+    );
+
+    expect(inspected.code).toBe('DECISION_ANALYZED_PARTIAL');
+    expect(inspected.data).toMatchObject({
+      complete: false,
+      outcomes: [{ scenarioId: 'approved', found: true, available: 'true' }],
+    });
+    expect(inspected.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'PROBABILITY_GAME_VERSION_UNSUPPORTED',
+        severity: 'warning',
+      }),
+    );
+  });
+});
+
 describe('authorized decision analysis service', () => {
   it('inventories decisions, links scenario evidence, and compares a proposal without writing source', async () => {
     const { engine, analyzer, sourcePath } = await fixture();

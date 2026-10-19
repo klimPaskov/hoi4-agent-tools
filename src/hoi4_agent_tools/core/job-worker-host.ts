@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, fstatSync, openSync, readSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -9,7 +9,7 @@ import { JobService } from './job-service.js';
 import { jobOwnerLiveness, readCheckpointIdentity, type JobRecord } from './job-store.js';
 import { RequestScheduler } from './request-scheduler.js';
 import { SharedRequestCapacity, type SharedCapacityLease } from './shared-request-capacity.js';
-import { containedGeneratedPath } from './workspace.js';
+import { containedGeneratedPath, type ResolvedWorkspace } from './workspace.js';
 import { ServiceError } from './result.js';
 import { isDomainToolName } from './domain-tools.js';
 import {
@@ -147,6 +147,28 @@ function retainOrRemoveLog(file: string, evidence: WorkerExitEvidence, logRoot: 
  * Bounded, fixed-entry child execution. Client disconnection never kills a worker; an
  * overdue or unresponsive cancelled read-only worker is stopped by its supervising host.
  */
+/**
+ * Select the workspaces a job worker resolves again. A mod folder removed after the host
+ * discovered it must not stop jobs for every other workspace, so absent roots are left out.
+ * The job's own workspace is always kept, and a missing root still fails that job explicitly.
+ */
+export async function workerWorkspaces(
+  workspaces: readonly ResolvedWorkspace[],
+  workspaceId: string,
+): Promise<ResolvedWorkspace[]> {
+  const retained = await Promise.all(
+    workspaces.map(
+      async (workspace) =>
+        workspace.id === workspaceId ||
+        (await stat(workspace.modRoot).then(
+          (metadata) => metadata.isDirectory(),
+          () => false,
+        )),
+    ),
+  );
+  return workspaces.filter((_workspace, index) => retained[index]);
+}
+
 export class JobWorkerHost {
   private readonly owner = {};
   private constructor(
@@ -277,7 +299,7 @@ export class JobWorkerHost {
     const registeredWorkspaceIds = new Set(
       configuration.workspaces.map((workspace) => workspace.id),
     );
-    const resolvedWorkspaces = this.engine.resolver.list();
+    const resolvedWorkspaces = await workerWorkspaces(this.engine.resolver.list(), workspaceId);
     const discoveredWorkspaceIds = resolvedWorkspaces
       .map((workspace) => workspace.id)
       .filter((workspaceId) => !registeredWorkspaceIds.has(workspaceId));
