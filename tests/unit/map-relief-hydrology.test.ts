@@ -123,6 +123,91 @@ describe('named rivers that cannot reach their mouth', () => {
   });
 });
 
+describe('rivers that end in a lake or at the edge of the map', () => {
+  it('ends a river beside the lake it flows into', () => {
+    const model: GeographyModelInput = {
+      version: 1,
+      seas: [
+        {
+          id: 'sea',
+          polygons: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          ],
+        },
+      ],
+      lands: [
+        {
+          id: 'land',
+          polygons: [
+            [
+              [0.15, 0.2],
+              [0.85, 0.2],
+              [0.85, 0.8],
+              [0.15, 0.8],
+            ],
+          ],
+        },
+      ],
+      lakes: [{ id: 'pond', center: [0.55, 0.5], radius: 0.04 }],
+      rivers: [{ id: 'feeder', source: [0.3, 0.35], mouth: { lake: 'pond' }, size: 2 }],
+    };
+    const { terrain, kind } = synthesize(resolve(model));
+    const feeder = terrain.rivers.find(({ id }) => id === 'feeder')!;
+    expect(feeder.mouth).toBe('lake');
+    expect(feeder.complete).toBe(true);
+    const path = terrain.riverPaths.find(({ id }) => id === 'feeder')!.pixels;
+    const last = path[path.length - 1]!;
+    expect(
+      [last - 1, last + 1, last - WIDTH, last + WIDTH].some((pixel) => kind[pixel] === 2),
+    ).toBe(true);
+    expect(terrain.notes.map(({ code }) => code)).not.toContain('MAP_RIVER_PIXEL_ROUTE_INCOMPLETE');
+  });
+
+  it('leaves the map through its edge when the land reaches it', () => {
+    const model: GeographyModelInput = {
+      version: 1,
+      seas: [
+        {
+          id: 'sea',
+          polygons: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          ],
+        },
+      ],
+      lands: [
+        {
+          id: 'shelf',
+          polygons: [
+            [
+              [0, 0.2],
+              [0.7, 0.2],
+              [0.7, 0.8],
+              [0, 0.8],
+            ],
+          ],
+        },
+      ],
+      rivers: [{ id: 'outflow', source: [0.4, 0.5], mouth: [0, 0.5], size: 2 }],
+    };
+    const { terrain } = synthesize(resolve(model));
+    const outflow = terrain.rivers.find(({ id }) => id === 'outflow')!;
+    expect(outflow.mouth).toBe('edge');
+    expect(outflow.complete).toBe(true);
+    const path = terrain.riverPaths.find(({ id }) => id === 'outflow')!.pixels;
+    expect(path[path.length - 1]! % WIDTH).toBe(0);
+  });
+});
+
 describe('river network options', () => {
   const geography = resolve(reliefGeography());
 

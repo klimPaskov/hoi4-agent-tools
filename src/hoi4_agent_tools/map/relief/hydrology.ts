@@ -188,8 +188,6 @@ interface RouteSpec {
   goalCell?: number;
   /** Alternatively, a test for goal cells; `joined` reports the neighbour that made it a goal. */
   goalTest?: (cell: number) => number | undefined;
-  /** Cells owned by another river: blocked, except those of `allowOwner`. */
-  allowOwner?: number;
   /** A direction the route should keep to: stepping against it costs `weight` per cell. */
   bias?: { dx: number; dy: number; weight: number };
   limit?: number;
@@ -252,7 +250,7 @@ function createRouter(
           const next = ny * mw + nx;
           if (!isLandCell(kind, next)) continue;
           const owner = occupant[next]!;
-          if (owner !== 0 && owner !== (spec.allowOwner ?? -1) + 1) continue;
+          if (owner !== 0) continue;
           // Diagonal steps may not squeeze between two blocked cells.
           if (n % 2 === 1) {
             const a = y * mw + nx;
@@ -267,16 +265,21 @@ function createRouter(
               4 * (rise > 0 ? rise : 0) +
               0.01 * (height[next]! - LAND_FLOOR) +
               4 * wander[next]!);
-          // Keep clear of other rivers' channels so the pixel paths can stay apart.
+          // Keep clear of other rivers' channels so the pixel paths, which bend a little, can stay apart.
           let crowded = false;
           for (let m = 0; m < 8 && !crowded; m += 1) {
             const mx = nx + NEIGHBOUR_DX[m]!;
             const my = ny + NEIGHBOUR_DY[m]!;
             if (mx < 0 || my < 0 || mx >= mw || my >= mh) continue;
             const around = occupant[my * mw + mx]!;
-            if (around !== 0 && around !== (spec.allowOwner ?? -1) + 1) crowded = true;
+            if (around !== 0) crowded = true;
           }
-          if (crowded) step += 6;
+          if (crowded) {
+            const sx = nx - (spec.start % mw);
+            const sy = ny - Math.floor(spec.start / mw);
+            const nearStart = sx * sx + sy * sy <= 6;
+            if (!nearStart && spec.goalTest?.(next) === undefined) continue;
+          }
           if (spec.bias !== undefined) {
             const along =
               (NEIGHBOUR_DX[n]! * spec.bias.dx + NEIGHBOUR_DY[n]! * spec.bias.dy) / length;
@@ -392,6 +395,7 @@ interface NamedContext {
   conditioned: Float32Array;
   notes: HydrologyNote[];
   seed: number;
+  signal?: AbortSignal | undefined;
 }
 
 /** The macro cell holding a frame point, moved to the nearest land cell within `radius`. */
@@ -571,6 +575,7 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
         rivers: pending.map((river) => river.id).slice(0, 20),
       });
     for (const river of ready) {
+      context.signal?.throwIfAborted();
       pending.splice(pending.indexOf(river), 1);
       const ownId = routed.length + 1;
       let start: number;
@@ -1332,6 +1337,7 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
       macro.heights[cell]! + (hash01(jitterSeed, x, (cell - x) / mw) - 0.5) * 0.03;
   }
   const first = priorityFlood(conditioned, kind, mw, mh, undefined, heap);
+  input.signal?.throwIfAborted();
 
   // Lakes by cell, for sources and mouths.
   const lakeOf = new Int16Array(total);
@@ -1374,6 +1380,7 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
     conditioned,
     notes,
     seed,
+    signal: input.signal,
   });
 
   // Burn the channels into the heights and flood again with the channels as outlets, so every
@@ -1388,7 +1395,9 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
       channel[cell] = 1;
     }
   }
+  input.signal?.throwIfAborted();
   const second = priorityFlood(burned, kind, mw, mh, channel, heap);
+  input.signal?.throwIfAborted();
   const acc = accumulate(second, rain, kind);
 
   // Catchment along every named channel: its own cells, the cells draining into them and the
@@ -1463,6 +1472,7 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
   });
   computeWidths(rivers, stream.threshold);
   computeOrders(rivers);
+  input.signal?.throwIfAborted();
   const carved = carveValleys({ macro, rivers, mw, mh });
   let estimated = 0;
   for (const river of rivers) estimated += river.cells.length * PIXELS_PER_CELL;
