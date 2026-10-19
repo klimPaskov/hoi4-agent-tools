@@ -362,11 +362,42 @@ Keys that take exactly one value (`capital`, `state`, `to_state`, `start_state`,
 }
 ```
 
-Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
+Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (or follow natural lines, see [Feature-aware provinces, states and strategic regions](#feature-aware-provinces-states-and-strategic-regions)) (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
+
+### Feature-aware provinces, states and strategic regions
+
+By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058, plan section C9):
+
+- Province borders are pulled onto rivers, steep slopes and ridges, wall ranges and lake shores (a watershed whose step cost rises on them). A province that still straddles a river or wall is cut along it.
+- Province size follows the land: small in fertile valleys, on coasts and beside rivers, large on mountains and wasteland (`landArea.fertile`, `hills`, `mountain`, `waste`, in pixels), and per geography region through its `density.provinceAreaPx`. Without bands they follow `landProvincePixels` (0.35, 1, 2.2 and 3.4 times, scaled so the mean stays `landProvincePixels`). Sea provinces are small near a coast and large on the open sea (`seaArea.coastal` and `open`, from `seaProvincePixels`), and a channel no wider than `narrowStraitPx` (24) gets two sea provinces across it.
+- States and strategic regions are clusters over the province graph that avoid joining across rivers and ranges, prefer like ground, never mix geography regions or named seas, and respect `provincesPerState` (`[smallest, largest]`, or a region's own `density.provincesPerState`) and `regionSize`.
+- `barrierStrength` (0 to 60, default 20) sets how hard borders are pulled onto natural lines; `minProvincePixels` (default 40) is the smallest planned province.
+
+```json
+{
+  "id": "world",
+  "kind": "create_world",
+  "width": 5120,
+  "height": 2560,
+  "partition": "feature-aware",
+  "landProvincePixels": 400,
+  "partitionTuning": {
+    "landArea": { "fertile": 120, "hills": 400, "mountain": 800, "waste": 1100 },
+    "provincesPerState": [6, 12],
+    "barrierStrength": 24
+  }
+}
+```
+
+All the engine rules hold as before: provinces are connected, no box exceeds an eighth of the map, no four provinces meet at a corner, provinces are at least 20 pixels where a same-kind neighbour exists, and at most 65,000 exist. A plan that needs more than 21,000 provinces is refused with `MAP_PARTITION_PROVINCE_COUNT_HIGH` and the fields to change; both partitions warn with that code above 14,000 provinces. Contradictory bands (`MAP_PARTITION_AREA_BANDS_CONTRADICTORY`), reversed ranges, a map too small for `minProvincePixels` (`MAP_PARTITION_MAP_TOO_SMALL`) and `partitionTuning` with `legacy` are refused before anything is written. Info notes report the provinces cut along rivers or straits (`MAP_PARTITION_SPLITS`) and coast pixels adjusted because a 2 x 2 block touched its own kind only at a corner (`MAP_PARTITION_MASK_SMOOTHED`). Check the result with `hoi4.map_inspect` and `quality: true` (border naturalness).
+
+Code that needs the same cut calls `partitionWorld` (`src/hoi4_agent_tools/map/partition.ts`): it takes `PartitionFields` (distance to river, ridge strength, slope, terrain class, region id, fertility and a barrier mask; `partitionFieldsFromBitmaps` computes a basic version from `heightmap.bmp`, `terrain.bmp` and `rivers.bmp`, `partitionFieldsFromGeography` adds regions and walls) and returns the provinces, the barrier raster, the size distribution and a weighted province graph (`buildProvinceGraph`, `provinceEdgeCosts`) that the territory assignment service reuses.
+
+Measured on project-owned synthetic fixtures: a 1,024 x 512 world with a dense river net goes from province and state border enrichment 1.02 and 0.98 to 1.34 and 2.22 (natural share of state borders from 0.24 to 0.55). On a 5,120 x 2,560 fixture (400 and 2,500 pixel provinces) the legacy partition has 25,514 provinces and enrichment 0.97 and 0.90, the feature-aware one 17,061 (land mean 399 pixels, p10 228, p90 507; sea mean 2,345) and enrichment 1.75 and 3.38; it partitions in about 9 seconds and 0.8 GiB, and the whole `create_world` takes about 20 seconds. Province borders cannot be more enriched than the length of the natural lines allows; the numbers are in ADR 0058.
 
 ## Water, colour and the world edge
 

@@ -8,6 +8,7 @@ import {
   defaultTerrainClassTable,
   partitionFieldsFromBitmaps,
   ridgeField,
+  smoothDiagonalContacts,
   slopeField,
   type PartitionFields,
 } from '../../src/hoi4_agent_tools/map/partition-fields.js';
@@ -118,6 +119,38 @@ describe('partition fields from bitmaps', () => {
       terrainClasses: table,
     });
     expect(custom.terrainClass[10 * W + 10]).toBe(PARTITION_TERRAIN.desert);
+  });
+});
+
+describe('diagonal contacts', () => {
+  it('turns one pixel of the weaker kind of a checker block into the stronger kind', () => {
+    const kind = new Uint8Array(W * H);
+    // Land at (10,10) and (11,11), sea at (11,10) and (10,11): a corner contact.
+    kind[10 * W + 10] = 1;
+    kind[11 * W + 11] = 1;
+    const changed = smoothDiagonalContacts(kind, W, H);
+    expect(changed).toEqual([10 * W + 11]);
+    expect(kind[10 * W + 11]).toBe(1);
+    // A second call finds nothing.
+    expect(smoothDiagonalContacts(kind, W, H)).toEqual([]);
+  });
+
+  it('lets sea beat lake and land beat both, and wraps across the seam', () => {
+    const lakeSea = new Uint8Array(W * H).fill(2);
+    lakeSea[10 * W + 10] = 0;
+    lakeSea[11 * W + 11] = 0;
+    smoothDiagonalContacts(lakeSea, W, H);
+    // The sea pixels survive; one lake pixel of the checker block became sea.
+    expect(lakeSea[10 * W + 10]).toBe(0);
+    expect(lakeSea[10 * W + 11]! + lakeSea[11 * W + 10]!).toBeLessThan(4);
+    const seam = new Uint8Array(W * H);
+    seam[10 * W + (W - 1)] = 1;
+    seam[11 * W] = 1;
+    expect(smoothDiagonalContacts(seam, W, H)).toHaveLength(1);
+    // Plain edges and solid areas are untouched.
+    const plain = new Uint8Array(W * H).fill(1);
+    plain[5 * W + 5] = 0;
+    expect(smoothDiagonalContacts(plain, W, H)).toEqual([]);
   });
 });
 

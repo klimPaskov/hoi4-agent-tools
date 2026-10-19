@@ -999,7 +999,6 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     scripts = false,
-    includeAppearance = false,
   ): Promise<{
     snapshot: MapScanSnapshot;
     validation: MapValidationResult;

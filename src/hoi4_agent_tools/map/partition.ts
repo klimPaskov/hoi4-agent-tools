@@ -52,7 +52,10 @@ export interface WorldPartition {
   barrier: Uint8Array;
   /** Geography region (or named sea) of each province, 0 for none: the region holding most pixels. */
   provinceRegion: Uint16Array;
-  /** Ground class (`PARTITION_TERRAIN`) of each land province: the class holding most pixels. */
+  /**
+   * Ground class (`PARTITION_TERRAIN`) of each land province, the class holding most pixels. A sea
+   * province has 0 when it touches land (shelf) and 1 when it does not (open sea).
+   */
   provinceGround: Uint8Array;
   statistics: PartitionStatistics;
   notes: FeaturePartitionDiagnostics[];
@@ -128,6 +131,13 @@ export function partitionWorld(input: WorldPartitionInput): WorldPartition {
       PARTITION_TERRAIN.water,
     ),
   );
+  for (let id = 0; id < count; id++)
+    if (provinces.kind[id] === PARTITION_KIND.sea) {
+      let shelf = false;
+      for (let e = graph.offsets[id]!; e < graph.offsets[id + 1]!; e++)
+        if (graph.kind[graph.to[e]!] === PARTITION_KIND.land) shelf = true;
+      provinceGround[id] = shelf ? 0 : 1;
+    }
   return {
     fields,
     tuning: input.tuning,
@@ -215,7 +225,8 @@ export function clusterStates(
 
 /**
  * Cluster provinces into strategic regions: land by basin and ground inside each geography
- * region, sea by named sea. Pass the land provinces or the sea provinces as `members`.
+ * region, sea by named sea and by shelf against open water. Pass the land provinces or the sea
+ * provinces as `members`.
  */
 export function clusterRegions(
   partition: WorldPartition,
@@ -231,7 +242,7 @@ export function clusterRegions(
     { min: options.min, target: options.target, max: options.max },
     {
       group: (id) => region[id]!,
-      ...(kind === 'land' ? { label: (id: number) => ground[id]! } : {}),
+      label: (id: number) => ground[id]!,
     },
   );
 }

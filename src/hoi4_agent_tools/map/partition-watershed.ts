@@ -211,10 +211,17 @@ export function weightedWatershed(input: WatershedInput): Int32Array {
     distance[p] = 0;
     push(0, p);
   }
-  // Neighbour offsets as (dx, dy, base cost).
-  const dxs = [-1, 1, 0, 0, -1, 1, -1, 1];
-  const dys = [0, 0, -1, 1, -1, -1, 1, 1];
-  const bases = [10, 10, 10, 10, 14, 14, 14, 14];
+  const relax = (q: number, from: number, current: number, base: number, label: number): void => {
+    let cost = current + ((base * step[q]!) >> 8);
+    if (region !== undefined && region[q] !== region[from]) cost += regionPenalty;
+    if (terrain !== undefined && terrain[q] !== terrain[from]) cost += terrainPenalty;
+    if (cost < distance[q]!) {
+      distance[q] = cost;
+      labels[q] = label;
+      push(cost, q);
+    }
+  };
+  const last = width - 1;
   for (let current = 0; live > 0; current++) {
     const bucket = current & mask;
     while (heads[bucket]! !== -1) {
@@ -225,26 +232,29 @@ export function weightedWatershed(input: WatershedInput): Int32Array {
       free = node;
       live--;
       if (distance[p] !== current) continue;
-      const x = p % width;
-      const y = (p - x) / width;
+      const y = (p / width) | 0;
+      const x = p - y * width;
       const label = labels[p]!;
       const here = kind[p]!;
-      for (let k = 0; k < 8; k++) {
-        const ny = y + dys[k]!;
-        if (ny < 0 || ny >= height) continue;
-        let nx = x + dxs[k]!;
-        if (nx < 0) nx = width - 1;
-        else if (nx >= width) nx = 0;
-        const q = ny * width + nx;
-        if (kind[q] !== here) continue;
-        let cost = current + ((bases[k]! * step[q]!) >> 8);
-        if (region !== undefined && region[q] !== region[p]) cost += regionPenalty;
-        if (terrain !== undefined && terrain[q] !== terrain[p]) cost += terrainPenalty;
-        if (cost < distance[q]!) {
-          distance[q] = cost;
-          labels[q] = label;
-          push(cost, q);
-        }
+      const west = x > 0 ? p - 1 : p + last;
+      const east = x < last ? p + 1 : p - last;
+      if (kind[west] === here) relax(west, p, current, 10, label);
+      if (kind[east] === here) relax(east, p, current, 10, label);
+      if (y > 0) {
+        const north = p - width;
+        const northWest = x > 0 ? north - 1 : north + last;
+        const northEast = x < last ? north + 1 : north - last;
+        if (kind[north] === here) relax(north, p, current, 10, label);
+        if (kind[northWest] === here) relax(northWest, p, current, 14, label);
+        if (kind[northEast] === here) relax(northEast, p, current, 14, label);
+      }
+      if (y < height - 1) {
+        const south = p + width;
+        const southWest = x > 0 ? south - 1 : south + last;
+        const southEast = x < last ? south + 1 : south - last;
+        if (kind[south] === here) relax(south, p, current, 10, label);
+        if (kind[southWest] === here) relax(southWest, p, current, 14, label);
+        if (kind[southEast] === here) relax(southEast, p, current, 14, label);
       }
     }
   }

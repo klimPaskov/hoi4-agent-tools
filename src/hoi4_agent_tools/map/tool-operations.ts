@@ -695,7 +695,6 @@ export async function inspectMap(
     context.principal,
     context.signal,
     input.references,
-    input.quality,
   );
   const sharedRevision = snapshot.revision;
   let borderQuality: { report: BorderQualityReport; summary: BorderQualitySummary } | undefined;
