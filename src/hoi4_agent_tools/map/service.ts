@@ -999,7 +999,9 @@ export class AgentNudger {
     principal?: string,
     signal?: AbortSignal,
     scripts = false,
-    includeAppearance = false,
+    // Kept for callers: the scan below always reads the appearance and border bitmaps since the
+    // phase 0 merge, so the flag no longer changes what is read.
+    _includeAppearance = false,
   ): Promise<{
     snapshot: MapScanSnapshot;
     validation: MapValidationResult;
