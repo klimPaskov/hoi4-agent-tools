@@ -1611,12 +1611,20 @@ function analyzeFragments(
     activeDecisionPaths: reads.bind('active-decisions', 'decision', catalog.activeDecisionPaths),
     inventoryComplete: snapshot.complete,
     catalogFingerprint: catalog.fingerprint,
+    ...(options.documentedEffects === undefined
+      ? {}
+      : { documentedEffectKeys: options.documentedEffects.names }),
   };
+  // A game update that documents new effects changes how fragments read, so it keys the cache.
+  const fragmentFingerprint =
+    options.documentedEffects === undefined
+      ? catalog.fingerprint
+      : `${catalog.fingerprint}:${options.documentedEffects.sha256}`;
   for (const file of files) {
     budget.spend('source_fragment');
     if (!shouldAnalyzeEventFile(file)) continue;
     if (snapshot.index.isSourceSkipped(file.displayPath)) continue;
-    const cacheKey = eventSemanticFragmentCacheKey(file, catalog.fingerprint);
+    const cacheKey = eventSemanticFragmentCacheKey(file, fragmentFingerprint);
     const fragment = semanticFragment(dependencies, options.cache, file, cacheKey, reads, () =>
       analyzeEventSource(file, context),
     );

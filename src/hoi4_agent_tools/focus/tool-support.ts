@@ -11,6 +11,7 @@ import {
   linkContinuousFocusPalettes,
   parseFocusPlanningSidecar,
   type ContinuousFocusPalettePlan,
+  type FocusImportOptions,
   type FocusImportResult,
   type FocusReferenceCatalog,
   type FocusTreePlan,
@@ -82,7 +83,7 @@ export function importFocusFile(
   palettes: readonly ContinuousFocusPalettePlan[],
 ): FocusImportResult {
   const document = parseClausewitz(file.bytes, file.displayPath);
-  const imported = importFocusTrees(document, { references: referenceCatalog(snapshot) });
+  const imported = importFocusTrees(document, focusImportOptions(snapshot));
   const sidecar = activeSidecar(snapshot, file);
   imported.plans = imported.plans.map((plan) => {
     const enriched =
@@ -166,6 +167,16 @@ export function selectContinuousPlan(
       `Continuous focus palette was not found: ${paletteId}`,
     );
   return plan;
+}
+
+/** Import options from a scan: its reference catalog and the installed game's documented effects. */
+export function focusImportOptions(snapshot: ScanSnapshot): FocusImportOptions {
+  return {
+    references: referenceCatalog(snapshot),
+    ...(snapshot.documentedEffects === undefined
+      ? {}
+      : { nativeEffects: snapshot.documentedEffects.names }),
+  };
 }
 
 export function referenceCatalog(snapshot: ScanSnapshot): FocusReferenceCatalog {

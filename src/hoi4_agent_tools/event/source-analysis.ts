@@ -203,6 +203,8 @@ export interface EventSourceAnalysisContext {
   activeDecisionPaths?: ReadonlyMap<string, string>;
   inventoryComplete?: boolean;
   catalogFingerprint?: string;
+  /** Effect names the installed game documents; later patches add effects the built-in list lacks. */
+  documentedEffectKeys?: ReadonlySet<string>;
 }
 
 interface WalkContext {
@@ -317,9 +319,13 @@ const NATIVE_EFFECT_CONTAINERS = new Set([
 ]);
 
 /** Inside a native effect such as `add_building_construction`, `key = yes` is an argument. */
-function isNativeArgumentBlock(normalizedKey: string): boolean {
+function isNativeEffect(normalizedKey: string, documented?: ReadonlySet<string>): boolean {
+  return nativeEffectKeys.has(normalizedKey) || documented?.has(normalizedKey) === true;
+}
+
+function isNativeArgumentBlock(normalizedKey: string, documented?: ReadonlySet<string>): boolean {
   return (
-    nativeEffectKeys.has(normalizedKey) &&
+    isNativeEffect(normalizedKey, documented) &&
     !NATIVE_EFFECT_CONTAINERS.has(normalizedKey) &&
     !CONTROL_BLOCKS.has(normalizedKey) &&
     SCOPE_BLOCKS[normalizedKey] === undefined &&
@@ -394,11 +400,16 @@ function localisationKeysFromValue(value: SourceValue): string[] {
   return [...new Set(keys)].sort(compareCodeUnits);
 }
 
-function missingHelperCandidate(key: string, value: SourceValue, effectContext: boolean): boolean {
+function missingHelperCandidate(
+  key: string,
+  value: SourceValue,
+  effectContext: boolean,
+  documented?: ReadonlySet<string>,
+): boolean {
   const normalizedKey = key.toLowerCase();
   if (
     !effectContext ||
-    nativeEffectKeys.has(normalizedKey) ||
+    isNativeEffect(normalizedKey, documented) ||
     NON_HELPER_BLOCKS.has(normalizedKey) ||
     SCOPE_BLOCKS[normalizedKey] !== undefined ||
     STATE_RULES[normalizedKey] !== undefined ||
@@ -1191,7 +1202,7 @@ class FragmentAnalyzer {
         this.context.inventoryComplete !== false &&
         context.nativeArguments !== true &&
         context.inferMissingHelpers !== false &&
-        missingHelperCandidate(key, entry.value, effectContext)
+        missingHelperCandidate(key, entry.value, effectContext, this.context.documentedEffectKeys)
       ) {
         const target = this.unresolvedNode(
           'missing_helper',
@@ -1339,7 +1350,9 @@ class FragmentAnalyzer {
           NON_EXECUTING_BLOCKS.has(normalizedKey) || isTriggerIterator(normalizedKey)
             ? false
             : effectContext,
-        nativeArguments: context.nativeArguments === true || isNativeArgumentBlock(normalizedKey),
+        nativeArguments:
+          context.nativeArguments === true ||
+          isNativeArgumentBlock(normalizedKey, this.context.documentedEffectKeys),
         ...(context.inferMissingHelpers === false && isConventionalEffectBlock(normalizedKey)
           ? { inferMissingHelpers: true }
           : {}),

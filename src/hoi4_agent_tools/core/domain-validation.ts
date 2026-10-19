@@ -95,7 +95,12 @@ export async function postValidateTransaction(
         changed.has(sourcePathComparisonKey(relativePath)),
     )) {
       const document = parseClausewitz(file.bytes, file.displayPath);
-      const imported = importFocusTrees(document, { references: catalog });
+      const imported = importFocusTrees(document, {
+        references: catalog,
+        ...(snapshot.documentedEffects === undefined
+          ? {}
+          : { nativeEffects: snapshot.documentedEffects.names }),
+      });
       diagnostics.push(...imported.diagnostics);
       for (const plan of imported.plans) {
         const layout = await layoutFocusTreeAsync(plan, signal === undefined ? {} : { signal });

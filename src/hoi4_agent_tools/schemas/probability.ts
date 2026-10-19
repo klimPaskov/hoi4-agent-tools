@@ -848,7 +848,13 @@ const probabilityMetadataSchema = z
     gameVersion: z.string(),
     gameVersionVerification: z
       .object({
-        status: z.enum(['workspace_verified', 'adapter_target_only']),
+        status: z.enum([
+          'workspace_verified',
+          'workspace_observed',
+          'version_unknown',
+          'adapter_target_only',
+        ]),
+        reason: z.string().max(1024).optional(),
         adapterTarget: z.string(),
         sourcePath: z.string().optional(),
         observedVersion: z.string().optional(),

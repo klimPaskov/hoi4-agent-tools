@@ -168,6 +168,8 @@ const scopeKeys = new Set([
 
 export interface FocusImportOptions {
   references?: FocusReferenceCatalog;
+  /** Effect names the installed game documents; later patches add effects the built-in list lacks. */
+  nativeEffects?: ReadonlySet<string>;
 }
 
 function catalogValues(options: FocusImportOptions, kind: FocusReferenceKind): ReadonlySet<string> {
@@ -182,10 +184,10 @@ function isFormableDecision(target: string, options: FocusImportOptions): boolea
   return /(?:^form_|formable|form_country)/iu.test(target);
 }
 
-function isEffectContainer(key: string): boolean {
+function isEffectContainer(key: string, nativeEffects?: ReadonlySet<string>): boolean {
   return (
     effectContainerKeys.has(key) ||
-    (nativeFocusEffectKeys.has(key) &&
+    ((nativeFocusEffectKeys.has(key) || nativeEffects?.has(key) === true) &&
       /^(?:(?:global_)?every|ordered|random)_[a-z0-9_]+$/u.test(key))
   );
 }
@@ -455,6 +457,8 @@ function referenceLinks(
   const links: FocusReferenceLink[] = [];
   const knownHelpers = catalogValues(options, 'helper');
   const knownLeaders = catalogValues(options, 'leader');
+  const isNative = (key: string): boolean =>
+    nativeFocusEffectKeys.has(key) || options.nativeEffects?.has(key) === true;
 
   function recordReference(assignment: AssignmentNode, specification: ReferenceEffectSpec): void {
     for (const target of referenceTargets(assignment, specification)) {
@@ -480,7 +484,10 @@ function referenceLinks(
       recordReference(assignment, reference);
       if (assignment.value.type === 'block') {
         for (const nested of assignments(assignment.value)) {
-          if (nested.value.type === 'block' && isEffectContainer(nested.key.value.toLowerCase())) {
+          if (
+            nested.value.type === 'block' &&
+            isEffectContainer(nested.key.value.toLowerCase(), options.nativeEffects)
+          ) {
             effectAssignment(nested, new Set());
           }
         }
@@ -491,7 +498,7 @@ function referenceLinks(
     if (
       knownHelpers.has(key) &&
       !effectContainerKeys.has(normalizedKey) &&
-      !nativeFocusEffectKeys.has(normalizedKey)
+      !isNative(normalizedKey)
     ) {
       links.push({
         kind: 'helper',
@@ -501,7 +508,7 @@ function referenceLinks(
       return;
     }
 
-    if (isEffectContainer(normalizedKey)) {
+    if (isEffectContainer(normalizedKey, options.nativeEffects)) {
       if (assignment.value.type !== 'block') return;
       if (normalizedKey === 'random_list') {
         for (const weighted of assignments(assignment.value)) {
@@ -518,7 +525,7 @@ function referenceLinks(
       return;
     }
 
-    if (nativeFocusEffectKeys.has(normalizedKey)) return;
+    if (isNative(normalizedKey)) return;
     if (assignment.value.type === 'block' && isScopeKey(key, knownLeaders)) {
       effectWalk(assignment.value, new Set());
       return;

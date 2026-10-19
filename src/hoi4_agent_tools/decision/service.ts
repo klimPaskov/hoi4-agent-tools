@@ -127,22 +127,7 @@ export class DecisionAnalyzer {
             overlay,
             input.principal,
             input.signal,
-          ).catch((error: unknown) => {
-            // AI weights depend on adapters verified for one game version. A game patch leaves
-            // the AI score unresolved; visibility, availability and cost evidence still stand.
-            if (
-              error instanceof ServiceError &&
-              (error.code === 'PROBABILITY_GAME_VERSION_UNSUPPORTED' ||
-                error.code === 'PROBABILITY_GAME_VERSION_UNVERIFIED')
-            )
-              return {
-                status: 'unresolved' as const,
-                code: error.code,
-                message: error.message,
-                details: error.details,
-              };
-            throw error;
-          });
+          );
     const sourceComplete =
       input.mode === 'inventory'
         ? inventory.complete
@@ -238,14 +223,6 @@ export class DecisionAnalyzer {
         : {}),
     });
     result.code = complete ? 'DECISION_ANALYZED' : 'DECISION_ANALYZED_PARTIAL';
-    if (ai !== undefined && 'code' in ai)
-      result.diagnostics.push({
-        category: 'configuration',
-        code: ai.code,
-        severity: 'warning',
-        message: `${ai.message}; AI weights are unresolved, the remaining evidence is unaffected`,
-        details: ai.details,
-      });
     result.artifacts = [publicArtifactLink(artifact)];
     result.proposedFiles = overlay?.changes.map(({ path }) => path).slice(0, 64) ?? [];
     setInlineFilesScanned(

@@ -2,7 +2,9 @@
  * Native effect identifiers used to distinguish direct scripted-effect calls
  * from engine effects while importing focus completion rewards.
  *
- * Source: the official HOI4 1.19.2 effects documentation reviewed 2026-07-10.
+ * Source: the official HOI4 1.19.2 effects documentation reviewed 2026-07-10. This is the
+ * fallback list; analysis also accepts every effect the installed game documents in
+ * documentation/effects_documentation.md, so effects added by later patches are recognized.
  * Keep this list synchronized during compatibility reviews.
  */
 export const nativeEffectKeys: ReadonlySet<string> = new Set([
