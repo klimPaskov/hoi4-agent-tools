@@ -66,3 +66,5 @@ Implementation rationale for contributors. For using the server, start with the 
 57. [Border naturalness metric and validator](0059-border-naturalness-metric.md)
 58. [Terrain relief and hydrology synthesis](0056-terrain-relief-and-hydrology-synthesis.md)
 59. [Feature-aware province, state and region partition](0058-feature-aware-province-state-and-region-partition.md)
+60. [Straits, passes, impassable ranges and inland seas](0062-straits-passes-and-impassable-ranges.md)
+61. [Geography-driven ports, development, names and railways](0063-geography-driven-ports-development-names-and-railways.md)

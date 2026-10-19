@@ -5,7 +5,7 @@
  * and the port and city sites of the model. A state gets a port where the score is high, where a
  * port site stands, or where its country has no other port on that coast.
  */
-import { LAND, SEA, pairKey, type BorderStat } from './facts.js';
+import { LAND, SEA, centerOf, distanceOnMap, pairKey, type BorderStat } from './facts.js';
 import type { ProvinceMetrics } from './metrics.js';
 import type { GameplayBase } from './prepare.js';
 import { SITE_WEIGHT, type LocatedSite } from './sites.js';
@@ -188,7 +188,23 @@ export function planPorts(
         continue;
       }
     }
-    if (!scores.has(province)) {
+    // A site on the shore may fall in a province just inland; the nearest harbour within a few
+    // percent of the map width then holds the port.
+    let target = province;
+    if (!scores.has(target)) {
+      const x = site.at.x * base.input.width;
+      const y = site.at.y * base.input.height;
+      let nearest = 0.03 * base.input.width;
+      for (const candidate of scores.keys()) {
+        const centre = centerOf(provinces, candidate);
+        const d = distanceOnMap(centre.x, centre.y, x, y, base.input.width);
+        if (d < nearest) {
+          nearest = d;
+          target = candidate;
+        }
+      }
+    }
+    if (!scores.has(target)) {
       notes.push({
         code: 'MAP_PORT_SITE_NOT_COASTAL',
         severity: 'warning',
@@ -197,7 +213,7 @@ export function planPorts(
       });
       continue;
     }
-    portSiteOf.set(province, Math.max(portSiteOf.get(province) ?? 0, site.importance));
+    portSiteOf.set(target, Math.max(portSiteOf.get(target) ?? 0, site.importance));
   }
   const levelOf = (score: HarbourScore, capital: boolean, importance: number): number =>
     Math.max(
