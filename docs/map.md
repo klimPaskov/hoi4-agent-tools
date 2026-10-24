@@ -433,7 +433,7 @@ With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `histor
 
 ### Feature-aware provinces, states and strategic regions
 
-By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058, plan section C9):
+By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058):
 
 - Province borders are pulled onto rivers, steep slopes and ridges, wall ranges and lake shores (a watershed whose step cost rises on them). A province that still straddles a river or wall is cut along it.
 - Province size follows the land: small in fertile valleys, on coasts and beside rivers, large on mountains and wasteland (`landArea.fertile`, `hills`, `mountain`, `waste`, in pixels), and per geography region through its `density.provinceAreaPx`. Without bands they follow `landProvincePixels` (0.35, 1, 2.2 and 3.4 times, scaled so the mean stays `landProvincePixels`). Sea provinces are small near a coast and large on the open sea (`seaArea.coastal` and `open`, from `seaProvincePixels`), and a channel no wider than `narrowStraitPx` (24) gets two sea provinces across it.

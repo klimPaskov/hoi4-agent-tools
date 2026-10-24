@@ -114,7 +114,7 @@ New `create_world.overridesPath`: a workspace-relative `.json` file the mod auth
 - `strategicRegions`: at a point: `name`, `navalTerrain`, `weather`.
 - `names`: at a point: province, state, region or sea names with an optional `formerLabel`.
 - `adjacencies`: from a point to a point, optionally through a point, with type and name (straits, canals, impassable crossings).
-- `countries`: territory seeds, forced and blocked points, for the territory service (C11) once it lands.
+- `countries`: territory seeds, forced and blocked points, for the planned territory service once it lands.
 
 Overrides are applied after partition and before outputs, through the same typed state, region and adjacency records `update_state` and the other operations already write. An override that cannot apply is an error, never skipped: a point in the wrong surface (a victory point in water), a point outside the frame, two entries giving one entity different values, a merge across a sea, an unknown tag, a state whose capital lies in another state. Each names the entry `id`, the point and the entity it resolved to.
 

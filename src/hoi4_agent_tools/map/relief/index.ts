@@ -44,7 +44,7 @@ export { reliefStatistics, straightRiverShare, type ReliefNote } from './checks.
 
 /**
  * Parts of a geography model the synthesis cannot use yet: biomes, climate, fertility, ice and the
- * terrain shares of regions belong to the climate and biome stage (plan section C8). Relief, rivers
+ * terrain shares of regions belong to the climate and biome stage. Relief, rivers
  * and lakes are synthesised; a model that declares anything listed here is blocked rather than
  * generated with those parts silently ignored.
  */

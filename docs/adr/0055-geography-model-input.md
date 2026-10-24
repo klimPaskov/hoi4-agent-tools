@@ -2,7 +2,7 @@
 
 ## Context
 
-`create_world` accepted noise or one reference picture. A picture classifies pixels into a few terrain classes and has no place for a range with a crest, a volcano, a named river from a lake to a sea, a pass, a strait, a fertile plain, a site or a climate. A total-conversion mod describes its world as exactly that typed feature list, and the planned relief, hydrology, climate, partition and naming stages (sections C6 to C13 of `docs/plans/zin-map-pipeline.md`) all need one validated, deterministic description of the world to build on. This ADR adds that description and its review step. It does not add synthesis: no relief, river, biome or province is generated from it yet.
+`create_world` accepted noise or one reference picture. A picture classifies pixels into a few terrain classes and has no place for a range with a crest, a volcano, a named river from a lake to a sea, a pass, a strait, a fertile plain, a site or a climate. A total-conversion mod describes its world as exactly that typed feature list, and the planned relief, hydrology, climate, partition and naming stages all need one validated, deterministic description of the world to build on. This ADR adds that description and its review step. It does not add synthesis: no relief, river, biome or province is generated from it yet.
 
 ## Decision
 
