@@ -50,6 +50,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 | ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | merged (PR 36)                                                                                |
 | ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (fixes D2 to D4 merged in PR 41; pass 1 resumes after the release: 15 of 144 run) |
 | ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | merged (PR 39); usable now from the main checkout                                             |
+| ZR-6 | Sea crossings from the geography model's straits (K46)                                          | P1                           | open (mostly implemented on the unmerged C12 branch; finishing after 4.4.0)                   |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -141,6 +142,24 @@ Every sampled file held the expected bytes after each apply and after each rollb
 
 - How to use (after 4.4.0 and the main-checkout switch): remove the 4,500-file batching in `tools/content/apply.mts` and plan the whole change in one `manager.plan`; keep the 4 GiB journal option for the art.
 - Remaining integration work: the lead removes the batching and records the real apply timing.
+
+## ZR-6: Sea crossings from the geography model's straits (K46)
+
+- Opened: 2026-10-24 by lead
+- Priority: P1 (needed for the A-10 import to play correctly; may ship with ZR-2 steps 3 to 5, not blocking 4.4.0)
+- ZIN task: K46 (owner decision: every strait and every narrow water gap between two lands is a land-to-land sea crossing so armies can cross; bays and gulfs are named sea features), R-10 (A-10).
+- Tool or workflow: `hoi4_map_rewrite` `create_world` with `geography` or `geographyPath`; `map/adjacencies.csv`, `map/adjacency_rules.txt`.
+- Inputs and reproduction: the mod's `tools/content/data/geography/import/aoaz.geography.json` (commit `000daaa` on `zin/integration-r3`; valid against geography model version 1; 33 straits, each `between` two land points on different lands, rule `open`); prepared preview call `tools/content/data/geography/import/preview_call.json`.
+- Current behaviour (lead's read of `main` at `7e154a1`): straits are resolved, validated (`MAP_GEOGRAPHY_STRAIT_*`) and drawn by the preview, but nothing turns them into adjacencies: `adjacencies.csv` has only the rim rows of `edge.mode: "rim"` and the terminator; `adjacency_rules.txt` says no straits exist; the narrow-strait cut of the partition writes no crossing.
+- Required capability or improvement: (1) per resolved strait, after partition, one `sea` row `From;To;sea;Through;start_x;start_y;stop_x;stop_y;RULE;name` with the land provinces at the two ends, the sea province the crossing passes through, the shore points; `army-closed` and `navy-closed` mapped to rules or the impassable type; a diagnostic naming the strait when its ends fall in one province or on water or the crossing passes more than one sea province; rows stable across re-imports with stable ids. (2) A strait between two coasts of one land (today `MAP_GEOGRAPHY_STRAIT_SAME_LAND`) accepted as a crossing between the two provinces at its ends (ZIN: Coldor Channel, Mirolon Neck). (3) `bay` as a geography sea kind (today ocean, sea, gulf, fjord; ZIN stores 14 bays as `gulf` tagged `bay`).
+- Evidence: the lead's reads above; the base game's `adjacencies.csv` has 151 sea rows (e.g. `9990;4159;sea;5681;-1;-1;-1;-1;;Calabria-Sicily`); measured shore-to-shore widths median 4 px, widest 29.8 px.
+- Impact: armies cannot cross ZIN's straits; the A-10 run cannot pass.
+- Acceptance: a `create_world` write of the ZIN model yields one sea crossing per strait in `adjacencies.csv`, each From/To land and Through sea verified by `hoi4_map_inspect`, and the Linux harness shows armies crossing (A-10 run).
+- Worker assessment (2026-10-24): item (1) is implemented on the unmerged branch `claude/map-straits-ports-names` (C12 and C13, commits `0b02651`, `0d6ab84`, ADR 0062): every model strait becomes a `sea` row with its through province, shore coordinates (y from the bottom) and a rule in `adjacency_rules.txt` (`open` like Gibraltar, `army-closed`, `navy-closed`); `MAP_STRAIT_NOT_NARROW`, `MAP_STRAIT_UNRESOLVED`, `MAP_STRAIT_DUPLICATE`; adjacency-rule validators on any map; and `create_world.autoStraits` (default gap 24 px) for every unnamed narrow water gap between two landmasses, which covers K46's "every narrow water gap". Not yet covered: (2) same-land straits and (3) `bay`. Row stability across re-imports follows from ZR-2 step 4 (stable ids).
+- Status: open
+- Implementation: plan: after 4.4.0, bring the C12/C13 branch up to date with `main`, finish its MCP integration test, add (2) and (3) with tests, review and merge; release with ZR-2 steps 3 to 5.
+- Verification: pending
+- Remaining integration work: until then, the lead's workaround: `add_adjacency` operations per strait after a write, with province ids read at the `between` points by `hoi4_map_inspect`.
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
