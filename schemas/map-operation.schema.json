@@ -3111,6 +3111,9 @@
           "$ref": "#/$defs/__schema87"
         }
       ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
       "description": "[left, top, right, bottom] of the sheet in normalised picture coordinates."
     },
     "__schema87": {
@@ -3139,7 +3142,10 @@
         {
           "$ref": "#/$defs/__schema87"
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema91": {
       "description": "Picture point that maps to target.",
@@ -3154,7 +3160,10 @@
         {
           "$ref": "#/$defs/__schema87"
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema93": {
       "description": "World point of the anchor.",
@@ -3169,7 +3178,10 @@
         {
           "$ref": "#/$defs/__schema95"
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema95": {
       "type": "number"
@@ -3187,7 +3199,10 @@
         {
           "$ref": "#/$defs/__schema95"
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema98": {
       "description": "General map [a, b, c, d, e, f] from picture to world, instead of anchor, target and scale.",
@@ -3214,7 +3229,10 @@
         {
           "$ref": "#/$defs/__schema95"
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
     },
     "__schema100": {
       "default": 0,
