@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
-import { reconcileManagedOutputs } from '../../src/hoi4_agent_tools/core/managed-outputs.js';
+import {
+  planManagedOutputs,
+  reconcileManagedOutputs,
+} from '../../src/hoi4_agent_tools/core/managed-outputs.js';
 import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
 import {
+  isWorldCountryOutput,
+  planWorldOutputs,
   reconcileWorldOutputs,
   WORLD_OUTPUT_MANIFEST,
 } from '../../src/hoi4_agent_tools/map/world-outputs.js';
@@ -61,6 +66,106 @@ describe('managed output regeneration', () => {
         proposed: [one],
       }),
     ).toThrow('edited');
+  });
+  it('reports written, retired and released outputs', () => {
+    const first = planManagedOutputs({ ...input, sources: [], proposed: [one, two] });
+    expect(first).toMatchObject({
+      written: [one.relativePath, two.relativePath],
+      retired: [],
+      released: [],
+    });
+    const manifest = source(WORLD_OUTPUT_MANIFEST, first.changes.at(-1)!.content!);
+    const unchanged = [
+      manifest,
+      source(one.relativePath, one.content),
+      source(two.relativePath, two.content),
+    ];
+    const retired = planManagedOutputs({ ...input, sources: unchanged, proposed: [one] });
+    expect(retired).toMatchObject({
+      written: [one.relativePath],
+      retired: [two.relativePath],
+      released: [],
+    });
+    const edited = [
+      manifest,
+      source(one.relativePath, one.content),
+      source(two.relativePath, 'mine'),
+    ];
+    const releasable = (name: string) => name === two.relativePath;
+    const released = planManagedOutputs({ ...input, sources: edited, proposed: [one], releasable });
+    expect(released).toMatchObject({ retired: [], released: [two.relativePath] });
+    expect(released.changes.some((f) => f.relativePath === two.relativePath)).toBe(false);
+    expect(
+      JSON.parse(Buffer.from(released.changes.at(-1)!.content!).toString()).files.map(
+        (f: { relativePath: string }) => f.relativePath,
+      ),
+    ).toEqual([one.relativePath]);
+    // A releasable file the write would produce again still blocks: regenerating it would discard the edit.
+    expect(() =>
+      planManagedOutputs({ ...input, sources: edited, proposed: [one, two], releasable }),
+    ).toThrow('edited');
+    // Without the predicate an edited file blocks as before.
+    expect(() => planManagedOutputs({ ...input, sources: edited, proposed: [one] })).toThrow(
+      'edited',
+    );
+  });
+  it('releases only country outputs of a world when the workspace owns its countries', () => {
+    expect(
+      [
+        'common/country_tags/zz_world_countries.txt',
+        'common/countries/colors.txt',
+        'common/countries/ABC - Aster.txt',
+        'history/countries/ABC - Aster.txt',
+        'history/units/ABC_world.txt',
+        'gfx/flags/ABC.tga',
+        'gfx/flags/medium/ABC.tga',
+        'gfx/flags/small/ABC.tga',
+        'common/bookmarks/world.txt',
+      ].every(isWorldCountryOutput),
+    ).toBe(true);
+    expect(
+      [
+        'history/states/1-A.txt',
+        'map/provinces.bmp',
+        'common/on_actions/world.txt',
+        'localisation/replace/world_l_english.yml',
+        'history/units/ABC_custom.txt',
+        'gfx/flags/ABC_fascism.tga',
+      ].some(isWorldCountryOutput),
+    ).toBe(false);
+    const flag = {
+      relativePath: 'gfx/flags/ABC.tga',
+      content: Buffer.from('flag'),
+      operationIds: ['world'],
+    };
+    const onActions = {
+      relativePath: 'common/on_actions/world.txt',
+      content: Buffer.from('on_actions = { }'),
+      operationIds: ['world'],
+    };
+    const roots = ['world', 'map', ['history/states'], ['localisation']] as const;
+    const first = planWorldOutputs([], [flag, onActions], ...roots);
+    const manifest = source(WORLD_OUTPUT_MANIFEST, first.changes.at(-1)!.content!);
+    const edited = [
+      manifest,
+      source(flag.relativePath, 'mod flag'),
+      source(onActions.relativePath, 'mod hooks'),
+    ];
+    expect(() => planWorldOutputs(edited, [], ...roots)).toThrow('edited');
+    expect(() => planWorldOutputs(edited, [], ...roots, { releaseCountryOutputs: true })).toThrow(
+      'edited',
+    );
+    const flagOnly = [
+      manifest,
+      source(flag.relativePath, 'mod flag'),
+      source(onActions.relativePath, onActions.content),
+    ];
+    const plan = planWorldOutputs(flagOnly, [], ...roots, { releaseCountryOutputs: true });
+    expect(plan).toMatchObject({
+      released: [flag.relativePath],
+      retired: [onActions.relativePath],
+      written: [],
+    });
   });
   it.each([
     '../secret.txt',
@@ -134,6 +239,21 @@ describe('managed output regeneration', () => {
     const edited = sources.map((f) =>
       f === state ? source(f.relativePath, Buffer.concat([f.bytes, Buffer.from('# edit')])) : f,
     );
+    const report = next.worldOutputs?.[0];
+    expect(report?.operationId).toBe('world');
+    expect(report?.retired.length).toBeGreaterThan(0);
+    expect(report?.retired.every((path) => path.startsWith('history/states/'))).toBe(true);
+    expect(report?.released).toEqual([]);
+    expect(report?.written).toEqual(
+      [...report!.written].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+    );
+    const reconciled = next.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_RECONCILED');
+    expect(reconciled?.details).toMatchObject({
+      retired: report!.retired.length,
+      released: 0,
+      written: report!.written.length,
+      truncated: false,
+    });
     const blocked = planMapOperations(MapWorkspaceIndex.build(edited), [operation]);
     expect(blocked.blockers[0]?.code).toBe('MANAGED_OUTPUT_EDITED');
     expect(blocked.changes).toEqual([]);

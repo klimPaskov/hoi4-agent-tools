@@ -26,6 +26,8 @@ import {
   type AllocationEvidence,
   type MapAllocationRequest,
   type MapOperation,
+  type MapOperationPlan,
+  WORLD_OUTPUT_PATH_SAMPLE,
 } from './operations.js';
 import { borderQualityDiagnostics, type BorderQualityReport } from './border-quality.js';
 import {
@@ -383,12 +385,32 @@ export async function prepareMapRewrite(
         semanticDiff: compactSemantic.semantic,
         semanticDiffCounts: compactSemantic.counts,
         semanticDiffTruncated: compactSemantic.truncated,
+        ...worldOutputsData(planned.plan),
       }),
       filesScanned: planned.filesScanned,
       planBlockers: planned.plan.blockers
         .slice(0, 100)
         .map(({ code, message }) => ({ code, message })),
     }),
+  };
+}
+
+/** Counts and sorted samples of the managed outputs each generated world writes, retires and releases. */
+function worldOutputsData(plan: MapOperationPlan) {
+  if (plan.worldOutputs === undefined) return {};
+  const sample = (paths: readonly string[]) => paths.slice(0, WORLD_OUTPUT_PATH_SAMPLE);
+  return {
+    outputs: plan.worldOutputs.slice(0, 16).map((world) => ({
+      operationId: world.operationId,
+      written: world.written.length,
+      retired: world.retired.length,
+      released: world.released.length,
+      retiredFiles: sample(world.retired),
+      releasedFiles: sample(world.released),
+      truncated:
+        world.retired.length > WORLD_OUTPUT_PATH_SAMPLE ||
+        world.released.length > WORLD_OUTPUT_PATH_SAMPLE,
+    })),
   };
 }
 
@@ -607,6 +629,7 @@ export async function previewMapRewrite(
     semanticDiffTruncated: compactSemantic.truncated,
     fileCount: planned.plan.changes.length,
     artifactCount: planned.artifacts.length,
+    ...worldOutputsData(planned.plan),
     ...(input.operations.some(({ kind }) => kind === 'create_world') &&
     generatedWorldOperationIds(planned.plan).size === 0
       ? {}

@@ -1833,6 +1833,14 @@ export class AgentNudger {
     writes.push(...(await this.geographyArtifacts(prepared, options.signal, budget)));
     for (const [ordinal, imported] of prepared.imports.entries())
       writes.push(...(await buildImportArtifacts(imported, ordinal)));
+    if (plan.worldOutputs !== undefined)
+      writes.push({
+        name: 'map-world-outputs.json',
+        mimeType: 'application/json',
+        content: `${canonicalJson({ schemaVersion: 1, worlds: plan.worldOutputs })}
+`,
+        provenance,
+      });
     const generatedWorlds = generatedWorldOperationIds(plan);
     if (generatedWorlds.size > 0)
       writes.push(

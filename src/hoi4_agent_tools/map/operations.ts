@@ -52,7 +52,7 @@ import type { ColourClass } from './colormap.js';
 import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
-import { reconcileWorldOutputs } from './world-outputs.js';
+import { planWorldOutputs, reconcileWorldOutputs } from './world-outputs.js';
 import { resolvePartitionMode } from './partition.js';
 import type { PartitionTuning } from './partition-tuning.js';
 import type {
@@ -602,7 +602,19 @@ export interface MapOperationPlan {
   expectedChangedBounds?: PixelDiffBounds;
   finalIndex: MapWorkspaceIndex;
   operations: { id: string; kind: string; summary: string; data: Record<string, unknown> }[];
+  /** Managed outputs of each generated world: written, retired and released paths. */
+  worldOutputs?: WorldOutputReport[];
 }
+
+export interface WorldOutputReport {
+  operationId: string;
+  written: string[];
+  retired: string[];
+  released: string[];
+}
+
+/** Paths listed per kind in diagnostics and tool results; the artifact lists them all. */
+export const WORLD_OUTPUT_PATH_SAMPLE = 200;
 
 interface MutableChange {
   relativePath: string;
@@ -1601,6 +1613,7 @@ function proposedChanges(changes: ReadonlyMap<string, MutableChange>): ProposedF
 const diagnosticsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, Diagnostic[]>();
 
 const replacedRootsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, readonly string[]>();
+const worldOutputsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, WorldOutputReport>();
 
 function currentIndex(
   base: MapWorkspaceIndex,
@@ -5685,14 +5698,15 @@ function applyCreateWorld(
   const positioned = currentIndex(base, changes);
   for (const file of planSupplyRebuild(positioned, { mode: 'replace' }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
-  for (const file of reconcileWorldOutputs(
+  const outputs = planWorldOutputs(
     base.sourceFiles,
     proposedChanges(changes),
     operation.id,
     mapRoot,
     base.sourceRoots.states,
     base.sourceRoots.localisation,
-  ))
+  );
+  for (const file of outputs.changes)
     addChange(
       changes,
       file.relativePath,
@@ -5700,6 +5714,12 @@ function applyCreateWorld(
       operation.id,
       file.mediaType ?? 'text/plain',
     );
+  worldOutputsByPlan.set(changes, {
+    operationId: operation.id,
+    written: outputs.written,
+    retired: outputs.retired,
+    released: outputs.released,
+  });
   return [
     ...(reference?.diagnostics ?? []).map((message): Diagnostic => ({
       code: 'MAP_REFERENCE_INTERPRETATION',
@@ -5728,6 +5748,22 @@ function applyCreateWorld(
             details: { warningCount: world.warnings.length, samples: world.warnings.slice(0, 5) },
           },
         ]),
+    worldOutputsDiagnostic(operation.id, outputs),
+    ...(outputs.released.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_OUTPUT_RELEASED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message: `${outputs.released.length} edited country file(s) of the previous world are left to the workspace and no longer recorded as generated`,
+            details: {
+              count: outputs.released.length,
+              files: outputs.released.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+            },
+          },
+        ]),
     {
       code: 'MAP_WORLD_CREATED',
       severity: 'info',
@@ -5749,6 +5785,26 @@ function applyCreateWorld(
           },
         ]),
   ];
+}
+
+function worldOutputsDiagnostic(
+  operationId: string,
+  outputs: { written: readonly string[]; retired: readonly string[]; released: readonly string[] },
+): Diagnostic {
+  return {
+    code: 'MAP_WORLD_OUTPUTS_RECONCILED',
+    severity: 'info',
+    category: 'map',
+    operationId,
+    message: `The world records ${outputs.written.length} generated file(s), retires ${outputs.retired.length} earlier output(s) it no longer writes and releases ${outputs.released.length} to the workspace`,
+    details: {
+      written: outputs.written.length,
+      retired: outputs.retired.length,
+      released: outputs.released.length,
+      retiredFiles: outputs.retired.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+      truncated: outputs.retired.length > WORLD_OUTPUT_PATH_SAMPLE,
+    },
+  };
 }
 
 function applyRegenerateMapPositions(
@@ -5908,6 +5964,7 @@ function* planMapOperationSteps(
   const allocations: AllocationEvidence[] = [];
   let expectedChangedBounds: PixelDiffBounds | undefined;
   const manifestOperations: MapOperationPlan['operations'] = [];
+  const worldOutputs: WorldOutputReport[] = [];
   const ids = new Set<string>();
   for (const [operationIndex, operation] of operations.entries()) {
     yield* cancellationCheckpoint(signal, operationIndex);
@@ -5939,9 +5996,12 @@ function* planMapOperationSteps(
     const allocationsCheckpoint = allocations.length;
     const boundsCheckpoint = expectedChangedBounds;
     try {
-      if (operation.kind === 'create_world')
+      if (operation.kind === 'create_world') {
         diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
-      else if (operation.kind === 'move_state_provinces')
+        const outputs = worldOutputsByPlan.get(changes);
+        worldOutputsByPlan.delete(changes);
+        if (outputs !== undefined) worldOutputs.push(outputs);
+      } else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
       else if (operation.kind === 'split_state' || operation.kind === 'create_state')
@@ -6032,6 +6092,7 @@ function* planMapOperationSteps(
     ...(expectedChangedBounds === undefined ? {} : { expectedChangedBounds }),
     finalIndex,
     operations: manifestOperations,
+    ...(worldOutputs.length === 0 ? {} : { worldOutputs }),
   };
 }
 
