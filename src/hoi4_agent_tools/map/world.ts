@@ -18,8 +18,10 @@ import {
 } from './partition.js';
 import { smoothDiagonalContacts } from './partition-fields.js';
 import {
+  geographyPartitionFields,
   provinceCountNote,
   surfacePartitionFields,
+  type SurfacePartitionInput,
   type WorldPartitionSpec,
 } from './world-partition.js';
 import { fractal, lattice } from './world-noise.js';
@@ -620,7 +622,19 @@ interface StateDraft {
   navalBases: Map<number, number>;
 }
 
-export function generateWorld(spec: WorldSpec, context: WorldContext): GeneratedWorld {
+export interface WorldGenerationOptions {
+  /**
+   * The request's cancellation: the terrain synthesis and the feature-aware partition check it
+   * between rows and stop with its reason.
+   */
+  signal?: AbortSignal | undefined;
+}
+
+export function generateWorld(
+  spec: WorldSpec,
+  context: WorldContext,
+  options: WorldGenerationOptions = {},
+): GeneratedWorld {
   const { width, height } = spec;
   if (width % 256 !== 0 || height % 256 !== 0)
     throw new ServiceError(
@@ -709,6 +723,16 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       message: `${note.message} near (${note.x}, ${note.y})`,
       details: { pixels: note.pixels, x: note.x, y: note.y },
     });
+  // A coast that touches itself only at corners cannot be cut into valid provinces, so the
+  // feature-aware partition smooths it when it builds its own fields. A geography world smooths
+  // before the synthesis, so its heights, rivers and fields follow the smoothed mask; any other
+  // world smooths after its drainage and patches those rasters, as it always has.
+  const smoothMask =
+    spec.partition?.mode === 'feature-aware' && spec.partition.fields === undefined;
+  let smoothed =
+    smoothMask && geography !== undefined
+      ? smoothDiagonalContacts(surface.kind, width, height)
+      : [];
   // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
   // keeps the original elevation classes and drainage, byte for byte.
   const synthesized =
@@ -726,6 +750,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
             edge.mode === 'rim'
               ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
               : undefined,
+          signal: options.signal,
         });
   if (synthesized !== undefined) {
     for (const note of synthesized.notes) {
@@ -757,36 +782,44 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           warnings: [] as string[],
         };
   surface.elevation = drainage.elevation;
+  if (smoothMask && geography === undefined) {
+    smoothed = smoothDiagonalContacts(surface.kind, width, height);
+    for (const pixel of smoothed) {
+      const isLand = surface.kind[pixel] === LAND;
+      surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+      drainage.riverPixels[pixel] = isLand ? 255 : 254;
+    }
+  }
+  if (smoothed.length > 0)
+    notes.push({
+      code: 'MAP_PARTITION_MASK_SMOOTHED',
+      severity: 'info',
+      message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
+      details: { pixels: smoothed.length },
+    });
   let featurePartition: WorldPartition | undefined;
   let provinces: WorldProvinces;
   if (spec.partition?.mode === 'feature-aware') {
-    if (spec.partition.fields === undefined) {
-      // A coast that touches itself only at corners cannot be cut into valid provinces.
-      const smoothed = smoothDiagonalContacts(surface.kind, width, height);
-      for (const pixel of smoothed) {
-        const isLand = surface.kind[pixel] === LAND;
-        surface.elevation[pixel] = isLand ? 0.02 : -0.02;
-        drainage.riverPixels[pixel] = isLand ? 255 : 254;
-      }
-      if (smoothed.length > 0)
-        notes.push({
-          code: 'MAP_PARTITION_MASK_SMOOTHED',
-          severity: 'info',
-          message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
-          details: { pixels: smoothed.length },
-        });
-    }
+    const surfaceInput: SurfacePartitionInput = {
+      width,
+      height,
+      kind: surface.kind,
+      elevation: surface.elevation,
+      moisture: surface.moisture,
+      riverPixels: drainage.riverPixels,
+      ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
+    };
+    // A geography world hands the partition its regions, densities and walls, the synthesised
+    // heights and the model-drawn lines of the synthesis (ADR 0058).
     featurePartition = partitionWorldFromRequest(
       spec.partition.fields ??
-        surfacePartitionFields({
-          width,
-          height,
-          kind: surface.kind,
-          elevation: surface.elevation,
-          moisture: surface.moisture,
-          riverPixels: drainage.riverPixels,
-          ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
-        }),
+        (synthesized === undefined || geography === undefined
+          ? surfacePartitionFields(surfaceInput)
+          : geographyPartitionFields(
+              { ...surfaceInput, heights: synthesized.heights },
+              geography,
+              synthesized.fields,
+            )),
       spec.seed,
       spec.partition.tuning,
       {
@@ -796,6 +829,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
         landProvincesPerRegion: spec.landProvincesPerRegion,
         seaProvincesPerRegion: spec.seaProvincesPerRegion,
       },
+      options.signal,
     );
     provinces = featurePartition.provinces;
     for (const note of featurePartition.notes) notes.push(note);

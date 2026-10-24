@@ -147,6 +147,8 @@ export interface WatershedInput {
   terrainPenalty?: number;
   /** Seed pixels; the label of seed `i` is `i`. */
   seeds: Int32Array;
+  /** Checked every 65,536 settled pixels; stops with its reason. */
+  signal?: AbortSignal | undefined;
 }
 
 /** A plain step has this multiplier, and costs 10 for a cardinal move and 14 for a diagonal one. */
@@ -222,6 +224,8 @@ export function weightedWatershed(input: WatershedInput): Int32Array {
     }
   };
   const last = width - 1;
+  const signal = input.signal;
+  let settled = 0;
   for (let current = 0; live > 0; current++) {
     const bucket = current & mask;
     while (heads[bucket]! !== -1) {
@@ -232,6 +236,7 @@ export function weightedWatershed(input: WatershedInput): Int32Array {
       free = node;
       live--;
       if (distance[p] !== current) continue;
+      if ((++settled & 0xffff) === 0) signal?.throwIfAborted();
       const y = (p / width) | 0;
       const x = p - y * width;
       const label = labels[p]!;

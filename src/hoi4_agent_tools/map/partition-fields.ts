@@ -4,10 +4,11 @@ import { ServiceError } from '../core/result.js';
  * Inputs of the feature-aware partition (ADR 0058): one byte (or two) per pixel describing the
  * natural lines and the character of the land, in one typed contract. The contract exists so the
  * partition does not care where the numbers come from. `partitionFieldsFromBitmaps` computes a
- * basic version from the height, terrain and river bitmaps a map already has; the relief,
- * hydrology and climate stages (C6, C7, C8) fill the same fields from their float rasters and the
- * geography model (`partitionFieldsFromGeography` adds regions and wall ranges). Only `+ - * /` and
- * `sqrt` are used, so every field is identical on every platform.
+ * basic version from the height, terrain and river bitmaps a map already has; the generator fills
+ * them from its own rasters and, for a geography world, from the synthesised heights, the model
+ * (`partitionFieldsFromGeography` adds regions and wall ranges) and the lines of the synthesis
+ * (`partitionFieldsWithTerrainLines`). Only `+ - * /` and `sqrt` are used, so every field is
+ * identical on every platform.
  */
 
 /** Terrain classes the partition distinguishes; `water` marks pixels that are not land. */

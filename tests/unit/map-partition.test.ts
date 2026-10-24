@@ -695,3 +695,52 @@ describe('partition at scale', () => {
     assertProvinceTopology(2_048, 1_024, big.kind, result.provinces);
   }, 120_000);
 });
+
+describe('partition cancellation', () => {
+  const aborted = (): AbortSignal => {
+    const controller = new AbortController();
+    controller.abort();
+    return controller.signal;
+  };
+
+  it('stops the partition with the abort reason and ignores a live signal', () => {
+    expect(() =>
+      partitionWorld({
+        fields,
+        seed: 7,
+        tuning: resolvePartitionTuning(undefined, {
+          ...BASE,
+          width: fields.width,
+          height: fields.height,
+        }),
+        signal: aborted(),
+      }),
+    ).toThrow(expect.objectContaining({ name: 'AbortError' }) as Error);
+    const live = partitionWorld({
+      fields,
+      seed: 7,
+      tuning: resolvePartitionTuning(undefined, {
+        ...BASE,
+        width: fields.width,
+        height: fields.height,
+      }),
+      signal: new AbortController().signal,
+    });
+    expect(
+      Buffer.from(live.provinces.pixel.buffer).equals(Buffer.from(main.provinces.pixel.buffer)),
+    ).toBe(true);
+  });
+
+  it('checks the signal inside the watershed of a large map', () => {
+    const width = 512;
+    const height = 256;
+    const kind = new Uint8Array(width * height).fill(1);
+    const step = new Uint16Array(width * height).fill(STEP_UNIT);
+    const seeds = Int32Array.from([128 * width + 100, 128 * width + 400]);
+    expect(() =>
+      weightedWatershed({ width, height, kind, step, seeds, signal: aborted() }),
+    ).toThrow(expect.objectContaining({ name: 'AbortError' }) as Error);
+    const labels = weightedWatershed({ width, height, kind, step, seeds });
+    expect(labels.every((label) => label === 0 || label === 1)).toBe(true);
+  });
+});
