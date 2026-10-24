@@ -4,7 +4,7 @@
  * installed game read-only beneath it; nothing outside the run folder is written.
  *
  * Usage: tsx scripts/map-campaign/run-one.ts --id <map id> --store <dir> --game <game root>
- *        [--maps <dir>] [--manifest <file>] [--options <json>]
+ *        [--maps <dir>] [--manifest <file>] [--options <json>] [--keep | --keep-failed]
  * Writes `<store>/results/<id>.json` and prints its path.
  */
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -211,7 +211,8 @@ async function main(): Promise<void> {
   }
   result.milliseconds = Math.round(performance.now() - started);
   result.peakRssMiB = Math.round(process.resourceUsage().maxRSS / 1024);
-  // Keep a failed run's mod and artifacts for triage; a passing world is only its result.
+  // A world of a few hundred megabytes is only kept on request (--keep, or --keep-failed for a
+  // failed map); the result JSON holds the diagnosis, and a failed map can be rerun with --keep.
   const files = result.files as Record<string, unknown> | undefined;
   const passed =
     result.crash === undefined &&
@@ -222,7 +223,9 @@ async function main(): Promise<void> {
     files.waterAboveSurface === 0 &&
     files.pixelsWithoutDefinition === 0;
   result.passed = passed;
-  if (passed && !process.argv.includes('--keep')) await rm(run, { recursive: true, force: true });
+  const keep =
+    process.argv.includes('--keep') || (!passed && process.argv.includes('--keep-failed'));
+  if (!keep) await rm(run, { recursive: true, force: true });
   const target = path.join(store, 'results', `${id}.json`);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, `${JSON.stringify(result, null, 2)}\n`);
