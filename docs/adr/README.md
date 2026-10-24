@@ -64,3 +64,4 @@ Implementation rationale for contributors. For using the server, start with the 
 55. [World edge and seam policy](0061-world-edge-and-seam-policy.md)
 56. [Geography model input for world generation](0055-geography-model-input.md)
 57. [Border naturalness metric and validator](0059-border-naturalness-metric.md)
+58. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
