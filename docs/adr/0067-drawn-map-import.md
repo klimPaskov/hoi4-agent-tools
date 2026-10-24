@@ -68,11 +68,33 @@ Classification runs per sheet, after warping, at world resolution, with the exis
 
 The output of this stage is one frame-aligned class raster (land, sea, lake, terrain classes, river and text masks). Everything downstream (geography synthesis, partition, outputs) consumes it exactly as it consumes a picture today, so every layer derives from one registration and `provinces.bmp`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp`, `trees.bmp`, the normal and colour maps and all text files share one frame by construction.
 
-### 2. Precedence of the three sources
+### 2. Which layer comes from which source
 
-Highest first: authored overrides (section 4), the geography model, the registered drawing. The model's lakes, ranges, rivers and sites are laid over the drawing's land and sea as today. The import measures how far model and drawing disagree before planning: land-sea intersection over union, the largest disagreeing areas, model features that fall in the drawing's water, and terrain shares per model region. Below thresholds that the request may set (`reference.agreement`), disagreement is a warning with an artifact; above them it is the blocker `MAP_IMPORT_SOURCES_DISAGREE`, because two sources about 80 pixels apart would otherwise produce coasts that neither the owner nor the model drew. The preview always shows both outlines.
+The frame is 5,120 x 2,560 for ZIN (the largest province map the engine accepts at that height; the lead confirmed it on 24 October 2026). The import never chooses the frame from the picture: `width` and `height` are required with `sheets` or `fit: "frame"`, and a geography model whose frame differs is the existing error `MAP_GEOGRAPHY_FRAME_MISMATCH`.
 
-### 3. Stable ids across re-imports
+| Layer or fact                                                                 | From the drawing's pixels (or the cleaned layout)                                             | From the model's vectors                                                                                                                                                                                |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Coastline: which pixel is land and which is sea                               | yes, the only source when a picture is given                                                  | `lands` and `seas` polygons are not drawn into the mask; they are compared with it (agreement check), name land masses and seas, and give containment. Without a picture they draw the coast, as today. |
+| Lakes                                                                         | no: drawn lake colour inside land becomes land unless a model lake covers it, and is reported | `lakes` carve the land, always (shape, ports)                                                                                                                                                           |
+| Terrain classes (plains, forest, hills, mountain, desert, marsh, ice, jungle) | yes, as the base class where no model area applies                                            | `forests`, `deserts`, `marshes`, `ice`, `plains`, `hills` and biome areas override the drawn class inside their polygons; region `terrain` shares are checked against the result                        |
+| Relief and the heightmap                                                      | no                                                                                            | ranges (crest, half-width, height, `wall`), volcanoes, plateaus and passes drive synthesis (ADR 0056) together with the terrain classes; the drawing's shading is never read as height                  |
+| Rivers (`rivers.bmp`)                                                         | no: pencil rivers are not extracted (the drawn-river trace stays off for imports)             | `rivers` paths and hydrology (ADR 0056)                                                                                                                                                                 |
+| Straits and adjacencies                                                       | no                                                                                            | `straits` (and override `adjacencies`)                                                                                                                                                                  |
+| Sites, capitals, victory points, ports                                        | no                                                                                            | `sites` (and override `states`)                                                                                                                                                                         |
+| Province, state and strategic-region grouping                                 | land, sea and lake mask and terrain only                                                      | `regions` (borders, densities), seas (sea regions), walls (ADR 0058)                                                                                                                                    |
+| Names                                                                         | no (handwriting is not read; OCR stays off for imports)                                       | every name, then override `names`                                                                                                                                                                       |
+| Roads, places, coasts features                                                | no                                                                                            | yes                                                                                                                                                                                                     |
+| World edge                                                                    | land the drawing puts in the edge band is cleared or refused by `edge`                        | the model's edge features are checked by `edge`                                                                                                                                                         |
+
+R-18 requires open sea at the horizontal seam, so a ZIN import uses `edge: {"mode": "sea-band"}`: land in the east and west bands (`max(192 px, 4% of the width)`) is an error in the model (`MAP_GEOGRAPHY_*` edge diagnostic) and in the warped drawing (`MAP_IMPORT_EDGE_LAND`, with the sheet and the pixel count), not a silent cut. The model's current edge cliffs (`edges`, `wrapPolicy` in `aoaz.json`) must become open sea before an import can pass.
+
+Consequence for the model's repair: its `lands` and `seas` polygons need only agree with the drawing within the agreement threshold; the vectors that must be right are lakes, ranges, rivers (from high ground to a mouth in the drawing's water), straits, sites, regions, terrain areas and names.
+
+### 3. Precedence and agreement
+
+Highest first: authored overrides (section 5), the geography model, the registered drawing, applied per layer as the table says. The import measures how far model and drawing disagree before planning: land-sea intersection over union, the largest disagreeing areas, model features that fall in the drawing's water, and terrain shares per model region. Below thresholds that the request may set (`reference.agreement`), disagreement is a warning with an artifact; above them it is the blocker `MAP_IMPORT_SOURCES_DISAGREE`, because two sources about 80 pixels apart would otherwise produce coasts that neither the owner nor the model drew. The preview always shows both outlines.
+
+### 4. Stable ids across re-imports
 
 New `create_world.ids`: `{ "mode": "fresh" | "stable" }`, default `fresh` (today). `stable` requires a ledger from an earlier import and refuses (`MAP_IMPORT_IDS_NO_BASELINE`) without one; the first ZIN import is `fresh` and establishes it.
 
@@ -82,7 +104,7 @@ New `create_world.ids`: `{ "mode": "fresh" | "stable" }`, default `fresh` (today
 - **Colours.** Matched provinces keep their colour. New provinces get a colour from a hash of the seed and their representative pixel, probed past colours in use, instead of from the shared random stream, so a change in one place cannot recolour the world.
 - **Determinism.** With `stable`, an import whose sources, overrides, ledger and options did not change produces the same partition and therefore the same files, and the transaction is a no-op (A-10's second-import check). `fresh` keeps today's guarantee: the same inputs and seed give the same files.
 
-### 4. Authored overrides that survive regeneration
+### 5. Authored overrides that survive regeneration
 
 New `create_world.overridesPath`: a workspace-relative `.json` file the mod author owns, schema `world-overrides.schema.json`, version 1. The tool reads it with the same guards as `geographyPath` and never writes it, so its bytes and history stay the author's. Every entry has an `id` unique in the file, so diagnostics name it. Entries are keyed by world points, never by numeric ids, so they survive renumbering:
 
@@ -98,7 +120,7 @@ Overrides are applied after partition and before outputs, through the same typed
 
 Hand edits of generated files still block regeneration (`MANAGED_OUTPUT_EDITED`); the error now lists the files and, for state and region files, the changed fields, and says that the override file is where such a change belongs. Capturing edits into the override file automatically is not part of this decision.
 
-### 5. Diagnostics and evidence
+### 6. Diagnostics and evidence
 
 Errors block the write and a preview reports them all: source size or hash mismatch, unreadable or oversized source, a sheet box or clip outside the drawing, a zero or non-finite scale, a sheet target entirely outside the frame, overlapping targets with equal order, `fill: "error"` with uncovered pixels, unknown colours under `exact`, sources that disagree beyond the threshold, invalid overrides, a missing ledger under `stable`. Warnings: sheet edges that cut land (land touching a clip edge that is not a frame edge), class shares far from the model's region shares, small disagreeing areas. Every code has a negative test with a synthetic picture.
 
@@ -106,11 +128,11 @@ The preview and the write return, as content-addressed artifacts: `map-import-re
 
 After the write, the existing post-write validation runs, plus three alignment checks: all bitmaps have the frame size; every land province pixel has a height above sea level in `heightmap.bmp` and every water pixel below it; coast intersection over union between the class raster and `provinces.bmp` is at least 0.99. Failure rolls the transaction back as every failed validation does.
 
-### 6. What stays the mod's work
+### 7. What stays the mod's work
 
 The tool takes the geography schema version 1 of ADR 0055 and the sheet document above. Converting `aoaz.json` into those two documents is ZIN data work (the field mapping is direct: `geometry.coordinates` to points and rings, `sheets.*` to sheet entries with `drawingBox` to `box`, `drawingAnchor` to `anchor`, `worldAnchor` to `target`, `scaleWorldPerDrawing` to `scale`). The tool does not read the mod's own model format; a generic GeoJSON input for any mod can be a separate request. The drawing must lie inside the mod workspace to be read: the mod's git-ignored `docs/reference/originals/` copy qualifies, the private folder outside the mod does not, and no root is widened for it.
 
-### 7. Order of implementation
+### 8. Order of implementation
 
 1. Exact palette matching, `fit: "frame"` and the working-size rule (the cleaned layout imports correctly at full resolution). Small, independent of Q-04.
 2. Registered sheets, the agreement measurement and the import artifacts.
