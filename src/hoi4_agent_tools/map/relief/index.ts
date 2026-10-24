@@ -42,20 +42,15 @@ export {
 } from './terrain-synthesis.js';
 export { reliefStatistics, straightRiverShare, type ReliefNote } from './checks.js';
 
+
 /**
- * Parts of a geography model the synthesis cannot use yet: biomes, climate, fertility, ice and the
- * terrain shares of regions belong to the climate and biome stage (plan section C8). Relief, rivers
- * and lakes are synthesised; a model that declares anything listed here is blocked rather than
- * generated with those parts silently ignored.
+ * Parts of a geography model the synthesis cannot honour. Relief, rivers and lakes (ADR 0056) and
+ * climate, biomes, fertility, region terrain shares, sea ice and city styles (ADR 0057) are all
+ * synthesised, so a valid model has none; a part added to the schema later that the synthesis does
+ * not yet use is listed here, and a model that declares it is refused with a message naming it
+ * instead of being generated with it silently ignored.
  */
 export function unsupportedGeographyParts(geography: ResolvedGeography): string[] {
-  const parts: string[] = [];
-  if (geography.biomes.length > 0) parts.push(`${geography.biomes.length} biome feature(s)`);
-  if (geography.climate.declared) parts.push('the climate');
-  if (geography.lands.some((land) => land.biome !== undefined || land.fertility !== undefined))
-    parts.push('land biome and fertility defaults');
-  if (geography.regions.some((region) => region.terrain !== undefined))
-    parts.push('region terrain shares');
-  if (geography.seas.some((sea) => sea.ice > 0)) parts.push('sea ice');
-  return parts;
+  void geography;
+  return [];
 }

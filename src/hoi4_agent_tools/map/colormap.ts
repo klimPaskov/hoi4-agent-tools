@@ -20,7 +20,9 @@ export type ColourClass =
   | 'snow'
   | 'urban'
   | 'lakes'
-  | 'ocean';
+  | 'ocean'
+  | 'steppe'
+  | 'tundra';
 
 export const COLOUR_CLASSES: readonly ColourClass[] = [
   'plains',
@@ -35,10 +37,14 @@ export const COLOUR_CLASSES: readonly ColourClass[] = [
   'urban',
   'lakes',
   'ocean',
+  // Appended so the codes of the original classes never change.
+  'steppe',
+  'tundra',
 ];
 
 export type WorldLook = 'vanilla-temperate' | 'fertile' | 'arid' | 'custom';
-export type ColourMapProfile = 'calibrated' | 'legacy';
+/** `solved` is stage B (ADR 0057): the colour map is solved from target colours over the atlas. */
+export type ColourMapProfile = 'calibrated' | 'legacy' | 'solved';
 
 type Triple = readonly [number, number, number];
 
@@ -56,6 +62,8 @@ const VANILLA_TEMPERATE: Readonly<Record<ColourClass, Triple>> = {
   urban: [69, 73, 43],
   lakes: [82, 101, 128],
   ocean: [79, 102, 141],
+  steppe: [88, 80, 48],
+  tundra: [66, 67, 50],
 };
 
 /** Per-channel multipliers applied to the vanilla table for the other palette sets. */

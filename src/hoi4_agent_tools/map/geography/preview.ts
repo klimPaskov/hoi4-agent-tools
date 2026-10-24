@@ -604,6 +604,7 @@ function featureReport(
       if (feature.provincesPerState !== undefined)
         base.provincesPerState = feature.provincesPerState;
       if (feature.provinceAreaPx !== undefined) base.provinceAreaPx = feature.provinceAreaPx;
+      if (feature.cityStyle !== undefined) base.cityStyle = feature.cityStyle;
       break;
     case 'range':
       base.vertices = feature.path.xs.length;

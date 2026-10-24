@@ -6,6 +6,7 @@
  * network are derived afterwards from the generated map by the shared planners in derived.ts.
  */
 import { ServiceError } from '../core/result.js';
+import type { AtlasTiles } from './atlas-tiles.js';
 import { createBmp, type RgbColor } from './bmp.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 import { generateWorldDrainage } from './world-drainage.js';
@@ -17,7 +18,9 @@ import {
   type WorldPartition,
 } from './partition.js';
 import { smoothDiagonalContacts } from './partition-fields.js';
+import { partitionFieldsFromGeography } from './partition-geography.js';
 import {
+  ecologyPartitionFields,
   provinceCountNote,
   surfacePartitionFields,
   type WorldPartitionSpec,
@@ -47,6 +50,38 @@ import type { ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import { synthesizeTerrain, type SynthesizedTerrain } from './relief/terrain-synthesis.js';
 import type { ReliefSettings } from './relief/macro-relief.js';
+import { BUNDLED_ATLAS, terrainTileTable } from './atlas-tiles.js';
+import { solveColourMap, type ColourSolverStatistics } from './colormap-solver.js';
+import {
+  biomeNote,
+  climateNote,
+  climateWeatherBlock,
+  colourNotes,
+  computeClimate,
+  computeEcology,
+  ecologyGraphics,
+  ecologyPlanes,
+  ecologyWetness,
+  ecologyTreeGrid,
+  EcologySampler,
+  geographyDeclaresEcology,
+  latitudeDistance,
+  navalTerrainOfRegion,
+  provinceClimate,
+  provinceRegionShares,
+  provinceTerrainVote,
+  rasterizeSeas,
+  regionShareNotes,
+  resolveGraphicIndices,
+  SEA_DEPTH,
+  seaIceNotes,
+  seasonsFile,
+  DEFAULT_TERRAIN_INDEX,
+  terrainVariant,
+  type Ecology,
+  type EcologyPlanes,
+  type SeaProvinceDepth,
+} from './climate/index.js';
 
 export interface WorldCountry {
   tag: string;
@@ -101,9 +136,14 @@ export interface WorldSpec {
   riverDensity?: number;
   /** Largest number of unnamed river systems (geography worlds); absent keeps every system. */
   riverCount?: number;
-  /** `legacy` keeps the original flat tints; `calibrated` follows ADR 0054. */
+  /**
+   * `legacy` keeps the original flat tints; `calibrated` follows ADR 0054; `solved` is the overlay
+   * inverting solver of ADR 0057 (stage B).
+   */
   colormapProfile?: ColourMapProfile;
   look?: WorldLook;
+  /** `generated` writes `seasons.txt` from the geography climate; `vanilla` (default) leaves it out. */
+  seasons?: 'vanilla' | 'generated';
   /**
    * Opt-in feature-aware provinces, states and regions (ADR 0058). Absent or `legacy` keeps the
    * warped Voronoi provinces and breadth-first clusters, byte for byte.
@@ -129,6 +169,10 @@ export interface WorldContext {
   }>;
   /** Entries never chosen because the engine draws no atlas tile for them (`texture = 255`). */
   unrenderedTerrain?: ReadonlyArray<{ name: string; index: number; type: string; reason: string }>;
+  /** Mean colours of the terrain atlas tiles when the active sources include the atlas. */
+  atlas?: AtlasTiles;
+  /** Palette indices of the active cities.txt city groups. */
+  cityStyles?: readonly number[];
   /** Existing identifiers remain declared for shared portrait and script references. */
   continentKeys?: readonly string[];
   inheritedCountryTags?: readonly string[];
@@ -151,10 +195,23 @@ export interface WorldNote {
   details?: Record<string, unknown>;
 }
 
+/** What the climate and biome stage decided (ADR 0057), for reports and tests. */
+export interface GeneratedEcology {
+  readonly ecology: Ecology;
+  /** Terrain name each land province was given, by province index. */
+  readonly provinceTerrain: ReadonlyMap<number, string>;
+  /** How the colour map solver did, when the profile was `solved`. */
+  readonly colour?: ColourSolverStatistics;
+  /** Naval terrain written for each sea region, by strategic region id. */
+  readonly navalTerrain: ReadonlyMap<number, string>;
+}
+
 export interface GeneratedWorld {
   files: WorldFile[];
   /** The synthesised terrain and its fields, for worlds built from a geography model (ADR 0056). */
   terrain?: SynthesizedTerrain;
+  /** Climate, biome and fertility of a geography world (ADR 0057). */
+  ecology?: GeneratedEcology;
   warnings: string[];
   notes: WorldNote[];
   summary: {
@@ -537,35 +594,6 @@ function slug(value: string): string {
   return value.replace(/[^A-Za-z0-9 _-]/gu, '').trim() || 'Country';
 }
 
-const DEFAULT_TERRAIN_INDEX = new Map<string, number>([
-  ['plains', 0],
-  ['forest', 1],
-  ['hills', 17],
-  ['desert', 3],
-  ['mountain', 6],
-  ['marsh', 9],
-  ['urban', 13],
-  ['lakes', 15],
-  ['ocean', 15],
-  ['jungle', 21],
-]);
-
-/**
- * A graphical terrain index of the base game's numbering (farmland 5, sparse forest 4, mountain
- * with grass 20), used only when the active terrain files confirm that index still has that
- * category and draws a tile. Without any terrain files the base game's numbering is assumed.
- */
-function terrainVariant(context: WorldContext, index: number, type: string): number | undefined {
-  const entries = context.terrainEntries;
-  if (entries === undefined) return context.terrainIndex === undefined ? index : undefined;
-  return entries.some(
-    (entry) =>
-      entry.index === index && entry.type === type && entry.texture !== 255 && !entry.permSnow,
-  )
-    ? index
-    : undefined;
-}
-
 /** Approximate seasonal weather: signed latitude is positive north of the equator. */
 function weatherBlock(signedLatitude: number, desert: boolean): string {
   const latitude = Math.abs(signedLatitude);
@@ -711,6 +739,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     });
   // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
   // keeps the original elevation classes and drainage, byte for byte.
+  // The climate and biome stage (ADR 0057) runs for every geography world, except a world that
+  // brings a reference picture and a model that says nothing about climate or biomes: the picture
+  // then keeps supplying the terrain classes (ADR 0056).
+  const ecologyDriven =
+    geography !== undefined &&
+    (reference === undefined || geographyDeclaresEcology(geography));
   const synthesized =
     geography === undefined
       ? undefined
@@ -726,6 +760,17 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
             edge.mode === 'rim'
               ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
               : undefined,
+          climate: ecologyDriven
+            ? (macro) =>
+                computeClimate({
+                  settings: geography.climate,
+                  width: macro.width,
+                  height: macro.height,
+                  seed: spec.seed,
+                  kind: macro.kind,
+                  heights: macro.heights,
+                })
+            : undefined,
         });
   if (synthesized !== undefined) {
     for (const note of synthesized.notes) {
@@ -738,6 +783,34 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       });
     }
     notes.push(terrainSummaryNote(synthesized, geography!));
+  }
+  if (geography !== undefined && reference !== undefined && ecologyDriven)
+    notes.push({
+      code: 'MAP_REFERENCE_TERRAIN_IGNORED',
+      severity: 'info',
+      message:
+        'The geography model declares climate, biomes, fertility, terrain shares or sea ice, so the reference picture supplies only the coast; its terrain classes are not used',
+    });
+  // Ecology: ground cover, relief class, fertility and tree density of every macro cell, and the
+  // full-resolution planes the partition and the province terrain read.
+  let ecology: Ecology | undefined;
+  let planes: EcologyPlanes | undefined;
+  let sampler: EcologySampler | undefined;
+  if (ecologyDriven && synthesized?.climate !== undefined) {
+    ecology = computeEcology({
+      geography: geography!,
+      width,
+      height,
+      seed: spec.seed,
+      kind: surface.kind,
+      heights: synthesized.heights,
+      riverBitmap: synthesized.riverBitmap,
+      fields: synthesized.fields,
+      climate: synthesized.climate,
+    });
+    sampler = new EcologySampler(ecology, width, height, spec.seed);
+    planes = ecologyPlanes(ecology, sampler, surface.kind, synthesized.snow);
+    notes.push(climateNote(synthesized.climate, ecology), ...ecology.notes);
   }
   const drainage =
     synthesized === undefined
@@ -776,17 +849,33 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           details: { pixels: smoothed.length },
         });
     }
-    featurePartition = partitionWorldFromRequest(
+    // A geography world adds its regions, named seas and wall ranges to the fields; with the
+    // ecology stage the terrain class and fertility planes are the stage's own.
+    const baseFields =
       spec.partition.fields ??
-        surfacePartitionFields({
-          width,
-          height,
-          kind: surface.kind,
-          elevation: surface.elevation,
-          moisture: surface.moisture,
-          riverPixels: drainage.riverPixels,
-          ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
-        }),
+      (planes !== undefined && synthesized !== undefined
+        ? ecologyPartitionFields({
+            width,
+            height,
+            kind: surface.kind,
+            heights: synthesized.heights,
+            riverBitmap: drainage.riverPixels,
+            classPlane: planes.classPlane,
+            fertilityPlane: planes.fertilityPlane,
+          })
+        : surfacePartitionFields({
+            width,
+            height,
+            kind: surface.kind,
+            elevation: surface.elevation,
+            moisture: surface.moisture,
+            riverPixels: drainage.riverPixels,
+            ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
+          }));
+    featurePartition = partitionWorldFromRequest(
+      spec.partition.fields === undefined && geography !== undefined
+        ? partitionFieldsFromGeography(baseFields, geography)
+        : baseFields,
       spec.seed,
       spec.partition.tuning,
       {
@@ -903,6 +992,10 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       terrain.set(id, referenceTerrainNames[selected]!);
     }
   }
+  // Province terrain follows the ecology: the terrain most of the province's pixels have.
+  if (planes !== undefined)
+    for (const [id, name] of provinceTerrainVote(planes.classPlane, provinces.pixel, count, landIds))
+      terrain.set(id, name);
   // Continents: the largest land masses, with islands joining the nearest one.
   const landParts = new Map<number, number>();
   {
@@ -1536,12 +1629,15 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const terrainIndex = context.terrainIndex ?? DEFAULT_TERRAIN_INDEX;
   // Lake pixels use the ocean's graphical terrain: the lake entry names no atlas tile.
   const lakeIndex = terrainIndex.get('lakes') ?? terrainIndex.get('ocean') ?? 15;
-  const calibrated = spec.colormapProfile === 'calibrated';
+  const solved = spec.colormapProfile === 'solved';
+  const calibrated = spec.colormapProfile === 'calibrated' || solved;
   const farmlandIndex = calibrated ? terrainVariant(context, 5, 'plains') : undefined;
   const sparseForestIndex = calibrated ? terrainVariant(context, 4, 'forest') : undefined;
   const mountainGrassIndex = calibrated ? terrainVariant(context, 20, 'mountain') : undefined;
   const terrainPixels = new Uint8Array(width * height);
-  const colourClasses = calibrated ? new Uint8Array(width * height) : undefined;
+  const colourClasses =
+    calibrated || ecology !== undefined ? new Uint8Array(width * height) : undefined;
+  const graphicIndices = ecology === undefined ? undefined : resolveGraphicIndices(context);
   const classCode = (name: ColourClass): number => COLOUR_CLASSES.indexOf(name);
   const flatSlope = (x: number, y: number): boolean =>
     Math.abs(
@@ -1552,7 +1648,31 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           heights[Math.max(0, y - 1) * width + x]!,
       ) <=
     2;
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
+  if (
+    ecology !== undefined &&
+    sampler !== undefined &&
+    graphicIndices !== undefined &&
+    colourClasses !== undefined
+  ) {
+    // The graphical terrain follows the ecology: covers, relief, snow and urban footprints.
+    const graphics = ecologyGraphics({
+      ecology,
+      sampler,
+      indices: graphicIndices,
+      kind: surface.kind,
+      snow: synthesized?.snow,
+      cityPixels,
+    });
+    terrainPixels.set(graphics.terrainPixels);
+    colourClasses.set(graphics.colourClasses);
+    if (edge.mode === 'rim')
+      for (let pixel = 0; pixel < width * height; pixel += 1)
+        if (surface.kind[pixel] === LAND && rimStrength(edge, width, pixel % width) > 0.35) {
+          terrainPixels[pixel] = graphicIndices.snowMountain;
+          colourClasses[pixel] = classCode('snow');
+        }
+  } else
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
     const id = provinces.pixel[pixel]!;
     const type = visualTerrain(pixel);
     const snowy =
@@ -1658,8 +1778,13 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // trees.bmp: 75/256 of the map size, forests and jungles only.
   const treeWidth = Math.round((width * 75) / 256);
   const treeHeight = Math.round((height * 75) / 256);
-  const treePixels = new Uint8Array(treeWidth * treeHeight);
-  for (let y = 0; y < treeHeight; y += 1)
+  const ecologyTrees =
+    ecology !== undefined && sampler !== undefined
+      ? ecologyTreeGrid({ ecology, sampler, kind: surface.kind, seed: spec.seed })
+      : undefined;
+  const treePixels = ecologyTrees?.pixels ?? new Uint8Array(treeWidth * treeHeight);
+  if (ecologyTrees === undefined)
+    for (let y = 0; y < treeHeight; y += 1)
     for (let x = 0; x < treeWidth; x += 1) {
       const source =
         Math.floor((y * height) / treeHeight) * width + Math.floor((x * width) / treeWidth);
@@ -1693,7 +1818,38 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }),
     'image/bmp',
   );
-  // cities.bmp: sparse city footprints agree with the terrain and light maps.
+  // cities.bmp: sparse city footprints agree with the terrain and light maps. A geography world
+  // writes the style map the base game has instead: the city group of each region over its land.
+  let citiesBitmap = cityPixels;
+  if (ecology !== undefined) {
+    const known = context.cityStyles;
+    const defaultStyle = known === undefined || known.includes(15) ? 15 : known[0]!;
+    const styleOfCell = new Uint8Array(ecology.width * ecology.height).fill(defaultStyle);
+    const undefinedStyles = new Set<number>();
+    ecology.regions.forEach((region, index) => {
+      if (region.cityStyle === undefined) return;
+      if (known !== undefined && !known.includes(region.cityStyle)) {
+        undefinedStyles.add(region.cityStyle);
+        return;
+      }
+      for (let cell = 0; cell < styleOfCell.length; cell += 1)
+        if (ecology.regionOf[cell] === index + 1) styleOfCell[cell] = region.cityStyle;
+    });
+    if (undefinedStyles.size > 0)
+      notes.push({
+        code: 'MAP_CITIES_STYLE_UNDEFINED',
+        severity: 'warning',
+        message: `Regions ask for city style(s) ${[...undefinedStyles].sort((a, b) => a - b).join(', ')} that no city_group of cities.txt defines; the default style ${defaultStyle} is written there instead`,
+        details: { styles: [...undefinedStyles].sort((a, b) => a - b), known },
+      });
+    citiesBitmap = new Uint8Array(width * height);
+    const macroWidth = ecology.width;
+    for (let y = 0; y < height; y += 1)
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        if (surface.kind[pixel] === LAND) citiesBitmap[pixel] = styleOfCell[(y >> 1) * macroWidth + (x >> 1)]!;
+      }
+  }
   add(
     `${map}/cities.bmp`,
     createBmp({
@@ -1701,7 +1857,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       height,
       bitsPerPixel: 8,
       palette: bmpPalette(context.palettes.cities, (index) => ({ r: index, g: index, b: index })),
-      indexedPixels: cityPixels,
+      indexedPixels: citiesBitmap,
     }),
     'image/bmp',
   );
@@ -1755,7 +1911,37 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     ocean: { r: 50, g: 70, b: 92 },
   };
   let colormap: Uint8Array;
-  if (colourClasses !== undefined) {
+  let colourStatistics: ColourSolverStatistics | undefined;
+  if (solved && colourClasses !== undefined) {
+    const lights = new Uint8Array(width * height);
+    for (let pixel = 0; pixel < lights.length; pixel += 1)
+      if (cityPixels[pixel] === 15) lights[pixel] = 200;
+    const atlasTiles = context.atlas ?? BUNDLED_ATLAS;
+    const solution = solveColourMap({
+      width,
+      height,
+      seed: spec.seed,
+      classes: colourClasses,
+      indices: terrainPixels,
+      tileOfIndex: terrainTileTable(context.terrainEntries),
+      tiles: atlasTiles,
+      referenceTiles: BUNDLED_ATLAS,
+      heights,
+      lights,
+      look: spec.look ?? 'vanilla-temperate',
+      ...(spec.colormapPalette === undefined ? {} : { overrides: spec.colormapPalette }),
+      ...(ecology === undefined
+        ? { moisture: surface.moisture }
+        : {
+            wetness: ecologyWetness(ecology),
+            fertility: ecology.fertility,
+            temperature: ecology.temperature,
+          }),
+    });
+    colormap = solution.colormap;
+    colourStatistics = solution.statistics;
+    notes.push(...colourNotes(solution.statistics, atlasTiles));
+  } else if (calibrated && colourClasses !== undefined) {
     const lights = new Uint8Array(width * height);
     for (let pixel = 0; pixel < lights.length; pixel += 1)
       if (cityPixels[pixel] === 15) lights[pixel] = 200;
@@ -1803,6 +1989,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   );
   // Water colour maps: sea tint by distance from land, lake tint with a shore gradient, and the
   // darkest tint at the world edge (ADR 0053, 0061).
+  // A geography world's seas also set the shelf and abyss tints and the pale water of sea ice.
+  const seaRasters =
+    ecology === undefined || geography === undefined
+      ? undefined
+      : rasterizeSeas(geography, width, height);
+  const waterScale = Math.min(1.5, Math.max(0.35, width / 5632));
   for (const level of [0, 1, 2])
     add(
       `${map}/terrain/colormap_water_${level}.dds`,
@@ -1819,6 +2011,20 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
             ...(edge.mode === 'none'
               ? {}
               : { darken: (x, y) => edgeWaterDarkness(edge, width, height, x, y) }),
+            ...(seaRasters === undefined
+              ? {}
+              : {
+                  virtualDistance: (x: number, y: number): number => {
+                    const code = seaRasters.depth[(y >> 1) * seaRasters.width + (x >> 1)]!;
+                    const actual = landDistance[y * width + x]!;
+                    if (code === SEA_DEPTH.shelf) return Math.min(actual, 14 * waterScale);
+                    if (code === SEA_DEPTH.fjord) return Math.min(actual, 9 * waterScale);
+                    if (code === SEA_DEPTH.abyss) return Math.max(actual, 150 * waterScale);
+                    return -1;
+                  },
+                  ice: (x: number, y: number): number =>
+                    seaRasters.ice[(y >> 1) * seaRasters.width + (x >> 1)]! / 255,
+                }),
           },
           level,
         ),
@@ -1832,12 +2038,87 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     list.push(provinceId(id));
     regionMembers.set(region, list);
   }
+  // With the climate stage a region's weather follows the temperature and rain under it, and a
+  // sea region takes its naval terrain from the depth of its water (ADR 0057).
+  const provinceWeather =
+    ecology === undefined || seaRasters === undefined
+      ? undefined
+      : provinceClimate({
+          width,
+          height,
+          temperature: ecology.temperature,
+          rainfall: ecology.rainfall,
+          ice: seaRasters.ice,
+          landDistance,
+          provincePixels: provinces.pixel,
+          provinceSize: provinces.size,
+          provinceCount: count,
+        });
+  const shelfPixels = Math.max(12, Math.round(24 * waterScale));
+  const navalTerrain = new Map<number, string>();
   for (const [region, members] of [...regionMembers].sort((left, right) => left[0] - right[0])) {
     const indexes = members.map((member) => member - 1);
     const meanLatitude =
       indexes.reduce((sum, id) => sum + 1 - (2 * center(id).y) / height, 0) / indexes.length;
     const desert = indexes.filter((id) => terrain.get(id) === 'desert').length > indexes.length / 2;
     const naval = indexes.every((id) => provinces.kind[id] !== LAND);
+    let navalName = 'water_deep_ocean';
+    let weather = weatherBlock(meanLatitude, desert);
+    if (provinceWeather !== undefined && ecology !== undefined && seaRasters !== undefined) {
+      let pixels = 0;
+      let temperature = 0;
+      let rainfall = 0;
+      let ice = 0;
+      let landCount = 0;
+      let deserts = 0;
+      let mountains = 0;
+      const seas: SeaProvinceDepth[] = [];
+      for (const id of indexes) {
+        const size = provinces.size[id]!;
+        pixels += size;
+        temperature += provinceWeather.temperature[id]! * size;
+        rainfall += provinceWeather.rainfall[id]! * size;
+        ice += provinceWeather.ice[id]! * size;
+        if (provinces.kind[id] === LAND) {
+          landCount += 1;
+          if (terrain.get(id) === 'desert') deserts += 1;
+          if (terrain.get(id) === 'mountain') mountains += 1;
+        } else if (provinces.kind[id] === SEA) {
+          const c = center(id);
+          const code =
+            seaRasters.depth[
+              Math.min(seaRasters.height - 1, Math.floor(c.y / 2)) * seaRasters.width +
+                Math.min(seaRasters.width - 1, Math.floor(c.x / 2))
+            ]!;
+          seas.push({
+            pixels: size,
+            meanLandDistance: provinceWeather.landDistance[id]!,
+            ...(code === SEA_DEPTH.shelf
+              ? { declared: { depthClass: 'shelf', kind: 'sea' } }
+              : code === SEA_DEPTH.abyss
+                ? { declared: { depthClass: 'abyss', kind: 'sea' } }
+                : code === SEA_DEPTH.fjord
+                  ? { declared: { depthClass: 'open', kind: 'fjord' } }
+                  : {}),
+          });
+        }
+      }
+      const warmBandY = geography!.climate.warmBandY;
+      const y01 = 1 - (meanLatitude + 1) / 2;
+      weather = climateWeatherBlock({
+        temperature: temperature / pixels,
+        rainfall: rainfall / pixels,
+        latitude: latitudeDistance(y01, warmBandY),
+        northern: y01 < warmBandY,
+        seasonality: geography!.climate.seasonality,
+        desertShare: landCount === 0 ? 0 : deserts / landCount,
+        mountainShare: landCount === 0 ? 0 : mountains / landCount,
+        sea: naval,
+        ice: ice / pixels,
+      });
+      if (naval) navalName = navalTerrainOfRegion(seas, shelfPixels);
+    }
+    if (naval) navalTerrain.set(region, navalName);
     add(
       `${map}/strategicregions/${region}-${slug(regionNames.get(region) ?? `World region ${region}`).slice(0, 80)}.txt`,
       text(
@@ -1848,14 +2129,16 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           '\tprovinces={',
           `\t\t${members.sort((a, b) => a - b).join(' ')} `,
           '\t}',
-          ...(naval ? ['\tnaval_terrain=water_deep_ocean'] : []),
-          weatherBlock(meanLatitude, desert),
+          ...(naval ? [`\tnaval_terrain=${navalName}`] : []),
+          weather,
           '}',
           '',
         ].join('\n'),
       ),
     );
   }
+  if (geography !== undefined && spec.seasons === 'generated')
+    add(`${map}/seasons.txt`, text(seasonsFile(geography.climate)));
   // States.
   for (const state of states) {
     const provinceList = state.provinces.map(provinceId).sort((a, b) => a - b);
@@ -2142,10 +2425,53 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       ),
     ]),
   );
+  if (ecology !== undefined && geography !== undefined && graphicIndices !== undefined) {
+    const used = new Set<number>();
+    for (let pixel = 0; pixel < terrainPixels.length; pixel += 1)
+      if (surface.kind[pixel] === LAND) used.add(terrainPixels[pixel]!);
+    notes.push(
+      biomeNote(
+        ecology,
+        ecologyTrees === undefined ? 0 : ecologyTrees.nonZero / ecologyTrees.pixels.length,
+        used.size,
+      ),
+    );
+    notes.push(
+      ...regionShareNotes(
+        ecology,
+        provinceRegionShares(
+          ecology,
+          width,
+          height,
+          provinces.pixel,
+          (province) => terrain.get(province),
+          surface.kind,
+        ),
+      ),
+    );
+    notes.push(...seaIceNotes(geography));
+    if (graphicIndices.unmapped.length > 0)
+      notes.push({
+        code: 'MAP_BIOME_UNMAPPED',
+        severity: 'warning',
+        message: `The active terrain files define no graphical terrain for ${graphicIndices.unmapped.join(', ')}; the generator's own numbering is written there, which the game draws with whatever those indices mean in this mod`,
+        details: { categories: graphicIndices.unmapped },
+      });
+  }
   return {
     files,
     warnings: [...interpretationWarnings, ...drainage.warnings],
     notes,
+    ...(ecology === undefined
+      ? {}
+      : {
+          ecology: {
+            ecology,
+            provinceTerrain: terrain,
+            navalTerrain,
+            ...(colourStatistics === undefined ? {} : { colour: colourStatistics }),
+          },
+        }),
     ...(synthesized === undefined ? {} : { terrain: synthesized }),
     summary: {
       width,

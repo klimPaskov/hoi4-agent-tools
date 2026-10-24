@@ -145,8 +145,8 @@ describe('geography model through hoi4.map_rewrite', () => {
         featureCount: 16,
         errorCount: 0,
         warningCount: 0,
-        synthesis: 'unavailable',
-        unsupported: expect.arrayContaining([expect.stringContaining('biome')]) as string[],
+        synthesis: 'available',
+        unsupported: [],
         counts: expect.objectContaining({ land: 2, sea: 1, river: 2, range: 1, pass: 1 }),
       }),
     ]);
@@ -271,7 +271,7 @@ describe('geography model through hoi4.map_rewrite', () => {
     );
   }, 180_000);
 
-  it('blocks a write of a model with biomes because the climate stage is not implemented yet', async () => {
+  it('blocks a write of a model whose river cannot reach its mouth, and writes nothing', async () => {
     const { client, modRoot } = await fixture();
     const before = await sourceInventory(modRoot);
     const result = await client.callTool({
@@ -281,9 +281,7 @@ describe('geography model through hoi4.map_rewrite', () => {
     const content = result.structuredContent as unknown as PublicResult;
     expect(content.status).toBe('blocked');
     expect(content.changedFiles).toEqual([]);
-    expect(content.blockers.map(({ code }) => code)).toContain(
-      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
-    );
+    expect(content.blockers.map(({ code }) => code)).toContain('MAP_RIVER_UNREACHABLE_MOUTH');
     expect(await sourceInventory(modRoot)).toEqual(before);
   });
 

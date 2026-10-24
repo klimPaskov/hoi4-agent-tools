@@ -4,6 +4,7 @@
  * the barrier and valley fields later stages read. One call, deterministic, memory bounded by typed
  * arrays of the map size.
  */
+import type { ClimateFields } from '../climate/climate-field.js';
 import type { ResolvedGeography } from '../geography/index.js';
 import { LAKE, LAND, chamferDistance } from './grid.js';
 import { landDistanceField, lakeHeight } from '../water.js';
@@ -34,6 +35,7 @@ import {
   HEIGHT_CEILING,
   peakHeight,
   synthesizeMacroRelief,
+  type MacroRelief,
   type ReliefSettings,
 } from './macro-relief.js';
 import { rasterizeRivers } from './river-raster.js';
@@ -49,6 +51,12 @@ export interface TerrainSynthesisInput {
   rivers?: { density?: number | undefined; count?: number | undefined } | undefined;
   /** Rain per macro cell (half the map size), a multiplier of one; later stages supply it. */
   rainfall?: Float32Array | undefined;
+  /**
+   * Computes the climate from the macro relief (before any river is routed, so the rain shadow of
+   * the ranges shapes the catchments). Its `rainMultiplier` replaces `rainfall`, and the result is
+   * returned as `SynthesizedTerrain.climate`.
+   */
+  climate?: ((macro: MacroRelief) => ClimateFields) | undefined;
   /**
    * A change to land heights in map values, applied to the macro relief before the hydrology so
    * that rivers route around it (the world rim, ADR 0061): `x` and `y` are the full-resolution
@@ -88,6 +96,8 @@ export interface SynthesizedTerrain {
   readonly relief: ReliefStatistics;
   readonly riverStatistics: RiverStatistics;
   readonly notes: readonly ReliefNote[];
+  /** The climate the request computed from the macro relief, when it asked for one. */
+  readonly climate?: ClimateFields;
 }
 
 /** Red channel response of the normal map per height step (base game: about 2.6). */
@@ -214,6 +224,8 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
         if (macro.kind[cell] === LAND)
           macro.heights[cell] = adjust(2 * x + 1, 2 * y + 1, macro.heights[cell]!);
       }
+  stage('climate');
+  const climate = input.climate?.(macro);
   stage('hydrology');
   const hydrology = synthesizeHydrology({
     geography,
@@ -221,7 +233,7 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     seed,
     density: input.rivers?.density,
     count: input.rivers?.count,
-    rainfall: input.rainfall,
+    rainfall: climate?.rainMultiplier ?? input.rainfall,
     landPixels,
     signal: input.signal,
   });
@@ -402,5 +414,6 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     relief: statistics,
     riverStatistics,
     notes,
+    ...(climate === undefined ? {} : { climate }),
   };
 }

@@ -139,6 +139,8 @@ export interface ResolvedRegion extends FeatureBase<'region'> {
   /** Typical `[smallest, usual, largest]` provinces per state and province size in pixels. */
   readonly provincesPerState?: readonly [number, number, number];
   readonly provinceAreaPx?: number;
+  /** Palette index of the city group drawn over this region's land (cities.bmp). */
+  readonly cityStyle?: number;
 }
 
 export interface ResolvedRange extends FeatureBase<'range'> {

@@ -521,6 +521,7 @@ function canonicalModel(
       terrain: f.terrain,
       provincesPerState: f.provincesPerState,
       provinceAreaPx: f.provinceAreaPx,
+      cityStyle: f.cityStyle,
     })),
     ranges: parts.ranges.map((f) => ({
       ...base(f),
@@ -806,6 +807,7 @@ export function resolveGeography(
       ...(Object.keys(terrain).length === 0 ? {} : { terrain }),
       ...(perState === undefined ? {} : { provincesPerState: perState }),
       ...opt('provinceAreaPx', input.density?.provinceAreaPx),
+      ...opt('cityStyle', input.cityStyle),
     });
   }
 

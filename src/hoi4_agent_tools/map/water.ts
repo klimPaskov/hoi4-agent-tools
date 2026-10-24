@@ -171,6 +171,7 @@ const SEA_CURVE: Curve = [
 const LAKE_INTERIOR_TINT = [58, 102, 147] as const;
 const LAKE_SHORE_TINT = [78, 128, 168] as const;
 const DEEPEST_TINT = [26, 43, 59] as const;
+const ICE_TINT = [196, 218, 232] as const;
 const VANILLA_MAP_WIDTH = 5632;
 
 function curveAt(curve: Curve, distance: number): [number, number, number] {
@@ -204,6 +205,14 @@ export interface WaterColourInput {
    * (ADR 0061) uses it so the seam shows no shelf.
    */
   darken?: (x: number, y: number) => number;
+  /**
+   * A distance from land in pixels to use instead of the real one for a sea pixel, or a negative
+   * number for none: a sea the model calls a shelf is bright and one it calls an abyss is dark
+   * whatever the coast is doing (ADR 0057).
+   */
+  virtualDistance?: (x: number, y: number) => number;
+  /** Sea ice cover 0 to 1 at a full-resolution pixel: the water tints toward pale ice. */
+  ice?: (x: number, y: number) => number;
 }
 
 /**
@@ -223,7 +232,11 @@ export function waterColourLevel(input: WaterColourInput, level: number): Uint8A
       const sx = x * factor;
       const sy = y * factor;
       const pixel = sy * width + sx;
-      const distance = landDistance[pixel]!;
+      let distance = landDistance[pixel]!;
+      if (kind[pixel] !== LAKE && input.virtualDistance !== undefined) {
+        const virtual = input.virtualDistance(sx, sy);
+        if (virtual >= 0) distance = virtual;
+      }
       let r: number;
       let g: number;
       let b: number;
@@ -242,6 +255,13 @@ export function waterColourLevel(input: WaterColourInput, level: number): Uint8A
         r = cr * variation;
         g = cg * variation;
         b = cb * variation;
+      }
+      const ice = kind[pixel] === SEA ? (input.ice?.(sx, sy) ?? 0) : 0;
+      if (ice > 0) {
+        const cover = Math.min(1, ice * (0.75 + 0.5 * noise));
+        r += (ICE_TINT[0] - r) * cover;
+        g += (ICE_TINT[1] - g) * cover;
+        b += (ICE_TINT[2] - b) * cover;
       }
       const darkness = input.darken?.(sx, sy) ?? 0;
       if (darkness > 0) {

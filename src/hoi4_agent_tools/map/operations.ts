@@ -496,6 +496,7 @@ export interface CreateWorldOperation extends MapOperationBase {
   ambientFrame?: boolean;
   look?: WorldLookInput;
   colormap?: WorldColormapInput;
+  seasons?: 'vanilla' | 'generated';
   partition?: WorldPartitionInput;
   partitionTuning?: WorldPartitionTuningInput;
   replaceBaseGame?: boolean;
@@ -5509,18 +5510,21 @@ function applyCreateWorld(
         'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
         { modelHash: geography.geography.hash },
       );
+    // Every part of a model is either synthesised (relief, rivers, lakes, climate, biomes,
+    // fertility, region terrain shares, sea ice, city styles) or named here and refused.
     const pending = unsupportedGeographyParts(geography.geography);
     if (pending.length > 0)
       throw new ServiceError(
         'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
-        `The geography model is valid and its relief, rivers and lakes can be synthesized, but this version cannot yet use ${pending.join(', ')} (the climate and biome stage); remove them from the model to generate relief and rivers only, or use preview:true to review the model overlay and report`,
-        {
-          modelHash: geography.geography.hash,
-          available: ['relief', 'rivers', 'lakes'],
-          unavailable: pending,
-        },
+        `The geography model is valid, but this version cannot use ${pending.join(', ')}; remove them from the model, or use preview:true to review the model overlay and report`,
+        { modelHash: geography.geography.hash, unavailable: pending },
       );
   } else {
+    if (operation.seasons === 'generated')
+      throw new ServiceError(
+        'MAP_SEASONS_REQUIRE_GEOGRAPHY',
+        'seasons "generated" writes the seasons file from the climate of a geography model; give geography or geographyPath, or remove seasons',
+      );
     if (operation.relief !== undefined)
       throw new ServiceError(
         'MAP_RELIEF_REQUIRES_GEOGRAPHY',
@@ -5544,8 +5548,11 @@ function applyCreateWorld(
   const worldHeight = operation.height ?? reference?.surface.height ?? 512;
   const edge = resolveEdge(operation.edge, worldWidth, worldHeight);
   const look = operation.look;
+  // A world built from a geography model gets the solved colour map unless the request says
+  // otherwise; every other world keeps the profile it always had (ADR 0054, 0057).
   const colormapProfile =
-    operation.colormap?.profile ?? (look === undefined ? 'legacy' : 'calibrated');
+    operation.colormap?.profile ??
+    (hasGeography ? 'solved' : look === undefined ? 'legacy' : 'calibrated');
   if (look === 'custom' && operation.colormap?.palette === undefined)
     throw new ServiceError(
       'MAP_LOOK_CUSTOM_PALETTE_REQUIRED',
@@ -5623,6 +5630,7 @@ function applyCreateWorld(
       ...(edge.mode === 'none' ? {} : { edge }),
       ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
       colormapProfile,
+      ...(hasGeography ? { seasons: operation.seasons ?? ('generated' as const) } : {}),
       ...(partitionMode === 'legacy'
         ? {}
         : {

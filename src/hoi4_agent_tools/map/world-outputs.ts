@@ -21,6 +21,7 @@ export function reconcileWorldOutputs(
     'adjacency_rules.txt',
     'positions.txt',
     'ambient_object.txt',
+    'seasons.txt',
     'heightmap.bmp',
     'terrain.bmp',
     'rivers.bmp',

@@ -149,3 +149,40 @@ export function provinceCountNote(
     },
   };
 }
+
+export interface EcologyPartitionInput {
+  width: number;
+  height: number;
+  /** 0 = sea, 1 = land, 2 = lake. */
+  kind: Uint8Array;
+  /** `heightmap.bmp` values. */
+  heights: Uint8Array;
+  /** `rivers.bmp` indices. */
+  riverBitmap: Uint8Array;
+  /** `PARTITION_TERRAIN` class per pixel from the climate and biome stage (ADR 0057). */
+  classPlane: Uint8Array;
+  /** Fertility 0 to 255 per pixel from the same stage. */
+  fertilityPlane: Uint8Array;
+}
+
+/**
+ * Partition fields of a geography world: slope, ridge and river distance from the synthesised
+ * heights and rivers, the terrain class and fertility the ecology decided. Regions and wall ranges
+ * are added by `partitionFieldsFromGeography`.
+ */
+export function ecologyPartitionFields(input: EcologyPartitionInput): PartitionFields {
+  const identity = Uint8Array.from({ length: 256 }, (_, index) => index);
+  const fields = partitionFieldsFromBitmaps({
+    width: input.width,
+    height: input.height,
+    kind: input.kind,
+    heights: input.heights,
+    rivers: input.riverBitmap,
+    terrain: input.classPlane,
+    terrainClasses: identity,
+  });
+  const fertility = new Uint8Array(input.fertilityPlane);
+  for (let p = 0; p < fertility.length; p++)
+    if (input.kind[p] !== PARTITION_KIND.land) fertility[p] = 0;
+  return { ...fields, fertility };
+}

@@ -209,14 +209,16 @@ const colourClassNames = [
   'urban',
   'lakes',
   'ocean',
+  'steppe',
+  'tundra',
 ] as const;
 export const worldColormapSchema = z
   .object({
     profile: z
-      .enum(['calibrated', 'legacy'])
+      .enum(['calibrated', 'legacy', 'solved'])
       .optional()
       .describe(
-        'calibrated writes a dark, varied colour map calibrated to the base game; legacy keeps the original flat tints. Defaults to calibrated when look is set, otherwise legacy.',
+        'solved states the colour each class should show and solves for the colour map value that produces it over the atlas tile each pixel draws (the terrain shader overlays the colour map on the atlas), so a fertile plain is green on any tile; calibrated writes a dark, varied colour map from tables measured on the base game; legacy keeps the original flat tints. Defaults to solved for a world built from a geography model, to calibrated when look is set, otherwise legacy.',
       ),
     palette: z
       .object(
@@ -227,7 +229,9 @@ export const worldColormapSchema = z
       )
       .strict()
       .optional()
-      .describe('Class colours for look custom: the intended colour map value of each class.'),
+      .describe(
+        'Class colours for look custom: with the calibrated profile the intended colour map value of each class, with the solved profile the colour the player should see.',
+      ),
   })
   .strict();
 export type WorldColormapInput = z.infer<typeof worldColormapSchema>;
@@ -789,7 +793,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       geography: geographyModelSchema
         .optional()
         .describe(
-          'Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json. Without preview the world is built from it: relief (ranges with passes, volcanoes, plateaus), rivers and lakes are synthesised; biomes, climate and fertility are not yet, and a model that declares them is blocked with MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE.',
+          'Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json. Without preview the world is built from it: relief (ranges with passes, volcanoes, plateaus), rivers and lakes, then the climate (temperature by latitude and height, rain from the prevailing wind with rain shadows), biomes and fertility (biome polygons, land defaults and region terrain shares win over the climate), the terrain bitmap, trees, a solved colour map, weather and naval terrain per strategic region, city styles per region and seasons.txt.',
         ),
       geographyPath: geographyPathSchema
         .optional()
@@ -852,6 +856,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         ),
       look: worldLookSchema.optional(),
       colormap: worldColormapSchema.optional(),
+      seasons: z
+        .enum(['vanilla', 'generated'])
+        .optional()
+        .describe(
+          'generated writes map/seasons.txt from the climate of the geography model (a cold north band is desaturated, a mild one keeps its colour; seasonality sets the tint); vanilla leaves the base game file in force. Defaults to generated for a world built from a geography model. Needs geography.',
+        ),
       partition: worldPartitionSchema.optional(),
       partitionTuning: worldPartitionTuningSchema
         .optional()

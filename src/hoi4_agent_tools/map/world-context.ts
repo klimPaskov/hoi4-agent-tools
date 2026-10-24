@@ -3,6 +3,7 @@ import { hasBlockingDiagnostics } from '../core/diagnostics.js';
 import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { assignments, childBlocks, firstScalar, parseClausewitz } from '../core/source/index.js';
+import { atlasTilesFromDds } from './atlas-tiles.js';
 import { BmpImage } from './bmp.js';
 import type { MapWorkspaceIndex } from './model.js';
 import type { WorldContext } from './world.js';
@@ -76,6 +77,24 @@ export function buildWorldContext(base: MapWorkspaceIndex): WorldContext {
         `The installed ${name} bitmap requires an 8-bit palette with at least ${minimumEntries} entries.`,
       );
     context.palettes[name] = bitmap.palette.map((color) => ({ ...color }));
+  }
+
+  // The installed terrain atlas, for the mean colour of its tiles (the colour map solver reads
+  // them at run time; nothing of the atlas is copied).
+  const atlasFile = base.sourceRoots.map
+    .map((root) => base.activeFiles.byRelativePath.get(normalized(`${root}/terrain/atlas0.dds`)))
+    .find((entry) => entry !== undefined);
+  if (atlasFile !== undefined) context.atlas = atlasTilesFromDds(atlasFile.bytes);
+
+  // The city groups of the active cities.txt: the palette indices cities.bmp may use.
+  const citiesFile = base.sourceRoots.map
+    .map((root) => base.activeFiles.byRelativePath.get(normalized(`${root}/cities.txt`)))
+    .find((entry) => entry !== undefined);
+  if (citiesFile !== undefined) {
+    const styles = new Set<number>();
+    for (const match of citiesFile.bytes.toString('utf8').matchAll(/color_index\s*=\s*(\d+)/gu))
+      styles.add(Number(match[1]));
+    if (styles.size > 0) context.cityStyles = [...styles].sort((a, b) => a - b);
   }
 
   const terrainFiles = base.activeFiles.all

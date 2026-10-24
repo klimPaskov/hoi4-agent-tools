@@ -21,6 +21,7 @@ import {
   plainContext,
   syntheticRaster,
 } from '../helpers/map-appearance-world.js';
+import { climateGeography } from '../helpers/climate-fixture.js';
 import { reliefGeography } from '../helpers/relief-fixture.js';
 import { indexedPixels } from '../helpers/relief-checks.js';
 
@@ -113,7 +114,8 @@ describe('a world built from a geography model', () => {
         if (terrainBitmap[index] === 16) marked += 1;
       }
     expect(snow).toBeGreaterThan(50);
-    expect(marked).toBe(snow);
+    // Victory-point footprints are urban terrain even where a snow line crosses them.
+    expect(snow - marked).toBeLessThanOrEqual(Math.ceil(snow * 0.01));
   });
 
   it('refuses a model resolved for another map size', () => {
@@ -250,22 +252,29 @@ describe('create_world with a geography through the planner', () => {
     expect(codes).not.toContain('MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE');
   }, 120_000);
 
-  it('blocks a model whose biomes and climate the synthesis cannot use yet, and says which', async () => {
+  it('plans a model with biomes, climate, fertility and sea ice instead of blocking it', async () => {
     const nudger = await service();
     const plan = await nudger.plan({
       workspaceId: 'w',
-      operations: world({ geography: syntheticGeography(), width: 4096, height: 2048 }),
+      operations: world({ geography: climateGeography() }),
     });
-    const blocker = plan.plan.blockers.find(
-      ({ code }) => code === 'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
-    );
-    expect(blocker).toBeDefined();
-    expect(blocker!.message).toContain('biome');
-    expect(blocker!.message).toContain('climate');
-    expect(blocker!.message).toContain('relief');
-    const details = blocker!.details as { available: string[]; unavailable: string[] };
-    expect(details.available).toEqual(['relief', 'rivers', 'lakes']);
-    expect(details.unavailable.length).toBeGreaterThanOrEqual(2);
+    expect(plan.plan.blockers).toEqual([]);
+    const codes = plan.plan.diagnostics.map(({ code }) => code);
+    expect(codes).not.toContain('MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE');
+    expect(codes).toContain('MAP_CLIMATE_SYNTHESIZED');
+    expect(codes).toContain('MAP_BIOME_SYNTHESIZED');
+    expect(codes).toContain('MAP_COLORMAP_RESIDUAL');
+    const paths = plan.plan.changes.map((change) => change.relativePath);
+    expect(paths).toContain('map/seasons.txt');
+  }, 120_000);
+
+  it('refuses generated seasons without a geography', async () => {
+    const nudger = await service();
+    const plan = await nudger.plan({
+      workspaceId: 'w',
+      operations: world({ seasons: 'generated' }),
+    });
+    expect(plan.plan.blockers.map(({ code }) => code)).toEqual(['MAP_SEASONS_REQUIRE_GEOGRAPHY']);
   }, 60_000);
 
   it('writes nothing for a model with errors, whatever relief it asks for', async () => {
@@ -315,7 +324,7 @@ describe('schema and helpers', () => {
     expect(operation({ relief: { detail: 0.5, extra: 1 } }).success).toBe(false);
   });
 
-  it('lists the parts of a model the synthesis cannot use yet', () => {
+  it('has no unsupported part: every declared part of a model is synthesised', () => {
     const relief = resolveGeography(reliefGeography(), {
       frame: { width: 2048, height: 1024 },
       hasReference: false,
@@ -325,9 +334,7 @@ describe('schema and helpers', () => {
       frame: { width: 4096, height: 2048 },
       hasReference: false,
     }).geography;
-    const parts = unsupportedGeographyParts(full);
-    expect(parts.join(' ')).toContain('biome');
-    expect(parts.join(' ')).toContain('climate');
+    expect(unsupportedGeographyParts(full)).toEqual([]);
   });
 
   it('writes 24-bit bitmaps from packed bytes exactly like pixel objects', () => {

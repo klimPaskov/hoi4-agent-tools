@@ -14,6 +14,8 @@ import { RenderBudget } from '../core/render-budget.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { assignments, firstScalar, parseClausewitz } from '../core/source/index.js';
 import { decodeDds } from '../gui/dds.js';
+import { BUNDLED_ATLAS_TILE_MEANS, terrainTileTable } from './atlas-tiles.js';
+import { overlayForward } from './colormap-overlay.js';
 import { BmpImage } from './bmp.js';
 import { MAP_PROVINCE_ENGINE_MAX_PIXELS, defaultMapSelectorValue } from './model.js';
 import type { MapWorkspaceIndex } from './model.js';
@@ -51,6 +53,10 @@ export const COLORMAP_MEAN_VALUE_RANGE = [50, 100] as const;
 export const COLORMAP_DISTINCT_MINIMUM = 400;
 export const COLORMAP_DEVIATION_MINIMUM = 15;
 export const WATER_COLORMAP_DEVIATION_MINIMUM = 8;
+/** Mean luminance (0..1) the overlay model predicts for land; the base game's is 0.525 (ADR 0057). */
+export const ALBEDO_LUMINANCE_RANGE = [0.4, 0.65] as const;
+/** One graphical terrain index on more than this share of the land is a monotone terrain bitmap. */
+export const TERRAIN_DOMINANCE_LIMIT = 0.7;
 
 function normalized(value: string): string {
   return value.replaceAll('\\', '/').replace(/^\.\//u, '').toLowerCase();
@@ -363,6 +369,7 @@ function* validateTerrainBitmap(
   for (const entry of entries ?? []) if (!byIndex.has(entry.index)) byIndex.set(entry.index, entry);
   const counts = new Uint32Array(256);
   const waterCounts = new Uint32Array(256);
+  const landCounts = new Uint32Array(256);
   const { width, height, kind } = raster;
   for (let y = 0; y < height; y += 1) {
     if (y % STRIP_ROWS === 0) {
@@ -374,7 +381,22 @@ function* validateTerrainBitmap(
       const value = row[x]!;
       counts[value]! += 1;
       if (kind[y * width + x] === LAKE) waterCounts[value]! += 1;
+      else if (kind[y * width + x] === LAND) landCounts[value]! += 1;
     }
+  }
+  if (raster.landPixels >= 4_000) {
+    let top = 0;
+    for (let value = 1; value < 256; value += 1)
+      if (landCounts[value]! > landCounts[top]!) top = value;
+    const share = landCounts[top]! / raster.landPixels;
+    if (share > TERRAIN_DOMINANCE_LIMIT)
+      report({
+        code: 'MAP_TERRAIN_BITMAP_DOMINATED',
+        severity: 'info',
+        message: `${file.relativePath} draws graphical terrain index ${top} on ${Math.round(share * 100)}% of the land; the base game's most common index covers 21%, so the map will look uniform`,
+        location: locate(file),
+        details: { index: top, share: Math.round(share * 1000) / 1000 },
+      });
   }
   if (entries === undefined) return;
   const undefinedIndices: Array<{ index: number; pixels: number }> = [];
@@ -943,6 +965,71 @@ function* landColourStatistics(
     });
 }
 
+/**
+ * The colour the terrain shader would show over the atlas, from the terrain bitmap and the colour
+ * map (the overlay model of ADR 0057, with the bundled tile means). A mean luminance far from the
+ * base game's means the map will render paler or darker than the base game, whatever the colour
+ * map's own value statistics say.
+ */
+function* validateAlbedo(
+  index: MapWorkspaceIndex,
+  raster: Raster,
+  report: Report,
+  options: AppearanceOptions,
+): AppearanceSteps {
+  const terrainFile = selectedFile(index, 'terrain', 'terrain.bmp');
+  const colourFile = mapFile(index, 'terrain/colormap_rgb_cityemissivemask_a.dds');
+  if (terrainFile === undefined || colourFile === undefined || colourFile.bytes.length < 128)
+    return;
+  if (
+    colourFile.bytes.readUInt32LE(16) !== raster.width / 2 ||
+    colourFile.bytes.readUInt32LE(12) !== raster.height / 2
+  )
+    return;
+  let image: BmpImage;
+  try {
+    image = BmpImage.decode(terrainFile.bytes);
+  } catch {
+    return;
+  }
+  if (image.bitsPerPixel !== 8 || image.width !== raster.width || image.height !== raster.height)
+    return;
+  const colours = readDds(colourFile, () => undefined);
+  if (colours === undefined) return;
+  const tiles = terrainTileTable(
+    graphicalTerrain(index)?.map(({ index: value, texture }) => ({ index: value, texture })),
+  );
+  let sum = 0;
+  let cells = 0;
+  for (let y = 0; y < colours.height; y += 1) {
+    if (y % STRIP_ROWS === 0) {
+      options.signal?.throwIfAborted();
+      yield;
+    }
+    const row = rowOf(image, y * 2);
+    for (let x = 0; x < colours.width; x += 1) {
+      if (raster.kind[y * 2 * raster.width + x * 2] !== LAND) continue;
+      const mean = BUNDLED_ATLAS_TILE_MEANS[tiles[row[x * 2]!]!]!;
+      const offset = (y * colours.width + x) * 4;
+      const r = overlayForward(mean[0] / 255, colours.data[offset]! / 255);
+      const g = overlayForward(mean[1] / 255, colours.data[offset + 1]! / 255);
+      const b = overlayForward(mean[2] / 255, colours.data[offset + 2]! / 255);
+      sum += 0.3 * r + 0.59 * g + 0.11 * b;
+      cells += 1;
+    }
+  }
+  if (cells < 100) return;
+  const luminance = sum / cells;
+  if (luminance < ALBEDO_LUMINANCE_RANGE[0] || luminance > ALBEDO_LUMINANCE_RANGE[1])
+    report({
+      code: 'MAP_COLORMAP_ALBEDO_RANGE',
+      severity: 'warning',
+      message: `The terrain shader would show this land with a mean luminance of ${luminance.toFixed(2)} over the atlas, outside ${ALBEDO_LUMINANCE_RANGE[0]} to ${ALBEDO_LUMINANCE_RANGE[1]} (the base game's is 0.53): the map will render ${luminance > ALBEDO_LUMINANCE_RANGE[1] ? 'pale and washed out' : 'dark'}. Offline estimate from the overlay model, not a game screenshot`,
+      location: locate(colourFile),
+      details: { meanLuminance: Math.round(luminance * 1000) / 1000, landCells: cells },
+    });
+}
+
 // ---------------------------------------------------------------------------------------------
 // world_normal.bmp
 
@@ -1249,6 +1336,7 @@ export function* validateAppearance(
   yield* validateRivers(index, raster, report, options);
   yield* validateTrees(index, raster, report, options);
   yield* validateColourMaps(index, raster, report, options);
+  yield* validateAlbedo(index, raster, report, options);
   yield* validateNormals(index, raster, report, options);
   yield* validateCities(index, raster, report, options);
 }

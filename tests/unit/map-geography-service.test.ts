@@ -50,7 +50,7 @@ describe('geography model in the map service', () => {
     });
     expect(JSON.stringify(planned.transaction)).not.toContain('aldoria');
     expect(planned.plan.blockers.map(({ code }) => code)).toEqual([
-      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+      'MAP_RIVER_UNREACHABLE_MOUTH',
     ]);
     const edited = syntheticGeography();
     edited.lands![0]!.name = 'Aldoria the Great';
@@ -82,7 +82,7 @@ describe('geography model in the map service', () => {
       sha256: sha256Bytes(await readFile(file)),
     });
     expect(planned.plan.blockers.map(({ code }) => code)).toEqual([
-      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+      'MAP_RIVER_UNREACHABLE_MOUTH',
     ]);
     // The same plan after the file changed is a different plan.
     await writeFile(

@@ -905,6 +905,8 @@ export class AgentNudger {
               ...sourceRoots.map.flatMap((root) =>
                 ['terrain', 'rivers', 'trees', 'cities'].map((name) => `${root}/${name}.bmp`),
               ),
+              // The terrain atlas: the colour map solver reads the mean colour of its tiles.
+              ...sourceRoots.map.map((root) => `${normalizeSourceRoot(root)}/terrain/atlas0.dds`),
             ],
           },
           principal,

@@ -155,6 +155,12 @@ const regionSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Palette index of the city group in map/cities.txt whose buildings stand in this region
+     * (the base game: 15 western, 0 and 2 Asian, 1 French). It becomes the value of cities.bmp
+     * over the region's land.
+     */
+    cityStyle: z.number().int().min(0).max(255).optional(),
   })
   .strict();
 
