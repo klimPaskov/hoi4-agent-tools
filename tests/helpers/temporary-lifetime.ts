@@ -68,6 +68,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 beforeAll(async () => {
   await sweepTemporaryDirectories(tmpdir());
+  // Fixtures of a killed or crashed test run keep their owner record; collect the dead ones.
+  await sweepTemporaryDirectories(tmpdir(), { ownedFixturesOnly: true });
 });
 beforeEach(() => {
   shared = new Set(lifetime.paths());

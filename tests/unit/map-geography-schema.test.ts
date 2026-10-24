@@ -365,7 +365,7 @@ describe('geography model schema (version 1)', () => {
     expect(geographyPathSchema.safeParse(value).success).toBe(false);
   });
 
-  it.each(['geography/erdae.json', 'world.JSON', 'a/b/c/model.json'])(
+  it.each(['geography/world.json', 'world.JSON', 'a/b/c/model.json'])(
     'accepts the geography path %s',
     (value) => {
       expect(geographyPathSchema.safeParse(value).success).toBe(true);
