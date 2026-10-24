@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.4.0 - 2026-10-24
 
 - Collect test fixtures that a killed or crashed test run left in the temporary folder: the test setup now also sweeps `hoi4-*` fixtures that carry an owner record of a process that has ended (`sweepTemporaryDirectories` option `ownedFixturesOnly`). Unmarked folders and folders of a live process are never removed. Interrupted local runs had left 2,441 such folders (640 MB).
 - Fix the province count of generated worlds (found by the map import campaign, ZR-4). Extra provinces in high and wet land were added on top of `landProvincePixels`, so reference worlds, whose terrain is wet, got 50 to 95% more land provinces than requested (18,000 to 23,000 instead of about 13,000); they now redistribute the requested size, and lakes are cut at the sea size. When neither province size is given and the land would still need more than 14,000 provinces, both sizes grow towards 13,000 (`MAP_WORLD_PROVINCE_SIZE_RAISED`); chosen sizes above 21,000 provinces are refused before generation (`MAP_PARTITION_PROVINCE_COUNT_HIGH`) instead of failing on a 23 MB `unitstacks.txt`. This changes the province partition, and with it every derived file, of every `create_world` for a seed.
