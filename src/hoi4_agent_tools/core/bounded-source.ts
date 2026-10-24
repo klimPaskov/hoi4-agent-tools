@@ -13,7 +13,8 @@ export const REFERENCE_WORKING_MAX_SIDE = 3_072;
 export const REFERENCE_WORKING_MAX_BYTES = 33_554_432;
 /** Ceilings for a working copy sized to an output frame instead of the default side limit. */
 export const REFERENCE_FRAME_WORKING_MAX_PIXELS = 32_000_000;
-export const REFERENCE_FRAME_WORKING_MAX_BYTES = 67_108_864;
+// A noisy drawing barely compresses: allow four bytes per pixel (RGBA) and the PNG overhead.
+export const REFERENCE_FRAME_WORKING_MAX_BYTES = REFERENCE_FRAME_WORKING_MAX_PIXELS * 4 + 1_048_576;
 
 /**
  * Working-copy size chosen from the decoded original's size. `nearest` keeps every colour of an

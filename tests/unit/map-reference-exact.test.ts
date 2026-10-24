@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { readReferenceImageSource } from '../../src/hoi4_agent_tools/core/bounded-source.js';
+import { randomBytes } from 'node:crypto';
+import {
+  readReferenceImageSource,
+  REFERENCE_FRAME_WORKING_MAX_BYTES,
+  REFERENCE_WORKING_MAX_BYTES,
+} from '../../src/hoi4_agent_tools/core/bounded-source.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { prepareReferenceWorld } from '../../src/hoi4_agent_tools/map/reference-preparation.js';
@@ -201,6 +206,30 @@ describe('frame-fitted references', () => {
       colours.add((data[index]! << 16) | (data[index + 1]! << 8) | data[index + 2]!);
     expect(colours.size).toBe(4);
   });
+
+  it('keeps a noisy frame-sized working copy that barely compresses', async () => {
+    // Pencil hatching compresses badly; ZIN's 5,786 x 4,250 working copy exceeded a fixed 64 MiB.
+    const width = 6_800;
+    const height = 3_400;
+    const noise = randomBytes(width * height * 3);
+    const resolver = await workspace({
+      'reference/noise.png': await sharp(noise, { raw: { width, height, channels: 3 } })
+        .png({ compressionLevel: 1 })
+        .toBuffer(),
+    });
+    const loaded = await readReferenceImageSource(
+      resolver,
+      'reference',
+      'reference/noise.png',
+      undefined,
+      undefined,
+      { size: () => ({ width, height }), kernel: 'area' },
+    );
+    // Larger than the 64 MiB limit that refused the ZIN drawing.
+    expect(loaded.bytes.length).toBeGreaterThan(64 * 1_048_576);
+    expect(REFERENCE_WORKING_MAX_BYTES).toBeLessThan(loaded.bytes.length);
+    expect(loaded.bytes.length).toBeLessThanOrEqual(REFERENCE_FRAME_WORKING_MAX_BYTES);
+  }, 120_000);
 
   it('refuses a working copy over the frame pixel ceiling', async () => {
     const resolver = await workspace({ 'reference/small.png': await picture(64, 32, () => SEA) });
