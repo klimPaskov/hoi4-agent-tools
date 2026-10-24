@@ -143,6 +143,8 @@ interface ResolvedCountry {
 }
 
 interface LevelEntity {
+  /** The tag (of the overlord for a bloc), for messages. */
+  name: string;
   weight: number;
   /** Capital first. */
   seeds: number[];
@@ -480,8 +482,8 @@ class TerritoryRun {
         if (open[atom] === 0)
           refuse(
             'MAP_TERRITORY_SEED_UNAVAILABLE',
-            `Atom ${atom} of ${label} is outside the land that can be assigned (excluded, unowned or outside its overlord)`,
-            { atom, level: label },
+            `Atom ${atom}, a seed or forced territory of ${entity.name}, is outside the land that can be assigned in ${label} (excluded, unowned or outside its overlord)`,
+            { atom, tag: entity.name, level: label },
           );
         sourceOwner[atom] = index;
       }
@@ -499,8 +501,8 @@ class TerritoryRun {
           if (component[atom] === component[capital] && !reached.has(atom))
             refuse(
               'MAP_TERRITORY_FORCED_UNREACHABLE',
-              `Atom ${atom} is on the same landmass as the capital of ${label} entity ${index} but blocked or forced territory of other countries cuts it off`,
-              { atom, capital, entity: index, level: label },
+              `Atom ${atom} is on the same landmass as the capital of ${entity.name} but blocked or forced territory of other countries cuts it off`,
+              { atom, capital, tag: entity.name, level: label },
             );
       }
     // Sea edges: every atom of a landmass without a source reaches its nearest neighbours elsewhere.
@@ -1136,6 +1138,7 @@ export function growTerritory(
   const signal = options.signal;
   const n = atoms.count;
   const toEntity = (index: number): LevelEntity => ({
+    name: resolved[index]!.tag,
     weight: resolved[index]!.weight,
     seeds: resolved[index]!.seeds,
     forced: resolved[index]!.forced,
@@ -1160,6 +1163,7 @@ export function growTerritory(
     for (const atom of [...blocked])
       if (!members.every((member) => resolved[member]!.blocked.has(atom))) blocked.delete(atom);
     return {
+      name: resolved[index]!.tag,
       weight: members.reduce((sum, member) => sum + resolved[member]!.weight, 0),
       seeds: members.flatMap((member) => resolved[member]!.seeds),
       forced: members.flatMap((member) => resolved[member]!.forced),

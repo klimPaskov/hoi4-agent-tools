@@ -556,6 +556,57 @@ function provinceLabelsOf(model: AtomModel, owner: Int32Array, provinceCount: nu
   return labels;
 }
 
+/** The state or province an atom stands for, in words and as detail fields. */
+function describeAtom(
+  model: AtomModel,
+  atom: number,
+): { words: string; details: Record<string, unknown> } {
+  if (!Number.isInteger(atom) || atom < 0 || atom >= model.atoms.count)
+    return { words: `atom ${atom}`, details: {} };
+  if (model.unit === 'state') {
+    const stateId = model.stateOfAtom[atom]!;
+    return { words: `State ${stateId}`, details: { stateId } };
+  }
+  const provinceId = model.atoms.members[atom]![0]!;
+  return {
+    words: `Province ${provinceId} (state ${model.stateOfAtom[atom]!})`,
+    details: { provinceId, stateId: model.stateOfAtom[atom]! },
+  };
+}
+
+/**
+ * Grow the territory and restate a refusal of the growth in the request's terms: the growth names
+ * internal atoms, the caller sent states, provinces and points.
+ */
+function growInRequestTerms(
+  model: AtomModel,
+  countries: readonly TerritoryCountry[],
+  options: Parameters<typeof growTerritory>[2],
+): TerritoryResult {
+  try {
+    return growTerritory(model.atoms, countries, options);
+  } catch (error) {
+    if (!(error instanceof ServiceError) || typeof error.details.atom !== 'number') throw error;
+    const atom = describeAtom(model, error.details.atom);
+    const capital =
+      typeof error.details.capital === 'number'
+        ? describeAtom(model, error.details.capital)
+        : undefined;
+    const rest = Object.fromEntries(
+      Object.entries(error.details).filter(([key]) => key !== 'atom' && key !== 'capital'),
+    );
+    throw new ServiceError(
+      error.code,
+      error.message.replace(/^Atom \d+/u, atom.words),
+      {
+        ...rest,
+        ...atom.details,
+        ...(capital === undefined ? {} : { capital: capital.details }),
+      },
+    );
+  }
+}
+
 function limited(values: readonly number[], limit = 1_000): number[] {
   return values.slice(0, limit);
 }
@@ -634,11 +685,11 @@ export function* applyAssignTerritory(
     },
     ...(signal === undefined ? {} : { signal }),
   } as const;
-  const result: TerritoryResult = growTerritory(atoms, countries, options);
+  const result: TerritoryResult = growInRequestTerms(model, countries, options);
   yield;
   // The comparison: the same seeds and weights on distance alone.
   const provinceCount = world.table.provinceKinds.length;
-  const baseline = growTerritory(atoms, countries, {
+  const baseline = growInRequestTerms(model, countries, {
     ...options,
     barriers: 'none',
     smoothing: { passes: 0 },
