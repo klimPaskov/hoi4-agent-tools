@@ -40,11 +40,11 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 
 | Id   | Title                                                                                           | Priority                     | Status                                                                                           |
 | ---- | ----------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | in review (fix on `claude/zr1-workspace-discovery`; workaround below)                            |
+| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | in review (PR 37, CI running)                                                                    |
 | ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in progress (steps 1 and 2 implemented on `claude/zr2-import`; release 4.4.0 after PR 36 merges) |
-| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | in review (fixes on `claude/pr36-fixes`, full check running)                                     |
+| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | in review (fixes pushed to PR 36, CI running)                                                    |
 | ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (15 of 144 run; 5 defect classes diagnosed)                                          |
-| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | open (investigating)                                                                             |
+| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | in review (fixed on `claude/zr5-transaction-files`)                                              |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -122,10 +122,20 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 - Evidence: the error object above.
 - Impact: the integrated build cannot be applied in one transaction; the lead's stopgap splits the apply into atomic transactions of at most 4,500 files, losing all-or-nothing behaviour across the whole apply.
 - Acceptance: `apply.mts apply` with 5,051 and with 12,000 files commits atomically in one transaction (or a documented atomic chunked mode), rolls back fully on an injected failure, with a test at the limit and above it, and timings recorded.
-- Status: open (investigating)
-- Implementation: pending
-- Verification: pending
-- Remaining integration work: none yet; the lead keeps the split apply as a stopgap.
+- Status: in review (fixed and tested on `claude/zr5-transaction-files`; merges after PR 36, then released in 4.4.0)
+- Implementation: commit `273960f`. The file ceiling rises from 5,000 to 15,000 and the authenticated manifest ceiling from 16 to 32 MiB (a manifest entry measured about 940 bytes). Root cause of the slow large applies: every 16-file replacement batch rewrote and fsynced the whole manifest twice (intent and checkpoint), and the manifest grows with the file count, so a large apply was quadratic (632 manifest writes of up to 4.7 MB for 5,051 files). Batches now grow with the file count to about 64 batches (16 files up to 1,024, at most 256); ordinary rewrites are unchanged; recovery already handles pending intents of any length. `TRANSACTION_STRUCTURE_LIMIT` names each exceeded limit and the remedy. ADR 0047 amendment.
+- Verification: `tests/unit/transaction-size.test.ts` (batch sizes; the error names `5,051 files (limit 15,000)`-style limits and the remedy; one 5,051-file transaction applied, then a second one failing post-validation rolls every file back) plus the existing transaction, batch and recovery suites: 80 tests pass. Benchmark (synthetic tree of small text files, 3 rounds: first write, rewrite, injected post-write failure; measured on the worker's Windows machine while other jobs shared the disk, so timings are indicative):
+
+| Files  | Code                     | Plan s (3 rounds) | Apply s (3 rounds)                                             | Manifest       | Peak RSS |
+| ------ | ------------------------ | ----------------- | -------------------------------------------------------------- | -------------- | -------- |
+| 5,051  | before (16-file batches) | 31 / 138 / 116    | 321 / 465 / 267 (rolled back)                                  | 3.4 to 4.7 MB  | 526 MiB  |
+| 5,051  | after                    | 15 / 41 / 79      | 38 / 150 / 402 (rolled back; a stray test run shared the disk) | 3.4 to 4.7 MB  | 494 MiB  |
+| 12,000 | after                    | 67 / 86 / 127     | 198 / 142 / 230 (rolled back)                                  | 8.2 to 11.3 MB | 920 MiB  |
+
+Every sampled file held the expected bytes after each apply and after each rollback.
+
+- How to use (after 4.4.0 and the main-checkout switch): remove the 4,500-file batching in `tools/content/apply.mts` and plan the whole change in one `manager.plan`; keep the 4 GiB journal option for the art.
+- Remaining integration work: the lead removes the batching and records the real apply timing.
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
