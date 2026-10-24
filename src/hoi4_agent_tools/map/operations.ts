@@ -53,14 +53,20 @@ import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
 import { buildWorldContext } from './world-context.js';
 import { reconcileWorldOutputs } from './world-outputs.js';
+import { resolvePartitionMode } from './partition.js';
+import type { PartitionTuning } from './partition-tuning.js';
 import type {
   WorldColormapInput,
   WorldEdgeInput,
+  WorldReliefInput,
   WorldLookInput,
+  WorldPartitionInput,
+  WorldPartitionTuningInput,
   WorldReferenceInput,
 } from '../schemas/map.js';
 import type { GeographyModelInput } from '../schemas/geography.js';
 import type { PreparedGeography } from './geography/preparation.js';
+import { unsupportedGeographyParts } from './relief/index.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -484,11 +490,14 @@ export interface CreateWorldOperation extends MapOperationBase {
   geographyPath?: string;
   continentNames?: string[];
   startDate?: string;
-  rivers?: number;
+  rivers?: number | { density: number };
+  relief?: WorldReliefInput;
   edge?: WorldEdgeInput;
   ambientFrame?: boolean;
   look?: WorldLookInput;
   colormap?: WorldColormapInput;
+  partition?: WorldPartitionInput;
+  partitionTuning?: WorldPartitionTuningInput;
   replaceBaseGame?: boolean;
 }
 
@@ -5485,9 +5494,11 @@ function applyCreateWorld(
   changes: Map<string, MutableChange>,
   operation: CreateWorldOperation,
   context: MapPlanningContext,
+  signal: AbortSignal | undefined,
 ): Diagnostic[] {
   const geography = context.geographyModels?.get(operation.id);
-  if (operation.geography !== undefined || operation.geographyPath !== undefined) {
+  const hasGeography = operation.geography !== undefined || operation.geographyPath !== undefined;
+  if (hasGeography) {
     if (geography === undefined)
       throw new ServiceError(
         'MAP_GEOGRAPHY_NOT_PREPARED',
@@ -5499,11 +5510,28 @@ function applyCreateWorld(
         'The geography model has errors; fix them (see the MAP_GEOGRAPHY_* diagnostics and map-geography-report.json) before generating a world',
         { modelHash: geography.geography.hash },
       );
-    throw new ServiceError(
-      'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
-      'The geography model is valid, but this version cannot synthesize relief, rivers or biomes from it yet; use preview:true to review the model overlay and report',
-      { modelHash: geography.geography.hash },
-    );
+    const pending = unsupportedGeographyParts(geography.geography);
+    if (pending.length > 0)
+      throw new ServiceError(
+        'MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE',
+        `The geography model is valid and its relief, rivers and lakes can be synthesized, but this version cannot yet use ${pending.join(', ')} (the climate and biome stage); remove them from the model to generate relief and rivers only, or use preview:true to review the model overlay and report`,
+        {
+          modelHash: geography.geography.hash,
+          available: ['relief', 'rivers', 'lakes'],
+          unavailable: pending,
+        },
+      );
+  } else {
+    if (operation.relief !== undefined)
+      throw new ServiceError(
+        'MAP_RELIEF_REQUIRES_GEOGRAPHY',
+        'relief shapes the terrain synthesised from a geography model; give geography or geographyPath, or remove relief',
+      );
+    if (typeof operation.rivers === 'object')
+      throw new ServiceError(
+        'MAP_RIVER_DENSITY_REQUIRES_GEOGRAPHY',
+        'rivers { density } sets the river network of a geography world; give geography or geographyPath, or use an integer count',
+      );
   }
   const reference = context.referenceWorlds?.get(operation.id);
   if (operation.reference !== undefined && reference === undefined)
@@ -5528,6 +5556,12 @@ function applyCreateWorld(
     throw new ServiceError(
       'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
       'look selects a calibrated palette; remove colormap.profile "legacy" or look',
+    );
+  const partitionMode = resolvePartitionMode(operation.partition, hasGeography);
+  if (partitionMode === 'legacy' && operation.partitionTuning !== undefined)
+    throw new ServiceError(
+      'MAP_PARTITION_TUNING_REQUIRES_FEATURE_AWARE',
+      'partitionTuning applies to the feature-aware partition; set partition to "feature-aware" or remove it',
     );
   const world = generateWorld(
     {
@@ -5563,16 +5597,50 @@ function applyCreateWorld(
         ? {}
         : { continentNames: operation.continentNames }),
       startDate: operation.startDate ?? '1936.1.1',
-      rivers: operation.rivers ?? (reference === undefined ? 8 : 80),
+      rivers:
+        typeof operation.rivers === 'number' ? operation.rivers : reference === undefined ? 8 : 80,
+      ...(geography === undefined
+        ? {}
+        : {
+            geography: geography.geography,
+            ...(operation.relief === undefined
+              ? {}
+              : {
+                  relief: {
+                    ...(operation.relief.scale === undefined
+                      ? {}
+                      : { scale: operation.relief.scale }),
+                    ...(operation.relief.detail === undefined
+                      ? {}
+                      : { detail: operation.relief.detail }),
+                  },
+                }),
+            ...(typeof operation.rivers === 'object'
+              ? { riverDensity: operation.rivers.density }
+              : typeof operation.rivers === 'number'
+                ? { riverCount: operation.rivers }
+                : {}),
+          }),
       ...(edge.mode === 'none' ? {} : { edge }),
       ...(operation.ambientFrame === true ? { ambientFrame: true } : {}),
       colormapProfile,
+      ...(partitionMode === 'legacy'
+        ? {}
+        : {
+            partition: {
+              mode: partitionMode,
+              ...(operation.partitionTuning === undefined
+                ? {}
+                : { tuning: operation.partitionTuning as PartitionTuning }),
+            },
+          }),
       ...(look === undefined ? {} : { look }),
       ...(operation.colormap?.palette === undefined
         ? {}
         : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
+    { signal },
   );
   const roots =
     operation.replaceBaseGame === false
@@ -5870,7 +5938,7 @@ function* planMapOperationSteps(
     const boundsCheckpoint = expectedChangedBounds;
     try {
       if (operation.kind === 'create_world')
-        diagnostics.push(...applyCreateWorld(base, changes, operation, context));
+        diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
       else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
