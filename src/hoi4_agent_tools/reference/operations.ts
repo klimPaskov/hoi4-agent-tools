@@ -3,7 +3,7 @@ import { hashCanonical } from '../core/canonical.js';
 import { parseClausewitz } from '../core/source/index.js';
 import {
   requireOperationScope,
-  resolveOperationWorkspaceId,
+  resolveOperationWorkspaceForSource,
   type OperationContext,
 } from '../core/operation-context.js';
 import { emptyServiceResult } from '../core/result.js';
@@ -96,10 +96,12 @@ export class ReferenceToolService {
   ): Promise<ReturnType<typeof toolResult>> {
     requireOperationScope(context, 'hoi4:read');
     const parsed = schemas[name].parse(input);
-    const workspaceId = await resolveOperationWorkspaceId(
+    // A validated file names its mod when the client's roots and working directory do not.
+    const workspaceId = await resolveOperationWorkspaceForSource(
       this.engine,
       context,
       parsed.workspaceId,
+      name === 'hoi4.script_validate' ? scriptValidateRequestSchema.parse(parsed).path : undefined,
       signal,
     );
     const workspace = this.engine.resolver.get(workspaceId, context.principal);
