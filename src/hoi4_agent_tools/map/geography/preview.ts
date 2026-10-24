@@ -704,7 +704,7 @@ export function buildGeographyReport(prepared: PreparedGeography): Record<string
     edgeBand: prepared.edgeBand,
     hasReferenceImage: prepared.hasReference,
     synthesis:
-      'not applied: this report validates the model; relief, rivers and biomes are synthesised from it by later stages',
+      'not applied: this report validates the model; a world request without preview synthesises relief, rivers and lakes from it, and the climate and biome stage is not implemented yet',
     totals: { features: geography.featureCount, points: geography.pointCount },
     counts,
     climate: geography.climate,

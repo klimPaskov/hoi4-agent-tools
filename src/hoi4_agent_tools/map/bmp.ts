@@ -36,6 +36,8 @@ export interface CreateBmpOptions {
   topDown?: boolean;
   palette?: readonly RgbColor[];
   rgbPixels?: readonly RgbColor[];
+  /** 24-bit pixels as packed red, green, blue bytes, three per pixel, in place of `rgbPixels`. */
+  rgbBytes?: Uint8Array;
   indexedPixels?: Uint8Array;
   /**
    * The header's colours-used count for an 8-bit image; defaults to the palette size. The game
@@ -411,7 +413,11 @@ export function createBmp(options: CreateBmpOptions): Buffer {
     );
   }
   const pixelCount = options.width * options.height;
-  if (options.bitsPerPixel === 24 && (options.rgbPixels?.length ?? 0) !== pixelCount) {
+  const packed = options.rgbBytes;
+  if (
+    options.bitsPerPixel === 24 &&
+    (packed === undefined ? (options.rgbPixels?.length ?? 0) : packed.length / 3) !== pixelCount
+  ) {
     throw new ServiceError(
       'MAP_BMP_PIXEL_COUNT_INVALID',
       'RGB pixel count does not match BMP dimensions',
@@ -471,6 +477,11 @@ export function createBmp(options: CreateBmpOptions): Buffer {
           );
         }
         bytes[rowOffset + x] = index;
+      } else if (packed !== undefined) {
+        const offset = rowOffset + x * 3;
+        bytes[offset] = packed[logicalIndex * 3 + 2]!;
+        bytes[offset + 1] = packed[logicalIndex * 3 + 1]!;
+        bytes[offset + 2] = packed[logicalIndex * 3]!;
       } else {
         const color = options.rgbPixels?.[logicalIndex];
         if (color === undefined) {

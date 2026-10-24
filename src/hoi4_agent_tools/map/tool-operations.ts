@@ -35,6 +35,7 @@ import {
 import { buildMapCatalog, lookupMapCoordinate, searchMapCatalog } from './catalog.js';
 import { GEOGRAPHY_FEATURE_KINDS } from './geography/model.js';
 import { operationHasGeography, type PreparedGeography } from './geography/preparation.js';
+import { unsupportedGeographyParts } from './relief/index.js';
 import { renderMap, type MapOverlay, type MapSemanticDiff } from './render.js';
 import { exportProvinceGeometryRowRuns, type AgentNudger } from './service.js';
 import type { MapValidationResult } from './validation.js';
@@ -424,6 +425,7 @@ function geographySummary(prepared: PreparedGeography) {
     GEOGRAPHY_FEATURE_KINDS.map((kind) => [kind, prepared.geography.list(kind).length]),
   );
   const severities = diagnosticSeverityCounts(prepared.diagnostics);
+  const unsupported = unsupportedGeographyParts(prepared.geography);
   return {
     operationId: prepared.operationId,
     modelHash: prepared.geography.hash,
@@ -437,7 +439,8 @@ function geographySummary(prepared: PreparedGeography) {
     counts,
     errorCount: severities.error,
     warningCount: severities.warning,
-    synthesis: 'unavailable' as const,
+    synthesis: unsupported.length === 0 ? ('available' as const) : ('unavailable' as const),
+    unsupported,
   };
 }
 
@@ -468,7 +471,7 @@ async function previewGeographyRewrite(
       severity: 'info',
       category: 'map',
       message:
-        'This preview checks the geography model only. No map was planned and no relief, river or biome was synthesized, and a request without preview is blocked until synthesis exists.',
+        'This preview checks the geography model only: no map was planned and nothing was synthesized. A request without preview builds relief, rivers and lakes from the model, and is blocked while the model declares biomes, climate, fertility or sea ice, which the climate stage does not synthesize yet.',
     },
     ...(ignored === 0
       ? []

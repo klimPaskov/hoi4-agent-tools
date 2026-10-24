@@ -194,7 +194,12 @@ const mapPlanOutputSchema = strictOperationResultSchema(
               counts: z.record(z.string().max(32), nonNegativeIntegerSchema),
               errorCount: nonNegativeIntegerSchema,
               warningCount: nonNegativeIntegerSchema,
-              synthesis: z.literal('unavailable'),
+              synthesis: z
+                .enum(['available', 'unavailable'])
+                .describe(
+                  'available: a request without preview builds relief, rivers and lakes from the model; unavailable: the model declares parts the synthesis cannot use yet (see unsupported) and such a request is blocked',
+                ),
+              unsupported: z.array(z.string().max(128)).max(16),
             })
             .strict(),
         )
@@ -238,7 +243,7 @@ export const mapTaskTools = [
     name: 'hoi4.map_rewrite',
     title: 'Build a world or edit the map',
     description:
-      'Build a world from a reference image or a geography model (geography, geographyPath), or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and countries, or a model overlay and report; omit preview to write the generated map and starting scenario (models are not written yet). Returns counts, diagnostics and linked PNGs.',
+      'Build a world from a reference image or a geography model (geography, geographyPath), or edit provinces, states, regions and supply. Example: {"preview":true,"operations":[{"kind":"create_world","reference":{"imagePath":"references/world.png"}}]}. Preview first to check coastlines, terrain and countries, or a model overlay and report; omit preview to write the generated map and starting scenario (models with biomes or climate are blocked until that stage exists). Returns counts, diagnostics and linked PNGs.',
     inputSchema: mapRewriteRequestSchema,
     outputSchema: mapPlanOutputSchema,
     annotations: {
