@@ -66,4 +66,5 @@ Implementation rationale for contributors. For using the server, start with the 
 57. [Border naturalness metric and validator](0059-border-naturalness-metric.md)
 58. [Terrain relief and hydrology synthesis](0056-terrain-relief-and-hydrology-synthesis.md)
 59. [Feature-aware province, state and region partition](0058-feature-aware-province-state-and-region-partition.md)
-60. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
+60. [Workspace fallback for sessions outside every mod](0066-workspace-fallback-outside-every-mod.md)
+61. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
