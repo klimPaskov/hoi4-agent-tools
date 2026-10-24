@@ -8,6 +8,7 @@ import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import {
   assignments,
+  assertSourceEncodingPreserved,
   childBlocks,
   decodeSource,
   encodeSource,
@@ -383,6 +384,7 @@ export function parseTextDocument(file: ScannedFile): TextFileDocument {
 }
 
 export function encodeTextDocument(document: TextFileDocument, text: string): Buffer {
+  assertSourceEncodingPreserved(document, document.file.displayPath);
   return encodeSource(text, document.encoding);
 }
 
