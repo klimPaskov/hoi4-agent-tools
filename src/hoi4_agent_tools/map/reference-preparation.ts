@@ -1,4 +1,8 @@
-import { readReferenceImageSource, type ReferenceImageSource } from '../core/bounded-source.js';
+import {
+  readReferenceImageSource,
+  type ReferenceImageSource,
+  type ReferenceWorkingSize,
+} from '../core/bounded-source.js';
 import type { WorkspaceResolver } from '../core/workspace.js';
 import { extractReferenceLabels } from './reference-labels.js';
 import { extractReferenceWorld } from './reference-world.js';
@@ -22,6 +26,28 @@ export async function prepareReferenceWorld(
   const reference = operation.reference;
   if (reference === undefined)
     throw new ServiceError('MAP_REFERENCE_REQUIRED', 'Reference preparation requires imagePath');
+  const frame = reference.fit === 'frame';
+  const exact = reference.paletteMatch === 'exact';
+  if (frame && (operation.width === undefined || operation.height === undefined))
+    throw new ServiceError(
+      'MAP_REFERENCE_FRAME_SIZE_REQUIRED',
+      'A reference fitted to the frame needs explicit width and height',
+    );
+  // A frame-fitted picture keeps the frame's resolution instead of the default 3,072-pixel
+  // working copy; an exact palette is never resampled between colours.
+  const working: ReferenceWorkingSize | undefined = frame
+    ? {
+        size: (originalWidth, originalHeight) => {
+          const cropWidth = reference.crop?.width ?? originalWidth;
+          const cropHeight = reference.crop?.height ?? originalHeight;
+          return {
+            width: Math.ceil((originalWidth * operation.width!) / cropWidth),
+            height: Math.ceil((originalHeight * operation.height!) / cropHeight),
+          };
+        },
+        kernel: exact ? 'nearest' : 'area',
+      }
+    : undefined;
   const images: ReferenceImageSource[] = [];
   const load = async (relativePath: string) => {
     const image = await readReferenceImageSource(
@@ -30,11 +56,29 @@ export async function prepareReferenceWorld(
       relativePath,
       principal,
       signal,
+      working,
     );
     images.push(image);
     return image;
   };
   const main = await load(reference.imagePath);
+  if (frame) {
+    const sourceAspect =
+      (reference.crop?.width ?? main.originalWidth) /
+      (reference.crop?.height ?? main.originalHeight);
+    const frameAspect = operation.width! / operation.height!;
+    if (Math.abs(sourceAspect - frameAspect) > frameAspect * 0.01)
+      throw new ServiceError(
+        'MAP_REFERENCE_FRAME_ASPECT',
+        `The reference (${reference.crop?.width ?? main.originalWidth} x ${reference.crop?.height ?? main.originalHeight}) does not have the frame's shape (${operation.width} x ${operation.height}); fitting it would distort the map. Crop or resize the picture, or use the default fit.`,
+        {
+          sourceWidth: reference.crop?.width ?? main.originalWidth,
+          sourceHeight: reference.crop?.height ?? main.originalHeight,
+          width: operation.width,
+          height: operation.height,
+        },
+      );
+  }
   if (
     reference.crop !== undefined &&
     (reference.crop.x + reference.crop.width > main.originalWidth ||
@@ -67,7 +111,8 @@ export async function prepareReferenceWorld(
             Math.round((reference.crop.height * main.workingHeight) / main.originalHeight),
           ),
         };
-  const text = await extractReferenceLabels(main.bytes);
+  // Text recognition masks labels out of heuristic classification; an exact palette has none.
+  const text = exact ? { labels: [], warnings: [] } : await extractReferenceLabels(main.bytes);
   signal?.throwIfAborted();
   const textMasks = text.labels
     .slice(0, Math.max(0, 256 - (reference.ignoreMasks?.length ?? 0)))
@@ -95,6 +140,8 @@ export async function prepareReferenceWorld(
       ? {}
       : { riverAnnotations: reference.riverAnnotations }),
     ...(reference.palette === undefined ? {} : { palette: reference.palette }),
+    ...(frame ? { fit: 'stretch' as const } : {}),
+    ...(exact ? { paletteMatch: 'exact' as const } : {}),
     ...(reference.coastDetail === undefined ? {} : { coastDetail: reference.coastDetail }),
     ...(political === undefined ? {} : { politicalImageBytes: political.bytes }),
     ...(terrain === undefined ? {} : { terrainImageBytes: terrain.bytes }),

@@ -82,6 +82,18 @@ export const worldReferenceSchema = z
       .max(64)
       .optional(),
     coastDetail: z.number().min(0).max(1).optional(),
+    paletteMatch: z
+      .enum(['nearest', 'exact'])
+      .optional()
+      .describe(
+        'nearest (default) snaps every pixel to the closest palette colour. exact requires every pixel to equal a palette colour, trusts the classes as painted (no text masking, cleanup, smoothing or political inference) and fails with MAP_REFERENCE_PALETTE_UNKNOWN_COLOR naming any other colour, its count and source pixels.',
+      ),
+    fit: z
+      .enum(['contain', 'frame'])
+      .optional()
+      .describe(
+        'contain (default) centres the picture with sea padding at a working size of at most 3,072 pixels per side. frame maps the picture (or its crop) onto exactly width x height, which must be given and have the same shape within 1%, and reads it at the frame resolution.',
+      ),
     labels: z
       .array(
         z
@@ -113,6 +125,10 @@ export const worldReferenceSchema = z
       .optional(),
   })
   .strict()
+  .refine((value) => value.paletteMatch !== 'exact' || (value.palette?.length ?? 0) > 0, {
+    path: ['palette'],
+    message: 'paletteMatch "exact" needs a palette that lists every colour of the picture',
+  })
   .describe(
     'Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement.',
   );
@@ -871,6 +887,15 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       {
         path: ['geographyPath'],
         message: 'Give the geography inline (geography) or by file (geographyPath), not both',
+      },
+    )
+    .refine(
+      (operation) =>
+        operation.reference?.fit !== 'frame' ||
+        (operation.width !== undefined && operation.height !== undefined),
+      {
+        path: ['reference', 'fit'],
+        message: 'reference.fit "frame" needs explicit width and height',
       },
     ),
   z

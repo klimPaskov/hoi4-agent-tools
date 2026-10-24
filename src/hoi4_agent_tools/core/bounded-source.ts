@@ -11,6 +11,19 @@ import { TemporaryDirectoryLifetime, sweepTemporaryDirectories } from './tempora
 export const REFERENCE_SOURCE_MAX_BYTES = 1_073_741_824;
 export const REFERENCE_WORKING_MAX_SIDE = 3_072;
 export const REFERENCE_WORKING_MAX_BYTES = 33_554_432;
+/** Ceilings for a working copy sized to an output frame instead of the default side limit. */
+export const REFERENCE_FRAME_WORKING_MAX_PIXELS = 32_000_000;
+export const REFERENCE_FRAME_WORKING_MAX_BYTES = 67_108_864;
+
+/**
+ * Working-copy size chosen from the decoded original's size. `nearest` keeps every colour of an
+ * indexed picture; `area` averages, for drawings and photographs. A size larger than the
+ * original keeps the original size: the working copy is never enlarged.
+ */
+export interface ReferenceWorkingSize {
+  size: (originalWidth: number, originalHeight: number) => { width: number; height: number };
+  kernel: 'nearest' | 'area';
+}
 
 export type ReferenceSourceEvidence = Omit<ScannedFile, 'bytes'>;
 
@@ -168,6 +181,7 @@ export async function readReferenceImageSource(
   relativePath: string,
   principal?: string,
   signal?: AbortSignal,
+  working?: ReferenceWorkingSize,
 ): Promise<ReferenceImageSource> {
   if (!/\.(?:png|jpe?g|webp)$/iu.test(relativePath) || relativePath.includes(':'))
     throw new ServiceError(
@@ -254,18 +268,46 @@ export async function readReferenceImageSource(
         'Reference must be a single-frame supported raster image',
       );
     signal?.throwIfAborted();
-    const decoded = await input
-      .resize({
-        width: REFERENCE_WORKING_MAX_SIDE,
-        height: REFERENCE_WORKING_MAX_SIDE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
+    const requested = working?.size(metadata.width, metadata.height);
+    if (
+      requested !== undefined &&
+      (!Number.isSafeInteger(requested.width) ||
+        !Number.isSafeInteger(requested.height) ||
+        requested.width < 1 ||
+        requested.height < 1 ||
+        Math.min(requested.width, metadata.width) * Math.min(requested.height, metadata.height) >
+          REFERENCE_FRAME_WORKING_MAX_PIXELS)
+    )
+      throw new ServiceError(
+        'REFERENCE_WORKING_PIXEL_LIMIT',
+        'Reference working copy for this frame exceeds its pixel limit',
+        { limit: REFERENCE_FRAME_WORKING_MAX_PIXELS },
+      );
+    const decoded = await (
+      requested === undefined
+        ? input.resize({
+            width: REFERENCE_WORKING_MAX_SIDE,
+            height: REFERENCE_WORKING_MAX_SIDE,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+        : requested.width >= metadata.width && requested.height >= metadata.height
+          ? input
+          : input.resize({
+              width: Math.min(requested.width, metadata.width),
+              height: Math.min(requested.height, metadata.height),
+              fit: 'fill',
+              kernel: working?.kernel === 'nearest' ? sharp.kernel.nearest : sharp.kernel.lanczos3,
+            })
+    )
       .png()
       .toBuffer({ resolveWithObject: true });
     await verifySource(resolved.root, source);
     signal?.throwIfAborted();
-    if (decoded.data.length > REFERENCE_WORKING_MAX_BYTES)
+    if (
+      decoded.data.length >
+      (working === undefined ? REFERENCE_WORKING_MAX_BYTES : REFERENCE_FRAME_WORKING_MAX_BYTES)
+    )
       throw new ServiceError(
         'REFERENCE_WORKING_BYTE_LIMIT',
         'Reference working image exceeds its byte limit',
