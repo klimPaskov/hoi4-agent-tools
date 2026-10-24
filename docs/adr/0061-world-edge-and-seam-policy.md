@@ -2,7 +2,7 @@
 
 ## Context
 
-The engine wraps the map horizontally and treats it as a sphere for day and night: every map sampler uses wrap addressing, and no define or `default.map` key turns this off. A reference picture keeps its own edges, so land that touches column 0 or the last column is cut by a straight vertical line where the world repeats, and provinces at the two edges are adjacent. The generated ZIN map had land on 1,037 rows of its seam and on 2,674 columns of its top row. `ambient_object.txt` was a comment, which drops the base map's north and south frame borders.
+The engine wraps the map horizontally and treats it as a sphere for day and night: every map sampler uses wrap addressing, and no define or `default.map` key turns this off. A reference picture keeps its own edges, so land that touches column 0 or the last column is cut by a straight vertical line where the world repeats, and provinces at the two edges are adjacent. A generated mod map had land on 1,037 rows of its seam and on 2,674 columns of its top row. `ambient_object.txt` was a comment, which drops the base map's north and south frame borders.
 
 ## Decision
 

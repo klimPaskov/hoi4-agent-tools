@@ -208,7 +208,7 @@ describe('frame-fitted references', () => {
   });
 
   it('keeps a noisy frame-sized working copy that barely compresses', async () => {
-    // Pencil hatching compresses badly; ZIN's 5,786 x 4,250 working copy exceeded a fixed 64 MiB.
+    // Pencil hatching compresses badly; a 5,786 x 4,250 working copy exceeded a fixed 64 MiB.
     const width = 6_800;
     const height = 3_400;
     const noise = randomBytes(width * height * 3);
@@ -225,7 +225,7 @@ describe('frame-fitted references', () => {
       undefined,
       { size: () => ({ width, height }), kernel: 'area' },
     );
-    // Larger than the 64 MiB limit that refused the ZIN drawing.
+    // Larger than the former 64 MiB limit, which refused a real drawing.
     expect(loaded.bytes.length).toBeGreaterThan(64 * 1_048_576);
     expect(REFERENCE_WORKING_MAX_BYTES).toBeLessThan(loaded.bytes.length);
     expect(loaded.bytes.length).toBeLessThanOrEqual(REFERENCE_FRAME_WORKING_MAX_BYTES);

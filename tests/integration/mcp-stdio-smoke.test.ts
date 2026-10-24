@@ -184,7 +184,7 @@ describe('stdio smoke: synthetic fixture', () => {
       const previewed = await server.call('hoi4.map_rewrite', `preview a model: ${label}`, {
         workspaceId: 'world',
         preview: true,
-        operations: [{ id: 'erdae', kind: 'create_world', width: 4096, height: 2048, ...source }],
+        operations: [{ id: 'world', kind: 'create_world', width: 4096, height: 2048, ...source }],
       });
       const problems = successProblems(previewed);
       ledger.record(previewed, 'rewrite', problems);

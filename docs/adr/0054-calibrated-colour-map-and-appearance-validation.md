@@ -2,7 +2,7 @@
 
 ## Context
 
-The terrain shader overlays the colour map on the atlas texture at strength 0.75 in gamma space (`GetOverlay(diffuse, colormap, 0.75)`): channels below 0.5 darken, channels above 0.5 lighten. The base game's land colour map is dark and varied (mean value 74, 1,084 distinct 5-bit colours). The generator wrote ten flat tints at 1.45 to 1.75 times that brightness, so the map rendered pale: on the ZIN map the mean value is 129 and there are 14 distinct colours. Permanent-snow terrain was tinted as plains, and only 12 of the base game's 22 land indices could be written. Validation never read the bitmaps, so "offline validation passes" while terrain, rivers, trees, colour maps and normals were wrong.
+The terrain shader overlays the colour map on the atlas texture at strength 0.75 in gamma space (`GetOverlay(diffuse, colormap, 0.75)`): channels below 0.5 darken, channels above 0.5 lighten. The base game's land colour map is dark and varied (mean value 74, 1,084 distinct 5-bit colours). The generator wrote ten flat tints at 1.45 to 1.75 times that brightness, so the map rendered pale: on a generated mod map the mean value is 129 and there are 14 distinct colours. Permanent-snow terrain was tinted as plains, and only 12 of the base game's 22 land indices could be written. Validation never read the bitmaps, so "offline validation passes" while terrain, rivers, trees, colour maps and normals were wrong.
 
 ## Decision
 
