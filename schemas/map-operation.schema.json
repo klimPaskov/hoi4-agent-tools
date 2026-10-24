@@ -4600,7 +4600,10 @@
           "minimum": 1,
           "maximum": 64
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema171": {
       "type": "array",
@@ -4615,7 +4618,10 @@
           "minimum": 1,
           "maximum": 400
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema172": {
       "type": "number",
