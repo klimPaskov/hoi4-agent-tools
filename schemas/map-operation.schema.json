@@ -1644,7 +1644,10 @@
             {
               "type": "number"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
         }
       },
       "required": [
@@ -3541,7 +3544,10 @@
             {
               "$ref": "#/$defs/__schema128"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
@@ -3715,7 +3721,10 @@
                 {
                   "$ref": "#/$defs/__schema136"
                 }
-              ]
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
             },
             "provinceAreaPx": {
               "type": "integer",
@@ -3847,7 +3856,10 @@
             {
               "$ref": "#/$defs/__schema128"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
@@ -4238,7 +4250,10 @@
             {
               "$ref": "#/$defs/__schema154"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         },
         "path": {
           "minItems": 2,
@@ -4898,7 +4913,10 @@
           "minimum": 1,
           "maximum": 64
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema205": {
       "type": "array",
@@ -4913,7 +4931,10 @@
           "minimum": 1,
           "maximum": 400
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "__schema206": {
       "type": "number",

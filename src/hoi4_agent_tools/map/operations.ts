@@ -5494,6 +5494,7 @@ function applyCreateWorld(
   changes: Map<string, MutableChange>,
   operation: CreateWorldOperation,
   context: MapPlanningContext,
+  signal: AbortSignal | undefined,
 ): Diagnostic[] {
   const geography = context.geographyModels?.get(operation.id);
   const hasGeography = operation.geography !== undefined || operation.geographyPath !== undefined;
@@ -5639,6 +5640,7 @@ function applyCreateWorld(
         : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
+    { signal },
   );
   const roots =
     operation.replaceBaseGame === false
@@ -5936,7 +5938,7 @@ function* planMapOperationSteps(
     const boundsCheckpoint = expectedChangedBounds;
     try {
       if (operation.kind === 'create_world')
-        diagnostics.push(...applyCreateWorld(base, changes, operation, context));
+        diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
       else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);

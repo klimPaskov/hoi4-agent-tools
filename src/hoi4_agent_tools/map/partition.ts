@@ -41,6 +41,8 @@ export interface WorldPartitionInput {
   fields: PartitionFields;
   tuning: ResolvedPartitionTuning;
   seed: number;
+  /** Checked between the stages and inside the long loops; stops with its reason. */
+  signal?: AbortSignal | undefined;
 }
 
 export interface WorldPartition {
@@ -103,6 +105,7 @@ function majorityPerProvince(
 export function partitionWorld(input: WorldPartitionInput): WorldPartition {
   const { fields } = input;
   const result = partitionProvinces(input);
+  input.signal?.throwIfAborted();
   const { provinces } = result;
   const graph = buildProvinceGraph({
     width: fields.width,
@@ -157,10 +160,12 @@ export function partitionWorldFromRequest(
   seed: number,
   tuning: PartitionTuning | undefined,
   base: Omit<PartitionBase, 'width' | 'height'>,
+  signal?: AbortSignal,
 ): WorldPartition {
   return partitionWorld({
     fields,
     seed,
+    signal,
     tuning: resolvePartitionTuning(tuning, {
       ...base,
       width: fields.width,

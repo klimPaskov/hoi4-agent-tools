@@ -29,6 +29,8 @@ export interface FeaturePartitionInput {
   fields: PartitionFields;
   tuning: ResolvedPartitionTuning;
   seed: number;
+  /** Checked between the stages and inside the watershed; stops with its reason. */
+  signal?: AbortSignal | undefined;
 }
 
 export interface SizeStatistics {
@@ -745,8 +747,11 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
       `The planned province areas give about ${expected} provinces, above the 21,000 the wiki advises and the text tables allow; raise landProvincePixels, seaProvincePixels or partitionTuning.landArea and seaArea`,
       { expectedProvinces: expected, maximum: PARTITION_PROVINCE_ERROR },
     );
+  const { signal } = input;
+  signal?.throwIfAborted();
   const barrier = buildBarrierField(fields, tuning, shore.distance);
   const step = buildStepField(fields, barrier, tuning, input.seed);
+  signal?.throwIfAborted();
   // Seeds: land, sea and lakes each at their own density.
   const seeded = new Uint8Array(total);
   const seeds: number[] = [];
@@ -794,6 +799,7 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
     }),
   );
   for (const pixel of seedMissedComponents(kind, width, height, seeded, queue)) seeds.push(pixel);
+  signal?.throwIfAborted();
   if (seeds.length > 65_000)
     throw new ServiceError(
       'MAP_WORLD_TOO_MANY_PROVINCES',
@@ -814,8 +820,10 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
     terrainClass: fields.terrainClass,
     terrainPenalty: 30,
     seeds: Int32Array.from(seeds),
+    signal,
   });
   const rivers = splitAcrossLines(fields, labels, MIN_PIECE_PIXELS, queue);
+  signal?.throwIfAborted();
   const straits = splitNarrowStraits(
     fields,
     labels,
@@ -830,6 +838,7 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
       message: `Cut ${rivers} province(s) along rivers or walls and ${straits} sea province(s) along narrow straits`,
       details: { riverSplits: rivers, straitSplits: straits },
     });
+  signal?.throwIfAborted();
   const provinces = assembleWorldProvinces(
     {
       width,
