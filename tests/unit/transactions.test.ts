@@ -1549,7 +1549,10 @@ describe('transaction manager', () => {
     const validManifest = await readFile(manifestPath);
     await writeFile(
       manifestPath,
-      Buffer.concat([validManifest, Buffer.alloc(16_777_217 - validManifest.length, 0x20)]),
+      Buffer.concat([
+        validManifest,
+        Buffer.alloc(TRANSACTION_MAX_MANIFEST_BYTES + 1 - validManifest.length, 0x20),
+      ]),
     );
     await expect(manager.status('test', plan.transactionId)).rejects.toMatchObject({
       code: 'TRANSACTION_MANIFEST_LIMIT',

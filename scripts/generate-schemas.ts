@@ -56,6 +56,8 @@ import {
   probabilitySweepInputSchema,
 } from '../src/hoi4_agent_tools/schemas/probability.js';
 
+import { referenceSheetsDocumentSchema } from '../src/hoi4_agent_tools/schemas/reference-sheets.js';
+
 const root = path.resolve(import.meta.dirname, '..');
 const output = path.join(root, 'schemas');
 const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as {
@@ -65,6 +67,7 @@ await mkdir(output, { recursive: true });
 
 const schemas: (readonly [string, z.ZodType])[] = [
   ['configuration.schema.json', serverConfigurationSchema],
+  ['reference-sheets.schema.json', referenceSheetsDocumentSchema],
   ['impact-inspect-input.schema.json', impactInspectRequestSchema],
   ['decision-inspect-input.schema.json', decisionInspectRequestSchema],
   ['shared-scenario.schema.json', sharedScenarioSchema],

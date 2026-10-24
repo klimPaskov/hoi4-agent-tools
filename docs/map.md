@@ -29,24 +29,61 @@ Automatic interpretation recognizes visual land/water and terrain cues, derives 
 
 Optional `reference` controls refine the same call:
 
-| Field                                                       | Meaning                                                                                                                                                  |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `politicalImagePath`, `terrainImagePath`, `heightImagePath` | Additional aligned workspace images for political regions, terrain cues or grayscale height.                                                             |
-| `mode`                                                      | `auto`, `illustrated`, `satellite`, `sketch`, `political` or `grayscale`.                                                                                |
-| `crop`                                                      | `{x,y,width,height}` in original source pixels.                                                                                                          |
-| `ignoreMasks`                                               | Polygons that exclude legends, frames or decorative areas.                                                                                               |
-| `annotations`                                               | `{kind,polygon}` semantic polygons: sea, land, plains, lake, forest, desert, mountain, snow, volcano, hills, marsh or jungle.                            |
-| `riverAnnotations`                                          | Paths for known rivers.                                                                                                                                  |
-| `palette`                                                   | `{kind,color:{r,g,b}}` color cues for the same semantic kinds.                                                                                           |
-| `coastDetail`                                               | Detail preservation from 0 to 1.                                                                                                                         |
-| `cities`                                                    | `{name,x,y,countryTag?}` reviewed city and optional capital anchors. `countryTag` must name a generated country.                                         |
-| `labels`                                                    | `{name,x,y,kind}` reviewed names for `state`, `country`, `city`, `sea`, `region`, `mountain` or `geography`; useful for handwritten or ambiguous labels. |
+| Field                                                       | Meaning                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `politicalImagePath`, `terrainImagePath`, `heightImagePath` | Additional aligned workspace images for political regions, terrain cues or grayscale height.                                                                                                                                                                                                                                                                                                      |
+| `mode`                                                      | `auto`, `illustrated`, `satellite`, `sketch`, `political` or `grayscale`.                                                                                                                                                                                                                                                                                                                         |
+| `crop`                                                      | `{x,y,width,height}` in original source pixels.                                                                                                                                                                                                                                                                                                                                                   |
+| `ignoreMasks`                                               | Polygons that exclude legends, frames or decorative areas.                                                                                                                                                                                                                                                                                                                                        |
+| `annotations`                                               | `{kind,polygon}` semantic polygons: sea, land, plains, lake, forest, desert, mountain, snow, volcano, hills, marsh or jungle.                                                                                                                                                                                                                                                                     |
+| `riverAnnotations`                                          | Paths for known rivers.                                                                                                                                                                                                                                                                                                                                                                           |
+| `palette`                                                   | `{kind,color:{r,g,b}}` color cues for the same semantic kinds.                                                                                                                                                                                                                                                                                                                                    |
+| `coastDetail`                                               | Detail preservation from 0 to 1.                                                                                                                                                                                                                                                                                                                                                                  |
+| `paletteMatch`                                              | `nearest` (default) snaps each pixel to the closest `palette` colour. `exact` requires every pixel to equal a palette colour and trusts the classes as painted (no text masking, cleanup, smoothing or political inference; thin painted water stays water); any other colour fails with `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`, listing up to 16 colours with counts and five source pixels each. |
+| `fit`                                                       | `contain` (default) centres the picture with sea padding. `frame` maps the picture, or its `crop`, onto exactly `width` x `height` (both required, same shape within 1%, else `MAP_REFERENCE_FRAME_ASPECT`) and reads it at the frame resolution instead of the 3,072-pixel working copy.                                                                                                         |
+| `cities`                                                    | `{name,x,y,countryTag?}` reviewed city and optional capital anchors. `countryTag` must name a generated country.                                                                                                                                                                                                                                                                                  |
+| `labels`                                                    | `{name,x,y,kind}` reviewed names for `state`, `country`, `city`, `sea`, `region`, `mountain` or `geography`; useful for handwritten or ambiguous labels.                                                                                                                                                                                                                                          |
 
 Reviewed geography labels preserve names for lakes, rivers, forests and other features in localisation and generated-world provenance. They do not invent a native HOI4 map entity or turn a geographic label into a city or victory point.
 
 All annotation positions and polygons use normalized 0 to 1 coordinates relative to the original, uncropped reference, with the origin at its top left. Crop uses source pixels instead. Explicit `countries` on the operation supplies reviewed country tags, names, colors and relative shares. If borders or names cannot be inferred reliably, the server generates named defaults and reports the assumptions. Manual controls are optional and never change the original image.
 
-Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side. The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
+### Registered drawings and import evidence
+
+A picture made of several drawn sheets, each at its own place, scale or orientation, is registered onto the world frame with `reference.sheets` (inline) or `reference.sheetsPath` (a workspace-relative `.json` file read with the same guards as `geographyPath`). The document is [reference-sheets version 1](../schemas/reference-sheets.schema.json):
+
+```json
+{
+  "version": 1,
+  "source": { "width": 17520, "height": 12720 },
+  "fill": "sea",
+  "sheets": [
+    {
+      "id": "cold",
+      "box": [0, 0, 0.395, 0.245],
+      "anchor": [0.043, 0.087],
+      "target": [0.04, 0.17],
+      "scale": [1.037, 1.506]
+    },
+    {
+      "id": "east",
+      "box": [0.036, 0.5, 0.4, 1],
+      "anchor": [0.142, 0.7],
+      "target": [0.89, 0.618],
+      "scale": [-1.13, 1.66],
+      "order": 1
+    }
+  ]
+}
+```
+
+Each sheet maps picture coordinates to world coordinates as `world = target + scale * (picture - anchor)` per axis (a negative scale mirrors), or by `affine: [a, b, c, d, e, f]`. `box` is the sheet's part of the picture, `clip` an optional polygon that cuts it out of its box, and `order` decides which sheet wins where targets overlap; two overlapping sheets of equal order are refused. World pixels outside every sheet are open sea (`fill: "sea"`) or an error (`"error"`). `source` pins the picture size and optionally its SHA-256, so registrations made for one picture are never applied to another. Sheets imply `fit: "frame"`; `width` and `height` are required.
+
+The picture is read once at the resolution the sheets need (one working pixel per world pixel for the most enlarged sheet, at most 32 million pixels), each world pixel is sampled from its sheet (nearest under `paletteMatch: "exact"`, bilinear otherwise), and the registered picture is classified as one frame-aligned picture from which every map layer derives. With sheets, `annotations`, `ignoreMasks`, `riverAnnotations`, `labels` and `cities` use world coordinates, and recognised text is never used as a name. `crop` and the aligned political, terrain and height pictures cannot be combined with sheets yet.
+
+A request with sheets, `fit: "frame"`, `paletteMatch: "exact"` or a geography model beside the picture returns import evidence: `map-import-report.json` (sheet coverage and hidden pixels, class shares and, with a model, the land agreement: intersection over union, land only in the picture or only in the model, the twelve worst 128-pixel cells, and model sites, volcanoes and river ends on the wrong surface), `map-import-classes.png`, `map-import-alignment.png` (the picture darkened, its coast in red and the model's in yellow) and, with sheets, `map-import-registration.png`. Land agreement below `reference.agreement.minLandIou` (default 0.85) is the error `MAP_IMPORT_SOURCES_DISAGREE`, which blocks the write; below `warnLandIou` (default 0.95) it is a warning. A preview with a model checks the model, the registration and the agreement without planning a map and reports the figures in `data.import`. See ADR 0067.
+
+Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side, or, with `fit: "frame"`, a copy at the frame resolution (never enlarged, at most 32 million pixels; nearest-neighbour reduction under `paletteMatch: "exact"`, so no new colours appear). The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
 ## Describe a world as a geography model
 

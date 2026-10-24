@@ -1,0 +1,267 @@
+{
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.3.0/schemas/reference-sheets.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "source": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "fill": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "sheets": {
+      "$ref": "#/$defs/__schema5"
+    }
+  },
+  "required": [
+    "version",
+    "sheets"
+  ],
+  "additionalProperties": false,
+  "description": "Registration of a drawn picture made of sheets onto the world frame (ADR 0067). Coordinates are normalised: picture coordinates to the picture, world coordinates to width x height.",
+  "$defs": {
+    "__schema0": {
+      "type": "number",
+      "const": 1
+    },
+    "__schema1": {
+      "description": "The picture these registrations were made for; a picture of another size or hash is refused.",
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema2": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "__schema3": {
+      "default": "sea",
+      "description": "What world pixels outside every sheet become: open sea, or an error.",
+      "$ref": "#/$defs/__schema4"
+    },
+    "__schema4": {
+      "type": "string",
+      "enum": [
+        "sea",
+        "error"
+      ]
+    },
+    "__schema5": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      }
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "box": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "clip": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "anchor": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "target": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "scale": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "affine": {
+          "$ref": "#/$defs/__schema20"
+        },
+        "order": {
+          "$ref": "#/$defs/__schema22"
+        }
+      },
+      "required": [
+        "id",
+        "box"
+      ],
+      "additionalProperties": false
+    },
+    "__schema7": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+      "description": "Unique sheet id, named in diagnostics and artifacts."
+    },
+    "__schema8": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema9"
+        },
+        {
+          "$ref": "#/$defs/__schema9"
+        },
+        {
+          "$ref": "#/$defs/__schema9"
+        },
+        {
+          "$ref": "#/$defs/__schema9"
+        }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[left, top, right, bottom] of the sheet in normalised picture coordinates."
+    },
+    "__schema9": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema10": {
+      "description": "Polygon in picture coordinates that cuts the sheet out of its box, so a neighbouring sheet inside the box is not pulled in.",
+      "$ref": "#/$defs/__schema11"
+    },
+    "__schema11": {
+      "minItems": 3,
+      "maxItems": 512,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema12"
+      }
+    },
+    "__schema12": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema9"
+        },
+        {
+          "$ref": "#/$defs/__schema9"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema13": {
+      "description": "Picture point that maps to target.",
+      "$ref": "#/$defs/__schema14"
+    },
+    "__schema14": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema9"
+        },
+        {
+          "$ref": "#/$defs/__schema9"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema15": {
+      "description": "World point of the anchor.",
+      "$ref": "#/$defs/__schema16"
+    },
+    "__schema16": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema17": {
+      "type": "number"
+    },
+    "__schema18": {
+      "description": "World units per picture unit along x and y; a negative value mirrors.",
+      "$ref": "#/$defs/__schema19"
+    },
+    "__schema19": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema20": {
+      "description": "General map [a, b, c, d, e, f] from picture to world, instead of anchor, target and scale.",
+      "$ref": "#/$defs/__schema21"
+    },
+    "__schema21": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        },
+        {
+          "$ref": "#/$defs/__schema17"
+        }
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "__schema22": {
+      "default": 0,
+      "description": "Where targets overlap the higher order wins; equal orders that overlap are an error.",
+      "$ref": "#/$defs/__schema23"
+    },
+    "__schema23": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    }
+  }
+}
