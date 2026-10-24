@@ -372,18 +372,18 @@ Nothing is lost or duplicated: for any split, merge or move, the sums of manpowe
       "unit": "province",
       "seed": 7,
       "countries": [
-        { "tag": "GON", "weight": 3, "seeds": [{ "state": 41 }, { "x": 1810, "y": 902 }] },
+        { "tag": "AAA", "weight": 3, "seeds": [{ "state": 41 }, { "x": 1810, "y": 902 }] },
         {
-          "tag": "ROH",
+          "tag": "BBB",
           "weight": 2,
           "seeds": [{ "province": 3318 }],
           "blocked": { "regionIds": [12] }
         },
         {
-          "tag": "ARN",
+          "tag": "CCC",
           "weight": 1,
           "seeds": [{ "state": 108 }],
-          "overlord": "GON",
+          "overlord": "AAA",
           "regions": [4]
         }
       ],
@@ -416,9 +416,11 @@ The province unit writes the new borders exactly: each state is split by owner, 
 
 `borderQuality` is `report` by default: the result adds `MAP_BORDER_QUALITY_MEASURED` with the enrichment, natural share and straightness of the proposed country and state borders, and the artifact `map-territory-report.json` holds every number. `enforce` blocks the write when a layer misses the targets (enrichment 1.6; straightness 0.12 for countries and 0.25 for states; override with `borderTargets`) with `MAP_TERRITORY_BORDER_ARTIFICIAL`; `off` skips it. `data.territory` returns, per operation, the sizes against targets (worst eight countries), the border score, the same seeds grown on distance alone (`distanceOnly`), and the counts of states changed, created and removed. Previews work as for any rewrite and write nothing.
 
-Refusals name the cause: `MAP_TERRITORY_SEED_IN_WATER`, `_STATE_UNKNOWN`, `_PROVINCE_UNKNOWN`, `_POINT_OUTSIDE_MAP`, `_PROVINCE_WITHOUT_STATE`, `_SEED_MISSING` (a country with no seed), `_FORCED_CONFLICT` (two countries claim one atom), `_FORCED_BLOCKED`, `_FORCED_UNREACHABLE` (blocked or forced land cuts a seed off), `_TAG_INVALID`, `_TAG_DUPLICATE`, `_WEIGHT_INVALID`, `_TOO_MANY_COUNTRIES` (above 512), `_OVERLORD_INVALID`, `_MERGE_INVALID`, `_STATE_OVERLAP`, `_STATE_SIZE_INVALID`, `_NOTHING_TO_REPARTITION`. Warnings: `MAP_TERRITORY_SHARE_OFF` (a country is more than the tolerance from its target) and `MAP_TERRITORY_DISCONNECTED`.
+Unowned land: states in `unowned`, and landmasses without a seed under `islandPolicy: "unowned"`, are not grown into. With `ownership.unowned: "clear"` (the default) their owner is removed, and their controller too when `controller` is `owner`; `"keep"` leaves them as they were. States outside `scope` are never edited. Provinces that belong to no state cannot be owned and are left out.
 
-Measured on project-owned synthetic fixtures (ADR 0060): country-border enrichment 3.1 to 3.6 against 1.2 to 2.5 for the same seeds grown on distance alone on a partitioned world with rivers and ridges; on a 5,120 x 2,560 world with 305 countries and 1,486 states, 15 seconds by state and 26 seconds by province (872 new states).
+Refusals name the cause and the state or province of the request: `MAP_TERRITORY_SEED_IN_WATER`, `_STATE_UNKNOWN`, `_PROVINCE_UNKNOWN`, `_REGION_UNKNOWN`, `_SCOPE_UNKNOWN`, `_POINT_OUTSIDE_MAP`, `_PROVINCE_WITHOUT_STATE`, `_SEED_MISSING` (a country with no seed), `_SEED_UNAVAILABLE` (a seed or forced land is unowned, outside the scope or outside its overlord), `_FORCED_CONFLICT` (two countries claim one state or province), `_FORCED_BLOCKED` (forced or a seed and blocked for the same country), `_FORCED_UNREACHABLE` (blocked or forced land cuts a seed off from its capital), `_TAG_INVALID`, `_TAG_DUPLICATE`, `_WEIGHT_INVALID`, `_TOO_MANY_COUNTRIES` (above 512), `_TOO_MANY_SEEDS` (above 64), `_OVERLORD_INVALID` (unknown, itself or a cycle), `_MERGE_INVALID`, `_OPTION_INVALID`, `_STATE_OVERLAP`, `_STATE_SIZE_INVALID`, `_STATE_SIZE_NEEDS_PROVINCE_UNIT`, `_NO_LAND`, `_MAP_MISSING`, `_NOTHING_TO_REPARTITION`, and `MAP_UPDATE_STATES_DUPLICATE` for a state listed twice in `update_states`. The schema refuses more than 512 countries, more than 64 seeds, an empty seed list, a tag that is not three capital letters or digits, a weight of zero or less, and more than 5,000 `update_states` entries before anything is planned. Warnings: `MAP_TERRITORY_SHARE_OFF` (a country is more than the tolerance from its target) and `MAP_TERRITORY_DISCONNECTED`; info: `MAP_TERRITORY_ASSIGNED`, `MAP_TERRITORY_REPARTITIONED` and `MAP_TERRITORY_NO_FEATURES` (no height, river or terrain bitmap, so borders fall back to distance), `MAP_TERRITORY_STATE_SIZE_UNMET` (a fragment below `stateSize.min` has no neighbour of the same owner and strategic region to join) and `MAP_TERRITORY_STATE_SKIPPED` (`repartition_states` leaves states that span several strategic regions or share provinces).
+
+Measured on project-owned synthetic fixtures (ADR 0060): country-border enrichment 3.1 to 3.6 against 1.2 to 2.5 for the same seeds grown on distance alone on a partitioned world with rivers and ridges; on a generated total-conversion map of 13.1 million pixels with about 300 countries and 1,500 states, 15 seconds by state and 26 seconds by province.
 
 ## Other map changes
 
