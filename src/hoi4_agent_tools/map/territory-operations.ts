@@ -595,15 +595,11 @@ function growInRequestTerms(
     const rest = Object.fromEntries(
       Object.entries(error.details).filter(([key]) => key !== 'atom' && key !== 'capital'),
     );
-    throw new ServiceError(
-      error.code,
-      error.message.replace(/^Atom \d+/u, atom.words),
-      {
-        ...rest,
-        ...atom.details,
-        ...(capital === undefined ? {} : { capital: capital.details }),
-      },
-    );
+    throw new ServiceError(error.code, error.message.replace(/^Atom \d+/u, atom.words), {
+      ...rest,
+      ...atom.details,
+      ...(capital === undefined ? {} : { capital: capital.details }),
+    });
   }
 }
 
@@ -974,11 +970,10 @@ function regroupProvinces(
   };
   for (const group of [...groups.values()].sort((a, b) => a.id - b.id)) {
     const old = index.statesById.get(group.stateId)!;
+    const oldSorted = [...old.provinces].sort((a, b) => a - b);
     const same =
-      group.provinces.length === old.provinces.length &&
-      group.provinces.every(
-        (province, position) => province === [...old.provinces].sort((a, b) => a - b)[position],
-      );
+      group.provinces.length === oldSorted.length &&
+      group.provinces.every((province, position) => province === oldSorted[position]);
     const owner = tagOf(group.label);
     const origin = originTag(group);
     const addCores = tagsFor(extraCores, group);
