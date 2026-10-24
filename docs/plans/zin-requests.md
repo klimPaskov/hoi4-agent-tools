@@ -28,6 +28,7 @@ The mod's `tools/content/apply.mts` imports the atomic rewrite engine from the m
 
 Schema changes, compatibility changes, releases, runtime installs and server restarts, newest first.
 
+- 2026-10-24: merged to `main`: PR 38 (dependency security update), PR 37 (ZR-1), PR 36 (map pipeline phase 1 with the ZR-3 fixes), `main` at `dc980bd`. Open with CI running: PR 39 (ZR-5), PR 40 (ZR-2 steps 1 and 2), PR 41 (campaign fixes). **Main checkout switch announced:** once PR 39 (ZR-5) merges, the main checkout moves from `claude/zin-map-pipeline-phase1` (`9ed6351`) to `main`, followed by `npm ci` there (zod is now 4.6.7). The mod's `apply.mts` then imports the engine with the 15,000-file ceiling. Do not run `apply.mts` while the switch is in progress; the worker posts here when it is done.
 - 2026-10-24: no server restart, runtime install or main-checkout switch yet. Planned, each announced again here before it happens: after PR 36 merges, the main checkout moves from `claude/zin-map-pipeline-phase1` to `main` (same engine code plus the PR 36 fixes); the ZR-1 fix ships in the next release (4.4.0) and then needs a runtime install and a reconnect.
 - 2026-10-24: proposed schema changes for ZR-2 (ADR 0067): optional `create_world` fields `reference.sheets`/`sheetsPath`, `reference.paletteMatch`, `reference.fit`, `reference.agreement`, `ids`, `overridesPath`; two new published schemas `reference-sheets` and `world-overrides`. ZR-1 adds the configuration key `defaultWorkspace`. All additive, minor version. ZR-2 is not implemented until the lead has read ADR 0067.
 - 2026-10-24: the lead renamed Erdae to Aoaz in the mod (`81bc85a` on the mod's local branch `zin/integration-r3`; table in `docs/lore/names_traceability.md`). Private originals keep their names (`docs/reference/originals/Erdae.png`, `Erdae-working.jpg`). New tool docs, fixtures and ZIN-facing text say Aoaz; two tool test strings keep the old name for now (operation id `erdae` in `tests/integration/mcp-stdio-smoke.test.ts`, path case `geography/erdae.json` in `tests/unit/map-geography-schema.test.ts`); neither feeds a recorded hash, and they will be renamed with the next change to those tests. The worker now reads `tools/content/data/geography/aoaz.json` and `docs/reference/cleaned/Aoaz-clean-v3.png`.
@@ -38,13 +39,13 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 
 ## Index
 
-| Id   | Title                                                                                           | Priority                     | Status                                                                                           |
-| ---- | ----------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | in review (PR 37, CI running)                                                                    |
-| ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in progress (steps 1 and 2 implemented on `claude/zr2-import`; release 4.4.0 after PR 36 merges) |
-| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | in review (fixes pushed to PR 36, CI running)                                                    |
-| ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (15 of 144 run; 5 defect classes diagnosed)                                          |
-| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | in review (fixed on `claude/zr5-transaction-files`)                                              |
+| Id   | Title                                                                                           | Priority                     | Status                                                  |
+| ---- | ----------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------- |
+| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | merged (PR 37); release 4.4.0 pending                   |
+| ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in review (steps 1 and 2: PR 40)                        |
+| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | merged (PR 36)                                          |
+| ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (15 of 144 run; 5 defect classes diagnosed) |
+| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | in review (PR 39)                                       |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -61,7 +62,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 - Evidence: the calls above; code path `create.ts` `resolveCurrentWorkspaceId` -> `resolveClientWorkspaceId`; `operation-context.ts` `resolveOperationWorkspaceForSource`.
 - Impact: every agent session not started in the mod folder needs the opaque id `mod_zin_86bac5c64231`, which it cannot discover from the error.
 - Acceptance: unit and MCP tests for the three cases plus negatives (path in two mods stays ambiguous, default outside the principal's grants is refused, unknown default id is a configuration error); from this worker session, `hoi4_script_validate {"path":"common/national_focus/zin_noris.txt"}` without `workspaceId` resolves ZIN after the release.
-- Status: in review (reproduced; fixed on a branch; the subfolder case already worked and is covered by a test)
+- Status: merged (PR 37, `602a6b8`, 2026-10-24; CI green on Linux and Windows); released with 4.4.0 (pending)
 - Implementation: branch `claude/zr1-workspace-discovery`, ADR 0066. When the client roots and the working directory identify no mod, `current` now resolves to (1) the new optional configuration key `defaultWorkspace` (an ID or short form such as `"zin"`; refused at startup when unknown, ambiguous or `current`; never used for a principal without a grant), (2) the only mod, (3) for the `path` of `hoi4_script_validate` and the `relativePath` of the focus tools, the one mod that has that file. Otherwise `WORKSPACE_CONTEXT_NOT_FOUND` and `WORKSPACE_CONTEXT_REQUIRED` list up to 32 workspace ids and names and say: pass `workspaceId`, start in the mod folder, or set `defaultWorkspace`.
 - How to use (after the release): nothing for a validated `path` that only ZIN has; otherwise `"defaultWorkspace": "zin"` in `C:/Users/klimp/AppData/Roaming/hoi4-agent-tools/config.json` (the worker proposes that edit with the release install), or `{"workspaceId":"zin"}` per call.
 - Verification: unit tests `tests/unit/workspace-context.test.ts` (10, with negatives: unknown, ambiguous and reserved default; principal without grant; a path in two mods stays `WORKSPACE_SOURCE_AMBIGUOUS`; a traversal path is not recovered) and MCP tests in `tests/integration/mcp-client-roots.test.ts` (client root outside every mod: focus inspect and script validate by path, the candidate list, the default).
@@ -105,8 +106,8 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 - Evidence: the review notes above and a probe reproduction of finding 2.
 - Impact: without the fix a ZIN world from the model would ignore the Great Wall range as a border and the region densities.
 - Acceptance: a world-level test that regions and walls shape the partition; a heights test after smoothing; a cancellation test; `npm run check`; CI green on PR 36.
-- Status: in progress
-- Implementation: branch `claude/pr36-fixes` (from PR 36), pushed to the PR branch after `npm run check`.
+- Status: merged (PR 36, `dc980bd`, 2026-10-24; CI green on Linux and Windows)
+- Implementation: commits `3c0354b` (geography regions, densities and walls reach the partition; smoothing before synthesis for geography worlds; the request signal reaches synthesis and partition; world-level tests in `tests/unit/map-world-geography-partition.test.ts`) and `c0e6c61` (ADR 0058, tool description and changelog corrected).
 - Verification: pending
 - Remaining integration work: none for the lead until the release.
 
