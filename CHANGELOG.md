@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Place countries the mod already owns (ZR-8, ADR 0069): `create_world.countries` accepts `{ "source": "workspace", "realms": [...] }` besides the array. Each realm is a declared tag with a capital point and optional seeds, claim and exclusion polygons and a weight; `unowned` polygons and `islands` (`nearest`, `one-owner`, `unowned`) decide land no country claims. The world then writes only the map, states, strategic regions and their names, and none of the countries' files. New refusals `MAP_WORLD_REALM_TAG_UNKNOWN`, `MAP_WORLD_REALM_TAG_DYNAMIC`, `MAP_WORLD_REALM_POINT_OUTSIDE`, `MAP_WORLD_REALM_POINT_WATER`, `MAP_WORLD_REALM_POINT_CONFLICT` and `MAP_WORLD_REALM_CLAIM_OVERLAP`; notes `MAP_WORLD_REALMS_PLACED` and `MAP_WORLD_STATE_UNOWNED`; result field `data.realms` and artifact `map-world-realms.json`. Public schema change: `countries` becomes a union of the existing array and the new object (minor version). Requests with the array are unchanged.
+- Report what a world write does to the previous world's files: `MAP_WORLD_OUTPUTS_RECONCILED`, `data.outputs` (written, retired and released counts with up to 200 paths each) and the artifact `map-world-outputs.json`. With workspace countries an edited country file of the previous world is released to the mod (`MAP_WORLD_OUTPUT_RELEASED`) instead of refusing the write; every other edited output still refuses with `MANAGED_OUTPUT_EDITED`.
+- Report the declared country tags after every world write (`MAP_WORLD_TAG_COUNT`) and warn above 439 (`MAP_WORLD_TAG_COUNT_HIGH`), the count at which one measured game build overflowed its flag sheet.
+
 ## 4.4.0 - 2026-10-24
 
 - Collect test fixtures that a killed or crashed test run left in the temporary folder: the test setup now also sweeps `hoi4-*` fixtures that carry an owner record of a process that has ended (`sweepTemporaryDirectories` option `ownedFixturesOnly`). Unmarked folders and folders of a live process are never removed. Interrupted local runs had left 2,441 such folders (640 MB).

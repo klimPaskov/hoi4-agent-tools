@@ -25,6 +25,67 @@ const rgbSchema = z
   })
   .strict();
 const pointSchema = z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict();
+const countryTagSchema = z.string().regex(/^[A-Z][A-Z0-9]{2}$/u);
+const realmPolygonSchema = z.array(pointSchema).min(3).max(10_000);
+const realmPolygonsSchema = z.array(realmPolygonSchema).min(1).max(64);
+export const workspaceRealmSchema = z
+  .object({
+    tag: countryTagSchema,
+    capital: pointSchema.describe('World pixel, top-left origin, on land; the capital province.'),
+    seeds: z
+      .array(pointSchema)
+      .max(256)
+      .optional()
+      .describe('Further world pixels whose provinces the country must own.'),
+    claim: realmPolygonsSchema
+      .optional()
+      .describe(
+        'Polygons in world pixels; land provinces more than half inside belong to the country.',
+      ),
+    exclude: realmPolygonsSchema
+      .optional()
+      .describe(
+        'Polygons in world pixels; land provinces more than half inside never belong to it.',
+      ),
+    weight: z
+      .number()
+      .min(0.05)
+      .max(100)
+      .optional()
+      .describe('Relative share of the land claims leave free; default 1.'),
+  })
+  .strict();
+export const workspaceCountriesSchema = z
+  .object({
+    source: z.literal('workspace'),
+    realms: z.array(workspaceRealmSchema).min(1).max(512),
+    unowned: z
+      .array(realmPolygonSchema)
+      .max(256)
+      .optional()
+      .describe('Polygons in world pixels whose land provinces no country owns.'),
+    islands: z
+      .enum(['nearest', 'one-owner', 'unowned'])
+      .default('nearest')
+      .describe(
+        'Landmasses no country reaches: every province to the nearest capital, the whole landmass to one country, or unowned.',
+      ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    for (const [index, realm] of value.realms.entries()) {
+      if (seen.has(realm.tag))
+        context.addIssue({
+          code: 'custom',
+          path: ['realms', index, 'tag'],
+          message: `Country ${realm.tag} is listed twice`,
+        });
+      seen.add(realm.tag);
+    }
+  });
+export type WorkspaceCountriesInput = z.input<typeof workspaceCountriesSchema>;
+
 const operationBase = {
   id: identifier,
   summary: z.string().max(1000).optional(),
@@ -858,21 +919,28 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       landProvincesPerRegion: z.number().int().min(2).max(400).optional(),
       seaProvincesPerRegion: z.number().int().min(1).max(200).optional(),
       countries: z
-        .array(
+        .union([
           z
-            .object({
-              tag: z.string().regex(/^[A-Z][A-Z0-9]{2}$/u),
-              name: worldName,
-              adjective: worldName.optional(),
-              color: rgbSchema.optional(),
-              share: z.number().min(0.05).max(100).optional(),
-              ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(200)
-        .optional(),
+            .array(
+              z
+                .object({
+                  tag: countryTagSchema,
+                  name: worldName,
+                  adjective: worldName.optional(),
+                  color: rgbSchema.optional(),
+                  share: z.number().min(0.05).max(100).optional(),
+                  ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(200),
+          workspaceCountriesSchema,
+        ])
+        .optional()
+        .describe(
+          'Countries the world generates and writes (an array), or { source: "workspace", realms } for countries the workspace already declares: the world then places them from their capital, seeds, claims and exclusions and writes no country, flag, unit, country history, country name or bookmark file.',
+        ),
       continentNames: z.array(worldName).max(12).optional(),
       startDate: z
         .string()

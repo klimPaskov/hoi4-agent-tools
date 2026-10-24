@@ -399,7 +399,29 @@ export async function prepareMapRewrite(
 function worldOutputsData(plan: MapOperationPlan) {
   if (plan.worldOutputs === undefined) return {};
   const sample = (paths: readonly string[]) => paths.slice(0, WORLD_OUTPUT_PATH_SAMPLE);
+  const realms = plan.worldOutputs.flatMap(({ operationId, realms: placed }) =>
+    placed === undefined
+      ? []
+      : [
+          {
+            operationId,
+            countries: placed.countries.slice(0, 100).map((country) => ({
+              tag: country.tag,
+              capitalState: country.capitalState,
+              capitalProvince: country.capitalProvince,
+              states: country.states.length,
+              provinces: country.provinces,
+              landShare: country.landShare,
+              targetShare: country.targetShare,
+            })),
+            countryCount: placed.countries.length,
+            unownedStates: placed.unownedStates.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+            unownedStateCount: placed.unownedStates.length,
+          },
+        ],
+  );
   return {
+    ...(realms.length === 0 ? {} : { realms: realms.slice(0, 16) }),
     outputs: plan.worldOutputs.slice(0, 16).map((world) => ({
       operationId: world.operationId,
       written: world.written.length,
