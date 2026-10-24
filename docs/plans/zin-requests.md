@@ -44,14 +44,15 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 
 ## Index
 
-| Id   | Title                                                                                           | Priority                     | Status                                                                                        |
-| ---- | ----------------------------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------- |
-| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | merged (PR 37); release 4.4.0 pending                                                         |
-| ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | steps 1 and 2 merged (PR 40); release 4.4.0 pending; steps 3 to 5 next                        |
-| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | merged (PR 36)                                                                                |
-| ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (fixes D2 to D4 merged in PR 41; pass 1 resumes after the release: 15 of 144 run) |
-| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | merged (PR 39); usable now from the main checkout                                             |
-| ZR-6 | Sea crossings from the geography model's straits (K46)                                          | P1                           | open (mostly implemented on the unmerged C12 branch; finishing after 4.4.0)                   |
+| Id   | Title                                                                                           | Priority                     | Status                                                                                                                             |
+| ---- | ----------------------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | merged (PR 37); release 4.4.0 pending                                                                                              |
+| ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | steps 1 and 2 merged (PR 40); release 4.4.0 pending; steps 3 to 5 next                                                             |
+| ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | merged (PR 36)                                                                                                                     |
+| ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (fixes D2 to D4 merged in PR 41; pass 1 resumes after the release: 15 of 144 run)                                      |
+| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | merged (PR 39); usable now from the main checkout                                                                                  |
+| ZR-6 | Sea crossings from the geography model's straits (K46)                                          | P1                           | open (mostly implemented on the unmerged C12 branch; finishing after 4.4.0)                                                        |
+| ZR-7 | Probability routes refuse game version 1.19.3.0                                                 | P1                           | diagnosed: an outdated 3.9.0 server is registered for sessions in the mod folder; fixed by 4.4.0 install and a registration change |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -161,6 +162,22 @@ Every sampled file held the expected bytes after each apply and after each rollb
 - Implementation: plan: after 4.4.0, bring the C12/C13 branch up to date with `main`, finish its MCP integration test, add (2) and (3) with tests, review and merge; release with ZR-2 steps 3 to 5.
 - Verification: pending
 - Remaining integration work: until then, the lead's workaround: `add_adjacency` operations per strait after a write, with province ids read at the `between` points by `hoi4_map_inspect`.
+
+## ZR-7: Probability routes refuse game version 1.19.3.0
+
+- Opened: 2026-10-25 by lead
+- Priority: P1 (blocks every AI-weight audit the mod's rules require)
+- ZIN task: AI behaviour for every focus tree, decision and event (02 spec; 04 acceptance: AI audits); first hit on the new shared focus trees (mod commit `512f15c9`: `shared_delving_holds`, `shared_middle_free`, `shared_small_folk`) and reproduced on the North Lands tree.
+- Tool or workflow: `hoi4_probability_inspect`, evaluate, sweep, compare.
+- Inputs and reproduction: the ZIN workspace with the installed game 1.19.3.0.
+- Current behaviour: refusal `PROBABILITY_GAME_VERSION_UNSUPPORTED: verified for 1.19.2.0, installed 1.19.3.0`.
+- Required capability or improvement: support 1.19.3.0, or a documented override with a recorded warning.
+- Evidence (worker, 2026-10-25): the refusal code does not exist in the installed runtime `runtime-v430` (4.3.0) nor on `main`: 4.3.0 removed the gate (changelog 4.3.0: "Run probability analysis on every installed HOI4 version"; results record the observed build as `workspace_verified`, `workspace_observed` or `version_unknown`). The refusing server is an **outdated global npm install, `hoi4-agent-tools@3.9.0`** (`C:/Users/klimp/AppData/Roaming/npm/hoi4-agent-tools.cmd`), which the mod's committed project file `.mcp.json` registers as `hoi4_agent_tools` (`"command": "hoi4-agent-tools.cmd"`, mod commit `e1beb03c`). Claude Code gives a project's `.mcp.json` precedence over the user-level registration of the same name, so every session started in the mod folder runs 3.9.0 instead of `runtime-v430`. In 3.9.0 all probability routes and the decision AI-weight evaluation share the gate. This also means those sessions miss everything since 3.9.0 (4.0 to 4.3, and 4.4.0 after release).
+- Impact: AI audits blocked in sessions started in the mod folder; other tools there run an old version.
+- Acceptance: as the lead wrote; plus `hoi4_probability_inspect` from a mod-folder session reports the runtime's version (4.4.0) in its results.
+- Status: diagnosed (no tool defect; registration and install)
+- Implementation: the worker installs 4.4.0 into the fresh prefix `runtime-v440` and points both user-level registrations at it (announced in the release entry), and, announced here before it happens, updates the global npm install from 3.9.0 to 4.4.0 so `hoi4-agent-tools.cmd` is current too (`npm install --global hoi4-agent-tools@4.4.0`; it needs every session that uses the global command to be stopped first, because Windows locks its native modules).
+- Remaining integration work (lead, because `.mcp.json` is a mod file): change the mod's `.mcp.json` so `hoi4_agent_tools` points at the installed runtime (the same `command`, `args` and `HOI4_AGENT_CONFIG` as `~/.claude.json`), or remove that entry so the user-level registration applies; then reconnect. Until then, a workaround: start agent sessions outside the mod folder (they use `runtime-v430`, which has no gate) and pass `"workspaceId":"zin"`.
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
