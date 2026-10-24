@@ -147,10 +147,10 @@ describe('geography model source (geographyPath)', () => {
       (failure as { details: { issues: Array<{ path: string }> } }).details.issues[0]!.path,
     ).toBe('lands.0.elevationBase');
     await writeModel(mod, 'geography/unknown.json', '{"version":1,"__proto__":{"admin":true}}');
-    const polluted = await readGeographyModelSource(resolver, 'geo', 'geography/unknown.json');
-    // A prototype key in the file never reaches the parsed model or Object.prototype.
-    expect(Object.prototype.hasOwnProperty.call(polluted.model, '__proto__')).toBe(false);
-    expect(Object.getPrototypeOf(polluted.model)).toBe(Object.prototype);
+    // A prototype key in the file is refused like any unknown key and never reaches Object.prototype.
+    await expect(
+      readGeographyModelSource(resolver, 'geo', 'geography/unknown.json'),
+    ).rejects.toMatchObject({ code: 'MAP_GEOGRAPHY_SCHEMA_INVALID' });
     expect(({} as Record<string, unknown>).admin).toBeUndefined();
     await writeModel(mod, 'geography/extra.json', '{"version":1,"constructor":{"admin":true}}');
     await expect(
