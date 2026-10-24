@@ -40,7 +40,7 @@ export const BORDER_PROVINCE_KIND = { unknown: 0, land: 1, sea: 2, lake: 3 } as 
 
 export type BorderLayerName = 'province' | 'state' | 'region' | 'country';
 
-/** Targets for an engineered world: the plan's thresholds (C10), measured against vanilla. */
+/** Targets for an engineered world: the design's thresholds, measured against vanilla. */
 export const BORDER_QUALITY_TARGETS = {
   /** Enrichment over chance at least this (vanilla 1.35 to 1.46). */
   minEnrichment: 1.6,
@@ -1506,7 +1506,7 @@ export function checkBorderTargets(
   return { layer: layer.layer, passed: failures.length === 0, failures };
 }
 
-/** The validators of C10 as diagnostics: review warnings, not-meaningful and missing inputs. */
+/** The border validators (ADR 0059) as diagnostics: review warnings, not-meaningful and missing inputs. */
 export function borderQualityDiagnostics(
   report: BorderQualityReport,
   targets?: BorderTargets,

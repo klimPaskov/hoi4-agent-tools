@@ -1,7 +1,7 @@
 import type { GeographyModelInput } from '../../src/hoi4_agent_tools/schemas/geography.js';
 
 /**
- * A project-owned, invented world shaped like the ZIN model for relief and hydrology tests: one
+ * A project-owned, invented world shaped like a large fantasy map for relief and hydrology tests: one
  * continent with a wall range that has gates, a long ridge with spurs and a snow line, a ring
  * massif, an escarpment, two volcanoes, a lake with an outflow, a river with two tributaries, a
  * delta river, a plateau and a chasm. It carries no biome or climate, which later stages own.
@@ -27,8 +27,8 @@ export function reliefGeography(): GeographyModelInput {
     ],
     lands: [
       {
-        id: 'erdae',
-        name: 'Erdae',
+        id: 'mainland',
+        name: 'Mainland',
         kind: 'continent',
         elevationBase: 0.15,
         coastDetail: 0.6,

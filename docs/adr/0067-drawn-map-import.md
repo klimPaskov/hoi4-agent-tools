@@ -1,26 +1,26 @@
 # ADR 0067: Import of a drawn map: sheet registration, stable ids and authored overrides
 
-Status: accepted (2026-10-24, approved by the ZIN lead; request ZR-2 in `docs/plans/zin-requests.md`). Steps 1 and 2 are implemented; section 9 records where the implementation differs from this text.
+Status: accepted (2026-10-24). Steps 1 and 2 are implemented; section 9 records where the implementation differs from this text.
 
 ## Context
 
-The ZIN mod must import its owner's map of Aoaz through `hoi4.map_rewrite` (ZIN requirement R-10, acceptance A-10). Two sources are possible, and the owner has not yet chosen (ZIN question Q-04):
+A total-conversion mod must turn its author's drawn map into a world through `hoi4.map_rewrite`. Two kinds of source are common, and the importer takes both:
 
-- **The full drawing.** One RGBA picture of 17,520 x 12,720 pixels (447 MB PNG): thirteen coloured-pencil sheets laid side by side, each at its own drawn scale and position, with sea hatching, ink labels and paper seams. The mod records twelve sheet registrations that move, scale and (for one sheet) mirror each sheet into the approved 18 October game layout of 5,120 x 2,560: per sheet a `drawingBox`, a `drawingAnchor`, a `worldAnchor` and `scaleWorldPerDrawing` (a negative x scale mirrors), registered by landmark pairs to about 80 pixels. The drawing frame is normalised, so the same numbers apply to the 3,200 x 2,323 working mosaic. Several drawing boxes overlap each other by up to 2% of the drawing (the bands at y 0.50 to 0.52 and x 0.375 to 0.40).
-- **The cleaned layout.** `Aoaz-clean-v3.png`, 5,120 x 2,560 with exactly eleven flat class colours, already in the game layout.
+- **A drawing made of sheets.** One large picture (the case that motivated this decision is 17,520 x 12,720 pixels, a 447 MB PNG) with many hand-coloured sheets laid side by side, each at its own drawn scale and position, with sea hatching, ink labels and paper seams. The author records per sheet how it moves, scales and possibly mirrors into the game layout (5,120 x 2,560 here), registered by landmark pairs to about 80 pixels. The boxes of neighbouring sheets in the picture overlap by a few percent.
+- **A cleaned layout.** A picture already in the game layout with a handful of flat class colours.
 
-The mod also keeps a vector geography model (`aoaz.json`: 44 seas, 89 lands, 63 ranges, 32 rivers, 12 lakes, 86 sites, 19 regions ...). It is a GeoJSON-like document of its own (`geometry` objects, extra `drawing` coordinates per feature), not the geography schema version 1 of ADR 0055.
+Such a mod also keeps a vector geography model of its own design, which it converts to the geography model of ADR 0055.
 
-What `create_world` does today (code read at `9ed6351`):
+What `create_world` did before this decision:
 
 - One reference picture, fitted into the frame by aspect-preserving scaling with sea padding, optionally cropped by an axis-aligned box. No affine registration, no mosaic.
-- Every source is first reduced to at most 3,072 pixels per side (`REFERENCE_WORKING_MAX_SIDE`). The cleaned layout would lose 40% of its width and be scaled back up; the full drawing's mirrored East sheet would be read at about half the resolution its 5,120-pixel target needs.
+- Every source is first reduced to at most 3,072 pixels per side (`REFERENCE_WORKING_MAX_SIDE`). A 5,120-pixel cleaned layout would lose 40% of its width and be scaled back up; an enlarged sheet of a drawing would be read at about half the resolution its target needs.
 - A `palette` snaps every pixel to the nearest entry. An indexed picture with an unexpected colour is silently classified instead of reported.
 - Province ids are numbered by the reading order of each province's first pixel; province colours, states and strategic regions are drawn from one random stream. Any change anywhere renumbers and recolours the whole world. The managed-output manifest (ADR 0052) records only paths and hashes, and regeneration refuses with `MANAGED_OUTPUT_EDITED` once any generated file was edited.
 - There is no file of authored adjustments that is applied again after each generation. Reviewed `labels`, `cities` and `annotations` cover part of it, inline in the request.
-- With a geography model, the picture supplies the coast and terrain classes, and the model supplies relief, rivers and partition fields. (PR 36 review: the model's regions, densities and walls do not yet reach the partition, and the heightmap can show sea under land after coast smoothing. Both are fixed in PR 36 before this work builds on it.)
+- With a geography model, the picture supplies the coast and terrain classes, and the model supplies relief, rivers and partition fields.
 
-A-10 requires: all layers aligned and compared with the drawing; `hoi4_map_inspect` and the validators pass; a second import with no source change writes identical files; an authored override survives a re-import; a deliberately broken input gives an accurate diagnostic; the other map workflows keep passing their tests.
+An import is acceptable when all layers are aligned and compared with the drawing; `hoi4.map_inspect` and the validators pass; a second import with no source change writes identical files; an authored override survives a re-import; a deliberately broken input gives an accurate diagnostic; and the other map workflows keep passing their tests.
 
 ## Decision
 
@@ -62,7 +62,7 @@ Extend `create_world`; add no new tool and no separate apply step. One call prev
 - `source.width` and `height` must equal the decoded picture, and `sha256`, when given, must equal its hash; a mismatch is an error, so transforms recorded for one drawing are never applied to another.
 - Without `sheets` the picture is one sheet with the identity map and the frame's size. This is the cleaned layout's path, and the existing single-picture behaviour (padding fit) is unchanged when neither `sheets` nor the new `fit: "frame"` is given.
 
-Decoding. The source is read once, sequentially, through the existing snapshot loader (ADR 0046) and reduced by libvips area averaging to a working scale chosen from the sheets: the smallest scale at which every sheet still has at least one working pixel per world pixel (for ZIN about one third, 5,840 x 4,240, about 74 MB of RGB), bounded by a pixel ceiling of 64 megapixels with `MAP_IMPORT_SOURCE_TOO_LARGE` above it. This replaces the fixed 3,072-pixel cap only for registered imports and for `fit: "frame"`; a single picture without them keeps today's cap and output. Then every world pixel is mapped back to its sheet by the inverse affine and sampled bilinearly in the working picture (nearest for `paletteMatch: "exact"`), in horizontal strips as the geography rasteriser does, so no full-size floating-point buffer exists.
+Decoding. The source is read once, sequentially, through the existing snapshot loader (ADR 0046) and reduced by libvips area averaging to a working scale chosen from the sheets: the smallest scale at which every sheet still has at least one working pixel per world pixel (for the motivating drawing about one third, 5,840 x 4,240, about 74 MB of RGB), bounded by a pixel ceiling of 64 megapixels with `MAP_IMPORT_SOURCE_TOO_LARGE` above it. This replaces the fixed 3,072-pixel cap only for registered imports and for `fit: "frame"`; a single picture without them keeps today's cap and output. Then every world pixel is mapped back to its sheet by the inverse affine and sampled bilinearly in the working picture (nearest for `paletteMatch: "exact"`), in horizontal strips as the geography rasteriser does, so no full-size floating-point buffer exists.
 
 Classification runs per sheet, after warping, at world resolution, with the existing reference classifier, so OCR text masking, water cleaning and component cleaning apply as today. Each sheet may carry its own `palette` and `mode`, because the sheets' sea blues differ by sheet. New `reference.paletteMatch`: `nearest` (today's behaviour, the default) or `exact`: every pixel must equal a palette colour, and any other colour is the error `MAP_IMPORT_PALETTE_UNKNOWN_COLOR` with the colour, its count and the first five world coordinates. The cleaned layout is imported with `exact` and its eleven colours mapped to classes.
 
@@ -70,7 +70,7 @@ The output of this stage is one frame-aligned class raster (land, sea, lake, ter
 
 ### 2. Which layer comes from which source
 
-The frame is 5,120 x 2,560 for ZIN (the largest province map the engine accepts at that height; the lead confirmed it on 24 October 2026). The import never chooses the frame from the picture: `width` and `height` are required with `sheets` or `fit: "frame"`, and a geography model whose frame differs is the existing error `MAP_GEOGRAPHY_FRAME_MISMATCH`.
+The frame is the request's `width` and `height` (5,120 x 2,560 is the largest province map the engine accepts at that height). The import never chooses the frame from the picture: `width` and `height` are required with `sheets` or `fit: "frame"`, and a geography model whose frame differs is the existing error `MAP_GEOGRAPHY_FRAME_MISMATCH`.
 
 | Layer or fact                                                                 | From the drawing's pixels (or the cleaned layout)                                             | From the model's vectors                                                                                                                                                                                |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,9 +86,9 @@ The frame is 5,120 x 2,560 for ZIN (the largest province map the engine accepts 
 | Roads, places, coasts features                                                | no                                                                                            | yes                                                                                                                                                                                                     |
 | World edge                                                                    | land the drawing puts in the edge band is cleared or refused by `edge`                        | the model's edge features are checked by `edge`                                                                                                                                                         |
 
-R-18 requires open sea at the horizontal seam, so a ZIN import uses `edge: {"mode": "sea-band"}`: land in the east and west bands (`max(192 px, 4% of the width)`) is an error in the model (`MAP_GEOGRAPHY_*` edge diagnostic) and in the warped drawing (`MAP_IMPORT_EDGE_LAND`, with the sheet and the pixel count), not a silent cut. The model's current edge cliffs (`edges`, `wrapPolicy` in `aoaz.json`) must become open sea before an import can pass.
+A world that must keep open sea at the horizontal seam uses `edge: {"mode": "sea-band"}`: land in the east and west bands (`max(192 px, 4% of the width)`) is an error in the model (`MAP_GEOGRAPHY_*` edge diagnostic) and in the warped drawing (`MAP_IMPORT_EDGE_LAND`, with the sheet and the pixel count), not a silent cut. A model that runs land off the east or west edge must turn it into open sea before such an import can pass.
 
-Consequence for the model's repair: its `lands` and `seas` polygons need only agree with the drawing within the agreement threshold; the vectors that must be right are lakes, ranges, rivers (from high ground to a mouth in the drawing's water), straits, sites, regions, terrain areas and names.
+Consequence for a model's author: its `lands` and `seas` polygons need only agree with the drawing within the agreement threshold; the vectors that must be right are lakes, ranges, rivers (from high ground to a mouth in the drawing's water), straits, sites, regions, terrain areas and names.
 
 ### 3. Precedence and agreement
 
@@ -96,7 +96,7 @@ Highest first: authored overrides (section 5), the geography model, the register
 
 ### 4. Stable ids across re-imports
 
-New `create_world.ids`: `{ "mode": "fresh" | "stable" }`, default `fresh` (today). `stable` requires a ledger from an earlier import and refuses (`MAP_IMPORT_IDS_NO_BASELINE`) without one; the first ZIN import is `fresh` and establishes it.
+New `create_world.ids`: `{ "mode": "fresh" | "stable" }`, default `fresh` (today). `stable` requires a ledger from an earlier import and refuses (`MAP_IMPORT_IDS_NO_BASELINE`) without one; a first import is `fresh` and establishes it.
 
 - **Ledger.** A generated, managed file `map/.hoi4-agent-ids.json` (in the managed-output allow-list, hash-checked like every generated file): source hashes, the generator version, and per province its id, colour, kind, area and a representative interior pixel (the deepest pixel of its distance transform, ties by reading order); per state and strategic region its id, members and name key.
 - **Matching.** The new partition is matched to the previous `provinces.bmp` (verified against the manifest, so never a hand-edited file) in one raster pass that counts overlaps between old ids and new labels. A new province keeps an old id when each holds more than half of the other's pixels: mutual majority, so no id is ever claimed twice and no order dependence remains. States and strategic regions are matched the same way on pixel-weighted membership.
@@ -114,7 +114,7 @@ New `create_world.overridesPath`: a workspace-relative `.json` file the mod auth
 - `strategicRegions`: at a point: `name`, `navalTerrain`, `weather`.
 - `names`: at a point: province, state, region or sea names with an optional `formerLabel`.
 - `adjacencies`: from a point to a point, optionally through a point, with type and name (straits, canals, impassable crossings).
-- `countries`: territory seeds, forced and blocked points, for the territory service (C11) once it lands.
+- `countries`: territory seeds, forced and blocked points, for the planned territory service once it lands.
 
 Overrides are applied after partition and before outputs, through the same typed state, region and adjacency records `update_state` and the other operations already write. An override that cannot apply is an error, never skipped: a point in the wrong surface (a victory point in water), a point outside the frame, two entries giving one entity different values, a merge across a sea, an unknown tag, a state whose capital lies in another state. Each names the entry `id`, the point and the entity it resolved to.
 
@@ -130,7 +130,7 @@ After the write, the existing post-write validation runs, plus three alignment c
 
 ### 7. What stays the mod's work
 
-The tool takes the geography schema version 1 of ADR 0055 and the sheet document above. Converting `aoaz.json` into those two documents is ZIN data work (the field mapping is direct: `geometry.coordinates` to points and rings, `sheets.*` to sheet entries with `drawingBox` to `box`, `drawingAnchor` to `anchor`, `worldAnchor` to `target`, `scaleWorldPerDrawing` to `scale`). The tool does not read the mod's own model format; a generic GeoJSON input for any mod can be a separate request. The drawing must lie inside the mod workspace to be read: the mod's git-ignored `docs/reference/originals/` copy qualifies, the private folder outside the mod does not, and no root is widened for it.
+The tool takes the geography schema version 1 of ADR 0055 and the sheet document above. Converting a mod's own map description into those two documents is the mod's work; the tool reads no mod-specific format (a generic GeoJSON input can be a separate request). The drawing must lie inside the mod workspace to be read, for example in a git-ignored folder of the mod; no root is widened for it.
 
 ### 8. Order of implementation
 
@@ -144,7 +144,7 @@ Steps 1 and 2 serve either Q-04 answer; 3 to 5 are needed for both.
 
 ## Consequences
 
-The owner's drawing can be re-imported after any edit to the drawing, the transforms, the model or the overrides without losing authored work or renumbering unrelated provinces, and every failure names the sheet, colour, point or entry at fault. The public `hoi4.map_rewrite` schema gains optional fields and two published schemas (`reference-sheets`, `world-overrides`); this is a minor version, reviewed for compatibility before it is merged. Registered imports use more memory than the 3,072-pixel working copy (about 74 MB of working picture for ZIN), bounded by the 64-megapixel ceiling and measured against the 19 October baselines. Stable ids add one raster pass and a ledger file to every stable import.
+The owner's drawing can be re-imported after any edit to the drawing, the transforms, the model or the overrides without losing authored work or renumbering unrelated provinces, and every failure names the sheet, colour, point or entry at fault. The public `hoi4.map_rewrite` schema gains optional fields and two published schemas (`reference-sheets`, `world-overrides`); this is a minor version, reviewed for compatibility before it is merged. Registered imports use more memory than the 3,072-pixel working copy (about 74 MB of working picture for the motivating drawing), bounded by the 64-megapixel ceiling and measured against the 19 October baselines. Stable ids add one raster pass and a ledger file to every stable import.
 
 Not covered: recognising the owner's handwriting as names (labels stay reviewed input), registering sheets automatically (the transforms are authored data), rotation estimation, and capturing hand edits into the override file.
 
@@ -154,7 +154,7 @@ Tests use only synthetic, project-owned pictures: registration round trips (forw
 
 Where the implementation of steps 1 and 2 differs from the text above, the implementation is the decision:
 
-- **Names.** The error codes use the `MAP_REFERENCE_` prefix of the other reference errors: `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`, `MAP_REFERENCE_PALETTE_CONFLICT`, `MAP_REFERENCE_PALETTE_REQUIRED`, `MAP_REFERENCE_FRAME_ASPECT`, `MAP_REFERENCE_FRAME_SIZE_REQUIRED`, `MAP_REFERENCE_SHEETS_SOURCE_MISMATCH`, `MAP_REFERENCE_SHEET_DEGENERATE`, `MAP_REFERENCE_SHEET_OUTSIDE`, `MAP_REFERENCE_SHEETS_OVERLAP_ORDER`, `MAP_REFERENCE_SHEETS_UNCOVERED`, `MAP_REFERENCE_SHEETS_UNSUPPORTED`, `MAP_REFERENCE_SHEETS_INVALID`, `MAP_REFERENCE_SHEETS_JSON_INVALID`, `MAP_REFERENCE_SHEETS_PATH_INVALID`, `MAP_REFERENCE_SHEETS_TOO_LARGE`, the warning `MAP_REFERENCE_SHEET_HIDDEN`, and for the agreement `MAP_IMPORT_SOURCES_DISAGREE` (error), `MAP_IMPORT_SOURCES_AGREEMENT` (warning or info) and `MAP_IMPORT_FEATURE_SURFACE` (warning). The working copy's ceiling is the existing 32-megapixel decode ceiling (`REFERENCE_WORKING_PIXEL_LIMIT`), which the ZIN drawing's 24.6-megapixel working copy fits.
+- **Names.** The error codes use the `MAP_REFERENCE_` prefix of the other reference errors: `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`, `MAP_REFERENCE_PALETTE_CONFLICT`, `MAP_REFERENCE_PALETTE_REQUIRED`, `MAP_REFERENCE_FRAME_ASPECT`, `MAP_REFERENCE_FRAME_SIZE_REQUIRED`, `MAP_REFERENCE_SHEETS_SOURCE_MISMATCH`, `MAP_REFERENCE_SHEET_DEGENERATE`, `MAP_REFERENCE_SHEET_OUTSIDE`, `MAP_REFERENCE_SHEETS_OVERLAP_ORDER`, `MAP_REFERENCE_SHEETS_UNCOVERED`, `MAP_REFERENCE_SHEETS_UNSUPPORTED`, `MAP_REFERENCE_SHEETS_INVALID`, `MAP_REFERENCE_SHEETS_JSON_INVALID`, `MAP_REFERENCE_SHEETS_PATH_INVALID`, `MAP_REFERENCE_SHEETS_TOO_LARGE`, the warning `MAP_REFERENCE_SHEET_HIDDEN`, and for the agreement `MAP_IMPORT_SOURCES_DISAGREE` (error), `MAP_IMPORT_SOURCES_AGREEMENT` (warning or info) and `MAP_IMPORT_FEATURE_SURFACE` (warning). The working copy's ceiling is the existing 32-megapixel decode ceiling (`REFERENCE_WORKING_PIXEL_LIMIT`), which the motivating drawing's 24.6-megapixel working copy fits.
 - **Palettes per sheet are not implemented.** One `reference.palette` serves every sheet; it may list several colours of one class (the sea blue of each sheet). Per-sheet `palette` and `mode` stay possible later as additive fields.
 - **Pixels outside every sheet** are painted the neutral sea colour `#245b82` in the registered picture and are open sea in the class raster whatever the palette says; exact matching skips them, and no cleanup moves them.
 - **Reference controls** (`annotations`, `ignoreMasks`, `riverAnnotations`, `labels`, `cities`) use world coordinates when sheets are given, because the registered picture is the world frame. Text recognition still masks ink out of classification, but never supplies names: only reviewed `labels` do.

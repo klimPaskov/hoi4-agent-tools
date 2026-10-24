@@ -19,7 +19,7 @@ import type { WorldProvinces } from './world-provinces.js';
  * provinces along its natural lines and returns the provinces, the weighted province graph, the
  * barrier raster and the groupings (geography region and ground class per province) that the
  * state and region clustering reads. World generation calls it, and so can the territory
- * assignment service (C11) to grow countries over the same graph.
+ * assignment service to grow countries over the same graph.
  */
 
 export type PartitionMode = 'legacy' | 'feature-aware';

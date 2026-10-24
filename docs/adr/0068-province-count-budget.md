@@ -2,7 +2,7 @@
 
 ## Context
 
-The map import campaign (request ZR-4 in `docs/plans/zin-requests.md`) ran `create_world` with only a reference picture on web maps. Defaults gave 17,000 to 23,000 provinces where the base game has about 13,400. Two causes:
+A reliability campaign ran `create_world` with only a reference picture on web maps. Defaults gave 17,000 to 23,000 provinces where the base game has about 13,400. Two causes:
 
 - The legacy partition gives each sampling box of `landProvincePixels` up to two extra sites in elevated or wet land. Reference terrain carries moisture 0.45 to 0.96, so the extras added 50 to 95% to the requested count instead of redistributing it, and lakes were cut at the land size.
 - A picture with much land (73% on one map) needs more than 21,000 provinces at the default 400 pixels even when the partition is right. The world then failed late, after generation, when `unitstacks.txt` (23 MB) exceeded the 16 MiB text-table limit, with an error that did not name the file.

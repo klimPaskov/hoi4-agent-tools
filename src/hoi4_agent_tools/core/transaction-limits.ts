@@ -1,5 +1,5 @@
 // A generated world holds thousands of state and region files, and a whole-mod content apply
-// (ZIN, ADR 0047 amendment) more than 8,000; a manifest entry is about 1 KB, so 15,000 files fit
+// (ADR 0047 amendment) more than 8,000; a manifest entry is about 1 KB, so 15,000 files fit
 // the 32 MiB authenticated manifest cap with room for longer paths.
 export const TRANSACTION_MAX_FILES = 15_000;
 export const TRANSACTION_MAX_OPERATIONS = 1_000;
