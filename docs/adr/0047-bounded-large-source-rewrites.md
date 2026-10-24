@@ -27,3 +27,9 @@ Public rewrite structure failures report only allowlisted nonnegative integer co
 Large worlds retain complete inspectable evidence without thousands of separate review artifacts, and staging can overlap filesystem latency. A failure in one staging operation cannot leave an asynchronous writer running after recovery starts.
 
 Version-two journals advance the authenticated head before and after each replacement batch. They do not rely on an unrecorded interval of source mutations: the durable intent is sufficient to recover a crash at either rename boundary or before completion. Version-one journals continue to use per-file completion checkpoints. Manifest and artifact byte budgets remain fixed and independent of batching.
+
+## Amendment (2026-10-24): whole-mod applies
+
+A mod that applies its whole content tree through the engine (the ZIN overhaul, request ZR-5) changes more than 5,000 files in one apply and will pass 8,000. The file ceiling rises to 15,000 and the authenticated manifest ceiling to 32 MiB: a manifest entry measured about 940 bytes (3.4 to 4.7 MB for 5,051 files), so 15,000 files fit with room for longer paths. The operation, dependency, diagnostic, validation-check and artifact ceilings are unchanged, and the journal ceiling stays a constructor option.
+
+Applying wrote the whole manifest twice for every 16 replaced files (an intent and a checkpoint), and the manifest grows with the file count, so a large apply was quadratic: 632 manifest writes of up to 4.7 MB for 5,051 files. The batch now grows with the file count to about 64 batches (16 files up to 1,024, at most 256), so a large apply writes the manifest about 128 times; up to 1,024 files nothing changes. Recovery already handles pending intents of any length. `TRANSACTION_STRUCTURE_LIMIT` names each exceeded limit and the remedy.
