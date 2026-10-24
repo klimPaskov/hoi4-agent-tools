@@ -62,6 +62,8 @@ export interface ReferenceWorldOptions {
    * water stays water). Any other colour fails with `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`.
    */
   paletteMatch?: 'nearest' | 'exact';
+  /** Frame-sized mask: 1 where no registered sheet covers the pixel; those pixels are open sea. */
+  uncovered?: Uint8Array;
   politicalImageBytes?: Uint8Array;
   terrainImageBytes?: Uint8Array;
   heightImageBytes?: Uint8Array;
@@ -146,19 +148,35 @@ export const referenceWorldOptionsSchema = z
     coastDetail: z.number().min(0).max(1).optional(),
     fit: z.enum(['contain', 'stretch']).optional(),
     paletteMatch: z.enum(['nearest', 'exact']).optional(),
+    uncovered: bytesSchema.optional(),
     politicalImageBytes: bytesSchema.optional(),
     terrainImageBytes: bytesSchema.optional(),
     heightImageBytes: bytesSchema.optional(),
   })
   .strict();
 
-interface DecodedImage {
+/** A decoded RGB picture, three bytes per pixel. */
+export interface RawReferenceImage {
   data: Buffer;
   width: number;
   height: number;
 }
+type DecodedImage = RawReferenceImage;
 
-async function decode(bytes: Uint8Array): Promise<DecodedImage> {
+async function decode(bytes: Uint8Array | RawReferenceImage): Promise<DecodedImage> {
+  if (!(bytes instanceof Uint8Array)) {
+    if (
+      bytes.width < 1 ||
+      bytes.height < 1 ||
+      bytes.width * bytes.height > REFERENCE_IMAGE_PIXEL_LIMIT ||
+      bytes.data.length !== bytes.width * bytes.height * 3
+    )
+      throw new ServiceError(
+        'MAP_REFERENCE_IMAGE_BLOCKED',
+        'Reference image exceeds the bounded decode limit',
+      );
+    return bytes;
+  }
   if (bytes.byteLength === 0 || bytes.byteLength > REFERENCE_IMAGE_BYTE_LIMIT)
     throw new ServiceError(
       'MAP_REFERENCE_IMAGE_BLOCKED',
@@ -273,6 +291,7 @@ function exactCodes(
   height: number,
   palette: readonly ReferencePaletteEntry[],
   toSource: (x: number, y: number) => ReferencePoint,
+  uncovered?: Uint8Array,
 ): Uint8Array {
   const known = new Map<number, number>();
   for (const entry of palette) {
@@ -290,6 +309,8 @@ function exactCodes(
   const unknown = new Map<number, { count: number; samples: ReferencePoint[] }>();
   let unknownPixels = 0;
   for (let pixel = 0; pixel < codes.length; pixel += 1) {
+    // Pixels outside every registered sheet are open sea whatever colour stands there.
+    if (uncovered?.[pixel]) continue;
     const key = (data[pixel * 3]! << 16) | (data[pixel * 3 + 1]! << 8) | data[pixel * 3 + 2]!;
     const code = known.get(key);
     if (code !== undefined) {
@@ -480,7 +501,7 @@ function coherentNoise(seed: number, x: number, y: number, scale: number): numbe
 
 /** The returned mask remains a raster; coastlines never go through lossy polygon tracing. */
 export async function extractReferenceWorld(
-  imageBytes: Uint8Array,
+  imageBytes: Uint8Array | RawReferenceImage,
   input: ReferenceWorldOptions,
 ): Promise<ReferenceWorldRaster> {
   const parsed = referenceWorldOptionsSchema.safeParse(input);
@@ -538,7 +559,14 @@ export async function extractReferenceWorld(
     y: Math.min(source.height - 1, crop.y + Math.floor(((y + 0.5) * crop.height) / bounds.height)),
   });
   const localCodes = exact
-    ? exactCodes(resized, bounds.width, bounds.height, options.palette ?? [], toSource)
+    ? exactCodes(
+        resized,
+        bounds.width,
+        bounds.height,
+        options.palette ?? [],
+        toSource,
+        options.uncovered?.length === bounds.width * bounds.height ? options.uncovered : undefined,
+      )
     : mode === 'sketch' || mode === 'grayscale'
       ? grayscaleCodes(resized, bounds.width, bounds.height, mode)
       : undefined;
@@ -568,9 +596,23 @@ export async function extractReferenceWorld(
     );
   for (const mask of options.ignoreMasks ?? [])
     polygon(codes, width, height, mask.map(transform), 255);
+  const uncovered = options.uncovered;
+  if (uncovered !== undefined && uncovered.length !== codes.length)
+    throw new ServiceError(
+      'MAP_REFERENCE_OPTIONS_INVALID',
+      'The uncovered mask must have the frame size',
+    );
+  // Open sea outside every sheet is decided, not inferred: no mask fill, cleanup or smoothing moves it.
+  if (uncovered !== undefined)
+    for (let pixel = 0; pixel < codes.length; pixel += 1) if (uncovered[pixel]) codes[pixel] = 0;
   fillUnknown(codes, width, height);
   const protectedFeatures =
-    (options.annotations?.length ?? 0) > 0 ? new Uint8Array(codes.length) : undefined;
+    (options.annotations?.length ?? 0) > 0 || uncovered !== undefined
+      ? new Uint8Array(codes.length)
+      : undefined;
+  if (protectedFeatures !== undefined && uncovered !== undefined)
+    for (let pixel = 0; pixel < codes.length; pixel += 1)
+      if (uncovered[pixel]) protectedFeatures[pixel] = 1;
   for (const annotation of options.annotations ?? []) {
     polygon(codes, width, height, annotation.polygon.map(transform), semanticCode(annotation.kind));
     if (protectedFeatures)

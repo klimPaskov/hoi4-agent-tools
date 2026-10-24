@@ -48,6 +48,41 @@ Reviewed geography labels preserve names for lakes, rivers, forests and other fe
 
 All annotation positions and polygons use normalized 0 to 1 coordinates relative to the original, uncropped reference, with the origin at its top left. Crop uses source pixels instead. Explicit `countries` on the operation supplies reviewed country tags, names, colors and relative shares. If borders or names cannot be inferred reliably, the server generates named defaults and reports the assumptions. Manual controls are optional and never change the original image.
 
+### Registered drawings and import evidence
+
+A picture made of several drawn sheets, each at its own place, scale or orientation, is registered onto the world frame with `reference.sheets` (inline) or `reference.sheetsPath` (a workspace-relative `.json` file read with the same guards as `geographyPath`). The document is [reference-sheets version 1](../schemas/reference-sheets.schema.json):
+
+```json
+{
+  "version": 1,
+  "source": { "width": 17520, "height": 12720 },
+  "fill": "sea",
+  "sheets": [
+    {
+      "id": "cold",
+      "box": [0, 0, 0.395, 0.245],
+      "anchor": [0.043, 0.087],
+      "target": [0.04, 0.17],
+      "scale": [1.037, 1.506]
+    },
+    {
+      "id": "east",
+      "box": [0.036, 0.5, 0.4, 1],
+      "anchor": [0.142, 0.7],
+      "target": [0.89, 0.618],
+      "scale": [-1.13, 1.66],
+      "order": 1
+    }
+  ]
+}
+```
+
+Each sheet maps picture coordinates to world coordinates as `world = target + scale * (picture - anchor)` per axis (a negative scale mirrors), or by `affine: [a, b, c, d, e, f]`. `box` is the sheet's part of the picture, `clip` an optional polygon that cuts it out of its box, and `order` decides which sheet wins where targets overlap; two overlapping sheets of equal order are refused. World pixels outside every sheet are open sea (`fill: "sea"`) or an error (`"error"`). `source` pins the picture size and optionally its SHA-256, so registrations made for one picture are never applied to another. Sheets imply `fit: "frame"`; `width` and `height` are required.
+
+The picture is read once at the resolution the sheets need (one working pixel per world pixel for the most enlarged sheet, at most 32 million pixels), each world pixel is sampled from its sheet (nearest under `paletteMatch: "exact"`, bilinear otherwise), and the registered picture is classified as one frame-aligned picture from which every map layer derives. With sheets, `annotations`, `ignoreMasks`, `riverAnnotations`, `labels` and `cities` use world coordinates, and recognised text is never used as a name. `crop` and the aligned political, terrain and height pictures cannot be combined with sheets yet.
+
+A request with sheets, `fit: "frame"`, `paletteMatch: "exact"` or a geography model beside the picture returns import evidence: `map-import-report.json` (sheet coverage and hidden pixels, class shares and, with a model, the land agreement: intersection over union, land only in the picture or only in the model, the twelve worst 128-pixel cells, and model sites, volcanoes and river ends on the wrong surface), `map-import-classes.png`, `map-import-alignment.png` (the picture darkened, its coast in red and the model's in yellow) and, with sheets, `map-import-registration.png`. Land agreement below `reference.agreement.minLandIou` (default 0.85) is the error `MAP_IMPORT_SOURCES_DISAGREE`, which blocks the write; below `warnLandIou` (default 0.95) it is a warning. A preview with a model checks the model, the registration and the agreement without planning a map and reports the figures in `data.import`. See ADR 0067.
+
 Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side, or, with `fit: "frame"`, a copy at the frame resolution (never enlarged, at most 32 million pixels; nearest-neighbour reduction under `paletteMatch: "exact"`, so no new colours appear). The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
 ## Describe a world as a geography model
