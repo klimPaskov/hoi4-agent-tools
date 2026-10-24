@@ -60,8 +60,12 @@ describe('transaction size (ZR-5)', () => {
         changes: changes(TRANSACTION_MAX_FILES + 1, 'over'),
         validate: checks,
       })
-      .catch((error: unknown) => error as Error & { code: string });
+      .then(
+        () => undefined,
+        (error: unknown) => error as Error & { code: string },
+      );
     expect(failure).toMatchObject({ code: 'TRANSACTION_STRUCTURE_LIMIT' });
+    if (failure === undefined) return;
     expect(failure.message).toContain(
       `${TRANSACTION_MAX_FILES + 1} files (limit ${TRANSACTION_MAX_FILES})`,
     );
