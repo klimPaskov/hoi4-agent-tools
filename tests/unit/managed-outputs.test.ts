@@ -95,11 +95,10 @@ describe('managed output regeneration', () => {
     const released = planManagedOutputs({ ...input, sources: edited, proposed: [one], releasable });
     expect(released).toMatchObject({ retired: [], released: [two.relativePath] });
     expect(released.changes.some((f) => f.relativePath === two.relativePath)).toBe(false);
-    expect(
-      JSON.parse(Buffer.from(released.changes.at(-1)!.content!).toString()).files.map(
-        (f: { relativePath: string }) => f.relativePath,
-      ),
-    ).toEqual([one.relativePath]);
+    const inventory = JSON.parse(Buffer.from(released.changes.at(-1)!.content!).toString()) as {
+      files: { relativePath: string }[];
+    };
+    expect(inventory.files.map((f) => f.relativePath)).toEqual([one.relativePath]);
     // A releasable file the write would produce again still blocks: regenerating it would discard the edit.
     expect(() =>
       planManagedOutputs({ ...input, sources: edited, proposed: [one, two], releasable }),
