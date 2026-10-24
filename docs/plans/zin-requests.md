@@ -14,9 +14,10 @@ Shared record between the ZIN lead session and the HOI4 Agent Tools worker. The 
 
 The mod's `tools/content/apply.mts` imports the atomic rewrite engine from the main checkout, so the main checkout runs whatever is checked out there. The worker announces every switch here before making it.
 
-| Date       | Branch                           | Head      | Note                                                                  |
-| ---------- | -------------------------------- | --------- | --------------------------------------------------------------------- |
-| 2026-10-24 | `claude/zin-map-pipeline-phase1` | `9ed6351` | state at launch, clean, package 4.3.0; unchanged by the worker so far |
+| Date       | Branch                           | Head      | Note                                                     |
+| ---------- | -------------------------------- | --------- | -------------------------------------------------------- |
+| 2026-10-24 | `claude/zin-map-pipeline-phase1` | `9ed6351` | state at launch, clean, package 4.3.0                    |
+| 2026-10-24 | `main`                           | `3733d4a` | after PRs 36 to 39; `npm ci` run; engine import verified |
 
 ## Installed runtime
 
@@ -28,6 +29,7 @@ The mod's `tools/content/apply.mts` imports the atomic rewrite engine from the m
 
 Schema changes, compatibility changes, releases, runtime installs and server restarts, newest first.
 
+- 2026-10-24: **main-checkout switch done.** PR 39 (ZR-5) merged; the main checkout is on `main` at `3733d4a`, clean, with `npm ci` run (zod 4.6.7). Verified by importing the engine from the checkout as `apply.mts` does: `TRANSACTION_MAX_FILES` 15,000, manifest ceiling 32 MiB, batch size 79 for 5,051 files. `apply.mts` can now apply the whole content tree in one transaction (remove its 4,500-file batching). The installed runtime is unchanged (4.3.0) until the 4.4.0 install, announced separately.
 - 2026-10-24: merged to `main`: PR 38 (dependency security update), PR 37 (ZR-1), PR 36 (map pipeline phase 1 with the ZR-3 fixes), `main` at `dc980bd`. Open with CI running: PR 39 (ZR-5), PR 40 (ZR-2 steps 1 and 2), PR 41 (campaign fixes). **Main checkout switch announced:** once PR 39 (ZR-5) merges, the main checkout moves from `claude/zin-map-pipeline-phase1` (`9ed6351`) to `main`, followed by `npm ci` there (zod is now 4.6.7). The mod's `apply.mts` then imports the engine with the 15,000-file ceiling. Do not run `apply.mts` while the switch is in progress; the worker posts here when it is done.
 - 2026-10-24: no server restart, runtime install or main-checkout switch yet. Planned, each announced again here before it happens: after PR 36 merges, the main checkout moves from `claude/zin-map-pipeline-phase1` to `main` (same engine code plus the PR 36 fixes); the ZR-1 fix ships in the next release (4.4.0) and then needs a runtime install and a reconnect.
 - 2026-10-24: proposed schema changes for ZR-2 (ADR 0067): optional `create_world` fields `reference.sheets`/`sheetsPath`, `reference.paletteMatch`, `reference.fit`, `reference.agreement`, `ids`, `overridesPath`; two new published schemas `reference-sheets` and `world-overrides`. ZR-1 adds the configuration key `defaultWorkspace`. All additive, minor version. ZR-2 is not implemented until the lead has read ADR 0067.
@@ -45,7 +47,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 | ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in review (steps 1 and 2: PR 40)                        |
 | ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | merged (PR 36)                                          |
 | ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (15 of 144 run; 5 defect classes diagnosed) |
-| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | in review (PR 39)                                       |
+| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | merged (PR 39); usable now from the main checkout       |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -123,7 +125,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 - Evidence: the error object above.
 - Impact: the integrated build cannot be applied in one transaction; the lead's stopgap splits the apply into atomic transactions of at most 4,500 files, losing all-or-nothing behaviour across the whole apply.
 - Acceptance: `apply.mts apply` with 5,051 and with 12,000 files commits atomically in one transaction (or a documented atomic chunked mode), rolls back fully on an injected failure, with a test at the limit and above it, and timings recorded.
-- Status: in review (fixed and tested on `claude/zr5-transaction-files`; merges after PR 36, then released in 4.4.0)
+- Status: merged (PR 39, `3733d4a`, CI green on Linux and Windows); available to `apply.mts` from the main checkout now; in the 4.4.0 release
 - Implementation: commit `273960f`. The file ceiling rises from 5,000 to 15,000 and the authenticated manifest ceiling from 16 to 32 MiB (a manifest entry measured about 940 bytes). Root cause of the slow large applies: every 16-file replacement batch rewrote and fsynced the whole manifest twice (intent and checkpoint), and the manifest grows with the file count, so a large apply was quadratic (632 manifest writes of up to 4.7 MB for 5,051 files). Batches now grow with the file count to about 64 batches (16 files up to 1,024, at most 256); ordinary rewrites are unchanged; recovery already handles pending intents of any length. `TRANSACTION_STRUCTURE_LIMIT` names each exceeded limit and the remedy. ADR 0047 amendment.
 - Verification: `tests/unit/transaction-size.test.ts` (batch sizes; the error names the exceeded limit, such as `15,001 files (limit 15,000)`, and the remedy; one 5,051-file transaction applied, then a second one failing post-validation rolls every file back) plus the existing transaction, batch and recovery suites: 80 tests pass. Benchmark (synthetic tree of small text files, 3 rounds: first write, rewrite, injected post-write failure; measured on the worker's Windows machine while other jobs shared the disk, so timings are indicative):
 
