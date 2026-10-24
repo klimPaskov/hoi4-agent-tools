@@ -12,6 +12,7 @@ export const TEMPORARY_STALE_MS = 3 * 60 * 60 * 1000;
 // Dated event evaluation directories contain retained benchmark evidence, not scratch files.
 const scratchName = /^hoi4-(?:reference-source|event-eval)-[A-Za-z0-9]{6}$/u;
 const referenceSnapshotName = /^\.reference-snapshot-[A-Za-z0-9]{6}$/u;
+const ownedFixtureName = /^hoi4-[a-z0-9-]{1,64}-[A-Za-z0-9]{6}$/u;
 const ownerSchema = z
   .object({
     version: z.literal(1),
@@ -76,6 +77,11 @@ async function inventory(directory: string): Promise<Inventory> {
 export interface TemporarySweepOptions {
   /** Private image snapshots in server-owned storage; unowned directories are never removed. */
   referenceSnapshotsOnly?: boolean;
+  /**
+   * Any `hoi4-*` test fixture, but only one that carries an owner record: a run that was killed
+   * leaves its marked fixtures behind, and unmarked directories are never removed.
+   */
+  ownedFixturesOnly?: boolean;
   now?: number;
   staleMs?: number;
   maxBytes?: number;
@@ -136,7 +142,11 @@ export async function sweepTemporaryDirectories(
     modified: number;
     eligible: boolean;
   }> = [];
-  const names = options.referenceSnapshotsOnly ? referenceSnapshotName : scratchName;
+  const names = options.referenceSnapshotsOnly
+    ? referenceSnapshotName
+    : options.ownedFixturesOnly
+      ? ownedFixtureName
+      : scratchName;
   for (const name of (await readdir(root)).filter((name) => names.test(name)).sort()) {
     const directory = path.join(root, name);
     if (protectedRoots.some((protectedRoot) => overlaps(directory, protectedRoot))) continue;
@@ -150,7 +160,7 @@ export async function sweepTemporaryDirectories(
       )
         continue;
       const record = await owner(directory);
-      if (options.referenceSnapshotsOnly && record == null) continue;
+      if ((options.referenceSnapshotsOnly || options.ownedFixturesOnly) && record == null) continue;
       // An interrupted sweep must not leave a permanent lock. Malformed or live locks
       // stay protected; only a confirmed dead local owner can relinquish its lock.
       const previousSweep = await owner(directory, SWEEP_LOCK);

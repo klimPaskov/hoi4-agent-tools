@@ -86,6 +86,37 @@ describe('temporary directory ownership and recovery', () => {
     expect(await readFile(path.join(unrelated, 'evidence'), 'utf8')).toBe('retained');
   });
 
+  it('collects marked fixtures of a dead test run but never unmarked or live ones', async () => {
+    const { parent } = await fixture();
+    const make = async (name: string, pid?: number) => {
+      const directory = path.join(parent, name);
+      await mkdir(directory);
+      await writeFile(path.join(directory, 'fixture'), 'synthetic');
+      if (pid !== undefined)
+        await writeFile(
+          path.join(directory, '.hoi4-temp-owner.json'),
+          JSON.stringify({ version: 1, pid, host: hostname(), token: randomUUID() }),
+        );
+      return directory;
+    };
+    const dead = await make('hoi4-agent-map-deadAA', 101);
+    const live = await make('hoi4-agent-map-liveAA', 202);
+    const unowned = await make('hoi4-agent-map-noneAA');
+    const protectedRoot = await make('hoi4-agent-map-rootAA', 101);
+    const unrelated = await make('other-tool-deadBB', 101);
+    const result = await sweepTemporaryDirectories(parent, {
+      ownedFixturesOnly: true,
+      staleMs: 0,
+      now: Date.now() + 1000,
+      isAlive: (pid) => pid === 202,
+      protectedRoots: [protectedRoot],
+    });
+    expect(result.removed).toBe(1);
+    await expect(lstat(dead)).rejects.toMatchObject({ code: 'ENOENT' });
+    for (const directory of [live, unowned, protectedRoot, unrelated])
+      expect(await readFile(path.join(directory, 'fixture'), 'utf8')).toBe('synthetic');
+  });
+
   it('removes owned fixtures on normal and idle-style shutdown, even after a failed operation', async () => {
     const { parent } = await fixture();
     for (const reason of ['normal', 'idle', 'failure']) {
