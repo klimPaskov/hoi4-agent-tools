@@ -278,6 +278,24 @@ function workspaceAliases(workspace: ResolvedWorkspace): Set<string> {
   ]);
 }
 
+const WORKSPACE_CONTEXT_FIX =
+  'Pass workspaceId with one of the listed IDs or the mod folder name, start the client in the mod folder, or set defaultWorkspace in the server configuration';
+const WORKSPACE_CANDIDATE_LIMIT = 32;
+
+/** The mods a caller could name, bounded and without host paths. */
+function workspaceCandidates(workspaces: readonly ResolvedWorkspace[]): {
+  workspaceIds: string[];
+  workspaceNames: string[];
+  workspaceCount: number;
+} {
+  const listed = workspaces.slice(0, WORKSPACE_CANDIDATE_LIMIT);
+  return {
+    workspaceIds: listed.map(({ id }) => id),
+    workspaceNames: listed.map(({ name }) => name),
+    workspaceCount: workspaces.length,
+  };
+}
+
 function requestedWorkspaceAlias(value: string): string {
   const staleDiscovered = /^mod_(.+)_[a-f0-9]{12}$/u.exec(value);
   return staleDiscovered?.[1] ?? value;
@@ -396,6 +414,7 @@ export class WorkspaceResolver {
   #workspaceStorageRoot?: string;
   #serverStateRoot?: string;
   #serverState?: ServerState;
+  #defaultWorkspaceId?: string;
 
   private constructor(private readonly configuration: ServerConfiguration) {}
 
@@ -469,6 +488,17 @@ export class WorkspaceResolver {
       resolver.#byId.set(workspace.id, workspace);
     }
     await resolver.discoverModWorkspaces();
+    if (configuration.defaultWorkspace !== undefined) {
+      const id = resolver.resolveWorkspaceId(configuration.defaultWorkspace);
+      if (resolver.#byId.get(id)?.registration.kind !== 'mod') {
+        throw new ServiceError(
+          'WORKSPACE_DEFAULT_UNKNOWN',
+          `The configured default workspace is not a registered mod workspace: ${configuration.defaultWorkspace}`,
+          { defaultWorkspace: configuration.defaultWorkspace },
+        );
+      }
+      resolver.#defaultWorkspaceId = id;
+    }
     if (configuration.serverStateRoot !== undefined) {
       resolver.#serverState = await ServerState.create(configuration.serverStateRoot);
       resolver.#serverStateRoot = resolver.#serverState.root;
@@ -504,11 +534,12 @@ export class WorkspaceResolver {
         { currentDirectory },
       );
     }
-    if (workspaces.length === 1) return workspaces[0]!.id;
+    const fallback = this.fallbackWorkspaceId(workspaces);
+    if (fallback !== undefined) return fallback;
     throw new ServiceError(
       'WORKSPACE_CONTEXT_REQUIRED',
-      'The MCP working directory does not identify one writable mod workspace',
-      { currentDirectory, workspaceIds: workspaces.map(({ id }) => id) },
+      `The MCP working directory does not identify one writable mod workspace. ${WORKSPACE_CONTEXT_FIX}`,
+      { currentDirectory, ...workspaceCandidates(workspaces) },
     );
   }
 
@@ -518,19 +549,25 @@ export class WorkspaceResolver {
     principal?: string,
   ): Promise<string> {
     const canonicalRoots = await Promise.all(rootPaths.map((rootPath) => canonicalPath(rootPath)));
-    const matches = this.list(principal).filter(
-      (workspace) =>
-        workspace.registration.kind === 'mod' &&
-        canonicalRoots.some(
-          (rootPath) =>
-            isWithin(workspace.modRoot, rootPath) || isWithin(rootPath, workspace.modRoot),
-        ),
+    const workspaces = this.list(principal).filter(
+      ({ registration }) => registration.kind === 'mod',
+    );
+    const matches = workspaces.filter((workspace) =>
+      canonicalRoots.some(
+        (rootPath) =>
+          isWithin(workspace.modRoot, rootPath) || isWithin(rootPath, workspace.modRoot),
+      ),
     );
     if (matches.length === 1) return matches[0]!.id;
     if (matches.length === 0) {
+      const fallback = this.fallbackWorkspaceId(workspaces);
+      if (fallback !== undefined) return fallback;
       throw new ServiceError(
         'WORKSPACE_CONTEXT_NOT_FOUND',
-        'The active MCP client roots do not identify a registered HOI4 mod workspace',
+        workspaces.length === 0
+          ? 'No writable mod workspace is configured for the MCP server'
+          : `The active MCP client roots do not identify a registered HOI4 mod workspace. ${WORKSPACE_CONTEXT_FIX}`,
+        workspaceCandidates(workspaces),
       );
     }
     throw new ServiceError(
@@ -538,6 +575,20 @@ export class WorkspaceResolver {
       'The active MCP client roots identify more than one HOI4 mod workspace',
       { workspaceIds: matches.map(({ id }) => id) },
     );
+  }
+
+  /**
+   * The mod used when neither the client roots nor the working directory name one: the
+   * configured default when the caller may use it, else the only mod the caller can see.
+   */
+  private fallbackWorkspaceId(workspaces: readonly ResolvedWorkspace[]): string | undefined {
+    if (
+      this.#defaultWorkspaceId !== undefined &&
+      workspaces.some(({ id }) => id === this.#defaultWorkspaceId)
+    ) {
+      return this.#defaultWorkspaceId;
+    }
+    return workspaces.length === 1 ? workspaces[0]!.id : undefined;
   }
 
   /** Find one mod containing an existing source path when a stale client root selected another mod. */
