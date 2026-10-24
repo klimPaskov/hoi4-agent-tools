@@ -196,6 +196,35 @@ export function smoothDiagonalContacts(
   return changed;
 }
 
+/**
+ * Province parts never join across the east-west seam, so a 2x2 window that straddles it holds
+ * four provinces whenever the kind changes vertically on both sides (a coast that crosses the
+ * seam). Make the east column (x = 0) agree with its upper pixel there, one pixel per crossing,
+ * and return the changed pixels.
+ */
+export function repairSeamCorners(
+  kind: Uint8Array,
+  width: number,
+  height: number,
+  maxPasses = 8,
+): number[] {
+  const changed: number[] = [];
+  if (width < 2) return changed;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let found = false;
+    for (let y = 0; y + 1 < height; y++) {
+      const west = y * width + width - 1;
+      const east = y * width;
+      if (kind[west] === kind[west + width] || kind[east] === kind[east + width]) continue;
+      kind[east + width] = kind[east]!;
+      changed.push(east + width);
+      found = true;
+    }
+    if (!found) break;
+  }
+  return changed;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Adapter from bitmaps
 

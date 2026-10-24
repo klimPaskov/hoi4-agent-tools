@@ -17,3 +17,7 @@ Canonical path checks reject scratch junctions, symlinks are not followed during
 ## Validation
 
 Synthetic regression tests cover normal and explicit process exit, partial failure, stale legacy directories, fresh directories, dead-owner size eviction, live/foreign/malformed owners, locks, junctions, changed ownership, and rejecting a large truncate without growing the file. Existing source readers continue using the persistent analysis cache and configured source roots.
+
+## Amendment (2026-10-24)
+
+A hard kill of a test run (a stopped job, a usage limit, a crashed worker) leaves its marked fixtures behind, and the start-up sweep matched only the two product scratch names, so they were never collected: 2,441 fixtures (640 MB) had accumulated on one machine. The test setup now runs a second sweep, `ownedFixturesOnly`, over `hoi4-*` fixture names that removes only directories whose owner record names a dead local process, with the same staleness, size, lock and protected-root rules. Unmarked directories stay untouched.

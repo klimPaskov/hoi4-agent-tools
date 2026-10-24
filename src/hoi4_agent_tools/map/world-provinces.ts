@@ -63,15 +63,34 @@ interface SeedGrid {
   y: number[];
 }
 
+/** Extra land sites a sampling box gets from its mean height and wetness, before rounding. */
+function landDensity(relief: number, wet: number): number {
+  return Math.max(0, relief) * 1.3 + Math.max(0, wet);
+}
+
 /**
  * Jittered sites use ordinary Euclidean distance, rather than cardinal flood distance.
- * Additional sites in elevated/wet land give those areas a denser, varied partition.
+ * Additional sites in elevated/wet land give those areas a denser, varied partition; the
+ * sampling box grows by the mean of those extras, so they redistribute provinces instead of
+ * adding to the requested `landProvincePixels`. Lakes take the sea target.
  * Each occupied sampling box has a site, including thin coasts and small islands.
  */
 function sites(input: WorldProvinceInput, wanted: number): SeedGrid {
   const { width, height, kind, elevation, moisture, seed } = input;
-  const target = wanted === 0 ? input.seaProvincePixels : input.landProvincePixels;
-  const cell = Math.max(2, Math.floor(Math.min(Math.sqrt(target), width / 20, height / 20)));
+  const target = wanted === 1 ? input.landProvincePixels : input.seaProvincePixels;
+  let extras = 0;
+  let pixels = 0;
+  if (wanted === 1)
+    for (let p = 0; p < kind.length; p++) {
+      if (kind[p] !== 1) continue;
+      pixels++;
+      extras += Math.min(2, landDensity(elevation[p]!, moisture[p]!));
+    }
+  const meanExtra = pixels === 0 ? 0 : extras / pixels;
+  const cell = Math.max(
+    2,
+    Math.floor(Math.min(Math.sqrt(target * (1 + meanExtra)), width / 20, height / 20)),
+  );
   const columns = Math.ceil(width / cell);
   const rows = Math.ceil(height / cell);
   const result: SeedGrid = {
@@ -108,8 +127,7 @@ function sites(input: WorldProvinceInput, wanted: number): SeedGrid {
         }
       }
       if (count === 0) continue;
-      const density =
-        wanted === 1 ? Math.max(0, relief / count) * 1.3 + Math.max(0, wet / count) : 0;
+      const density = wanted === 1 ? landDensity(relief / count, wet / count) : 0;
       const extra = Math.min(2, Math.floor(density + hash(seed, bin + wanted * 7717)));
       const used = new Set<number>();
       for (let slot = 0; slot <= extra; slot++) {
