@@ -5575,6 +5575,8 @@ function applyCreateWorld(
       ...(operation.landPolygons === undefined ? {} : { landPolygons: operation.landPolygons }),
       landProvincePixels: operation.landProvincePixels ?? 400,
       seaProvincePixels: operation.seaProvincePixels ?? 2_500,
+      provinceSizesDefaulted:
+        operation.landProvincePixels === undefined && operation.seaProvincePixels === undefined,
       provincesPerState: operation.provincesPerState ?? (reference === undefined ? 5 : 12),
       landProvincesPerRegion:
         operation.landProvincesPerRegion ?? (reference === undefined ? 25 : 60),

@@ -16,7 +16,8 @@ import {
   partitionWorldFromRequest,
   type WorldPartition,
 } from './partition.js';
-import { smoothDiagonalContacts } from './partition-fields.js';
+import { repairSeamCorners, smoothDiagonalContacts } from './partition-fields.js';
+import { PARTITION_PROVINCE_ERROR, PARTITION_PROVINCE_WARNING } from './partition-tuning.js';
 import {
   geographyPartitionFields,
   provinceCountNote,
@@ -72,6 +73,11 @@ export interface WorldSpec {
   landPolygons?: ReadonlyArray<ReadonlyArray<{ x: number; y: number }>>;
   landProvincePixels: number;
   seaProvincePixels: number;
+  /**
+   * True when the caller gave neither province size: the sizes may then grow so the world stays
+   * near the base game's province count instead of failing.
+   */
+  provinceSizesDefaulted?: boolean;
   provincesPerState: number;
   landProvincesPerRegion: number;
   seaProvincesPerRegion: number;
@@ -355,6 +361,53 @@ function generateSurface(spec: WorldSpec, random: Random): Surface {
  * Surface of a world described by a geography model: land and lakes from the model (or lakes laid
  * over a reference picture's coast); elevation is filled in by the terrain synthesis later.
  */
+/** Province count the vanilla map holds; defaulted sizes grow towards it. */
+const PROVINCE_COUNT_GOAL = 13_000;
+
+/**
+ * Check the province count the sizes give before partitioning. Defaulted sizes above the warning
+ * grow until the world holds about the base game's count; sizes the caller chose that give more
+ * than the text tables allow are refused before any work.
+ */
+function provinceBudget(
+  spec: WorldSpec,
+  kind: Uint8Array,
+): { landProvincePixels: number; seaProvincePixels: number; note?: WorldNote } {
+  let land = 0;
+  let water = 0;
+  for (const value of kind)
+    if (value === LAND) land += 1;
+    else water += 1;
+  const expected = land / spec.landProvincePixels + water / spec.seaProvincePixels;
+  const sizes = {
+    landProvincePixels: spec.landProvincePixels,
+    seaProvincePixels: spec.seaProvincePixels,
+  };
+  if (expected <= PARTITION_PROVINCE_WARNING) return sizes;
+  if (spec.provinceSizesDefaulted === true) {
+    const factor = expected / PROVINCE_COUNT_GOAL;
+    const landProvincePixels = Math.ceil(spec.landProvincePixels * factor);
+    const seaProvincePixels = Math.ceil(spec.seaProvincePixels * factor);
+    return {
+      landProvincePixels,
+      seaProvincePixels,
+      note: {
+        code: 'MAP_WORLD_PROVINCE_SIZE_RAISED',
+        severity: 'info',
+        message: `The default province sizes would give about ${Math.round(expected)} provinces on this much land; they were raised to ${landProvincePixels} land and ${seaProvincePixels} sea pixels for about ${PROVINCE_COUNT_GOAL}. Set landProvincePixels and seaProvincePixels to choose them`,
+        details: { expectedProvinces: Math.round(expected), landProvincePixels, seaProvincePixels },
+      },
+    };
+  }
+  if (expected > PARTITION_PROVINCE_ERROR)
+    throw new ServiceError(
+      'MAP_PARTITION_PROVINCE_COUNT_HIGH',
+      `landProvincePixels ${spec.landProvincePixels} and seaProvincePixels ${spec.seaProvincePixels} give about ${Math.round(expected)} provinces on this map, above the ${PARTITION_PROVINCE_ERROR} the text tables allow; raise them`,
+      { expectedProvinces: Math.round(expected), maximum: PARTITION_PROVINCE_ERROR },
+    );
+  return sizes;
+}
+
 function geographySurface(
   spec: WorldSpec,
   geography: ResolvedGeography,
@@ -733,6 +786,9 @@ export function generateWorld(
     smoothMask && geography !== undefined
       ? smoothDiagonalContacts(surface.kind, width, height)
       : [];
+  // A coast crossing the east-west seam is repaired in every world, before the synthesis of a
+  // geography world and after the drainage of any other, like the smoothing.
+  let seamRepaired = geography !== undefined ? repairSeamCorners(surface.kind, width, height) : [];
   // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
   // keeps the original elevation classes and drainage, byte for byte.
   const synthesized =
@@ -790,6 +846,21 @@ export function generateWorld(
       drainage.riverPixels[pixel] = isLand ? 255 : 254;
     }
   }
+  if (geography === undefined) {
+    seamRepaired = repairSeamCorners(surface.kind, width, height);
+    for (const pixel of seamRepaired) {
+      const isLand = surface.kind[pixel] === LAND;
+      surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+      drainage.riverPixels[pixel] = isLand ? 255 : 254;
+    }
+  }
+  if (seamRepaired.length > 0)
+    notes.push({
+      code: 'MAP_WORLD_SEAM_CORNER_REPAIRED',
+      severity: 'info',
+      message: `Changed ${seamRepaired.length} pixel(s) at the east-west seam where a coast crosses it, because province parts cannot join across the seam`,
+      details: { pixels: seamRepaired.length },
+    });
   if (smoothed.length > 0)
     notes.push({
       code: 'MAP_PARTITION_MASK_SMOOTHED',
@@ -797,6 +868,8 @@ export function generateWorld(
       message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
       details: { pixels: smoothed.length },
     });
+  const sizes = provinceBudget(spec, surface.kind);
+  if (sizes.note !== undefined) notes.push(sizes.note);
   let featurePartition: WorldPartition | undefined;
   let provinces: WorldProvinces;
   if (spec.partition?.mode === 'feature-aware') {
@@ -823,8 +896,8 @@ export function generateWorld(
       spec.seed,
       spec.partition.tuning,
       {
-        landProvincePixels: spec.landProvincePixels,
-        seaProvincePixels: spec.seaProvincePixels,
+        landProvincePixels: sizes.landProvincePixels,
+        seaProvincePixels: sizes.seaProvincePixels,
         provincesPerState: spec.provincesPerState,
         landProvincesPerRegion: spec.landProvincesPerRegion,
         seaProvincesPerRegion: spec.seaProvincesPerRegion,
@@ -841,8 +914,8 @@ export function generateWorld(
       kind: surface.kind,
       elevation: surface.elevation,
       moisture: surface.moisture,
-      landProvincePixels: spec.landProvincePixels,
-      seaProvincePixels: spec.seaProvincePixels,
+      landProvincePixels: sizes.landProvincePixels,
+      seaProvincePixels: sizes.seaProvincePixels,
     });
   const count = provinces.kind.length;
   const countNote = provinceCountNote(
