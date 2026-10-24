@@ -39,6 +39,7 @@ Schema changes, compatibility changes, releases, runtime installs and server res
 | ZR-1 | Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder                       | P1                           | in review (fix on `claude/zr1-workspace-discovery`; workaround below) |
 | ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in review (design ADR 0067 waits for the lead)                        |
 | ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | in progress (worker, proactive)                                       |
+| ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | open (waiting for the user's download approval in the worker session) |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -84,7 +85,8 @@ Schema changes, compatibility changes, releases, runtime installs and server res
   2. Converting `aoaz.json` into geography schema version 1 and the sheet document is ZIN data work in the design (field mapping in ADR 0067 section 7). Agreed, or do you need a generic GeoJSON input in the tool?
   3. Where will the sheet document and the override file live in the mod? The drawing is read from the git-ignored `docs/reference/originals/Erdae.png` inside the mod (the private folder outside the mod is not readable by design). Will that copy be renamed?
   4. The eleven class colours of `Aoaz-clean-v3.png` and their meanings: if a spec in the mod defines them, name the file.
-- Remaining integration work: owner answer to Q-04 (the design takes both sources); the lead's conversion of the model and sheets.
+- Q-04 answered (owner via the lead, 2026-10-24): the ZIN map targets the owner's full drawing plus the recorded per-sheet transforms at 5,120 x 2,560; the design keeps the cleaned layout as a second input. The owner also ordered the reliability campaign ZR-4.
+- Remaining integration work: the lead's conversion of the model and sheets.
 
 ## ZR-3: PR 36 review findings
 
@@ -102,3 +104,27 @@ Schema changes, compatibility changes, releases, runtime installs and server res
 - Implementation: branch `claude/pr36-fixes` (from PR 36), pushed to the PR branch after `npm run check`.
 - Verification: pending
 - Remaining integration work: none for the lead until the release.
+
+## ZR-4: Reliability campaign: at least 100 web maps through the import
+
+- Opened: 2026-10-24 by lead, on the owner's instruction (the lead asked for id ZR-3, which was already taken by the PR 36 findings). Owner's words, relayed verbatim: "Try many different maps from the web. Like at least 100 different maps and each time you fix any defects and improve the tool more and more until its like extremely reliable."
+- Priority: P1
+- ZIN task: R-10, A-10 (the import must be reliable on any drawn or printed map, not only on Aoaz).
+- Tool or workflow: `hoi4_map_rewrite` `create_world` with `reference` (today's single-picture path), then the registered-sheet and exact-palette paths of ZR-2 as they land; `hoi4_map_inspect` and the validators on every result.
+- Inputs and reproduction: at least 100 varied map images from the web: hand-drawn fantasy maps, scanned atlases, coloured political maps, relief and satellite-style maps, small and very large, odd aspect ratios, labels and ink noise, islands and archipelagos, lakes and rivers, maps that touch the frame edge. Each runs end to end in a dedicated test mod workspace (never the ZIN mod), preview and write, then inspect and validate.
+- Storage and licences: downloads stay out of git under the ignored folder `campaign/maps/` of the tool repository, one folder per image; the committed manifest `docs/plans/map-campaign/manifest.json` lists per image the source URL, licence, author, dimensions, bytes and SHA-256. Only images whose licence allows redistribution (public domain, CC0, CC BY with attribution) may become committed fixtures; recurring defects become tests with small synthetic or licence-clear fixtures.
+- Per map recorded: URL, licence, dimensions, category, outcome (passes, defect found, refused correctly), defects, fix (importer and validators only, never output patching), the commit that fixed it, time and memory.
+- Current behaviour: not started. Downloading files needs the user's explicit approval in the worker session; requested 2026-10-24.
+- Required capability or improvement: every map either imports to a world that passes inspection and validation, or is refused with an accurate diagnostic; no crash, hang, silent wrong output or unbounded memory.
+- Evidence: the running table below.
+- Impact: confidence that the Aoaz import and every later re-import behave.
+- Acceptance: at least 100 maps run; the last full pass has no unexplained failure; every defect class has a regression test.
+- Status: open
+- Implementation: harness and manifest on the worker's campaign branch (pending)
+- Verification: pending
+- Remaining integration work: none for the lead.
+
+### Reliability table
+
+| #   | Map | Licence | Size | Category | Outcome | Defect | Fix |
+| --- | --- | ------- | ---- | -------- | ------- | ------ | --- |
