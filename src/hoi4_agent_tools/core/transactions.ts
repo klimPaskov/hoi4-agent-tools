@@ -45,7 +45,7 @@ import {
   TRANSACTION_MAX_JOURNAL_BYTES,
   TRANSACTION_MAX_MANIFEST_BYTES,
   TRANSACTION_MAX_OPERATIONS,
-  TRANSACTION_MAX_PENDING_FILES,
+  transactionBatchSize,
   TRANSACTION_MAX_READ_DEPENDENCIES,
   TRANSACTION_MAX_VALIDATION_CHECKS,
 } from './transaction-limits.js';
@@ -455,9 +455,26 @@ export class TransactionManager {
       (input.artifacts?.length ?? 0) > TRANSACTION_MAX_ARTIFACTS ||
       (input.diagnostics?.length ?? 0) > TRANSACTION_MAX_DIAGNOSTICS
     ) {
+      const exceeded = [
+        input.changes.length > TRANSACTION_MAX_FILES
+          ? `${input.changes.length} files (limit ${TRANSACTION_MAX_FILES})`
+          : '',
+        input.operations.length > TRANSACTION_MAX_OPERATIONS
+          ? `${input.operations.length} operations (limit ${TRANSACTION_MAX_OPERATIONS})`
+          : '',
+        (input.readDependencies?.length ?? 0) > TRANSACTION_MAX_READ_DEPENDENCIES
+          ? `${input.readDependencies?.length} read dependencies (limit ${TRANSACTION_MAX_READ_DEPENDENCIES})`
+          : '',
+        (input.artifacts?.length ?? 0) > TRANSACTION_MAX_ARTIFACTS
+          ? `${input.artifacts?.length} artifacts (limit ${TRANSACTION_MAX_ARTIFACTS})`
+          : '',
+        (input.diagnostics?.length ?? 0) > TRANSACTION_MAX_DIAGNOSTICS
+          ? `${input.diagnostics?.length} diagnostics (limit ${TRANSACTION_MAX_DIAGNOSTICS})`
+          : '',
+      ].filter((entry) => entry.length > 0);
       throw new ServiceError(
         'TRANSACTION_STRUCTURE_LIMIT',
-        'Transaction input exceeds the supported review structure limits',
+        `Transaction input exceeds the supported review structure limits: ${exceeded.join(', ')}. Combine operations into fewer entries, or split the change into transactions under the limits`,
         {
           files: input.changes.length,
           filesLimit: TRANSACTION_MAX_FILES,
@@ -857,7 +874,8 @@ export class TransactionManager {
             'integrityHash',
             'authenticationTag',
           ]);
-          const batchSize = manifest.version >= 2 ? TRANSACTION_MAX_PENDING_FILES : 1;
+          const batchSize = manifest.version >= 2 ? transactionBatchSize(manifest.files.length) : 1;
+          let pendingByPath: Map<string, TransactionPendingFile> | undefined;
           for (let offset = 0; offset < manifest.files.length; offset += batchSize) {
             const batch = manifest.files.slice(offset, offset + batchSize);
             if (manifest.version >= 2) {
@@ -892,6 +910,9 @@ export class TransactionManager {
                 return entry.value;
               });
               await this.writeManifest(workspace, manifest, options.hooks, canonicalSnapshot);
+              pendingByPath = new Map(
+                manifest.pendingFiles.map((pending) => [pending.relativePath, pending]),
+              );
               await options.hooks?.afterBatchIntent?.(
                 batch.map(({ relativePath }) => relativePath),
                 offset / batchSize,
@@ -923,9 +944,7 @@ export class TransactionManager {
                   'Source changed while transaction output was being staged',
                 );
               }
-              const pending = manifest.pendingFiles?.find(
-                ({ relativePath }) => relativePath === file.relativePath,
-              );
+              const pending = pendingByPath?.get(file.relativePath);
               if (
                 pending !== undefined &&
                 (!sameFileIdentity(await fileIdentity(target.target), pending.beforeIdentity) ||
