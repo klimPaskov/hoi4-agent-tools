@@ -1,4 +1,4 @@
-# ADR 0064: Workspace fallback for sessions outside every mod
+# ADR 0066: Workspace fallback for sessions outside every mod
 
 ## Context
 
