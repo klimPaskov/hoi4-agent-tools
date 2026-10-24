@@ -171,6 +171,35 @@ describe('natural world province geometry', () => {
     assertTopology(source, output);
   });
 
+  it('keeps the land province count at the requested size on uniformly wet land', () => {
+    // Reference terrain carries moisture 0.45 to 0.96; extra sites once added 50-95% provinces.
+    for (const moisture of [0.05, 0.5, 0.95]) {
+      // Large enough that the sampling cell is not capped at a twentieth of the map.
+      const source = input(2048, 1024);
+      source.landProvincePixels = 400;
+      source.elevation.fill(0.05);
+      source.moisture.fill(moisture);
+      const count = generateWorldProvinces(source).kind.length;
+      const expected = (source.width * source.height) / source.landProvincePixels;
+      expect(count).toBeGreaterThan(expected * 0.9);
+      expect(count).toBeLessThan(expected * 1.1);
+    }
+  });
+
+  it('cuts lakes at the sea province size, not the land size', () => {
+    const source = input(2048, 1024);
+    source.landProvincePixels = 100;
+    source.seaProvincePixels = 2_500;
+    for (let y = 256; y < 768; y++)
+      for (let x = 512; x < 1536; x++) source.kind[y * source.width + x] = 2;
+    const output = generateWorldProvinces(source);
+    const lakes = output.kind.filter((kind) => kind === 2).length;
+    const expected = (512 * 1024) / source.seaProvincePixels;
+    expect(lakes).toBeGreaterThan(expected * 0.7);
+    expect(lakes).toBeLessThan(expected * 1.4);
+    assertTopology(source, output);
+  });
+
   it('rejects invalid dimensions, excessive allocation, mismatched fields and non-finite values', () => {
     const source = input(64, 64);
     expect(() => generateWorldProvinces({ ...source, width: -1 })).toThrow(/dimensions/);

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.3.0/schemas/probability-analysis-result.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.4.0/schemas/probability-analysis-result.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -928,7 +928,10 @@
                       {
                         "type": "string"
                       }
-                    ]
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
                   },
                   "gap": {
                     "type": "number",
@@ -1121,7 +1124,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
               },
               "beforeLeader": {
                 "type": "string"
@@ -1176,7 +1182,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
               },
               "slope": {
                 "type": "number"
@@ -1213,7 +1222,10 @@
                   {
                     "type": "string"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
               },
               "candidateId": {
                 "type": "string"
@@ -1237,7 +1249,10 @@
                       {
                         "type": "number"
                       }
-                    ]
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
                   },
                   "right": {
                     "type": "array",
@@ -1248,7 +1263,10 @@
                       {
                         "type": "number"
                       }
-                    ]
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
                   }
                 },
                 "required": [

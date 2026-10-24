@@ -5560,6 +5560,7 @@ function applyCreateWorld(
   changes: Map<string, MutableChange>,
   operation: CreateWorldOperation,
   context: MapPlanningContext,
+  signal: AbortSignal | undefined,
 ): Diagnostic[] {
   const geography = context.geographyModels?.get(operation.id);
   const hasGeography = operation.geography !== undefined || operation.geographyPath !== undefined;
@@ -5645,6 +5646,8 @@ function applyCreateWorld(
       ...(operation.landPolygons === undefined ? {} : { landPolygons: operation.landPolygons }),
       landProvincePixels: operation.landProvincePixels ?? 400,
       seaProvincePixels: operation.seaProvincePixels ?? 2_500,
+      provinceSizesDefaulted:
+        operation.landProvincePixels === undefined && operation.seaProvincePixels === undefined,
       provincesPerState: operation.provincesPerState ?? (reference === undefined ? 5 : 12),
       landProvincesPerRegion:
         operation.landProvincesPerRegion ?? (reference === undefined ? 25 : 60),
@@ -5710,6 +5713,7 @@ function applyCreateWorld(
         : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
+    { signal },
   );
   const roots =
     operation.replaceBaseGame === false
@@ -6009,7 +6013,7 @@ function* planMapOperationSteps(
     const territoryCheckpoint = territory.length;
     try {
       if (operation.kind === 'create_world')
-        diagnostics.push(...applyCreateWorld(base, changes, operation, context));
+        diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
       else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'assign_territory') {

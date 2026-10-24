@@ -1,7 +1,26 @@
-import { readReferenceImageSource, type ReferenceImageSource } from '../core/bounded-source.js';
+import sharp from 'sharp';
+import {
+  readReferenceImageSource,
+  type ReferenceImageSource,
+  type ReferenceSourceEvidence,
+  type ReferenceWorkingSize,
+} from '../core/bounded-source.js';
 import type { WorkspaceResolver } from '../core/workspace.js';
+import { readWorkspaceJsonSource } from '../core/workspace-json.js';
+import {
+  REFERENCE_SHEETS_SOURCE_MAX_BYTES,
+  referenceSheetsDocumentSchema,
+  type ReferenceSheetsDocument,
+} from '../schemas/reference-sheets.js';
 import { extractReferenceLabels } from './reference-labels.js';
-import { extractReferenceWorld } from './reference-world.js';
+import {
+  registerSheets,
+  sheetAffine,
+  sheetWorkingSize,
+  warpSheets,
+  type WarpedSheets,
+} from './reference-sheets.js';
+import { extractReferenceWorld, type RawReferenceImage } from './reference-world.js';
 import type { CreateWorldOperation, PreparedReferenceWorld } from './operations.js';
 import type { WorldCountry } from './world.js';
 import { ServiceError } from '../core/result.js';
@@ -9,6 +28,55 @@ import { ServiceError } from '../core/result.js';
 export interface LoadedReferenceWorld {
   prepared: PreparedReferenceWorld;
   images: ReferenceImageSource[];
+  /** Other source files read for the reference (a sheet document): read dependencies. */
+  documents: ReferenceSourceEvidence[];
+  /** The registered picture in the world frame, reduced for previews, when sheets were used. */
+  previewBytes?: Buffer;
+  /** Coverage of each registered sheet, when sheets were used. */
+  registration?: Pick<WarpedSheets, 'coverage' | 'uncovered' | 'width' | 'height'>;
+}
+
+const PREVIEW_MAX_SIDE = 3_072;
+
+async function loadSheetsDocument(
+  resolver: WorkspaceResolver,
+  workspaceId: string,
+  reference: NonNullable<CreateWorldOperation['reference']>,
+  principal?: string,
+  signal?: AbortSignal,
+): Promise<{ document: ReferenceSheetsDocument; evidence?: ReferenceSourceEvidence } | undefined> {
+  if (reference.sheets !== undefined) return { document: reference.sheets };
+  if (reference.sheetsPath === undefined) return undefined;
+  const read = await readWorkspaceJsonSource(
+    resolver,
+    workspaceId,
+    reference.sheetsPath,
+    REFERENCE_SHEETS_SOURCE_MAX_BYTES,
+    {
+      pathInvalid: 'MAP_REFERENCE_SHEETS_PATH_INVALID',
+      tooLarge: 'MAP_REFERENCE_SHEETS_TOO_LARGE',
+      jsonInvalid: 'MAP_REFERENCE_SHEETS_JSON_INVALID',
+      label: 'Sheet document',
+    },
+    principal,
+    signal,
+  );
+  const parsed = referenceSheetsDocumentSchema.safeParse(read.value);
+  if (!parsed.success)
+    throw new ServiceError(
+      'MAP_REFERENCE_SHEETS_INVALID',
+      `Sheet document does not match reference-sheets version 1: ${parsed.error.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+        .join('; ')}`,
+      {
+        issues: parsed.error.issues.slice(0, 20).map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      },
+    );
+  return { document: parsed.data, evidence: read.evidence };
 }
 
 /** Analyze only bounded, authorized sources; the transaction retains the original source hashes. */
@@ -22,6 +90,58 @@ export async function prepareReferenceWorld(
   const reference = operation.reference;
   if (reference === undefined)
     throw new ServiceError('MAP_REFERENCE_REQUIRED', 'Reference preparation requires imagePath');
+  const sheetsSource = await loadSheetsDocument(
+    resolver,
+    workspaceId,
+    reference,
+    principal,
+    signal,
+  );
+  const sheeted = sheetsSource !== undefined;
+  const frame = reference.fit === 'frame' || sheeted;
+  const exact = reference.paletteMatch === 'exact';
+  if (
+    sheeted &&
+    (reference.crop !== undefined ||
+      reference.politicalImagePath !== undefined ||
+      reference.terrainImagePath !== undefined ||
+      reference.heightImagePath !== undefined)
+  )
+    throw new ServiceError(
+      'MAP_REFERENCE_SHEETS_UNSUPPORTED',
+      'A registered sheet picture cannot be combined with crop or aligned political, terrain or height pictures yet',
+    );
+  if (frame && (operation.width === undefined || operation.height === undefined))
+    throw new ServiceError(
+      'MAP_REFERENCE_FRAME_SIZE_REQUIRED',
+      'A reference fitted to the frame needs explicit width and height',
+    );
+  // A frame-fitted picture keeps the frame's resolution instead of the default 3,072-pixel
+  // working copy; an exact palette is never resampled between colours.
+  const frameSize = { width: operation.width ?? 0, height: operation.height ?? 0 };
+  // Each sheet keeps at least one working pixel per world pixel; the maps alone decide the size.
+  const working: ReferenceWorkingSize | undefined = sheeted
+    ? {
+        size: () =>
+          sheetWorkingSize(
+            sheetsSource.document.sheets.map((sheet) => sheetAffine(sheet)),
+            frameSize,
+          ),
+        kernel: exact ? 'nearest' : 'area',
+      }
+    : frame
+      ? {
+          size: (originalWidth, originalHeight) => {
+            const cropWidth = reference.crop?.width ?? originalWidth;
+            const cropHeight = reference.crop?.height ?? originalHeight;
+            return {
+              width: Math.ceil((originalWidth * operation.width!) / cropWidth),
+              height: Math.ceil((originalHeight * operation.height!) / cropHeight),
+            };
+          },
+          kernel: exact ? 'nearest' : 'area',
+        }
+      : undefined;
   const images: ReferenceImageSource[] = [];
   const load = async (relativePath: string) => {
     const image = await readReferenceImageSource(
@@ -30,11 +150,56 @@ export async function prepareReferenceWorld(
       relativePath,
       principal,
       signal,
+      working,
     );
     images.push(image);
     return image;
   };
   const main = await load(reference.imagePath);
+  let warped: WarpedSheets | undefined;
+  let picture: RawReferenceImage | undefined;
+  if (sheetsSource !== undefined) {
+    const sheets = registerSheets(sheetsSource.document, frameSize, {
+      width: main.originalWidth,
+      height: main.originalHeight,
+      sha256: main.source.sha256,
+    });
+    const raw = await sharp(main.bytes)
+      .flatten({ background: '#245b82' })
+      .removeAlpha()
+      .toColourspace('srgb')
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    signal?.throwIfAborted();
+    warped = warpSheets(
+      { data: raw.data, width: raw.info.width, height: raw.info.height },
+      sheets,
+      frameSize,
+      {
+        fill: sheetsSource.document.fill,
+        sampling: exact ? 'nearest' : 'bilinear',
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    picture = { data: warped.rgb, width: warped.width, height: warped.height };
+  }
+  if (frame && !sheeted) {
+    const sourceAspect =
+      (reference.crop?.width ?? main.originalWidth) /
+      (reference.crop?.height ?? main.originalHeight);
+    const frameAspect = operation.width! / operation.height!;
+    if (Math.abs(sourceAspect - frameAspect) > frameAspect * 0.01)
+      throw new ServiceError(
+        'MAP_REFERENCE_FRAME_ASPECT',
+        `The reference (${reference.crop?.width ?? main.originalWidth} x ${reference.crop?.height ?? main.originalHeight}) does not have the frame's shape (${operation.width} x ${operation.height}); fitting it would distort the map. Crop or resize the picture, or use the default fit.`,
+        {
+          sourceWidth: reference.crop?.width ?? main.originalWidth,
+          sourceHeight: reference.crop?.height ?? main.originalHeight,
+          width: operation.width,
+          height: operation.height,
+        },
+      );
+  }
   if (
     reference.crop !== undefined &&
     (reference.crop.x + reference.crop.width > main.originalWidth ||
@@ -67,7 +232,25 @@ export async function prepareReferenceWorld(
             Math.round((reference.crop.height * main.workingHeight) / main.originalHeight),
           ),
         };
-  const text = await extractReferenceLabels(main.bytes);
+  // The registered picture, reduced, is what previews show and what text recognition reads.
+  const previewBytes =
+    picture === undefined
+      ? undefined
+      : await sharp(picture.data, {
+          raw: { width: picture.width, height: picture.height, channels: 3 },
+        })
+          .resize({
+            width: PREVIEW_MAX_SIDE,
+            height: PREVIEW_MAX_SIDE,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .png()
+          .toBuffer();
+  // Text recognition masks labels out of heuristic classification; an exact palette has none.
+  const text = exact
+    ? { labels: [], warnings: [] }
+    : await extractReferenceLabels(previewBytes ?? main.bytes);
   signal?.throwIfAborted();
   const textMasks = text.labels
     .slice(0, Math.max(0, 256 - (reference.ignoreMasks?.length ?? 0)))
@@ -83,7 +266,11 @@ export async function prepareReferenceWorld(
         { x: left, y: bottom },
       ];
     });
-  const surface = await extractReferenceWorld(main.bytes, {
+  const uncovered =
+    warped === undefined
+      ? undefined
+      : Uint8Array.from(warped.owner, (owner) => (owner === 255 ? 1 : 0));
+  const surface = await extractReferenceWorld(picture ?? main.bytes, {
     width: operation.width ?? 5_632,
     height: operation.height ?? 2_048,
     seed: operation.seed ?? 1,
@@ -95,6 +282,9 @@ export async function prepareReferenceWorld(
       ? {}
       : { riverAnnotations: reference.riverAnnotations }),
     ...(reference.palette === undefined ? {} : { palette: reference.palette }),
+    ...(frame ? { fit: 'stretch' as const } : {}),
+    ...(exact ? { paletteMatch: 'exact' as const } : {}),
+    ...(uncovered === undefined ? {} : { uncovered }),
     ...(reference.coastDetail === undefined ? {} : { coastDetail: reference.coastDetail }),
     ...(political === undefined ? {} : { politicalImageBytes: political.bytes }),
     ...(terrain === undefined ? {} : { terrainImageBytes: terrain.bytes }),
@@ -154,7 +344,8 @@ export async function prepareReferenceWorld(
     );
   // An explicit review is authoritative, including an empty list. OCR still helps mask ink,
   // but must not reintroduce discarded or uncertain names outside the supplied label set.
-  const automaticText = reference.labels === undefined ? text.labels : [];
+  // Names are never read from a registered drawing: its labels are the owner's to review.
+  const automaticText = reference.labels === undefined && !sheeted ? text.labels : [];
   const labels = automaticText
     .filter(
       ({ text: label }) =>
@@ -320,5 +511,17 @@ export async function prepareReferenceWorld(
       diagnostics: [...new Set(warnings)],
     },
     images,
+    documents: sheetsSource?.evidence === undefined ? [] : [sheetsSource.evidence],
+    ...(previewBytes === undefined ? {} : { previewBytes }),
+    ...(warped === undefined
+      ? {}
+      : {
+          registration: {
+            coverage: warped.coverage,
+            uncovered: warped.uncovered,
+            width: warped.width,
+            height: warped.height,
+          },
+        }),
   };
 }

@@ -1,7 +1,7 @@
 /**
  * The typed interface between terrain synthesis and the stages that read its fields: the
- * feature-aware partition (C9), the border-naturalness metric (C10), climate and biome (C8) and the
- * composite renders (C14). Every field is a plain typed array with its grid size, so a consumer needs
+ * feature-aware partition (ADR 0058), the border-naturalness metric (ADR 0059), climate and biome and the
+ * composite renders. Every field is a plain typed array with its grid size, so a consumer needs
  * no knowledge of how it was made (ADR 0056).
  */
 

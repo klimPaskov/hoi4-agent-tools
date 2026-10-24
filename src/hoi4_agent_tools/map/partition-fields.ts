@@ -4,10 +4,11 @@ import { ServiceError } from '../core/result.js';
  * Inputs of the feature-aware partition (ADR 0058): one byte (or two) per pixel describing the
  * natural lines and the character of the land, in one typed contract. The contract exists so the
  * partition does not care where the numbers come from. `partitionFieldsFromBitmaps` computes a
- * basic version from the height, terrain and river bitmaps a map already has; the relief,
- * hydrology and climate stages (C6, C7, C8) fill the same fields from their float rasters and the
- * geography model (`partitionFieldsFromGeography` adds regions and wall ranges). Only `+ - * /` and
- * `sqrt` are used, so every field is identical on every platform.
+ * basic version from the height, terrain and river bitmaps a map already has; the generator fills
+ * them from its own rasters and, for a geography world, from the synthesised heights, the model
+ * (`partitionFieldsFromGeography` adds regions and wall ranges) and the lines of the synthesis
+ * (`partitionFieldsWithTerrainLines`). Only `+ - * /` and `sqrt` are used, so every field is
+ * identical on every platform.
  */
 
 /** Terrain classes the partition distinguishes; `water` marks pixels that are not land. */
@@ -189,6 +190,35 @@ export function smoothDiagonalContacts(
         changed.push(target);
         found = true;
       }
+    }
+    if (!found) break;
+  }
+  return changed;
+}
+
+/**
+ * Province parts never join across the east-west seam, so a 2x2 window that straddles it holds
+ * four provinces whenever the kind changes vertically on both sides (a coast that crosses the
+ * seam). Make the east column (x = 0) agree with its upper pixel there, one pixel per crossing,
+ * and return the changed pixels.
+ */
+export function repairSeamCorners(
+  kind: Uint8Array,
+  width: number,
+  height: number,
+  maxPasses = 8,
+): number[] {
+  const changed: number[] = [];
+  if (width < 2) return changed;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let found = false;
+    for (let y = 0; y + 1 < height; y++) {
+      const west = y * width + width - 1;
+      const east = y * width;
+      if (kind[west] === kind[west + width] || kind[east] === kind[east + width]) continue;
+      kind[east + width] = kind[east]!;
+      changed.push(east + width);
+      found = true;
     }
     if (!found) break;
   }

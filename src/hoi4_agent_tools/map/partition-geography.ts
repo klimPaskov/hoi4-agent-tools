@@ -1,3 +1,4 @@
+import { ServiceError } from '../core/result.js';
 import {
   forEachPolylinePixel,
   rowStrips,
@@ -5,6 +6,12 @@ import {
   type ResolvedGeography,
 } from './geography/index.js';
 import { PARTITION_KIND, type PartitionFields, type PartitionRegion } from './partition-fields.js';
+import {
+  BARRIER_CREST,
+  BARRIER_FORT_LINE,
+  BARRIER_WALL,
+  type BarrierField,
+} from './relief/fields.js';
 
 /**
  * Geography inputs of the partition (ADR 0058): the named regions and seas of the model become the
@@ -89,4 +96,39 @@ export function partitionFieldsFromGeography(
     });
   }
   return { ...fields, regionId, barrier, regions: table };
+}
+
+/** Strength each model-drawn line of the terrain synthesis gives the partition's barrier plane. */
+const TERRAIN_LINE_STRENGTH: ReadonlyArray<readonly [number, number]> = [
+  [BARRIER_WALL, 255],
+  [BARRIER_FORT_LINE, 180],
+  [BARRIER_CREST, 150],
+];
+
+/**
+ * Return `fields` with the lines the terrain synthesis drew from the model (ADR 0056) raised in
+ * its `barrier` plane: a wall outside its pass gaps at 255 (a hard line no province straddles), a
+ * fort line at 180 and a range crest at 150. Rivers and steep ground are left to the
+ * `riverDistance`, `slope` and `ridge` planes, which already carry them, so they do not count
+ * twice. A stronger value already in the plane is kept.
+ */
+export function partitionFieldsWithTerrainLines(
+  fields: PartitionFields,
+  lines: BarrierField,
+): PartitionFields {
+  const { width, height } = fields;
+  if (lines.width !== width || lines.height !== height)
+    throw new ServiceError(
+      'MAP_PARTITION_FIELDS_INVALID',
+      'The terrain barrier field does not match the partition dimensions',
+      { width, height, barrier: { width: lines.width, height: lines.height } },
+    );
+  const barrier = new Uint8Array(fields.barrier);
+  for (let p = 0; p < barrier.length; p++) {
+    const sources = lines.sources[p]!;
+    if (sources === 0) continue;
+    for (const [flag, strength] of TERRAIN_LINE_STRENGTH)
+      if ((sources & flag) !== 0 && strength > barrier[p]!) barrier[p] = strength;
+  }
+  return { ...fields, barrier };
 }

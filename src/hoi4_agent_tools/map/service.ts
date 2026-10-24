@@ -46,7 +46,13 @@ import {
   type MapOperationPlan,
   type PreparedReferenceWorld,
 } from './operations.js';
-import { prepareReferenceWorld } from './reference-preparation.js';
+import { prepareReferenceWorld, type LoadedReferenceWorld } from './reference-preparation.js';
+import {
+  buildImportArtifacts,
+  buildImportReport,
+  type ImportReport,
+  type PreparedImport,
+} from './reference-import.js';
 import { buildGeographyArtifacts } from './geography/preview.js';
 import {
   operationHasGeography,
@@ -122,6 +128,51 @@ export interface MapRewritePlanInput {
 
 export interface MapRewritePlanResult extends MapPlanResult, StoredMapDiff {}
 
+/**
+ * Evidence of an imported reference: registered sheets, an exact or frame-fitted picture, or a
+ * geography model beside the picture. Plain pictures keep their previous output.
+ */
+function importEvidence(
+  operation: Extract<MapOperation, { kind: 'create_world' }>,
+  loaded: LoadedReferenceWorld,
+  geography: PreparedGeography | undefined,
+): { prepared: PreparedImport; diagnostics: Diagnostic[] } | undefined {
+  const reference = operation.reference;
+  if (
+    reference === undefined ||
+    (loaded.registration === undefined &&
+      geography === undefined &&
+      reference.fit !== 'frame' &&
+      reference.paletteMatch !== 'exact')
+  )
+    return undefined;
+  const seed = operation.seed ?? 1;
+  const built = buildImportReport({
+    operationId: operation.id,
+    surface: loaded.prepared.surface,
+    seed,
+    ...(loaded.registration === undefined ? {} : { registration: loaded.registration }),
+    ...(geography === undefined ? {} : { geography: geography.geography }),
+    ...(reference.agreement === undefined ? {} : { thresholds: reference.agreement }),
+  });
+  return {
+    diagnostics: built.diagnostics,
+    prepared: {
+      report: built.report,
+      surface: loaded.prepared.surface,
+      ...(loaded.previewBytes === undefined ? {} : { registered: loaded.previewBytes }),
+      ...(geography === undefined ? {} : { geography: geography.geography }),
+      seed,
+      sourceHashes: Object.fromEntries(
+        [...loaded.images.map(({ source }) => source), ...loaded.documents].map((evidence) => [
+          evidence.displayPath,
+          evidence.sha256,
+        ]),
+      ),
+    },
+  };
+}
+
 interface PreparedMapOperations {
   snapshot: MapScanSnapshot;
   plan: MapOperationPlan;
@@ -129,6 +180,8 @@ interface PreparedMapOperations {
   referenceImages: Array<{ operationId: string; bytes: Buffer; source: ReferenceSourceEvidence }>;
   geography: PreparedGeography[];
   territory: { reports: TerritoryReport[]; quality: TerritoryQuality | undefined };
+  /** Evidence of imported references: sheets, exact or frame-fitted pictures, or a model beside them. */
+  imports: PreparedImport[];
 }
 
 export interface MapValidationAttributionInput {
@@ -1077,6 +1130,7 @@ export class AgentNudger {
     );
     const referenceWorlds = new Map<string, PreparedReferenceWorld>();
     const referenceImages: PreparedMapOperations['referenceImages'] = [];
+    const referenceLoads = new Map<string, LoadedReferenceWorld>();
     for (const operation of operations) {
       if (operation.kind !== 'create_world' || operation.reference === undefined) continue;
       const loaded = await prepareReferenceWorld(
@@ -1089,16 +1143,18 @@ export class AgentNudger {
       referenceWorlds.set(operation.id, loaded.prepared);
       referenceImages.push({
         operationId: operation.id,
-        bytes: loaded.images[0]!.bytes,
+        // A registered drawing is shown as it lies in the world frame, not as drawn.
+        bytes: loaded.previewBytes ?? loaded.images[0]!.bytes,
         source: loaded.images[0]!.source,
       });
-      for (const image of loaded.images) {
+      referenceLoads.set(operation.id, loaded);
+      for (const evidence of [...loaded.images.map(({ source }) => source), ...loaded.documents]) {
         snapshot.referenceSources ??= [];
         const previous = snapshot.referenceSources.findIndex(
-          (file) => file.displayPath === image.source.displayPath,
+          (file) => file.displayPath === evidence.displayPath,
         );
-        if (previous < 0) snapshot.referenceSources.push(image.source);
-        else snapshot.referenceSources[previous] = image.source;
+        if (previous < 0) snapshot.referenceSources.push(evidence);
+        else snapshot.referenceSources[previous] = evidence;
       }
     }
     const geographyModels = new Map<string, PreparedGeography>();
@@ -1121,6 +1177,18 @@ export class AgentNudger {
         if (previous < 0) snapshot.referenceSources.push(evidence);
         else snapshot.referenceSources[previous] = evidence;
       }
+    }
+    // An imported reference reports what it supplied and how far the model agrees with it.
+    const imports: PreparedImport[] = [];
+    const importDiagnostics: Diagnostic[] = [];
+    for (const operation of operations) {
+      if (operation.kind !== 'create_world') continue;
+      const loaded = referenceLoads.get(operation.id);
+      if (loaded === undefined) continue;
+      const built = importEvidence(operation, loaded, geographyModels.get(operation.id));
+      if (built === undefined) continue;
+      imports.push(built.prepared);
+      importDiagnostics.push(...built.diagnostics);
     }
     snapshot.files.sort(
       (left, right) =>
@@ -1162,6 +1230,7 @@ export class AgentNudger {
           );
       }
     }
+    plan.diagnostics.push(...importDiagnostics);
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
     const freshWorld = newWorld && snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
     const baselineValidation = freshWorld
@@ -1195,6 +1264,7 @@ export class AgentNudger {
       referenceImages,
       geography: [...geographyModels.values()],
       territory: { reports: plan.territory ?? [], quality: territoryQuality },
+      imports,
     };
   }
 
@@ -1485,24 +1555,48 @@ export class AgentNudger {
     signal?: AbortSignal;
   }): Promise<{
     geography: PreparedGeography[];
+    imports: ImportReport[];
+    importDiagnostics: Diagnostic[];
     artifacts: StoredArtifact[];
     filesScanned: string[];
   }> {
     input.signal?.throwIfAborted();
     const geography: PreparedGeography[] = [];
+    const imports: PreparedImport[] = [];
+    const importDiagnostics: Diagnostic[] = [];
+    const referenceFiles: string[] = [];
     for (const operation of input.operations) {
       if (operation.kind !== 'create_world' || !operationHasGeography(operation)) continue;
-      geography.push(
-        await prepareGeography(
-          this.resolver,
-          input.workspaceId,
-          operation,
-          input.principal,
-          input.signal,
+      const prepared = await prepareGeography(
+        this.resolver,
+        input.workspaceId,
+        operation,
+        input.principal,
+        input.signal,
+      );
+      geography.push(prepared);
+      // The drawing beside the model is registered and compared too, without planning a map.
+      if (operation.reference === undefined) continue;
+      const loaded = await prepareReferenceWorld(
+        this.resolver,
+        input.workspaceId,
+        operation,
+        input.principal,
+        input.signal,
+      );
+      referenceFiles.push(
+        ...[...loaded.images.map(({ source }) => source), ...loaded.documents].map(
+          ({ displayPath }) => displayPath,
         ),
       );
+      const built = importEvidence(operation, loaded, prepared);
+      if (built === undefined) continue;
+      imports.push(built.prepared);
+      importDiagnostics.push(...built.diagnostics);
     }
     const writes = await this.geographyArtifacts({ geography }, input.signal, new RenderBudget());
+    for (const [ordinal, imported] of imports.entries())
+      writes.push(...(await buildImportArtifacts(imported, ordinal)));
     const artifacts = await this.artifacts.withAtomicChunkedWrites(
       this.resolver.get(input.workspaceId, input.principal),
       writes,
@@ -1511,10 +1605,15 @@ export class AgentNudger {
     );
     return {
       geography,
+      imports: imports.map(({ report }) => report),
+      importDiagnostics,
       artifacts,
-      filesScanned: geography.flatMap(({ source }) =>
-        source.kind === 'file' ? [source.evidence.displayPath] : [],
-      ),
+      filesScanned: [
+        ...geography.flatMap(({ source }) =>
+          source.kind === 'file' ? [source.evidence.displayPath] : [],
+        ),
+        ...referenceFiles,
+      ],
     };
   }
 
@@ -1781,6 +1880,8 @@ export class AgentNudger {
           schemaVersion: 'map-territory.v1',
         },
       });
+    for (const [ordinal, imported] of prepared.imports.entries())
+      writes.push(...(await buildImportArtifacts(imported, ordinal)));
     const generatedWorlds = generatedWorldOperationIds(plan);
     if (generatedWorlds.size > 0)
       writes.push(

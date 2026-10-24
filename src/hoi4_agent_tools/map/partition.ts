@@ -19,7 +19,7 @@ import type { WorldProvinces } from './world-provinces.js';
  * provinces along its natural lines and returns the provinces, the weighted province graph, the
  * barrier raster and the groupings (geography region and ground class per province) that the
  * state and region clustering reads. World generation calls it, and so can the territory
- * assignment service (C11) to grow countries over the same graph.
+ * assignment service to grow countries over the same graph.
  */
 
 export type PartitionMode = 'legacy' | 'feature-aware';
@@ -41,6 +41,8 @@ export interface WorldPartitionInput {
   fields: PartitionFields;
   tuning: ResolvedPartitionTuning;
   seed: number;
+  /** Checked between the stages and inside the long loops; stops with its reason. */
+  signal?: AbortSignal | undefined;
 }
 
 export interface WorldPartition {
@@ -103,6 +105,7 @@ function majorityPerProvince(
 export function partitionWorld(input: WorldPartitionInput): WorldPartition {
   const { fields } = input;
   const result = partitionProvinces(input);
+  input.signal?.throwIfAborted();
   const { provinces } = result;
   const graph = buildProvinceGraph({
     width: fields.width,
@@ -157,10 +160,12 @@ export function partitionWorldFromRequest(
   seed: number,
   tuning: PartitionTuning | undefined,
   base: Omit<PartitionBase, 'width' | 'height'>,
+  signal?: AbortSignal,
 ): WorldPartition {
   return partitionWorld({
     fields,
     seed,
+    signal,
     tuning: resolvePartitionTuning(tuning, {
       ...base,
       width: fields.width,

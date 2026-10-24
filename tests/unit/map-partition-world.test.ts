@@ -183,15 +183,16 @@ describe('generateWorld with the feature-aware partition', () => {
 
   it('is the legacy world unless it is asked for, and different when asked', () => {
     const legacy = generateWorld(spec(), plainContext);
-    // Pinned from the integration branch before the feature-aware partition existed: a change
-    // here means the legacy partition changed.
+    // Pinned so that any change to the legacy partition is deliberate.
     const pinned = (name: string): string =>
       sha(legacy.files.find((file) => file.relativePath === name)!.content);
+    // Re-pinned for ADR 0068: the legacy partition's extra wet and high land sites now
+    // redistribute landProvincePixels instead of adding to it.
     expect(pinned('map/provinces.bmp')).toBe(
-      'a87bd6c49c9c80e1db16e5af2facb0518a38d6b8c1a74ac3b9ee72f9ae8d6ccc',
+      'd8f61e331547ac574340694bb4f230f102a07e6fc05c4368e0db7ebbbf921f0f',
     );
     expect(pinned('map/definition.csv')).toBe(
-      'e80cadbc7015d9ba5c991e8c5946afff266749b22ece790ce2bb78d6a9c741e4',
+      '9d77e66cfb4df13211fbd1da23a61736daf72b4e75fe6304d02b7cfcc8a7208f',
     );
     const same = generateWorld(spec({ partition: { mode: 'legacy' } }), plainContext);
     expect(same.files.map((f) => sha(f.content))).toEqual(legacy.files.map((f) => sha(f.content)));

@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.3.0/schemas/geography-model.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.4.0/schemas/geography-model.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -197,7 +197,10 @@
             {
               "$ref": "#/$defs/__schema14"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
@@ -371,7 +374,10 @@
                 {
                   "$ref": "#/$defs/__schema22"
                 }
-              ]
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
             },
             "provinceAreaPx": {
               "type": "integer",
@@ -503,7 +509,10 @@
             {
               "$ref": "#/$defs/__schema14"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
@@ -894,7 +903,10 @@
             {
               "$ref": "#/$defs/__schema40"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         },
         "path": {
           "minItems": 2,

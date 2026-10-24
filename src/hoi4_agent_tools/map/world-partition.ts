@@ -10,6 +10,12 @@ import {
   type PartitionTuning,
 } from './partition-tuning.js';
 import type { PartitionMode } from './partition.js';
+import {
+  partitionFieldsFromGeography,
+  partitionFieldsWithTerrainLines,
+} from './partition-geography.js';
+import type { ResolvedGeography } from './geography/index.js';
+import type { TerrainFields } from './relief/fields.js';
 
 /**
  * The generator's side of the partition (ADR 0058): what `create_world` hands the partition when
@@ -50,6 +56,11 @@ export interface SurfacePartitionInput {
   riverPixels: Uint8Array;
   /** Reference terrain codes, when a picture supplied them. */
   referenceTerrain?: Uint8Array;
+  /**
+   * `heightmap.bmp` values, when the terrain synthesis made them (land from 96). Slope and ridge
+   * are then read from them instead of from `elevation`, which stops at height 206.
+   */
+  heights?: Uint8Array;
 }
 
 /** Value below which a share of the land lies, from a coarse histogram (no sort of 13 million). */
@@ -93,7 +104,10 @@ export function surfacePartitionFields(input: SurfacePartitionInput): PartitionF
       continue;
     }
     const value = elevation[p]!;
-    heights[p] = Math.min(255, Math.max(96, Math.round(96 + value * 110)));
+    heights[p] =
+      input.heights === undefined
+        ? Math.min(255, Math.max(96, Math.round(96 + value * 110)))
+        : Math.max(96, input.heights[p]!);
     if (input.referenceTerrain !== undefined) {
       terrain[p] = REFERENCE_CLASSES[input.referenceTerrain[p]!] ?? PARTITION_TERRAIN.plains;
       continue;
@@ -127,6 +141,23 @@ export function surfacePartitionFields(input: SurfacePartitionInput): PartitionF
     terrainClasses: identity,
     moisture: wet,
   });
+}
+
+/**
+ * Partition fields of a world built from a geography model: the surface fields read from the
+ * synthesised heights, with the model's regions, densities and wall ranges
+ * (`partitionFieldsFromGeography`) and the walls, fort lines and crests the synthesis drew
+ * (`partitionFieldsWithTerrainLines`).
+ */
+export function geographyPartitionFields(
+  input: SurfacePartitionInput,
+  geography: ResolvedGeography,
+  terrain: TerrainFields,
+): PartitionFields {
+  return partitionFieldsWithTerrainLines(
+    partitionFieldsFromGeography(surfacePartitionFields(input), geography),
+    terrain.barrier,
+  );
 }
 
 /** A province-count note for the legacy partition and the final check of the feature-aware one. */

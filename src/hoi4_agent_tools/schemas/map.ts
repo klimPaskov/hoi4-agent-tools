@@ -3,6 +3,7 @@ import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-b
 import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
 import { workspaceRelativePathSchema } from './common.js';
 import { geographyModelSchema, geographyPathSchema } from './geography.js';
+import { referenceSheetsDocumentSchema, referenceSheetsPathSchema } from './reference-sheets.js';
 
 const identifier = z.string().min(1).max(256);
 // eslint-disable-next-line no-control-regex -- portable JSON Schema pattern rejects grammar-breaking controls.
@@ -82,6 +83,38 @@ export const worldReferenceSchema = z
       .max(64)
       .optional(),
     coastDetail: z.number().min(0).max(1).optional(),
+    paletteMatch: z
+      .enum(['nearest', 'exact'])
+      .optional()
+      .describe(
+        'nearest (default) snaps every pixel to the closest palette colour. exact requires every pixel to equal a palette colour, trusts the classes as painted (no text masking, cleanup, smoothing or political inference) and fails with MAP_REFERENCE_PALETTE_UNKNOWN_COLOR naming any other colour, its count and source pixels.',
+      ),
+    sheets: referenceSheetsDocumentSchema
+      .optional()
+      .describe(
+        'Registration of a picture made of drawn sheets onto the world frame (inline; use sheetsPath for a file). Each sheet maps its part of the picture with anchor, target and scale (or affine); the registered picture is read at the resolution the sheets need and every layer derives from it. Implies fit frame; width and height are required. Annotations, masks, labels and cities then use world coordinates.',
+      ),
+    agreement: z
+      .object({
+        minLandIou: z.number().min(0).max(1).optional(),
+        warnLandIou: z.number().min(0).max(1).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'With a geography model: land intersection over union between the model and this reference below minLandIou (default 0.85) blocks the write with MAP_IMPORT_SOURCES_DISAGREE; below warnLandIou (default 0.95) it is a warning. The measured value is always in map-import-report.json.',
+      ),
+    sheetsPath: referenceSheetsPathSchema
+      .optional()
+      .describe(
+        'Workspace-relative .json file holding the sheet registration (reference-sheets version 1).',
+      ),
+    fit: z
+      .enum(['contain', 'frame'])
+      .optional()
+      .describe(
+        'contain (default) centres the picture with sea padding at a working size of at most 3,072 pixels per side. frame maps the picture (or its crop) onto exactly width x height, which must be given and have the same shape within 1%, and reads it at the frame resolution.',
+      ),
     labels: z
       .array(
         z
@@ -113,6 +146,19 @@ export const worldReferenceSchema = z
       .optional(),
   })
   .strict()
+  .refine((value) => value.paletteMatch !== 'exact' || (value.palette?.length ?? 0) > 0, {
+    path: ['palette'],
+    message: 'paletteMatch "exact" needs a palette that lists every colour of the picture',
+  })
+  .refine((value) => value.sheets === undefined || value.sheetsPath === undefined, {
+    path: ['sheetsPath'],
+    message: 'Give the sheets inline (sheets) or by file (sheetsPath), not both',
+  })
+  .refine(
+    (value) =>
+      (value.sheets === undefined && value.sheetsPath === undefined) || value.fit !== 'contain',
+    { path: ['fit'], message: 'Registered sheets always fill the frame; omit fit or use "frame"' },
+  )
   .describe(
     'Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement.',
   );
@@ -1038,6 +1084,17 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       {
         path: ['geographyPath'],
         message: 'Give the geography inline (geography) or by file (geographyPath), not both',
+      },
+    )
+    .refine(
+      (operation) =>
+        (operation.reference?.fit !== 'frame' &&
+          operation.reference?.sheets === undefined &&
+          operation.reference?.sheetsPath === undefined) ||
+        (operation.width !== undefined && operation.height !== undefined),
+      {
+        path: ['reference', 'fit'],
+        message: 'reference.fit "frame" and registered sheets need explicit width and height',
       },
     ),
   z
