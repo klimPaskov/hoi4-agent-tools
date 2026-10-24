@@ -148,6 +148,28 @@ export function buildTerritoryProvinceGraph(table: BorderEdgeTable): TerritoryPr
 }
 
 /**
+ * The province graph of a partition (ADR 0058) as a territory province graph: its mean barrier
+ * strength per border gives the natural length (a border at full strength counts as natural).
+ * Used when the border edge table does not exist yet, as during world generation.
+ */
+export function territoryGraphFromPartition(
+  graph: ProvinceGraph,
+  sumX: ArrayLike<number>,
+  sumY: ArrayLike<number>,
+): Pick<TerritoryProvinceGraph, 'graph' | 'credit' | 'sumX' | 'sumY' | 'size'> {
+  const credit = new Float32Array(graph.to.length);
+  for (let slot = 0; slot < credit.length; slot += 1)
+    credit[slot] = graph.length[slot]! * Math.min(1, graph.barrier[slot]! * 1.25);
+  return {
+    graph,
+    credit,
+    sumX: Float64Array.from({ length: graph.count }, (_, i) => sumX[i]!),
+    sumY: Float64Array.from({ length: graph.count }, (_, i) => sumY[i]!),
+    size: graph.size,
+  };
+}
+
+/**
  * The units countries are made of: land provinces, or the land provinces of states. An atom graph
  * has the shape of a `ProvinceGraph` (every atom is land) with the natural length of every border.
  */
@@ -169,7 +191,7 @@ export interface TerritoryAtoms {
  * be land and appear once. `region` is optional and gives the group id of each atom.
  */
 export function buildTerritoryAtoms(
-  base: TerritoryProvinceGraph,
+  base: Pick<TerritoryProvinceGraph, 'graph' | 'credit' | 'sumX' | 'sumY' | 'size'>,
   groups: readonly (readonly number[])[],
   region?: Int32Array,
 ): TerritoryAtoms {

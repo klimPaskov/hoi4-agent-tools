@@ -17,6 +17,8 @@ import {
   type WorldPartition,
 } from './partition.js';
 import { smoothDiagonalContacts } from './partition-fields.js';
+import { buildTerritoryAtoms, territoryGraphFromPartition } from './territory-graph.js';
+import { growTerritory } from './territory.js';
 import {
   provinceCountNote,
   surfacePartitionFields,
@@ -1116,7 +1118,27 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     if (!referenceOwners.has(capital)) owned[index]! += provinces.size[capital]!;
     return [...provinces.neighbors[capital]!];
   });
-  for (;;) {
+  let grownByTerritory = false;
+  if (featurePartition !== undefined && referenceOwners.size === 0) {
+    // The feature-aware partition grows countries along its natural lines (ADR 0060).
+    const atoms = buildTerritoryAtoms(
+      territoryGraphFromPartition(featurePartition.graph, provinces.sumX, provinces.sumY),
+      landIds.map((id) => [id]),
+    );
+    const grown = growTerritory(
+      atoms,
+      spec.countries.map((country, index) => ({
+        tag: country.tag,
+        weight: shares[index]!,
+        seeds: [atoms.atomOfProvince[capitals[index]!]!],
+      })),
+      { seed: spec.seed },
+    );
+    for (const [atom, id] of landIds.entries())
+      if (grown.owner[atom]! >= 0) owner.set(id, grown.owner[atom]!);
+    grownByTerritory = true;
+  }
+  while (!grownByTerritory) {
     let chosen = -1;
     for (let index = 0; index < countryCount; index += 1) {
       frontiers[index] = frontiers[index]!.filter(
