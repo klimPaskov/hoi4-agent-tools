@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import type { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { resolveOperationWorkspaceForSource } from '../../src/hoi4_agent_tools/core/operation-context.js';
+import { ServiceError } from '../../src/hoi4_agent_tools/core/result.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 
 const FOCUS = 'common/national_focus/only_here.txt';
@@ -38,7 +39,12 @@ describe('implicit workspace resolution outside every mod', () => {
     const resolver = await WorkspaceResolver.create(configuration);
     const ids = resolver.list().map(({ id }) => id);
 
-    const failure = await resolver.resolveClientWorkspaceId([outside]).catch((error) => error);
+    const failure = await resolver
+      .resolveClientWorkspaceId([outside])
+      .then(() => undefined)
+      .catch((error: unknown) => error as ServiceError);
+    expect(failure).toBeInstanceOf(ServiceError);
+    if (failure === undefined) return;
     expect(failure).toMatchObject({
       code: 'WORKSPACE_CONTEXT_NOT_FOUND',
       details: { workspaceIds: ids, workspaceNames: ['alpha', 'beta'], workspaceCount: 2 },
