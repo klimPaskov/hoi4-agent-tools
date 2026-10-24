@@ -50,7 +50,9 @@ const baseWorld: CreateWorldOperation = {
   provincesPerState: 4,
 };
 
-function workspaceWorld(countries: CreateWorldOperation['countries']): CreateWorldOperation {
+function workspaceWorld(
+  countries: NonNullable<CreateWorldOperation['countries']>,
+): CreateWorldOperation {
   return { ...baseWorld, countries };
 }
 
