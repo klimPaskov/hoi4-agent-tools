@@ -44,6 +44,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 | ZR-2 | Import of the owner's drawn map                                                                 | P0 design, P1 implementation | in progress (steps 1 and 2 implemented on `claude/zr2-import`; release 4.4.0 after PR 36 merges) |
 | ZR-3 | PR 36 review findings (geography partition fields, heights after coast smoothing, cancellation) | P1                           | in review (fixes on `claude/pr36-fixes`, full check running)                                     |
 | ZR-4 | Reliability campaign: at least 100 web maps through the import                                  | P1                           | in progress (15 of 144 run; 5 defect classes diagnosed)                                          |
+| ZR-5 | Whole-mod content apply exceeds the 5,000-file transaction limit                                | P1                           | open (investigating)                                                                             |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -108,6 +109,23 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 - Implementation: branch `claude/pr36-fixes` (from PR 36), pushed to the PR branch after `npm run check`.
 - Verification: pending
 - Remaining integration work: none for the lead until the release.
+
+## ZR-5: Whole-mod content apply exceeds the 5,000-file transaction limit
+
+- Opened: 2026-10-24 by lead
+- Priority: P1
+- ZIN task: applying the integrated content build to the mod (R-0c, every game file through the shared atomic rewrite engine).
+- Tool or workflow: `TransactionManager.plan` in `src/hoi4_agent_tools/core/transactions.ts` (line 458), called by the mod's `tools/content/apply.mts` line 94 with one operation covering the whole staged tree.
+- Inputs and reproduction: mod `zin` at `3f755f1` (master), `cd tools && node --import tsx content/apply.mts apply` with the tool's main checkout on `claude/zin-map-pipeline-phase1`; the plan writes 4,693 files and deletes 358.
+- Current behaviour: `ServiceError TRANSACTION_STRUCTURE_LIMIT`, details `files: 5051, filesLimit: 5000` (operations 1 of 1000).
+- Required capability or improvement: one atomic transaction carries a whole-mod content apply of this size and larger (the content tree will pass 8,000 files), by raising the file limit with a measured memory and time cost or by a supported chunked or streamed transaction that still commits or rolls back atomically; the error names the remedy.
+- Evidence: the error object above.
+- Impact: the integrated build cannot be applied in one transaction; the lead's stopgap splits the apply into atomic transactions of at most 4,500 files, losing all-or-nothing behaviour across the whole apply.
+- Acceptance: `apply.mts apply` with 5,051 and with 12,000 files commits atomically in one transaction (or a documented atomic chunked mode), rolls back fully on an injected failure, with a test at the limit and above it, and timings recorded.
+- Status: open (investigating)
+- Implementation: pending
+- Verification: pending
+- Remaining integration work: none yet; the lead keeps the split apply as a stopgap.
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
