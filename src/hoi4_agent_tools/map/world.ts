@@ -52,6 +52,7 @@ import type { ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import { synthesizeTerrain, type SynthesizedTerrain } from './relief/terrain-synthesis.js';
 import type { ReliefSettings } from './relief/macro-relief.js';
+import { assignUnreachedRealmLand, resolveRealmRules } from './world-realms.js';
 
 export interface WorldCountry {
   tag: string;
@@ -61,6 +62,38 @@ export interface WorldCountry {
   /** Relative share of the land; default 1. */
   share?: number;
   ideology?: 'democratic' | 'communism' | 'fascism' | 'neutrality';
+}
+
+interface WorldPoint {
+  x: number;
+  y: number;
+}
+type WorldPolygon = ReadonlyArray<WorldPoint>;
+
+/** A country the workspace owns: the world places it and writes none of its country files. */
+export interface WorldRealm {
+  tag: string;
+  capital: WorldPoint;
+  seeds?: readonly WorldPoint[] | undefined;
+  claim?: readonly WorldPolygon[] | undefined;
+  exclude?: readonly WorldPolygon[] | undefined;
+}
+
+/** Workspace-owned countries (ADR 0069); `countries` then carries their tags, names and weights. */
+export interface WorldRealms {
+  list: readonly WorldRealm[];
+  unowned?: readonly WorldPolygon[];
+  islands?: 'nearest' | 'one-owner' | 'unowned';
+}
+
+export interface WorldRealmSummary {
+  tag: string;
+  capitalState: number;
+  capitalProvince: number;
+  states: number[];
+  provinces: number;
+  landShare: number;
+  targetShare: number;
 }
 
 export interface WorldSpec {
@@ -84,6 +117,8 @@ export interface WorldSpec {
   landProvincesPerRegion: number;
   seaProvincesPerRegion: number;
   countries: readonly WorldCountry[];
+  /** When present the workspace owns the countries; `countries` lists them in the same order. */
+  realms?: WorldRealms;
   continentNames?: readonly string[];
   startDate: string;
   rivers: number;
@@ -179,6 +214,8 @@ export interface GeneratedWorld {
     countries: number;
     rivers: number;
   };
+  /** Workspace-owned countries and the states nobody owns (ADR 0069). */
+  realms?: { countries: WorldRealmSummary[]; unownedStates: number[] };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -662,7 +699,8 @@ function weatherBlock(signedLatitude: number, desert: boolean): string {
 interface StateDraft {
   id: number;
   provinces: number[];
-  owner: string;
+  /** Absent for land no workspace country owns. */
+  owner?: string;
   region: number;
   capital: number;
   manpower: number;
@@ -1077,7 +1115,11 @@ export function generateWorld(
   const countryCount = spec.countries.length;
   const interpretationWarnings: string[] = [];
   const referenceOwners = new Map<number, number>();
-  if (reference?.inferredCountries.length === countryCount && countryCount > 1) {
+  if (
+    spec.realms === undefined &&
+    reference?.inferredCountries.length === countryCount &&
+    countryCount > 1
+  ) {
     const indexes = new Map<number, number>();
     const unresolved: number[] = [];
     for (const [index, country] of spec.countries.entries()) {
@@ -1175,6 +1217,17 @@ export function generateWorld(
   const largest = [...landIds].sort(
     (left, right) => provinces.size[right]! - provinces.size[left]! || left - right,
   );
+  const realmRules =
+    spec.realms === undefined
+      ? undefined
+      : resolveRealmRules(spec.realms, {
+          width,
+          height,
+          pixelProvince: provinces.pixel,
+          provinceSize: provinces.size,
+          isLand: (id) => provinces.kind[id] === LAND,
+        });
+  if (realmRules !== undefined) capitals.push(...realmRules.capitals);
   while (capitals.length < countryCount) {
     const countryIndex = capitals.length;
     const regionCandidates = largest.filter(
@@ -1216,18 +1269,26 @@ export function generateWorld(
   }
   const shares = spec.countries.map((country) => Math.max(0.05, country.share ?? 1));
   const owned = new Array<number>(countryCount).fill(0);
-  for (const [id, country] of referenceOwners) {
+  for (const [id, country] of realmRules?.forced ?? referenceOwners) {
     owner.set(id, country);
     owned[country]! += provinces.size[id]!;
   }
+  const unownedLand = realmRules?.unowned ?? new Set<number>();
+  const blockedFor = (index: number, id: number) =>
+    unownedLand.has(id) || realmRules?.excluded[index]!.has(id) === true;
   const frontiers = capitals.map((capital, index) => {
+    if (!owner.has(capital)) owned[index]! += provinces.size[capital]!;
     owner.set(capital, index);
-    if (!referenceOwners.has(capital)) owned[index]! += provinces.size[capital]!;
+    if (realmRules !== undefined)
+      return [...owner]
+        .filter(([, country]) => country === index)
+        .flatMap(([id]) => [...provinces.neighbors[id]!]);
     return [...provinces.neighbors[capital]!];
   });
   let grownByTerritory = false;
-  if (featurePartition !== undefined && referenceOwners.size === 0) {
-    // The feature-aware partition grows countries along its natural lines (ADR 0060).
+  // The feature-aware partition grows generated countries along its natural lines (ADR 0060).
+  // Workspace-owned countries keep the realm growth with its forced and blocked land (ADR 0069).
+  if (featurePartition !== undefined && referenceOwners.size === 0 && realmRules === undefined) {
     const atoms = buildTerritoryAtoms(
       territoryGraphFromPartition(featurePartition.graph, provinces.sumX, provinces.sumY),
       landIds.map((id) => [id]),
@@ -1249,7 +1310,7 @@ export function generateWorld(
     let chosen = -1;
     for (let index = 0; index < countryCount; index += 1) {
       frontiers[index] = frontiers[index]!.filter(
-        (id) => provinces.kind[id] === LAND && !owner.has(id),
+        (id) => provinces.kind[id] === LAND && !owner.has(id) && !blockedFor(index, id),
       );
       if (frontiers[index]!.length === 0) continue;
       if (chosen < 0 || owned[index]! / shares[index]! < owned[chosen]! / shares[chosen]!)
@@ -1263,9 +1324,21 @@ export function generateWorld(
     for (const neighbor of provinces.neighbors[next]!)
       if (!owner.has(neighbor)) frontier.push(neighbor);
   }
+  // Land no workspace country reached follows the island rule; the rest of the land is unowned.
+  if (realmRules !== undefined)
+    assignUnreachedRealmLand({
+      landIds,
+      owner,
+      unowned: unownedLand,
+      capitals,
+      excluded: realmRules.excluded,
+      islands: spec.realms?.islands ?? 'nearest',
+      part: (id) => landParts.get(id)!,
+      center,
+    });
   // Islands no country reached go to the nearest capital's country.
   for (const id of landIds)
-    if (!owner.has(id)) {
+    if (!owner.has(id) && !unownedLand.has(id)) {
       const c = center(id);
       let best = 0;
       for (const [index, capital] of capitals.entries())
@@ -1306,7 +1379,7 @@ export function generateWorld(
   // States: within each region and country, clusters of about provincesPerState.
   const groups = new Map<string, number[]>();
   for (const id of landIds) {
-    const key = `${regionOf.get(id)}:${owner.get(id)}`;
+    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}`;
     const list = groups.get(key) ?? [];
     list.push(id);
     groups.set(key, list);
@@ -1335,7 +1408,7 @@ export function generateWorld(
       const draft: StateDraft = {
         id: states.length + 1,
         provinces: sorted,
-        owner: spec.countries[countryIndex]!.tag,
+        ...(countryIndex < 0 ? {} : { owner: spec.countries[countryIndex]!.tag }),
         region,
         capital: sorted[0]!,
         manpower: 0,
@@ -1397,7 +1470,7 @@ export function generateWorld(
           }[terrain.get(id) ?? 'plains'] ?? 0.5;
         return sum + value * provinces.size[id]!;
       }, 0) / pixels;
-    const isCapital = countryCapitalState.get(state.owner) === state;
+    const isCapital = state.owner !== undefined && countryCapitalState.get(state.owner) === state;
     const development = Math.min(1, habitability * (0.5 + random.next()) * (isCapital ? 1.8 : 1));
     state.manpower = Math.max(1_000, Math.round((pixels * 180 * development) / 1_000) * 1_000);
     const categoryIndex = Math.max(
@@ -1512,6 +1585,8 @@ export function generateWorld(
   const add = (relativePath: string, content: Buffer, mediaType = 'text/plain') =>
     files.push({ relativePath, content, mediaType });
   const countryNames = new Map(spec.countries.map(({ tag, name }) => [tag, name]));
+  const ownerName = (state: StateDraft) =>
+    state.owner === undefined ? 'Free Land' : (countryNames.get(state.owner) ?? state.owner);
   const map = context.mapRoot;
   // provinces.bmp
   const rgb = new Array<RgbColor>(width * height);
@@ -2014,8 +2089,9 @@ export function generateWorld(
                 `\tresources = {\n${resources.map(([resource, amount]) => `\t\t${resource} = ${amount}`).join('\n')}\n\t}`,
               ]),
           '\thistory = {',
-          `\t\towner = ${state.owner}`,
-          `\t\tadd_core_of = ${state.owner}`,
+          ...(state.owner === undefined
+            ? []
+            : [`\t\towner = ${state.owner}`, `\t\tadd_core_of = ${state.owner}`]),
           ...[...state.victoryPoints].map(
             ([id, value]) => `\t\tvictory_points = { ${provinceId(id)} ${value} }`,
           ),
@@ -2034,7 +2110,8 @@ export function generateWorld(
   const countryLocalisation: Array<readonly [string, string]> = [];
   const countryLines: string[] = [];
   const countryColors: string[] = [];
-  for (const [index, country] of spec.countries.entries()) {
+  // Workspace-owned countries keep their own tags, files, histories, flags and names.
+  for (const [index, country] of (spec.realms === undefined ? spec.countries : []).entries()) {
     const color = country.color ?? {
       r: 60 + random.int(170),
       g: 60 + random.int(170),
@@ -2167,10 +2244,12 @@ export function generateWorld(
       );
     void index;
   }
-  add('common/country_tags/zz_world_countries.txt', text(`${countryLines.join('\n')}\n`));
-  add('common/countries/colors.txt', text(`${countryColors.join('\n')}\n`));
+  if (spec.realms === undefined) {
+    add('common/country_tags/zz_world_countries.txt', text(`${countryLines.join('\n')}\n`));
+    add('common/countries/colors.txt', text(`${countryColors.join('\n')}\n`));
+  }
   if (spec.startingScenario) {
-    for (const tag of context.inheritedCountryTags ?? [])
+    for (const tag of spec.realms === undefined ? (context.inheritedCountryTags ?? []) : [])
       if (!countryNames.has(tag))
         add(
           `history/countries/${tag} - inactive world.txt`,
@@ -2201,31 +2280,56 @@ export function generateWorld(
           .filter((state) => state.owner === left.tag)
           .reduce((sum, state) => sum + state.manpower, 0) || (left.tag < right.tag ? -1 : 1),
   );
-  const majors = ranked.slice(0, Math.min(7, ranked.length));
-  add(
-    'common/bookmarks/world.txt',
-    text(
-      [
-        'bookmarks = {',
-        '\tbookmark = {',
-        '\t\tname = "WORLD_BOOKMARK_NAME"',
-        '\t\tdesc = "WORLD_BOOKMARK_DESC"',
-        `\t\tdate = ${spec.startDate}.12`,
-        '\t\tpicture = "GFX_select_date_1936"',
-        `\t\tdefault_country = "${majors[0]!.tag}"`,
-        '\t\tdefault = yes',
-        ...majors.map(
-          (country) =>
-            `\t\t"${country.tag}" = {\n\t\t\thistory = "${country.tag}_WORLD_DESC"\n\t\t\tideology = ${country.ideology ?? 'neutrality'}\n\t\t}`,
-        ),
-        '\t\t"---" = {\n\t\t\thistory = "WORLD_OTHER_DESC"\n\t\t}',
-        '\t\teffect = {\n\t\t\trandomize_weather = 22345\n\t\t}',
-        '\t}',
-        '}',
-        '',
-      ].join('\n'),
-    ),
-  );
+  const majors = spec.realms === undefined ? ranked.slice(0, Math.min(7, ranked.length)) : [];
+  if (spec.realms === undefined)
+    add(
+      'common/bookmarks/world.txt',
+      text(
+        [
+          'bookmarks = {',
+          '\tbookmark = {',
+          '\t\tname = "WORLD_BOOKMARK_NAME"',
+          '\t\tdesc = "WORLD_BOOKMARK_DESC"',
+          `\t\tdate = ${spec.startDate}.12`,
+          '\t\tpicture = "GFX_select_date_1936"',
+          `\t\tdefault_country = "${majors[0]!.tag}"`,
+          '\t\tdefault = yes',
+          ...majors.map(
+            (country) =>
+              `\t\t"${country.tag}" = {\n\t\t\thistory = "${country.tag}_WORLD_DESC"\n\t\t\tideology = ${country.ideology ?? 'neutrality'}\n\t\t}`,
+          ),
+          '\t\t"---" = {\n\t\t\thistory = "WORLD_OTHER_DESC"\n\t\t}',
+          '\t\teffect = {\n\t\t\trandomize_weather = 22345\n\t\t}',
+          '\t}',
+          '}',
+          '',
+        ].join('\n'),
+      ),
+    );
+  const realmSummary = () => {
+    const landPixels = landIds.reduce((sum, id) => sum + provinces.size[id]!, 0);
+    const weights = spec.countries.reduce((sum, country) => sum + (country.share ?? 1), 0);
+    return {
+      countries: spec.countries.map((country, index) => {
+        const ownedStates = states.filter((state) => state.owner === country.tag);
+        const pixels = ownedStates.reduce(
+          (sum, state) =>
+            sum + state.provinces.reduce((inner, id) => inner + provinces.size[id]!, 0),
+          0,
+        );
+        return {
+          tag: country.tag,
+          capitalState: countryCapitalState.get(country.tag)!.id,
+          capitalProvince: provinceId(capitals[index]!),
+          states: ownedStates.map(({ id }) => id),
+          provinces: ownedStates.reduce((sum, state) => sum + state.provinces.length, 0),
+          landShare: Math.round((pixels / landPixels) * 10_000) / 10_000,
+          targetShare: Math.round(((country.share ?? 1) / weights) * 10_000) / 10_000,
+        };
+      }),
+      unownedStates: states.filter((state) => state.owner === undefined).map(({ id }) => id),
+    };
+  };
   // Localisation for everything named above.
   add(
     `${context.localisationRoot}/replace/world_l_english.yml`,
@@ -2234,8 +2338,7 @@ export function generateWorld(
         (state) =>
           [
             `STATE_${state.id}`,
-            stateNames.get(state.id) ??
-              `${countryNames.get(state.owner) ?? state.owner} District ${state.id}`,
+            stateNames.get(state.id) ?? `${ownerName(state)} District ${state.id}`,
           ] as const,
       ),
       ...states.flatMap((state) =>
@@ -2243,8 +2346,7 @@ export function generateWorld(
           (id) =>
             [
               `VICTORY_POINTS_${provinceId(id)}`,
-              cityNames.get(id) ??
-                `${countryNames.get(state.owner) ?? state.owner} Settlement ${provinceId(id)}`,
+              cityNames.get(id) ?? `${ownerName(state)} Settlement ${provinceId(id)}`,
             ] as const,
         ),
       ),
@@ -2259,9 +2361,13 @@ export function generateWorld(
       ),
       ...continentNames.map((name, index) => [`world_continent_${index + 1}`, name] as const),
       ...countryLocalisation,
-      ['WORLD_BOOKMARK_NAME', spec.worldName ?? 'A New World'],
-      ['WORLD_BOOKMARK_DESC', 'Nations of an unfamiliar map at the dawn of the war.'],
-      ['WORLD_OTHER_DESC', 'Any other nation of this world.'],
+      ...(spec.realms === undefined
+        ? ([
+            ['WORLD_BOOKMARK_NAME', spec.worldName ?? 'A New World'],
+            ['WORLD_BOOKMARK_DESC', 'Nations of an unfamiliar map at the dawn of the war.'],
+            ['WORLD_OTHER_DESC', 'Any other nation of this world.'],
+          ] as const)
+        : []),
       ...majors.map(
         (country) =>
           [
@@ -2288,5 +2394,6 @@ export function generateWorld(
       countries: spec.countries.length,
       rivers: riverCount,
     },
+    ...(spec.realms === undefined ? {} : { realms: realmSummary() }),
   };
 }

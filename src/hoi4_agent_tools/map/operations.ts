@@ -47,12 +47,17 @@ import {
   type WeatherPositionRecord,
 } from './model.js';
 import { planReferenceRemap, ReferenceRemapError } from './references.js';
-import { generateWorld, type WorldCountry } from './world.js';
+import { generateWorld, type GeneratedWorld, type WorldCountry } from './world.js';
 import type { ColourClass } from './colormap.js';
 import { resolveEdge } from './world-edge.js';
 import { planMapPositions, planSupplyRebuild } from './derived.js';
-import { buildWorldContext } from './world-context.js';
-import { reconcileWorldOutputs } from './world-outputs.js';
+import {
+  buildWorldContext,
+  countryTagCatalog,
+  type CountryTagCatalog,
+  WORLD_COUNTRY_TAG_FILE,
+} from './world-context.js';
+import { planWorldOutputs } from './world-outputs.js';
 import { resolvePartitionMode } from './partition.js';
 import {
   applyAssignTerritory,
@@ -70,6 +75,7 @@ import type {
   WorldPartitionInput,
   WorldPartitionTuningInput,
   WorldReferenceInput,
+  WorkspaceCountriesInput,
 } from '../schemas/map.js';
 import type { GeographyModelInput } from '../schemas/geography.js';
 import type { PreparedGeography } from './geography/preparation.js';
@@ -497,7 +503,7 @@ export interface CreateWorldOperation extends MapOperationBase {
   provincesPerState?: number;
   landProvincesPerRegion?: number;
   seaProvincesPerRegion?: number;
-  countries?: WorldCountry[];
+  countries?: WorldCountry[] | WorkspaceCountriesInput;
   reference?: WorldReferenceInput;
   geography?: GeographyModelInput;
   geographyPath?: string;
@@ -623,7 +629,21 @@ export interface MapOperationPlan {
   operations: { id: string; kind: string; summary: string; data: Record<string, unknown> }[];
   /** Reports of the territory operations in the request, in order. */
   territory?: TerritoryReport[];
+  /** Managed outputs of each generated world: written, retired and released paths. */
+  worldOutputs?: WorldOutputReport[];
 }
+
+export interface WorldOutputReport {
+  operationId: string;
+  written: string[];
+  retired: string[];
+  released: string[];
+  /** Workspace-owned countries the world placed and the states nobody owns (ADR 0069). */
+  realms?: NonNullable<GeneratedWorld['realms']>;
+}
+
+/** Paths listed per kind in diagnostics and tool results; the artifact lists them all. */
+export const WORLD_OUTPUT_PATH_SAMPLE = 200;
 
 export interface MutableChange {
   relativePath: string;
@@ -1622,6 +1642,7 @@ function proposedChanges(changes: ReadonlyMap<string, MutableChange>): ProposedF
 export const diagnosticsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, Diagnostic[]>();
 
 const replacedRootsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, readonly string[]>();
+const worldOutputsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, WorldOutputReport>();
 
 export function currentIndex(
   base: MapWorkspaceIndex,
@@ -5623,6 +5644,29 @@ function applyCreateWorld(
       'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
       'look selects a calibrated palette; remove colormap.profile "legacy" or look',
     );
+  const workspaceCountries =
+    operation.countries !== undefined && !Array.isArray(operation.countries)
+      ? operation.countries
+      : undefined;
+  const tagCatalog = countryTagCatalog(base);
+  if (workspaceCountries !== undefined) {
+    const declared = new Set(tagCatalog.static);
+    const dynamicTags = new Set(tagCatalog.dynamic);
+    for (const realm of workspaceCountries.realms) {
+      if (dynamicTags.has(realm.tag))
+        throw new ServiceError(
+          'MAP_WORLD_REALM_TAG_DYNAMIC',
+          `${realm.tag} is a dynamic tag; a world can only place countries with static tags`,
+          { tag: realm.tag },
+        );
+      if (!declared.has(realm.tag))
+        throw new ServiceError(
+          'MAP_WORLD_REALM_TAG_UNKNOWN',
+          `No active common/country_tags file other than the generated world's declares ${realm.tag}`,
+          { tag: realm.tag },
+        );
+    }
+  }
   const partitionMode = resolvePartitionMode(operation.partition, hasGeography);
   if (partitionMode === 'legacy' && operation.partitionTuning !== undefined)
     throw new ServiceError(
@@ -5652,13 +5696,29 @@ function applyCreateWorld(
       landProvincesPerRegion:
         operation.landProvincesPerRegion ?? (reference === undefined ? 25 : 60),
       seaProvincesPerRegion: operation.seaProvincesPerRegion ?? (reference === undefined ? 10 : 30),
-      countries: operation.countries ??
+      countries: workspaceCountries?.realms.map((realm) => ({
+        tag: realm.tag,
+        name: realm.tag,
+        ...(realm.weight === undefined ? {} : { share: realm.weight }),
+      })) ??
+        (operation.countries as WorldCountry[] | undefined) ??
         reference?.countries ?? [
           { tag: 'X01', name: 'Aster' },
           { tag: 'X02', name: 'Brum' },
           { tag: 'X03', name: 'Corvel' },
           { tag: 'X04', name: 'Doran' },
         ],
+      ...(workspaceCountries === undefined
+        ? {}
+        : {
+            realms: {
+              list: workspaceCountries.realms,
+              ...(workspaceCountries.unowned === undefined
+                ? {}
+                : { unowned: workspaceCountries.unowned }),
+              islands: workspaceCountries.islands ?? 'nearest',
+            },
+          }),
       ...(reference === undefined
         ? {}
         : {
@@ -5723,14 +5783,15 @@ function applyCreateWorld(
   for (const file of world.files)
     addChange(changes, file.relativePath, file.content, operation.id, file.mediaType);
   // Remove only unchanged outputs recorded by a previous generation, before indexing new IDs.
-  for (const file of reconcileWorldOutputs(
+  for (const file of planWorldOutputs(
     base.sourceFiles,
     proposedChanges(changes),
     operation.id,
     mapRoot,
     base.sourceRoots.states,
     base.sourceRoots.localisation,
-  ))
+    { releaseCountryOutputs: workspaceCountries !== undefined },
+  ).changes)
     if (file.content === null)
       addChange(changes, file.relativePath, null, operation.id, 'text/plain');
   // Start from empty derived files so no base-game position or supply line survives.
@@ -5756,14 +5817,16 @@ function applyCreateWorld(
   const positioned = currentIndex(base, changes);
   for (const file of planSupplyRebuild(positioned, { mode: 'replace' }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
-  for (const file of reconcileWorldOutputs(
+  const outputs = planWorldOutputs(
     base.sourceFiles,
     proposedChanges(changes),
     operation.id,
     mapRoot,
     base.sourceRoots.states,
     base.sourceRoots.localisation,
-  ))
+    { releaseCountryOutputs: workspaceCountries !== undefined },
+  );
+  for (const file of outputs.changes)
     addChange(
       changes,
       file.relativePath,
@@ -5771,6 +5834,13 @@ function applyCreateWorld(
       operation.id,
       file.mediaType ?? 'text/plain',
     );
+  worldOutputsByPlan.set(changes, {
+    operationId: operation.id,
+    written: outputs.written,
+    retired: outputs.retired,
+    released: outputs.released,
+    ...(world.realms === undefined ? {} : { realms: world.realms }),
+  });
   return [
     ...(reference?.diagnostics ?? []).map((message): Diagnostic => ({
       code: 'MAP_REFERENCE_INTERPRETATION',
@@ -5799,6 +5869,24 @@ function applyCreateWorld(
             details: { warningCount: world.warnings.length, samples: world.warnings.slice(0, 5) },
           },
         ]),
+    worldOutputsDiagnostic(operation.id, outputs),
+    ...worldTagDiagnostics(operation.id, tagCatalog, world, workspaceCountries !== undefined),
+    ...worldRealmDiagnostics(operation.id, world),
+    ...(outputs.released.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_OUTPUT_RELEASED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message: `${outputs.released.length} edited country file(s) of the previous world are left to the workspace and no longer recorded as generated`,
+            details: {
+              count: outputs.released.length,
+              files: outputs.released.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+            },
+          },
+        ]),
     {
       code: 'MAP_WORLD_CREATED',
       severity: 'info',
@@ -5820,6 +5908,122 @@ function applyCreateWorld(
           },
         ]),
   ];
+}
+
+/** Tag count observed to overflow the flag sheet of one 1.19 Windows build; never a block. */
+export const WORLD_TAG_COUNT_OBSERVED_LIMIT = 439;
+
+function worldTagDiagnostics(
+  operationId: string,
+  catalog: CountryTagCatalog,
+  world: GeneratedWorld,
+  workspaceOwned: boolean,
+): Diagnostic[] {
+  const declared = new Set(catalog.static);
+  const generated = workspaceOwned
+    ? 0
+    : worldGeneratedTags(world).filter((tag) => !declared.has(tag)).length;
+  const total = declared.size + generated + catalog.dynamic.length;
+  const details = {
+    static: declared.size + generated,
+    generated,
+    dynamic: catalog.dynamic.length,
+    total,
+    observedLimit: WORLD_TAG_COUNT_OBSERVED_LIMIT,
+  };
+  return [
+    {
+      code: 'MAP_WORLD_TAG_COUNT',
+      severity: 'info',
+      category: 'map',
+      operationId,
+      message: `After this write ${total} country tags are declared: ${details.static} static (${generated} written by the world) and ${details.dynamic} dynamic`,
+      details,
+    },
+    ...(total <= WORLD_TAG_COUNT_OBSERVED_LIMIT
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_TAG_COUNT_HIGH',
+            severity: 'warning' as const,
+            category: 'map' as const,
+            operationId,
+            message: `${total} country tags exceed ${WORLD_TAG_COUNT_OBSERVED_LIMIT}, the count at which one measured game build overflowed its flag sheet`,
+            details,
+          },
+        ]),
+  ];
+}
+
+/** Tags of the country files a generated world writes. */
+function worldGeneratedTags(world: GeneratedWorld): string[] {
+  const file = world.files.find(({ relativePath }) => relativePath === WORLD_COUNTRY_TAG_FILE);
+  if (file === undefined) return [];
+  return [
+    ...new Set(
+      [...file.content.toString('utf8').matchAll(/^([A-Z][A-Z0-9]{2}) =/gmu)].map(
+        (match) => match[1]!,
+      ),
+    ),
+  ];
+}
+
+function worldRealmDiagnostics(operationId: string, world: GeneratedWorld): Diagnostic[] {
+  if (world.realms === undefined) return [];
+  const { countries, unownedStates } = world.realms;
+  return [
+    {
+      code: 'MAP_WORLD_REALMS_PLACED',
+      severity: 'info',
+      category: 'map',
+      operationId,
+      message: `Placed ${countries.length} workspace countries; their country files, histories, flags and names stay the workspace's`,
+      details: {
+        countries: countries
+          .slice(0, 100)
+          .map(({ tag, capitalState, states, landShare, targetShare }) => ({
+            tag,
+            capitalState,
+            states: states.length,
+            landShare,
+            targetShare,
+          })),
+        truncated: countries.length > 100,
+      },
+    },
+    ...(unownedStates.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_STATE_UNOWNED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            operationId,
+            message: `${unownedStates.length} state(s) have no owner, as the request asks; whether the game build accepts unowned land is for the mod to verify`,
+            details: { count: unownedStates.length, states: unownedStates.slice(0, 200) },
+          },
+        ]),
+  ];
+}
+
+function worldOutputsDiagnostic(
+  operationId: string,
+  outputs: { written: readonly string[]; retired: readonly string[]; released: readonly string[] },
+): Diagnostic {
+  return {
+    code: 'MAP_WORLD_OUTPUTS_RECONCILED',
+    severity: 'info',
+    category: 'map',
+    operationId,
+    message: `The world records ${outputs.written.length} generated file(s), retires ${outputs.retired.length} earlier output(s) it no longer writes and releases ${outputs.released.length} to the workspace`,
+    details: {
+      written: outputs.written.length,
+      retired: outputs.retired.length,
+      released: outputs.released.length,
+      retiredFiles: outputs.retired.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+      truncated: outputs.retired.length > WORLD_OUTPUT_PATH_SAMPLE,
+    },
+  };
 }
 
 function applyRegenerateMapPositions(
@@ -5980,6 +6184,7 @@ function* planMapOperationSteps(
   let expectedChangedBounds: PixelDiffBounds | undefined;
   const manifestOperations: MapOperationPlan['operations'] = [];
   const territory: TerritoryReport[] = [];
+  const worldOutputs: WorldOutputReport[] = [];
   const ids = new Set<string>();
   for (const [operationIndex, operation] of operations.entries()) {
     yield* cancellationCheckpoint(signal, operationIndex);
@@ -6012,9 +6217,12 @@ function* planMapOperationSteps(
     const boundsCheckpoint = expectedChangedBounds;
     const territoryCheckpoint = territory.length;
     try {
-      if (operation.kind === 'create_world')
+      if (operation.kind === 'create_world') {
         diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
-      else if (operation.kind === 'move_state_provinces')
+        const outputs = worldOutputsByPlan.get(changes);
+        worldOutputsByPlan.delete(changes);
+        if (outputs !== undefined) worldOutputs.push(outputs);
+      } else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
       else if (operation.kind === 'assign_territory') {
         const outcome = yield* applyAssignTerritory(base, changes, allocations, operation, signal);
@@ -6122,6 +6330,7 @@ function* planMapOperationSteps(
     finalIndex,
     operations: manifestOperations,
     ...(territory.length === 0 ? {} : { territory }),
+    ...(worldOutputs.length === 0 ? {} : { worldOutputs }),
   };
 }
 

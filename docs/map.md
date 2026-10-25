@@ -493,6 +493,40 @@ Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
+Each write records its generated files in `.hoi4-agent-world.json`. A later `create_world` deletes the recorded files it no longer writes (retires them) in the same transaction and refuses with `MANAGED_OUTPUT_EDITED` when a recorded file was edited since. `MAP_WORLD_OUTPUTS_RECONCILED` and `data.outputs` give the counts of written, retired and released files with up to 200 paths each; `map-world-outputs.json` lists them all.
+
+### Countries the mod already owns
+
+A mod that writes its own country tags, country files, histories, orders of battle, flags and names gives `countries` as an object instead of an array (ADR 0069):
+
+```json
+"countries": {
+  "source": "workspace",
+  "realms": [
+    { "tag": "AUR", "capital": { "x": 812, "y": 340 }, "weight": 2 },
+    {
+      "tag": "BOR",
+      "capital": { "x": 1210, "y": 300 },
+      "seeds": [{ "x": 1300, "y": 420 }],
+      "claim": [[{ "x": 1180, "y": 250 }, { "x": 1290, "y": 250 }, { "x": 1290, "y": 380 }]],
+      "exclude": [[{ "x": 1000, "y": 500 }, { "x": 1100, "y": 500 }, { "x": 1100, "y": 600 }]]
+    }
+  ],
+  "unowned": [[{ "x": 600, "y": 700 }, { "x": 680, "y": 700 }, { "x": 680, "y": 760 }]],
+  "islands": "nearest"
+}
+```
+
+Points and polygon vertices are world pixels with the origin at the top left. A capital or seed names the land province under it; a land province with more than half its pixels inside a claim belongs to that country, inside an exclusion never does, and inside `unowned` belongs to nobody. Countries grow from their capitals, seeds and claims by `weight` (default 1). Land that growth does not reach goes, on a landmass a country already holds, to the nearest country that may own it; a landmass no country starts on follows `islands`: `nearest` (each province to the nearest capital), `one-owner` (the whole landmass to the country nearest its centre) or `unowned`. At most 512 countries.
+
+Every tag must be declared by an active `common/country_tags` file other than the world's own (`MAP_WORLD_REALM_TAG_UNKNOWN`) and not only as a dynamic tag (`MAP_WORLD_REALM_TAG_DYNAMIC`). A point outside the world (`MAP_WORLD_REALM_POINT_OUTSIDE`) or in water (`MAP_WORLD_REALM_POINT_WATER`), a point in unowned land, in the country's own exclusion or on another country's point (`MAP_WORLD_REALM_POINT_CONFLICT`), and claims that overlap each other or unowned land (`MAP_WORLD_REALM_CLAIM_OVERLAP`) are refused with the tag and position. A reference picture's political colours are not used with this form.
+
+The world then writes no country tag file, country file, `colors.txt`, country history, order of battle, flag, country name or bookmark. Unowned land forms states with no `owner`, `controller` or `add_core_of` (`MAP_WORLD_STATE_UNOWNED`, and `MAP_STATE_OWNER_MISSING` for each); whether the game build accepts unowned land is the mod's to verify. `MAP_WORLD_REALMS_PLACED`, `data.realms` and `map-world-realms.json` give each country's capital state and province, states, provinces and land share against its target. The country histories stay the mod's: a `capital` in a state the country does not own is the existing warning `MAP_COUNTRY_CAPITAL_NOT_OWNED`.
+
+A recorded country file of an earlier generated world that the mod has since edited is released: left in place, dropped from `.hoi4-agent-world.json` and listed as released (`MAP_WORLD_OUTPUT_RELEASED`). Unedited ones are retired. Other edited recorded files still refuse. To keep a file the mod changed, leave its recorded hash as the world wrote it.
+
+Every `create_world` reports the country tags declared after the write (`MAP_WORLD_TAG_COUNT`: static, written by the world, dynamic, total) and warns above 439 (`MAP_WORLD_TAG_COUNT_HIGH`), the count at which one measured game build overflowed its flag sheet; this is an observation, not a documented limit, and never blocks.
+
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
 
 ### Feature-aware provinces, states and strategic regions

@@ -69,4 +69,5 @@ Implementation rationale for contributors. For using the server, start with the 
 60. [Workspace fallback for sessions outside every mod](0066-workspace-fallback-outside-every-mod.md)
 61. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
 62. [Province count budget for generated worlds](0068-province-count-budget.md)
-63. [Territory assignment service](0060-territory-assignment-service.md)
+63. [Workspace-owned countries in generated worlds](0069-workspace-owned-countries-in-generated-worlds.md)
+64. [Territory assignment service](0060-territory-assignment-service.md)

@@ -372,7 +372,9 @@ export async function prepareReferenceWorld(
     return id === 0 ? undefined : id;
   };
   let countries: WorldCountry[];
-  if (operation.countries !== undefined) countries = operation.countries;
+  if (Array.isArray(operation.countries)) countries = operation.countries;
+  // Workspace-owned countries are placed from their own points; the picture's colours are unused.
+  else if (operation.countries !== undefined) countries = [];
   else if (surface.inferredCountries.length > 1) {
     countries = surface.inferredCountries.slice(0, 200).map((country, index) => ({
       tag: `X${(index + 1).toString(36).toUpperCase().padStart(2, '0')}`,
