@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Raise the pinned overrides of three transitive dependencies to their fixed releases, clearing every `npm audit --omit=dev` advisory: `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp), `hono` 4.13.13 (GHSA-5r4p-p66f-jhc7) and `ip-address` 10.7.4 (GHSA-rxp7-6hxx-x8q5). No source or schema change.
+
 ## 4.6.0 - 2026-10-25
 
 - Add the territory assignment service (ADR 0060). `assign_territory` grows up to 512 countries over the states or provinces of a map from capital and anchor seeds (state, province or pixel) with forced and blocked land, preferred strategic regions, subjects inside an overlord, merges, island policies, size targets by weight, extra cores and claims, and writes owner, controller, cores and claims. Borders follow rivers, ranges, lake shores and terrain changes (a shortest-path growth with barrier-weighted steps, size balancing, a corridor for cut-off seeds and a local search that shortens the artificial border); the result reports sizes against targets and the same seeds grown on distance alone. With `unit: "province"` the states a border cuts are regrouped in one pass, conserving population, resources and buildings exactly. `repartition_states` regroups the states of chosen owners along natural lines, and `update_states` edits up to 5,000 states in one rewrite. New diagnostics `MAP_TERRITORY_*`.
