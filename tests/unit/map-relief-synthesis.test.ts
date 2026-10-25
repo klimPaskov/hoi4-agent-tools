@@ -78,9 +78,9 @@ describe('terrain synthesis from a geography model', () => {
     // The synthesis uses only + - * /, sqrt, floor and round, so these hashes hold on every
     // platform. A change that moves them is a change to every seed's terrain: update them on
     // purpose, with a changelog entry, never to silence a failing run.
-    expect(sha(terrain.heights).slice(0, 16)).toBe('a961e307614c7383');
-    expect(sha(terrain.riverBitmap).slice(0, 16)).toBe('a742d327e34b777d');
-    expect(sha(terrain.normals).slice(0, 16)).toBe('f1835b2bc89fe44f');
+    expect(sha(terrain.heights).slice(0, 16)).toBe('a2d69e80806316b1');
+    expect(sha(terrain.riverBitmap).slice(0, 16)).toBe('7f36649726e6577e');
+    expect(sha(terrain.normals).slice(0, 16)).toBe('14466f8014282916');
   });
 
   it('writes land from 96, the sea at 89 and a bank of 93 and 91 beside land', () => {

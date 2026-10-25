@@ -557,7 +557,9 @@ A river the model draws is authoritative over the synthesised relief (ADR 0071).
 
 Only a course that cannot exist is refused with `MAP_RIVER_UNREACHABLE_MOUTH`: a mouth on another landmass or not reachable over land, an unreachable source or via point, a lake without a free shore. The error lists every such river in `details.rivers` with its reason, or `blockedBy` another failed river.
 
-To check all of this without a write, call `hoi4.map_rewrite` with `preview: true` and `synthesisCheck: true` on the `create_world` operation: it runs the relief and river synthesis only, writes nothing and returns `MAP_SYNTHESIS_CHECK_READY` or `MAP_SYNTHESIS_CHECK_BLOCKED` with `data.synthesisCheck` (unreachable rivers and carved crossings). It does not run the partition, the countries or the climate stage (ADR 0070). A world that fails to generate returns only its own blockers, never the findings of the map it would replace.
+A declared pass is a saddle lower than the crest on both sides (ADR 0072): the heights in its corridor are capped at the saddle level after all relief is composed, so a volcano cone or plateau on the pass is cut down there (move the volcano if the cone should stay whole). Another range's body is not touched.
+
+To check all of this without a write, call `hoi4.map_rewrite` with `preview: true` and `synthesisCheck: true` on the `create_world` operation: it runs the relief and river synthesis only, writes nothing and returns `MAP_SYNTHESIS_CHECK_READY` or `MAP_SYNTHESIS_CHECK_BLOCKED` with `data.synthesisCheck` (unreachable rivers, carved crossings and passes that are not lower than their crest). It does not run the partition, the countries or the climate stage (ADR 0070). A world that fails to generate returns only its own blockers, never the findings of the map it would replace.
 
 ### Feature-aware provinces, states and strategic regions
 
