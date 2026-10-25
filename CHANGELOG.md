@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Raise the pinned overrides of three transitive dependencies to their fixed releases, clearing every `npm audit --omit=dev` advisory: `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp), `hono` 4.13.13 (GHSA-5r4p-p66f-jhc7) and `ip-address` 10.7.4 (GHSA-rxp7-6hxx-x8q5). No source or schema change.
+
 ## 4.6.1 - 2026-10-26
 
 - Stop flagging `constant:<category>.<key>` script-constant reads as scoped temporary-variable reads (`KNOWN_MISTAKE_TEMP_VARIABLE_SCOPE_PREFIX`).
