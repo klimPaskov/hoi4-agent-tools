@@ -9,6 +9,7 @@ import {
   synthesizeTerrain,
   type SynthesizedTerrain,
 } from '../../src/hoi4_agent_tools/map/relief/index.js';
+import { checkTerrainRivers } from '../../src/hoi4_agent_tools/map/relief/terrain-synthesis.js';
 import type { GeographyModelInput } from '../../src/hoi4_agent_tools/schemas/geography.js';
 import { reliefGeography } from '../helpers/relief-fixture.js';
 import { checkRiverBitmap, percentile } from '../helpers/relief-checks.js';
@@ -111,6 +112,96 @@ describe('named rivers that cannot reach their mouth', () => {
     expect(error.details?.riverId).toBe('west_brook');
     expect(error.details?.climb).toBeGreaterThan(22);
     expect(error.message).toContain('climb');
+  });
+
+  it('reports every river that cannot reach its mouth with its divide', () => {
+    const model: GeographyModelInput = {
+      version: 1,
+      seas: [
+        {
+          id: 'sea',
+          polygons: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          ],
+        },
+      ],
+      lands: [
+        {
+          id: 'land',
+          polygons: [
+            [
+              [0.15, 0.2],
+              [0.85, 0.2],
+              [0.85, 0.8],
+              [0.15, 0.8],
+            ],
+          ],
+        },
+      ],
+      ranges: [
+        {
+          id: 'divide',
+          profile: 'wall',
+          path: [
+            [0.5, 0.1],
+            [0.5, 0.9],
+          ],
+          halfWidth: 0.01,
+          peak: 0.9,
+        },
+      ],
+      rivers: [
+        { id: 'east', source: [0.7, 0.5], mouth: { sea: 'sea' }, size: 3 },
+        { id: 'west_brook', source: [0.3, 0.5], mouth: { river: 'east' }, size: 1 },
+        { id: 'north_brook', source: [0.3, 0.3], mouth: { river: 'east' }, size: 1 },
+        { id: 'west_rill', source: [0.25, 0.6], mouth: { river: 'west_brook' }, size: 1 },
+      ],
+    };
+    const error = failure(() => synthesize(resolve(model)));
+    expect(error.code).toBe('MAP_RIVER_UNREACHABLE_MOUTH');
+    expect(error.message).toContain('3 rivers cannot reach their mouths');
+    const rivers = error.details?.rivers as Array<Record<string, unknown>>;
+    expect(rivers.map(({ riverId }) => riverId).sort()).toEqual([
+      'north_brook',
+      'west_brook',
+      'west_rill',
+    ]);
+    for (const river of rivers.filter(({ riverId }) => riverId !== 'west_rill')) {
+      expect(river.limit).toBe(22);
+      expect(river.climb as number).toBeGreaterThan(22);
+      const divide = river.divide as { x: number; y: number; range?: string };
+      // The divide lies on the wall at x = 0.5 of the 1024 pixel width.
+      expect(Math.abs(divide.x - 512)).toBeLessThan(40);
+      expect(divide.range).toBe('divide');
+    }
+    // A tributary of a river that fails is reported as blocked by it, without a divide of its own.
+    const rill = rivers.find(({ riverId }) => riverId === 'west_rill')!;
+    expect(rill.blockedBy).toBe('west_brook');
+    expect(rill.divide).toBeUndefined();
+    // The first failure keeps the single-river fields of earlier releases.
+    expect(error.details?.riverId).toBeDefined();
+  });
+
+  it('checks the rivers without building the heights or the river bitmap', () => {
+    const geography = resolve(reliefGeography());
+    const kind = rasterizeGeographyKind(geography, {
+      width: WIDTH,
+      height: HEIGHT,
+      seed: SEED,
+    });
+    const notes = checkTerrainRivers({
+      geography,
+      width: WIDTH,
+      height: HEIGHT,
+      seed: SEED,
+      kind,
+    });
+    expect(notes.every(({ severity }) => severity !== 'error')).toBe(true);
   });
 
   it('refuses a river whose mouth lies on another landmass', () => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Stop reporting the validation findings of a map that a failed `create_world` left in place: a world that cannot generate now returns only its own blockers, and a successful replacement of a map is validated on the map it produces instead of being compared with the map it replaces (ADR 0070). Before, a river that could not reach its mouth came back with three `MAP_VALIDATION_OPERATION_UNOWNED` blockers about the old map.
+- Report every named river that cannot reach its mouth in one run: `MAP_RIVER_UNREACHABLE_MOUTH` keeps its code and top-level fields and gains `details.rivers`, each with the reason, `climb`, `limit`, the `divide` (world pixel, height, nearest model range) or `blockedBy` another failed river.
+- Add `create_world.synthesisCheck` (with `preview: true` and a geography): run only the relief and river synthesis and report all unreachable rivers without writing (`MAP_SYNTHESIS_CHECK_READY`, `MAP_SYNTHESIS_CHECK_BLOCKED`, `data.synthesisCheck`). Public schema change: one new optional field on `create_world` (minor version).
+
 ## 4.5.0 - 2026-10-25
 
 - Refuse `hoi4.focus_rewrite` with `FOCUS_SOURCE_CHANGED_SINCE_PLAN` when the focus source changed in meaning after the plan was inspected, instead of reverting the external change to the plan's values (national trees and continuous palettes). Comment and formatting changes and a source that already equals the plan are still accepted. Reported by the HOI4 Factory S01 EXP-02 probe.

@@ -108,6 +108,56 @@ interface PublicResult {
   diagnostics: Array<{ code: string; severity: string }>;
 }
 
+/** A wall between two brooks and the river they would join: neither brook can reach it. */
+function dividedGeography() {
+  return {
+    version: 1,
+    seas: [
+      {
+        id: 'sea',
+        polygons: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+          ],
+        ],
+      },
+    ],
+    lands: [
+      {
+        id: 'land',
+        polygons: [
+          [
+            [0.15, 0.2],
+            [0.85, 0.2],
+            [0.85, 0.8],
+            [0.15, 0.8],
+          ],
+        ],
+      },
+    ],
+    ranges: [
+      {
+        id: 'divide',
+        profile: 'wall',
+        path: [
+          [0.5, 0.1],
+          [0.5, 0.9],
+        ],
+        halfWidth: 0.01,
+        peak: 0.9,
+      },
+    ],
+    rivers: [
+      { id: 'east', source: [0.7, 0.5], mouth: { sea: 'sea' }, size: 3 },
+      { id: 'west_brook', source: [0.3, 0.5], mouth: { river: 'east' }, size: 1 },
+      { id: 'north_brook', source: [0.3, 0.3], mouth: { river: 'east' }, size: 1 },
+    ],
+  };
+}
+
 const create = (extra: Record<string, unknown>) => ({
   id: 'world',
   kind: 'create_world',
@@ -269,6 +319,136 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect((await readFile(path.join(modRoot, 'map', 'world_normal.bmp'))).readInt32LE(18)).toBe(
       512,
     );
+  }, 180_000);
+
+  it('checks every river without writing, and reports each failure with its divide', async () => {
+    const { client, modRoot } = await fixture();
+    const before = await sourceInventory(modRoot);
+    const ok = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [
+          create({
+            geography: reliefGeography(),
+            width: 1024,
+            height: 512,
+            synthesisCheck: true,
+          }),
+        ],
+      },
+    });
+    expect(ok.structuredContent).toMatchObject({
+      status: 'ok',
+      code: 'MAP_SYNTHESIS_CHECK_READY',
+      data: { fileCount: 0, synthesisCheck: { passed: true, unreachableRivers: 0 } },
+    });
+    const bad = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [
+          create({
+            geography: dividedGeography(),
+            width: 1024,
+            height: 512,
+            synthesisCheck: true,
+          }),
+        ],
+      },
+    });
+    const content = bad.structuredContent as unknown as PublicResult & {
+      data: {
+        synthesisCheck: { unreachableRivers: number; rivers: Array<Record<string, unknown>> };
+      };
+    };
+    expect(content).toMatchObject({ status: 'blocked', code: 'MAP_SYNTHESIS_CHECK_BLOCKED' });
+    expect(content.data.synthesisCheck.unreachableRivers).toBe(2);
+    expect(content.data.synthesisCheck.rivers.map(({ riverId }) => riverId).sort()).toEqual([
+      'north_brook',
+      'west_brook',
+    ]);
+    for (const river of content.data.synthesisCheck.rivers)
+      expect(river).toMatchObject({
+        limit: 22,
+        divide: {
+          range: 'divide',
+          x: expect.any(Number) as number,
+          y: expect.any(Number) as number,
+        },
+      });
+    expect(content.blockers.map(({ code }) => code)).toEqual(['MAP_RIVER_UNREACHABLE_MOUTH']);
+    expect(await sourceInventory(modRoot)).toEqual(before);
+    // Without preview, or without a geography, the check is refused and nothing is written.
+    for (const [operation, preview, code] of [
+      [
+        create({ geography: reliefGeography(), width: 1024, height: 512, synthesisCheck: true }),
+        false,
+        'MAP_SYNTHESIS_CHECK_REQUIRES_PREVIEW',
+      ],
+    ] as const) {
+      const refused = await client.callTool({
+        name: 'hoi4.map_rewrite',
+        arguments: { workspaceId: 'test', preview, operations: [operation] },
+      });
+      expect(
+        (refused.structuredContent as unknown as PublicResult).blockers.map((b) => b.code),
+      ).toContain(code);
+    }
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  }, 180_000);
+
+  it('reports only the generation blocker when a world fails over an existing map', async () => {
+    const { client, modRoot } = await fixture({ emptyMod: true });
+    const first = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [
+          create({
+            width: 512,
+            height: 256,
+            seed: 3,
+            rivers: 0,
+            countries: [{ tag: 'AAA', name: 'Aster' }],
+          }),
+        ],
+      },
+    });
+    expect((first.structuredContent as unknown as PublicResult).status).toBe('ok');
+    // The map being replaced has a defect of its own: a controller without an owner. It is an
+    // error of the old map and must not become a blocker of the world that replaces it.
+    const states = path.join(modRoot, 'history', 'states');
+    const file = (await readdir(states))[0]!;
+    const text = await readFile(path.join(states, file), 'utf8');
+    expect(text).toContain('owner = AAA');
+    await writeFile(path.join(states, file), text.replace('owner = AAA', 'controller = AAA'));
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [
+          create({
+            geography: dividedGeography(),
+            width: 1024,
+            height: 512,
+            landProvincePixels: 4000,
+            seaProvincePixels: 15000,
+          }),
+        ],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('blocked');
+    expect([...new Set(content.blockers.map(({ code }) => code))]).toEqual([
+      'MAP_RIVER_UNREACHABLE_MOUTH',
+    ]);
+    expect(JSON.stringify(content)).not.toContain('MAP_VALIDATION_OPERATION_UNOWNED');
+    expect(JSON.stringify(content)).not.toContain('MAP_STATE_CONTROLLER_WITHOUT_OWNER');
+    expect(await sourceInventory(modRoot)).toEqual(before);
   }, 180_000);
 
   it('blocks a write of a model with biomes because the climate stage is not implemented yet', async () => {

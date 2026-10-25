@@ -465,6 +465,10 @@ Every `create_world` reports the country tags declared after the write (`MAP_WOR
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
 
+### Checking a model's rivers
+
+A model whose rivers cannot reach their mouths (a divide higher than the climb limit of 22 height units) is refused at the write with `MAP_RIVER_UNREACHABLE_MOUTH`. The error lists every such river in `details.rivers` with its reason, `climb`, `limit` and `divide` (world pixel, height and the nearest range), or `blockedBy` another failed river. To find them all without a write, call `hoi4.map_rewrite` with `preview: true` and `synthesisCheck: true` on the `create_world` operation: it runs the relief and river synthesis only, writes nothing and returns `MAP_SYNTHESIS_CHECK_READY` or `MAP_SYNTHESIS_CHECK_BLOCKED` with `data.synthesisCheck`. It does not run the partition, the countries or the climate stage (ADR 0070). A world that fails to generate returns only its own blockers, never the findings of the map it would replace.
+
 ### Feature-aware provinces, states and strategic regions
 
 By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058):

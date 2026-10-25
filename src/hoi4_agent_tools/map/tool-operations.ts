@@ -615,12 +615,92 @@ async function previewGeographyRewrite(
   return result;
 }
 
+/**
+ * `create_world.synthesisCheck`: run the model's relief and river synthesis only and report every
+ * river that cannot reach its mouth, with its divide. No map is generated and nothing is written.
+ */
+async function previewSynthesisCheck(
+  nudger: AgentNudger,
+  input: MapRewriteToolRequest,
+  context: MapOperationContext,
+) {
+  await context.progress(0, 2, 'Synthesising relief and rivers to check every river');
+  const checked = await nudger.checkSynthesis({
+    workspaceId: context.workspaceId,
+    operations: input.operations as MapOperation[],
+    ...(context.principal === undefined ? {} : { principal: context.principal }),
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+  });
+  const blocked = checked.diagnostics.filter(
+    ({ severity }) => severity === 'error' || severity === 'blocker',
+  );
+  const valid = blocked.length === 0 && checked.plan.blockers.length === 0;
+  const rivers = checked.diagnostics.flatMap(({ code, details }) =>
+    code === 'MAP_RIVER_UNREACHABLE_MOUTH' && Array.isArray(details?.rivers)
+      ? (details.rivers as unknown[])
+      : [],
+  );
+  const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
+  const result = emptyServiceResult(context.workspaceId, {
+    execution: 'preview' as const,
+    allocations: [],
+    operationBlockers: [],
+    expectedChangedBounds: null,
+    changedProvinceIds: [],
+    changedProvinceCount: 0,
+    semanticDiff: compactSemantic.semantic,
+    semanticDiffCounts: compactSemantic.counts,
+    semanticDiffTruncated: compactSemantic.truncated,
+    fileCount: 0,
+    artifactCount: checked.artifacts.length,
+    geography: checked.geography.slice(0, 16).map(geographySummary),
+    synthesisCheck: {
+      passed: valid,
+      unreachableRivers: rivers.length,
+      rivers: rivers.slice(0, 200),
+    },
+  });
+  result.status = valid ? 'ok' : 'blocked';
+  result.code = valid ? 'MAP_SYNTHESIS_CHECK_READY' : 'MAP_SYNTHESIS_CHECK_BLOCKED';
+  setInlineFilesScanned(result, checked.filesScanned);
+  result.proposedFiles = [];
+  result.diagnostics = checked.diagnostics.slice(0, 100);
+  result.artifacts = checked.artifacts.map(publicArtifactLink);
+  result.validation = {
+    passed: valid,
+    checks: [
+      {
+        id: 'river-synthesis',
+        passed: valid,
+        message: valid
+          ? 'Every river of the model reaches its mouth'
+          : `${rivers.length || blocked.length} river(s) or model parts block the synthesis; see MAP_RIVER_UNREACHABLE_MOUTH details.rivers`,
+      },
+    ],
+  };
+  result.blockers = [
+    ...checked.plan.blockers.map(({ code, message, details }) => ({
+      code,
+      message,
+      ...(details === undefined ? {} : { details }),
+    })),
+  ].slice(0, 100);
+  await context.progress(2, 2, 'River check complete; nothing was written');
+  return result;
+}
+
 /** Generate and validate the same proposed map without creating a write transaction. */
 export async function previewMapRewrite(
   nudger: AgentNudger,
   input: MapRewriteToolRequest,
   context: MapOperationContext,
 ) {
+  if (
+    input.operations.some(
+      (operation) => operation.kind === 'create_world' && operation.synthesisCheck === true,
+    )
+  )
+    return previewSynthesisCheck(nudger, input, context);
   if (
     input.operations.some(
       (operation) => operation.kind === 'create_world' && operationHasGeography(operation),

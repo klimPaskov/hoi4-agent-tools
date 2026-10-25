@@ -186,6 +186,48 @@ function barrierField(
   return { width, height, strength, sources };
 }
 
+/**
+ * Run the macro relief and the hydrology only, which is where a model's rivers fail to reach
+ * their mouths, and return their notes. The full-resolution heights, river pixels and fields are
+ * not built, so a model can be checked in a fraction of a write. A river that cannot reach its
+ * mouth throws as in `synthesizeTerrain`, with every failing river in its details.
+ */
+export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
+  const { geography, width, height, seed, kind } = input;
+  const relief: ReliefSettings = { ...DEFAULT_RELIEF, ...input.relief };
+  let landPixels = 0;
+  for (let index = 0; index < width * height; index += 1) if (kind[index] === LAND) landPixels += 1;
+  const macro = synthesizeMacroRelief({
+    geography,
+    width,
+    height,
+    seed,
+    kind,
+    relief,
+    signal: input.signal,
+  });
+  const adjust = input.adjustHeight;
+  if (adjust !== undefined)
+    for (let y = 0; y < macro.height; y += 1)
+      for (let x = 0; x < macro.width; x += 1) {
+        const cell = y * macro.width + x;
+        if (macro.kind[cell] === LAND)
+          macro.heights[cell] = adjust(2 * x + 1, 2 * y + 1, macro.heights[cell]!);
+      }
+  return [
+    ...synthesizeHydrology({
+      geography,
+      macro,
+      seed,
+      density: input.rivers?.density,
+      count: input.rivers?.count,
+      rainfall: input.rainfall,
+      landPixels,
+      signal: input.signal,
+    }).notes,
+  ];
+}
+
 /** Build relief, hydrology, normals and fields for a geography model on a map of the given size. */
 export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerrain {
   const { geography, width, height, seed, kind } = input;
