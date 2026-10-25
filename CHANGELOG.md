@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.6.0 - 2026-10-25
 
 - Add the territory assignment service (ADR 0060). `assign_territory` grows up to 512 countries over the states or provinces of a map from capital and anchor seeds (state, province or pixel) with forced and blocked land, preferred strategic regions, subjects inside an overlord, merges, island policies, size targets by weight, extra cores and claims, and writes owner, controller, cores and claims. Borders follow rivers, ranges, lake shores and terrain changes (a shortest-path growth with barrier-weighted steps, size balancing, a corridor for cut-off seeds and a local search that shortens the artificial border); the result reports sizes against targets and the same seeds grown on distance alone. With `unit: "province"` the states a border cuts are regrouped in one pass, conserving population, resources and buildings exactly. `repartition_states` regroups the states of chosen owners along natural lines, and `update_states` edits up to 5,000 states in one rewrite. New diagnostics `MAP_TERRITORY_*`.
 - Land listed in `assign_territory.unowned`, and landmasses without a seed under `islandPolicy: "unowned"`, lose their owner (and controller) with `ownership.unowned: "clear"`, the default, or keep it with `"keep"`; states outside `scope` are never edited. Refusals name the state or province of the request (`MAP_TERRITORY_SEED_UNAVAILABLE`, `_FORCED_BLOCKED`, `_FORCED_CONFLICT`, `_FORCED_UNREACHABLE` carry `stateId` or `provinceId`). Results of a territory operation add `data.territory`.
