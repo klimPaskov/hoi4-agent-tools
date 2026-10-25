@@ -18,6 +18,8 @@ import {
 } from './partition.js';
 import { repairSeamCorners, smoothDiagonalContacts } from './partition-fields.js';
 import { PARTITION_PROVINCE_ERROR, PARTITION_PROVINCE_WARNING } from './partition-tuning.js';
+import { buildTerritoryAtoms, territoryGraphFromPartition } from './territory-graph.js';
+import { growTerritory } from './territory.js';
 import {
   geographyPartitionFields,
   provinceCountNote,
@@ -1334,7 +1336,28 @@ export function generateWorld(
         .flatMap(([id]) => [...provinces.neighbors[id]!]);
     return [...provinces.neighbors[capital]!];
   });
-  for (;;) {
+  let grownByTerritory = false;
+  // The feature-aware partition grows generated countries along its natural lines (ADR 0060).
+  // Workspace-owned countries keep the realm growth with its forced and blocked land (ADR 0069).
+  if (featurePartition !== undefined && referenceOwners.size === 0 && realmRules === undefined) {
+    const atoms = buildTerritoryAtoms(
+      territoryGraphFromPartition(featurePartition.graph, provinces.sumX, provinces.sumY),
+      landIds.map((id) => [id]),
+    );
+    const grown = growTerritory(
+      atoms,
+      spec.countries.map((country, index) => ({
+        tag: country.tag,
+        weight: shares[index]!,
+        seeds: [atoms.atomOfProvince[capitals[index]!]!],
+      })),
+      { seed: spec.seed },
+    );
+    for (const [atom, id] of landIds.entries())
+      if (grown.owner[atom]! >= 0) owner.set(id, grown.owner[atom]!);
+    grownByTerritory = true;
+  }
+  while (!grownByTerritory) {
     let chosen = -1;
     for (let index = 0; index < countryCount; index += 1) {
       frontiers[index] = frontiers[index]!.filter(

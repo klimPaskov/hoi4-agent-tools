@@ -148,6 +148,19 @@ describe('workspace-owned countries in create_world', () => {
     expect(tags?.details).toMatchObject({ generated: 1, total: 1 });
   });
 
+  it('keeps the realm constraints with the feature-aware partition', () => {
+    // Generated countries of a feature-aware world grow with the territory service (ADR 0060);
+    // workspace countries keep the realm growth with forced claims and blocked land.
+    const featureAware = { ...workspaceWorld({ ...realms, islands: 'unowned' as const }) };
+    const result = plan([tagFile], { ...featureAware, partition: 'feature-aware' });
+    expect(result.blockers).toEqual([]);
+    expect(ownerAt(result, 80, 128)).toBe('AAA');
+    expect(ownerAt(result, 230, 70)).toBe('BBB');
+    expect(ownerAt(result, 190, 200)).toBeUndefined();
+    expect([...islandOwners(result)]).toEqual(['-']);
+    expect(result.worldOutputs?.[0]?.realms?.unownedStates.length).toBeGreaterThan(0);
+  });
+
   it('applies the island rules', () => {
     const unowned = plan([tagFile], workspaceWorld({ ...realms, islands: 'unowned' }));
     expect(unowned.blockers).toEqual([]);

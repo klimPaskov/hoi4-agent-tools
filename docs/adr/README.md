@@ -70,5 +70,6 @@ Implementation rationale for contributors. For using the server, start with the 
 61. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
 62. [Province count budget for generated worlds](0068-province-count-budget.md)
 63. [Workspace-owned countries in generated worlds](0069-workspace-owned-countries-in-generated-worlds.md)
-64. [Validation of a replacement world and the river check](0070-whole-map-validation-and-river-check.md)
-65. [Drawn rivers carve their valleys](0071-drawn-rivers-carve-their-valleys.md)
+64. [Territory assignment service](0060-territory-assignment-service.md)
+65. [Validation of a replacement world and the river check](0070-whole-map-validation-and-river-check.md)
+66. [Drawn rivers carve their valleys](0071-drawn-rivers-carve-their-valleys.md)

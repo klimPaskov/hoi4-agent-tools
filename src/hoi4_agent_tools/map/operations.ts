@@ -59,6 +59,13 @@ import {
 } from './world-context.js';
 import { planWorldOutputs } from './world-outputs.js';
 import { resolvePartitionMode } from './partition.js';
+import {
+  applyAssignTerritory,
+  applyRepartitionStates,
+  type AssignTerritoryOperation,
+  type RepartitionStatesOperation,
+  type TerritoryReport,
+} from './territory-operations.js';
 import type { PartitionTuning } from './partition-tuning.js';
 import type {
   WorldColormapInput,
@@ -96,9 +103,9 @@ export interface MapPlanningContext {
   synthesisCheck?: boolean;
 }
 
-type MapOperationSteps<T> = Generator<void, T, void>;
+export type MapOperationSteps<T> = Generator<void, T, void>;
 
-function* cancellationCheckpoint(
+export function* cancellationCheckpoint(
   signal: AbortSignal | undefined,
   iteration = 0,
   stride = 1,
@@ -234,6 +241,12 @@ export interface UpdateStateOperation extends MapOperationBase {
     victoryPoints?: { provinceId: number; value: number }[];
     provinceBuildings?: Record<string, Record<string, number>>;
   };
+}
+
+export interface UpdateStatesOperation extends MapOperationBase {
+  kind: 'update_states';
+  /** One entry per state; the changes have the meaning they have in `update_state`. */
+  updates: { stateId: number; changes: UpdateStateOperation['changes'] }[];
 }
 
 export interface SplitStateOperation extends MapOperationBase {
@@ -507,6 +520,9 @@ export interface CreateWorldOperation extends MapOperationBase {
   colormap?: WorldColormapInput;
   partition?: WorldPartitionInput;
   partitionTuning?: WorldPartitionTuningInput;
+  /** Measure the border naturalness of the new world; `enforce` needs the feature-aware partition. */
+  borderQuality?: 'off' | 'report' | 'enforce';
+  borderTargets?: { minEnrichment?: number; maxStraightness?: number; minNaturalShare?: number };
   replaceBaseGame?: boolean;
 }
 
@@ -537,11 +553,14 @@ export interface RebuildSupplyOperation extends MapOperationBase {
 
 export type MapOperation =
   | CreateWorldOperation
+  | AssignTerritoryOperation
+  | RepartitionStatesOperation
   | RemapMapReferencesOperation
   | RegenerateMapPositionsOperation
   | RebuildSupplyOperation
   | MoveStateProvincesOperation
   | UpdateStateOperation
+  | UpdateStatesOperation
   | SplitStateOperation
   | MergeStatesOperation
   | SplitProvinceOperation
@@ -611,6 +630,8 @@ export interface MapOperationPlan {
   expectedChangedBounds?: PixelDiffBounds;
   finalIndex: MapWorkspaceIndex;
   operations: { id: string; kind: string; summary: string; data: Record<string, unknown> }[];
+  /** Reports of the territory operations in the request, in order. */
+  territory?: TerritoryReport[];
   /** Managed outputs of each generated world: written, retired and released paths. */
   worldOutputs?: WorldOutputReport[];
 }
@@ -627,14 +648,14 @@ export interface WorldOutputReport {
 /** Paths listed per kind in diagnostics and tool results; the artifact lists them all. */
 export const WORLD_OUTPUT_PATH_SAMPLE = 200;
 
-interface MutableChange {
+export interface MutableChange {
   relativePath: string;
   content: Buffer | null;
   operationIds: Set<string>;
   mediaType: string;
 }
 
-interface StateData {
+export interface StateData {
   id: number;
   name: string;
   manpower: number;
@@ -652,7 +673,7 @@ interface StateData {
   datedHistory?: string[];
 }
 
-interface StatePatchFields {
+export interface StatePatchFields {
   id?: boolean;
   name?: boolean;
   manpower?: boolean;
@@ -667,7 +688,7 @@ interface StatePatchFields {
   buildings?: boolean;
 }
 
-function normalizeRelative(value: string): string {
+export function normalizeRelative(value: string): string {
   return value.replaceAll('\\', '/').replace(/^\.\//u, '').toLowerCase();
 }
 
@@ -687,11 +708,11 @@ function quote(value: string): string {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
-function uniqueSorted(values: readonly number[]): number[] {
+export function uniqueSorted(values: readonly number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
 }
 
-function uniqueStrings(values: readonly string[]): string[] {
+export function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => compareCodeUnits(left, right));
 }
 
@@ -762,7 +783,7 @@ function blockInsertion(
   };
 }
 
-function cloneState(state: StateRecord): StateData {
+export function cloneState(state: StateRecord): StateData {
   return {
     id: state.id,
     name: state.name,
@@ -804,7 +825,7 @@ function compileHistory(data: StateData, indent: string, newline: string): strin
   return rows.length === 0 ? `{ }` : `{${newline}${rows.join(newline)}${newline}${indent}}`;
 }
 
-function compileState(data: StateData, newline = '\n'): Buffer {
+export function compileState(data: StateData, newline = '\n'): Buffer {
   const resources =
     data.resources.size === 0
       ? ''
@@ -1128,7 +1149,7 @@ function patchDefinitionLine(source: ProvinceDefinition, updated: ProvinceDefini
   return replaceDelimitedFields(line.text, replacements);
 }
 
-function applyTextRanges(
+export function applyTextRanges(
   document: TextFileDocument,
   replacements: readonly SourceReplacement[],
 ): Buffer {
@@ -1208,7 +1229,7 @@ function patchDefinitions(
   return applyTextRanges(document, replacements);
 }
 
-function rootEvidence(
+export function rootEvidence(
   records: readonly { id: number; file: ScannedFile }[],
 ): AllocationEvidence['roots'] {
   const groups = new Map<
@@ -1259,7 +1280,7 @@ function contiguous(ids: readonly number[], start: number): boolean {
   return true;
 }
 
-function maximumObservedId(values: readonly number[], fallback: number): number {
+export function maximumObservedId(values: readonly number[], fallback: number): number {
   let maximum = fallback;
   for (const value of values) {
     if (!Number.isSafeInteger(value)) {
@@ -1585,7 +1606,7 @@ export function indexWithProposedChanges(
   return MapWorkspaceIndex.build(files, base.sourceRoots, base.sharedIndex.rebuild(files));
 }
 
-function addChange(
+export function addChange(
   changes: Map<string, MutableChange>,
   relativePath: string,
   content: Uint8Array | null,
@@ -1621,12 +1642,12 @@ function proposedChanges(changes: ReadonlyMap<string, MutableChange>): ProposedF
 
 /** Source folders a new world replaces, per plan, so lower layers stop counting. */
 /** Diagnostics an operation raises while applying, drained into the plan after it succeeds. */
-const diagnosticsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, Diagnostic[]>();
+export const diagnosticsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, Diagnostic[]>();
 
 const replacedRootsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, readonly string[]>();
 const worldOutputsByPlan = new WeakMap<ReadonlyMap<string, MutableChange>, WorldOutputReport>();
 
-function currentIndex(
+export function currentIndex(
   base: MapWorkspaceIndex,
   changes: ReadonlyMap<string, MutableChange>,
 ): MapWorkspaceIndex {
@@ -1730,7 +1751,7 @@ function requireSplitPolicy(operation: SplitStateOperation): SplitStateDistribut
   return policy as SplitStateDistributionPolicy;
 }
 
-function requireSafeLocalisationDocument(
+export function requireSafeLocalisationDocument(
   document: LocalisationDocument,
   relativePath: string,
 ): void {
@@ -1753,7 +1774,7 @@ function requireSafeLocalisationDocument(
   }
 }
 
-function safeLocalisationRelativePath(index: MapWorkspaceIndex, requested: string): string {
+export function safeLocalisationRelativePath(index: MapWorkspaceIndex, requested: string): string {
   const value = requested.replaceAll('\\', '/');
   const segments = value.split('/');
   if (
@@ -1786,7 +1807,7 @@ function safeLocalisationRelativePath(index: MapWorkspaceIndex, requested: strin
   return value;
 }
 
-function escapedLocalisationValue(value: string): string {
+export function escapedLocalisationValue(value: string): string {
   return value
     .replaceAll('\\', '\\\\')
     .replaceAll('"', '\\"')
@@ -1795,7 +1816,7 @@ function escapedLocalisationValue(value: string): string {
     .replaceAll('\n', '\\n');
 }
 
-function localisationEntryLine(
+export function localisationEntryLine(
   document: LocalisationDocument,
   entry: LocalisationEntry,
   value: string,
@@ -1834,7 +1855,7 @@ function localisationEntryLine(
   return `${line.slice(0, opening + 1)}${escapedLocalisationValue(value)}${line.slice(closing)}`;
 }
 
-function appendLocalisationEntry(
+export function appendLocalisationEntry(
   document: LocalisationDocument,
   key: string,
   value: string,
@@ -1994,7 +2015,7 @@ function splitScalar(total: number, ratio: number, policy: SplitScalarPolicy): [
  * count of slot buildings. A level applies to the whole state, so a split keeps it in both parts
  * and a merge keeps the highest; slot buildings are divided and summed.
  */
-function isLevelStateBuilding(index: MapWorkspaceIndex, building: string): boolean {
+export function isLevelStateBuilding(index: MapWorkspaceIndex, building: string): boolean {
   const definition = index.buildingDefinitions.get(building);
   if (definition !== undefined) return !definition.sharesSlots && !definition.provincial;
   return LEVEL_STATE_BUILDINGS.has(building);
@@ -2080,7 +2101,7 @@ function mergeBounds(
   };
 }
 
-function regionMembershipId(index: MapWorkspaceIndex, provinceId: number): number {
+export function regionMembershipId(index: MapWorkspaceIndex, provinceId: number): number {
   const regions = index.regionForProvince(provinceId);
   if (regions.length !== 1)
     throw new ServiceError(
@@ -2104,7 +2125,7 @@ function stateMembershipId(index: MapWorkspaceIndex, provinceId: number): number
   return states[0]?.id;
 }
 
-function commitState(
+export function commitState(
   changes: Map<string, MutableChange>,
   state: StateRecord,
   data: StateData,
@@ -2230,7 +2251,7 @@ function distributeDatedHistory(
   return result;
 }
 
-function assertDatedStateHistorySafe(
+export function assertDatedStateHistorySafe(
   state: StateRecord,
   fields: StatePatchFields,
   operationId: string,
@@ -2354,18 +2375,19 @@ function exactNumericMap(values: Record<string, number>, label: string): Map<str
   return result;
 }
 
-function applyUpdateState(
-  base: MapWorkspaceIndex,
+/** Apply one state update against an index that already holds every earlier change. */
+export function updateStateAgainst(
+  index: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
-  operation: UpdateStateOperation,
+  stateId: number,
+  values: UpdateStateOperation['changes'],
+  operationId: string,
 ): void {
-  const index = currentIndex(base, changes);
-  const state = index.statesById.get(operation.stateId);
+  const state = index.statesById.get(stateId);
   if (state === undefined)
-    throw new ServiceError('MAP_STATE_NOT_FOUND', `State ${operation.stateId} does not exist`);
+    throw new ServiceError('MAP_STATE_NOT_FOUND', `State ${stateId} does not exist`);
   const desired = cloneState(state);
   const fields: StatePatchFields = {};
-  const values = operation.changes;
   if (values.capital !== undefined) {
     if (values.victoryPoints === undefined)
       throw new ServiceError(
@@ -2464,7 +2486,45 @@ function applyUpdateState(
     desired.provinceBuildings = provinceBuildings;
     fields.buildings = true;
   }
-  commitState(changes, state, desired, fields, operation.id);
+  commitState(changes, state, desired, fields, operationId);
+}
+
+function applyUpdateState(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: UpdateStateOperation,
+): void {
+  updateStateAgainst(
+    currentIndex(base, changes),
+    changes,
+    operation.stateId,
+    operation.changes,
+    operation.id,
+  );
+}
+
+/**
+ * Update many states in one operation: the index is built once and each state is patched in
+ * place, so a politics pass over thousands of states costs one validation. All or nothing.
+ */
+function applyUpdateStates(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: UpdateStatesOperation,
+): void {
+  const seen = new Set<number>();
+  for (const { stateId } of operation.updates) {
+    if (seen.has(stateId))
+      throw new ServiceError(
+        'MAP_UPDATE_STATES_DUPLICATE',
+        `State ${stateId} appears twice in updates; merge its changes into one entry`,
+        { stateId },
+      );
+    seen.add(stateId);
+  }
+  const index = currentIndex(base, changes);
+  for (const { stateId, changes: values } of operation.updates)
+    updateStateAgainst(index, changes, stateId, values, operation.id);
 }
 
 function applyMoveStateProvinces(
@@ -2816,7 +2876,11 @@ function requireMergeStatePolicy(operation: MergeStatesOperation): void {
   }
 }
 
-function removalContent(index: MapWorkspaceIndex, file: ScannedFile, label: string): Buffer | null {
+export function removalContent(
+  index: MapWorkspaceIndex,
+  file: ScannedFile,
+  label: string,
+): Buffer | null {
   const lowerExists = index.sourceFiles.some(
     (candidate) =>
       normalizeRelative(candidate.relativePath) === normalizeRelative(file.relativePath) &&
@@ -4793,7 +4857,9 @@ function handleSimpleOperation(
   }
 }
 
-function buildingPositionLine(value: Omit<BuildingPositionRecord, 'line' | 'document'>): string {
+export function buildingPositionLine(
+  value: Omit<BuildingPositionRecord, 'line' | 'document'>,
+): string {
   return [
     value.stateId,
     value.building,
@@ -5620,6 +5686,11 @@ function applyCreateWorld(
       'MAP_SYNTHESIS_CHECK_REQUIRES_GEOGRAPHY',
       'synthesisCheck runs the relief and river synthesis of a geography model; give geography or geographyPath',
     );
+  if (partitionMode === 'legacy' && operation.borderQuality === 'enforce')
+    throw new ServiceError(
+      'MAP_BORDER_QUALITY_ENFORCE_NEEDS_FEATURE_AWARE',
+      'borderQuality "enforce" needs the feature-aware partition: the legacy partition cuts at chance level against rivers and slopes and would block every write. Set partition to "feature-aware", or use "report"',
+    );
   const world = generateWorld(
     {
       startingScenario,
@@ -6010,7 +6081,7 @@ function applyRebuildSupply(
  * Rewrite the script references of one entity kind in the proposed changes. Returns the number
  * of script files changed; an empty result is an error only when the caller asks for it.
  */
-function remapScriptReferences(
+export function remapScriptReferences(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
   operationId: string,
@@ -6143,6 +6214,7 @@ function* planMapOperationSteps(
   const allocations: AllocationEvidence[] = [];
   let expectedChangedBounds: PixelDiffBounds | undefined;
   const manifestOperations: MapOperationPlan['operations'] = [];
+  const territory: TerritoryReport[] = [];
   const worldOutputs: WorldOutputReport[] = [];
   const ids = new Set<string>();
   for (const [operationIndex, operation] of operations.entries()) {
@@ -6174,6 +6246,7 @@ function* planMapOperationSteps(
     );
     const allocationsCheckpoint = allocations.length;
     const boundsCheckpoint = expectedChangedBounds;
+    const territoryCheckpoint = territory.length;
     try {
       if (operation.kind === 'create_world') {
         diagnostics.push(...applyCreateWorld(base, changes, operation, context, signal));
@@ -6182,7 +6255,22 @@ function* planMapOperationSteps(
         if (outputs !== undefined) worldOutputs.push(outputs);
       } else if (operation.kind === 'move_state_provinces')
         applyMoveStateProvinces(base, changes, operation);
-      else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
+      else if (operation.kind === 'assign_territory') {
+        const outcome = yield* applyAssignTerritory(base, changes, allocations, operation, signal);
+        diagnostics.push(...outcome.diagnostics);
+        territory.push(outcome.report);
+      } else if (operation.kind === 'repartition_states') {
+        const outcome = yield* applyRepartitionStates(
+          base,
+          changes,
+          allocations,
+          operation,
+          signal,
+        );
+        diagnostics.push(...outcome.diagnostics);
+        territory.push(outcome.report);
+      } else if (operation.kind === 'update_state') applyUpdateState(base, changes, operation);
+      else if (operation.kind === 'update_states') applyUpdateStates(base, changes, operation);
       else if (operation.kind === 'split_state' || operation.kind === 'create_state')
         yield* applySplitState(base, changes, allocations, operation, signal);
       else if (operation.kind === 'merge_states') applyMergeStates(base, changes, operation);
@@ -6230,6 +6318,7 @@ function* planMapOperationSteps(
       for (const [key, change] of changesCheckpoint) changes.set(key, change);
       allocations.length = allocationsCheckpoint;
       expectedChangedBounds = boundsCheckpoint;
+      territory.length = territoryCheckpoint;
       const serviceError =
         error instanceof ServiceError
           ? error
@@ -6271,6 +6360,7 @@ function* planMapOperationSteps(
     ...(expectedChangedBounds === undefined ? {} : { expectedChangedBounds }),
     finalIndex,
     operations: manifestOperations,
+    ...(territory.length === 0 ? {} : { territory }),
     ...(worldOutputs.length === 0 ? {} : { worldOutputs }),
   };
 }
