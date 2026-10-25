@@ -1494,15 +1494,9 @@ export function resolveGeography(
     const first = ends[0]!,
       second = ends[1]!;
     const idOf = (end: ResolvedStraitEnd) => (end.type === 'land' ? end.id : end.landId);
-    if (idOf(first) !== undefined && idOf(first) === idOf(second))
-      sink(
-        'MAP_GEOGRAPHY_STRAIT_SAME_LAND',
-        derived ? 'warning' : 'error',
-        `Strait ${input.id} joins ${idOf(first)} to itself; a strait separates two lands`,
-        { featureId: input.id, land: idOf(first), derived },
-      );
-    if (first.type === 'point' && second.type === 'point') {
-      let water = false;
+    const bothPoints = first.type === 'point' && second.type === 'point';
+    let water = false;
+    if (first.type === 'point' && second.type === 'point')
       for (let step = 1; step < 32 && !water; step++) {
         const f = step / 32;
         if (
@@ -1511,6 +1505,27 @@ export function resolveGeography(
         )
           water = true;
       }
+    if (idOf(first) !== undefined && idOf(first) === idOf(second)) {
+      // Two declared shore points of one land across water: a crossing between two coasts of the
+      // land, such as a bay mouth or a neck of sea (ADR 0062).
+      if (bothPoints && !derived && water)
+        sink(
+          'MAP_GEOGRAPHY_STRAIT_SAME_LAND',
+          'info',
+          `Strait ${input.id} crosses water between two coasts of ${idOf(first)}`,
+          { featureId: input.id, land: idOf(first), derived, coasts: 'same-land' },
+        );
+      else
+        sink(
+          'MAP_GEOGRAPHY_STRAIT_SAME_LAND',
+          derived ? 'warning' : 'error',
+          bothPoints
+            ? `Strait ${input.id} joins ${idOf(first)} to itself across no water; a strait crosses water between two shores`
+            : `Strait ${input.id} joins ${idOf(first)} to itself; give two shore points across the water for a crossing between two coasts of one land`,
+          { featureId: input.id, land: idOf(first), derived },
+        );
+    }
+    if (bothPoints) {
       if (!water)
         sink(
           'MAP_GEOGRAPHY_STRAIT_NO_WATER',
@@ -1573,6 +1588,7 @@ export function resolveGeography(
       importance: input.importance ?? GEOGRAPHY_DEFAULTS.site.importance,
       onWater,
       ...opt('country', input.country),
+      ...opt('resource', input.resource),
       ...(landId === undefined ? {} : { landId }),
       ...(regionId === undefined ? {} : { regionId }),
       ...(lakeId === undefined ? {} : { lakeId }),

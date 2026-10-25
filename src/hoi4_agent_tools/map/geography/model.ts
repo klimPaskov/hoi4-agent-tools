@@ -2,6 +2,7 @@ import type {
   GeographyBiomeKind,
   GeographyDepthClass,
   GeographyPlaceKind,
+  GeographyResource,
   GeographySiteKind,
 } from '../../schemas/geography.js';
 import { boundsContain, pointSegment, ringContains, type Bounds } from './geometry.js';
@@ -115,7 +116,7 @@ export interface ResolvedSea extends FeatureBase<'sea'> {
   readonly area: ResolvedArea;
   readonly depthClass: GeographyDepthClass;
   readonly ice: number;
-  readonly seaKind: 'ocean' | 'sea' | 'gulf' | 'fjord';
+  readonly seaKind: 'ocean' | 'sea' | 'gulf' | 'bay' | 'fjord';
 }
 
 export interface ResolvedLand extends FeatureBase<'land'> {
@@ -239,6 +240,8 @@ export interface ResolvedSite extends FeatureBase<'site'> {
   readonly at: GeoPoint;
   readonly importance: number;
   readonly country?: string;
+  /** What a `mine` site yields. */
+  readonly resource?: GeographyResource;
   readonly onWater: boolean;
   readonly landId?: string;
   readonly regionId?: string;

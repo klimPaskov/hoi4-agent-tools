@@ -27,6 +27,11 @@ import {
   type SurfacePartitionInput,
   type WorldPartitionSpec,
 } from './world-partition.js';
+import { adjacencyRowText, adjacencyRulesText, type CrossingPlan } from './gameplay/crossings.js';
+import { convertInlandSeas } from './gameplay/inland-sea.js';
+import { planEconomy, type EconomyPlan } from './gameplay/economy.js';
+import { prepareGameplay, type GameplayBase } from './gameplay/prepare.js';
+import type { RailCostModel } from './derived.js';
 import { fractal, lattice } from './world-noise.js';
 import {
   calibratedColourMap,
@@ -156,6 +161,18 @@ export interface WorldSpec {
   partition?: WorldPartitionSpec;
   /** Colour overrides by class for `look: 'custom'`. */
   colormapPalette?: Partial<Record<ColourClass, readonly [number, number, number]>>;
+  /**
+   * Also write a crossing for every narrow channel the model does not declare (ADR 0062); the
+   * largest gap in pixels. Needs a geography.
+   */
+  autoStraits?: { maxGapPx: number };
+  /**
+   * `geography` (default for a geography world) plans ports, development, resources, victory
+   * points and names from the model; `legacy` keeps the random economy (ADR 0063).
+   */
+  developmentModel?: 'geography' | 'legacy';
+  /** Most impassable adjacency rows (default 2,000); lowered by tests of the limit. */
+  impassableRowLimit?: number;
 }
 
 /** Installed base-game data that makes generated files match the game's conventions. */
@@ -200,6 +217,10 @@ export interface GeneratedWorld {
   files: WorldFile[];
   /** The synthesised terrain and its fields, for worlds built from a geography model (ADR 0056). */
   terrain?: SynthesizedTerrain;
+  /** Terrain-aware railway costs for `planSupplyRebuild` (geography worlds, ADR 0063). */
+  railCost?: RailCostModel;
+  /** The crossing and economy plans of a geography world, for reports and tests. */
+  gameplay?: { crossings: CrossingPlan; economy: EconomyPlan | undefined };
   warnings: string[];
   notes: WorldNote[];
   summary: {
@@ -713,6 +734,8 @@ interface StateDraft {
   resources: Map<string, number>;
   victoryPoints: Map<number, number>;
   navalBases: Map<number, number>;
+  /** Land fort levels by province, from the passes of the model. */
+  forts: Map<number, number>;
 }
 
 export interface WorldGenerationOptions {
@@ -860,6 +883,27 @@ export function generateWorld(
     }
     notes.push(terrainSummaryNote(synthesized, geography!));
   }
+  // A lake the model calls an inland sea becomes navigable water (ADR 0062).
+  const inland =
+    geography === undefined || synthesized === undefined
+      ? undefined
+      : convertInlandSeas(surface.kind, surface.elevation, width, height, geography);
+  if (inland !== undefined && geography !== undefined) {
+    for (const { lake, pixels } of inland.converted)
+      notes.push({
+        code: 'MAP_INLAND_SEA_CREATED',
+        severity: 'info',
+        message: `Lake ${geography.lakes[lake]!.id} is an inland sea: its ${pixels} water pixels are written as sea provinces so ships and ports can use them`,
+        details: { lakeId: geography.lakes[lake]!.id, pixels },
+      });
+    for (const lake of inland.missing)
+      notes.push({
+        code: 'MAP_INLAND_SEA_NO_WATER',
+        severity: 'info',
+        message: `Lake ${geography.lakes[lake]!.id} is an inland sea but has no separate water body: it joined the open sea or was too small to keep`,
+        details: { lakeId: geography.lakes[lake]!.id },
+      });
+  }
   const drainage =
     synthesized === undefined
       ? generateWorldDrainage({
@@ -963,6 +1007,24 @@ export function generateWorld(
     featurePartition === undefined ? 'legacy' : 'feature-aware',
   );
   if (countNote !== undefined) notes.push(countNote);
+  // Crossings, passes and walls of a geography world (ADR 0062).
+  const gameplay: GameplayBase | undefined =
+    geography === undefined || synthesized === undefined
+      ? undefined
+      : prepareGameplay({
+          width,
+          height,
+          geography,
+          provinces,
+          heights: synthesized.heights,
+          riverBitmap: drainage.riverPixels,
+          fields: synthesized.fields,
+          riverPaths: synthesized.riverPaths,
+          autoStraits: spec.autoStraits,
+          impassableLimit: spec.impassableRowLimit,
+          inlandSeas: inland?.converted.map(({ lake }) => lake) ?? [],
+        });
+  if (gameplay !== undefined) for (const note of gameplay.notes) notes.push(note);
   const center = (id: number) => ({
     x: provinces.sumX[id]! / provinces.size[id]!,
     y: provinces.sumY[id]! / provinces.size[id]!,
@@ -1200,7 +1262,23 @@ export function generateWorld(
     }
     return selected;
   };
-  const namedCities = (spec.referenceCities ?? []).map((city) => {
+  // Sites of the model that anchor a country (its capital) choose that country's capital province.
+  const siteAnchors =
+    geography === undefined
+      ? []
+      : geography.sites.flatMap((site) =>
+          site.country === undefined || site.onWater
+            ? []
+            : [
+                {
+                  name: site.name ?? site.id,
+                  x: site.at.x * width,
+                  y: site.at.y * height,
+                  countryTag: site.country,
+                },
+              ],
+        );
+  const namedCities = [...(spec.referenceCities ?? []), ...siteAnchors].map((city) => {
     const pixel =
       city.x >= 0 && city.y >= 0 && city.x < width && city.y < height
         ? Math.floor(city.y) * width + Math.floor(city.x)
@@ -1421,11 +1499,30 @@ export function generateWorld(
         resources: new Map(),
         victoryPoints: new Map(),
         navalBases: new Map(),
+        forts: new Map(),
       };
       states.push(draft);
       for (const id of sorted) stateOf.set(id, draft);
     }
   }
+  // Names from reference labels (the nearest province to each label), which win over any other.
+  const stateNames = new Map<number, string>();
+  const regionNames = new Map<number, string>();
+  for (const label of spec.referenceLabels ?? []) {
+    if (label.kind === 'state') {
+      const nearby = nearestProvince(label, landIds);
+      const state = stateOf.get(nearby)!;
+      const previous = stateNames.get(state.id);
+      stateNames.set(state.id, previous === undefined ? label.name : `${previous} / ${label.name}`);
+    } else if (label.kind === 'sea' || label.kind === 'region') {
+      const members = label.kind === 'sea' ? seaIds : landIds;
+      if (members.length === 0) continue;
+      const region = regionOf.get(nearestProvince(label, members))!;
+      const previous = regionNames.get(region);
+      regionNames.set(region, previous === undefined ? label.name : `${previous} / ${label.name}`);
+    }
+  }
+  const lakeNames = new Map<number, string>();
   // State values from size, terrain and development, with the country capital boosted.
   const categories = [
     'wasteland',
@@ -1453,120 +1550,156 @@ export function generateWorld(
     state.capital = capital;
     countryCapitalState.set(spec.countries[index]!.tag, state);
   }
-  for (const state of states) {
-    const pixels = state.provinces.reduce((sum, id) => sum + provinces.size[id]!, 0);
-    const habitability =
-      state.provinces.reduce((sum, id) => {
-        const value =
-          {
-            plains: 1,
-            forest: 0.8,
-            hills: 0.6,
-            jungle: 0.5,
-            marsh: 0.4,
-            desert: 0.25,
-            mountain: 0.3,
-            urban: 1.5,
-          }[terrain.get(id) ?? 'plains'] ?? 0.5;
-        return sum + value * provinces.size[id]!;
-      }, 0) / pixels;
-    const isCapital = state.owner !== undefined && countryCapitalState.get(state.owner) === state;
-    const development = Math.min(1, habitability * (0.5 + random.next()) * (isCapital ? 1.8 : 1));
-    state.manpower = Math.max(1_000, Math.round((pixels * 180 * development) / 1_000) * 1_000);
-    const categoryIndex = Math.max(
-      0,
-      Math.min(categories.length - 1, Math.round(development * 5.2 + (isCapital ? 1 : 0))),
-    );
-    state.category = categories[categoryIndex]!;
-    if (context.stateCategories !== undefined && !context.stateCategories.has(state.category))
-      state.category = context.stateCategories.has('rural')
-        ? 'rural'
-        : ([...context.stateCategories][0] ?? 'rural');
-    const slots = slotsFor[state.category] ?? 2;
-    state.infrastructure = Math.max(
-      1,
-      Math.min(5, Math.round(1 + development * 3 + (isCapital ? 1 : 0))),
-    );
-    state.civilian = Math.round(slots * (0.25 + random.next() * 0.3));
-    state.military = Math.min(slots - state.civilian, Math.round(slots * random.next() * 0.3));
-    if (isCapital) {
-      terrain.set(state.capital, 'urban');
-      state.airBase = 2;
-    }
-    const coastalProvinces = state.provinces.filter(coastal);
-    if (coastalProvinces.length > 0 && (isCapital || random.next() < 0.35)) {
-      state.navalBases.set(coastalProvinces[0]!, isCapital ? 3 : 1);
-      if (slots - state.civilian - state.military > 0 && random.next() < 0.5) state.dockyard = 1;
-    }
-    for (const id of state.provinces) {
-      const kindOfLand = terrain.get(id);
-      const roll = random.next();
-      const add = (resource: string, amount: number) =>
-        state.resources.set(resource, (state.resources.get(resource) ?? 0) + amount);
-      if (kindOfLand === 'desert' && roll < 0.3) add('oil', 2 + random.int(6));
-      if ((kindOfLand === 'mountain' || kindOfLand === 'hills') && roll < 0.35)
-        add('steel', 2 + random.int(8));
-      if (kindOfLand === 'mountain' && roll < 0.15) add('tungsten', 1 + random.int(4));
-      if (kindOfLand === 'hills' && roll > 0.85) add('chromium', 1 + random.int(4));
-      if (kindOfLand === 'jungle' && roll < 0.35) add('rubber', 1 + random.int(5));
-      if (kindOfLand === 'plains' && roll < 0.05) add('aluminium', 1 + random.int(4));
-    }
-    state.victoryPoints.set(
-      state.capital,
-      isCapital ? 25 : Math.max(1, Math.round(development * 8)),
-    );
-  }
   const cityNames = new Map<number, string>();
-  for (const city of namedCities) {
-    const state = stateOf.get(city.province)!;
-    cityNames.set(city.province, city.name);
-    state.victoryPoints.set(
-      city.province,
-      Math.max(5, state.victoryPoints.get(city.province) ?? 0),
-    );
-    terrain.set(city.province, 'urban');
-  }
-  // Each coastal territory needs a port even when its capital lies inland or on another island.
-  const portChecked = new Set<number>();
-  for (const start of landIds) {
-    if (portChecked.has(start)) continue;
-    const queue = [start];
-    portChecked.add(start);
-    let bestCoast: number | undefined;
-    let hasPort = false;
-    for (const id of queue) {
-      if (stateOf.get(id)!.navalBases.has(id)) hasPort = true;
-      if (
-        coastal(id) &&
-        (bestCoast === undefined || provinces.size[id]! > provinces.size[bestCoast]!)
-      )
-        bestCoast = id;
-      for (const next of provinces.neighbors[id]!)
-        if (
-          !portChecked.has(next) &&
-          provinces.kind[next] === LAND &&
-          owner.get(next) === owner.get(start)
-        ) {
-          portChecked.add(next);
-          queue.push(next);
-        }
+  // A geography world gets its economy, ports, names and railway costs from the model (ADR 0063);
+  // every other world keeps the random economy below, byte for byte.
+  const economy: EconomyPlan | undefined =
+    gameplay === undefined || spec.developmentModel === 'legacy'
+      ? undefined
+      : planEconomy(gameplay, {
+          states: states.map((state) => ({
+            id: state.id,
+            provinces: state.provinces,
+            owner: state.owner,
+            isCapital: state.owner !== undefined && countryCapitalState.get(state.owner) === state,
+          })),
+          terrain,
+          options: {
+            categories,
+            slotsFor,
+            allowedCategories: context.stateCategories,
+            capitalProvinces: new Set(capitals),
+          },
+          regionOf,
+          fixedStateNames: stateNames,
+          fixedRegionNames: regionNames,
+          countryNames: new Map(spec.countries.map(({ tag, name }) => [tag, name])),
+        });
+  if (economy !== undefined) {
+    for (const state of states) {
+      const plan = economy.development.states.get(state.id)!;
+      state.manpower = plan.manpower;
+      state.category = plan.category;
+      state.infrastructure = plan.infrastructure;
+      state.civilian = plan.civilian;
+      state.military = plan.military;
+      state.dockyard = plan.dockyard;
+      state.airBase = plan.airBase;
+      state.resources = plan.resources;
+      state.victoryPoints = plan.victoryPoints;
+      for (const id of state.provinces) {
+        const port = economy.ports.ports.get(id);
+        if (port !== undefined) state.navalBases.set(id, port.level);
+        const fort = economy.forts.get(id);
+        if (fort !== undefined) state.forts.set(id, fort);
+      }
     }
-    if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
+    for (const id of economy.development.urban) terrain.set(id, 'urban');
+    for (const [id, name] of economy.names.victory) cityNames.set(id, name);
+    for (const [id, name] of economy.names.states) stateNames.set(id, name);
+    for (const [id, name] of economy.names.regions) regionNames.set(id, name);
+    for (const [id, name] of economy.names.lakes) lakeNames.set(id, name);
+    for (const note of economy.notes) notes.push(note);
   }
-  const stateNames = new Map<number, string>();
-  const regionNames = new Map<number, string>();
-  for (const label of spec.referenceLabels ?? []) {
-    if (label.kind === 'state') {
-      const nearby = nearestProvince(label, landIds);
-      const state = stateOf.get(nearby)!;
-      const previous = stateNames.get(state.id);
-      stateNames.set(state.id, previous === undefined ? label.name : `${previous} / ${label.name}`);
-    } else if (label.kind === 'sea' || label.kind === 'region') {
-      const members = label.kind === 'sea' ? seaIds : landIds;
-      if (members.length === 0) continue;
-      const region = regionOf.get(nearestProvince(label, members))!;
-      const previous = regionNames.get(region);
-      regionNames.set(region, previous === undefined ? label.name : `${previous} / ${label.name}`);
+  if (economy === undefined) {
+    for (const state of states) {
+      const pixels = state.provinces.reduce((sum, id) => sum + provinces.size[id]!, 0);
+      const habitability =
+        state.provinces.reduce((sum, id) => {
+          const value =
+            {
+              plains: 1,
+              forest: 0.8,
+              hills: 0.6,
+              jungle: 0.5,
+              marsh: 0.4,
+              desert: 0.25,
+              mountain: 0.3,
+              urban: 1.5,
+            }[terrain.get(id) ?? 'plains'] ?? 0.5;
+          return sum + value * provinces.size[id]!;
+        }, 0) / pixels;
+      const isCapital = state.owner !== undefined && countryCapitalState.get(state.owner) === state;
+      const development = Math.min(1, habitability * (0.5 + random.next()) * (isCapital ? 1.8 : 1));
+      state.manpower = Math.max(1_000, Math.round((pixels * 180 * development) / 1_000) * 1_000);
+      const categoryIndex = Math.max(
+        0,
+        Math.min(categories.length - 1, Math.round(development * 5.2 + (isCapital ? 1 : 0))),
+      );
+      state.category = categories[categoryIndex]!;
+      if (context.stateCategories !== undefined && !context.stateCategories.has(state.category))
+        state.category = context.stateCategories.has('rural')
+          ? 'rural'
+          : ([...context.stateCategories][0] ?? 'rural');
+      const slots = slotsFor[state.category] ?? 2;
+      state.infrastructure = Math.max(
+        1,
+        Math.min(5, Math.round(1 + development * 3 + (isCapital ? 1 : 0))),
+      );
+      state.civilian = Math.round(slots * (0.25 + random.next() * 0.3));
+      state.military = Math.min(slots - state.civilian, Math.round(slots * random.next() * 0.3));
+      if (isCapital) {
+        terrain.set(state.capital, 'urban');
+        state.airBase = 2;
+      }
+      const coastalProvinces = state.provinces.filter(coastal);
+      if (coastalProvinces.length > 0 && (isCapital || random.next() < 0.35)) {
+        state.navalBases.set(coastalProvinces[0]!, isCapital ? 3 : 1);
+        if (slots - state.civilian - state.military > 0 && random.next() < 0.5) state.dockyard = 1;
+      }
+      for (const id of state.provinces) {
+        const kindOfLand = terrain.get(id);
+        const roll = random.next();
+        const add = (resource: string, amount: number) =>
+          state.resources.set(resource, (state.resources.get(resource) ?? 0) + amount);
+        if (kindOfLand === 'desert' && roll < 0.3) add('oil', 2 + random.int(6));
+        if ((kindOfLand === 'mountain' || kindOfLand === 'hills') && roll < 0.35)
+          add('steel', 2 + random.int(8));
+        if (kindOfLand === 'mountain' && roll < 0.15) add('tungsten', 1 + random.int(4));
+        if (kindOfLand === 'hills' && roll > 0.85) add('chromium', 1 + random.int(4));
+        if (kindOfLand === 'jungle' && roll < 0.35) add('rubber', 1 + random.int(5));
+        if (kindOfLand === 'plains' && roll < 0.05) add('aluminium', 1 + random.int(4));
+      }
+      state.victoryPoints.set(
+        state.capital,
+        isCapital ? 25 : Math.max(1, Math.round(development * 8)),
+      );
+    }
+    for (const city of namedCities) {
+      const state = stateOf.get(city.province)!;
+      cityNames.set(city.province, city.name);
+      state.victoryPoints.set(
+        city.province,
+        Math.max(5, state.victoryPoints.get(city.province) ?? 0),
+      );
+      terrain.set(city.province, 'urban');
+    }
+    // Each coastal territory needs a port even when its capital lies inland or on another island.
+    const portChecked = new Set<number>();
+    for (const start of landIds) {
+      if (portChecked.has(start)) continue;
+      const queue = [start];
+      portChecked.add(start);
+      let bestCoast: number | undefined;
+      let hasPort = false;
+      for (const id of queue) {
+        if (stateOf.get(id)!.navalBases.has(id)) hasPort = true;
+        if (
+          coastal(id) &&
+          (bestCoast === undefined || provinces.size[id]! > provinces.size[bestCoast]!)
+        )
+          bestCoast = id;
+        for (const next of provinces.neighbors[id]!)
+          if (
+            !portChecked.has(next) &&
+            provinces.kind[next] === LAND &&
+            owner.get(next) === owner.get(start)
+          ) {
+            portChecked.add(next);
+            queue.push(next);
+          }
+      }
+      if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
     }
   }
   // Province IDs: 1-based in reading order of the province's first pixel; 0 is the null row.
@@ -1655,13 +1788,21 @@ export function generateWorld(
       message: `The rim edge policy wrote ${rimRows.length} impassable adjacency row(s) for provinces that meet across the seam`,
       details: { rows: rimRows.length },
     });
+  const crossingRows = (gameplay?.crossings.rows ?? []).map(adjacencyRowText);
   add(
     `${map}/adjacencies.csv`,
     text(
-      `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n${rimRows.map((row) => `${row}\r\n`).join('')}-1;-1;;-1;-1;-1;-1;-1;-1\r\n`,
+      `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n${[...crossingRows, ...rimRows].map((row) => `${row}\r\n`).join('')}-1;-1;;-1;-1;-1;-1;-1;-1\r\n`,
     ),
   );
-  add(`${map}/adjacency_rules.txt`, text('# No straits or canals in this world yet.\n'));
+  add(
+    `${map}/adjacency_rules.txt`,
+    text(
+      gameplay === undefined
+        ? '# No straits or canals in this world yet.\n'
+        : adjacencyRulesText(gameplay.crossings.rules),
+    ),
+  );
   add(`${map}/positions.txt`, text(''));
   add(
     `${map}/ambient_object.txt`,
@@ -2070,9 +2211,16 @@ export function generateWorld(
       ...(state.military > 0 ? [`\t\t\tarms_factory = ${state.military}`] : []),
       ...(state.dockyard > 0 ? [`\t\t\tdockyard = ${state.dockyard}`] : []),
       ...(state.airBase > 0 ? [`\t\t\tair_base = ${state.airBase}`] : []),
-      ...[...state.navalBases].map(
-        ([id, level]) => `\t\t\t${provinceId(id)} = { naval_base = ${level} }`,
-      ),
+      ...[
+        ...state.navalBases.keys(),
+        ...[...state.forts.keys()].filter((id) => !state.navalBases.has(id)).sort((a, b) => a - b),
+      ].map((id) => {
+        const parts = [
+          ...(state.navalBases.has(id) ? [`naval_base = ${state.navalBases.get(id)}`] : []),
+          ...(state.forts.has(id) ? [`bunker = ${state.forts.get(id)}`] : []),
+        ];
+        return `\t\t\t${provinceId(id)} = { ${parts.join(' ')} }`;
+      }),
     ];
     add(
       `${context.statesRoot}/${state.id}-${slug(stateNames.get(state.id) ?? `STATE_${state.id}`).slice(0, 80)}.txt`,
@@ -2359,6 +2507,9 @@ export function generateWorld(
       ...(spec.referenceLabels ?? []).map(
         (label, index) => [`WORLD_GEOGRAPHY_${index + 1}`, label.name] as const,
       ),
+      ...[...lakeNames]
+        .sort((a, b) => a[0] - b[0])
+        .map(([id, name]) => [`PROV${provinceId(id)}`, name] as const),
       ...continentNames.map((name, index) => [`world_continent_${index + 1}`, name] as const),
       ...countryLocalisation,
       ...(spec.realms === undefined
@@ -2382,6 +2533,8 @@ export function generateWorld(
     warnings: [...interpretationWarnings, ...drainage.warnings],
     notes,
     ...(synthesized === undefined ? {} : { terrain: synthesized }),
+    ...(economy === undefined ? {} : { railCost: economy.railCost }),
+    ...(gameplay === undefined ? {} : { gameplay: { crossings: gameplay.crossings, economy } }),
     summary: {
       width,
       height,

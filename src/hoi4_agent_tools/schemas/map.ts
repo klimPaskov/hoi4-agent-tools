@@ -347,6 +347,40 @@ export const worldPartitionSchema = z
   );
 export type WorldPartitionInput = z.infer<typeof worldPartitionSchema>;
 
+/** Development model of a world built from a geography (ADR 0063). */
+export const worldDevelopmentSchema = z
+  .object({
+    model: z
+      .enum(['geography', 'legacy'])
+      .optional()
+      .describe(
+        'geography (default for a geography world) plans ports, population, state categories, infrastructure, factories, resources, victory points, names and railway costs from the model: fertility, rivers, the coast, passes, ranges and sites. legacy keeps the random economy.',
+      ),
+  })
+  .strict();
+export type WorldDevelopmentInput = z.infer<typeof worldDevelopmentSchema>;
+
+/** Automatic detection of narrow sea channels between landmasses (ADR 0062). */
+export const worldAutoStraitsSchema = z
+  .union([
+    z.boolean(),
+    z
+      .object({
+        maxGapPx: z
+          .number()
+          .int()
+          .min(4)
+          .max(96)
+          .optional()
+          .describe('Widest channel written as a crossing, in pixels; default 24 (about 170 km).'),
+      })
+      .strict(),
+  ])
+  .describe(
+    'Also write a sea crossing for every channel narrower than maxGapPx that one sea province fills between two landmasses and that the model does not declare as a strait. Needs a geography.',
+  );
+export type WorldAutoStraitsInput = z.infer<typeof worldAutoStraitsSchema>;
+
 const partitionAreaPixels = z.number().int().min(20).max(50_000);
 export const worldPartitionTuningSchema = z
   .object({
@@ -1128,6 +1162,8 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       look: worldLookSchema.optional(),
       colormap: worldColormapSchema.optional(),
       partition: worldPartitionSchema.optional(),
+      development: worldDevelopmentSchema.optional(),
+      autoStraits: worldAutoStraitsSchema.optional(),
       partitionTuning: worldPartitionTuningSchema
         .optional()
         .describe(
