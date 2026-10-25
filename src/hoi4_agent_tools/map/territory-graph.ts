@@ -9,7 +9,7 @@ import { buildProvinceGraph, type ProvinceGraph } from './partition-graph.js';
 
 /**
  * The graph territory assignment grows countries over (ADR 0060). Provinces come from a border
- * edge table of the C10 metric, so the natural lines are exactly the ones the metric rewards:
+ * edge table of the border metric (ADR 0059), so the natural lines are exactly the ones the metric rewards:
  * every shared border carries the strength of the features it lies on and the number of its pixel
  * edges that count as natural. States (or any other grouping of provinces) are aggregated into
  * atoms with the same two numbers, and the algorithm in `territory.ts` runs on atoms only.
@@ -67,7 +67,7 @@ function graphKind(kind: number): number {
 }
 
 /**
- * Build the province graph of a map from the border edge table of the C10 metric. The table holds
+ * Build the province graph of a map from the border edge table of the border metric (ADR 0059). The table holds
  * every land border pixel edge with its natural features, so the mean strength and the natural
  * length of each shared border are exact; borders with water have none.
  */

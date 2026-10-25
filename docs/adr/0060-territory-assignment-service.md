@@ -2,7 +2,7 @@
 
 ## Context
 
-Country borders of a generated total-conversion map came from a private script that grew countries over province centres and then cut states along the border, so states fell to 4.7 provinces and the borders ignored rivers and ranges (country enrichment 0.50 against 1.46 in the base game, ADR 0059). The feature-aware partition (ADR 0058) exports a weighted province graph and the border metric (ADR 0059) can score any grouping of provinces without reading the raster again, so the pieces for a public service existed. A politics pass also needs more than the `create_world` limits (200 countries) and more than 100 operations of one state each (a pass over more than a thousand states took 14 calls with a full validation each). Plan section C11 asks for one rewrite operation that covers a whole map.
+Country borders of a generated total-conversion map came from a private script that grew countries over province centres and then cut states along the border, so states fell to 4.7 provinces and the borders ignored rivers and ranges (country enrichment 0.50 against 1.46 in the base game, ADR 0059). The feature-aware partition (ADR 0058) exports a weighted province graph and the border metric (ADR 0059) can score any grouping of provinces without reading the raster again, so the pieces for a public service existed. A politics pass also needs more than the `create_world` limits (200 countries) and more than 100 operations of one state each (a pass over more than a thousand states took 14 calls with a full validation each). A single rewrite operation that covers a whole map was needed.
 
 ## Decision
 
