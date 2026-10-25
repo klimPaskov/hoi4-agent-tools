@@ -171,6 +171,13 @@ describe('known-mistake detectors', () => {
     const findings = knownMistakeFindings('scripted_effects', document);
     expect(findings.map(({ code }) => code)).toEqual(['KNOWN_MISTAKE_TEMP_VARIABLE_SCOPE_PREFIX']);
     expect(findings[0]!.message).toContain('ROOT.amount');
+    // A script constant read is not a scoped variable read, even when its key matches a temporary.
+    expect(
+      codes(
+        'scripted_effects',
+        'a = { set_temp_variable = { event_id = 1 } b = { c = constant:random_identity.event_id } }\n',
+      ),
+    ).toEqual([]);
     // A name that is also a regular variable in the file is not reported.
     expect(
       codes(

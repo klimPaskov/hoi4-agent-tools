@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 4.6.1 - 2026-10-26
 
+- Stop flagging `constant:<category>.<key>` script-constant reads as scoped temporary-variable reads (`KNOWN_MISTAKE_TEMP_VARIABLE_SCOPE_PREFIX`).
 - Make declared passes saddles whatever else stands there (ADR 0072). After the macro relief is composed, the heights in a pass's corridor are capped at the pass's saddle level, so a volcano cone, plateau or neighbouring feature that overlaps a pass no longer fills the gap and no longer fails the world with `MAP_PASS_NOT_LOWER`. Another range's body is left alone. `create_world.synthesisCheck` now also reports `MAP_PASS_NOT_LOWER`, so a preview catches what the write would block on. Models whose passes were refused now write; worlds with no overlapping feature on a pass are unchanged.
 
 ## 4.6.0 - 2026-10-25
