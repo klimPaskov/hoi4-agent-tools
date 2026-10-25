@@ -122,6 +122,50 @@ export function assertFocusPlanAuthority(
   );
 }
 
+/**
+ * True when the source changed in meaning after the plan was imported, so regenerating from the
+ * plan would overwrite those changes. A formatting-only change (the source still imports to the
+ * plan's original baseline), a source that already equals the plan, and an unchanged source are not
+ * semantic drift. This is deliberately independent of whether the plan itself was edited: a plan
+ * edit plus an external formatting change reports `conflict`, which is still safe to apply.
+ */
+export function hasSemanticSourceDrift(
+  drift: FocusDriftResult | ContinuousFocusDriftResult,
+): boolean {
+  if (!drift.sourceChanged) return false;
+  if (drift.status === 'tree_removed') return true;
+  return (
+    drift.currentPlanHash !== drift.importedPlanHash &&
+    drift.currentPlanHash !== drift.savedPlanHash
+  );
+}
+
+/**
+ * Refuses to regenerate a tree from a plan when the source changed in meaning after the plan was
+ * imported. Applying the plan would overwrite those external changes with stale plan values.
+ * Re-import the source with the inspect tool, reapply the intended change to the fresh plan, and
+ * retry.
+ */
+export function assertNoSemanticSourceDrift(
+  drift: FocusDriftResult | ContinuousFocusDriftResult,
+  sourcePath: string,
+): void {
+  if (!hasSemanticSourceDrift(drift)) return;
+  throw new ServiceError(
+    'FOCUS_SOURCE_CHANGED_SINCE_PLAN',
+    'The focus source changed in meaning after the plan was imported; rewriting from the plan would overwrite those changes. Import the current source with hoi4.focus_inspect, reapply the intended edit to the fresh plan, and retry',
+    {
+      relativePath: sourcePath,
+      status: drift.status,
+      savedSourceHash: drift.savedSourceHash,
+      currentSourceHash: drift.currentSourceHash,
+      savedPlanHash: drift.savedPlanHash,
+      currentPlanHash: drift.currentPlanHash,
+      importedPlanHash: drift.importedPlanHash,
+    },
+  );
+}
+
 export function detectContinuousFocusDrift(
   savedPlan: ContinuousFocusPalettePlan,
   currentDocument: SourceDocument,
