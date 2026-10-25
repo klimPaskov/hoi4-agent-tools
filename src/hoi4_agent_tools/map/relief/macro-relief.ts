@@ -659,6 +659,112 @@ function applyVolcano(
 
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * A declared pass is authoritative over the other relief (ADR 0072). The saddle of a range's
+ * envelope is lowered by the range alone; a volcano cone, a plateau or a neighbouring range that
+ * overlaps the pass adds height back and the gap disappears. After everything is composed, the
+ * heights along the pass corridor are capped at the saddle level (base plus crest times the
+ * envelope), with a soft edge across the corridor, so the pass is lower than the crest on both
+ * sides wherever it lies.
+ */
+function carvePassSaddles(
+  geography: ResolvedGeography,
+  tables: readonly RangeTable[],
+  heights: Float32Array,
+  kind: Uint8Array,
+  mw: number,
+  mh: number,
+): void {
+  const aspect = mh / mw;
+  // The line of every range in cell units, one point per table entry, with its footprint.
+  const lines = new Map<string, { x: Float64Array; y: Float64Array; reach: number }>();
+  for (const range of geography.ranges) {
+    const table = tables.find((candidate) => candidate.id === range.id);
+    if (table === undefined) continue;
+    const x = new Float64Array(table.count);
+    const y = new Float64Array(table.count);
+    let widest = 0;
+    for (let j = 0; j < table.count; j += 1) {
+      const point = sampleAlong(range.path, geography.frame, j / (table.count - 1));
+      x[j] = point.x * mw;
+      y[j] = point.y * mh;
+      widest = Math.max(widest, table.halfWidth[j]!);
+    }
+    lines.set(range.id, { x, y, reach: Math.max(2, widest * mw) });
+  }
+  for (const range of geography.ranges) {
+    const table = tables.find((candidate) => candidate.id === range.id);
+    const own = lines.get(range.id);
+    if (table === undefined || own === undefined) continue;
+    const lineX = own.x;
+    const lineY = own.y;
+    for (const entry of table.passes) {
+      if (entry.depth <= 0) continue;
+      const k = Math.min(table.count - 1, Math.max(0, Math.round(entry.at * (table.count - 1))));
+      // Half-width of the corridor in cells: the range's footprint, at least three cells, plus a
+      // soft edge of three more.
+      const corridor = Math.max(2, table.halfWidth[k]! * mw);
+      const edge = 2;
+      const entries = Math.ceil((entry.halfLength / table.length) * (table.count - 1));
+      const first = Math.max(0, k - entries);
+      const last = Math.min(table.count - 1, k + entries);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (let j = first; j <= last; j += 1) {
+        minX = Math.min(minX, lineX[j]!);
+        maxX = Math.max(maxX, lineX[j]!);
+        minY = Math.min(minY, lineY[j]!);
+        maxY = Math.max(maxY, lineY[j]!);
+      }
+      const reach = Math.ceil(corridor + edge) + 1;
+      const x0 = Math.max(0, Math.floor(minX) - reach);
+      const x1 = Math.min(mw - 1, Math.ceil(maxX) + reach);
+      const y0 = Math.max(0, Math.floor(minY) - reach);
+      const y1 = Math.min(mh - 1, Math.ceil(maxY) + reach);
+      const baseLevel = table.base[k]!;
+      const crestLevel = table.crest[k]!;
+      for (let y = y0; y <= y1; y += 1)
+        for (let x = x0; x <= x1; x += 1) {
+          const cell = y * mw + x;
+          if (kind[cell] !== LAND) continue;
+          // The nearest point of the range line, which must lie inside the pass window.
+          let nearest = -1;
+          let nearestDistance = Infinity;
+          for (let j = 0; j < table.count; j += 1) {
+            const distance = Math.hypot(lineX[j]! - (x + 0.5), lineY[j]! - (y + 0.5));
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearest = j;
+            }
+          }
+          if (nearest < first || nearest > last || nearestDistance > corridor + edge) continue;
+          // A cell on the body of another range belongs to that range, not to this pass.
+          let onOther = false;
+          for (const [id, other] of lines) {
+            if (id === range.id) continue;
+            for (let j = 0; j < other.x.length && !onOther; j += 1)
+              if (Math.hypot(other.x[j]! - (x + 0.5), other.y[j]! - (y + 0.5)) <= other.reach)
+                onOther = true;
+            if (onOther) break;
+          }
+          if (onOther) continue;
+          const along = ((nearest - k) / (table.count - 1)) * table.length;
+          const s = (along * along) / (entry.halfLength * entry.halfLength);
+          if (s >= 1) continue;
+          const bump = (1 - s) * (1 - s);
+          const cap = baseLevel + (crestLevel - baseLevel) * (1 - entry.depth * bump);
+          const weight =
+            nearestDistance <= corridor ? 1 : 1 - smoothstep((nearestDistance - corridor) / edge);
+          if (cap < heights[cell]!)
+            heights[cell] = heights[cell]! + (cap - heights[cell]!) * weight;
+        }
+    }
+  }
+  void aspect;
+}
+
 /** Build the macro relief of the model. */
 export function synthesizeMacroRelief(input: MacroReliefInput): MacroRelief {
   const { geography, width, height, seed } = input;
@@ -700,6 +806,7 @@ export function synthesizeMacroRelief(input: MacroReliefInput): MacroRelief {
     heights[index] = Math.min(HEIGHT_CEILING, heights[index]! + targets.delta[index]!);
     footprint[index] = Math.max(footprint[index]!, targets.footprint[index]!);
   }
+  carvePassSaddles(geography, ranges, heights, kind, mw, mh);
   return {
     width: mw,
     height: mh,

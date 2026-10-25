@@ -302,6 +302,8 @@ const detectors: Readonly<Record<string, Detector>> = {
     const findings: Array<{ node: AssignmentNode; message: string }> = [];
     for (const { node, token } of names) {
       const name = token.slice(token.lastIndexOf('.') + 1);
+      // `constant:category.key` reads a script constant, not a scoped variable.
+      if (token.startsWith('constant:')) continue;
       if (!temporary.has(name) || regular.has(name)) continue;
       if (!/^(?:[A-Za-z_][\w]*|[a-z_]+:[\w]+)(?:\.[A-Za-z_][\w]*)+$/u.test(token)) continue;
       findings.push({

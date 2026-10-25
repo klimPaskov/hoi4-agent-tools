@@ -214,18 +214,32 @@ export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
         if (macro.kind[cell] === LAND)
           macro.heights[cell] = adjust(2 * x + 1, 2 * y + 1, macro.heights[cell]!);
       }
-  return [
-    ...synthesizeHydrology({
-      geography,
-      macro,
-      seed,
-      density: input.rivers?.density,
-      count: input.rivers?.count,
-      rainfall: input.rainfall,
-      landPixels,
-      signal: input.signal,
-    }).notes,
-  ];
+  const hydrology = synthesizeHydrology({
+    geography,
+    macro,
+    seed,
+    density: input.rivers?.density,
+    count: input.rivers?.count,
+    rainfall: input.rainfall,
+    landPixels,
+    signal: input.signal,
+  });
+  const notes: ReliefNote[] = [...hydrology.notes];
+  // The pass test of the write, on the macro grid: a declared pass must be a saddle lower than
+  // the crest on both sides. Only its error is reported, so a preview never blocks on a warning
+  // the full-resolution write would not raise.
+  const quantised = new Uint8Array(macro.width * macro.height);
+  for (let index = 0; index < quantised.length; index += 1)
+    quantised[index] = Math.max(0, Math.min(255, Math.round(hydrology.heights[index]!)));
+  for (const note of checkRangesAndFeatures(
+    geography,
+    macro.ranges,
+    { width: macro.width, height: macro.height, kind: macro.kind, heights: quantised },
+    (peak) => peakHeight(peak, macro.scale),
+    (peak) => peakHeight(peak, macro.scale),
+  ))
+    if (note.code === 'MAP_PASS_NOT_LOWER') notes.push(note);
+  return notes;
 }
 
 /** Build relief, hydrology, normals and fields for a geography model on a map of the given size. */

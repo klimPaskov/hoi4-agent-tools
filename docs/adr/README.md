@@ -75,3 +75,4 @@ Implementation rationale for contributors. For using the server, start with the 
 65. [Territory assignment service](0060-territory-assignment-service.md)
 66. [Validation of a replacement world and the river check](0070-whole-map-validation-and-river-check.md)
 67. [Drawn rivers carve their valleys](0071-drawn-rivers-carve-their-valleys.md)
+68. [Declared passes are saddles](0072-declared-passes-are-saddles.md)
