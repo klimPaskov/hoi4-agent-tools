@@ -3,8 +3,9 @@
 ## Unreleased
 
 - Stop reporting the validation findings of a map that a failed `create_world` left in place: a world that cannot generate now returns only its own blockers, and a successful replacement of a map is validated on the map it produces instead of being compared with the map it replaces (ADR 0070). Before, a river that could not reach its mouth came back with three `MAP_VALIDATION_OPERATION_UNOWNED` blockers about the old map.
-- Report every named river that cannot reach its mouth in one run: `MAP_RIVER_UNREACHABLE_MOUTH` keeps its code and top-level fields and gains `details.rivers`, each with the reason, `climb`, `limit`, the `divide` (world pixel, height, nearest model range) or `blockedBy` another failed river.
-- Add `create_world.synthesisCheck` (with `preview: true` and a geography): run only the relief and river synthesis and report all unreachable rivers without writing (`MAP_SYNTHESIS_CHECK_READY`, `MAP_SYNTHESIS_CHECK_BLOCKED`, `data.synthesisCheck`). Public schema change: one new optional field on `create_world` (minor version).
+- Let drawn rivers carve their valleys (ADR 0071). A river whose course crosses a divide higher than 22 height units (a volcano cone, a foothill, the tip of a range) is no longer refused: its bed is cut through the rise as a gorge, and each crossing is reported as the warning `MAP_RIVER_CARVED_CROSSING` with the river, climb and divide location (world pixel, height, nearest range or volcano). Models that were refused now write; models that wrote are unchanged.
+- Report every named river with an impossible course in one run: `MAP_RIVER_UNREACHABLE_MOUTH` (a mouth on another landmass, a source or via point that cannot be reached, a lake without a shore) keeps its code and top-level fields and gains `details.rivers`, each with its reason or `blockedBy` another failed river.
+- Add `create_world.synthesisCheck` (with `preview: true` and a geography): run only the relief and river synthesis and report all impossible rivers and carved crossings without writing (`MAP_SYNTHESIS_CHECK_READY`, `MAP_SYNTHESIS_CHECK_BLOCKED`, `data.synthesisCheck`). Public schema change: one new optional field on `create_world` (minor version).
 
 ## 4.5.0 - 2026-10-25
 

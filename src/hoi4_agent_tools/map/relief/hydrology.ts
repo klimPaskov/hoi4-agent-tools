@@ -422,6 +422,22 @@ function nearestRange(
   return best;
 }
 
+/** The volcano nearest a point, and whether the point lies on its cone (within 1.3 radii). */
+function nearestVolcano(
+  geography: ResolvedGeography,
+  x: number,
+  y: number,
+  aspect: number,
+): { id: string; distance: number; inside: boolean } | undefined {
+  let best: { id: string; distance: number; inside: boolean } | undefined;
+  for (const volcano of geography.volcanoes) {
+    const distance = Math.hypot(x - volcano.at.x, (y - volcano.at.y) * aspect);
+    if (best === undefined || distance < best.distance)
+      best = { id: volcano.id, distance, inside: distance <= volcano.radius * 1.3 };
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 function fail(code: string, message: string, details: Record<string, unknown>): never {
@@ -849,27 +865,42 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
           ),
         );
         const climb = climbOf(conditioned, cells);
+        // A drawn river is authoritative over the relief: where its course rises over a divide, the
+        // bed is burned to a monotone descent below, which cuts a gorge through the cone, foothill
+        // or range slope (ADR 0071). Each such crossing is reported with its location.
         if (climb > MAXIMUM_RIVER_CLIMB) {
           const divide = climbDivide(conditioned, cells);
           const cx = (divide.cell % mw) + 0.5;
           const cy = Math.floor(divide.cell / mw) + 0.5;
-          const range = nearestRange(geography, cx / mw, cy / mh, mh / mw);
-          unreachable(
-            `its route would climb ${Math.round(climb)} height units over a divide (the limit is ${MAXIMUM_RIVER_CLIMB})`,
-            {
+          const aspect = mh / mw;
+          const range = nearestRange(geography, cx / mw, cy / mh, aspect);
+          const volcano = nearestVolcano(geography, cx / mw, cy / mh, aspect);
+          notes.push({
+            code: 'MAP_RIVER_CARVED_CROSSING',
+            severity: 'warning',
+            message: `River ${river.id} crosses a divide ${Math.round(climb)} height units above its bed near (${Math.floor(cx * 2)}, ${Math.floor(cy * 2)}); its valley is carved through it${
+              volcano?.inside === true
+                ? ` (the slope of volcano ${volcano.id})`
+                : range !== undefined && range.distance <= 0.06
+                  ? ` (the range ${range.id})`
+                  : ''
+            }`,
+            details: {
+              riverId: river.id,
               climb: Math.round(climb),
               limit: MAXIMUM_RIVER_CLIMB,
               divide: {
                 x: Math.floor(cx * 2),
                 y: Math.floor(cy * 2),
                 height: Math.round(conditioned[divide.cell]!),
+                ...(range === undefined ? {} : { nearestRange: range.id }),
                 ...(range !== undefined && range.distance <= 0.06
                   ? { range: range.id, rangeDistance: Math.round(range.distance * 1000) / 1000 }
                   : {}),
-                ...(range === undefined ? {} : { nearestRange: range.id }),
+                ...(volcano?.inside === true ? { volcano: volcano.id } : {}),
               },
             },
-          );
+          });
         }
         routed.push({
           river,

@@ -640,6 +640,10 @@ async function previewSynthesisCheck(
       ? (details.rivers as unknown[])
       : [],
   );
+  // Drawn rivers are authoritative: crossings of relief they cut through are warnings (ADR 0071).
+  const carved = checked.diagnostics.flatMap(({ code, details }) =>
+    code === 'MAP_RIVER_CARVED_CROSSING' && details !== undefined ? [details] : [],
+  );
   const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
   const result = emptyServiceResult(context.workspaceId, {
     execution: 'preview' as const,
@@ -658,6 +662,8 @@ async function previewSynthesisCheck(
       passed: valid,
       unreachableRivers: rivers.length,
       rivers: rivers.slice(0, 200),
+      carvedCrossings: carved.length,
+      crossings: carved.slice(0, 200),
     },
   });
   result.status = valid ? 'ok' : 'blocked';

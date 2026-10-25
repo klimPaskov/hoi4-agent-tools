@@ -108,8 +108,8 @@ interface PublicResult {
   diagnostics: Array<{ code: string; severity: string }>;
 }
 
-/** A wall between two brooks and the river they would join: neither brook can reach it. */
-function dividedGeography() {
+/** A wall between two brooks and the river they would join: each brook is carved through it. */
+function walledGeography() {
   return {
     version: 1,
     seas: [
@@ -154,6 +154,55 @@ function dividedGeography() {
       { id: 'east', source: [0.7, 0.5], mouth: { sea: 'sea' }, size: 3 },
       { id: 'west_brook', source: [0.3, 0.5], mouth: { river: 'east' }, size: 1 },
       { id: 'north_brook', source: [0.3, 0.3], mouth: { river: 'east' }, size: 1 },
+    ],
+  };
+}
+
+/** Two lands: brooks on the west land cannot reach a river that lies on the east land. */
+function isolatedGeography() {
+  return {
+    version: 1,
+    seas: [
+      {
+        id: 'sea',
+        polygons: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+          ],
+        ],
+      },
+    ],
+    lands: [
+      {
+        id: 'west',
+        polygons: [
+          [
+            [0.1, 0.2],
+            [0.4, 0.2],
+            [0.4, 0.8],
+            [0.1, 0.8],
+          ],
+        ],
+      },
+      {
+        id: 'east',
+        polygons: [
+          [
+            [0.6, 0.2],
+            [0.9, 0.2],
+            [0.9, 0.8],
+            [0.6, 0.8],
+          ],
+        ],
+      },
+    ],
+    rivers: [
+      { id: 'east_river', source: [0.75, 0.5], mouth: { sea: 'sea' }, size: 3 },
+      { id: 'west_brook', source: [0.2, 0.5], mouth: { river: 'east_river' }, size: 1 },
+      { id: 'north_brook', source: [0.2, 0.3], mouth: { river: 'east_river' }, size: 1 },
     ],
   };
 }
@@ -344,6 +393,33 @@ describe('geography model through hoi4.map_rewrite', () => {
       code: 'MAP_SYNTHESIS_CHECK_READY',
       data: { fileCount: 0, synthesisCheck: { passed: true, unreachableRivers: 0 } },
     });
+    const walled = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [
+          create({
+            geography: walledGeography(),
+            width: 1024,
+            height: 512,
+            synthesisCheck: true,
+          }),
+        ],
+      },
+    });
+    const carved = walled.structuredContent as unknown as PublicResult & {
+      data: {
+        synthesisCheck: { carvedCrossings: number; crossings: Array<Record<string, unknown>> };
+      };
+    };
+    expect(carved).toMatchObject({ status: 'ok', code: 'MAP_SYNTHESIS_CHECK_READY' });
+    expect(carved.data.synthesisCheck.carvedCrossings).toBe(2);
+    expect(carved.data.synthesisCheck.crossings.map(({ riverId }) => riverId).sort()).toEqual([
+      'north_brook',
+      'west_brook',
+    ]);
+    expect(carved.diagnostics.map(({ code }) => code)).toContain('MAP_RIVER_CARVED_CROSSING');
     const bad = await client.callTool({
       name: 'hoi4.map_rewrite',
       arguments: {
@@ -351,7 +427,7 @@ describe('geography model through hoi4.map_rewrite', () => {
         preview: true,
         operations: [
           create({
-            geography: dividedGeography(),
+            geography: isolatedGeography(),
             width: 1024,
             height: 512,
             synthesisCheck: true,
@@ -371,14 +447,7 @@ describe('geography model through hoi4.map_rewrite', () => {
       'west_brook',
     ]);
     for (const river of content.data.synthesisCheck.rivers)
-      expect(river).toMatchObject({
-        limit: 22,
-        divide: {
-          range: 'divide',
-          x: expect.any(Number) as number,
-          y: expect.any(Number) as number,
-        },
-      });
+      expect(river).toMatchObject({ reason: expect.stringContaining('not reachable over land') });
     expect(content.blockers.map(({ code }) => code)).toEqual(['MAP_RIVER_UNREACHABLE_MOUTH']);
     expect(await sourceInventory(modRoot)).toEqual(before);
     // Without preview, or without a geography, the check is refused and nothing is written.
@@ -432,7 +501,7 @@ describe('geography model through hoi4.map_rewrite', () => {
         workspaceId: 'test',
         operations: [
           create({
-            geography: dividedGeography(),
+            geography: isolatedGeography(),
             width: 1024,
             height: 512,
             landProvincePixels: 4000,
