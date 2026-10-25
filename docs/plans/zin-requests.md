@@ -29,6 +29,7 @@ The mod's `tools/content/apply.mts` imports the atomic rewrite engine from the m
 
 Schema changes, compatibility changes, releases, runtime installs and server restarts, newest first.
 
+- 2026-10-25: ZR-11 (drawn rivers carve their valleys) is folded into the 4.6.0 plan with ZR-9 and ZR-10: PR 48, ADR 0070 and 0071. Behaviour change, no schema change beyond the planned `synthesisCheck`: a river that crosses a divide above 22 height units no longer fails the world; it gets the warning `MAP_RIVER_CARVED_CROSSING` with its location. The 4.6.0 release will be announced here before it is tagged.
 - 2026-10-25: **planned schema change (ZR-10), not yet implemented:** `hoi4_map_rewrite` `create_world.synthesisCheck` (boolean, optional; with `preview: true` it runs relief and river synthesis and reports unreachable rivers without writing); `MAP_RIVER_UNREACHABLE_MOUTH` gains `details.rivers` (every failing river with its divide). ZR-9 changes behaviour only (no schema change). Both target 4.6.0, with the territory service (PR 46) and straits, ports and names (PR 47) once their CI is green. I will announce the release here before tagging.
 - 2026-10-25: **4.5.0 released and installed; reconnect now.** Tag `v4.5.0` on `main` `2212596`; published to npm (the workflow's publish job passed; its verification and container jobs were still running at this entry). Installed into the fresh prefix `C:/Users/klimp/AppData/Local/hoi4-agent-tools/runtime-v450/` and smoke-tested with the real config (server 4.5.0, 28 tools, `hoi4_script_validate` with `workspaceId: "zin"` resolves `mod_zin_86bac5c64231`; the package carries `countries.source: "workspace"` in `schemas/map-operation.schema.json`). Both user-level registrations now point at `runtime-v450/node_modules/hoi4-agent-tools/dist/bin/stdio.js`: `~/.claude.json` `mcpServers.hoi4_agent_tools` and `~/.codex/config.toml` `[mcp_servers.hoi4_agent_tools]`; backups `~/.claude.json.bak-before-v450-20261025-134838` and `~/.codex/config.toml.bak-before-v450-20261025-134838`. **Lead: restart the `hoi4_agent_tools` MCP server (or start a new session) and confirm the tool list; a running session keeps its 4.4.0 server until then.** The release also carries `FOCUS_SOURCE_CHANGED_SINCE_PLAN` and the non-round-trippable encoding guard from another PR. `runtime-v440` stays installed as a fallback. Open PRs not in 4.5.0: territory service (#46) and straits, ports and names with same-land straits and `bay` (#47), both in CI.
 - 2026-10-25: **planned release 4.5.0** from `main` `54000f1` (ZR-8 parts 1 and 3; schema as announced, points `{ "x", "y" }`, no `connectedMainland` or `overlord`). Scale check before tagging: 156 workspace realms on a synthetic 5,120 x 2,560 world, 13,702 provinces, 3,097 states, 35 s, 1.4 GiB peak, no blockers. After the release workflow passes, the worker installs it into the fresh prefix `runtime-v450`, repoints both user-level registrations (with backups) and announces the install here; running sessions keep their server until they reconnect.
@@ -63,6 +64,7 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 | ZR-8  | `create_world` with mod-owned countries, seed-based state ownership and retirement of old country outputs | P0 for the import            | designed (ADR 0069, schema announced); implementing; seed growth waits on the C11 territory service merge         |
 | ZR-9  | A failed `create_world` reports the old map's validation findings as blockers                             | P1                           | diagnosed (secondary effect of ZR-10); fix planned for 4.6.0                                                      |
 | ZR-10 | Report every unreachable river with its divide, and check rivers without a full write                     | P1                           | planned for 4.6.0                                                                                                 |
+| ZR-11 | Drawn rivers must carve their valleys through relief instead of failing                                   | P0 for the map write         | implemented in PR 48; ships in 4.6.0                                                                              |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -250,6 +252,19 @@ Every sampled file held the expected bytes after each apply and after each rollb
 - Status: planned for 4.6.0
 - Implementation: pending
 - Verification: pending
+
+## ZR-11: Drawn rivers carve their valleys through relief instead of failing
+
+- Opened: 2026-10-25 by lead
+- Priority: P0 for the map write (the write is held for it)
+- ZIN task: R-10/A-10 import; the owner-drawn Giant River (`river_giant`, mouth in `sea_gulf_inner_dark`) fails with climb 104, then 36, most likely over the cone of `volcano_goldoroth` near its last leg. The lead will not move the owner's river or volcano.
+- Tool or workflow: `hoi4_map_rewrite` `create_world` with a geography (relief and river synthesis, ADR 0056).
+- Current behaviour: a river whose least-cost route climbs more than 22 height units is refused with `MAP_RIVER_UNREACHABLE_MOUTH`.
+- Required: drawn rivers are authoritative over synthesised relief; the synthesis carves each river's valley along its course (lowering the cone, foothill or range slope to a monotone descent, like an antecedent gorge) and blocks only impossible courses (mouth on land, a loop), reporting the carved crossings as warnings with locations. Acceptance: the mod's current `create_world_call.json` writes with every river reaching its mouth, and the report lists where valleys were carved.
+- Worker implementation (2026-10-25, PR 48, `claude/zr9-world-validation`, ADR 0071): the bed of every route was already burned to a monotone descent and the valley carving never lets a bed rise downstream, so a route over the limit is now accepted and the rise across it is cut down to the bed. Each such crossing is the warning `MAP_RIVER_CARVED_CROSSING` with `riverId`, `climb`, `limit` and `divide` (world pixel `x`, `y`, `height`, and `range`/`nearestRange` or `volcano` when the divide lies on a cone). Still refused (all listed in `details.rivers`, with `blockedBy` for tributaries): a mouth on another landmass or not reachable over land, an unreachable source or via point, a lake without a free shore. `synthesisCheck` (ZR-10) lists the crossings in `data.synthesisCheck.crossings`. Unit tests: carving through a wall (beds never rise downstream) and through a volcano cone. The gorge is one macro cell wide, so a very high divide gives a steep-sided cut; the report is how to find them.
+- Not yet verified on the ZIN model (the worker has no access to run the mod's call; the lead runs the `synthesisCheck` preview first: it needs 4.6.0).
+- Status: implemented in PR 48 (CI pending); ships in 4.6.0
+- Verification: pending (lead: `synthesisCheck` preview, then the write)
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
