@@ -9,7 +9,22 @@ import { ServiceError } from '../core/result.js';
 import { createBmp, type RgbColor } from './bmp.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 import { generateWorldDrainage } from './world-drainage.js';
-import { generateWorldProvinces } from './world-provinces.js';
+import { generateWorldProvinces, type WorldProvinces } from './world-provinces.js';
+import {
+  clusterRegions,
+  clusterStates,
+  partitionWorldFromRequest,
+  type WorldPartition,
+} from './partition.js';
+import { repairSeamCorners, smoothDiagonalContacts } from './partition-fields.js';
+import { PARTITION_PROVINCE_ERROR, PARTITION_PROVINCE_WARNING } from './partition-tuning.js';
+import {
+  geographyPartitionFields,
+  provinceCountNote,
+  surfacePartitionFields,
+  type SurfacePartitionInput,
+  type WorldPartitionSpec,
+} from './world-partition.js';
 import { fractal, lattice } from './world-noise.js';
 import {
   calibratedColourMap,
@@ -31,6 +46,11 @@ import {
   type EdgeSpec,
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
+import type { ResolvedGeography } from './geography/index.js';
+import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
+import { synthesizeTerrain, type SynthesizedTerrain } from './relief/terrain-synthesis.js';
+import type { ReliefSettings } from './relief/macro-relief.js';
+import { assignUnreachedRealmLand, resolveRealmRules } from './world-realms.js';
 
 export interface WorldCountry {
   tag: string;
@@ -40,6 +60,38 @@ export interface WorldCountry {
   /** Relative share of the land; default 1. */
   share?: number;
   ideology?: 'democratic' | 'communism' | 'fascism' | 'neutrality';
+}
+
+interface WorldPoint {
+  x: number;
+  y: number;
+}
+type WorldPolygon = ReadonlyArray<WorldPoint>;
+
+/** A country the workspace owns: the world places it and writes none of its country files. */
+export interface WorldRealm {
+  tag: string;
+  capital: WorldPoint;
+  seeds?: readonly WorldPoint[] | undefined;
+  claim?: readonly WorldPolygon[] | undefined;
+  exclude?: readonly WorldPolygon[] | undefined;
+}
+
+/** Workspace-owned countries (ADR 0069); `countries` then carries their tags, names and weights. */
+export interface WorldRealms {
+  list: readonly WorldRealm[];
+  unowned?: readonly WorldPolygon[];
+  islands?: 'nearest' | 'one-owner' | 'unowned';
+}
+
+export interface WorldRealmSummary {
+  tag: string;
+  capitalState: number;
+  capitalProvince: number;
+  states: number[];
+  provinces: number;
+  landShare: number;
+  targetShare: number;
 }
 
 export interface WorldSpec {
@@ -54,10 +106,17 @@ export interface WorldSpec {
   landPolygons?: ReadonlyArray<ReadonlyArray<{ x: number; y: number }>>;
   landProvincePixels: number;
   seaProvincePixels: number;
+  /**
+   * True when the caller gave neither province size: the sizes may then grow so the world stays
+   * near the base game's province count instead of failing.
+   */
+  provinceSizesDefaulted?: boolean;
   provincesPerState: number;
   landProvincesPerRegion: number;
   seaProvincesPerRegion: number;
   countries: readonly WorldCountry[];
+  /** When present the workspace owns the countries; `countries` lists them in the same order. */
+  realms?: WorldRealms;
   continentNames?: readonly string[];
   startDate: string;
   rivers: number;
@@ -74,9 +133,25 @@ export interface WorldSpec {
   edge?: EdgeSpec;
   /** Write the base map's north and south frame borders in `ambient_object.txt`. */
   ambientFrame?: boolean;
+  /**
+   * A resolved geography model (ADR 0056): land, relief and rivers are synthesised from it. The
+   * model must have been resolved for this map size. A reference picture, when given, still
+   * supplies the coast and the terrain classes.
+   */
+  geography?: ResolvedGeography;
+  relief?: Partial<ReliefSettings>;
+  /** Share of land pixels the river network covers (geography worlds); default 2%. */
+  riverDensity?: number;
+  /** Largest number of unnamed river systems (geography worlds); absent keeps every system. */
+  riverCount?: number;
   /** `legacy` keeps the original flat tints; `calibrated` follows ADR 0054. */
   colormapProfile?: ColourMapProfile;
   look?: WorldLook;
+  /**
+   * Opt-in feature-aware provinces, states and regions (ADR 0058). Absent or `legacy` keeps the
+   * warped Voronoi provinces and breadth-first clusters, byte for byte.
+   */
+  partition?: WorldPartitionSpec;
   /** Colour overrides by class for `look: 'custom'`. */
   colormapPalette?: Partial<Record<ColourClass, readonly [number, number, number]>>;
 }
@@ -121,6 +196,8 @@ export interface WorldNote {
 
 export interface GeneratedWorld {
   files: WorldFile[];
+  /** The synthesised terrain and its fields, for worlds built from a geography model (ADR 0056). */
+  terrain?: SynthesizedTerrain;
   warnings: string[];
   notes: WorldNote[];
   summary: {
@@ -135,12 +212,14 @@ export interface GeneratedWorld {
     countries: number;
     rivers: number;
   };
+  /** Workspace-owned countries and the states nobody owns (ADR 0069). */
+  realms?: { countries: WorldRealmSummary[]; unownedStates: number[] };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Deterministic randomness and noise
 
-class Random {
+export class Random {
   #state: number;
   constructor(seed: number) {
     this.#state = (seed ^ 0x9e3779b9) >>> 0;
@@ -315,11 +394,111 @@ function generateSurface(spec: WorldSpec, random: Random): Surface {
   return { kind, elevation, moisture };
 }
 
+/**
+ * Surface of a world described by a geography model: land and lakes from the model (or lakes laid
+ * over a reference picture's coast); elevation is filled in by the terrain synthesis later.
+ */
+/** Province count the vanilla map holds; defaulted sizes grow towards it. */
+const PROVINCE_COUNT_GOAL = 13_000;
+
+/**
+ * Check the province count the sizes give before partitioning. Defaulted sizes above the warning
+ * grow until the world holds about the base game's count; sizes the caller chose that give more
+ * than the text tables allow are refused before any work.
+ */
+function provinceBudget(
+  spec: WorldSpec,
+  kind: Uint8Array,
+): { landProvincePixels: number; seaProvincePixels: number; note?: WorldNote } {
+  let land = 0;
+  let water = 0;
+  for (const value of kind)
+    if (value === LAND) land += 1;
+    else water += 1;
+  const expected = land / spec.landProvincePixels + water / spec.seaProvincePixels;
+  const sizes = {
+    landProvincePixels: spec.landProvincePixels,
+    seaProvincePixels: spec.seaProvincePixels,
+  };
+  if (expected <= PARTITION_PROVINCE_WARNING) return sizes;
+  if (spec.provinceSizesDefaulted === true) {
+    const factor = expected / PROVINCE_COUNT_GOAL;
+    const landProvincePixels = Math.ceil(spec.landProvincePixels * factor);
+    const seaProvincePixels = Math.ceil(spec.seaProvincePixels * factor);
+    return {
+      landProvincePixels,
+      seaProvincePixels,
+      note: {
+        code: 'MAP_WORLD_PROVINCE_SIZE_RAISED',
+        severity: 'info',
+        message: `The default province sizes would give about ${Math.round(expected)} provinces on this much land; they were raised to ${landProvincePixels} land and ${seaProvincePixels} sea pixels for about ${PROVINCE_COUNT_GOAL}. Set landProvincePixels and seaProvincePixels to choose them`,
+        details: { expectedProvinces: Math.round(expected), landProvincePixels, seaProvincePixels },
+      },
+    };
+  }
+  if (expected > PARTITION_PROVINCE_ERROR)
+    throw new ServiceError(
+      'MAP_PARTITION_PROVINCE_COUNT_HIGH',
+      `landProvincePixels ${spec.landProvincePixels} and seaProvincePixels ${spec.seaProvincePixels} give about ${Math.round(expected)} provinces on this map, above the ${PARTITION_PROVINCE_ERROR} the text tables allow; raise them`,
+      { expectedProvinces: Math.round(expected), maximum: PARTITION_PROVINCE_ERROR },
+    );
+  return sizes;
+}
+
+function geographySurface(
+  spec: WorldSpec,
+  geography: ResolvedGeography,
+  reference: ReferenceWorldRaster | undefined,
+): Surface {
+  const { width, height } = spec;
+  const total = width * height;
+  const options = { width, height, seed: spec.seed };
+  let kind: Uint8Array;
+  let moisture: Float32Array;
+  if (reference === undefined) {
+    kind = rasterizeGeographyKind(geography, options);
+    moisture = new Float32Array(total);
+    const scale = Math.max(width, height) / 6;
+    for (let y = 0; y < height; y += 1)
+      for (let x = 0; x < width; x += 1)
+        moisture[y * width + x] = fractal(spec.seed + 7919, x, y, scale * 0.8, 4);
+  } else {
+    kind = new Uint8Array(reference.kind);
+    overlayGeographyLakes(kind, geography, options);
+    moisture = new Float32Array(reference.moisture);
+  }
+  return { kind, elevation: new Float32Array(total), moisture };
+}
+
+function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeography): WorldNote {
+  const { relief, riverStatistics } = terrain;
+  return {
+    code: 'MAP_RELIEF_SYNTHESIZED',
+    severity: 'info',
+    message: `Synthesised relief and rivers from the geography model: land height median ${relief.median}, 99th percentile ${relief.p99}, maximum ${relief.maximum}, mean step ${relief.meanStep.toFixed(2)} per half-resolution pixel; ${riverStatistics.count} rivers (${riverStatistics.named} named) on ${(riverStatistics.landShare * 100).toFixed(2)}% of the land`,
+    details: {
+      modelHash: geography.hash,
+      relief,
+      rivers: riverStatistics,
+      // The first of the named rivers only: the response budget is shared with everything else the
+      // world reports, and a river that did not complete is always listed.
+      namedRivers: terrain.rivers
+        .filter((river) => river.named && river.junction !== 'distributary')
+        .slice(0, 24)
+        .map(({ id, pixels, mouth, complete }) => ({ id, pixels, mouth, complete })),
+      incompleteRivers: terrain.rivers
+        .filter((river) => river.named && !river.complete)
+        .slice(0, 24)
+        .map(({ id }) => id),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Grouping provinces into regions and states
 
 /** Grow clusters of about `target` members over a graph from spread-out seeds. */
-function growClusters(
+export function growClusters(
   members: readonly number[],
   neighbors: (id: number) => Iterable<number>,
   target: number,
@@ -518,7 +697,8 @@ function weatherBlock(signedLatitude: number, desert: boolean): string {
 interface StateDraft {
   id: number;
   provinces: number[];
-  owner: string;
+  /** Absent for land no workspace country owns. */
+  owner?: string;
   region: number;
   capital: number;
   manpower: number;
@@ -533,7 +713,19 @@ interface StateDraft {
   navalBases: Map<number, number>;
 }
 
-export function generateWorld(spec: WorldSpec, context: WorldContext): GeneratedWorld {
+export interface WorldGenerationOptions {
+  /**
+   * The request's cancellation: the terrain synthesis and the feature-aware partition check it
+   * between rows and stop with its reason.
+   */
+  signal?: AbortSignal | undefined;
+}
+
+export function generateWorld(
+  spec: WorldSpec,
+  context: WorldContext,
+  options: WorldGenerationOptions = {},
+): GeneratedWorld {
   const { width, height } = spec;
   if (width % 256 !== 0 || height % 256 !== 0)
     throw new ServiceError(
@@ -571,14 +763,29 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       'MAP_WORLD_REFERENCE_DIMENSIONS',
       'Reference raster dimensions do not match the world',
     );
+  const geography = spec.geography;
+  if (
+    geography !== undefined &&
+    (geography.frame.width !== width || geography.frame.height !== height)
+  )
+    throw new ServiceError(
+      'MAP_GEOGRAPHY_FRAME_MISMATCH',
+      'The geography model was resolved for a different map size than the world being created',
+      {
+        model: { width: geography.frame.width, height: geography.frame.height },
+        world: { width, height },
+      },
+    );
   const surface: Surface =
-    reference === undefined
-      ? generateSurface(spec, random)
-      : {
-          kind: new Uint8Array(reference.kind),
-          elevation: new Float32Array(reference.elevation),
-          moisture: new Float32Array(reference.moisture),
-        };
+    geography !== undefined
+      ? geographySurface(spec, geography, reference)
+      : reference === undefined
+        ? generateSurface(spec, random)
+        : {
+            kind: new Uint8Array(reference.kind),
+            elevation: new Float32Array(reference.elevation),
+            moisture: new Float32Array(reference.moisture),
+          };
   const notes: WorldNote[] = [];
   const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
   if (edge.mode !== 'none') {
@@ -607,27 +814,153 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       message: `${note.message} near (${note.x}, ${note.y})`,
       details: { pixels: note.pixels, x: note.x, y: note.y },
     });
-  const drainage = generateWorldDrainage({
-    width,
-    height,
-    kind: surface.kind,
-    elevation: surface.elevation,
-    seed: spec.seed,
-    count: spec.rivers,
-    ...(reference === undefined ? {} : { referenceRivers: reference.rivers }),
-  });
+  // A coast that touches itself only at corners cannot be cut into valid provinces, so the
+  // feature-aware partition smooths it when it builds its own fields. A geography world smooths
+  // before the synthesis, so its heights, rivers and fields follow the smoothed mask; any other
+  // world smooths after its drainage and patches those rasters, as it always has.
+  const smoothMask =
+    spec.partition?.mode === 'feature-aware' && spec.partition.fields === undefined;
+  let smoothed =
+    smoothMask && geography !== undefined
+      ? smoothDiagonalContacts(surface.kind, width, height)
+      : [];
+  // A coast crossing the east-west seam is repaired in every world, before the synthesis of a
+  // geography world and after the drainage of any other, like the smoothing.
+  let seamRepaired = geography !== undefined ? repairSeamCorners(surface.kind, width, height) : [];
+  // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
+  // keeps the original elevation classes and drainage, byte for byte.
+  const synthesized =
+    geography === undefined
+      ? undefined
+      : synthesizeTerrain({
+          geography,
+          width,
+          height,
+          seed: spec.seed,
+          kind: surface.kind,
+          relief: spec.relief,
+          rivers: { density: spec.riverDensity, count: spec.riverCount },
+          adjustHeight:
+            edge.mode === 'rim'
+              ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+              : undefined,
+          signal: options.signal,
+        });
+  if (synthesized !== undefined) {
+    for (const note of synthesized.notes) {
+      if (note.severity === 'error') throw new ServiceError(note.code, note.message, note.details);
+      notes.push({
+        code: note.code,
+        severity: note.severity,
+        message: note.message,
+        ...(note.details === undefined ? {} : { details: note.details }),
+      });
+    }
+    notes.push(terrainSummaryNote(synthesized, geography!));
+  }
+  const drainage =
+    synthesized === undefined
+      ? generateWorldDrainage({
+          width,
+          height,
+          kind: surface.kind,
+          elevation: surface.elevation,
+          seed: spec.seed,
+          count: spec.rivers,
+          ...(reference === undefined ? {} : { referenceRivers: reference.rivers }),
+        })
+      : {
+          riverPixels: synthesized.riverBitmap,
+          elevation: synthesized.elevation,
+          count: synthesized.riverStatistics.count,
+          warnings: [] as string[],
+        };
   surface.elevation = drainage.elevation;
-  const provinces = generateWorldProvinces({
-    width,
-    height,
-    seed: spec.seed,
-    kind: surface.kind,
-    elevation: surface.elevation,
-    moisture: surface.moisture,
-    landProvincePixels: spec.landProvincePixels,
-    seaProvincePixels: spec.seaProvincePixels,
-  });
+  if (smoothMask && geography === undefined) {
+    smoothed = smoothDiagonalContacts(surface.kind, width, height);
+    for (const pixel of smoothed) {
+      const isLand = surface.kind[pixel] === LAND;
+      surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+      drainage.riverPixels[pixel] = isLand ? 255 : 254;
+    }
+  }
+  if (geography === undefined) {
+    seamRepaired = repairSeamCorners(surface.kind, width, height);
+    for (const pixel of seamRepaired) {
+      const isLand = surface.kind[pixel] === LAND;
+      surface.elevation[pixel] = isLand ? 0.02 : -0.02;
+      drainage.riverPixels[pixel] = isLand ? 255 : 254;
+    }
+  }
+  if (seamRepaired.length > 0)
+    notes.push({
+      code: 'MAP_WORLD_SEAM_CORNER_REPAIRED',
+      severity: 'info',
+      message: `Changed ${seamRepaired.length} pixel(s) at the east-west seam where a coast crosses it, because province parts cannot join across the seam`,
+      details: { pixels: seamRepaired.length },
+    });
+  if (smoothed.length > 0)
+    notes.push({
+      code: 'MAP_PARTITION_MASK_SMOOTHED',
+      severity: 'info',
+      message: `Changed ${smoothed.length} coast pixel(s) that touched their own kind only at a corner, which no province partition can represent`,
+      details: { pixels: smoothed.length },
+    });
+  const sizes = provinceBudget(spec, surface.kind);
+  if (sizes.note !== undefined) notes.push(sizes.note);
+  let featurePartition: WorldPartition | undefined;
+  let provinces: WorldProvinces;
+  if (spec.partition?.mode === 'feature-aware') {
+    const surfaceInput: SurfacePartitionInput = {
+      width,
+      height,
+      kind: surface.kind,
+      elevation: surface.elevation,
+      moisture: surface.moisture,
+      riverPixels: drainage.riverPixels,
+      ...(reference === undefined ? {} : { referenceTerrain: reference.terrain }),
+    };
+    // A geography world hands the partition its regions, densities and walls, the synthesised
+    // heights and the model-drawn lines of the synthesis (ADR 0058).
+    featurePartition = partitionWorldFromRequest(
+      spec.partition.fields ??
+        (synthesized === undefined || geography === undefined
+          ? surfacePartitionFields(surfaceInput)
+          : geographyPartitionFields(
+              { ...surfaceInput, heights: synthesized.heights },
+              geography,
+              synthesized.fields,
+            )),
+      spec.seed,
+      spec.partition.tuning,
+      {
+        landProvincePixels: sizes.landProvincePixels,
+        seaProvincePixels: sizes.seaProvincePixels,
+        provincesPerState: spec.provincesPerState,
+        landProvincesPerRegion: spec.landProvincesPerRegion,
+        seaProvincesPerRegion: spec.seaProvincesPerRegion,
+      },
+      options.signal,
+    );
+    provinces = featurePartition.provinces;
+    for (const note of featurePartition.notes) notes.push(note);
+  } else
+    provinces = generateWorldProvinces({
+      width,
+      height,
+      seed: spec.seed,
+      kind: surface.kind,
+      elevation: surface.elevation,
+      moisture: surface.moisture,
+      landProvincePixels: sizes.landProvincePixels,
+      seaProvincePixels: sizes.seaProvincePixels,
+    });
   const count = provinces.kind.length;
+  const countNote = provinceCountNote(
+    count,
+    featurePartition === undefined ? 'legacy' : 'feature-aware',
+  );
+  if (countNote !== undefined) notes.push(countNote);
   const center = (id: number) => ({
     x: provinces.sumX[id]! / provinces.size[id]!,
     y: provinces.sumY[id]! / provinces.size[id]!,
@@ -780,7 +1113,11 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const countryCount = spec.countries.length;
   const interpretationWarnings: string[] = [];
   const referenceOwners = new Map<number, number>();
-  if (reference?.inferredCountries.length === countryCount && countryCount > 1) {
+  if (
+    spec.realms === undefined &&
+    reference?.inferredCountries.length === countryCount &&
+    countryCount > 1
+  ) {
     const indexes = new Map<number, number>();
     const unresolved: number[] = [];
     for (const [index, country] of spec.countries.entries()) {
@@ -878,6 +1215,17 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const largest = [...landIds].sort(
     (left, right) => provinces.size[right]! - provinces.size[left]! || left - right,
   );
+  const realmRules =
+    spec.realms === undefined
+      ? undefined
+      : resolveRealmRules(spec.realms, {
+          width,
+          height,
+          pixelProvince: provinces.pixel,
+          provinceSize: provinces.size,
+          isLand: (id) => provinces.kind[id] === LAND,
+        });
+  if (realmRules !== undefined) capitals.push(...realmRules.capitals);
   while (capitals.length < countryCount) {
     const countryIndex = capitals.length;
     const regionCandidates = largest.filter(
@@ -919,20 +1267,27 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   }
   const shares = spec.countries.map((country) => Math.max(0.05, country.share ?? 1));
   const owned = new Array<number>(countryCount).fill(0);
-  for (const [id, country] of referenceOwners) {
+  for (const [id, country] of realmRules?.forced ?? referenceOwners) {
     owner.set(id, country);
     owned[country]! += provinces.size[id]!;
   }
+  const unownedLand = realmRules?.unowned ?? new Set<number>();
+  const blockedFor = (index: number, id: number) =>
+    unownedLand.has(id) || realmRules?.excluded[index]!.has(id) === true;
   const frontiers = capitals.map((capital, index) => {
+    if (!owner.has(capital)) owned[index]! += provinces.size[capital]!;
     owner.set(capital, index);
-    if (!referenceOwners.has(capital)) owned[index]! += provinces.size[capital]!;
+    if (realmRules !== undefined)
+      return [...owner]
+        .filter(([, country]) => country === index)
+        .flatMap(([id]) => [...provinces.neighbors[id]!]);
     return [...provinces.neighbors[capital]!];
   });
   for (;;) {
     let chosen = -1;
     for (let index = 0; index < countryCount; index += 1) {
       frontiers[index] = frontiers[index]!.filter(
-        (id) => provinces.kind[id] === LAND && !owner.has(id),
+        (id) => provinces.kind[id] === LAND && !owner.has(id) && !blockedFor(index, id),
       );
       if (frontiers[index]!.length === 0) continue;
       if (chosen < 0 || owned[index]! / shares[index]! < owned[chosen]! / shares[chosen]!)
@@ -946,9 +1301,21 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     for (const neighbor of provinces.neighbors[next]!)
       if (!owner.has(neighbor)) frontier.push(neighbor);
   }
+  // Land no workspace country reached follows the island rule; the rest of the land is unowned.
+  if (realmRules !== undefined)
+    assignUnreachedRealmLand({
+      landIds,
+      owner,
+      unowned: unownedLand,
+      capitals,
+      excluded: realmRules.excluded,
+      islands: spec.realms?.islands ?? 'nearest',
+      part: (id) => landParts.get(id)!,
+      center,
+    });
   // Islands no country reached go to the nearest capital's country.
   for (const id of landIds)
-    if (!owner.has(id)) {
+    if (!owner.has(id) && !unownedLand.has(id)) {
       const c = center(id);
       let best = 0;
       for (const [index, capital] of capitals.entries())
@@ -961,8 +1328,14 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }
   // Strategic regions: land regions over the land graph, sea regions over the sea graph.
   const graph = (id: number) => provinces.neighbors[id]!;
-  const landRegion = growClusters(landIds, graph, spec.landProvincesPerRegion, random);
-  const seaRegion = growClusters(seaIds, graph, spec.seaProvincesPerRegion, random);
+  const landRegion =
+    featurePartition === undefined
+      ? growClusters(landIds, graph, spec.landProvincesPerRegion, random)
+      : clusterRegions(featurePartition, landIds, 'land');
+  const seaRegion =
+    featurePartition === undefined
+      ? growClusters(seaIds, graph, spec.seaProvincesPerRegion, random)
+      : clusterRegions(featurePartition, seaIds, 'sea');
   const regionOf = new Map<number, number>();
   const landRegionCount = Math.max(-1, ...landRegion.values()) + 1;
   for (const [id, region] of landRegion) regionOf.set(id, region + 1);
@@ -983,7 +1356,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // States: within each region and country, clusters of about provincesPerState.
   const groups = new Map<string, number[]>();
   for (const id of landIds) {
-    const key = `${regionOf.get(id)}:${owner.get(id)}`;
+    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}`;
     const list = groups.get(key) ?? [];
     list.push(id);
     groups.set(key, list);
@@ -992,7 +1365,10 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const stateOf = new Map<number, StateDraft>();
   for (const key of [...groups.keys()].sort()) {
     const members = groups.get(key)!;
-    const clusters = growClusters(members, graph, spec.provincesPerState, random);
+    const clusters =
+      featurePartition === undefined
+        ? growClusters(members, graph, spec.provincesPerState, random)
+        : clusterStates(featurePartition, members);
     const byCluster = new Map<number, number[]>();
     for (const [id, cluster] of clusters) {
       const list = byCluster.get(cluster) ?? [];
@@ -1009,7 +1385,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       const draft: StateDraft = {
         id: states.length + 1,
         provinces: sorted,
-        owner: spec.countries[countryIndex]!.tag,
+        ...(countryIndex < 0 ? {} : { owner: spec.countries[countryIndex]!.tag }),
         region,
         capital: sorted[0]!,
         manpower: 0,
@@ -1071,7 +1447,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           }[terrain.get(id) ?? 'plains'] ?? 0.5;
         return sum + value * provinces.size[id]!;
       }, 0) / pixels;
-    const isCapital = countryCapitalState.get(state.owner) === state;
+    const isCapital = state.owner !== undefined && countryCapitalState.get(state.owner) === state;
     const development = Math.min(1, habitability * (0.5 + random.next()) * (isCapital ? 1.8 : 1));
     state.manpower = Math.max(1_000, Math.round((pixels * 180 * development) / 1_000) * 1_000);
     const categoryIndex = Math.max(
@@ -1186,6 +1562,8 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const add = (relativePath: string, content: Buffer, mediaType = 'text/plain') =>
     files.push({ relativePath, content, mediaType });
   const countryNames = new Map(spec.countries.map(({ tag, name }) => [tag, name]));
+  const ownerName = (state: StateDraft) =>
+    state.owner === undefined ? 'Free Land' : (countryNames.get(state.owner) ?? state.owner);
   const map = context.mapRoot;
   // provinces.bmp
   const rgb = new Array<RgbColor>(width * height);
@@ -1315,19 +1693,20 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   // heightmap.bmp: sea below 95, land from 96 up. Lakes sit at the sea's interior height with a
   // one to two pixel translucent bank, so the water layer draws them opaque (ADR 0053).
   const landDistance = landDistanceField(surface.kind, width, height);
-  const heights = new Uint8Array(width * height);
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
-    const value = surface.elevation[pixel]!;
-    heights[pixel] =
-      surface.kind[pixel] === LAND
-        ? rimHeight(
-            Math.min(255, Math.round(96 + value * 110)),
-            rimStrength(edge, width, pixel % width),
-          )
-        : surface.kind[pixel] === LAKE
-          ? lakeHeight(landDistance[pixel]!)
-          : Math.max(60, Math.round(94 + value * 30));
-  }
+  const heights = synthesized?.heights ?? new Uint8Array(width * height);
+  if (synthesized === undefined)
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      const value = surface.elevation[pixel]!;
+      heights[pixel] =
+        surface.kind[pixel] === LAND
+          ? rimHeight(
+              Math.min(255, Math.round(96 + value * 110)),
+              rimStrength(edge, width, pixel % width),
+            )
+          : surface.kind[pixel] === LAKE
+            ? lakeHeight(landDistance[pixel]!)
+            : Math.max(60, Math.round(94 + value * 30));
+    }
   const grey = Array.from({ length: 256 }, (_, index) => ({ r: index, g: index, b: index }));
   add(
     `${map}/heightmap.bmp`,
@@ -1358,9 +1737,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     const id = provinces.pixel[pixel]!;
     const type = visualTerrain(pixel);
     const snowy =
-      reference === undefined
-        ? type === 'mountain' && latitude(id) > 0.7
-        : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
+      synthesized !== undefined
+        ? (synthesized.snow[pixel] === 1 || reference?.terrain[pixel] === 4) &&
+          surface.kind[pixel] === LAND
+        : reference === undefined
+          ? type === 'mountain' && latitude(id) > 0.7
+          : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
     const x = pixel % width;
     const rimmed = rimStrength(edge, width, x) > 0.35 && surface.kind[pixel] === LAND;
     let index = snowy
@@ -1504,28 +1886,42 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     }),
     'image/bmp',
   );
-  // world_normal.bmp at half size from the height gradient.
+  // world_normal.bmp at half size. Geography worlds shade from the float height field at the
+  // base game's response; every other world from the quantised heights.
   const halfWidth = width / 2;
   const halfHeight = height / 2;
-  const normals = new Array<RgbColor>(halfWidth * halfHeight);
-  const heightAt = (x: number, y: number) =>
-    heights[Math.min(height - 1, Math.max(0, y)) * width + Math.min(width - 1, Math.max(0, x))]!;
-  for (let y = 0; y < halfHeight; y += 1)
-    for (let x = 0; x < halfWidth; x += 1) {
-      const dx = (heightAt(x * 2 + 2, y * 2) - heightAt(x * 2 - 2, y * 2)) / 4;
-      const dy = (heightAt(x * 2, y * 2 - 2) - heightAt(x * 2, y * 2 + 2)) / 4;
-      const length = Math.hypot(dx, dy, 8);
-      normals[y * halfWidth + x] = {
-        r: Math.round(128 - (dx / length) * 127),
-        g: Math.round(128 + (dy / length) * 127),
-        b: Math.round(128 + (8 / length) * 127),
-      };
-    }
-  add(
-    `${map}/world_normal.bmp`,
-    createBmp({ width: halfWidth, height: halfHeight, bitsPerPixel: 24, rgbPixels: normals }),
-    'image/bmp',
-  );
+  if (synthesized !== undefined)
+    add(
+      `${map}/world_normal.bmp`,
+      createBmp({
+        width: halfWidth,
+        height: halfHeight,
+        bitsPerPixel: 24,
+        rgbBytes: synthesized.normals,
+      }),
+      'image/bmp',
+    );
+  else {
+    const normals = new Array<RgbColor>(halfWidth * halfHeight);
+    const heightAt = (x: number, y: number) =>
+      heights[Math.min(height - 1, Math.max(0, y)) * width + Math.min(width - 1, Math.max(0, x))]!;
+    for (let y = 0; y < halfHeight; y += 1)
+      for (let x = 0; x < halfWidth; x += 1) {
+        const dx = (heightAt(x * 2 + 2, y * 2) - heightAt(x * 2 - 2, y * 2)) / 4;
+        const dy = (heightAt(x * 2, y * 2 - 2) - heightAt(x * 2, y * 2 + 2)) / 4;
+        const length = Math.hypot(dx, dy, 8);
+        normals[y * halfWidth + x] = {
+          r: Math.round(128 - (dx / length) * 127),
+          g: Math.round(128 + (dy / length) * 127),
+          b: Math.round(128 + (8 / length) * 127),
+        };
+      }
+    add(
+      `${map}/world_normal.bmp`,
+      createBmp({ width: halfWidth, height: halfHeight, bitsPerPixel: 24, rgbPixels: normals }),
+      'image/bmp',
+    );
+  }
   // Colour maps: land tint and city lights at half size; water at half, quarter and eighth.
   const tint: Record<string, RgbColor> = {
     plains: { r: 121, g: 133, b: 76 },
@@ -1670,8 +2066,9 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
                 `\tresources = {\n${resources.map(([resource, amount]) => `\t\t${resource} = ${amount}`).join('\n')}\n\t}`,
               ]),
           '\thistory = {',
-          `\t\towner = ${state.owner}`,
-          `\t\tadd_core_of = ${state.owner}`,
+          ...(state.owner === undefined
+            ? []
+            : [`\t\towner = ${state.owner}`, `\t\tadd_core_of = ${state.owner}`]),
           ...[...state.victoryPoints].map(
             ([id, value]) => `\t\tvictory_points = { ${provinceId(id)} ${value} }`,
           ),
@@ -1690,7 +2087,8 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
   const countryLocalisation: Array<readonly [string, string]> = [];
   const countryLines: string[] = [];
   const countryColors: string[] = [];
-  for (const [index, country] of spec.countries.entries()) {
+  // Workspace-owned countries keep their own tags, files, histories, flags and names.
+  for (const [index, country] of (spec.realms === undefined ? spec.countries : []).entries()) {
     const color = country.color ?? {
       r: 60 + random.int(170),
       g: 60 + random.int(170),
@@ -1823,10 +2221,12 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       );
     void index;
   }
-  add('common/country_tags/zz_world_countries.txt', text(`${countryLines.join('\n')}\n`));
-  add('common/countries/colors.txt', text(`${countryColors.join('\n')}\n`));
+  if (spec.realms === undefined) {
+    add('common/country_tags/zz_world_countries.txt', text(`${countryLines.join('\n')}\n`));
+    add('common/countries/colors.txt', text(`${countryColors.join('\n')}\n`));
+  }
   if (spec.startingScenario) {
-    for (const tag of context.inheritedCountryTags ?? [])
+    for (const tag of spec.realms === undefined ? (context.inheritedCountryTags ?? []) : [])
       if (!countryNames.has(tag))
         add(
           `history/countries/${tag} - inactive world.txt`,
@@ -1857,31 +2257,56 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           .filter((state) => state.owner === left.tag)
           .reduce((sum, state) => sum + state.manpower, 0) || (left.tag < right.tag ? -1 : 1),
   );
-  const majors = ranked.slice(0, Math.min(7, ranked.length));
-  add(
-    'common/bookmarks/world.txt',
-    text(
-      [
-        'bookmarks = {',
-        '\tbookmark = {',
-        '\t\tname = "WORLD_BOOKMARK_NAME"',
-        '\t\tdesc = "WORLD_BOOKMARK_DESC"',
-        `\t\tdate = ${spec.startDate}.12`,
-        '\t\tpicture = "GFX_select_date_1936"',
-        `\t\tdefault_country = "${majors[0]!.tag}"`,
-        '\t\tdefault = yes',
-        ...majors.map(
-          (country) =>
-            `\t\t"${country.tag}" = {\n\t\t\thistory = "${country.tag}_WORLD_DESC"\n\t\t\tideology = ${country.ideology ?? 'neutrality'}\n\t\t}`,
-        ),
-        '\t\t"---" = {\n\t\t\thistory = "WORLD_OTHER_DESC"\n\t\t}',
-        '\t\teffect = {\n\t\t\trandomize_weather = 22345\n\t\t}',
-        '\t}',
-        '}',
-        '',
-      ].join('\n'),
-    ),
-  );
+  const majors = spec.realms === undefined ? ranked.slice(0, Math.min(7, ranked.length)) : [];
+  if (spec.realms === undefined)
+    add(
+      'common/bookmarks/world.txt',
+      text(
+        [
+          'bookmarks = {',
+          '\tbookmark = {',
+          '\t\tname = "WORLD_BOOKMARK_NAME"',
+          '\t\tdesc = "WORLD_BOOKMARK_DESC"',
+          `\t\tdate = ${spec.startDate}.12`,
+          '\t\tpicture = "GFX_select_date_1936"',
+          `\t\tdefault_country = "${majors[0]!.tag}"`,
+          '\t\tdefault = yes',
+          ...majors.map(
+            (country) =>
+              `\t\t"${country.tag}" = {\n\t\t\thistory = "${country.tag}_WORLD_DESC"\n\t\t\tideology = ${country.ideology ?? 'neutrality'}\n\t\t}`,
+          ),
+          '\t\t"---" = {\n\t\t\thistory = "WORLD_OTHER_DESC"\n\t\t}',
+          '\t\teffect = {\n\t\t\trandomize_weather = 22345\n\t\t}',
+          '\t}',
+          '}',
+          '',
+        ].join('\n'),
+      ),
+    );
+  const realmSummary = () => {
+    const landPixels = landIds.reduce((sum, id) => sum + provinces.size[id]!, 0);
+    const weights = spec.countries.reduce((sum, country) => sum + (country.share ?? 1), 0);
+    return {
+      countries: spec.countries.map((country, index) => {
+        const ownedStates = states.filter((state) => state.owner === country.tag);
+        const pixels = ownedStates.reduce(
+          (sum, state) =>
+            sum + state.provinces.reduce((inner, id) => inner + provinces.size[id]!, 0),
+          0,
+        );
+        return {
+          tag: country.tag,
+          capitalState: countryCapitalState.get(country.tag)!.id,
+          capitalProvince: provinceId(capitals[index]!),
+          states: ownedStates.map(({ id }) => id),
+          provinces: ownedStates.reduce((sum, state) => sum + state.provinces.length, 0),
+          landShare: Math.round((pixels / landPixels) * 10_000) / 10_000,
+          targetShare: Math.round(((country.share ?? 1) / weights) * 10_000) / 10_000,
+        };
+      }),
+      unownedStates: states.filter((state) => state.owner === undefined).map(({ id }) => id),
+    };
+  };
   // Localisation for everything named above.
   add(
     `${context.localisationRoot}/replace/world_l_english.yml`,
@@ -1890,8 +2315,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
         (state) =>
           [
             `STATE_${state.id}`,
-            stateNames.get(state.id) ??
-              `${countryNames.get(state.owner) ?? state.owner} District ${state.id}`,
+            stateNames.get(state.id) ?? `${ownerName(state)} District ${state.id}`,
           ] as const,
       ),
       ...states.flatMap((state) =>
@@ -1899,8 +2323,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
           (id) =>
             [
               `VICTORY_POINTS_${provinceId(id)}`,
-              cityNames.get(id) ??
-                `${countryNames.get(state.owner) ?? state.owner} Settlement ${provinceId(id)}`,
+              cityNames.get(id) ?? `${ownerName(state)} Settlement ${provinceId(id)}`,
             ] as const,
         ),
       ),
@@ -1915,9 +2338,13 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       ),
       ...continentNames.map((name, index) => [`world_continent_${index + 1}`, name] as const),
       ...countryLocalisation,
-      ['WORLD_BOOKMARK_NAME', spec.worldName ?? 'A New World'],
-      ['WORLD_BOOKMARK_DESC', 'Nations of an unfamiliar map at the dawn of the war.'],
-      ['WORLD_OTHER_DESC', 'Any other nation of this world.'],
+      ...(spec.realms === undefined
+        ? ([
+            ['WORLD_BOOKMARK_NAME', spec.worldName ?? 'A New World'],
+            ['WORLD_BOOKMARK_DESC', 'Nations of an unfamiliar map at the dawn of the war.'],
+            ['WORLD_OTHER_DESC', 'Any other nation of this world.'],
+          ] as const)
+        : []),
       ...majors.map(
         (country) =>
           [
@@ -1931,6 +2358,7 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
     files,
     warnings: [...interpretationWarnings, ...drainage.warnings],
     notes,
+    ...(synthesized === undefined ? {} : { terrain: synthesized }),
     summary: {
       width,
       height,
@@ -1943,5 +2371,6 @@ export function generateWorld(spec: WorldSpec, context: WorldContext): Generated
       countries: spec.countries.length,
       rivers: riverCount,
     },
+    ...(spec.realms === undefined ? {} : { realms: realmSummary() }),
   };
 }

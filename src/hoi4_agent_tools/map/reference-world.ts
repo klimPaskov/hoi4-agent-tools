@@ -56,6 +56,14 @@ export interface ReferenceWorldOptions {
   /** Lower values broaden pale water-texture cleanup; the coastline remains raster-based. */
   coastDetail?: number;
   fit?: 'contain' | 'stretch';
+  /**
+   * `exact`: every pixel must equal a palette colour, and the palette classes are trusted as
+   * drawn (no text masking, texture cleanup, biome smoothing or political inference, and thin
+   * water stays water). Any other colour fails with `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`.
+   */
+  paletteMatch?: 'nearest' | 'exact';
+  /** Frame-sized mask: 1 where no registered sheet covers the pixel; those pixels are open sea. */
+  uncovered?: Uint8Array;
   politicalImageBytes?: Uint8Array;
   terrainImageBytes?: Uint8Array;
   heightImageBytes?: Uint8Array;
@@ -139,19 +147,36 @@ export const referenceWorldOptionsSchema = z
       .optional(),
     coastDetail: z.number().min(0).max(1).optional(),
     fit: z.enum(['contain', 'stretch']).optional(),
+    paletteMatch: z.enum(['nearest', 'exact']).optional(),
+    uncovered: bytesSchema.optional(),
     politicalImageBytes: bytesSchema.optional(),
     terrainImageBytes: bytesSchema.optional(),
     heightImageBytes: bytesSchema.optional(),
   })
   .strict();
 
-interface DecodedImage {
+/** A decoded RGB picture, three bytes per pixel. */
+export interface RawReferenceImage {
   data: Buffer;
   width: number;
   height: number;
 }
+type DecodedImage = RawReferenceImage;
 
-async function decode(bytes: Uint8Array): Promise<DecodedImage> {
+async function decode(bytes: Uint8Array | RawReferenceImage): Promise<DecodedImage> {
+  if (!(bytes instanceof Uint8Array)) {
+    if (
+      bytes.width < 1 ||
+      bytes.height < 1 ||
+      bytes.width * bytes.height > REFERENCE_IMAGE_PIXEL_LIMIT ||
+      bytes.data.length !== bytes.width * bytes.height * 3
+    )
+      throw new ServiceError(
+        'MAP_REFERENCE_IMAGE_BLOCKED',
+        'Reference image exceeds the bounded decode limit',
+      );
+    return bytes;
+  }
   if (bytes.byteLength === 0 || bytes.byteLength > REFERENCE_IMAGE_BYTE_LIMIT)
     throw new ServiceError(
       'MAP_REFERENCE_IMAGE_BLOCKED',
@@ -254,6 +279,70 @@ function classify(
   if (maximum - minimum < 34 && maximum < 175) return semanticCode('mountain');
   if (r > b + 20 && g < 150) return semanticCode('hills');
   return 3;
+}
+
+const UNKNOWN_COLOR_LIMIT = 16;
+const UNKNOWN_COLOR_SAMPLES = 5;
+
+/** Classify by exact palette colour; report every other colour with counts and positions. */
+function exactCodes(
+  data: Buffer,
+  width: number,
+  height: number,
+  palette: readonly ReferencePaletteEntry[],
+  toSource: (x: number, y: number) => ReferencePoint,
+  uncovered?: Uint8Array,
+): Uint8Array {
+  const known = new Map<number, number>();
+  for (const entry of palette) {
+    const key = (entry.color.r << 16) | (entry.color.g << 8) | entry.color.b;
+    const code = semanticCode(entry.kind);
+    if (known.has(key) && known.get(key) !== code)
+      throw new ServiceError(
+        'MAP_REFERENCE_PALETTE_CONFLICT',
+        'One palette colour is given two different kinds',
+        { color: [entry.color.r, entry.color.g, entry.color.b] },
+      );
+    known.set(key, code);
+  }
+  const codes = new Uint8Array(width * height);
+  const unknown = new Map<number, { count: number; samples: ReferencePoint[] }>();
+  let unknownPixels = 0;
+  for (let pixel = 0; pixel < codes.length; pixel += 1) {
+    // Pixels outside every registered sheet are open sea whatever colour stands there.
+    if (uncovered?.[pixel]) continue;
+    const key = (data[pixel * 3]! << 16) | (data[pixel * 3 + 1]! << 8) | data[pixel * 3 + 2]!;
+    const code = known.get(key);
+    if (code !== undefined) {
+      codes[pixel] = code;
+      continue;
+    }
+    unknownPixels += 1;
+    let entry = unknown.get(key);
+    if (entry === undefined) {
+      entry = { count: 0, samples: [] };
+      unknown.set(key, entry);
+    }
+    entry.count += 1;
+    if (entry.samples.length < UNKNOWN_COLOR_SAMPLES)
+      entry.samples.push(toSource(pixel % width, Math.floor(pixel / width)));
+  }
+  if (unknownPixels > 0) {
+    const colors = [...unknown.entries()]
+      .sort(([leftKey, left], [rightKey, right]) => right.count - left.count || leftKey - rightKey)
+      .slice(0, UNKNOWN_COLOR_LIMIT)
+      .map(([key, { count, samples }]) => ({
+        color: [key >> 16, (key >> 8) & 255, key & 255],
+        count,
+        samples,
+      }));
+    throw new ServiceError(
+      'MAP_REFERENCE_PALETTE_UNKNOWN_COLOR',
+      `${unknownPixels} reference pixels in ${unknown.size} colours match no palette entry; add the colours to the palette or repaint them. Samples are source pixel coordinates.`,
+      { unknownPixels, unknownColors: unknown.size, colors },
+    );
+  }
+  return codes;
 }
 
 function fillUnknown(codes: Uint8Array, width: number, height: number): void {
@@ -412,7 +501,7 @@ function coherentNoise(seed: number, x: number, y: number, scale: number): numbe
 
 /** The returned mask remains a raster; coastlines never go through lossy polygon tracing. */
 export async function extractReferenceWorld(
-  imageBytes: Uint8Array,
+  imageBytes: Uint8Array | RawReferenceImage,
   input: ReferenceWorldOptions,
 ): Promise<ReferenceWorldRaster> {
   const parsed = referenceWorldOptionsSchema.safeParse(input);
@@ -429,6 +518,12 @@ export async function extractReferenceWorld(
     throw new ServiceError(
       'MAP_REFERENCE_PIXELS_BLOCKED',
       'Reference output exceeds the pixel budget',
+    );
+  const exact = options.paletteMatch === 'exact';
+  if (exact && (options.palette?.length ?? 0) === 0)
+    throw new ServiceError(
+      'MAP_REFERENCE_PALETTE_REQUIRED',
+      'Exact palette matching needs a palette that lists every colour of the picture',
     );
   const scale = options.fit === 'stretch' ? 1 : Math.min(width / crop.width, height / crop.height);
   const bounds =
@@ -447,14 +542,32 @@ export async function extractReferenceWorld(
     .resize(bounds.width, bounds.height, { kernel: sharp.kernel.nearest })
     .raw()
     .toBuffer();
-  const mode =
-    options.mode === undefined || options.mode === 'auto' ? modeFor(resized) : options.mode;
+  const mode = exact
+    ? 'political'
+    : options.mode === undefined || options.mode === 'auto'
+      ? modeFor(resized)
+      : options.mode;
   const diagnostics = [
-    `Reference interpretation uses ${mode} visual heuristics; illustrated labels and ambiguous biomes may need semantic overrides.`,
+    exact
+      ? 'Reference interpretation matches every pixel to the exact palette; no visual heuristics are applied.'
+      : `Reference interpretation uses ${mode} visual heuristics; illustrated labels and ambiguous biomes may need semantic overrides.`,
   ];
   const codes = new Uint8Array(width * height);
-  const localCodes =
-    mode === 'sketch' || mode === 'grayscale'
+  // Unknown-colour samples name the source pixel, so the picture can be repainted there.
+  const toSource = (x: number, y: number): ReferencePoint => ({
+    x: Math.min(source.width - 1, crop.x + Math.floor(((x + 0.5) * crop.width) / bounds.width)),
+    y: Math.min(source.height - 1, crop.y + Math.floor(((y + 0.5) * crop.height) / bounds.height)),
+  });
+  const localCodes = exact
+    ? exactCodes(
+        resized,
+        bounds.width,
+        bounds.height,
+        options.palette ?? [],
+        toSource,
+        options.uncovered?.length === bounds.width * bounds.height ? options.uncovered : undefined,
+      )
+    : mode === 'sketch' || mode === 'grayscale'
       ? grayscaleCodes(resized, bounds.width, bounds.height, mode)
       : undefined;
   for (let y = 0; y < bounds.height; y += 1)
@@ -464,9 +577,9 @@ export async function extractReferenceWorld(
       codes[target] =
         localCodes?.[local] ?? classify(pixelColor(resized, local), mode, options.palette ?? []);
     }
-  if (mode === 'illustrated' || mode === 'satellite')
+  if (!exact && (mode === 'illustrated' || mode === 'satellite'))
     cleanWaterTexture(codes, resized, width, bounds, options.coastDetail ?? 1, diagnostics);
-  if (mode !== 'sketch' && mode !== 'grayscale')
+  if (!exact && mode !== 'sketch' && mode !== 'grayscale')
     maskOceanText(codes, resized, width, bounds, diagnostics);
   const transform = (point: ReferencePoint): ReferencePoint => ({
     x: bounds.x + ((point.x * source.width - crop.x) / crop.width) * bounds.width,
@@ -483,9 +596,23 @@ export async function extractReferenceWorld(
     );
   for (const mask of options.ignoreMasks ?? [])
     polygon(codes, width, height, mask.map(transform), 255);
+  const uncovered = options.uncovered;
+  if (uncovered !== undefined && uncovered.length !== codes.length)
+    throw new ServiceError(
+      'MAP_REFERENCE_OPTIONS_INVALID',
+      'The uncovered mask must have the frame size',
+    );
+  // Open sea outside every sheet is decided, not inferred: no mask fill, cleanup or smoothing moves it.
+  if (uncovered !== undefined)
+    for (let pixel = 0; pixel < codes.length; pixel += 1) if (uncovered[pixel]) codes[pixel] = 0;
   fillUnknown(codes, width, height);
   const protectedFeatures =
-    (options.annotations?.length ?? 0) > 0 ? new Uint8Array(codes.length) : undefined;
+    (options.annotations?.length ?? 0) > 0 || uncovered !== undefined
+      ? new Uint8Array(codes.length)
+      : undefined;
+  if (protectedFeatures !== undefined && uncovered !== undefined)
+    for (let pixel = 0; pixel < codes.length; pixel += 1)
+      if (uncovered[pixel]) protectedFeatures[pixel] = 1;
   for (const annotation of options.annotations ?? []) {
     polygon(codes, width, height, annotation.polygon.map(transform), semanticCode(annotation.kind));
     if (protectedFeatures)
@@ -514,7 +641,7 @@ export async function extractReferenceWorld(
     ).map((path) => path.map((point) => ({ x: point.x + bounds.x, y: point.y + bounds.y }))),
   );
   traceCoastalRivers(kind, width, height, rivers, diagnostics);
-  normalizeWater(kind, width, height, rivers, diagnostics);
+  normalizeWater(kind, width, height, rivers, diagnostics, !exact);
   cleanSmallComponents(kind, width, height, protectedFeatures, diagnostics);
   repairCorners(kind, width, height, diagnostics);
   // Corner repairs can detach an inlet from the ocean. Recheck sea fragments as well as
@@ -523,7 +650,7 @@ export async function extractReferenceWorld(
     if (!cleanSmallComponents(kind, width, height, protectedFeatures, diagnostics)) break;
     repairCorners(kind, width, height, diagnostics);
   }
-  if (mode === 'illustrated')
+  if (!exact && mode === 'illustrated')
     smoothIllustratedTerrain(terrain, kind, width, height, protectedFeatures, diagnostics);
   const elevation = new Float32Array(codes.length);
   const moisture = new Float32Array(codes.length);
@@ -547,7 +674,7 @@ export async function extractReferenceWorld(
     inferredCountries: [],
     diagnostics,
   };
-  inferCountries(result, resized, mode);
+  if (!exact) inferCountries(result, resized, mode);
   await applyLayers(result, input, crop);
   normalizeElevation(result, options.seed, options.heightImageBytes !== undefined);
   return result;
@@ -1100,6 +1227,7 @@ function normalizeWater(
   height: number,
   rivers: ReferencePoint[][],
   diagnostics: string[],
+  thinWaterToRivers = true,
 ): void {
   const visited = new Uint8Array(kind.length);
   const queue = new Int32Array(kind.length);
@@ -1135,7 +1263,11 @@ function normalizeWater(
     const spanX = maxX - minX + 1;
     const spanY = maxY - minY + 1;
     const thin = tail / Math.max(spanX, spanY) <= Math.max(2, Math.min(width, height) / 350);
-    if (thin && Math.max(spanX, spanY) >= Math.max(5, Math.min(width, height) / 100)) {
+    if (
+      thinWaterToRivers &&
+      thin &&
+      Math.max(spanX, spanY) >= Math.max(5, Math.min(width, height) / 100)
+    ) {
       const points = connectedPath(queue.subarray(0, tail), width, height);
       for (let index = 0; index < tail; index += 1) kind[queue[index]!] = 1;
       if (rivers.length < 512) rivers.push(points);

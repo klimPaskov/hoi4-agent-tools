@@ -387,12 +387,22 @@ describe('Agent Nudger map model and operations', () => {
       parseTextDocument(
         scannedText('map/too-large.txt', 'x'.repeat(MAP_TEXT_MAX_BYTES + 1), 0, 'game'),
       ),
-    ).toThrowError(expect.objectContaining({ code: 'MAP_TEXT_FILE_LIMIT' }));
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'MAP_TEXT_FILE_LIMIT',
+        details: expect.objectContaining({ relativePath: 'map/too-large.txt' }),
+      }),
+    );
     expect(() =>
       parseTextDocument(
         scannedText('map/too-many-records.txt', 'x\n'.repeat(MAP_TEXT_MAX_RECORDS + 1), 0, 'game'),
       ),
-    ).toThrowError(expect.objectContaining({ code: 'MAP_TEXT_RECORD_LIMIT' }));
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'MAP_TEXT_RECORD_LIMIT',
+        details: expect.objectContaining({ relativePath: 'map/too-many-records.txt' }),
+      }),
+    );
   });
 
   it('keeps a full-game localisation catalog separate from connected map topology limits', () => {

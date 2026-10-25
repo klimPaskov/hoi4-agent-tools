@@ -2,7 +2,7 @@
 
 ## Context
 
-A generated or edited map can be valid and still look artificial: province, state and country borders that ignore rivers, ridges and shores. The ZIN map passed every structural check while its borders sat at chance level against the land (province, state and country enrichment 0.94, 0.70 and 0.50; vanilla 1.35, 1.40 and 1.46). Nothing in the tool measured this, so neither a person nor a generator could tell whether a change made borders better. The territory assignment service (plan section C11) and the ZIN acceptance check (at least 85% of state-border length and 70% of country-border length follow nature) both need the same number from code, not from a render.
+A generated or edited map can be valid and still look artificial: province, state and country borders that ignore rivers, ridges and shores. A generated mod map passed every structural check while its borders sat at chance level against the land (province, state and country enrichment 0.94, 0.70 and 0.50; vanilla 1.35, 1.40 and 1.46). Nothing in the tool measured this, so neither a person nor a generator could tell whether a change made borders better. The planned territory assignment service and a mod's acceptance check (for example at least 85% of state-border length and 70% of country-border length follow nature) both need the same number from code, not from a render.
 
 ## Decision
 
@@ -20,7 +20,7 @@ A generated or edited map can be valid and still look artificial: province, stat
 | `extra`         | within 1 pixel of a pixel of a caller-supplied plane (for example a geography wall range)                                     | barrier    |
 | `terrainChange` | within 1 pixel of a change between obstacle terrain classes (mountain, forest, jungle, marsh) in `terrain.bmp`; water ignored | natural    |
 
-The barrier set (river, slope, lake shore, extra) is the plan's measurement. The natural set adds terrain-class changes, which `common/terrain` supplies through the graphical terrain entries. An edge carries the union of the features at its two pixels. The central-difference gradient reproduces the plan's published base rates (0.407 of vanilla land and 0.037 of ZIN land; this implementation measures land pixel pairs, 0.430 and 0.040).
+The barrier set (river, slope, lake shore, extra) is the plan's measurement. The natural set adds terrain-class changes, which `common/terrain` supplies through the graphical terrain entries. An edge carries the union of the features at its two pixels. The central-difference gradient reproduces the plan's published base rates (0.407 of vanilla land and 0.037 of that mod's land; this implementation measures land pixel pairs, 0.430 and 0.040).
 
 **Per layer** the report gives:
 
@@ -38,8 +38,8 @@ The barrier set (river, slope, lake shore, extra) is the plan's measurement. The
 
 ## Consequences
 
-The plan asked for the flag to default on and for a render layer; the flag is off by default so existing requests, artifacts and golden hashes are unchanged, and the render is an overlay so it composes with every base layer. `create_world.borderQuality` (report or enforce) is not added here: a generator that cannot meet the targets yet would block every write, so enforcement waits for the feature-aware partition (C9) and territory assignment (C11), which will call the same functions.
+The plan asked for the flag to default on and for a render layer; the flag is off by default so existing requests, artifacts and golden hashes are unchanged, and the render is an overlay so it composes with every base layer. `create_world.borderQuality` (report or enforce) is not added here: a generator that cannot meet the targets yet would block every write, so enforcement waits for the feature-aware partition (ADR 0058) and territory assignment, which will call the same functions.
 
-The plain natural share depends on the feature radii. On vanilla it is 0.70 for states and 0.73 for countries with the defaults, below ZIN's acceptance wording of 85% for states; the options (`riverRadius`, `slopeRadius`, `terrainRadius`, `extraRadius`) are part of the public function so the acceptance check can fix its definition and report it. The metric rewards alignment with rough height data; thresholds are soft (warnings) and every number is shown.
+The plain natural share depends on the feature radii. On vanilla it is 0.70 for states and 0.73 for countries with the defaults, below an acceptance wording of 85% for states; the options (`riverRadius`, `slopeRadius`, `terrainRadius`, `extraRadius`) are part of the public function so the acceptance check can fix its definition and report it. The metric rewards alignment with rough height data; thresholds are soft (warnings) and every number is shown.
 
-Tests use synthetic fixtures: borders drawn along a meandering river against a ruler line, slope, terrain-class, lake-shore and extra-plane cases, the seam and the coast, unknown and out-of-table provinces, run ranking, limits and gap bridging, determinism, input and option validation, the edge budget and cancellation, a map at the engine's 13,238,272 pixel limit, the inspect and overlay surfaces, and the procedural generator's own world. Reproductions on installed vanilla and the ZIN map are recorded in `docs/map.md` and `docs/plans/zin-map-pipeline.md`; no game file is copied into the repository.
+Tests use synthetic fixtures: borders drawn along a meandering river against a ruler line, slope, terrain-class, lake-shore and extra-plane cases, the seam and the coast, unknown and out-of-table provinces, run ranking, limits and gap bridging, determinism, input and option validation, the edge budget and cancellation, a map at the engine's 13,238,272 pixel limit, the inspect and overlay surfaces, and the procedural generator's own world. Reproductions on installed vanilla and a generated mod map are recorded in `docs/map.md`; no game file is copied into the repository.

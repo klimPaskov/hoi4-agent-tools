@@ -2,7 +2,7 @@
 
 ## Context
 
-Every tool takes `workspaceId`, defaulting to `current`. For `current` the server asks the MCP client for its roots and accepts only a root inside a mod workspace or containing one; without roots it uses its own working directory. A coding agent started in another folder (the tool repository, a git worktree, a scratch folder) advertises roots outside every mod, and so do its subagents, which share the parent's MCP connection. With several mods under a configured mod root, every implicit call then failed with `WORKSPACE_CONTEXT_NOT_FOUND`, an error that named neither the candidate workspaces nor the fix. The recovery that picks the one mod holding a requested source file never ran, because the roots check threw first. The ZIN project hit this on 19 October 2026 (request ZR-1 in `docs/plans/zin-requests.md`).
+Every tool takes `workspaceId`, defaulting to `current`. For `current` the server asks the MCP client for its roots and accepts only a root inside a mod workspace or containing one; without roots it uses its own working directory. A coding agent started in another folder (the tool repository, a git worktree, a scratch folder) advertises roots outside every mod, and so do its subagents, which share the parent's MCP connection. With several mods under a configured mod root, every implicit call then failed with `WORKSPACE_CONTEXT_NOT_FOUND`, an error that named neither the candidate workspaces nor the fix. The recovery that picks the one mod holding a requested source file never ran, because the roots check threw first. A coding agent working on a total-conversion mod hit this on 19 October 2026.
 
 ## Decision
 
