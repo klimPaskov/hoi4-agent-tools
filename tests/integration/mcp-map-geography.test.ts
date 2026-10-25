@@ -11,6 +11,7 @@ import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 import { syntheticGeography } from '../helpers/geography-fixture.js';
+import { gameplayGeography } from '../helpers/gameplay-fixture.js';
 import { reliefGeography } from '../helpers/relief-fixture.js';
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -368,6 +369,59 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect((await readFile(path.join(modRoot, 'map', 'world_normal.bmp'))).readInt32LE(18)).toBe(
       512,
     );
+  }, 180_000);
+
+  it('writes straits, a gated wall, ports and names for a model, and rejects bad options', async () => {
+    const { client, modRoot } = await fixture({ emptyMod: true });
+    const rejected = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [
+          create({
+            geography: gameplayGeography(),
+            width: 1024,
+            height: 512,
+            autoStraits: { maxGapPx: 3 },
+          }),
+        ],
+      },
+    });
+    expect(rejected.isError).toBe(true);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        operations: [
+          create({
+            geography: gameplayGeography(),
+            width: 1024,
+            height: 512,
+            landProvincePixels: 520,
+            seaProvincePixels: 2400,
+            countries: [
+              { tag: 'AAA', name: 'Westmarkland' },
+              { tag: 'BBB', name: 'Beta' },
+            ],
+            development: { model: 'geography' },
+            autoStraits: true,
+          }),
+        ],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('ok');
+    const adjacencies = (await readFile(path.join(modRoot, 'map', 'adjacencies.csv'))).toString();
+    expect(adjacencies).toContain('BRIGHT_STRAIT;Bright Strait');
+    expect(adjacencies).toContain(';impassable;');
+    expect((await readFile(path.join(modRoot, 'map', 'adjacency_rules.txt'))).toString()).toContain(
+      'name = "INNER_SEA_CANAL"',
+    );
+    const localisation = (
+      await readFile(path.join(modRoot, 'localisation', 'replace', 'world_l_english.yml'))
+    ).toString();
+    expect(localisation).toContain('Westhold');
+    expect(localisation).not.toMatch(/District d+/u);
   }, 180_000);
 
   it('checks every river without writing, and reports each failure with its divide', async () => {

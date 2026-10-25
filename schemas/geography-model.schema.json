@@ -121,6 +121,7 @@
             "ocean",
             "sea",
             "gulf",
+            "bay",
             "fjord"
           ]
         }
@@ -1006,6 +1007,17 @@
         },
         "lake": {
           "$ref": "#/$defs/__schema6"
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "steel",
+            "aluminium",
+            "tungsten",
+            "chromium",
+            "oil",
+            "rubber"
+          ]
         }
       },
       "required": [

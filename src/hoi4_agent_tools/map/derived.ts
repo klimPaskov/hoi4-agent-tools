@@ -29,11 +29,24 @@ interface PositionsRequest {
   mode?: 'missing' | 'replace';
 }
 
+/**
+ * A terrain-aware cost for the railway planner (ADR 0063): the cost of laying a line from one
+ * province to a neighbour, and the provinces trunk lines must reach. Without one, every step costs
+ * the same.
+ */
+export interface RailCostModel {
+  cost(from: number, to: number): number;
+  readonly trunk: ReadonlySet<number>;
+}
+
 interface SupplyRequest {
   stateIds?: readonly number[];
   mode?: 'connect' | 'replace';
   railwayLevel?: number;
   capitalRailwayLevel?: number;
+  railCost?: RailCostModel;
+  /** Level of the lines that reach a trunk province; default 2. */
+  trunkRailwayLevel?: number;
 }
 
 const TWO_PI = Math.PI * 2;
@@ -687,7 +700,7 @@ function shortestRailPath(
   neighbors: (id: number) => number[],
   sources: ReadonlySet<number>,
   isTarget: (id: number) => boolean,
-  cost: (id: number) => number,
+  cost: (from: number, to: number) => number,
 ): number[] | undefined {
   const distance = new Map<number, number>();
   const previous = new Map<number, number>();
@@ -709,7 +722,7 @@ function shortestRailPath(
       return path;
     }
     for (const next of neighbors(province)) {
-      const candidate = current + cost(next);
+      const candidate = current + cost(province, next);
       if (candidate < (distance.get(next) ?? Number.POSITIVE_INFINITY)) {
         distance.set(next, candidate);
         previous.set(next, province);
@@ -814,16 +827,25 @@ export function planSupplyRebuild(index: MapWorkspaceIndex, request: SupplyReque
         .map((state) => state.provinces.find((id) => nodes.has(id)))
         .filter((id): id is number => id !== undefined && !connected.has(id)),
     );
+    // Trunk lines reach the major cities of the country even where no supply node stands.
+    const trunk = new Set<number>();
+    for (const id of request.railCost?.trunk ?? [])
+      if (ownerOf(id) === owner && !connected.has(id) && neighbors(id).length > 0) {
+        trunk.add(id);
+        pending.add(id);
+      }
+    const ownerFactor = (id: number): number => (ownerOf(id) === owner ? 1 : 4);
+    const stepCost = (from: number, to: number): number =>
+      (request.railCost?.cost(from, to) ?? 1) * ownerFactor(to);
     while (pending.size > 0) {
-      const path = shortestRailPath(
-        neighbors,
-        connected,
-        (id) => pending.has(id),
-        (id) => (ownerOf(id) === owner ? 1 : 4),
-      );
+      const path = shortestRailPath(neighbors, connected, (id) => pending.has(id), stepCost);
       if (path === undefined) break;
       // A path that leaves the connected set once: from its target back to the network.
-      const level = path.includes(hub) ? capitalLevel : railwayLevel;
+      const level = path.includes(hub)
+        ? capitalLevel
+        : trunk.has(path[0]!)
+          ? Math.max(railwayLevel, request.trunkRailwayLevel ?? 2)
+          : railwayLevel;
       newRailways.push({ level, provinces: [...path].reverse() });
       railways.push(path);
       for (const id of path) {
