@@ -31,9 +31,11 @@ export const BORDER_FEATURE_BITS = {
 export type BorderFeature = keyof typeof BORDER_FEATURE_BITS;
 const BORDER_FEATURES = Object.keys(BORDER_FEATURE_BITS) as readonly BorderFeature[];
 /** Barrier set: the plan's measurement (rivers, steep gradients) plus lake shores and extras. */
-const BARRIER_MASK = 1 | 2 | 4 | 16;
+export const BORDER_BARRIER_MASK = 1 | 2 | 4 | 16;
+const BARRIER_MASK = BORDER_BARRIER_MASK;
 /** Natural set: the barrier set plus terrain-class changes. */
-const NATURAL_MASK = 31;
+export const BORDER_NATURAL_MASK = 31;
+const NATURAL_MASK = BORDER_NATURAL_MASK;
 
 /** Province kinds used by the metric. Only land provinces have land borders. */
 export const BORDER_PROVINCE_KIND = { unknown: 0, land: 1, sea: 2, lake: 3 } as const;
@@ -655,16 +657,19 @@ function validateInput(input: BorderQualityInput): void {
     );
 }
 
-/** One streamed pass over the raster: collect every land border edge and the chance baseline. */
-export async function buildBorderEdgeTable(
+/**
+ * One streamed pass over the raster: collect every land border edge and the chance baseline. The
+ * pass is a generator that yields every 16 rows so a synchronous planner can interleave its own
+ * checkpoints; `buildBorderEdgeTable` drives it and yields to the event loop.
+ */
+export function* buildBorderEdgeTableSteps(
   input: BorderQualityInput,
   options: BorderQualityOptions = {},
-): Promise<BorderEdgeTable> {
+): Generator<void, BorderEdgeTable, void> {
   const resolved = resolveOptions(options);
   validateInput(input);
   const { width, height, provinceIds, provinceKinds } = input;
   const rows = new FeatureRows(input, resolved);
-  const pace = new Pace(resolved.signal);
   let capacity = Math.min(65_536, resolved.maxEdges);
   let keys = new Int32Array(capacity);
   let provinceA = new Int32Array(capacity);
@@ -731,7 +736,10 @@ export async function buildBorderEdgeTable(
     }
   };
   for (let y = 0; y < height; y += 1) {
-    if (y % 16 === 0) await pace.tick();
+    if (y % 16 === 0) {
+      resolved.signal?.throwIfAborted();
+      yield;
+    }
     if (y + 1 < height) rows.rowFlags(y + 1, next);
     const rowStart = y * width;
     for (let x = 0; x < width; x += 1) {
@@ -785,6 +793,20 @@ export async function buildBorderEdgeTable(
     },
     options: resolved,
   };
+}
+
+/** Drive `buildBorderEdgeTableSteps`, yielding to the event loop about every 12 milliseconds. */
+export async function buildBorderEdgeTable(
+  input: BorderQualityInput,
+  options: BorderQualityOptions = {},
+): Promise<BorderEdgeTable> {
+  const steps = buildBorderEdgeTableSteps(input, options);
+  const pace = new Pace(options.signal);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+    await pace.tick();
+  }
 }
 
 function round(value: number, places = 4): number {

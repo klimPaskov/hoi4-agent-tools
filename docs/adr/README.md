@@ -72,3 +72,4 @@ Implementation rationale for contributors. For using the server, start with the 
 62. [Import of a drawn map: sheet registration, stable ids and authored overrides](0067-drawn-map-import.md)
 63. [Province count budget for generated worlds](0068-province-count-budget.md)
 64. [Workspace-owned countries in generated worlds](0069-workspace-owned-countries-in-generated-worlds.md)
+65. [Territory assignment service](0060-territory-assignment-service.md)

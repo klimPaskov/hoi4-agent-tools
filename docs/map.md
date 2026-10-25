@@ -265,7 +265,8 @@ Every operation has a unique `id` (1 to 256 characters), an optional `summary`, 
 The supported kinds are:
 
 - whole maps: `create_world`;
-- states: `create_state`, `split_state`, `merge_states`, `move_state_provinces`, `update_state`;
+- states: `create_state`, `split_state`, `merge_states`, `move_state_provinces`, `update_state`, `update_states`;
+- countries and whole maps: `assign_territory`, `repartition_states`;
 - provinces: `create_province`, `split_province`, `merge_provinces`, `remove_province`, `update_province_definition`;
 - strategic regions: `move_region_provinces`;
 - identifiers and script references: `renumber_map_entity`, `remap_map_references`;
@@ -357,6 +358,69 @@ Pass a full `distribution` with `stateValues: "retain-in-current-states"` to lea
 ```
 
 Nothing is lost or duplicated: for any split, merge or move, the sums of manpower, each resource and each slot building over all states are the same before and after.
+
+## Assign territory to countries
+
+`assign_territory` gives the land of a whole map to up to 512 countries in one call, so that their borders follow rivers, ranges and shores. `repartition_states` regroups the provinces of existing states along the same natural lines, and `update_states` edits up to 5,000 states in one validated rewrite. [ADR 0060](adr/0060-territory-assignment-service.md) records the design.
+
+```json
+{
+  "operations": [
+    {
+      "id": "politics",
+      "kind": "assign_territory",
+      "unit": "province",
+      "seed": 7,
+      "countries": [
+        { "tag": "AAA", "weight": 3, "seeds": [{ "state": 41 }, { "x": 1810, "y": 902 }] },
+        {
+          "tag": "BBB",
+          "weight": 2,
+          "seeds": [{ "province": 3318 }],
+          "blocked": { "regionIds": [12] }
+        },
+        {
+          "tag": "CCC",
+          "weight": 1,
+          "seeds": [{ "state": 108 }],
+          "overlord": "AAA",
+          "regions": [4]
+        }
+      ],
+      "stateSize": { "min": 3, "max": 12 },
+      "ownership": { "cores": "owner", "claims": "clear" },
+      "borderQuality": "report"
+    }
+  ]
+}
+```
+
+| Field of a country      | Meaning                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1).                                                                             |
+| `seeds`                 | `{ state }`, `{ province }` or a pixel `{ x, y }` of the province map; the first is the capital. A seed in the sea is refused.                         |
+| `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds }`: land the country always or never owns. `regionIds` are strategic regions.                                      |
+| `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                          |
+| `overlord`, `mergeInto` | A subject is grown inside its overlord's territory. `mergeInto` relabels the finished territory to another listed country and keeps its tag as a core. |
+| `cores`, `claims`       | Extra states the country holds a core on or claims.                                                                                                    |
+
+Top-level fields: `unit` (`state`, the default, assigns whole states; `province` assigns provinces and regroups the states a border cuts), `scope` (`stateIds`, `regionIds`, `owners`: only these states take part), `unowned` (land nobody owns), `barriers` (`natural` or `none`, which grows on distance alone), `rules.connectedMainland` (default true) and `rules.islandPolicy` (`one-owner`, `nearest` or `unowned` for landmasses without a seed), `smoothing` (`passes` 0 to 20, `maxShareChange`), `shareTolerance` (default 0.15), `seed` (the same seed gives the same borders), `ownership` (`controller`: `owner` or `keep`; `cores`: `keep`, `owner` or `add-owner`; `claims`: `keep` or `clear`; `unowned`: `clear` or `keep`), `stateSize` (province unit: fragments below `min` provinces join a neighbour of the same owner and strategic region), `remapReferences` (`refuse` or `override`, as for `merge_states`), `borderQuality` and `borderTargets`.
+
+How it works: a multi-source shortest-path growth from the seeds over the province or state graph, where a step costs the distance between centres times `1 + 6 * barrier` (the barrier is the strength of the rivers, slopes, lake shores and terrain changes along the shared border, measured by the metric of [Border naturalness](#border-naturalness)); country multipliers are corrected until sizes are within the tolerance of their targets; a country cut apart on its capital's landmass is joined by a corridor; and a local search moves boundary atoms when that shortens the artificial border without disconnecting the donor or leaving the size tolerance. Targets follow the weights, corrected for what the land allows (a country alone on an island owns the island).
+
+The province unit writes the new borders exactly: each state is split by owner, small fragments are merged, and states are rewritten in one pass. Population, resources and slot buildings follow the land by pixel share in whole units (every total is conserved), levels keep their value, victory points and province buildings follow their provinces, cores and claims are the union of the states that contribute, and new states are named `STATE_<id>` in `hoi4_agent_map_l_english.yml` after the state they were cut from, with a number. A state may hold provinces of one strategic region only; dated history that would be lost or rewritten, and provinces without geometry, refuse the operation.
+
+`repartition_states` takes `countries` (owners), `stateIds`, `provincesPerState` (`min` 3, `target` 6 and `max` 10 by default) and `remapReferences`. States are clustered per owner and strategic region; a cluster equal to an existing state is left alone.
+
+`update_states` takes `updates: [{ stateId, changes }]` with the changes of `update_state`. The index is built once; a state may appear once, and an unknown state refuses the whole list.
+
+`borderQuality` is `report` by default: the result adds `MAP_BORDER_QUALITY_MEASURED` with the enrichment, natural share and straightness of the proposed country and state borders, and the artifact `map-territory-report.json` holds every number. `enforce` blocks the write when a layer misses the targets (enrichment 1.6; straightness 0.12 for countries and 0.25 for states; override with `borderTargets`) with `MAP_TERRITORY_BORDER_ARTIFICIAL`; `off` skips it. `data.territory` returns, per operation, the sizes against targets (worst eight countries), the border score, the same seeds grown on distance alone (`distanceOnly`), and the counts of states changed, created and removed. Previews work as for any rewrite and write nothing.
+
+Unowned land: states in `unowned`, and landmasses without a seed under `islandPolicy: "unowned"`, are not grown into. With `ownership.unowned: "clear"` (the default) their owner is removed, and their controller too when `controller` is `owner`; `"keep"` leaves them as they were. States outside `scope` are never edited. Provinces that belong to no state cannot be owned and are left out.
+
+Refusals name the cause and the state or province of the request: `MAP_TERRITORY_SEED_IN_WATER`, `_STATE_UNKNOWN`, `_PROVINCE_UNKNOWN`, `_REGION_UNKNOWN`, `_SCOPE_UNKNOWN`, `_POINT_OUTSIDE_MAP`, `_PROVINCE_WITHOUT_STATE`, `_SEED_MISSING` (a country with no seed), `_SEED_UNAVAILABLE` (a seed or forced land is unowned, outside the scope or outside its overlord), `_FORCED_CONFLICT` (two countries claim one state or province), `_FORCED_BLOCKED` (forced or a seed and blocked for the same country), `_FORCED_UNREACHABLE` (blocked or forced land cuts a seed off from its capital), `_TAG_INVALID`, `_TAG_DUPLICATE`, `_WEIGHT_INVALID`, `_TOO_MANY_COUNTRIES` (above 512), `_TOO_MANY_SEEDS` (above 64), `_OVERLORD_INVALID` (unknown, itself or a cycle), `_MERGE_INVALID`, `_OPTION_INVALID`, `_STATE_OVERLAP`, `_STATE_SIZE_INVALID`, `_STATE_SIZE_NEEDS_PROVINCE_UNIT`, `_NO_LAND`, `_MAP_MISSING`, `_NOTHING_TO_REPARTITION`, and `MAP_UPDATE_STATES_DUPLICATE` for a state listed twice in `update_states`. The schema refuses more than 512 countries, more than 64 seeds, an empty seed list, a tag that is not three capital letters or digits, a weight of zero or less, and more than 5,000 `update_states` entries before anything is planned. Warnings: `MAP_TERRITORY_SHARE_OFF` (a country is more than the tolerance from its target) and `MAP_TERRITORY_DISCONNECTED`; info: `MAP_TERRITORY_ASSIGNED`, `MAP_TERRITORY_REPARTITIONED` and `MAP_TERRITORY_NO_FEATURES` (no height, river or terrain bitmap, so borders fall back to distance), `MAP_TERRITORY_STATE_SIZE_UNMET` (a fragment below `stateSize.min` has no neighbour of the same owner and strategic region to join) and `MAP_TERRITORY_STATE_SKIPPED` (`repartition_states` leaves states that span several strategic regions or share provinces).
+
+Measured on project-owned synthetic fixtures (ADR 0060): country-border enrichment 3.1 to 3.6 against 1.2 to 2.5 for the same seeds grown on distance alone on a partitioned world with rivers and ridges; on a generated total-conversion map of 13.1 million pixels with about 300 countries and 1,500 states, 15 seconds by state and 26 seconds by province.
 
 ## Other map changes
 
@@ -512,7 +576,7 @@ By default provinces grow evenly from spread seeds and states and regions grow b
 }
 ```
 
-All the engine rules hold as before: provinces are connected, no box exceeds an eighth of the map, no four provinces meet at a corner, provinces are at least 20 pixels where a same-kind neighbour exists, and at most 65,000 exist. A plan that needs more than 21,000 provinces is refused with `MAP_PARTITION_PROVINCE_COUNT_HIGH` and the fields to change; both partitions warn with that code above 14,000 provinces. Contradictory bands (`MAP_PARTITION_AREA_BANDS_CONTRADICTORY`), reversed ranges, a map too small for `minProvincePixels` (`MAP_PARTITION_MAP_TOO_SMALL`) and `partitionTuning` with `legacy` are refused before anything is written. Info notes report the provinces cut along rivers or straits (`MAP_PARTITION_SPLITS`) and coast pixels adjusted because a 2 x 2 block touched its own kind only at a corner (`MAP_PARTITION_MASK_SMOOTHED`). Check the result with `hoi4.map_inspect` and `quality: true` (border naturalness).
+All the engine rules hold as before: provinces are connected, no box exceeds an eighth of the map, no four provinces meet at a corner, provinces are at least 20 pixels where a same-kind neighbour exists, and at most 65,000 exist. A plan that needs more than 21,000 provinces is refused with `MAP_PARTITION_PROVINCE_COUNT_HIGH` and the fields to change; both partitions warn with that code above 14,000 provinces. Contradictory bands (`MAP_PARTITION_AREA_BANDS_CONTRADICTORY`), reversed ranges, a map too small for `minProvincePixels` (`MAP_PARTITION_MAP_TOO_SMALL`) and `partitionTuning` with `legacy` are refused before anything is written. Info notes report the provinces cut along rivers or straits (`MAP_PARTITION_SPLITS`) and coast pixels adjusted because a 2 x 2 block touched its own kind only at a corner (`MAP_PARTITION_MASK_SMOOTHED`). Check the result with `hoi4.map_inspect` and `quality: true` (border naturalness), or ask for it in the same call with `borderQuality`: `report` adds the measured province, state, region and country borders of the new world to the result, and `enforce` blocks the write below the targets (it needs the feature-aware partition and is refused with `legacy`, whose borders are at chance level). Countries of a feature-aware world without a reference picture are grown along natural lines by the territory service ([Assign territory to countries](#assign-territory-to-countries)).
 
 Code that needs the same cut calls `partitionWorld` (`src/hoi4_agent_tools/map/partition.ts`): it takes `PartitionFields` (distance to river, ridge strength, slope, terrain class, region id, fertility and a barrier mask; `partitionFieldsFromBitmaps` computes a basic version from `heightmap.bmp`, `terrain.bmp` and `rivers.bmp`, `partitionFieldsFromGeography` adds regions and walls) and returns the provinces, the barrier raster, the size distribution and a weighted province graph (`buildProvinceGraph`, `provinceEdgeCosts`) that the territory assignment service reuses.
 
