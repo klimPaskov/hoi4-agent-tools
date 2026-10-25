@@ -51,8 +51,8 @@ export function gameplayGeography(): GeographyModelInput {
     ],
     lands: [
       {
-        id: 'aenor',
-        name: 'Aenor',
+        id: 'westmark',
+        name: 'Westmark',
         kind: 'continent',
         elevationBase: 0.12,
         coastDetail: 0.3,
@@ -132,7 +132,7 @@ export function gameplayGeography(): GeographyModelInput {
     ranges: [
       {
         id: 'great_wall',
-        name: 'Great Wall of Aenor',
+        name: 'Great Wall of Westmark',
         profile: 'wall',
         barrier: 'impassable',
         path: [
@@ -199,8 +199,8 @@ export function gameplayGeography(): GeographyModelInput {
     ],
     lakes: [
       {
-        id: 'great_lake',
-        name: 'Great Lake',
+        id: 'inner_sea',
+        name: 'Inner Sea',
         center: [0.425, 0.36],
         radius: 0.045,
         gameplay: 'inland-sea',
@@ -222,7 +222,7 @@ export function gameplayGeography(): GeographyModelInput {
       {
         id: 'long_channel',
         name: 'Long Channel',
-        between: [{ land: 'aenor' }, { land: 'south_isle' }],
+        between: [{ land: 'westmark' }, { land: 'south_isle' }],
         width: 0.01,
       },
     ],
@@ -241,15 +241,15 @@ export function gameplayGeography(): GeographyModelInput {
       {
         id: 'lake_outflow',
         name: 'Lake Outflow',
-        source: { lake: 'great_lake' },
+        source: { lake: 'inner_sea' },
         mouth: { sea: 'north_sea' },
         size: 2,
       },
     ],
     sites: [
       {
-        id: 'aenor_city',
-        name: 'Aenorhold',
+        id: 'westmark_city',
+        name: 'Westhold',
         kind: 'capital',
         at: [0.2, 0.55],
         importance: 5,
@@ -261,7 +261,7 @@ export function gameplayGeography(): GeographyModelInput {
         kind: 'port',
         at: [0.41, 0.455],
         importance: 3,
-        lake: 'great_lake',
+        lake: 'inner_sea',
       },
       { id: 'bay_town', name: 'Baytown', kind: 'port', at: [0.145, 0.75], importance: 3 },
       { id: 'iron_hill', name: 'Iron Hill', kind: 'mine', at: [0.4, 0.68], importance: 3 },
@@ -291,7 +291,7 @@ export function gameplaySpec(overrides: Partial<WorldSpec> = {}): WorldSpec {
     rivers: 0,
     startDate: '1936.1.1',
     countries: [
-      { tag: 'AAA', name: 'Aenorland' },
+      { tag: 'AAA', name: 'Westmarkland' },
       { tag: 'BBB', name: 'Beta' },
     ],
     geography: resolution.geography,

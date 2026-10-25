@@ -38,7 +38,7 @@ const operation = (extra: Record<string, unknown> = {}): MapOperation =>
     seaProvincePixels: 2_400,
     geography: gameplayGeography(),
     countries: [
-      { tag: 'AAA', name: 'Aenorland' },
+      { tag: 'AAA', name: 'Westmarkland' },
       { tag: 'BBB', name: 'Beta' },
     ],
     ...extra,

@@ -362,11 +362,12 @@ function tripleBySearch(
   input: CrossingInput,
   expected: readonly [number | undefined, number | undefined],
 ): Triple | undefined {
-  if (expected[0] === undefined || expected[1] === undefined || expected[0] === expected[1])
-    return undefined;
+  if (expected[0] === undefined || expected[1] === undefined) return undefined;
   const { width, height } = input;
   const midX = ((probe[0]!.x + probe[probe.length - 1]!.x) / 2) * width;
   const midY = ((probe[0]!.y + probe[probe.length - 1]!.y) / 2) * height;
+  if (expected[0] === expected[1])
+    return sameLandTriple(probe, input, expected[0], midX, midY, strait.width * width);
   const reach = Math.max(0.12 * width, strait.width * width * 4);
   let best: (Triple & { score: number }) | undefined;
   for (let through = 0; through < input.kind.length; through += 1) {
@@ -382,6 +383,58 @@ function tripleBySearch(
       else if (input.features.land[other] === expected[1] && to === undefined) to = other;
     }
     if (from === undefined || to === undefined || input.neighbors[from]!.has(to)) continue;
+    if (best === undefined || d < best.score)
+      best = { from, through, to, via: [through], score: d };
+  }
+  return best === undefined
+    ? undefined
+    : { from: best.from, through: best.through, to: best.to, via: [best.through] };
+}
+
+/**
+ * A crossing between two coasts of one land: the sea province nearest the strait's middle whose
+ * land neighbours on that land include one near each end that do not touch each other.
+ */
+function sameLandTriple(
+  probe: readonly GeoPoint[],
+  input: CrossingInput,
+  land: number,
+  midX: number,
+  midY: number,
+  straitWidth: number,
+): Triple | undefined {
+  const { width, height } = input;
+  const ends = [probe[0]!, probe[probe.length - 1]!].map(({ x, y }) => ({
+    x: x * width,
+    y: y * height,
+  }));
+  const reach = Math.max(0.12 * width, straitWidth * 4);
+  let best: (Triple & { score: number }) | undefined;
+  for (let through = 0; through < input.kind.length; through += 1) {
+    if (input.kind[through] !== SEA) continue;
+    const centre = centerOf(input.center, through);
+    const d = distanceOnMap(centre.x, centre.y, midX, midY, width);
+    if (d > reach) continue;
+    const shores = [...input.neighbors[through]!]
+      .filter((other) => input.kind[other] === LAND && input.features.land[other] === land)
+      .sort((a, b) => a - b);
+    const nearest = (end: { x: number; y: number }) => {
+      let chosen: number | undefined;
+      let distance = Number.POSITIVE_INFINITY;
+      for (const shore of shores) {
+        const c = centerOf(input.center, shore);
+        const next = distanceOnMap(c.x, c.y, end.x, end.y, width);
+        if (next < distance) {
+          chosen = shore;
+          distance = next;
+        }
+      }
+      return chosen;
+    };
+    const from = nearest(ends[0]!);
+    const to = nearest(ends[1]!);
+    if (from === undefined || to === undefined || from === to || input.neighbors[from]!.has(to))
+      continue;
     if (best === undefined || d < best.score)
       best = { from, through, to, via: [through], score: d };
   }

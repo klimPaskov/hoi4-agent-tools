@@ -81,7 +81,7 @@ describe('ports from the shape of the coast', () => {
     const portsByLandmass = new Set(
       [...economy.ports.ports.keys()].map((province) => land.get(province + 1)),
     );
-    // Aenor, Cinder Isle and South Isle each have one.
+    // Westmark, Cinder Isle and South Isle each have one.
     expect(portsByLandmass.size).toBeGreaterThanOrEqual(3);
     for (const province of economy.ports.ports.keys())
       expect(
@@ -91,7 +91,7 @@ describe('ports from the shape of the coast', () => {
 
   it('puts the lake port of an inland sea on that sea', () => {
     const rows = adjacencyRows(world);
-    const canal = rows.find(({ rule }) => rule === 'GREAT_LAKE_CANAL')!;
+    const canal = rows.find(({ rule }) => rule === 'INNER_SEA_CANAL')!;
     // Sea provinces reachable from the canal's inland end without using the canal.
     const reach = new Set<number>([canal.from]);
     const stack = [canal.from];
@@ -191,7 +191,7 @@ describe('development from the model', () => {
     const capitals = [...a.values()].filter((text) => /victory_points = \{ \d+ 25 \}/u.test(text));
     expect(capitals).toHaveLength(2);
     expect(capitals.map((text) => names.get(`STATE_${/id = (\d+)/u.exec(text)![1]!}`))).toContain(
-      'Aenorhold',
+      'Westhold',
     );
     for (const text of a.values()) {
       expect(Number(/manpower = (\d+)/u.exec(text)![1])).toBeGreaterThanOrEqual(1_000);
@@ -252,7 +252,7 @@ describe('names from the model', () => {
     expect(all.some((name) => name.includes('West Marches'))).toBe(true);
     expect(all.some((name) => name.includes('Northern Reach'))).toBe(true);
     expect(all.some((name) => name.includes('Southern Deep'))).toBe(true);
-    expect(all).toContain('Great Lake');
+    expect(all).toContain('Inner Sea');
     expect(all).toContain('Cinder Keep');
     // A lake province carries the lake's name.
     expect([...names.keys()].some((key) => /^PROV\d+$/u.test(key))).toBe(true);

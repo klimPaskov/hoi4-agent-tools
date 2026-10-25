@@ -301,7 +301,7 @@ describe('geography model through hoi4.map_rewrite', () => {
             landProvincePixels: 520,
             seaProvincePixels: 2400,
             countries: [
-              { tag: 'AAA', name: 'Aenorland' },
+              { tag: 'AAA', name: 'Westmarkland' },
               { tag: 'BBB', name: 'Beta' },
             ],
             development: { model: 'geography' },
@@ -316,12 +316,12 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect(adjacencies).toContain('BRIGHT_STRAIT;Bright Strait');
     expect(adjacencies).toContain(';impassable;');
     expect((await readFile(path.join(modRoot, 'map', 'adjacency_rules.txt'))).toString()).toContain(
-      'name = "GREAT_LAKE_CANAL"',
+      'name = "INNER_SEA_CANAL"',
     );
     const localisation = (
       await readFile(path.join(modRoot, 'localisation', 'replace', 'world_l_english.yml'))
     ).toString();
-    expect(localisation).toContain('Aenorhold');
+    expect(localisation).toContain('Westhold');
     expect(localisation).not.toMatch(/District d+/u);
   }, 180_000);
 

@@ -16,7 +16,10 @@ import {
 } from '../helpers/gameplay-fixture.js';
 import { filesOf, indexOfFiles, plainContext } from '../helpers/map-appearance-world.js';
 import { resolveGeography } from '../../src/hoi4_agent_tools/map/geography/index.js';
-import type { GeographyModelInput } from '../../src/hoi4_agent_tools/schemas/geography.js';
+import {
+  geographyModelSchema,
+  type GeographyModelInput,
+} from '../../src/hoi4_agent_tools/schemas/geography.js';
 
 const noteCodes = (world: ReturnType<typeof gameplayWorld>): string[] =>
   world.notes.map(({ code }) => code);
@@ -62,13 +65,13 @@ describe('named straits and canals', () => {
   });
 
   it('writes a sea-to-sea canal from the inland sea through the isthmus', () => {
-    const canal = sea.find(({ rule }) => rule === 'GREAT_LAKE_CANAL')!;
+    const canal = sea.find(({ rule }) => rule === 'INNER_SEA_CANAL')!;
     expect(map.typeOf.get(canal.from)).toBe('sea');
     expect(map.typeOf.get(canal.to)).toBe('sea');
     expect(map.typeOf.get(canal.through)).toBe('land');
-    // The inland sea is sea water inside Aenor, not a lake province.
+    // The inland sea is sea water inside Westmark, not a lake province.
     const inland = world.notes.find(({ code }) => code === 'MAP_INLAND_SEA_CREATED');
-    expect(inland?.message).toContain('great_lake');
+    expect(inland?.message).toContain('inner_sea');
     expect(map.typeOf.get(canal.from) === 'lake').toBe(false);
   });
 
@@ -143,6 +146,62 @@ describe('named straits and canals', () => {
   });
 });
 
+describe('a crossing between two coasts of one land', () => {
+  it('writes a notch in the south coast as a land-to-land crossing', () => {
+    const spec = withModel((model) => {
+      model.straits!.push({
+        id: 'notch_crossing',
+        name: 'Notch Crossing',
+        between: [
+          [0.34, 0.76],
+          [0.27, 0.76],
+        ],
+      });
+    });
+    const built = generateWorld(spec, plainContext);
+    expect(noteCodes(built)).not.toContain('MAP_STRAIT_UNRESOLVED');
+    const row = adjacencyRows(built).find(({ comment }) => comment === 'Notch Crossing')!;
+    expect(row).toBeDefined();
+    const map = provinceMap(built);
+    expect(map.typeOf.get(row.from)).toBe('land');
+    expect(map.typeOf.get(row.to)).toBe('land');
+    expect(map.typeOf.get(row.through)).toBe('sea');
+    expect(row.from).not.toBe(row.to);
+  });
+
+  it('still refuses two points of one land across no water', () => {
+    const model = gameplayGeography();
+    model.straits = [
+      {
+        id: 'dry_loop',
+        between: [
+          [0.12, 0.3],
+          [0.2, 0.3],
+        ],
+      },
+    ];
+    const resolved = resolveGeography(geographyModelSchema.parse(model), {
+      frame: { width: GAMEPLAY_WIDTH, height: GAMEPLAY_HEIGHT },
+      hasReference: false,
+    });
+    expect(
+      resolved.diagnostics.find(({ code }) => code === 'MAP_GEOGRAPHY_STRAIT_SAME_LAND'),
+    ).toMatchObject({ severity: 'error' });
+  });
+
+  it('accepts bay as a sea kind and refuses an unknown one', () => {
+    const model = gameplayGeography();
+    model.seas![0]!.kind = 'bay';
+    const resolved = resolveGeography(geographyModelSchema.parse(model), {
+      frame: { width: GAMEPLAY_WIDTH, height: GAMEPLAY_HEIGHT },
+      hasReference: false,
+    });
+    expect(resolved.geography.list('sea')[0]).toMatchObject({ seaKind: 'bay' });
+    model.seas![0]!.kind = 'lagoon' as 'bay';
+    expect(geographyModelSchema.safeParse(model).success).toBe(false);
+  });
+});
+
 describe('the wall and its gates', () => {
   const world = gameplayWorld();
   const map = provinceMap(world);
@@ -169,7 +228,7 @@ describe('the wall and its gates', () => {
       expect(row.through).toBe(-1);
       expect(row.coordinates).toEqual([-1, -1, -1, -1]);
       expect(row.rule).toBe('');
-      expect(row.comment).toBe('Great Wall of Aenor');
+      expect(row.comment).toBe('Great Wall of Westmark');
       expect(map.neighbors.get(row.from)!.has(row.to)).toBe(true);
       expect(map.typeOf.get(row.from)).toBe('land');
       expect(map.typeOf.get(row.to)).toBe('land');
@@ -184,14 +243,14 @@ describe('the wall and its gates', () => {
       (a, b) => !blocked.has(`${a}:${b}`) && !gates.has(`${a}:${b}`),
     );
     const open = landComponents(map, (a, b) => !blocked.has(`${a}:${b}`));
-    // Aenor's land provinces on the two sides of the wall.
-    const aenor = [...map.typeOf]
+    // Westmark's land provinces on the two sides of the wall.
+    const westmark = [...map.typeOf]
       .filter(
         ([id, type]) => type === 'land' && xOf(id, map) >= 0 && xOf(id, map) < GAMEPLAY_WIDTH * 0.5,
       )
       .map(([id]) => id);
-    const westSide = aenor.filter((id) => west(id) && xOf(id, map) < GAMEPLAY_WIDTH * 0.27);
-    const eastSide = aenor.filter((id) => xOf(id, map) > GAMEPLAY_WIDTH * 0.33);
+    const westSide = westmark.filter((id) => west(id) && xOf(id, map) < GAMEPLAY_WIDTH * 0.27);
+    const eastSide = westmark.filter((id) => xOf(id, map) > GAMEPLAY_WIDTH * 0.33);
     expect(westSide.length).toBeGreaterThan(10);
     expect(eastSide.length).toBeGreaterThan(10);
     const westLabels = new Set(westSide.map((id) => closed.get(id)));

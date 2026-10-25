@@ -115,7 +115,7 @@ const seaSchema = z
     ...areaFields,
     depthClass: geographyDepthClassSchema.optional(),
     ice: unit.optional(),
-    kind: z.enum(['ocean', 'sea', 'gulf', 'fjord']).optional(),
+    kind: z.enum(['ocean', 'sea', 'gulf', 'bay', 'fjord']).optional(),
   })
   .strict();
 

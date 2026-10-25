@@ -116,7 +116,7 @@ export interface ResolvedSea extends FeatureBase<'sea'> {
   readonly area: ResolvedArea;
   readonly depthClass: GeographyDepthClass;
   readonly ice: number;
-  readonly seaKind: 'ocean' | 'sea' | 'gulf' | 'fjord';
+  readonly seaKind: 'ocean' | 'sea' | 'gulf' | 'bay' | 'fjord';
 }
 
 export interface ResolvedLand extends FeatureBase<'land'> {
