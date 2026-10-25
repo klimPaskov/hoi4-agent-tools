@@ -193,3 +193,38 @@ export function buildWorldContext(base: MapWorkspaceIndex): WorldContext {
   }
   return context;
 }
+
+/** The tag file a generated world writes for the countries it creates. */
+export const WORLD_COUNTRY_TAG_FILE = 'common/country_tags/zz_world_countries.txt';
+
+export interface CountryTagCatalog {
+  /** Tags declared by active tag files other than the world's own, sorted. */
+  static: string[];
+  /** Tags declared by active tag files marked `dynamic_tags = yes`, sorted. */
+  dynamic: string[];
+}
+
+/** Country tags the active sources declare, apart from those of a previously generated world. */
+export function countryTagCatalog(base: MapWorkspaceIndex): CountryTagCatalog {
+  const declared = new Set<string>();
+  const dynamic = new Set<string>();
+  for (const file of base.activeFiles.all) {
+    const name = normalized(file.relativePath);
+    if (!/^common\/country_tags\/[^/]+\.txt$/u.test(name) || name === WORLD_COUNTRY_TAG_FILE)
+      continue;
+    const entries = assignments(documentFor(file).root);
+    const isDynamic = entries.some(
+      (entry) =>
+        entry.key.value === 'dynamic_tags' &&
+        entry.value.type === 'scalar' &&
+        entry.value.value === 'yes',
+    );
+    for (const entry of entries)
+      if (/^[A-Z][A-Z0-9]{2}$/u.test(entry.key.value) && entry.value.type === 'scalar')
+        (isDynamic ? dynamic : declared).add(entry.key.value);
+  }
+  return {
+    static: [...declared].sort(compareCodeUnits),
+    dynamic: [...dynamic].filter((tag) => !declared.has(tag)).sort(compareCodeUnits),
+  };
+}

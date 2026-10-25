@@ -3,7 +3,7 @@ import { ServiceError } from '../core/result.js';
 /**
  * The province graph with edge weights (ADR 0058): who touches whom, how long the shared border
  * is, and how much of it lies on a natural line. States and strategic regions are clustered on it,
- * and the territory assignment service (C11) reuses it to grow countries over the same edges.
+ * and the planned territory assignment service reuses it to grow countries over the same edges.
  * Adjacency wraps east-west like the province builder's does.
  */
 

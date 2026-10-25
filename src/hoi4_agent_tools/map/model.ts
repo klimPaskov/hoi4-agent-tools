@@ -8,6 +8,7 @@ import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import {
   assignments,
+  assertSourceEncodingPreserved,
   childBlocks,
   decodeSource,
   encodeSource,
@@ -354,8 +355,12 @@ export function parseTextDocument(file: ScannedFile): TextFileDocument {
   if (file.bytes.length > MAP_TEXT_MAX_BYTES) {
     throw new ServiceError(
       'MAP_TEXT_FILE_LIMIT',
-      'Map text table exceeds the supported 16 MiB parsing limit',
-      { bytes: file.bytes.length, maximumBytes: MAP_TEXT_MAX_BYTES },
+      `Map text table ${file.relativePath} exceeds the supported 16 MiB parsing limit (${file.bytes.length} bytes)`,
+      {
+        relativePath: file.relativePath,
+        bytes: file.bytes.length,
+        maximumBytes: MAP_TEXT_MAX_BYTES,
+      },
     );
   }
   const decoded = decodeSource(file.bytes);
@@ -371,8 +376,12 @@ export function parseTextDocument(file: ScannedFile): TextFileDocument {
     if (index >= MAP_TEXT_MAX_RECORDS) {
       throw new ServiceError(
         'MAP_TEXT_RECORD_LIMIT',
-        'Map text table exceeds the supported record limit',
-        { records: index + 1, maximumRecords: MAP_TEXT_MAX_RECORDS },
+        `Map text table ${file.relativePath} exceeds the supported record limit`,
+        {
+          relativePath: file.relativePath,
+          records: index + 1,
+          maximumRecords: MAP_TEXT_MAX_RECORDS,
+        },
       );
     }
     lines.push({ index, start, end: start + text.length, fullEnd: start + full.length, text });
@@ -383,6 +392,7 @@ export function parseTextDocument(file: ScannedFile): TextFileDocument {
 }
 
 export function encodeTextDocument(document: TextFileDocument, text: string): Buffer {
+  assertSourceEncodingPreserved(document, document.file.displayPath);
   return encodeSource(text, document.encoding);
 }
 

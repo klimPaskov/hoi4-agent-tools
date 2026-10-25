@@ -12,7 +12,18 @@ import {
   slopeField,
   type PartitionFields,
 } from '../../src/hoi4_agent_tools/map/partition-fields.js';
-import { partitionFieldsFromGeography } from '../../src/hoi4_agent_tools/map/partition-geography.js';
+import {
+  partitionFieldsFromGeography,
+  partitionFieldsWithTerrainLines,
+} from '../../src/hoi4_agent_tools/map/partition-geography.js';
+import {
+  BARRIER_CREST,
+  BARRIER_FORT_LINE,
+  BARRIER_RIVER,
+  BARRIER_STEEP,
+  BARRIER_WALL,
+  type BarrierField,
+} from '../../src/hoi4_agent_tools/map/relief/fields.js';
 import {
   PARTITION_DEFAULTS,
   resolvePartitionTuning,
@@ -415,5 +426,52 @@ describe('partition fields from the geography model', () => {
     // The input planes are not modified.
     expect(fields.regionId.every((value) => value === 0)).toBe(true);
     expect(fields.barrier.every((value) => value === 0)).toBe(true);
+  });
+});
+
+describe('partition fields with the lines of the terrain synthesis', () => {
+  function lines(
+    width: number,
+    height: number,
+    entries: Array<[number, number, number]>,
+  ): BarrierField {
+    const strength = new Uint8Array(width * height);
+    const sources = new Uint8Array(width * height);
+    for (const [pixel, flags, value] of entries) {
+      sources[pixel] = flags;
+      strength[pixel] = value;
+    }
+    return { width, height, strength, sources };
+  }
+
+  it('raises walls, fort lines and crests and leaves rivers and steep ground to their planes', () => {
+    const fields = partitionFieldsFromBitmaps({ width: W, height: H, kind: land() });
+    const seeded = new Uint8Array(fields.barrier);
+    seeded[5] = 200;
+    const base = { ...fields, barrier: seeded };
+    const next = partitionFieldsWithTerrainLines(
+      base,
+      lines(W, H, [
+        [1, BARRIER_WALL, 255],
+        [2, BARRIER_FORT_LINE, 180],
+        [3, BARRIER_CREST | BARRIER_RIVER, 212],
+        [4, BARRIER_RIVER, 212],
+        [5, BARRIER_CREST, 150],
+        [6, BARRIER_STEEP, 200],
+      ]),
+    );
+    expect([...next.barrier.subarray(0, 7)]).toEqual([0, 255, 180, 150, 0, 200, 0]);
+    // The input plane is not modified and every other plane is shared.
+    expect(base.barrier[1]).toBe(0);
+    expect(next.riverDistance).toBe(base.riverDistance);
+    expect(() => assertPartitionFields(next)).not.toThrow();
+  });
+
+  it('refuses a barrier field of another size', () => {
+    const fields = partitionFieldsFromBitmaps({ width: W, height: H, kind: land() });
+    expectCode(
+      () => partitionFieldsWithTerrainLines(fields, lines(W / 2, H / 2, [])),
+      'MAP_PARTITION_FIELDS_INVALID',
+    );
   });
 });

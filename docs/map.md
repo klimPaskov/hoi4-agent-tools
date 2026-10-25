@@ -29,24 +29,61 @@ Automatic interpretation recognizes visual land/water and terrain cues, derives 
 
 Optional `reference` controls refine the same call:
 
-| Field                                                       | Meaning                                                                                                                                                  |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `politicalImagePath`, `terrainImagePath`, `heightImagePath` | Additional aligned workspace images for political regions, terrain cues or grayscale height.                                                             |
-| `mode`                                                      | `auto`, `illustrated`, `satellite`, `sketch`, `political` or `grayscale`.                                                                                |
-| `crop`                                                      | `{x,y,width,height}` in original source pixels.                                                                                                          |
-| `ignoreMasks`                                               | Polygons that exclude legends, frames or decorative areas.                                                                                               |
-| `annotations`                                               | `{kind,polygon}` semantic polygons: sea, land, plains, lake, forest, desert, mountain, snow, volcano, hills, marsh or jungle.                            |
-| `riverAnnotations`                                          | Paths for known rivers.                                                                                                                                  |
-| `palette`                                                   | `{kind,color:{r,g,b}}` color cues for the same semantic kinds.                                                                                           |
-| `coastDetail`                                               | Detail preservation from 0 to 1.                                                                                                                         |
-| `cities`                                                    | `{name,x,y,countryTag?}` reviewed city and optional capital anchors. `countryTag` must name a generated country.                                         |
-| `labels`                                                    | `{name,x,y,kind}` reviewed names for `state`, `country`, `city`, `sea`, `region`, `mountain` or `geography`; useful for handwritten or ambiguous labels. |
+| Field                                                       | Meaning                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `politicalImagePath`, `terrainImagePath`, `heightImagePath` | Additional aligned workspace images for political regions, terrain cues or grayscale height.                                                                                                                                                                                                                                                                                                      |
+| `mode`                                                      | `auto`, `illustrated`, `satellite`, `sketch`, `political` or `grayscale`.                                                                                                                                                                                                                                                                                                                         |
+| `crop`                                                      | `{x,y,width,height}` in original source pixels.                                                                                                                                                                                                                                                                                                                                                   |
+| `ignoreMasks`                                               | Polygons that exclude legends, frames or decorative areas.                                                                                                                                                                                                                                                                                                                                        |
+| `annotations`                                               | `{kind,polygon}` semantic polygons: sea, land, plains, lake, forest, desert, mountain, snow, volcano, hills, marsh or jungle.                                                                                                                                                                                                                                                                     |
+| `riverAnnotations`                                          | Paths for known rivers.                                                                                                                                                                                                                                                                                                                                                                           |
+| `palette`                                                   | `{kind,color:{r,g,b}}` color cues for the same semantic kinds.                                                                                                                                                                                                                                                                                                                                    |
+| `coastDetail`                                               | Detail preservation from 0 to 1.                                                                                                                                                                                                                                                                                                                                                                  |
+| `paletteMatch`                                              | `nearest` (default) snaps each pixel to the closest `palette` colour. `exact` requires every pixel to equal a palette colour and trusts the classes as painted (no text masking, cleanup, smoothing or political inference; thin painted water stays water); any other colour fails with `MAP_REFERENCE_PALETTE_UNKNOWN_COLOR`, listing up to 16 colours with counts and five source pixels each. |
+| `fit`                                                       | `contain` (default) centres the picture with sea padding. `frame` maps the picture, or its `crop`, onto exactly `width` x `height` (both required, same shape within 1%, else `MAP_REFERENCE_FRAME_ASPECT`) and reads it at the frame resolution instead of the 3,072-pixel working copy.                                                                                                         |
+| `cities`                                                    | `{name,x,y,countryTag?}` reviewed city and optional capital anchors. `countryTag` must name a generated country.                                                                                                                                                                                                                                                                                  |
+| `labels`                                                    | `{name,x,y,kind}` reviewed names for `state`, `country`, `city`, `sea`, `region`, `mountain` or `geography`; useful for handwritten or ambiguous labels.                                                                                                                                                                                                                                          |
 
 Reviewed geography labels preserve names for lakes, rivers, forests and other features in localisation and generated-world provenance. They do not invent a native HOI4 map entity or turn a geographic label into a city or victory point.
 
 All annotation positions and polygons use normalized 0 to 1 coordinates relative to the original, uncropped reference, with the origin at its top left. Crop uses source pixels instead. Explicit `countries` on the operation supplies reviewed country tags, names, colors and relative shares. If borders or names cannot be inferred reliably, the server generates named defaults and reports the assumptions. Manual controls are optional and never change the original image.
 
-Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side. The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
+### Registered drawings and import evidence
+
+A picture made of several drawn sheets, each at its own place, scale or orientation, is registered onto the world frame with `reference.sheets` (inline) or `reference.sheetsPath` (a workspace-relative `.json` file read with the same guards as `geographyPath`). The document is [reference-sheets version 1](../schemas/reference-sheets.schema.json):
+
+```json
+{
+  "version": 1,
+  "source": { "width": 17520, "height": 12720 },
+  "fill": "sea",
+  "sheets": [
+    {
+      "id": "cold",
+      "box": [0, 0, 0.395, 0.245],
+      "anchor": [0.043, 0.087],
+      "target": [0.04, 0.17],
+      "scale": [1.037, 1.506]
+    },
+    {
+      "id": "east",
+      "box": [0.036, 0.5, 0.4, 1],
+      "anchor": [0.142, 0.7],
+      "target": [0.89, 0.618],
+      "scale": [-1.13, 1.66],
+      "order": 1
+    }
+  ]
+}
+```
+
+Each sheet maps picture coordinates to world coordinates as `world = target + scale * (picture - anchor)` per axis (a negative scale mirrors), or by `affine: [a, b, c, d, e, f]`. `box` is the sheet's part of the picture, `clip` an optional polygon that cuts it out of its box, and `order` decides which sheet wins where targets overlap; two overlapping sheets of equal order are refused. World pixels outside every sheet are open sea (`fill: "sea"`) or an error (`"error"`). `source` pins the picture size and optionally its SHA-256, so registrations made for one picture are never applied to another. Sheets imply `fit: "frame"`; `width` and `height` are required.
+
+The picture is read once at the resolution the sheets need (one working pixel per world pixel for the most enlarged sheet, at most 32 million pixels), each world pixel is sampled from its sheet (nearest under `paletteMatch: "exact"`, bilinear otherwise), and the registered picture is classified as one frame-aligned picture from which every map layer derives. With sheets, `annotations`, `ignoreMasks`, `riverAnnotations`, `labels` and `cities` use world coordinates, and recognised text is never used as a name. `crop` and the aligned political, terrain and height pictures cannot be combined with sheets yet.
+
+A request with sheets, `fit: "frame"`, `paletteMatch: "exact"` or a geography model beside the picture returns import evidence: `map-import-report.json` (sheet coverage and hidden pixels, class shares and, with a model, the land agreement: intersection over union, land only in the picture or only in the model, the twelve worst 128-pixel cells, and model sites, volcanoes and river ends on the wrong surface), `map-import-classes.png`, `map-import-alignment.png` (the picture darkened, its coast in red and the model's in yellow) and, with sheets, `map-import-registration.png`. Land agreement below `reference.agreement.minLandIou` (default 0.85) is the error `MAP_IMPORT_SOURCES_DISAGREE`, which blocks the write; below `warnLandIou` (default 0.95) it is a warning. A preview with a model checks the model, the registration and the agreement without planning a map and reports the figures in `data.import`. See ADR 0067.
+
+Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side, or, with `fit: "frame"`, a copy at the frame resolution (never enlarged, at most 32 million pixels; nearest-neighbour reduction under `paletteMatch: "exact"`, so no new colours appear). The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
 ## Describe a world as a geography model
 
@@ -122,7 +159,7 @@ What each feature becomes. Heights are heightmap values: land from 96, sea 89 (A
 
 The synthesis checks its own output and reports: `MAP_RELIEF_SYNTHESIZED` (info: land median, 99th percentile, maximum, mean step per half-resolution pixel, river pixels and share, the first named rivers), `MAP_PASS_NOT_LOWER` (error: a pass that is not lower than the crest either side), `MAP_RIVER_UNREACHABLE_MOUTH` (error: a named river that cannot reach its mouth over land or would climb more than 22 height units), `MAP_RANGE_CREST_LOW`, `MAP_VOLCANO_NO_CRATER`, `MAP_RELIEF_FLAT`, `MAP_RIVER_STRAIGHT_RUN` (more than 3% of river pixels on straight 41-pixel stretches; the base game has 1.1%), `MAP_RIVER_DENSITY` and `MAP_RIVER_PIXEL_ROUTE_INCOMPLETE` (warnings), and `MAP_LAKE_ENDORHEIC` and `MAP_RIVER_STREAMS_DROPPED` (info). They need the model, so `hoi4.map_inspect` cannot repeat them on an existing mod; the [appearance validators](#appearance-validation) read every file written.
 
-Measured on the project's synthetic ZIN-shaped model at 5,120 x 2,560 (13.1 million pixels): land median 110, 99th percentile 222, maximum 244, mean height step 1.02 per half-resolution pixel (base game: 107, 213, 239 and 0.97), 6.0 million land pixels with 129,987 river pixels (2.16%, 88 connected rivers, no 2 x 2 block, one source each, 1.6% of river pixels on straight stretches), and about six seconds and 450 MB for the synthesis.
+Measured on the project's synthetic large fantasy model at 5,120 x 2,560 (13.1 million pixels): land median 110, 99th percentile 222, maximum 244, mean height step 1.02 per half-resolution pixel (base game: 107, 213, 239 and 0.97), 6.0 million land pixels with 129,987 river pixels (2.16%, 88 connected rivers, no 2 x 2 block, one source each, 1.6% of river pixels on straight stretches), and about six seconds and 450 MB for the synthesis.
 
 Not synthesised yet: biomes, climate, fertility, tree and colour-map classes from the model, sea ice, and the render layers for relief and rivers. Straits, passes, walls, ports, development and names are described in [Crossings, ports, development and names from a model](#crossings-ports-development-and-names-from-a-model). With a reference picture the picture still gives the coast and the terrain classes; its elevation and river hints are replaced. A reference picture's rivers are not routed.
 
@@ -185,13 +222,13 @@ Measured with this implementation (the plan's script gave the enrichment values 
 |                                               | state    | 1.40 (1.42) | 0.70          | 0.20             |
 |                                               | region   | 1.39        | 0.70          | 0.11             |
 |                                               | country  | 1.46 (1.53) | 0.73          | 0.11 (0.093)     |
-| ZIN map of 2026-10-18                         | province | 0.94 (0.94) | 0.08          | 0.99             |
+| A generated mod map of 2026-10-18             | province | 0.94 (0.94) | 0.08          | 0.99             |
 |                                               | state    | 0.70 (0.69) | 0.07          | 0.37             |
 |                                               | region   | 0.59        | 0.06          | 0.13             |
 |                                               | country  | 0.50 (0.52) | 0.09          | 0.22 (0.178)     |
 | Procedural `create_world`, 1024 x 512, seed 7 | state    | 1.03        | 0.32          | 0.24             |
 
-A 13.1 million pixel map takes about 1.5 seconds and 100 MB of additional memory. The ZIN rows use the installed game's `common/terrain` for the terrain classes. The last row is the repository's own procedural output: its borders sit at chance level against rivers and slopes, which is what the metric exists to show. The same functions are available to other code: `measureBorderNaturalness` for a full report, `buildBorderEdgeTable` and `scoreBorderAssignment` to score many candidate groupings of provinces without reading the raster again, and `checkBorderTargets` for an acceptance check such as the ZIN rule that at least 85% of state-border length and 70% of country-border length follows nature (vanilla itself reaches 0.70 and 0.73 with the default feature radii, so fix the radii in the check).
+A 13.1 million pixel map takes about 1.5 seconds and 100 MB of additional memory. The mod map rows use the installed game's `common/terrain` for the terrain classes. The last row is the repository's own procedural output: its borders sit at chance level against rivers and slopes, which is what the metric exists to show. The same functions are available to other code: `measureBorderNaturalness` for a full report, `buildBorderEdgeTable` and `scoreBorderAssignment` to score many candidate groupings of provinces without reading the raster again, and `checkBorderTargets` for an acceptance check such as a rule that at least 85% of state-border length and 70% of country-border length follows nature (vanilla itself reaches 0.70 and 0.73 with the default feature radii, so fix the radii in the check).
 
 The `border-quality` overlay is added to any base layer (state is the natural choice): state borders are green where they follow a feature and orange where they do not, and the worst artificial run of each layer is drawn two pixels wide (province white, state red, region yellow, country magenta). It works with `tile` and `area`, and scans the river and terrain bitmaps for that render only.
 
@@ -410,15 +447,49 @@ Not done: whole provinces inside a massif are not made impassable states, the en
 }
 ```
 
-Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (or follow natural lines, see [Feature-aware provinces, states and strategic regions](#feature-aware-provinces-states-and-strategic-regions)) (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Enclosed water becomes land or, when large, a lake.
+Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes from noise around `continents` centres to the requested `landCoverage`, or from `landPolygons` in pixel coordinates; the map's east-west seam and polar rows stay sea in generated worlds, while a reference picture keeps its own edges unless you set `edge` (see [Water, colour and the world edge](#water-colour-and-the-world-edge)). Provinces grow evenly from spread seeds (or follow natural lines, see [Feature-aware provinces, states and strategic regions](#feature-aware-provinces-states-and-strategic-regions)) (`landProvincePixels`, default 400, and `seaProvincePixels`, default 2,500, both capped so no province exceeds an eighth of the map), stay connected, avoid four-province corners and are at least 20 pixels. Lakes are cut at the sea size. Extra provinces in high and wet land redistribute the requested size rather than add to it, so the land holds about its area divided by `landProvincePixels`. Before partitioning, the province count is estimated from the land and water areas: when neither size is given and the estimate exceeds 14,000, both sizes grow so the world holds about 13,000 provinces, the base game's count (`MAP_WORLD_PROVINCE_SIZE_RAISED`); sizes you choose that give more than 21,000 are refused (`MAP_PARTITION_PROVINCE_COUNT_HIGH`), because the generated text tables stop loading beyond that. A coast that crosses the east-west seam is moved by one pixel at the seam, where provinces cannot join (`MAP_WORLD_SEAM_CORNER_REPAIRED`). Enclosed water becomes land or, when large, a lake.
 
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
+
+Each write records its generated files in `.hoi4-agent-world.json`. A later `create_world` deletes the recorded files it no longer writes (retires them) in the same transaction and refuses with `MANAGED_OUTPUT_EDITED` when a recorded file was edited since. `MAP_WORLD_OUTPUTS_RECONCILED` and `data.outputs` give the counts of written, retired and released files with up to 200 paths each; `map-world-outputs.json` lists them all.
+
+### Countries the mod already owns
+
+A mod that writes its own country tags, country files, histories, orders of battle, flags and names gives `countries` as an object instead of an array (ADR 0069):
+
+```json
+"countries": {
+  "source": "workspace",
+  "realms": [
+    { "tag": "AUR", "capital": { "x": 812, "y": 340 }, "weight": 2 },
+    {
+      "tag": "BOR",
+      "capital": { "x": 1210, "y": 300 },
+      "seeds": [{ "x": 1300, "y": 420 }],
+      "claim": [[{ "x": 1180, "y": 250 }, { "x": 1290, "y": 250 }, { "x": 1290, "y": 380 }]],
+      "exclude": [[{ "x": 1000, "y": 500 }, { "x": 1100, "y": 500 }, { "x": 1100, "y": 600 }]]
+    }
+  ],
+  "unowned": [[{ "x": 600, "y": 700 }, { "x": 680, "y": 700 }, { "x": 680, "y": 760 }]],
+  "islands": "nearest"
+}
+```
+
+Points and polygon vertices are world pixels with the origin at the top left. A capital or seed names the land province under it; a land province with more than half its pixels inside a claim belongs to that country, inside an exclusion never does, and inside `unowned` belongs to nobody. Countries grow from their capitals, seeds and claims by `weight` (default 1). Land that growth does not reach goes, on a landmass a country already holds, to the nearest country that may own it; a landmass no country starts on follows `islands`: `nearest` (each province to the nearest capital), `one-owner` (the whole landmass to the country nearest its centre) or `unowned`. At most 512 countries.
+
+Every tag must be declared by an active `common/country_tags` file other than the world's own (`MAP_WORLD_REALM_TAG_UNKNOWN`) and not only as a dynamic tag (`MAP_WORLD_REALM_TAG_DYNAMIC`). A point outside the world (`MAP_WORLD_REALM_POINT_OUTSIDE`) or in water (`MAP_WORLD_REALM_POINT_WATER`), a point in unowned land, in the country's own exclusion or on another country's point (`MAP_WORLD_REALM_POINT_CONFLICT`), and claims that overlap each other or unowned land (`MAP_WORLD_REALM_CLAIM_OVERLAP`) are refused with the tag and position. A reference picture's political colours are not used with this form.
+
+The world then writes no country tag file, country file, `colors.txt`, country history, order of battle, flag, country name or bookmark. Unowned land forms states with no `owner`, `controller` or `add_core_of` (`MAP_WORLD_STATE_UNOWNED`, and `MAP_STATE_OWNER_MISSING` for each); whether the game build accepts unowned land is the mod's to verify. `MAP_WORLD_REALMS_PLACED`, `data.realms` and `map-world-realms.json` give each country's capital state and province, states, provinces and land share against its target. The country histories stay the mod's: a `capital` in a state the country does not own is the existing warning `MAP_COUNTRY_CAPITAL_NOT_OWNED`.
+
+A recorded country file of an earlier generated world that the mod has since edited is released: left in place, dropped from `.hoi4-agent-world.json` and listed as released (`MAP_WORLD_OUTPUT_RELEASED`). Unedited ones are retired. Other edited recorded files still refuse. To keep a file the mod changed, leave its recorded hash as the world wrote it.
+
+Every `create_world` reports the country tags declared after the write (`MAP_WORLD_TAG_COUNT`: static, written by the world, dynamic, total) and warns above 439 (`MAP_WORLD_TAG_COUNT_HIGH`), the count at which one measured game build overflowed its flag sheet; this is an observation, not a documented limit, and never blocks.
 
 With `replaceBaseGame` (default `true`) it adds `replace_path` lines for `history/states`, `history/countries`, `history/units`, `map/strategicregions`, `map/supplyareas` and `common/bookmarks` to `descriptor.mod`, and its info diagnostic reminds you that the launcher's `.mod` file beside the mod folder needs the same lines. Base-game events, focuses and decisions still name base-game states; `map_inspect` with `references: true` lists them for replacement or remapping. The same seed always gives the same world. Refine it with the other operations.
 
 ### Feature-aware provinces, states and strategic regions
 
-By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058, plan section C9):
+By default provinces grow evenly from spread seeds and states and regions grow by breadth-first clusters, which ignore rivers, ridges and shores. Set `partition: "feature-aware"` (default `legacy`; a world given a `geography` defaults to it) to cut along natural lines instead (ADR 0058):
 
 - Province borders are pulled onto rivers, steep slopes and ridges, wall ranges and lake shores (a watershed whose step cost rises on them). A province that still straddles a river or wall is cut along it.
 - Province size follows the land: small in fertile valleys, on coasts and beside rivers, large on mountains and wasteland (`landArea.fertile`, `hills`, `mountain`, `waste`, in pixels), and per geography region through its `density.provinceAreaPx`. Without bands they follow `landProvincePixels` (0.35, 1, 2.2 and 3.4 times, scaled so the mean stays `landProvincePixels`). Sea provinces are small near a coast and large on the open sea (`seaArea.coastal` and `open`, from `seaProvincePixels`), and a channel no wider than `narrowStraitPx` (24) gets two sea provinces across it.

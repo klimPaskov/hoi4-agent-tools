@@ -131,7 +131,7 @@ export function harbourScores(
 export interface PortStateInput {
   id: number;
   provinces: readonly number[];
-  owner: string;
+  owner?: string | undefined;
   capital: boolean;
 }
 

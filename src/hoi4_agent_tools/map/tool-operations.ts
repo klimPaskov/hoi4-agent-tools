@@ -1,3 +1,4 @@
+import type { ImportReport } from './reference-import.js';
 import {
   boundedSourceHashEvidence,
   publicArtifactLink,
@@ -25,6 +26,8 @@ import {
   type AllocationEvidence,
   type MapAllocationRequest,
   type MapOperation,
+  type MapOperationPlan,
+  WORLD_OUTPUT_PATH_SAMPLE,
 } from './operations.js';
 import { borderQualityDiagnostics, type BorderQualityReport } from './border-quality.js';
 import {
@@ -323,6 +326,36 @@ export function normalizeMapRewriteRequest(input: unknown): MapRewriteToolReques
   return input as MapRewriteToolRequest;
 }
 
+/** The figures of an import report an agent needs inline; the full report is an artifact. */
+function importSummary(report: ImportReport) {
+  return {
+    operationId: report.operationId,
+    width: report.width,
+    height: report.height,
+    landPx: report.classes.landPx,
+    seaPx: report.classes.seaPx,
+    lakePx: report.classes.lakePx,
+    ...(report.registration === undefined
+      ? {}
+      : {
+          sheets: report.registration.sheets.length,
+          hiddenSheets: report.registration.sheets
+            .filter(({ pixels }) => pixels === 0)
+            .map(({ id }) => id)
+            .slice(0, 16),
+          uncoveredPx: report.registration.uncoveredPx,
+        }),
+    ...(report.agreement === undefined
+      ? {}
+      : {
+          landIou: report.agreement.landIou,
+          drawingOnlyLandPx: report.agreement.drawingOnlyLandPx,
+          modelOnlyLandPx: report.agreement.modelOnlyLandPx,
+          misplacedFeatures: report.agreement.featureCount,
+        }),
+  };
+}
+
 export async function prepareMapRewrite(
   nudger: AgentNudger,
   input: MapRewriteToolRequest,
@@ -352,12 +385,54 @@ export async function prepareMapRewrite(
         semanticDiff: compactSemantic.semantic,
         semanticDiffCounts: compactSemantic.counts,
         semanticDiffTruncated: compactSemantic.truncated,
+        ...worldOutputsData(planned.plan),
       }),
       filesScanned: planned.filesScanned,
       planBlockers: planned.plan.blockers
         .slice(0, 100)
         .map(({ code, message }) => ({ code, message })),
     }),
+  };
+}
+
+/** Counts and sorted samples of the managed outputs each generated world writes, retires and releases. */
+function worldOutputsData(plan: MapOperationPlan) {
+  if (plan.worldOutputs === undefined) return {};
+  const sample = (paths: readonly string[]) => paths.slice(0, WORLD_OUTPUT_PATH_SAMPLE);
+  const realms = plan.worldOutputs.flatMap(({ operationId, realms: placed }) =>
+    placed === undefined
+      ? []
+      : [
+          {
+            operationId,
+            countries: placed.countries.slice(0, 100).map((country) => ({
+              tag: country.tag,
+              capitalState: country.capitalState,
+              capitalProvince: country.capitalProvince,
+              states: country.states.length,
+              provinces: country.provinces,
+              landShare: country.landShare,
+              targetShare: country.targetShare,
+            })),
+            countryCount: placed.countries.length,
+            unownedStates: placed.unownedStates.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+            unownedStateCount: placed.unownedStates.length,
+          },
+        ],
+  );
+  return {
+    ...(realms.length === 0 ? {} : { realms: realms.slice(0, 16) }),
+    outputs: plan.worldOutputs.slice(0, 16).map((world) => ({
+      operationId: world.operationId,
+      written: world.written.length,
+      retired: world.retired.length,
+      released: world.released.length,
+      retiredFiles: sample(world.retired),
+      releasedFiles: sample(world.released),
+      truncated:
+        world.retired.length > WORLD_OUTPUT_PATH_SAMPLE ||
+        world.released.length > WORLD_OUTPUT_PATH_SAMPLE,
+    })),
   };
 }
 
@@ -461,7 +536,10 @@ async function previewGeographyRewrite(
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
   const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
-  const diagnostics = planned.geography.flatMap(({ diagnostics: found }) => found);
+  const diagnostics = [
+    ...planned.geography.flatMap(({ diagnostics: found }) => found),
+    ...planned.importDiagnostics,
+  ];
   const ignored = input.operations.filter(
     (operation) => operation.kind !== 'create_world' || !operationHasGeography(operation),
   ).length;
@@ -471,7 +549,7 @@ async function previewGeographyRewrite(
       severity: 'info',
       category: 'map',
       message:
-        'This preview checks the geography model only: no map was planned and nothing was synthesized. A request without preview builds relief, rivers and lakes from the model, and is blocked while the model declares biomes, climate, fertility or sea ice, which the climate stage does not synthesize yet.',
+        'This preview checks the geography model, and the registration and agreement of a reference picture beside it, only: no map was planned and nothing was synthesized. A request without preview builds relief, rivers and lakes from the model, and is blocked while the model declares biomes, climate, fertility or sea ice, which the climate stage does not synthesize yet.',
     },
     ...(ignored === 0
       ? []
@@ -485,7 +563,11 @@ async function previewGeographyRewrite(
         ]),
   ];
   const all = sortDiagnostics([...diagnostics, ...notes]);
-  const valid = planned.geography.every(({ valid: ok }) => ok);
+  const valid =
+    planned.geography.every(({ valid: ok }) => ok) &&
+    !planned.importDiagnostics.some(
+      ({ severity }) => severity === 'error' || severity === 'blocker',
+    );
   const result = emptyServiceResult(context.workspaceId, {
     execution: 'preview' as const,
     allocations: [],
@@ -499,6 +581,9 @@ async function previewGeographyRewrite(
     fileCount: 0,
     artifactCount: planned.artifacts.length,
     geography: planned.geography.slice(0, 16).map(geographySummary),
+    ...(planned.imports.length === 0
+      ? {}
+      : { import: planned.imports.slice(0, 16).map(importSummary) }),
   });
   result.status = valid ? 'ok' : 'blocked';
   result.code = valid ? 'MAP_GEOGRAPHY_PREVIEW_READY' : 'MAP_GEOGRAPHY_PREVIEW_BLOCKED';
@@ -566,6 +651,7 @@ export async function previewMapRewrite(
     semanticDiffTruncated: compactSemantic.truncated,
     fileCount: planned.plan.changes.length,
     artifactCount: planned.artifacts.length,
+    ...worldOutputsData(planned.plan),
     ...(input.operations.some(({ kind }) => kind === 'create_world') &&
     generatedWorldOperationIds(planned.plan).size === 0
       ? {}

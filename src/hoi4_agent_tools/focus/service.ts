@@ -22,6 +22,7 @@ import type { WorkspaceResolver } from '../core/workspace.js';
 import { PACKAGE_VERSION } from '../version.js';
 import {
   assertFocusPlanAuthority,
+  assertNoSemanticSourceDrift,
   detectContinuousFocusDrift,
   detectFocusDrift,
   type ContinuousFocusDriftResult,
@@ -73,6 +74,12 @@ export interface FocusPlanChangesInput {
   relativePath: string;
   plan: FocusTreePlan;
   authority?: 'plan' | 'source';
+  /**
+   * `refuse` rejects the write with FOCUS_SOURCE_CHANGED_SINCE_PLAN when the source changed in
+   * meaning after the plan was imported. `apply` (the default for direct library callers) lets
+   * `authority` decide. The MCP rewrite tools always use `refuse`.
+   */
+  onSemanticSourceDrift?: 'apply' | 'refuse';
   createIfMissing?: boolean;
   principal?: string;
   layout?: FocusLayoutResult;
@@ -107,6 +114,12 @@ export interface ContinuousFocusPlanChangesInput {
   relativePath: string;
   plan: ContinuousFocusPalettePlan;
   authority?: 'plan' | 'source';
+  /**
+   * `refuse` rejects the write with FOCUS_SOURCE_CHANGED_SINCE_PLAN when the source changed in
+   * meaning after the plan was imported. `apply` (the default for direct library callers) lets
+   * `authority` decide. The MCP rewrite tools always use `refuse`.
+   */
+  onSemanticSourceDrift?: 'apply' | 'refuse';
   createIfMissing?: boolean;
   principal?: string;
   artifacts?: ArtifactLink[];
@@ -410,7 +423,11 @@ export class FocusWorkbench {
     const drift = targetCreated
       ? missingTargetDrift(input.plan, document)
       : detectFocusDrift(input.plan, document, input.references);
-    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority ?? 'plan');
+    if (!targetCreated) {
+      if (input.onSemanticSourceDrift === 'refuse')
+        assertNoSemanticSourceDrift(drift, input.relativePath);
+      assertFocusPlanAuthority(drift, input.authority ?? 'plan');
+    }
     const layout =
       input.layout ??
       (await layoutFocusTreeAsync(
@@ -690,7 +707,11 @@ export class FocusWorkbench {
     const drift = targetCreated
       ? missingTargetDrift(input.plan, document)
       : detectContinuousFocusDrift(input.plan, document);
-    if (!targetCreated) assertFocusPlanAuthority(drift, input.authority ?? 'plan');
+    if (!targetCreated) {
+      if (input.onSemanticSourceDrift === 'refuse')
+        assertNoSemanticSourceDrift(drift, input.relativePath);
+      assertFocusPlanAuthority(drift, input.authority ?? 'plan');
+    }
     const after = updateContinuousFocusPaletteSource(
       document,
       targetCreated ? undefined : drift.currentSourcePlan,

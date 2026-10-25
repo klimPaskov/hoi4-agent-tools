@@ -208,6 +208,17 @@ export const serverConfigurationSchema = z
     workspaceStorageRoot: z.string().min(1).optional(),
     storageRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     workspaces: z.array(workspaceRegistrationSchema).max(WORKSPACE_MAX_REGISTRATIONS).default([]),
+    /**
+     * The mod workspace (ID or short form) used when neither the client roots nor the working
+     * directory identify one. Over HTTP it applies only to principals granted that workspace.
+     */
+    defaultWorkspace: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,63}$/u)
+      .refine((value) => value !== 'current', {
+        message: 'The default workspace must name a workspace, not "current"',
+      })
+      .optional(),
     http: z
       .object({
         host: z.string().default('127.0.0.1'),

@@ -27,12 +27,27 @@ export async function resolveOperationWorkspaceForSource(
   relativePath: string | undefined,
   signal?: AbortSignal,
 ): Promise<string> {
-  const resolvedWorkspaceId = await resolveOperationWorkspaceId(
-    engine,
-    context,
-    workspaceId,
-    signal,
-  );
+  let resolvedWorkspaceId: string;
+  try {
+    resolvedWorkspaceId = await resolveOperationWorkspaceId(engine, context, workspaceId, signal);
+  } catch (error) {
+    // A session outside every mod still names its mod through a source only one mod has.
+    if (
+      workspaceId !== 'current' ||
+      relativePath === undefined ||
+      !(error instanceof ServiceError) ||
+      !['WORKSPACE_CONTEXT_NOT_FOUND', 'WORKSPACE_CONTEXT_REQUIRED'].includes(error.code)
+    ) {
+      throw error;
+    }
+    const unique = await engine.resolver.resolveUniqueModSourceWorkspaceId(
+      relativePath,
+      context.principal,
+      signal,
+    );
+    if (unique === undefined) throw error;
+    return unique;
+  }
   if (workspaceId !== 'current' || relativePath === undefined) return resolvedWorkspaceId;
 
   try {

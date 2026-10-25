@@ -3,6 +3,7 @@ import { renderDimensionViolation, RENDER_MAX_DIMENSION } from '../core/render-b
 import { MAP_MASK_CELL_LIMIT, MAP_SELECTED_PIXEL_LIMIT } from '../map/limits.js';
 import { workspaceRelativePathSchema } from './common.js';
 import { geographyModelSchema, geographyPathSchema } from './geography.js';
+import { referenceSheetsDocumentSchema, referenceSheetsPathSchema } from './reference-sheets.js';
 
 const identifier = z.string().min(1).max(256);
 // eslint-disable-next-line no-control-regex -- portable JSON Schema pattern rejects grammar-breaking controls.
@@ -24,6 +25,67 @@ const rgbSchema = z
   })
   .strict();
 const pointSchema = z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict();
+const countryTagSchema = z.string().regex(/^[A-Z][A-Z0-9]{2}$/u);
+const realmPolygonSchema = z.array(pointSchema).min(3).max(10_000);
+const realmPolygonsSchema = z.array(realmPolygonSchema).min(1).max(64);
+export const workspaceRealmSchema = z
+  .object({
+    tag: countryTagSchema,
+    capital: pointSchema.describe('World pixel, top-left origin, on land; the capital province.'),
+    seeds: z
+      .array(pointSchema)
+      .max(256)
+      .optional()
+      .describe('Further world pixels whose provinces the country must own.'),
+    claim: realmPolygonsSchema
+      .optional()
+      .describe(
+        'Polygons in world pixels; land provinces more than half inside belong to the country.',
+      ),
+    exclude: realmPolygonsSchema
+      .optional()
+      .describe(
+        'Polygons in world pixels; land provinces more than half inside never belong to it.',
+      ),
+    weight: z
+      .number()
+      .min(0.05)
+      .max(100)
+      .optional()
+      .describe('Relative share of the land claims leave free; default 1.'),
+  })
+  .strict();
+export const workspaceCountriesSchema = z
+  .object({
+    source: z.literal('workspace'),
+    realms: z.array(workspaceRealmSchema).min(1).max(512),
+    unowned: z
+      .array(realmPolygonSchema)
+      .max(256)
+      .optional()
+      .describe('Polygons in world pixels whose land provinces no country owns.'),
+    islands: z
+      .enum(['nearest', 'one-owner', 'unowned'])
+      .default('nearest')
+      .describe(
+        'Landmasses no country reaches: every province to the nearest capital, the whole landmass to one country, or unowned.',
+      ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    for (const [index, realm] of value.realms.entries()) {
+      if (seen.has(realm.tag))
+        context.addIssue({
+          code: 'custom',
+          path: ['realms', index, 'tag'],
+          message: `Country ${realm.tag} is listed twice`,
+        });
+      seen.add(realm.tag);
+    }
+  });
+export type WorkspaceCountriesInput = z.input<typeof workspaceCountriesSchema>;
+
 const operationBase = {
   id: identifier,
   summary: z.string().max(1000).optional(),
@@ -82,6 +144,38 @@ export const worldReferenceSchema = z
       .max(64)
       .optional(),
     coastDetail: z.number().min(0).max(1).optional(),
+    paletteMatch: z
+      .enum(['nearest', 'exact'])
+      .optional()
+      .describe(
+        'nearest (default) snaps every pixel to the closest palette colour. exact requires every pixel to equal a palette colour, trusts the classes as painted (no text masking, cleanup, smoothing or political inference) and fails with MAP_REFERENCE_PALETTE_UNKNOWN_COLOR naming any other colour, its count and source pixels.',
+      ),
+    sheets: referenceSheetsDocumentSchema
+      .optional()
+      .describe(
+        'Registration of a picture made of drawn sheets onto the world frame (inline; use sheetsPath for a file). Each sheet maps its part of the picture with anchor, target and scale (or affine); the registered picture is read at the resolution the sheets need and every layer derives from it. Implies fit frame; width and height are required. Annotations, masks, labels and cities then use world coordinates.',
+      ),
+    agreement: z
+      .object({
+        minLandIou: z.number().min(0).max(1).optional(),
+        warnLandIou: z.number().min(0).max(1).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'With a geography model: land intersection over union between the model and this reference below minLandIou (default 0.85) blocks the write with MAP_IMPORT_SOURCES_DISAGREE; below warnLandIou (default 0.95) it is a warning. The measured value is always in map-import-report.json.',
+      ),
+    sheetsPath: referenceSheetsPathSchema
+      .optional()
+      .describe(
+        'Workspace-relative .json file holding the sheet registration (reference-sheets version 1).',
+      ),
+    fit: z
+      .enum(['contain', 'frame'])
+      .optional()
+      .describe(
+        'contain (default) centres the picture with sea padding at a working size of at most 3,072 pixels per side. frame maps the picture (or its crop) onto exactly width x height, which must be given and have the same shape within 1%, and reads it at the frame resolution.',
+      ),
     labels: z
       .array(
         z
@@ -113,6 +207,19 @@ export const worldReferenceSchema = z
       .optional(),
   })
   .strict()
+  .refine((value) => value.paletteMatch !== 'exact' || (value.palette?.length ?? 0) > 0, {
+    path: ['palette'],
+    message: 'paletteMatch "exact" needs a palette that lists every colour of the picture',
+  })
+  .refine((value) => value.sheets === undefined || value.sheetsPath === undefined, {
+    path: ['sheetsPath'],
+    message: 'Give the sheets inline (sheets) or by file (sheetsPath), not both',
+  })
+  .refine(
+    (value) =>
+      (value.sheets === undefined && value.sheetsPath === undefined) || value.fit !== 'contain',
+    { path: ['fit'], message: 'Registered sheets always fill the frame; omit fit or use "frame"' },
+  )
   .describe(
     'Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement.',
   );
@@ -846,21 +953,28 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       landProvincesPerRegion: z.number().int().min(2).max(400).optional(),
       seaProvincesPerRegion: z.number().int().min(1).max(200).optional(),
       countries: z
-        .array(
+        .union([
           z
-            .object({
-              tag: z.string().regex(/^[A-Z][A-Z0-9]{2}$/u),
-              name: worldName,
-              adjective: worldName.optional(),
-              color: rgbSchema.optional(),
-              share: z.number().min(0.05).max(100).optional(),
-              ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(200)
-        .optional(),
+            .array(
+              z
+                .object({
+                  tag: countryTagSchema,
+                  name: worldName,
+                  adjective: worldName.optional(),
+                  color: rgbSchema.optional(),
+                  share: z.number().min(0.05).max(100).optional(),
+                  ideology: z.enum(['democratic', 'communism', 'fascism', 'neutrality']).optional(),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(200),
+          workspaceCountriesSchema,
+        ])
+        .optional()
+        .describe(
+          'Countries the world generates and writes (an array), or { source: "workspace", realms } for countries the workspace already declares: the world then places them from their capital, seeds, claims and exclusions and writes no country, flag, unit, country history, country name or bookmark file.',
+        ),
       continentNames: z.array(worldName).max(12).optional(),
       startDate: z
         .string()
@@ -907,6 +1021,17 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
       {
         path: ['geographyPath'],
         message: 'Give the geography inline (geography) or by file (geographyPath), not both',
+      },
+    )
+    .refine(
+      (operation) =>
+        (operation.reference?.fit !== 'frame' &&
+          operation.reference?.sheets === undefined &&
+          operation.reference?.sheetsPath === undefined) ||
+        (operation.width !== undefined && operation.height !== undefined),
+      {
+        path: ['reference', 'fit'],
+        message: 'reference.fit "frame" and registered sheets need explicit width and height',
       },
     ),
   z

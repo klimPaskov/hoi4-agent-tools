@@ -14,7 +14,8 @@ import { locateSites, type LocatedSite } from './sites.js';
 export interface EconomyState {
   id: number;
   provinces: readonly number[];
-  owner: string;
+  /** Absent for land no workspace country owns (ADR 0069). */
+  owner?: string | undefined;
   isCapital: boolean;
 }
 

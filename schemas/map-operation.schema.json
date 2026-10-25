@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.3.0/schemas/map-operation.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.5.0/schemas/map-operation.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "oneOf": [
     {
@@ -534,10 +534,10 @@
           "$ref": "#/$defs/__schema28"
         },
         "definition": {
-          "$ref": "#/$defs/__schema42"
+          "$ref": "#/$defs/__schema44"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema46"
+          "$ref": "#/$defs/__schema48"
         }
       },
       "required": [
@@ -573,7 +573,7 @@
           "$ref": "#/$defs/__schema28"
         },
         "definition": {
-          "$ref": "#/$defs/__schema42"
+          "$ref": "#/$defs/__schema44"
         },
         "distribution": {
           "anyOf": [
@@ -582,7 +582,7 @@
               "const": "inherit-source"
             },
             {
-              "$ref": "#/$defs/__schema46"
+              "$ref": "#/$defs/__schema48"
             }
           ]
         }
@@ -620,7 +620,7 @@
           "$ref": "#/$defs/__schema3"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema47"
+          "$ref": "#/$defs/__schema49"
         }
       },
       "required": [
@@ -652,7 +652,7 @@
           "$ref": "#/$defs/__schema3"
         },
         "distribution": {
-          "$ref": "#/$defs/__schema47"
+          "$ref": "#/$defs/__schema49"
         }
       },
       "required": [
@@ -681,11 +681,11 @@
           "$ref": "#/$defs/__schema3"
         },
         "changes": {
-          "$ref": "#/$defs/__schema43"
+          "$ref": "#/$defs/__schema45"
         },
         "distribution": {
           "description": "Required complete dependency policy when changes.type crosses land/sea/lake",
-          "$ref": "#/$defs/__schema48"
+          "$ref": "#/$defs/__schema50"
         }
       },
       "required": [
@@ -746,103 +746,103 @@
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema49"
+          "$ref": "#/$defs/__schema51"
         },
         "summary": {
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema50"
+          "$ref": "#/$defs/__schema52"
         },
         "worldName": {
-          "$ref": "#/$defs/__schema51"
-        },
-        "startingScenario": {
           "$ref": "#/$defs/__schema53"
         },
-        "reference": {
+        "startingScenario": {
           "$ref": "#/$defs/__schema55"
         },
+        "reference": {
+          "$ref": "#/$defs/__schema57"
+        },
         "geography": {
-          "$ref": "#/$defs/__schema78"
+          "$ref": "#/$defs/__schema114"
         },
         "geographyPath": {
-          "$ref": "#/$defs/__schema128"
-        },
-        "width": {
-          "$ref": "#/$defs/__schema130"
-        },
-        "height": {
-          "$ref": "#/$defs/__schema131"
-        },
-        "seed": {
-          "$ref": "#/$defs/__schema132"
-        },
-        "landCoverage": {
-          "$ref": "#/$defs/__schema133"
-        },
-        "continents": {
-          "$ref": "#/$defs/__schema134"
-        },
-        "landPolygons": {
-          "$ref": "#/$defs/__schema135"
-        },
-        "landProvincePixels": {
-          "$ref": "#/$defs/__schema138"
-        },
-        "seaProvincePixels": {
-          "$ref": "#/$defs/__schema139"
-        },
-        "provincesPerState": {
-          "$ref": "#/$defs/__schema140"
-        },
-        "landProvincesPerRegion": {
-          "$ref": "#/$defs/__schema141"
-        },
-        "seaProvincesPerRegion": {
-          "$ref": "#/$defs/__schema142"
-        },
-        "countries": {
-          "$ref": "#/$defs/__schema143"
-        },
-        "continentNames": {
-          "$ref": "#/$defs/__schema145"
-        },
-        "startDate": {
-          "$ref": "#/$defs/__schema146"
-        },
-        "rivers": {
-          "$ref": "#/$defs/__schema147"
-        },
-        "relief": {
-          "$ref": "#/$defs/__schema149"
-        },
-        "edge": {
-          "$ref": "#/$defs/__schema153"
-        },
-        "ambientFrame": {
-          "$ref": "#/$defs/__schema158"
-        },
-        "look": {
-          "$ref": "#/$defs/__schema160"
-        },
-        "colormap": {
-          "$ref": "#/$defs/__schema161"
-        },
-        "partition": {
           "$ref": "#/$defs/__schema164"
         },
-        "development": {
-          "$ref": "#/$defs/__schema165"
+        "width": {
+          "$ref": "#/$defs/__schema166"
         },
-        "autoStraits": {
+        "height": {
           "$ref": "#/$defs/__schema167"
         },
-        "partitionTuning": {
+        "seed": {
+          "$ref": "#/$defs/__schema168"
+        },
+        "landCoverage": {
+          "$ref": "#/$defs/__schema169"
+        },
+        "continents": {
+          "$ref": "#/$defs/__schema170"
+        },
+        "landPolygons": {
           "$ref": "#/$defs/__schema171"
         },
+        "landProvincePixels": {
+          "$ref": "#/$defs/__schema174"
+        },
+        "seaProvincePixels": {
+          "$ref": "#/$defs/__schema175"
+        },
+        "provincesPerState": {
+          "$ref": "#/$defs/__schema176"
+        },
+        "landProvincesPerRegion": {
+          "$ref": "#/$defs/__schema177"
+        },
+        "seaProvincesPerRegion": {
+          "$ref": "#/$defs/__schema178"
+        },
+        "countries": {
+          "$ref": "#/$defs/__schema179"
+        },
+        "continentNames": {
+          "$ref": "#/$defs/__schema194"
+        },
+        "startDate": {
+          "$ref": "#/$defs/__schema195"
+        },
+        "rivers": {
+          "$ref": "#/$defs/__schema196"
+        },
+        "relief": {
+          "$ref": "#/$defs/__schema198"
+        },
+        "edge": {
+          "$ref": "#/$defs/__schema202"
+        },
+        "ambientFrame": {
+          "$ref": "#/$defs/__schema207"
+        },
+        "look": {
+          "$ref": "#/$defs/__schema209"
+        },
+        "colormap": {
+          "$ref": "#/$defs/__schema210"
+        },
+        "partition": {
+          "$ref": "#/$defs/__schema213"
+        },
+        "development": {
+          "$ref": "#/$defs/__schema214"
+        },
+        "autoStraits": {
+          "$ref": "#/$defs/__schema216"
+        },
+        "partitionTuning": {
+          "$ref": "#/$defs/__schema220"
+        },
         "replaceBaseGame": {
-          "$ref": "#/$defs/__schema181"
+          "$ref": "#/$defs/__schema230"
         }
       },
       "required": [
@@ -876,19 +876,19 @@
           "maxItems": 1000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema183"
+            "$ref": "#/$defs/__schema232"
           }
         },
         "readOnlySources": {
           "default": "refuse",
           "description": "override copies game or dependency files that need the change into the mod.",
-          "$ref": "#/$defs/__schema188"
+          "$ref": "#/$defs/__schema237"
         },
         "pathPrefixes": {
           "maxItems": 32,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema189"
+            "$ref": "#/$defs/__schema238"
           }
         }
       },
@@ -923,7 +923,7 @@
           "maxItems": 3,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema190"
+            "$ref": "#/$defs/__schema239"
           }
         },
         "stateIds": {
@@ -944,13 +944,13 @@
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema191"
+            "$ref": "#/$defs/__schema240"
           }
         },
         "mode": {
           "default": "missing",
           "description": "missing adds only absent positions; replace rewrites them for the selection.",
-          "$ref": "#/$defs/__schema192"
+          "$ref": "#/$defs/__schema241"
         }
       },
       "required": [
@@ -982,7 +982,7 @@
         "mode": {
           "default": "connect",
           "description": "connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.",
-          "$ref": "#/$defs/__schema193"
+          "$ref": "#/$defs/__schema242"
         },
         "railwayLevel": {
           "default": 1,
@@ -1013,22 +1013,22 @@
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema194"
+          "$ref": "#/$defs/__schema243"
         },
         "entity": {
-          "$ref": "#/$defs/__schema195"
+          "$ref": "#/$defs/__schema244"
         },
         "fromId": {
-          "$ref": "#/$defs/__schema196"
+          "$ref": "#/$defs/__schema245"
         },
         "toId": {
-          "$ref": "#/$defs/__schema197"
+          "$ref": "#/$defs/__schema246"
         },
         "collision": {
-          "$ref": "#/$defs/__schema198"
+          "$ref": "#/$defs/__schema247"
         },
         "renameLocalisation": {
-          "$ref": "#/$defs/__schema199"
+          "$ref": "#/$defs/__schema248"
         }
       },
       "required": [
@@ -1281,7 +1281,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1362,7 +1362,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1404,7 +1404,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1485,7 +1485,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1527,7 +1527,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1600,7 +1600,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema200"
+              "$ref": "#/$defs/__schema249"
             }
           },
           "required": [
@@ -1650,7 +1650,10 @@
             {
               "type": "number"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
         }
       },
       "required": [
@@ -2193,16 +2196,16 @@
           "type": "object",
           "properties": {
             "kind": {
-              "$ref": "#/$defs/__schema30"
+              "$ref": "#/$defs/__schema32"
             },
             "origin": {
               "$ref": "#/$defs/__schema29"
             },
             "width": {
-              "$ref": "#/$defs/__schema31"
+              "$ref": "#/$defs/__schema33"
             },
             "height": {
-              "$ref": "#/$defs/__schema32"
+              "$ref": "#/$defs/__schema34"
             }
           },
           "required": [
@@ -2217,25 +2220,25 @@
           "type": "object",
           "properties": {
             "kind": {
-              "$ref": "#/$defs/__schema33"
+              "$ref": "#/$defs/__schema35"
             },
             "width": {
-              "$ref": "#/$defs/__schema34"
+              "$ref": "#/$defs/__schema36"
             },
             "height": {
-              "$ref": "#/$defs/__schema35"
+              "$ref": "#/$defs/__schema37"
             },
             "origin": {
               "$ref": "#/$defs/__schema29"
             },
             "selectedPixelCount": {
-              "$ref": "#/$defs/__schema36"
+              "$ref": "#/$defs/__schema38"
             },
             "sha256": {
-              "$ref": "#/$defs/__schema37"
+              "$ref": "#/$defs/__schema39"
             },
             "data": {
-              "$ref": "#/$defs/__schema38"
+              "$ref": "#/$defs/__schema40"
             }
           },
           "required": [
@@ -2253,13 +2256,13 @@
           "type": "object",
           "properties": {
             "kind": {
-              "$ref": "#/$defs/__schema39"
+              "$ref": "#/$defs/__schema41"
             },
             "fillRule": {
-              "$ref": "#/$defs/__schema40"
+              "$ref": "#/$defs/__schema42"
             },
             "points": {
-              "$ref": "#/$defs/__schema41"
+              "$ref": "#/$defs/__schema43"
             }
           },
           "required": [
@@ -2276,14 +2279,10 @@
       "type": "object",
       "properties": {
         "x": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/__schema30"
         },
         "y": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+          "$ref": "#/$defs/__schema31"
         }
       },
       "required": [
@@ -2293,22 +2292,23 @@
       "additionalProperties": false
     },
     "__schema30": {
-      "type": "string",
-      "const": "rectangle"
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
     },
     "__schema31": {
       "type": "integer",
-      "exclusiveMinimum": 0,
-      "maximum": 16384
+      "minimum": 0,
+      "maximum": 9007199254740991
     },
     "__schema32": {
+      "type": "string",
+      "const": "rectangle"
+    },
+    "__schema33": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 16384
-    },
-    "__schema33": {
-      "type": "string",
-      "const": "mask"
     },
     "__schema34": {
       "type": "integer",
@@ -2316,35 +2316,44 @@
       "maximum": 16384
     },
     "__schema35": {
+      "type": "string",
+      "const": "mask"
+    },
+    "__schema36": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 16384
     },
-    "__schema36": {
+    "__schema37": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 16384
+    },
+    "__schema38": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 1000000,
       "description": "Declared selected cells; at most 1000000 pixels per operation"
     },
-    "__schema37": {
+    "__schema39": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "__schema38": {
+    "__schema40": {
       "type": "string",
       "minLength": 4,
       "maxLength": 30000000
     },
-    "__schema39": {
+    "__schema41": {
       "type": "string",
       "const": "polygon"
     },
-    "__schema40": {
+    "__schema42": {
       "type": "string",
       "const": "even-odd",
       "description": "Required deterministic polygon fill rule used for pixel-center sampling"
     },
-    "__schema41": {
+    "__schema43": {
       "minItems": 3,
       "maxItems": 4096,
       "type": "array",
@@ -2353,7 +2362,7 @@
       },
       "description": "Integer raster-boundary coordinates; runtime bounds are x from 0 through raster width and y from 0 through raster height"
     },
-    "__schema42": {
+    "__schema44": {
       "oneOf": [
         {
           "type": "object",
@@ -2363,7 +2372,7 @@
               "const": "inherit-source"
             },
             "overrides": {
-              "$ref": "#/$defs/__schema43"
+              "$ref": "#/$defs/__schema45"
             }
           },
           "required": [
@@ -2382,10 +2391,10 @@
               "type": "object",
               "properties": {
                 "color": {
-                  "$ref": "#/$defs/__schema44"
+                  "$ref": "#/$defs/__schema46"
                 },
                 "type": {
-                  "$ref": "#/$defs/__schema45"
+                  "$ref": "#/$defs/__schema47"
                 },
                 "coastal": {
                   "type": "boolean"
@@ -2417,14 +2426,14 @@
         }
       ]
     },
-    "__schema43": {
+    "__schema45": {
       "type": "object",
       "properties": {
         "color": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "type": {
-          "$ref": "#/$defs/__schema45"
+          "$ref": "#/$defs/__schema47"
         },
         "coastal": {
           "type": "boolean"
@@ -2441,7 +2450,7 @@
       },
       "additionalProperties": false
     },
-    "__schema44": {
+    "__schema46": {
       "type": "object",
       "properties": {
         "r": {
@@ -2467,7 +2476,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema45": {
+    "__schema47": {
       "type": "string",
       "enum": [
         "land",
@@ -2475,7 +2484,7 @@
         "lake"
       ]
     },
-    "__schema46": {
+    "__schema48": {
       "type": "object",
       "properties": {
         "state": {
@@ -2536,7 +2545,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema47": {
+    "__schema49": {
       "type": "object",
       "properties": {
         "membership": {
@@ -2564,7 +2573,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema48": {
+    "__schema50": {
       "type": "object",
       "properties": {
         "stateMembership": {
@@ -2703,71 +2712,86 @@
       ],
       "additionalProperties": false
     },
-    "__schema49": {
+    "__schema51": {
       "default": "world",
       "$ref": "#/$defs/__schema0"
     },
-    "__schema50": {
+    "__schema52": {
       "type": "string",
       "const": "create_world"
     },
-    "__schema51": {
-      "$ref": "#/$defs/__schema52"
+    "__schema53": {
+      "$ref": "#/$defs/__schema54"
     },
-    "__schema52": {
+    "__schema54": {
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
     },
-    "__schema53": {
+    "__schema55": {
       "description": "Include basic starting units and stockpiles and replace old-world startup/AI geography. Defaults on for reference-image worlds.",
-      "$ref": "#/$defs/__schema54"
+      "$ref": "#/$defs/__schema56"
     },
-    "__schema54": {
+    "__schema56": {
       "type": "boolean"
     },
-    "__schema55": {
+    "__schema57": {
       "type": "object",
       "properties": {
         "imagePath": {
-          "$ref": "#/$defs/__schema56"
-        },
-        "politicalImagePath": {
           "$ref": "#/$defs/__schema58"
         },
-        "terrainImagePath": {
-          "$ref": "#/$defs/__schema59"
-        },
-        "heightImagePath": {
+        "politicalImagePath": {
           "$ref": "#/$defs/__schema60"
         },
-        "mode": {
+        "terrainImagePath": {
           "$ref": "#/$defs/__schema61"
         },
-        "crop": {
+        "heightImagePath": {
           "$ref": "#/$defs/__schema62"
         },
-        "ignoreMasks": {
+        "mode": {
           "$ref": "#/$defs/__schema63"
         },
+        "crop": {
+          "$ref": "#/$defs/__schema64"
+        },
+        "ignoreMasks": {
+          "$ref": "#/$defs/__schema65"
+        },
         "annotations": {
-          "$ref": "#/$defs/__schema66"
+          "$ref": "#/$defs/__schema68"
         },
         "riverAnnotations": {
-          "$ref": "#/$defs/__schema69"
-        },
-        "palette": {
           "$ref": "#/$defs/__schema71"
         },
-        "coastDetail": {
+        "palette": {
           "$ref": "#/$defs/__schema73"
         },
+        "coastDetail": {
+          "$ref": "#/$defs/__schema75"
+        },
+        "paletteMatch": {
+          "$ref": "#/$defs/__schema76"
+        },
+        "sheets": {
+          "$ref": "#/$defs/__schema78"
+        },
+        "agreement": {
+          "$ref": "#/$defs/__schema104"
+        },
+        "sheetsPath": {
+          "$ref": "#/$defs/__schema106"
+        },
+        "fit": {
+          "$ref": "#/$defs/__schema108"
+        },
         "labels": {
-          "$ref": "#/$defs/__schema74"
+          "$ref": "#/$defs/__schema110"
         },
         "cities": {
-          "$ref": "#/$defs/__schema76"
+          "$ref": "#/$defs/__schema112"
         }
       },
       "required": [
@@ -2776,24 +2800,24 @@
       "additionalProperties": false,
       "description": "Generate from one local reference image. Optional controls use normalized 0..1 source coordinates; crop uses source pixels. Labels and political semantics may need refinement."
     },
-    "__schema56": {
-      "$ref": "#/$defs/__schema57"
+    "__schema58": {
+      "$ref": "#/$defs/__schema59"
     },
-    "__schema57": {
+    "__schema59": {
       "type": "string",
       "minLength": 1,
       "maxLength": 1024
     },
-    "__schema58": {
-      "$ref": "#/$defs/__schema56"
-    },
-    "__schema59": {
-      "$ref": "#/$defs/__schema56"
-    },
     "__schema60": {
-      "$ref": "#/$defs/__schema56"
+      "$ref": "#/$defs/__schema58"
     },
     "__schema61": {
+      "$ref": "#/$defs/__schema58"
+    },
+    "__schema62": {
+      "$ref": "#/$defs/__schema58"
+    },
+    "__schema63": {
       "type": "string",
       "enum": [
         "auto",
@@ -2804,7 +2828,7 @@
         "grayscale"
       ]
     },
-    "__schema62": {
+    "__schema64": {
       "type": "object",
       "properties": {
         "x": {
@@ -2836,22 +2860,22 @@
       ],
       "additionalProperties": false
     },
-    "__schema63": {
+    "__schema65": {
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema64"
+        "$ref": "#/$defs/__schema66"
       }
     },
-    "__schema64": {
+    "__schema66": {
       "minItems": 3,
       "maxItems": 1000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema65"
+        "$ref": "#/$defs/__schema67"
       }
     },
-    "__schema65": {
+    "__schema67": {
       "type": "object",
       "properties": {
         "x": {
@@ -2871,21 +2895,21 @@
       ],
       "additionalProperties": false
     },
-    "__schema66": {
+    "__schema68": {
       "maxItems": 128,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema67"
+        "$ref": "#/$defs/__schema69"
       }
     },
-    "__schema67": {
+    "__schema69": {
       "type": "object",
       "properties": {
         "kind": {
-          "$ref": "#/$defs/__schema68"
+          "$ref": "#/$defs/__schema70"
         },
         "polygon": {
-          "$ref": "#/$defs/__schema64"
+          "$ref": "#/$defs/__schema66"
         }
       },
       "required": [
@@ -2894,7 +2918,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema68": {
+    "__schema70": {
       "type": "string",
       "enum": [
         "sea",
@@ -2911,36 +2935,36 @@
         "jungle"
       ]
     },
-    "__schema69": {
-      "maxItems": 128,
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/__schema70"
-      }
-    },
-    "__schema70": {
-      "minItems": 2,
-      "maxItems": 1000,
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/__schema65"
-      }
-    },
     "__schema71": {
-      "maxItems": 64,
+      "maxItems": 128,
       "type": "array",
       "items": {
         "$ref": "#/$defs/__schema72"
       }
     },
     "__schema72": {
+      "minItems": 2,
+      "maxItems": 1000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema67"
+      }
+    },
+    "__schema73": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema74"
+      }
+    },
+    "__schema74": {
       "type": "object",
       "properties": {
         "kind": {
-          "$ref": "#/$defs/__schema68"
+          "$ref": "#/$defs/__schema70"
         },
         "color": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         }
       },
       "required": [
@@ -2949,23 +2973,339 @@
       ],
       "additionalProperties": false
     },
-    "__schema73": {
+    "__schema75": {
       "type": "number",
       "minimum": 0,
       "maximum": 1
     },
-    "__schema74": {
+    "__schema76": {
+      "description": "nearest (default) snaps every pixel to the closest palette colour. exact requires every pixel to equal a palette colour, trusts the classes as painted (no text masking, cleanup, smoothing or political inference) and fails with MAP_REFERENCE_PALETTE_UNKNOWN_COLOR naming any other colour, its count and source pixels.",
+      "$ref": "#/$defs/__schema77"
+    },
+    "__schema77": {
+      "type": "string",
+      "enum": [
+        "nearest",
+        "exact"
+      ]
+    },
+    "__schema78": {
+      "description": "Registration of a picture made of drawn sheets onto the world frame (inline; use sheetsPath for a file). Each sheet maps its part of the picture with anchor, target and scale (or affine); the registered picture is read at the resolution the sheets need and every layer derives from it. Implies fit frame; width and height are required. Annotations, masks, labels and cities then use world coordinates.",
+      "$ref": "#/$defs/__schema79"
+    },
+    "__schema79": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/__schema80"
+        },
+        "source": {
+          "$ref": "#/$defs/__schema81"
+        },
+        "fill": {
+          "$ref": "#/$defs/__schema83"
+        },
+        "sheets": {
+          "$ref": "#/$defs/__schema85"
+        }
+      },
+      "required": [
+        "version",
+        "sheets"
+      ],
+      "additionalProperties": false,
+      "description": "Registration of a drawn picture made of sheets onto the world frame (ADR 0067). Coordinates are normalised: picture coordinates to the picture, world coordinates to width x height."
+    },
+    "__schema80": {
+      "type": "number",
+      "const": 1
+    },
+    "__schema81": {
+      "description": "The picture these registrations were made for; a picture of another size or hash is refused.",
+      "$ref": "#/$defs/__schema82"
+    },
+    "__schema82": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
+    },
+    "__schema83": {
+      "default": "sea",
+      "description": "What world pixels outside every sheet become: open sea, or an error.",
+      "$ref": "#/$defs/__schema84"
+    },
+    "__schema84": {
+      "type": "string",
+      "enum": [
+        "sea",
+        "error"
+      ]
+    },
+    "__schema85": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema86"
+      }
+    },
+    "__schema86": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema87"
+        },
+        "box": {
+          "$ref": "#/$defs/__schema88"
+        },
+        "clip": {
+          "$ref": "#/$defs/__schema90"
+        },
+        "anchor": {
+          "$ref": "#/$defs/__schema93"
+        },
+        "target": {
+          "$ref": "#/$defs/__schema95"
+        },
+        "scale": {
+          "$ref": "#/$defs/__schema98"
+        },
+        "affine": {
+          "$ref": "#/$defs/__schema100"
+        },
+        "order": {
+          "$ref": "#/$defs/__schema102"
+        }
+      },
+      "required": [
+        "id",
+        "box"
+      ],
+      "additionalProperties": false
+    },
+    "__schema87": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+      "description": "Unique sheet id, named in diagnostics and artifacts."
+    },
+    "__schema88": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema89"
+        },
+        {
+          "$ref": "#/$defs/__schema89"
+        },
+        {
+          "$ref": "#/$defs/__schema89"
+        },
+        {
+          "$ref": "#/$defs/__schema89"
+        }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[left, top, right, bottom] of the sheet in normalised picture coordinates."
+    },
+    "__schema89": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "__schema90": {
+      "description": "Polygon in picture coordinates that cuts the sheet out of its box, so a neighbouring sheet inside the box is not pulled in.",
+      "$ref": "#/$defs/__schema91"
+    },
+    "__schema91": {
+      "minItems": 3,
+      "maxItems": 512,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema92"
+      }
+    },
+    "__schema92": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema89"
+        },
+        {
+          "$ref": "#/$defs/__schema89"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema93": {
+      "description": "Picture point that maps to target.",
+      "$ref": "#/$defs/__schema94"
+    },
+    "__schema94": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema89"
+        },
+        {
+          "$ref": "#/$defs/__schema89"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema95": {
+      "description": "World point of the anchor.",
+      "$ref": "#/$defs/__schema96"
+    },
+    "__schema96": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema97": {
+      "type": "number"
+    },
+    "__schema98": {
+      "description": "World units per picture unit along x and y; a negative value mirrors.",
+      "$ref": "#/$defs/__schema99"
+    },
+    "__schema99": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema100": {
+      "description": "General map [a, b, c, d, e, f] from picture to world, instead of anchor, target and scale.",
+      "$ref": "#/$defs/__schema101"
+    },
+    "__schema101": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        },
+        {
+          "$ref": "#/$defs/__schema97"
+        }
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "__schema102": {
+      "default": 0,
+      "description": "Where targets overlap the higher order wins; equal orders that overlap are an error.",
+      "$ref": "#/$defs/__schema103"
+    },
+    "__schema103": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "__schema104": {
+      "description": "With a geography model: land intersection over union between the model and this reference below minLandIou (default 0.85) blocks the write with MAP_IMPORT_SOURCES_DISAGREE; below warnLandIou (default 0.95) it is a warning. The measured value is always in map-import-report.json.",
+      "$ref": "#/$defs/__schema105"
+    },
+    "__schema105": {
+      "type": "object",
+      "properties": {
+        "minLandIou": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "warnLandIou": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "__schema106": {
+      "description": "Workspace-relative .json file holding the sheet registration (reference-sheets version 1).",
+      "$ref": "#/$defs/__schema107"
+    },
+    "__schema107": {
+      "$ref": "#/$defs/__schema59"
+    },
+    "__schema108": {
+      "description": "contain (default) centres the picture with sea padding at a working size of at most 3,072 pixels per side. frame maps the picture (or its crop) onto exactly width x height, which must be given and have the same shape within 1%, and reads it at the frame resolution.",
+      "$ref": "#/$defs/__schema109"
+    },
+    "__schema109": {
+      "type": "string",
+      "enum": [
+        "contain",
+        "frame"
+      ]
+    },
+    "__schema110": {
       "maxItems": 2048,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema75"
+        "$ref": "#/$defs/__schema111"
       }
     },
-    "__schema75": {
+    "__schema111": {
       "type": "object",
       "properties": {
         "name": {
-          "$ref": "#/$defs/__schema52"
+          "$ref": "#/$defs/__schema54"
         },
         "x": {
           "type": "number",
@@ -2998,18 +3338,18 @@
       ],
       "additionalProperties": false
     },
-    "__schema76": {
+    "__schema112": {
       "maxItems": 200,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema77"
+        "$ref": "#/$defs/__schema113"
       }
     },
-    "__schema77": {
+    "__schema113": {
       "type": "object",
       "properties": {
         "name": {
-          "$ref": "#/$defs/__schema52"
+          "$ref": "#/$defs/__schema54"
         },
         "x": {
           "type": "number",
@@ -3033,66 +3373,66 @@
       ],
       "additionalProperties": false
     },
-    "__schema78": {
+    "__schema114": {
       "description": "Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json. Without preview the world is built from it: relief (ranges with passes, volcanoes, plateaus), rivers and lakes are synthesised; biomes, climate and fertility are not yet, and a model that declares them is blocked with MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE.",
-      "$ref": "#/$defs/__schema79"
+      "$ref": "#/$defs/__schema115"
     },
-    "__schema79": {
+    "__schema115": {
       "type": "object",
       "properties": {
         "version": {
-          "$ref": "#/$defs/__schema80"
-        },
-        "name": {
-          "$ref": "#/$defs/__schema81"
-        },
-        "description": {
-          "$ref": "#/$defs/__schema83"
-        },
-        "seas": {
-          "$ref": "#/$defs/__schema84"
-        },
-        "lands": {
-          "$ref": "#/$defs/__schema97"
-        },
-        "regions": {
-          "$ref": "#/$defs/__schema100"
-        },
-        "ranges": {
-          "$ref": "#/$defs/__schema103"
-        },
-        "passes": {
-          "$ref": "#/$defs/__schema106"
-        },
-        "volcanoes": {
-          "$ref": "#/$defs/__schema108"
-        },
-        "plateaus": {
-          "$ref": "#/$defs/__schema110"
-        },
-        "rivers": {
-          "$ref": "#/$defs/__schema112"
-        },
-        "lakes": {
-          "$ref": "#/$defs/__schema114"
-        },
-        "biomes": {
           "$ref": "#/$defs/__schema116"
         },
+        "name": {
+          "$ref": "#/$defs/__schema117"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema119"
+        },
+        "seas": {
+          "$ref": "#/$defs/__schema120"
+        },
+        "lands": {
+          "$ref": "#/$defs/__schema133"
+        },
+        "regions": {
+          "$ref": "#/$defs/__schema136"
+        },
+        "ranges": {
+          "$ref": "#/$defs/__schema139"
+        },
+        "passes": {
+          "$ref": "#/$defs/__schema142"
+        },
+        "volcanoes": {
+          "$ref": "#/$defs/__schema144"
+        },
+        "plateaus": {
+          "$ref": "#/$defs/__schema146"
+        },
+        "rivers": {
+          "$ref": "#/$defs/__schema148"
+        },
+        "lakes": {
+          "$ref": "#/$defs/__schema150"
+        },
+        "biomes": {
+          "$ref": "#/$defs/__schema152"
+        },
         "straits": {
-          "$ref": "#/$defs/__schema118"
+          "$ref": "#/$defs/__schema154"
         },
         "sites": {
-          "$ref": "#/$defs/__schema121"
+          "$ref": "#/$defs/__schema157"
         },
         "roads": {
-          "$ref": "#/$defs/__schema123"
+          "$ref": "#/$defs/__schema159"
         },
         "places": {
-          "$ref": "#/$defs/__schema125"
+          "$ref": "#/$defs/__schema161"
         },
         "climate": {
-          "$ref": "#/$defs/__schema127"
+          "$ref": "#/$defs/__schema163"
         }
       },
       "required": [
@@ -3101,56 +3441,56 @@
       "additionalProperties": false,
       "description": "Geography model version 1. Normalized 0..1 coordinates over the whole world frame, origin top-left; lengths are fractions of the map width."
     },
-    "__schema80": {
+    "__schema116": {
       "type": "number",
       "const": 1
     },
-    "__schema81": {
-      "$ref": "#/$defs/__schema82"
+    "__schema117": {
+      "$ref": "#/$defs/__schema118"
     },
-    "__schema82": {
+    "__schema118": {
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
     },
-    "__schema83": {
+    "__schema119": {
       "type": "string",
       "maxLength": 2000
     },
-    "__schema84": {
+    "__schema120": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema85"
+        "$ref": "#/$defs/__schema121"
       }
     },
-    "__schema85": {
+    "__schema121": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "depthClass": {
-          "$ref": "#/$defs/__schema96"
+          "$ref": "#/$defs/__schema132"
         },
         "ice": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "kind": {
           "type": "string",
@@ -3168,55 +3508,55 @@
       ],
       "additionalProperties": false
     },
-    "__schema86": {
+    "__schema122": {
       "type": "string",
       "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
     },
-    "__schema87": {
-      "$ref": "#/$defs/__schema82"
+    "__schema123": {
+      "$ref": "#/$defs/__schema118"
     },
-    "__schema88": {
+    "__schema124": {
       "maxItems": 16,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema89"
+        "$ref": "#/$defs/__schema125"
       }
     },
-    "__schema89": {
+    "__schema125": {
       "type": "string",
       "minLength": 1,
       "maxLength": 48
     },
-    "__schema90": {
+    "__schema126": {
       "type": "string",
       "maxLength": 2000
     },
-    "__schema91": {
+    "__schema127": {
       "minItems": 1,
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema92"
+        "$ref": "#/$defs/__schema128"
       }
     },
-    "__schema92": {
+    "__schema128": {
       "minItems": 3,
       "maxItems": 2000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema93"
+        "$ref": "#/$defs/__schema129"
       }
     },
-    "__schema93": {
+    "__schema129": {
       "anyOf": [
         {
           "type": "object",
           "properties": {
             "x": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "y": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             }
           },
           "required": [
@@ -3229,28 +3569,31 @@
           "type": "array",
           "prefixItems": [
             {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
-    "__schema94": {
+    "__schema130": {
       "type": "number",
       "minimum": 0,
       "maximum": 1
     },
-    "__schema95": {
+    "__schema131": {
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema92"
+        "$ref": "#/$defs/__schema128"
       }
     },
-    "__schema96": {
+    "__schema132": {
       "type": "string",
       "enum": [
         "shelf",
@@ -3258,33 +3601,33 @@
         "abyss"
       ]
     },
-    "__schema97": {
+    "__schema133": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema98"
+        "$ref": "#/$defs/__schema134"
       }
     },
-    "__schema98": {
+    "__schema134": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "kind": {
           "type": "string",
@@ -3296,19 +3639,19 @@
           ]
         },
         "region": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "biome": {
-          "$ref": "#/$defs/__schema99"
+          "$ref": "#/$defs/__schema135"
         },
         "fertility": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "elevationBase": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "coastDetail": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         }
       },
       "required": [
@@ -3317,7 +3660,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema99": {
+    "__schema135": {
       "type": "string",
       "enum": [
         "forest",
@@ -3332,63 +3675,63 @@
         "hills"
       ]
     },
-    "__schema100": {
+    "__schema136": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema101"
+        "$ref": "#/$defs/__schema137"
       }
     },
-    "__schema101": {
+    "__schema137": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "terrain": {
           "type": "object",
           "properties": {
             "plains": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "forest": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "hills": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "mountain": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "desert": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "marsh": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "jungle": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "urban": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "snow": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             }
           },
           "additionalProperties": false
@@ -3400,15 +3743,18 @@
               "type": "array",
               "prefixItems": [
                 {
-                  "$ref": "#/$defs/__schema102"
+                  "$ref": "#/$defs/__schema138"
                 },
                 {
-                  "$ref": "#/$defs/__schema102"
+                  "$ref": "#/$defs/__schema138"
                 },
                 {
-                  "$ref": "#/$defs/__schema102"
+                  "$ref": "#/$defs/__schema138"
                 }
-              ]
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
             },
             "provinceAreaPx": {
               "type": "integer",
@@ -3424,39 +3770,39 @@
       ],
       "additionalProperties": false
     },
-    "__schema102": {
+    "__schema138": {
       "type": "integer",
       "minimum": 1,
       "maximum": 64
     },
-    "__schema103": {
+    "__schema139": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema104"
+        "$ref": "#/$defs/__schema140"
       }
     },
-    "__schema104": {
+    "__schema140": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "path": {
           "minItems": 2,
           "maxItems": 2000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema105"
+            "$ref": "#/$defs/__schema141"
           }
         },
         "closed": {
@@ -3468,7 +3814,7 @@
           "maximum": 0.25
         },
         "peak": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "profile": {
           "type": "string",
@@ -3485,10 +3831,10 @@
           "maximum": 1
         },
         "snowline": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "spurs": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "barrier": {
           "type": "string",
@@ -3505,16 +3851,16 @@
       ],
       "additionalProperties": false
     },
-    "__schema105": {
+    "__schema141": {
       "anyOf": [
         {
           "type": "object",
           "properties": {
             "x": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "y": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             "halfWidth": {
               "type": "number",
@@ -3522,7 +3868,7 @@
               "maximum": 0.25
             },
             "peak": {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             }
           },
           "required": [
@@ -3535,45 +3881,48 @@
           "type": "array",
           "prefixItems": [
             {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             },
             {
-              "$ref": "#/$defs/__schema94"
+              "$ref": "#/$defs/__schema130"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         }
       ]
     },
-    "__schema106": {
+    "__schema142": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema107"
+        "$ref": "#/$defs/__schema143"
       }
     },
-    "__schema107": {
+    "__schema143": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "range": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "at": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "position": {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         },
         "width": {
           "type": "number",
@@ -3581,7 +3930,7 @@
           "maximum": 0.1
         },
         "depth": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "fort": {
           "type": "integer",
@@ -3594,30 +3943,30 @@
       ],
       "additionalProperties": false
     },
-    "__schema108": {
+    "__schema144": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema109"
+        "$ref": "#/$defs/__schema145"
       }
     },
-    "__schema109": {
+    "__schema145": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "at": {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         },
         "radius": {
           "type": "number",
@@ -3625,7 +3974,7 @@
           "maximum": 0.25
         },
         "peak": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "crater": {
           "type": "number",
@@ -3642,36 +3991,36 @@
       ],
       "additionalProperties": false
     },
-    "__schema110": {
+    "__schema146": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema111"
+        "$ref": "#/$defs/__schema147"
       }
     },
-    "__schema111": {
+    "__schema147": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "height": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "edge": {
           "type": "string",
@@ -3688,38 +4037,38 @@
       ],
       "additionalProperties": false
     },
-    "__schema112": {
+    "__schema148": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema113"
+        "$ref": "#/$defs/__schema149"
       }
     },
-    "__schema113": {
+    "__schema149": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "source": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema129"
             },
             {
               "type": "object",
               "properties": {
                 "lake": {
-                  "$ref": "#/$defs/__schema86"
+                  "$ref": "#/$defs/__schema122"
                 }
               },
               "required": [
@@ -3732,13 +4081,13 @@
         "mouth": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema93"
+              "$ref": "#/$defs/__schema129"
             },
             {
               "type": "object",
               "properties": {
                 "sea": {
-                  "$ref": "#/$defs/__schema86"
+                  "$ref": "#/$defs/__schema122"
                 }
               },
               "required": [
@@ -3750,7 +4099,7 @@
               "type": "object",
               "properties": {
                 "lake": {
-                  "$ref": "#/$defs/__schema86"
+                  "$ref": "#/$defs/__schema122"
                 }
               },
               "required": [
@@ -3762,7 +4111,7 @@
               "type": "object",
               "properties": {
                 "river": {
-                  "$ref": "#/$defs/__schema86"
+                  "$ref": "#/$defs/__schema122"
                 }
               },
               "required": [
@@ -3776,7 +4125,7 @@
           "maxItems": 512,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema93"
+            "$ref": "#/$defs/__schema129"
           }
         },
         "size": {
@@ -3795,36 +4144,36 @@
       ],
       "additionalProperties": false
     },
-    "__schema114": {
+    "__schema150": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema115"
+        "$ref": "#/$defs/__schema151"
       }
     },
-    "__schema115": {
+    "__schema151": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "center": {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         },
         "radius": {
           "type": "number",
@@ -3832,10 +4181,10 @@
           "maximum": 0.25
         },
         "depthClass": {
-          "$ref": "#/$defs/__schema96"
+          "$ref": "#/$defs/__schema132"
         },
         "outflow": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "gameplay": {
           "type": "string",
@@ -3850,42 +4199,42 @@
       ],
       "additionalProperties": false
     },
-    "__schema116": {
+    "__schema152": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema117"
+        "$ref": "#/$defs/__schema153"
       }
     },
-    "__schema117": {
+    "__schema153": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "polygons": {
-          "$ref": "#/$defs/__schema91"
+          "$ref": "#/$defs/__schema127"
         },
         "holes": {
-          "$ref": "#/$defs/__schema95"
+          "$ref": "#/$defs/__schema131"
         },
         "kind": {
-          "$ref": "#/$defs/__schema99"
+          "$ref": "#/$defs/__schema135"
         },
         "density": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "fertility": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "z": {
           "type": "integer",
@@ -3900,45 +4249,48 @@
       ],
       "additionalProperties": false
     },
-    "__schema118": {
+    "__schema154": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema119"
+        "$ref": "#/$defs/__schema155"
       }
     },
-    "__schema119": {
+    "__schema155": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "between": {
           "type": "array",
           "prefixItems": [
             {
-              "$ref": "#/$defs/__schema120"
+              "$ref": "#/$defs/__schema156"
             },
             {
-              "$ref": "#/$defs/__schema120"
+              "$ref": "#/$defs/__schema156"
             }
-          ]
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
         },
         "path": {
           "minItems": 2,
           "maxItems": 64,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema93"
+            "$ref": "#/$defs/__schema129"
           }
         },
         "rule": {
@@ -3960,16 +4312,16 @@
       ],
       "additionalProperties": false
     },
-    "__schema120": {
+    "__schema156": {
       "anyOf": [
         {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         },
         {
           "type": "object",
           "properties": {
             "land": {
-              "$ref": "#/$defs/__schema86"
+              "$ref": "#/$defs/__schema122"
             }
           },
           "required": [
@@ -3979,27 +4331,27 @@
         }
       ]
     },
-    "__schema121": {
+    "__schema157": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema122"
+        "$ref": "#/$defs/__schema158"
       }
     },
-    "__schema122": {
+    "__schema158": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "kind": {
           "type": "string",
@@ -4015,7 +4367,7 @@
           ]
         },
         "at": {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         },
         "importance": {
           "type": "integer",
@@ -4030,7 +4382,7 @@
           "type": "boolean"
         },
         "lake": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "resource": {
           "type": "string",
@@ -4051,34 +4403,34 @@
       ],
       "additionalProperties": false
     },
-    "__schema123": {
+    "__schema159": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema124"
+        "$ref": "#/$defs/__schema160"
       }
     },
-    "__schema124": {
+    "__schema160": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "path": {
           "minItems": 2,
           "maxItems": 2000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema93"
+            "$ref": "#/$defs/__schema129"
           }
         },
         "importance": {
@@ -4093,27 +4445,27 @@
       ],
       "additionalProperties": false
     },
-    "__schema125": {
+    "__schema161": {
       "maxItems": 4000,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema126"
+        "$ref": "#/$defs/__schema162"
       }
     },
-    "__schema126": {
+    "__schema162": {
       "type": "object",
       "properties": {
         "id": {
-          "$ref": "#/$defs/__schema86"
+          "$ref": "#/$defs/__schema122"
         },
         "name": {
-          "$ref": "#/$defs/__schema87"
+          "$ref": "#/$defs/__schema123"
         },
         "tags": {
-          "$ref": "#/$defs/__schema88"
+          "$ref": "#/$defs/__schema124"
         },
         "note": {
-          "$ref": "#/$defs/__schema90"
+          "$ref": "#/$defs/__schema126"
         },
         "kind": {
           "type": "string",
@@ -4128,7 +4480,7 @@
           ]
         },
         "at": {
-          "$ref": "#/$defs/__schema93"
+          "$ref": "#/$defs/__schema129"
         }
       },
       "required": [
@@ -4138,7 +4490,7 @@
       ],
       "additionalProperties": false
     },
-    "__schema127": {
+    "__schema163": {
       "type": "object",
       "properties": {
         "windFrom": {
@@ -4167,7 +4519,7 @@
           "additionalProperties": false
         },
         "warmBandY": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         },
         "rainScale": {
           "type": "number",
@@ -4175,60 +4527,60 @@
           "maximum": 4
         },
         "seasonality": {
-          "$ref": "#/$defs/__schema94"
+          "$ref": "#/$defs/__schema130"
         }
       },
       "additionalProperties": false
     },
-    "__schema128": {
+    "__schema164": {
       "description": "Workspace-relative .json file holding a geography model (at most 4 MiB). Alternative to the inline geography field; give one of them.",
-      "$ref": "#/$defs/__schema129"
+      "$ref": "#/$defs/__schema165"
     },
-    "__schema129": {
-      "$ref": "#/$defs/__schema57"
+    "__schema165": {
+      "$ref": "#/$defs/__schema59"
     },
-    "__schema130": {
+    "__schema166": {
       "type": "integer",
       "minimum": 256,
       "maximum": 8192,
       "multipleOf": 256
     },
-    "__schema131": {
+    "__schema167": {
       "type": "integer",
       "minimum": 256,
       "maximum": 4096,
       "multipleOf": 256
     },
-    "__schema132": {
+    "__schema168": {
       "default": 1,
       "type": "integer",
       "minimum": 0,
       "maximum": 2147483647
     },
-    "__schema133": {
+    "__schema169": {
       "default": 0.35,
       "type": "number",
       "minimum": 0.05,
       "maximum": 0.9
     },
-    "__schema134": {
+    "__schema170": {
       "default": 3,
       "type": "integer",
       "minimum": 1,
       "maximum": 12
     },
-    "__schema135": {
+    "__schema171": {
       "description": "Land outlines in top-left pixel coordinates; omit for generated continents.",
-      "$ref": "#/$defs/__schema136"
+      "$ref": "#/$defs/__schema172"
     },
-    "__schema136": {
+    "__schema172": {
       "maxItems": 64,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema137"
+        "$ref": "#/$defs/__schema173"
       }
     },
-    "__schema137": {
+    "__schema173": {
       "minItems": 3,
       "maxItems": 10000,
       "type": "array",
@@ -4236,56 +4588,85 @@
         "$ref": "#/$defs/__schema29"
       }
     },
-    "__schema138": {
+    "__schema174": {
       "default": 400,
       "type": "integer",
       "minimum": 60,
       "maximum": 50000
     },
-    "__schema139": {
+    "__schema175": {
       "default": 2500,
       "type": "integer",
       "minimum": 200,
       "maximum": 200000
     },
-    "__schema140": {
+    "__schema176": {
       "type": "integer",
       "minimum": 1,
       "maximum": 64
     },
-    "__schema141": {
+    "__schema177": {
       "type": "integer",
       "minimum": 2,
       "maximum": 400
     },
-    "__schema142": {
+    "__schema178": {
       "type": "integer",
       "minimum": 1,
       "maximum": 200
     },
-    "__schema143": {
-      "minItems": 1,
-      "maxItems": 200,
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/__schema144"
-      }
+    "__schema179": {
+      "description": "Countries the world generates and writes (an array), or { source: \"workspace\", realms } for countries the workspace already declares: the world then places them from their capital, seeds, claims and exclusions and writes no country, flag, unit, country history, country name or bookmark file.",
+      "$ref": "#/$defs/__schema180"
     },
-    "__schema144": {
+    "__schema180": {
+      "anyOf": [
+        {
+          "minItems": 1,
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema181"
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/__schema183"
+            },
+            "realms": {
+              "$ref": "#/$defs/__schema184"
+            },
+            "unowned": {
+              "$ref": "#/$defs/__schema190"
+            },
+            "islands": {
+              "$ref": "#/$defs/__schema192"
+            }
+          },
+          "required": [
+            "source",
+            "realms"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema181": {
       "type": "object",
       "properties": {
         "tag": {
-          "type": "string",
-          "pattern": "^[A-Z][A-Z0-9]{2}$"
+          "$ref": "#/$defs/__schema182"
         },
         "name": {
-          "$ref": "#/$defs/__schema52"
+          "$ref": "#/$defs/__schema54"
         },
         "adjective": {
-          "$ref": "#/$defs/__schema52"
+          "$ref": "#/$defs/__schema54"
         },
         "color": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "share": {
           "type": "number",
@@ -4308,23 +4689,124 @@
       ],
       "additionalProperties": false
     },
-    "__schema145": {
+    "__schema182": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{2}$"
+    },
+    "__schema183": {
+      "type": "string",
+      "const": "workspace"
+    },
+    "__schema184": {
+      "minItems": 1,
+      "maxItems": 512,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema185"
+      }
+    },
+    "__schema185": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "$ref": "#/$defs/__schema182"
+        },
+        "capital": {
+          "description": "World pixel, top-left origin, on land; the capital province.",
+          "$ref": "#/$defs/__schema29"
+        },
+        "seeds": {
+          "description": "Further world pixels whose provinces the country must own.",
+          "$ref": "#/$defs/__schema186"
+        },
+        "claim": {
+          "description": "Polygons in world pixels; land provinces more than half inside belong to the country.",
+          "$ref": "#/$defs/__schema187"
+        },
+        "exclude": {
+          "description": "Polygons in world pixels; land provinces more than half inside never belong to it.",
+          "$ref": "#/$defs/__schema187"
+        },
+        "weight": {
+          "description": "Relative share of the land claims leave free; default 1.",
+          "$ref": "#/$defs/__schema189"
+        }
+      },
+      "required": [
+        "tag",
+        "capital"
+      ],
+      "additionalProperties": false
+    },
+    "__schema186": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema29"
+      }
+    },
+    "__schema187": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema188"
+      }
+    },
+    "__schema188": {
+      "minItems": 3,
+      "maxItems": 10000,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema29"
+      }
+    },
+    "__schema189": {
+      "type": "number",
+      "minimum": 0.05,
+      "maximum": 100
+    },
+    "__schema190": {
+      "description": "Polygons in world pixels whose land provinces no country owns.",
+      "$ref": "#/$defs/__schema191"
+    },
+    "__schema191": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema188"
+      }
+    },
+    "__schema192": {
+      "default": "nearest",
+      "description": "Landmasses no country reaches: every province to the nearest capital, the whole landmass to one country, or unowned.",
+      "$ref": "#/$defs/__schema193"
+    },
+    "__schema193": {
+      "type": "string",
+      "enum": [
+        "nearest",
+        "one-owner",
+        "unowned"
+      ]
+    },
+    "__schema194": {
       "maxItems": 12,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema52"
+        "$ref": "#/$defs/__schema54"
       }
     },
-    "__schema146": {
+    "__schema195": {
       "default": "1936.1.1",
       "type": "string",
       "pattern": "^\\d{3,4}\\.\\d{1,2}\\.\\d{1,2}$"
     },
-    "__schema147": {
+    "__schema196": {
       "description": "Without a geography: the number of generated rivers. With a geography: an integer limits the number of unnamed river systems, an object { density } sets the share of land the network covers; the rivers the model names are always routed.",
-      "$ref": "#/$defs/__schema148"
+      "$ref": "#/$defs/__schema197"
     },
-    "__schema148": {
+    "__schema197": {
       "anyOf": [
         {
           "type": "integer",
@@ -4348,25 +4830,25 @@
         }
       ]
     },
-    "__schema149": {
+    "__schema198": {
       "description": "Relief of a world built from a geography model: height scale and detail. Needs geography.",
-      "$ref": "#/$defs/__schema150"
+      "$ref": "#/$defs/__schema199"
     },
-    "__schema150": {
+    "__schema199": {
       "type": "object",
       "properties": {
         "scale": {
           "description": "Height of everything above the lowland: vanilla (the default) follows the base game, low is 25% lower, dramatic 15% higher.",
-          "$ref": "#/$defs/__schema151"
+          "$ref": "#/$defs/__schema200"
         },
         "detail": {
           "description": "Full-resolution roughness of the terrain, 0 to 1; default 0.5.",
-          "$ref": "#/$defs/__schema152"
+          "$ref": "#/$defs/__schema201"
         }
       },
       "additionalProperties": false
     },
-    "__schema151": {
+    "__schema200": {
       "type": "string",
       "enum": [
         "vanilla",
@@ -4374,34 +4856,34 @@
         "dramatic"
       ]
     },
-    "__schema152": {
+    "__schema201": {
       "type": "number",
       "minimum": 0,
       "maximum": 1
     },
-    "__schema153": {
+    "__schema202": {
       "type": "object",
       "properties": {
         "mode": {
           "description": "sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam; none keeps the picture and warns about land cut by the wrapping seam.",
-          "$ref": "#/$defs/__schema154"
+          "$ref": "#/$defs/__schema203"
         },
         "bandPx": {
           "description": "East and west sea band in pixels; default max(192, 4% of the width), at most a quarter of the width.",
-          "$ref": "#/$defs/__schema155"
+          "$ref": "#/$defs/__schema204"
         },
         "polarPx": {
           "description": "North and south sea band in pixels; default 64, at most a quarter of the height.",
-          "$ref": "#/$defs/__schema156"
+          "$ref": "#/$defs/__schema205"
         },
         "rimPx": {
           "description": "Rim range width in pixels for mode rim; default 160, at most a quarter of the width.",
-          "$ref": "#/$defs/__schema157"
+          "$ref": "#/$defs/__schema206"
         }
       },
       "additionalProperties": false
     },
-    "__schema154": {
+    "__schema203": {
       "type": "string",
       "enum": [
         "sea-band",
@@ -4409,29 +4891,29 @@
         "none"
       ]
     },
-    "__schema155": {
+    "__schema204": {
       "type": "integer",
       "minimum": 8,
       "maximum": 2048
     },
-    "__schema156": {
+    "__schema205": {
       "type": "integer",
       "minimum": 0,
       "maximum": 1024
     },
-    "__schema157": {
+    "__schema206": {
       "type": "integer",
       "minimum": 16,
       "maximum": 2048
     },
-    "__schema158": {
+    "__schema207": {
       "description": "Write the base map's north and south frame borders and logo frame into ambient_object.txt, placed for the world size. Off by default.",
-      "$ref": "#/$defs/__schema159"
+      "$ref": "#/$defs/__schema208"
     },
-    "__schema159": {
+    "__schema208": {
       "type": "boolean"
     },
-    "__schema160": {
+    "__schema209": {
       "type": "string",
       "enum": [
         "vanilla-temperate",
@@ -4441,70 +4923,70 @@
       ],
       "description": "Colour palette set for the calibrated land colour map: the base game, a greener fertile palette, a drier arid palette, or custom with colormap.palette. Setting it selects the calibrated colour map."
     },
-    "__schema161": {
+    "__schema210": {
       "type": "object",
       "properties": {
         "profile": {
           "description": "calibrated writes a dark, varied colour map calibrated to the base game; legacy keeps the original flat tints. Defaults to calibrated when look is set, otherwise legacy.",
-          "$ref": "#/$defs/__schema162"
+          "$ref": "#/$defs/__schema211"
         },
         "palette": {
           "description": "Class colours for look custom: the intended colour map value of each class.",
-          "$ref": "#/$defs/__schema163"
+          "$ref": "#/$defs/__schema212"
         }
       },
       "additionalProperties": false
     },
-    "__schema162": {
+    "__schema211": {
       "type": "string",
       "enum": [
         "calibrated",
         "legacy"
       ]
     },
-    "__schema163": {
+    "__schema212": {
       "type": "object",
       "properties": {
         "plains": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "farmland": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "forest": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "hills": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "desert": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "mountain": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "marsh": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "jungle": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "snow": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "urban": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "lakes": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         },
         "ocean": {
-          "$ref": "#/$defs/__schema44"
+          "$ref": "#/$defs/__schema46"
         }
       },
       "additionalProperties": false
     },
-    "__schema164": {
+    "__schema213": {
       "type": "string",
       "enum": [
         "legacy",
@@ -4512,114 +4994,114 @@
       ],
       "description": "legacy (default) keeps the warped Voronoi provinces and breadth-first clusters, so a seed gives the same world as before; feature-aware cuts provinces along rivers, ridges, steep slopes and shores, sizes them by terrain, fertility and coast, and clusters states and regions along natural lines. A world given a geography defaults to feature-aware."
     },
-    "__schema165": {
+    "__schema214": {
       "type": "object",
       "properties": {
         "model": {
           "description": "geography (default for a geography world) plans ports, population, state categories, infrastructure, factories, resources, victory points, names and railway costs from the model: fertility, rivers, the coast, passes, ranges and sites. legacy keeps the random economy.",
-          "$ref": "#/$defs/__schema166"
+          "$ref": "#/$defs/__schema215"
         }
       },
       "additionalProperties": false
     },
-    "__schema166": {
+    "__schema215": {
       "type": "string",
       "enum": [
         "geography",
         "legacy"
       ]
     },
-    "__schema167": {
+    "__schema216": {
       "anyOf": [
         {
-          "$ref": "#/$defs/__schema168"
+          "$ref": "#/$defs/__schema217"
         },
         {
-          "$ref": "#/$defs/__schema169"
+          "$ref": "#/$defs/__schema218"
         }
       ],
       "description": "Also write a sea crossing for every channel narrower than maxGapPx that one sea province fills between two landmasses and that the model does not declare as a strait. Needs a geography."
     },
-    "__schema168": {
+    "__schema217": {
       "type": "boolean"
     },
-    "__schema169": {
+    "__schema218": {
       "type": "object",
       "properties": {
         "maxGapPx": {
           "description": "Widest channel written as a crossing, in pixels; default 24 (about 170 km).",
-          "$ref": "#/$defs/__schema170"
+          "$ref": "#/$defs/__schema219"
         }
       },
       "additionalProperties": false
     },
-    "__schema170": {
+    "__schema219": {
       "type": "integer",
       "minimum": 4,
       "maximum": 96
     },
-    "__schema171": {
+    "__schema220": {
       "description": "Size bands and strengths of the feature-aware partition; refused with partition legacy.",
-      "$ref": "#/$defs/__schema172"
+      "$ref": "#/$defs/__schema221"
     },
-    "__schema172": {
+    "__schema221": {
       "type": "object",
       "properties": {
         "landArea": {
           "description": "Typical land province area in pixels by ground. Defaults follow landProvincePixels (0.35, 1, 2.2 and 3.4 times, scaled so the mean stays landProvincePixels). fertile must not exceed hills, nor hills mountain.",
-          "$ref": "#/$defs/__schema173"
+          "$ref": "#/$defs/__schema222"
         },
         "seaArea": {
           "description": "Sea province area in pixels near a coast and on the open sea. Defaults follow seaProvincePixels (0.5 and 2.4 times, scaled so the mean stays seaProvincePixels).",
-          "$ref": "#/$defs/__schema175"
+          "$ref": "#/$defs/__schema224"
         },
         "provincesPerState": {
           "description": "[smallest, largest] land provinces per state; the preferred size is the geometric mean.",
-          "$ref": "#/$defs/__schema176"
+          "$ref": "#/$defs/__schema225"
         },
         "regionSize": {
           "description": "[smallest, largest] land provinces per strategic region.",
-          "$ref": "#/$defs/__schema177"
+          "$ref": "#/$defs/__schema226"
         },
         "barrierStrength": {
           "description": "How strongly borders are pulled onto natural lines, 0 to 60; default 20.",
-          "$ref": "#/$defs/__schema178"
+          "$ref": "#/$defs/__schema227"
         },
         "minProvincePixels": {
           "description": "No province is planned smaller than this; default 40. The engine floor is 8.",
-          "$ref": "#/$defs/__schema179"
+          "$ref": "#/$defs/__schema228"
         },
         "narrowStraitPx": {
           "description": "A sea channel at most this wide gets two sea provinces across it; default 24.",
-          "$ref": "#/$defs/__schema180"
+          "$ref": "#/$defs/__schema229"
         }
       },
       "additionalProperties": false
     },
-    "__schema173": {
+    "__schema222": {
       "type": "object",
       "properties": {
         "fertile": {
-          "$ref": "#/$defs/__schema174"
+          "$ref": "#/$defs/__schema223"
         },
         "hills": {
-          "$ref": "#/$defs/__schema174"
+          "$ref": "#/$defs/__schema223"
         },
         "mountain": {
-          "$ref": "#/$defs/__schema174"
+          "$ref": "#/$defs/__schema223"
         },
         "waste": {
-          "$ref": "#/$defs/__schema174"
+          "$ref": "#/$defs/__schema223"
         }
       },
       "additionalProperties": false
     },
-    "__schema174": {
+    "__schema223": {
       "type": "integer",
       "minimum": 20,
       "maximum": 50000
     },
-    "__schema175": {
+    "__schema224": {
       "type": "object",
       "properties": {
         "coastal": {
@@ -4635,7 +5117,7 @@
       },
       "additionalProperties": false
     },
-    "__schema176": {
+    "__schema225": {
       "type": "array",
       "prefixItems": [
         {
@@ -4648,9 +5130,12 @@
           "minimum": 1,
           "maximum": 64
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
-    "__schema177": {
+    "__schema226": {
       "type": "array",
       "prefixItems": [
         {
@@ -4663,32 +5148,35 @@
           "minimum": 1,
           "maximum": 400
         }
-      ]
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
-    "__schema178": {
+    "__schema227": {
       "type": "number",
       "minimum": 0,
       "maximum": 60
     },
-    "__schema179": {
+    "__schema228": {
       "type": "integer",
       "minimum": 20,
       "maximum": 2000
     },
-    "__schema180": {
+    "__schema229": {
       "type": "integer",
       "minimum": 4,
       "maximum": 64
     },
-    "__schema181": {
+    "__schema230": {
       "default": true,
       "description": "Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.",
-      "$ref": "#/$defs/__schema182"
+      "$ref": "#/$defs/__schema231"
     },
-    "__schema182": {
+    "__schema231": {
       "type": "boolean"
     },
-    "__schema183": {
+    "__schema232": {
       "type": "object",
       "properties": {
         "from": {
@@ -4699,13 +5187,13 @@
         "to": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema184"
+              "$ref": "#/$defs/__schema233"
             },
             {
-              "$ref": "#/$defs/__schema185"
+              "$ref": "#/$defs/__schema234"
             },
             {
-              "$ref": "#/$defs/__schema187"
+              "$ref": "#/$defs/__schema236"
             }
           ],
           "description": "One ID replaces; several IDs copy the referencing assignment once per ID; null removes it."
@@ -4717,40 +5205,40 @@
       ],
       "additionalProperties": false
     },
-    "__schema184": {
+    "__schema233": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema185": {
+    "__schema234": {
       "minItems": 1,
       "maxItems": 16,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema186"
+        "$ref": "#/$defs/__schema235"
       }
     },
-    "__schema186": {
+    "__schema235": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema187": {
+    "__schema236": {
       "type": "null"
     },
-    "__schema188": {
+    "__schema237": {
       "type": "string",
       "enum": [
         "refuse",
         "override"
       ]
     },
-    "__schema189": {
+    "__schema238": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "__schema190": {
+    "__schema239": {
       "type": "string",
       "enum": [
         "buildings",
@@ -4758,30 +5246,30 @@
         "weather"
       ]
     },
-    "__schema191": {
+    "__schema240": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema192": {
+    "__schema241": {
       "type": "string",
       "enum": [
         "missing",
         "replace"
       ]
     },
-    "__schema193": {
+    "__schema242": {
       "type": "string",
       "enum": [
         "connect",
         "replace"
       ]
     },
-    "__schema194": {
+    "__schema243": {
       "type": "string",
       "const": "renumber_map_entity"
     },
-    "__schema195": {
+    "__schema244": {
       "type": "string",
       "enum": [
         "province",
@@ -4789,17 +5277,17 @@
         "strategic-region"
       ]
     },
-    "__schema196": {
+    "__schema245": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema197": {
+    "__schema246": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema198": {
+    "__schema247": {
       "default": "swap",
       "type": "string",
       "enum": [
@@ -4807,11 +5295,11 @@
         "reject"
       ]
     },
-    "__schema199": {
+    "__schema248": {
       "default": true,
       "type": "boolean"
     },
-    "__schema200": {
+    "__schema249": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991

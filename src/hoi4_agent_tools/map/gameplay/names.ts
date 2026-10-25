@@ -14,7 +14,7 @@ import { SITE_WEIGHT, landProvinceNear, type LocatedSite } from './sites.js';
 export interface NameState {
   id: number;
   provinces: readonly number[];
-  owner: string;
+  owner?: string | undefined;
 }
 
 export interface NameInput {
@@ -247,7 +247,8 @@ export function nameWorld(input: NameInput): NameResult {
     list.push(located);
     siteByProvince.set(located.province, list);
   }
-  const countryName = (tag: string): string => input.countryNames.get(tag) ?? tag;
+  const countryName = (tag: string | undefined): string =>
+    tag === undefined ? 'Free Land' : (input.countryNames.get(tag) ?? tag);
   const notes: NameResult['notes'] = [];
 
   // Lake provinces: the lake's own name.

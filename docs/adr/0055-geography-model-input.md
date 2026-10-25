@@ -2,7 +2,7 @@
 
 ## Context
 
-`create_world` accepted noise or one reference picture. A picture classifies pixels into a few terrain classes and has no place for a range with a crest, a volcano, a named river from a lake to a sea, a pass, a strait, a fertile plain, a site or a climate. The ZIN overhaul describes its world as exactly that typed feature list, and the planned relief, hydrology, climate, partition and naming stages (sections C6 to C13 of `docs/plans/zin-map-pipeline.md`) all need one validated, deterministic description of the world to build on. This ADR adds that description and its review step. It does not add synthesis: no relief, river, biome or province is generated from it yet.
+`create_world` accepted noise or one reference picture. A picture classifies pixels into a few terrain classes and has no place for a range with a crest, a volcano, a named river from a lake to a sea, a pass, a strait, a fertile plain, a site or a climate. A total-conversion mod describes its world as exactly that typed feature list, and the planned relief, hydrology, climate, partition and naming stages all need one validated, deterministic description of the world to build on. This ADR adds that description and its review step. It does not add synthesis: no relief, river, biome or province is generated from it yet.
 
 ## Decision
 
@@ -45,7 +45,7 @@ A request without `preview` loads and validates the model, stores the same artif
 
 ## Consequences
 
-An agent can check a whole world description, with ids, areas and defects, before any generation, and the ZIN geography can be converted to schema version 1 and reviewed without a game. The schema is a contract: later stages add optional fields, and a breaking change raises `version`.
+An agent can check a whole world description, with ids, areas and defects, before any generation, and a mod's own geography description can be converted to schema version 1 and reviewed without a game. The schema is a contract: later stages add optional fields, and a breaking change raises `version`.
 
 Invalid and valid models never write anything yet. The model's world frame must be mapped by its author: a drawing that does not fill the frame needs an affine transform before the model is written, because the tool does not pad or crop a model the way it does a picture. Lengths in map-width units make a model independent of the pixel size but tie it to the frame's aspect ratio.
 

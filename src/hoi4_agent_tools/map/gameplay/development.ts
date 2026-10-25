@@ -15,7 +15,7 @@ import { SITE_VICTORY_POINTS, SITE_WEIGHT, VICTORY_SITE_KINDS, type LocatedSite 
 export interface DevelopmentStateInput {
   id: number;
   provinces: readonly number[];
-  owner: string;
+  owner?: string | undefined;
   isCapital: boolean;
 }
 
