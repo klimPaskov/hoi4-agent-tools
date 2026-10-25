@@ -3,7 +3,12 @@ import { hasBlockingDiagnostics } from '../diagnostics.js';
 import { ServiceError } from '../result.js';
 import { sha256Bytes } from '../canonical.js';
 import { sourceDocumentCacheKey, sourceDocuments, type SourceDocumentCache } from './cache.js';
-import { decodeSource, encodeSource, type DecodedSource } from './encoding.js';
+import {
+  assertSourceEncodingPreserved,
+  decodeSource,
+  encodeSource,
+  type DecodedSource,
+} from './encoding.js';
 import {
   createSourceLineIndex,
   isTrivia,
@@ -351,6 +356,26 @@ function parseClausewitzUncached(bytes: Uint8Array, sourcePath: string): SourceD
       sourceRevision: sha256Bytes(decoded.bytes),
     };
   }
+  const encodingLoss = decoded.encodingLoss;
+  if (encodingLoss !== undefined) {
+    diagnostics.add(() => ({
+      code: 'SOURCE_ENCODING_NOT_ROUND_TRIPPABLE',
+      severity: 'warning',
+      category: 'syntax',
+      message:
+        'Source is not valid UTF-8 and contains bytes that Windows-1252 cannot represent; it can be read but any rewrite is refused',
+      location: locationFor(
+        sourcePath,
+        lineIndex,
+        encodingLoss.firstOffset,
+        encodingLoss.firstOffset + 1,
+      ),
+      details: {
+        byteCount: encodingLoss.count,
+        byteValues: encodingLoss.byteValues.map((value) => `0x${value.toString(16).toUpperCase()}`),
+      },
+    }));
+  }
   const lexed = lexClausewitz(decoded.text, sourcePath, { lineIndex, diagnostics });
   const parser = new Parser(lexed.tokens, decoded.text, sourcePath, lineIndex, diagnostics);
   const root = parser.parseRoot();
@@ -383,6 +408,7 @@ export function assertRewriteSafe(document: SourceDocument): void {
 }
 
 export function encodeDocumentText(document: SourceDocument, text: string): Buffer {
+  assertSourceEncodingPreserved(document, document.path);
   return encodeSource(text, document.encoding);
 }
 

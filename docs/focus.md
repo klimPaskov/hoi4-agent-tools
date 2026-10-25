@@ -168,6 +168,12 @@ Branch names, lane assignments, working labels, and other planning-only data may
 
 If malformed or unsupported script makes a requested change ambiguous, the rewrite stops and explains the blocker instead of guessing.
 
+### Stale source and source encoding
+
+A rewrite starts from a plan returned by `hoi4.focus_inspect`. If the source file changed in meaning after that inspection, `hoi4.focus_rewrite` refuses with `FOCUS_SOURCE_CHANGED_SINCE_PLAN` and writes nothing, because applying the plan would overwrite the other change with the plan's older values. Call `hoi4.focus_inspect` again, reapply the intended edit to the new plan, and retry. There is no override. A change that only touches comments or formatting does not trigger the refusal, and neither does a source that already equals the plan.
+
+Source files are read as UTF-8 (with or without a byte order mark) and, when they are not valid UTF-8, as Windows-1252. Windows-1252 leaves the bytes 0x81, 0x8D, 0x8F, 0x90 and 0x9D undefined, so a file containing any of them cannot be edited without changing those bytes. Inspection still works and reports the warning `SOURCE_ENCODING_NOT_ROUND_TRIPPABLE`; every rewrite of that file is refused with the same code. Convert the file to UTF-8, or replace those bytes, and retry.
+
 ## What inspection checks
 
 Inspection and rendering can report missing references, invalid prerequisite structure, duplicate or overlapping positions, insufficient spacing, long or crossing connectors, branch asymmetry, route conflicts, missing localisation or sprites, weak terminal branches, repeated rewards, and missing AI metadata. National-tree inspection also returns the exact `continuous_focus_position` coordinates and linked palette IDs in its compact result, so an agent can identify and move the continuous-focus area without opening the full artifact. Renders are offline review artifacts, not game screenshots.
