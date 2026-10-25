@@ -73,3 +73,5 @@ Implementation rationale for contributors. For using the server, start with the 
 63. [Province count budget for generated worlds](0068-province-count-budget.md)
 64. [Workspace-owned countries in generated worlds](0069-workspace-owned-countries-in-generated-worlds.md)
 65. [Territory assignment service](0060-territory-assignment-service.md)
+66. [Validation of a replacement world and the river check](0070-whole-map-validation-and-river-check.md)
+67. [Drawn rivers carve their valleys](0071-drawn-rivers-carve-their-valleys.md)

@@ -102,6 +102,8 @@ export interface MapPlanningContext {
   referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
   /** Geography models prepared and validated by the authorized workspace service. */
   geographyModels?: ReadonlyMap<string, PreparedGeography>;
+  /** Plan only the river check of `create_world.synthesisCheck`: nothing is generated or written. */
+  synthesisCheck?: boolean;
 }
 
 export type MapOperationSteps<T> = Generator<void, T, void>;
@@ -510,6 +512,7 @@ export interface CreateWorldOperation extends MapOperationBase {
   reference?: WorldReferenceInput;
   geography?: GeographyModelInput;
   geographyPath?: string;
+  synthesisCheck?: boolean;
   continentNames?: string[];
   startDate?: string;
   rivers?: number | { density: number };
@@ -5697,6 +5700,16 @@ function applyCreateWorld(
       'MAP_PARTITION_TUNING_REQUIRES_FEATURE_AWARE',
       'partitionTuning applies to the feature-aware partition; set partition to "feature-aware" or remove it',
     );
+  if (operation.synthesisCheck === true && context.synthesisCheck !== true)
+    throw new ServiceError(
+      'MAP_SYNTHESIS_CHECK_REQUIRES_PREVIEW',
+      "synthesisCheck checks the model's rivers without writing; call hoi4.map_rewrite with preview: true, or remove synthesisCheck to write the world",
+    );
+  if (operation.synthesisCheck === true && !hasGeography)
+    throw new ServiceError(
+      'MAP_SYNTHESIS_CHECK_REQUIRES_GEOGRAPHY',
+      'synthesisCheck runs the relief and river synthesis of a geography model; give geography or geographyPath',
+    );
   if (partitionMode === 'legacy' && operation.borderQuality === 'enforce')
     throw new ServiceError(
       'MAP_BORDER_QUALITY_ENFORCE_NEEDS_FEATURE_AWARE',
@@ -5801,8 +5814,26 @@ function applyCreateWorld(
         : { colormapPalette: colormapPaletteOverrides(operation.colormap.palette) }),
     },
     buildWorldContext(base),
-    { signal },
+    { signal, ...(operation.synthesisCheck === true ? { riverCheck: true } : {}) },
   );
+  if (operation.synthesisCheck === true)
+    return [
+      ...world.notes.map((note): Diagnostic => ({
+        code: note.code,
+        severity: note.severity,
+        category: 'map',
+        operationId: operation.id,
+        message: note.message,
+        ...(note.details === undefined ? {} : { details: note.details }),
+      })),
+      {
+        code: 'MAP_SYNTHESIS_CHECK_READY',
+        severity: 'info',
+        category: 'map',
+        operationId: operation.id,
+        message: `Every river of the model reaches its mouth over the synthesised relief of a ${world.summary.width}x${world.summary.height} map; nothing was written`,
+      },
+    ];
   const roots =
     operation.replaceBaseGame === false
       ? []

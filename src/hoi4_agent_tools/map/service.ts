@@ -1109,6 +1109,7 @@ export class AgentNudger {
     operations: readonly MapOperation[],
     principal?: string,
     signal?: AbortSignal,
+    synthesisCheck = false,
   ): Promise<PreparedMapOperations> {
     signal?.throwIfAborted();
     const snapshot = await this.scan(
@@ -1204,6 +1205,7 @@ export class AgentNudger {
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal, {
       referenceWorlds,
       geographyModels,
+      ...(synthesisCheck ? { synthesisCheck: true } : {}),
     });
     // Model diagnostics (including warnings of a model that is otherwise usable) travel with the plan.
     for (const geography of geographyModels.values())
@@ -1232,22 +1234,32 @@ export class AgentNudger {
     }
     plan.diagnostics.push(...importDiagnostics);
     const newWorld = operations.some(({ kind }) => kind === 'create_world');
-    const freshWorld = newWorld && snapshot.index.provinceBitmapFile?.rootKind !== 'mod';
-    const baselineValidation = freshWorld
+    // A new world replaces the whole map: findings of the map it replaces are not its baseline,
+    // so every finding of the generated map is judged on its own and belongs to the world
+    // operation (ADR 0070).
+    const baselineValidation = newWorld
       ? { passed: true, diagnostics: [], checks: [] }
       : await validateMapAsync(snapshot.index, signal === undefined ? {} : { signal });
     // A new world has nothing to compare its bitmap format and pixels with.
     const worldOperation = operations.find((operation) => operation.kind === 'create_world');
-    const rawValidation = await validateMapAsync(plan.finalIndex, {
-      ...(newWorld ? {} : { baseline: snapshot.index }),
-      ...(worldOperation?.kind === 'create_world' && worldOperation.edge !== undefined
-        ? { edgeMode: worldOperation.edge.mode ?? 'sea-band' }
-        : {}),
-      ...(signal === undefined ? {} : { signal }),
-      ...(plan.expectedChangedBounds === undefined
-        ? {}
-        : { expectedChangedBounds: plan.expectedChangedBounds }),
-    });
+    // A world that failed to generate left the workspace map unchanged; validating that map would
+    // report only its old findings, so the generation blocker stands alone.
+    const worldFailed =
+      worldOperation !== undefined &&
+      (plan.blockers.some(({ operationId }) => operationId === worldOperation.id) ||
+        synthesisCheck);
+    const rawValidation: MapValidationResult = worldFailed
+      ? { passed: true, diagnostics: [], checks: [] }
+      : await validateMapAsync(plan.finalIndex, {
+          ...(newWorld ? {} : { baseline: snapshot.index }),
+          ...(worldOperation?.kind === 'create_world' && worldOperation.edge !== undefined
+            ? { edgeMode: worldOperation.edge.mode ?? 'sea-band' }
+            : {}),
+          ...(signal === undefined ? {} : { signal }),
+          ...(plan.expectedChangedBounds === undefined
+            ? {}
+            : { expectedChangedBounds: plan.expectedChangedBounds }),
+        });
     const attributedValidation: MapValidationResult = {
       ...rawValidation,
       diagnostics: attributeMapValidationDiagnostics({
@@ -1488,6 +1500,43 @@ export class AgentNudger {
       prepared,
     );
     return { ...diff, ...planned };
+  }
+
+  /**
+   * Run the relief and river synthesis of every `create_world` with `synthesisCheck` and report
+   * the model's rivers that cannot reach their mouths, without generating or writing anything.
+   */
+  async checkSynthesis(input: MapPlanInput): Promise<{
+    plan: MapOperationPlan;
+    geography: PreparedGeography[];
+    diagnostics: Diagnostic[];
+    artifacts: StoredArtifact[];
+    filesScanned: string[];
+  }> {
+    const prepared = await this.prepareOperations(
+      input.workspaceId,
+      input.operations,
+      input.principal,
+      input.signal,
+      true,
+    );
+    const writes = await this.geographyArtifacts(prepared, input.signal, new RenderBudget());
+    const artifacts = await this.artifacts.withAtomicChunkedWrites(
+      this.resolver.get(input.workspaceId, input.principal),
+      writes,
+      (stored) => Promise.resolve([...stored]),
+      input.signal,
+    );
+    return {
+      plan: prepared.plan,
+      geography: prepared.geography,
+      diagnostics: sortDiagnostics([
+        ...prepared.plan.diagnostics,
+        ...prepared.geography.flatMap(({ diagnostics }) => diagnostics),
+      ]),
+      artifacts,
+      filesScanned: mapSourceEvidence(prepared.snapshot).map(({ displayPath }) => displayPath),
+    };
   }
 
   /** Build validated offline evidence without planning or applying a write transaction. */

@@ -55,7 +55,11 @@ import {
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
 import type { ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
-import { synthesizeTerrain, type SynthesizedTerrain } from './relief/terrain-synthesis.js';
+import {
+  checkTerrainRivers,
+  synthesizeTerrain,
+  type SynthesizedTerrain,
+} from './relief/terrain-synthesis.js';
 import type { ReliefSettings } from './relief/macro-relief.js';
 import { assignUnreachedRealmLand, resolveRealmRules } from './world-realms.js';
 
@@ -744,6 +748,11 @@ export interface WorldGenerationOptions {
    * between rows and stop with its reason.
    */
   signal?: AbortSignal | undefined;
+  /**
+   * Stop after the geography's relief and river hydrology and return their notes without files
+   * (`create_world.synthesisCheck`, ADR 0070). A river that cannot reach its mouth throws.
+   */
+  riverCheck?: boolean;
 }
 
 export function generateWorld(
@@ -854,6 +863,48 @@ export function generateWorld(
   let seamRepaired = geography !== undefined ? repairSeamCorners(surface.kind, width, height) : [];
   // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
   // keeps the original elevation classes and drainage, byte for byte.
+  if (options.riverCheck === true && geography !== undefined) {
+    const checked = checkTerrainRivers({
+      geography,
+      width,
+      height,
+      seed: spec.seed,
+      kind: surface.kind,
+      relief: spec.relief,
+      rivers: { density: spec.riverDensity, count: spec.riverCount },
+      adjustHeight:
+        edge.mode === 'rim'
+          ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+          : undefined,
+      signal: options.signal,
+    });
+    for (const note of checked) {
+      if (note.severity === 'error') throw new ServiceError(note.code, note.message, note.details);
+      notes.push({
+        code: note.code,
+        severity: note.severity,
+        message: note.message,
+        ...(note.details === undefined ? {} : { details: note.details }),
+      });
+    }
+    return {
+      files: [],
+      warnings: [],
+      notes,
+      summary: {
+        width,
+        height,
+        landProvinces: 0,
+        seaProvinces: 0,
+        lakeProvinces: 0,
+        states: 0,
+        landRegions: 0,
+        seaRegions: 0,
+        countries: spec.countries.length,
+        rivers: 0,
+      },
+    };
+  }
   const synthesized =
     geography === undefined
       ? undefined

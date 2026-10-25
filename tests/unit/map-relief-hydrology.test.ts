@@ -9,6 +9,7 @@ import {
   synthesizeTerrain,
   type SynthesizedTerrain,
 } from '../../src/hoi4_agent_tools/map/relief/index.js';
+import { checkTerrainRivers } from '../../src/hoi4_agent_tools/map/relief/terrain-synthesis.js';
 import type { GeographyModelInput } from '../../src/hoi4_agent_tools/schemas/geography.js';
 import { reliefGeography } from '../helpers/relief-fixture.js';
 import { checkRiverBitmap, percentile } from '../helpers/relief-checks.js';
@@ -59,8 +60,8 @@ function failure(run: () => unknown): {
 }
 
 describe('named rivers that cannot reach their mouth', () => {
-  it('refuses a tributary that would have to climb over a range', () => {
-    // A wall from sea to sea splits the land; a brook west of it joins a river east of it.
+  it('carves a drawn river through a range and reports where', () => {
+    // A wall from sea to sea splits the land; two brooks west of it join a river east of it.
     const model: GeographyModelInput = {
       version: 1,
       seas: [
@@ -104,13 +105,167 @@ describe('named rivers that cannot reach their mouth', () => {
       rivers: [
         { id: 'east', source: [0.7, 0.5], mouth: { sea: 'sea' }, size: 3 },
         { id: 'west_brook', source: [0.3, 0.5], mouth: { river: 'east' }, size: 1 },
+        { id: 'north_brook', source: [0.3, 0.3], mouth: { river: 'east' }, size: 1 },
+      ],
+    };
+    const { terrain } = synthesize(resolve(model));
+    const crossings = terrain.notes.filter(({ code }) => code === 'MAP_RIVER_CARVED_CROSSING');
+    expect(crossings.map(({ details }) => details?.riverId).sort()).toEqual([
+      'north_brook',
+      'west_brook',
+    ]);
+    for (const crossing of crossings) {
+      expect(crossing.severity).toBe('warning');
+      expect(crossing.details?.climb as number).toBeGreaterThan(22);
+      const divide = crossing.details?.divide as { x: number; y: number; range?: string };
+      expect(Math.abs(divide.x - 512)).toBeLessThan(40);
+      expect(divide.range).toBe('divide');
+      expect(crossing.message).toContain('carved');
+    }
+    // Both brooks are drawn, and their beds never rise downstream: the gorge is cut to the bed.
+    for (const id of ['west_brook', 'north_brook']) {
+      const path = terrain.riverPaths.find((entry) => entry.id === id)!;
+      let lowest = Infinity;
+      let rise = 0;
+      for (const pixel of path.pixels) {
+        const value = terrain.heights[pixel]!;
+        if (value < lowest) lowest = value;
+        else rise = Math.max(rise, value - lowest);
+      }
+      expect(rise).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('carves a drawn river through the cone of a volcano', () => {
+    const model: GeographyModelInput = {
+      version: 1,
+      seas: [
+        {
+          id: 'sea',
+          polygons: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          ],
+        },
+      ],
+      lands: [
+        {
+          id: 'land',
+          polygons: [
+            [
+              [0.1, 0.2],
+              [0.9, 0.2],
+              [0.9, 0.8],
+              [0.1, 0.8],
+            ],
+          ],
+        },
+      ],
+      volcanoes: [{ id: 'cone', at: [0.5, 0.5], radius: 0.07, peak: 0.95 }],
+      rivers: [
+        {
+          id: 'through',
+          source: [0.25, 0.5],
+          via: [[0.5, 0.52]],
+          mouth: { sea: 'sea' },
+          size: 2,
+        },
+      ],
+    };
+    const { terrain } = synthesize(resolve(model));
+    const crossing = terrain.notes.find(({ code }) => code === 'MAP_RIVER_CARVED_CROSSING');
+    expect(crossing?.details).toMatchObject({
+      riverId: 'through',
+      divide: { volcano: 'cone' },
+    });
+    expect(terrain.rivers.map(({ id }) => id)).toContain('through');
+  });
+
+  it('reports every river with an impossible course, and what blocks its tributaries', () => {
+    // Two lands: brooks on the west land cannot join a river that lies on the east land.
+    const model: GeographyModelInput = {
+      version: 1,
+      seas: [
+        {
+          id: 'sea',
+          polygons: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ],
+          ],
+        },
+      ],
+      lands: [
+        {
+          id: 'west',
+          polygons: [
+            [
+              [0.1, 0.2],
+              [0.4, 0.2],
+              [0.4, 0.8],
+              [0.1, 0.8],
+            ],
+          ],
+        },
+        {
+          id: 'east',
+          polygons: [
+            [
+              [0.6, 0.2],
+              [0.9, 0.2],
+              [0.9, 0.8],
+              [0.6, 0.8],
+            ],
+          ],
+        },
+      ],
+      rivers: [
+        { id: 'east_river', source: [0.75, 0.5], mouth: { sea: 'sea' }, size: 3 },
+        { id: 'west_brook', source: [0.2, 0.5], mouth: { river: 'east_river' }, size: 1 },
+        { id: 'north_brook', source: [0.2, 0.3], mouth: { river: 'east_river' }, size: 1 },
+        { id: 'west_rill', source: [0.15, 0.6], mouth: { river: 'west_brook' }, size: 1 },
       ],
     };
     const error = failure(() => synthesize(resolve(model)));
     expect(error.code).toBe('MAP_RIVER_UNREACHABLE_MOUTH');
-    expect(error.details?.riverId).toBe('west_brook');
-    expect(error.details?.climb).toBeGreaterThan(22);
-    expect(error.message).toContain('climb');
+    expect(error.message).toContain('3 rivers cannot reach their mouths');
+    const rivers = error.details?.rivers as Array<Record<string, unknown>>;
+    expect(rivers.map(({ riverId }) => riverId).sort()).toEqual([
+      'north_brook',
+      'west_brook',
+      'west_rill',
+    ]);
+    expect(rivers.find(({ riverId }) => riverId === 'west_brook')?.reason).toContain(
+      'not reachable over land',
+    );
+    // A tributary of a river that fails is reported as blocked by it.
+    expect(rivers.find(({ riverId }) => riverId === 'west_rill')?.blockedBy).toBe('west_brook');
+    // The first failure keeps the single-river fields of earlier releases.
+    expect(error.details?.riverId).toBeDefined();
+  });
+
+  it('checks the rivers without building the heights or the river bitmap', () => {
+    const geography = resolve(reliefGeography());
+    const kind = rasterizeGeographyKind(geography, {
+      width: WIDTH,
+      height: HEIGHT,
+      seed: SEED,
+    });
+    const notes = checkTerrainRivers({
+      geography,
+      width: WIDTH,
+      height: HEIGHT,
+      seed: SEED,
+      kind,
+    });
+    expect(notes.every(({ severity }) => severity !== 'error')).toBe(true);
   });
 
   it('refuses a river whose mouth lies on another landmass', () => {

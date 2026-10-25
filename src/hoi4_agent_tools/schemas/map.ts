@@ -1093,6 +1093,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe(
           'Geography model version 1, inline: seas, lands, ranges, passes, volcanoes, plateaus, rivers, lakes, biomes, straits, sites and climate in normalized 0..1 world coordinates. Use geographyPath for models over a few hundred vertices. With preview:true it returns a model overlay and map-geography-report.json. Without preview the world is built from it: relief (ranges with passes, volcanoes, plateaus), rivers and lakes are synthesised; biomes, climate and fertility are not yet, and a model that declares them is blocked with MAP_GEOGRAPHY_SYNTHESIS_UNAVAILABLE.',
         ),
+      synthesisCheck: z
+        .boolean()
+        .optional()
+        .describe(
+          'With preview:true and a geography: run only the relief and river synthesis and report every river that cannot reach its mouth, with the divide that stops it, without writing or planning the map. Refused without preview or without a geography.',
+        ),
       geographyPath: geographyPathSchema
         .optional()
         .describe(

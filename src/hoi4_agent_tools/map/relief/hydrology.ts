@@ -369,6 +369,75 @@ function climbOf(height: Float32Array, cells: readonly number[]): number {
   return climb;
 }
 
+/** The cell where a route rises most above its lowest earlier point: the divide it must cross. */
+function climbDivide(
+  height: Float32Array,
+  cells: readonly number[],
+): { climb: number; cell: number } {
+  let lowest = Infinity;
+  let climb = 0;
+  let divide = cells[0] ?? 0;
+  for (const cell of cells) {
+    const value = height[cell]!;
+    if (value < lowest) lowest = value;
+    else if (value - lowest > climb) {
+      climb = value - lowest;
+      divide = cell;
+    }
+  }
+  return { climb, cell: divide };
+}
+
+/** A model range running close to a point, in map-width units, or undefined when none does. */
+function nearestRange(
+  geography: ResolvedGeography,
+  x: number,
+  y: number,
+  aspect: number,
+): { id: string; distance: number } | undefined {
+  let best: { id: string; distance: number } | undefined;
+  for (const range of geography.ranges) {
+    const { xs, ys } = range.path;
+    for (let index = 0; index < xs.length; index += 1) {
+      const next = index + 1 < xs.length ? index + 1 : index;
+      const ax = xs[index]!;
+      const ay = ys[index]! * aspect;
+      const bx = xs[next]!;
+      const by = ys[next]! * aspect;
+      const px = x - ax;
+      const py = y * aspect - ay;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const length = dx * dx + dy * dy;
+      const t = length === 0 ? 0 : Math.max(0, Math.min(1, (px * dx + py * dy) / length));
+      const distance = Math.hypot(px - t * dx, py - t * dy);
+      if (
+        best === undefined ||
+        distance < best.distance ||
+        (distance === best.distance && range.id < best.id)
+      )
+        best = { id: range.id, distance };
+    }
+  }
+  return best;
+}
+
+/** The volcano nearest a point, and whether the point lies on its cone (within 1.3 radii). */
+function nearestVolcano(
+  geography: ResolvedGeography,
+  x: number,
+  y: number,
+  aspect: number,
+): { id: string; distance: number; inside: boolean } | undefined {
+  let best: { id: string; distance: number; inside: boolean } | undefined;
+  for (const volcano of geography.volcanoes) {
+    const distance = Math.hypot(x - volcano.at.x, (y - volcano.at.y) * aspect);
+    if (best === undefined || distance < best.distance)
+      best = { id: volcano.id, distance, inside: distance <= volcano.radius * 1.3 };
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 function fail(code: string, message: string, details: Record<string, unknown>): never {
@@ -383,6 +452,13 @@ function onEdge(mw: number, mh: number, cell: number): boolean {
   const x = cell % mw;
   const y = (cell - x) / mw;
   return x === 0 || y === 0 || x === mw - 1 || y === mh - 1;
+}
+
+/** A named river that could not reach its mouth, with the divide that stopped it when it has one. */
+interface RiverFailure extends Record<string, unknown> {
+  riverId: string;
+  reason: string;
+  blockedBy?: string;
 }
 
 interface NamedContext {
@@ -566,9 +642,13 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
     (a, b) => b.size - a.size || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   );
   const lakeIndex = new Map(geography.lakes.map((lake, index) => [lake.id, index + 1]));
+  // Every river that cannot reach its mouth is collected, so one run shows all of them.
+  const failures: RiverFailure[] = [];
+  const failed = new Set<string>();
   while (pending.length > 0) {
     const ready = pending.filter(
-      (river) => river.mouth.type !== 'river' || done.has(river.mouth.id),
+      (river) =>
+        river.mouth.type !== 'river' || done.has(river.mouth.id) || failed.has(river.mouth.id),
     );
     if (ready.length === 0)
       fail('MAP_RIVER_CYCLE', 'Rivers flow into each other in a cycle', {
@@ -578,220 +658,291 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
       context.signal?.throwIfAborted();
       pending.splice(pending.indexOf(river), 1);
       const ownId = routed.length + 1;
-      let start: number;
-      function unreachable(reason: string, details: Record<string, unknown> = {}): never {
-        return fail(
-          'MAP_RIVER_UNREACHABLE_MOUTH',
-          `River ${river.id} cannot reach its mouth: ${reason}`,
-          { riverId: river.id, ...details },
-        );
+      if (river.mouth.type === 'river' && failed.has(river.mouth.id)) {
+        failed.add(river.id);
+        failures.push({
+          riverId: river.id,
+          reason: `its mouth river ${river.mouth.id} cannot be routed`,
+          blockedBy: river.mouth.id,
+        });
+        continue;
       }
-      // The first via point or the mouth point steers the choice of a lake's outlet.
-      const firstVia = river.via[0];
-      if (river.source.type === 'lake') {
-        const index = lakeIndex.get(river.source.id)!;
-        const lake = geography.get('lake', river.source.id)!;
-        const x0 = Math.max(0, Math.floor(lake.area.bounds.x0 * mw) - 2);
-        const x1 = Math.min(mw - 1, Math.ceil(lake.area.bounds.x1 * mw) + 2);
-        const y0 = Math.max(0, Math.floor(lake.area.bounds.y0 * mh) - 2);
-        const y1 = Math.min(mh - 1, Math.ceil(lake.area.bounds.y1 * mh) + 2);
-        let best = -1;
-        let bestScore = Infinity;
-        for (let y = y0; y <= y1; y += 1)
-          for (let x = x0; x <= x1; x += 1) {
-            const cell = y * mw + x;
-            if (!isLandCell(kind, cell) || occupant[cell] !== 0) continue;
-            let rim = false;
-            for (let n = 0; n < 8 && !rim; n += 1) {
-              const nx = x + NEIGHBOUR_DX[n]!;
-              const ny = y + NEIGHBOUR_DY[n]!;
-              if (nx >= 0 && ny >= 0 && nx < mw && ny < mh && lakeOf[ny * mw + nx] === index)
-                rim = true;
-            }
-            if (!rim) continue;
-            const score =
-              firstVia === undefined
-                ? conditioned[cell]!
-                : (x + 0.5 - firstVia.x * mw) * (x + 0.5 - firstVia.x * mw) +
-                  (y + 0.5 - firstVia.y * mh) * (y + 0.5 - firstVia.y * mh);
-            if (score < bestScore) {
-              bestScore = score;
-              best = cell;
-            }
-          }
-        if (best < 0) unreachable(`its source lake ${river.source.id} has no free shore`);
-        start = best;
-      } else {
-        if (river.source.type !== 'point')
+      try {
+        let start: number;
+        function unreachable(reason: string, details: Record<string, unknown> = {}): never {
           return fail(
-            'MAP_RIVER_SOURCE_NOT_LAND',
-            `River ${river.id} must start at a point or a lake`,
-            {
-              riverId: river.id,
-            },
+            'MAP_RIVER_UNREACHABLE_MOUTH',
+            `River ${river.id} cannot reach its mouth: ${reason}`,
+            { riverId: river.id, ...details },
           );
-        start = landCellAt(macro, river.source.x, river.source.y, 8);
-        if (start < 0)
-          fail(
-            'MAP_RIVER_SOURCE_NOT_LAND',
-            `The source of river ${river.id} has no land within reach`,
-            {
-              riverId: river.id,
-            },
-          );
-        if (occupant[start] !== 0) {
-          let free = -1;
-          for (let r = 1; r <= 3 && free < 0; r += 1)
-            for (let dy = -r; dy <= r && free < 0; dy += 1)
-              for (let dx = -r; dx <= r && free < 0; dx += 1) {
-                const x = (start % mw) + dx;
-                const y = Math.floor(start / mw) + dy;
-                if (x < 0 || y < 0 || x >= mw || y >= mh) continue;
-                const cell = y * mw + x;
-                if (isLandCell(kind, cell) && occupant[cell] === 0) free = cell;
+        }
+        // The first via point or the mouth point steers the choice of a lake's outlet.
+        const firstVia = river.via[0];
+        if (river.source.type === 'lake') {
+          const index = lakeIndex.get(river.source.id)!;
+          const lake = geography.get('lake', river.source.id)!;
+          const x0 = Math.max(0, Math.floor(lake.area.bounds.x0 * mw) - 2);
+          const x1 = Math.min(mw - 1, Math.ceil(lake.area.bounds.x1 * mw) + 2);
+          const y0 = Math.max(0, Math.floor(lake.area.bounds.y0 * mh) - 2);
+          const y1 = Math.min(mh - 1, Math.ceil(lake.area.bounds.y1 * mh) + 2);
+          let best = -1;
+          let bestScore = Infinity;
+          for (let y = y0; y <= y1; y += 1)
+            for (let x = x0; x <= x1; x += 1) {
+              const cell = y * mw + x;
+              if (!isLandCell(kind, cell) || occupant[cell] !== 0) continue;
+              let rim = false;
+              for (let n = 0; n < 8 && !rim; n += 1) {
+                const nx = x + NEIGHBOUR_DX[n]!;
+                const ny = y + NEIGHBOUR_DY[n]!;
+                if (nx >= 0 && ny >= 0 && nx < mw && ny < mh && lakeOf[ny * mw + nx] === index)
+                  rim = true;
               }
-          if (free < 0) unreachable('its source is already taken by another river');
-          start = free;
-        }
-      }
-      const cells: number[] = [start];
-      occupant[start] = ownId;
-      let current = start;
-      const append = (leg: number[]): void => {
-        for (let index = 1; index < leg.length; index += 1) {
-          cells.push(leg[index]!);
-          occupant[leg[index]!] = ownId;
-        }
-        current = cells[cells.length - 1]!;
-      };
-      for (const via of river.via) {
-        const target = landCellAt(macro, via.x, via.y, 6);
-        if (target < 0 || target === current || occupant[target] !== 0) continue;
-        const leg = router.route({ start: current, goalCell: target });
-        if (leg === undefined)
-          unreachable('a via point cannot be reached over land', { via: { x: via.x, y: via.y } });
-        append(leg.cells);
-      }
-      let joinCell = -1;
-      let parentId: string | undefined;
-      let endsIn: RiverMouthKind = 'sea';
-      const mouth = river.mouth;
-      let final: { cells: number[]; joined: number } | undefined;
-      // A river that has run a while keeps its general direction toward an open "sea" mouth.
-      let bias: { dx: number; dy: number; weight: number } | undefined;
-      if (cells.length >= 12) {
-        const dx = (current % mw) - (start % mw);
-        const dy = Math.floor(current / mw) - Math.floor(start / mw);
-        const length = Math.sqrt(dx * dx + dy * dy);
-        if (length >= 8) bias = { dx: dx / length, dy: dy / length, weight: 1.5 };
-      }
-      if (mouth.type === 'sea') {
-        final = router.route({
-          start: current,
-          goalTest: (cell) =>
-            touchesWater(kind, mw, mh, cell, SEA) || onEdge(mw, mh, cell) ? -1 : undefined,
-          ...(bias === undefined ? {} : { bias }),
-        });
-        if (final === undefined) unreachable(`no coast of ${mouth.id} lies on its land`);
-      } else if (mouth.type === 'lake') {
-        const index = lakeIndex.get(mouth.id)!;
-        final = router.route({
-          start: current,
-          goalTest: (cell) => {
-            const x = cell % mw;
-            const y = (cell - x) / mw;
-            for (let n = 0; n < 8; n += 1) {
-              const nx = x + NEIGHBOUR_DX[n]!;
-              const ny = y + NEIGHBOUR_DY[n]!;
-              if (nx >= 0 && ny >= 0 && nx < mw && ny < mh && lakeOf[ny * mw + nx] === index)
-                return -1;
+              if (!rim) continue;
+              const score =
+                firstVia === undefined
+                  ? conditioned[cell]!
+                  : (x + 0.5 - firstVia.x * mw) * (x + 0.5 - firstVia.x * mw) +
+                    (y + 0.5 - firstVia.y * mh) * (y + 0.5 - firstVia.y * mh);
+              if (score < bestScore) {
+                bestScore = score;
+                best = cell;
+              }
             }
-            return undefined;
-          },
-        });
-        if (final === undefined) unreachable(`lake ${mouth.id} is not reachable over land`);
-        endsIn = 'lake';
-      } else if (mouth.type === 'river') {
-        const parentIndex = routed.findIndex((route) => route.river.id === mouth.id);
-        const parentOwner = parentIndex + 1;
-        final = router.route({
-          start: current,
-          goalTest: (cell) => {
-            const x = cell % mw;
-            const y = (cell - x) / mw;
-            for (let n = 0; n < 8; n += 1) {
-              const nx = x + NEIGHBOUR_DX[n]!;
-              const ny = y + NEIGHBOUR_DY[n]!;
-              if (nx < 0 || ny < 0 || nx >= mw || ny >= mh) continue;
-              if (occupant[ny * mw + nx] === parentOwner) return ny * mw + nx;
-            }
-            return undefined;
-          },
-        });
-        if (final === undefined) unreachable(`river ${mouth.id} is not reachable over land`);
-        parentId = mouth.id;
-        joinCell = final.joined;
-        endsIn = 'river';
-      } else {
-        const target = landCellAt(macro, mouth.x, mouth.y, 8);
-        if (target < 0) unreachable('its mouth lies far from any land');
-        final =
-          target === current
-            ? { cells: [current], joined: -1 }
-            : router.route({ start: current, goalCell: target });
-        if (final === undefined) unreachable('its mouth cannot be reached over land');
-      }
-      append(final.cells);
-      if (mouth.type === 'point') {
-        // Past a mouth drawn on land, the river follows the conditioned flow to the water.
-        let guard = 4096;
-        while (
-          guard-- > 0 &&
-          !touchesWater(kind, mw, mh, current, SEA) &&
-          !touchesWater(kind, mw, mh, current, LAKE) &&
-          !onEdge(mw, mh, current)
-        ) {
-          const next = flood.receiver[current]!;
-          if (next < 0 || occupant[next] !== 0) break;
-          cells.push(next);
-          occupant[next] = ownId;
-          current = next;
+          if (best < 0) unreachable(`its source lake ${river.source.id} has no free shore`);
+          start = best;
+        } else {
+          if (river.source.type !== 'point')
+            return fail(
+              'MAP_RIVER_SOURCE_NOT_LAND',
+              `River ${river.id} must start at a point or a lake`,
+              {
+                riverId: river.id,
+              },
+            );
+          start = landCellAt(macro, river.source.x, river.source.y, 8);
+          if (start < 0)
+            fail(
+              'MAP_RIVER_SOURCE_NOT_LAND',
+              `The source of river ${river.id} has no land within reach`,
+              {
+                riverId: river.id,
+              },
+            );
+          if (occupant[start] !== 0) {
+            let free = -1;
+            for (let r = 1; r <= 3 && free < 0; r += 1)
+              for (let dy = -r; dy <= r && free < 0; dy += 1)
+                for (let dx = -r; dx <= r && free < 0; dx += 1) {
+                  const x = (start % mw) + dx;
+                  const y = Math.floor(start / mw) + dy;
+                  if (x < 0 || y < 0 || x >= mw || y >= mh) continue;
+                  const cell = y * mw + x;
+                  if (isLandCell(kind, cell) && occupant[cell] === 0) free = cell;
+                }
+            if (free < 0) unreachable('its source is already taken by another river');
+            start = free;
+          }
         }
-        endsIn = touchesWater(kind, mw, mh, current, LAKE)
-          ? 'lake'
-          : touchesWater(kind, mw, mh, current, SEA)
-            ? 'sea'
-            : 'edge';
-      } else if (mouth.type === 'sea')
-        endsIn = touchesWater(kind, mw, mh, current, SEA) ? 'sea' : 'edge';
-      cells.splice(
-        0,
-        cells.length,
-        ...meanderRoute(
-          cells,
-          ownId,
-          { occupant, kind, height: conditioned, mw, mh, seed: context.seed },
-          river.id,
-        ),
-      );
-      const climb = climbOf(conditioned, cells);
-      if (climb > MAXIMUM_RIVER_CLIMB)
-        unreachable(
-          `its route would climb ${Math.round(climb)} height units over a divide (the limit is ${MAXIMUM_RIVER_CLIMB})`,
-          { climb: Math.round(climb) },
+        const cells: number[] = [start];
+        occupant[start] = ownId;
+        let current = start;
+        const append = (leg: number[]): void => {
+          for (let index = 1; index < leg.length; index += 1) {
+            cells.push(leg[index]!);
+            occupant[leg[index]!] = ownId;
+          }
+          current = cells[cells.length - 1]!;
+        };
+        for (const via of river.via) {
+          const target = landCellAt(macro, via.x, via.y, 6);
+          if (target < 0 || target === current || occupant[target] !== 0) continue;
+          const leg = router.route({ start: current, goalCell: target });
+          if (leg === undefined)
+            unreachable('a via point cannot be reached over land', { via: { x: via.x, y: via.y } });
+          append(leg.cells);
+        }
+        let joinCell = -1;
+        let parentId: string | undefined;
+        let endsIn: RiverMouthKind = 'sea';
+        const mouth = river.mouth;
+        let final: { cells: number[]; joined: number } | undefined;
+        // A river that has run a while keeps its general direction toward an open "sea" mouth.
+        let bias: { dx: number; dy: number; weight: number } | undefined;
+        if (cells.length >= 12) {
+          const dx = (current % mw) - (start % mw);
+          const dy = Math.floor(current / mw) - Math.floor(start / mw);
+          const length = Math.sqrt(dx * dx + dy * dy);
+          if (length >= 8) bias = { dx: dx / length, dy: dy / length, weight: 1.5 };
+        }
+        if (mouth.type === 'sea') {
+          final = router.route({
+            start: current,
+            goalTest: (cell) =>
+              touchesWater(kind, mw, mh, cell, SEA) || onEdge(mw, mh, cell) ? -1 : undefined,
+            ...(bias === undefined ? {} : { bias }),
+          });
+          if (final === undefined) unreachable(`no coast of ${mouth.id} lies on its land`);
+        } else if (mouth.type === 'lake') {
+          const index = lakeIndex.get(mouth.id)!;
+          final = router.route({
+            start: current,
+            goalTest: (cell) => {
+              const x = cell % mw;
+              const y = (cell - x) / mw;
+              for (let n = 0; n < 8; n += 1) {
+                const nx = x + NEIGHBOUR_DX[n]!;
+                const ny = y + NEIGHBOUR_DY[n]!;
+                if (nx >= 0 && ny >= 0 && nx < mw && ny < mh && lakeOf[ny * mw + nx] === index)
+                  return -1;
+              }
+              return undefined;
+            },
+          });
+          if (final === undefined) unreachable(`lake ${mouth.id} is not reachable over land`);
+          endsIn = 'lake';
+        } else if (mouth.type === 'river') {
+          const parentIndex = routed.findIndex((route) => route.river.id === mouth.id);
+          const parentOwner = parentIndex + 1;
+          final = router.route({
+            start: current,
+            goalTest: (cell) => {
+              const x = cell % mw;
+              const y = (cell - x) / mw;
+              for (let n = 0; n < 8; n += 1) {
+                const nx = x + NEIGHBOUR_DX[n]!;
+                const ny = y + NEIGHBOUR_DY[n]!;
+                if (nx < 0 || ny < 0 || nx >= mw || ny >= mh) continue;
+                if (occupant[ny * mw + nx] === parentOwner) return ny * mw + nx;
+              }
+              return undefined;
+            },
+          });
+          if (final === undefined) unreachable(`river ${mouth.id} is not reachable over land`);
+          parentId = mouth.id;
+          joinCell = final.joined;
+          endsIn = 'river';
+        } else {
+          const target = landCellAt(macro, mouth.x, mouth.y, 8);
+          if (target < 0) unreachable('its mouth lies far from any land');
+          final =
+            target === current
+              ? { cells: [current], joined: -1 }
+              : router.route({ start: current, goalCell: target });
+          if (final === undefined) unreachable('its mouth cannot be reached over land');
+        }
+        append(final.cells);
+        if (mouth.type === 'point') {
+          // Past a mouth drawn on land, the river follows the conditioned flow to the water.
+          let guard = 4096;
+          while (
+            guard-- > 0 &&
+            !touchesWater(kind, mw, mh, current, SEA) &&
+            !touchesWater(kind, mw, mh, current, LAKE) &&
+            !onEdge(mw, mh, current)
+          ) {
+            const next = flood.receiver[current]!;
+            if (next < 0 || occupant[next] !== 0) break;
+            cells.push(next);
+            occupant[next] = ownId;
+            current = next;
+          }
+          endsIn = touchesWater(kind, mw, mh, current, LAKE)
+            ? 'lake'
+            : touchesWater(kind, mw, mh, current, SEA)
+              ? 'sea'
+              : 'edge';
+        } else if (mouth.type === 'sea')
+          endsIn = touchesWater(kind, mw, mh, current, SEA) ? 'sea' : 'edge';
+        cells.splice(
+          0,
+          cells.length,
+          ...meanderRoute(
+            cells,
+            ownId,
+            { occupant, kind, height: conditioned, mw, mh, seed: context.seed },
+            river.id,
+          ),
         );
-      routed.push({
-        river,
-        cells,
-        ...(parentId === undefined ? {} : { parentId }),
-        joinCell,
-        endsIn,
-        climb,
-      });
-      done.add(river.id);
+        const climb = climbOf(conditioned, cells);
+        // A drawn river is authoritative over the relief: where its course rises over a divide, the
+        // bed is burned to a monotone descent below, which cuts a gorge through the cone, foothill
+        // or range slope (ADR 0071). Each such crossing is reported with its location.
+        if (climb > MAXIMUM_RIVER_CLIMB) {
+          const divide = climbDivide(conditioned, cells);
+          const cx = (divide.cell % mw) + 0.5;
+          const cy = Math.floor(divide.cell / mw) + 0.5;
+          const aspect = mh / mw;
+          const range = nearestRange(geography, cx / mw, cy / mh, aspect);
+          const volcano = nearestVolcano(geography, cx / mw, cy / mh, aspect);
+          notes.push({
+            code: 'MAP_RIVER_CARVED_CROSSING',
+            severity: 'warning',
+            message: `River ${river.id} crosses a divide ${Math.round(climb)} height units above its bed near (${Math.floor(cx * 2)}, ${Math.floor(cy * 2)}); its valley is carved through it${
+              volcano?.inside === true
+                ? ` (the slope of volcano ${volcano.id})`
+                : range !== undefined && range.distance <= 0.06
+                  ? ` (the range ${range.id})`
+                  : ''
+            }`,
+            details: {
+              riverId: river.id,
+              climb: Math.round(climb),
+              limit: MAXIMUM_RIVER_CLIMB,
+              divide: {
+                x: Math.floor(cx * 2),
+                y: Math.floor(cy * 2),
+                height: Math.round(conditioned[divide.cell]!),
+                ...(range === undefined ? {} : { nearestRange: range.id }),
+                ...(range !== undefined && range.distance <= 0.06
+                  ? { range: range.id, rangeDistance: Math.round(range.distance * 1000) / 1000 }
+                  : {}),
+                ...(volcano?.inside === true ? { volcano: volcano.id } : {}),
+              },
+            },
+          });
+        }
+        routed.push({
+          river,
+          cells,
+          ...(parentId === undefined ? {} : { parentId }),
+          joinCell,
+          endsIn,
+          climb,
+        });
+        done.add(river.id);
+      } catch (error) {
+        if (!(error instanceof ServiceError) || error.code !== 'MAP_RIVER_UNREACHABLE_MOUTH')
+          throw error;
+        // Release what the failed route took so later rivers see the ground free.
+        for (let cell = 0; cell < occupant.length; cell += 1)
+          if (occupant[cell] === ownId) occupant[cell] = 0;
+        failed.add(river.id);
+        failures.push({
+          riverId: river.id,
+          reason: error.message.replace(`River ${river.id} cannot reach its mouth: `, ''),
+          ...error.details,
+        });
+      }
     }
   }
   void notes;
+  if (failures.length > 0) {
+    const first = failures[0]!;
+    fail(
+      'MAP_RIVER_UNREACHABLE_MOUTH',
+      failures.length === 1
+        ? `River ${first.riverId} cannot reach its mouth: ${first.reason}`
+        : `${failures.length} rivers cannot reach their mouths: ${failures
+            .slice(0, 12)
+            .map(({ riverId }) => riverId)
+            .join(
+              ', ',
+            )}${failures.length > 12 ? ', ...' : ''}; the details list each reason and divide`,
+      // The first failure keeps the fields earlier releases returned for a single river.
+      { ...first, rivers: failures },
+    );
+  }
   return routed;
 }
 
