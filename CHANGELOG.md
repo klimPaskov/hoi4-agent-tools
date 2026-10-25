@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.6.1 - 2026-10-26
+
+- Stop flagging `constant:<category>.<key>` script-constant reads as scoped temporary-variable reads (`KNOWN_MISTAKE_TEMP_VARIABLE_SCOPE_PREFIX`).
+- Make declared passes saddles whatever else stands there (ADR 0072). After the macro relief is composed, the heights in a pass's corridor are capped at the pass's saddle level, so a volcano cone, plateau or neighbouring feature that overlaps a pass no longer fills the gap and no longer fails the world with `MAP_PASS_NOT_LOWER`. Another range's body is left alone. `create_world.synthesisCheck` now also reports `MAP_PASS_NOT_LOWER`, so a preview catches what the write would block on. Models whose passes were refused now write; worlds with no overlapping feature on a pass are unchanged.
+
 ## 4.6.0 - 2026-10-25
 
 - Add the territory assignment service (ADR 0060). `assign_territory` grows up to 512 countries over the states or provinces of a map from capital and anchor seeds (state, province or pixel) with forced and blocked land, preferred strategic regions, subjects inside an overlord, merges, island policies, size targets by weight, extra cores and claims, and writes owner, controller, cores and claims. Borders follow rivers, ranges, lake shores and terrain changes (a shortest-path growth with barrier-weighted steps, size balancing, a corridor for cut-off seeds and a local search that shortens the artificial border); the result reports sizes against targets and the same seeds grown on distance alone. With `unit: "province"` the states a border cuts are regrouped in one pass, conserving population, resources and buildings exactly. `repartition_states` regroups the states of chosen owners along natural lines, and `update_states` edits up to 5,000 states in one rewrite. New diagnostics `MAP_TERRITORY_*`.
