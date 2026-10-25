@@ -1833,6 +1833,23 @@ export class AgentNudger {
     writes.push(...(await this.geographyArtifacts(prepared, options.signal, budget)));
     for (const [ordinal, imported] of prepared.imports.entries())
       writes.push(...(await buildImportArtifacts(imported, ordinal)));
+    if (plan.worldOutputs !== undefined)
+      writes.push({
+        name: 'map-world-outputs.json',
+        mimeType: 'application/json',
+        content: `${canonicalJson({ schemaVersion: 1, worlds: plan.worldOutputs.map(({ realms: _realms, ...outputs }) => outputs) })}\n`,
+        provenance,
+      });
+    const realmWorlds = (plan.worldOutputs ?? []).flatMap(({ operationId, realms }) =>
+      realms === undefined ? [] : [{ operationId, ...realms }],
+    );
+    if (realmWorlds.length > 0)
+      writes.push({
+        name: 'map-world-realms.json',
+        mimeType: 'application/json',
+        content: `${canonicalJson({ schemaVersion: 1, worlds: realmWorlds })}\n`,
+        provenance,
+      });
     const generatedWorlds = generatedWorldOperationIds(plan);
     if (generatedWorlds.size > 0)
       writes.push(
