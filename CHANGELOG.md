@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Add the shared Rust HOI4 engine in `engine/` (ADR 0074): a lossless parser that round-trips all 7,717 vanilla 1.19.3.0 script and localisation files byte for byte, a symbol index over the game, DLC folders, dependencies and the mod in load order, a reference closure that reports every reference as resolved, unresolved or unknown with coverage per kind, lints whose vocabulary is read from the installed game's documentation, an override and `replace_path` audit that reports dropped definitions and `on_actions` hooks, a findings baseline that fails only on new findings, and the `hoi4-engine` command for the modding kit's `check.py`. Harvested from Hagane Studio with written permission: span repair plans, finding deltas, the dead-flag and DLC rules and a draw.io focus importer (`engine/PROVENANCE.md`). The CWTools MD Edition spike is in `docs/research/cwtools-md-edition-spike.md`. No MCP tool uses the engine yet, and the npm package is unchanged.
 - Raise the pinned overrides of three transitive dependencies to their fixed releases, clearing every `npm audit --omit=dev` advisory: `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp), `hono` 4.13.13 (GHSA-5r4p-p66f-jhc7) and `ip-address` 10.7.4 (GHSA-rxp7-6hxx-x8q5). No source or schema change.
 
 ## 4.6.1 - 2026-10-26

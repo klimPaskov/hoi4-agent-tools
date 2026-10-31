@@ -1,10 +1,11 @@
 # Project Instructions
 
-HOI4 Agent Tools is a public Model Context Protocol server for coding agents that analyze event chains and technology trees and create or clean focus trees, scripted GUIs, and maps in external Hearts of Iron IV mods. The MCP server is the product surface; do not add a dashboard, interactive editor, or gameplay-tool CLI.
+HOI4 Agent Tools is a public Model Context Protocol server for coding agents that analyze event chains and technology trees and create or clean focus trees, scripted GUIs, and maps in external Hearts of Iron IV mods. The MCP server is the product surface; do not add a dashboard, interactive editor, or gameplay-tool CLI. The read-only `hoi4-engine` check command of the shared Rust engine (`engine/`, ADR 0074) is the one command-line tool, for the modding kit's and mods' own checks.
 
 ## Engineering boundaries
 
-- Keep workspace resolution, Clausewitz parsing, indexing, diagnostics, atomic writes, artifacts, diffs, and failure recovery in `src/hoi4_agent_tools/core`.
+- Keep workspace resolution, Clausewitz parsing, indexing, diagnostics, atomic writes, artifacts, diffs, and failure recovery in `src/hoi4_agent_tools/core`. The shared Rust engine in `engine/` (ADR 0074) holds the same responsibilities for its command and for HOI4 Factory; MCP tools move onto it one at a time behind the same names, only when their existing tests pass.
+- In `engine/`, run `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --no-fail-fast`. Every adapted file names its source in its header and in `engine/PROVENANCE.md`. Engine fixtures are synthetic; never copy game or mod files into them.
 - Focus, GUI, map, event, technology, and MCP adapters must call the same typed core services. Transport handlers contain no domain logic.
 - Preserve source bytes when no edit is requested. Preserve comments, ordering, unknown fields, raw blocks, newline style, and detected encoding during targeted edits.
 - Refuse a rewrite when a construct cannot be represented safely.
