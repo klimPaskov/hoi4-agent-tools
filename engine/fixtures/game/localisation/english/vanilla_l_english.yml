@@ -1,0 +1,9 @@
+﻿l_english:
+ vanilla.1.t:0 "Vanilla one"
+ vanilla.1.d:0 "First vanilla event."
+ vanilla.1.a:0 "Fine."
+ vanilla.2.t:0 "Vanilla two"
+ vanilla.2.d:0 "Second vanilla event."
+ vanilla.2.a:0 "Fine."
+ VAN_left:0 "Left"
+ VAN_right:0 "Right"

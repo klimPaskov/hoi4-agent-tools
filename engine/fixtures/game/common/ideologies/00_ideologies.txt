@@ -1,0 +1,12 @@
+ideologies = {
+	communism = {
+		types = {
+			leninism = { }
+		}
+	}
+	fascism = {
+		types = {
+			nazism = { }
+		}
+	}
+}

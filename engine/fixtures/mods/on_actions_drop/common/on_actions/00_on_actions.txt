@@ -1,0 +1,13 @@
+# Copied from the game to add one hook, but the copy no longer has the
+# on_startup event, the on_startup effect or on_new_term_election.
+on_actions = {
+	on_startup = {
+		random_events = {
+			100 = vanilla.2
+			0 = 0
+		}
+	}
+	on_daily = {
+		events = { vanilla.1 }
+	}
+}

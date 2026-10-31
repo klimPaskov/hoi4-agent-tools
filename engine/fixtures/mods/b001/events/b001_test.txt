@@ -1,0 +1,21 @@
+add_namespace = b001_test
+
+country_event = {
+	id = b001_test.1
+	title = b001_test.1.t
+	desc = b001_test.1.d
+	is_triggered_only = yes
+
+	trigger = {
+		b001_unknown_scripted_trigger = yes
+	}
+
+	immediate = {
+		b001_undefined_effect = yes
+	}
+
+	option = {
+		name = b001_test.1.a
+		add_political_power = 25
+	}
+}

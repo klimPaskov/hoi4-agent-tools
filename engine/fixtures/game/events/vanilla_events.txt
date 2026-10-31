@@ -1,0 +1,24 @@
+add_namespace = vanilla
+
+country_event = {
+	id = vanilla.1
+	title = vanilla.1.t
+	desc = vanilla.1.d
+	picture = GFX_vanilla_picture
+	is_triggered_only = yes
+	option = {
+		name = vanilla.1.a
+		add_political_power = 10
+	}
+}
+
+country_event = {
+	id = vanilla.2
+	title = vanilla.2.t
+	desc = vanilla.2.d
+	is_triggered_only = yes
+	option = {
+		name = vanilla.2.a
+		vanilla_effect = yes
+	}
+}
