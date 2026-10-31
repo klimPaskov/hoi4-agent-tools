@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.6.1/schemas/map-operation.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.6.2/schemas/map-operation.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "oneOf": [
     {
@@ -5261,7 +5261,7 @@
           "$ref": "#/$defs/__schema205"
         },
         "capital": {
-          "description": "World pixel, top-left origin, on land; the capital province.",
+          "description": "World pixel, top-left origin, on land; the capital province. Capitals and seeds of different realms must be at least 10 pixels apart; each gets a province of its own.",
           "$ref": "#/$defs/__schema50"
         },
         "seeds": {

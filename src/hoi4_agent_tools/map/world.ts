@@ -61,7 +61,12 @@ import {
   type SynthesizedTerrain,
 } from './relief/terrain-synthesis.js';
 import type { ReliefSettings } from './relief/macro-relief.js';
-import { assignUnreachedRealmLand, resolveRealmRules } from './world-realms.js';
+import {
+  assignUnreachedRealmLand,
+  checkRealmPoints,
+  realmPointsError,
+  resolveRealmRules,
+} from './world-realms.js';
 
 export interface WorldCountry {
   tag: string;
@@ -755,6 +760,29 @@ export interface WorldGenerationOptions {
   riverCheck?: boolean;
 }
 
+/**
+ * The land pixels that each get a province of their own: every capital and seed. A point of the
+ * same realm within a few pixels of an earlier pin shares its province.
+ */
+function realmPins(
+  realms: WorldRealms | undefined,
+  width: number,
+  height: number,
+  kind: Uint8Array,
+): number[] | undefined {
+  if (realms === undefined) return undefined;
+  const pins: Array<{ pixel: number; x: number; y: number; realm: number }> = [];
+  for (const [index, realm] of realms.list.entries())
+    for (const point of [realm.capital, ...(realm.seeds ?? [])]) {
+      const x = Math.floor(point.x);
+      const y = Math.floor(point.y);
+      if (x < 0 || y < 0 || x >= width || y >= height || kind[y * width + x] !== LAND) continue;
+      if (pins.some((pin) => pin.realm === index && Math.hypot(pin.x - x, pin.y - y) < 6)) continue;
+      pins.push({ pixel: y * width + x, x, y, realm: index });
+    }
+  return pins.map(({ pixel }) => pixel);
+}
+
 export function generateWorld(
   spec: WorldSpec,
   context: WorldContext,
@@ -863,30 +891,64 @@ export function generateWorld(
   let seamRepaired = geography !== undefined ? repairSeamCorners(surface.kind, width, height) : [];
   // A geography model gets its relief and rivers from the synthesis of ADR 0056; every other world
   // keeps the original elevation classes and drainage, byte for byte.
+  // Every capital and seed is checked against the generated surface before anything else runs, and
+  // all problems are reported together (ADR 0073).
+  const pointProblems =
+    spec.realms === undefined
+      ? []
+      : checkRealmPoints(spec.realms, {
+          width,
+          height,
+          land: (pixel) => surface.kind[pixel] === LAND,
+        });
+  if (pointProblems.length > 0 && options.riverCheck !== true)
+    throw realmPointsError(pointProblems);
   if (options.riverCheck === true && geography !== undefined) {
-    const checked = checkTerrainRivers({
-      geography,
-      width,
-      height,
-      seed: spec.seed,
-      kind: surface.kind,
-      relief: spec.relief,
-      rivers: { density: spec.riverDensity, count: spec.riverCount },
-      adjustHeight:
-        edge.mode === 'rim'
-          ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
-          : undefined,
-      signal: options.signal,
-    });
-    for (const note of checked) {
-      if (note.severity === 'error') throw new ServiceError(note.code, note.message, note.details);
-      notes.push({
-        code: note.code,
-        severity: note.severity,
-        message: note.message,
-        ...(note.details === undefined ? {} : { details: note.details }),
+    let failure: ServiceError | undefined;
+    try {
+      const checked = checkTerrainRivers({
+        geography,
+        width,
+        height,
+        seed: spec.seed,
+        kind: surface.kind,
+        relief: spec.relief,
+        rivers: { density: spec.riverDensity, count: spec.riverCount },
+        adjustHeight:
+          edge.mode === 'rim'
+            ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+            : undefined,
+        signal: options.signal,
       });
+      for (const note of checked) {
+        if (note.severity === 'error')
+          throw new ServiceError(note.code, note.message, note.details);
+        notes.push({
+          code: note.code,
+          severity: note.severity,
+          message: note.message,
+          ...(note.details === undefined ? {} : { details: note.details }),
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof ServiceError)) throw error;
+      failure = error;
     }
+    // The preview reports the realm points and the synthesis together.
+    if (pointProblems.length > 0) {
+      const pointError = realmPointsError(pointProblems);
+      throw failure === undefined
+        ? pointError
+        : new ServiceError(
+            pointError.code,
+            `${pointError.message}. The relief synthesis also failed: ${failure.message}`,
+            {
+              ...pointError.details,
+              synthesis: { code: failure.code, message: failure.message, details: failure.details },
+            },
+          );
+    }
+    if (failure !== undefined) throw failure;
     return {
       files: [],
       warnings: [],
@@ -1038,6 +1100,7 @@ export function generateWorld(
         seaProvincesPerRegion: spec.seaProvincesPerRegion,
       },
       options.signal,
+      realmPins(spec.realms, width, height, surface.kind),
     );
     provinces = featurePartition.provinces;
     for (const note of featurePartition.notes) notes.push(note);

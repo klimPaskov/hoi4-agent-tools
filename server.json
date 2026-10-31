@@ -3,7 +3,7 @@
   "name": "io.github.klimPaskov/hoi4-agent-tools",
   "title": "HOI4 Agent Tools",
   "description": "Build HOI4 mods: focus trees, events, decisions, worlds, GUI previews, docs and AI balance.",
-  "version": "4.6.1",
+  "version": "4.6.2",
   "repository": {
     "url": "https://github.com/klimPaskov/hoi4-agent-tools",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "hoi4-agent-tools",
-      "version": "4.6.1",
+      "version": "4.6.2",
       "transport": {
         "type": "stdio"
       }
