@@ -17,3 +17,6 @@ schemas/*.json
 *.svg
 *.html
 npm-shrinkwrap.json
+engine/target/
+engine/fixtures/
+engine/crates/*/tests/data/
