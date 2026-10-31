@@ -1,0 +1,15 @@
+on_actions = {
+	on_startup = {
+		effect = {
+			set_country_flag = vanilla_started
+		}
+		events = { vanilla.1 }
+		random_events = {
+			100 = vanilla.2
+			0 = 0
+		}
+	}
+	on_new_term_election = {
+		events = { vanilla.2 }
+	}
+}

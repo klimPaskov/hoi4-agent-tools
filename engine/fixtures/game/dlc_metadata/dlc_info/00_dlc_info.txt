@@ -1,0 +1,8 @@
+dlcs = {
+	dlc901 = {
+		name = "Fixture Pack"
+	}
+	dlc902 = {
+		name = "Second Fixture Pack"
+	}
+}

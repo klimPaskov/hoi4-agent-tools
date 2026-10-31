@@ -1,0 +1,4 @@
+vanilla_dynamic = {
+	enable = { always = yes }
+	stability_factor = 0.05
+}

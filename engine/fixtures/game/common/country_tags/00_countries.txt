@@ -1,0 +1,2 @@
+VAN = "countries/Vanilla.txt"
+MOD = "countries/Modland.txt"
