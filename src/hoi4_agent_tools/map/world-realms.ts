@@ -87,6 +87,175 @@ function pointProvince(tag: string, role: string, point: Point, raster: RealmRas
   return province;
 }
 
+/** Two points of different realms closer than this many pixels cannot get a province each. */
+export const REALM_POINT_MIN_SEPARATION_PX = 10;
+
+/** How far from a point in water the nearest land is searched, in pixels. */
+const NEAREST_LAND_REACH_PX = 80;
+
+export interface RealmPointProblem {
+  code:
+    | 'MAP_WORLD_REALM_POINT_OUTSIDE'
+    | 'MAP_WORLD_REALM_POINT_WATER'
+    | 'MAP_WORLD_REALM_POINT_CONFLICT'
+    | 'MAP_WORLD_REALM_POINTS_TOO_CLOSE';
+  tag: string;
+  role: 'capital' | 'seed';
+  point: Point;
+  message: string;
+  /** For a point in water: the nearest land pixel within reach. */
+  nearestLand?: { x: number; y: number; distance: number };
+  /** For a conflict or a pair too close: the other realm. */
+  otherTag?: string;
+  otherPoint?: Point;
+  distance?: number;
+}
+
+export interface RealmPointRaster {
+  width: number;
+  height: number;
+  /** 1 on land pixels. */
+  land: (pixel: number) => boolean;
+}
+
+/**
+ * Check every capital and seed against the generated surface before any province exists, and
+ * return all problems at once: a point outside the frame or in water (with the nearest land), a
+ * point inside the unowned area, its own exclusion or another realm's claim, and points of
+ * different realms closer than `REALM_POINT_MIN_SEPARATION_PX`. Points of one realm may share a
+ * province; points of different realms each get their own province (ADR 0073).
+ */
+export function checkRealmPoints(
+  realms: WorldRealms,
+  raster: RealmPointRaster,
+): RealmPointProblem[] {
+  const problems: RealmPointProblem[] = [];
+  const points: Array<{ tag: string; role: 'capital' | 'seed'; point: Point; index: number }> = [];
+  for (const [index, realm] of realms.list.entries()) {
+    points.push({ tag: realm.tag, role: 'capital', point: realm.capital, index });
+    for (const seed of realm.seeds ?? [])
+      points.push({ tag: realm.tag, role: 'seed', point: seed, index });
+  }
+  const nearestLand = (point: Point) => {
+    const cx = Math.floor(point.x);
+    const cy = Math.floor(point.y);
+    let best: { x: number; y: number; distance: number } | undefined;
+    for (let radius = 1; radius <= NEAREST_LAND_REACH_PX; radius += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1)
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || y < 0 || x >= raster.width || y >= raster.height) continue;
+          if (!raster.land(y * raster.width + x)) continue;
+          const distance = Math.hypot(dx, dy);
+          if (best === undefined || distance < best.distance) best = { x, y, distance };
+        }
+      if (best !== undefined && best.distance <= radius) return best;
+    }
+    return best;
+  };
+  for (const { tag, role, point, index } of points) {
+    const x = Math.floor(point.x);
+    const y = Math.floor(point.y);
+    if (x < 0 || y < 0 || x >= raster.width || y >= raster.height) {
+      problems.push({
+        code: 'MAP_WORLD_REALM_POINT_OUTSIDE',
+        tag,
+        role,
+        point,
+        message: `The ${role} of ${tag} lies outside the ${raster.width}x${raster.height} world`,
+      });
+      continue;
+    }
+    if (!raster.land(y * raster.width + x)) {
+      const near = nearestLand(point);
+      problems.push({
+        code: 'MAP_WORLD_REALM_POINT_WATER',
+        tag,
+        role,
+        point,
+        message: `The ${role} of ${tag} at (${x}, ${y}) lies in water${
+          near === undefined
+            ? ''
+            : `; the nearest land is (${near.x}, ${near.y}), ${Math.round(near.distance)} px away`
+        }`,
+        ...(near === undefined ? {} : { nearestLand: near }),
+      });
+      continue;
+    }
+    const px = x + 0.5;
+    const py = y + 0.5;
+    const realm = realms.list[index]!;
+    if (realms.unowned?.some((polygon) => inside(px, py, polygon)) === true)
+      problems.push({
+        code: 'MAP_WORLD_REALM_POINT_CONFLICT',
+        tag,
+        role,
+        point,
+        message: `The ${role} of ${tag} at (${x}, ${y}) lies in the unowned area`,
+      });
+    else if (realm.exclude?.some((polygon) => inside(px, py, polygon)) === true)
+      problems.push({
+        code: 'MAP_WORLD_REALM_POINT_CONFLICT',
+        tag,
+        role,
+        point,
+        message: `The ${role} of ${tag} at (${x}, ${y}) lies in its own exclusion`,
+      });
+    else
+      for (const [otherIndex, other] of realms.list.entries()) {
+        if (otherIndex === index) continue;
+        if (other.claim?.some((polygon) => inside(px, py, polygon)) === true) {
+          problems.push({
+            code: 'MAP_WORLD_REALM_POINT_CONFLICT',
+            tag,
+            role,
+            point,
+            otherTag: other.tag,
+            message: `The ${role} of ${tag} at (${x}, ${y}) lies in a claim of ${other.tag}`,
+          });
+          break;
+        }
+      }
+  }
+  // Points of different realms that are too close to each have a province of their own.
+  for (let a = 0; a < points.length; a += 1)
+    for (let b = a + 1; b < points.length; b += 1) {
+      const left = points[a]!;
+      const right = points[b]!;
+      if (left.index === right.index) continue;
+      const distance = Math.hypot(left.point.x - right.point.x, left.point.y - right.point.y);
+      if (distance >= REALM_POINT_MIN_SEPARATION_PX) continue;
+      problems.push({
+        code: 'MAP_WORLD_REALM_POINTS_TOO_CLOSE',
+        tag: left.tag,
+        role: left.role,
+        point: left.point,
+        otherTag: right.tag,
+        otherPoint: right.point,
+        distance: Math.round(distance * 10) / 10,
+        message: `The ${left.role} of ${left.tag} and the ${right.role} of ${right.tag} are ${Math.round(distance * 10) / 10} px apart; points of different realms need ${REALM_POINT_MIN_SEPARATION_PX} px to get a province each`,
+      });
+    }
+  return problems;
+}
+
+/** One error for all point problems; the first one's code, every problem in `details.problems`. */
+export function realmPointsError(problems: readonly RealmPointProblem[]): ServiceError {
+  const first = problems[0]!;
+  return new ServiceError(
+    problems.length === 1 ? first.code : 'MAP_WORLD_REALM_POINTS_INVALID',
+    problems.length === 1
+      ? first.message
+      : `${problems.length} realm points cannot be placed: ${problems
+          .slice(0, 6)
+          .map(({ message }) => message)
+          .join('; ')}${problems.length > 6 ? '; ...' : ''}`,
+    { problems: problems.slice(0, 500), count: problems.length },
+  );
+}
+
 export function resolveRealmRules(realms: WorldRealms, raster: RealmRaster): RealmRules {
   const unowned =
     realms.unowned === undefined ? new Set<number>() : coveredProvinces(realms.unowned, raster);

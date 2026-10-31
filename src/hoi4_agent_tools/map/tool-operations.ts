@@ -639,9 +639,16 @@ async function previewSynthesisCheck(
     ({ severity }) => severity === 'error' || severity === 'blocker',
   );
   const valid = blocked.length === 0 && checked.plan.blockers.length === 0;
-  const rivers = checked.diagnostics.flatMap(({ code, details }) =>
-    code === 'MAP_RIVER_UNREACHABLE_MOUTH' && Array.isArray(details?.rivers)
-      ? (details.rivers as unknown[])
+  // Failures of the synthesis can sit inside a realm-point error that reports both (ADR 0073).
+  const synthesisDetails = (details: Record<string, unknown> | undefined) =>
+    (details?.synthesis as { details?: Record<string, unknown> } | undefined)?.details ?? details;
+  const rivers = checked.diagnostics.flatMap(({ details }) => {
+    const found = synthesisDetails(details)?.rivers;
+    return Array.isArray(found) ? (found as unknown[]) : [];
+  });
+  const realmPoints = checked.diagnostics.flatMap(({ code, details }) =>
+    code.startsWith('MAP_WORLD_REALM_POINT') && Array.isArray(details?.problems)
+      ? (details.problems as unknown[])
       : [],
   );
   // Drawn rivers are authoritative: crossings of relief they cut through are warnings (ADR 0071).
@@ -668,6 +675,8 @@ async function previewSynthesisCheck(
       rivers: rivers.slice(0, 200),
       carvedCrossings: carved.length,
       crossings: carved.slice(0, 200),
+      realmPointProblems: realmPoints.length,
+      realmPoints: realmPoints.slice(0, 500),
     },
   });
   result.status = valid ? 'ok' : 'blocked';

@@ -41,6 +41,8 @@ export interface WorldPartitionInput {
   fields: PartitionFields;
   tuning: ResolvedPartitionTuning;
   seed: number;
+  /** Land pixels that each get a province of their own (see `FeaturePartitionInput.pins`). */
+  pins?: readonly number[] | undefined;
   /** Checked between the stages and inside the long loops; stops with its reason. */
   signal?: AbortSignal | undefined;
 }
@@ -161,10 +163,12 @@ export function partitionWorldFromRequest(
   tuning: PartitionTuning | undefined,
   base: Omit<PartitionBase, 'width' | 'height'>,
   signal?: AbortSignal,
+  pins?: readonly number[],
 ): WorldPartition {
   return partitionWorld({
     fields,
     seed,
+    pins,
     signal,
     tuning: resolvePartitionTuning(tuning, {
       ...base,

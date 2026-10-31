@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.6.2 - 2026-10-31
+
+- Check the points of workspace countries together and give each capital a province (ADR 0073). `create_world` now reports every capital or seed that lies outside the world or in water (with the nearest land), in the unowned area, an own exclusion or another realm's claim, or within 10 pixels of a point of another realm, in one error (`MAP_WORLD_REALM_POINTS_INVALID`, `details.problems`; a single problem keeps its own code), before the relief synthesis starts. `create_world.synthesisCheck` runs the same check and lists the points beside the failing rivers (`data.synthesisCheck.realmPoints`). In the feature-aware partition every capital and seed is a province seed of its own, so capitals that are 20 to 40 pixels apart no longer fail with `MAP_WORLD_REALM_POINT_CONFLICT`. Feature-aware worlds with workspace countries get a slightly different province partition; other worlds are unchanged.
+
 ## Unreleased
 
 - Raise the pinned overrides of three transitive dependencies to their fixed releases, clearing every `npm audit --omit=dev` advisory: `fast-uri` 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp), `hono` 4.13.13 (GHSA-5r4p-p66f-jhc7) and `ip-address` 10.7.4 (GHSA-rxp7-6hxx-x8q5). No source or schema change.

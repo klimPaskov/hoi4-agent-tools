@@ -29,6 +29,11 @@ export interface FeaturePartitionInput {
   fields: PartitionFields;
   tuning: ResolvedPartitionTuning;
   seed: number;
+  /**
+   * Land pixels that each get a province seed of their own, with the generated land seeds nearby
+   * dropped, so each pinned point lies in a province centred on it (ADR 0073).
+   */
+  pins?: readonly number[] | undefined;
   /** Checked between the stages and inside the watershed; stops with its reason. */
   signal?: AbortSignal | undefined;
 }
@@ -761,18 +766,31 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
       seeded[pixel] = 1;
     }
   };
+  const landMinArea = Math.max(tuning.minProvincePixels, plan.minLand * 0.85);
+  const pins = (input.pins ?? []).filter((pixel) => kind[pixel] === LAND);
+  addSeeds(Int32Array.from(pins));
+  // Land seeds within a province radius of a pin would cut the pinned province in two.
+  const pinRadius = Math.max(4, 0.6 * Math.sqrt(landMinArea));
+  const pinPoints = pins.map((pixel) => [pixel % width, Math.floor(pixel / width)] as const);
+  const landSeeds = placeSeeds({
+    width,
+    height,
+    kind,
+    wanted: LAND,
+    areaAt: plan.land,
+    minArea: landMinArea,
+    barrier,
+    seed: input.seed,
+    salt: 17,
+  });
   addSeeds(
-    placeSeeds({
-      width,
-      height,
-      kind,
-      wanted: LAND,
-      areaAt: plan.land,
-      minArea: Math.max(tuning.minProvincePixels, plan.minLand * 0.85),
-      barrier,
-      seed: input.seed,
-      salt: 17,
-    }),
+    pins.length === 0
+      ? landSeeds
+      : landSeeds.filter((pixel) => {
+          const x = pixel % width;
+          const y = Math.floor(pixel / width);
+          return !pinPoints.some(([px, py]) => Math.hypot(px - x, py - y) < pinRadius);
+        }),
   );
   addSeeds(
     placeSeeds({

@@ -28,6 +28,7 @@ const tagFile = source(
   'common/country_tags/00_realms.txt',
   'AAA = "countries/AAA.txt"\nBBB = "countries/BBB.txt"\nCCC = "countries/CCC.txt"\n',
 );
+const moreTags = source('common/country_tags/02_more.txt', 'DDD = "countries/DDD.txt"\n');
 const dynamicFile = source(
   'common/country_tags/01_dynamic.txt',
   'dynamic_tags = yes\nD01 = "countries/D01.txt"\n',
@@ -219,7 +220,7 @@ describe('workspace-owned countries in create_world', () => {
       'MAP_WORLD_REALM_POINT_CONFLICT',
     ],
     [
-      'a seed on another capital',
+      'a seed on the capital of another realm',
       {
         source: 'workspace' as const,
         realms: [
@@ -227,7 +228,7 @@ describe('workspace-owned countries in create_world', () => {
           { tag: 'BBB', capital: { x: 300, y: 128 }, seeds: [{ x: 80, y: 128 }] },
         ],
       },
-      'MAP_WORLD_REALM_POINT_CONFLICT',
+      'MAP_WORLD_REALM_POINTS_TOO_CLOSE',
     ],
     [
       'overlapping claims',
@@ -287,6 +288,84 @@ describe('workspace-owned countries in create_world', () => {
     };
     expect(inventory.files.some(({ relativePath }) => relativePath === flag)).toBe(false);
     expect(next.diagnostics.map(({ code }) => code)).toContain('MAP_WORLD_OUTPUT_RELEASED');
+  });
+
+  it('gives capitals that are close together a province each', () => {
+    const near = {
+      source: 'workspace' as const,
+      realms: [
+        { tag: 'AAA', capital: { x: 80, y: 128 } },
+        { tag: 'BBB', capital: { x: 92, y: 128 } },
+        { tag: 'CCC', capital: { x: 300, y: 128 } },
+      ],
+    };
+    const result = plan([tagFile], {
+      ...workspaceWorld(near),
+      partition: 'feature-aware',
+      landProvincePixels: 1500,
+    });
+    expect(result.blockers).toEqual([]);
+    const report = result.worldOutputs?.[0]?.realms;
+    const provinces = report!.countries.map(({ capitalProvince }) => capitalProvince);
+    expect(new Set(provinces).size).toBe(3);
+    expect(ownerAt(result, 80, 128)).toBe('AAA');
+    expect(ownerAt(result, 92, 128)).toBe('BBB');
+    const states = report!.countries.map(({ capitalState }) => capitalState);
+    expect(new Set(states).size).toBe(3);
+    // The pinned provinces are centred on their capitals, not fragments cut off by a neighbour.
+    const raster = result.finalIndex.raster!;
+    const at = (x: number, y: number) => raster.provinceIds[y * raster.width + x];
+    expect(at(80, 128)).not.toBe(at(92, 128));
+  });
+
+  it('reports every realm point problem in one run', () => {
+    const many = {
+      source: 'workspace' as const,
+      realms: [
+        { tag: 'AAA', capital: { x: 80, y: 128 } },
+        { tag: 'BBB', capital: { x: 84, y: 128 } },
+        { tag: 'CCC', capital: { x: 440, y: 20 } },
+        { tag: 'DDD', capital: { x: 190, y: 200 } },
+      ],
+      unowned: [box(150, 170, 230, 230)],
+    };
+    const result = plan([tagFile, moreTags], workspaceWorld(many));
+    expect(result.blockers.map(({ code }) => code)).toEqual(['MAP_WORLD_REALM_POINTS_INVALID']);
+    const details = result.blockers[0]?.details as {
+      count: number;
+      problems: Array<{
+        code: string;
+        tag: string;
+        nearestLand?: { distance: number };
+        otherTag?: string;
+      }>;
+    };
+    expect(details.count).toBe(3);
+    expect(details.problems.map(({ code, tag }) => [code, tag]).sort()).toEqual([
+      ['MAP_WORLD_REALM_POINTS_TOO_CLOSE', 'AAA'],
+      ['MAP_WORLD_REALM_POINT_CONFLICT', 'DDD'],
+      ['MAP_WORLD_REALM_POINT_WATER', 'CCC'],
+    ]);
+    expect(
+      details.problems.find(({ tag }) => tag === 'CCC')?.nearestLand?.distance,
+    ).toBeGreaterThan(0);
+    expect(
+      details.problems.find(({ code }) => code === 'MAP_WORLD_REALM_POINTS_TOO_CLOSE'),
+    ).toMatchObject({
+      otherTag: 'BBB',
+    });
+    expect(result.changes).toEqual([]);
+  });
+
+  it('keeps a single problem under its own code', () => {
+    const result = plan(
+      [tagFile],
+      workspaceWorld({
+        source: 'workspace' as const,
+        realms: [{ tag: 'AAA', capital: { x: 440, y: 20 } }],
+      }),
+    );
+    expect(result.blockers.map(({ code }) => code)).toEqual(['MAP_WORLD_REALM_POINT_WATER']);
   });
 
   it('validates the request shape', () => {

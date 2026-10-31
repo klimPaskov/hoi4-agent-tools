@@ -523,6 +523,63 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect(await sourceInventory(modRoot)).toEqual(before);
   }, 180_000);
 
+  it('lists every realm point problem and every failing river in one preview', async () => {
+    const { client, modRoot } = await fixture();
+    await mkdir(path.join(modRoot, 'common', 'country_tags'), { recursive: true });
+    await writeFile(
+      path.join(modRoot, 'common', 'country_tags', '00_realms.txt'),
+      'AAA = "countries/AAA.txt"\nBBB = "countries/BBB.txt"\nCCC = "countries/CCC.txt"\n',
+    );
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [
+          create({
+            geography: isolatedGeography(),
+            width: 1024,
+            height: 512,
+            synthesisCheck: true,
+            countries: {
+              source: 'workspace',
+              realms: [
+                // In the sea, beside the western land.
+                { tag: 'AAA', capital: { x: 60, y: 256 } },
+                // Two capitals of different realms 4 px apart on the eastern land.
+                { tag: 'BBB', capital: { x: 760, y: 256 } },
+                { tag: 'CCC', capital: { x: 764, y: 256 } },
+              ],
+            },
+          }),
+        ],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult & {
+      data: {
+        synthesisCheck: {
+          realmPointProblems: number;
+          realmPoints: Array<{ code: string; tag: string; nearestLand?: { distance: number } }>;
+          unreachableRivers: number;
+        };
+      };
+    };
+    expect(content).toMatchObject({ status: 'blocked', code: 'MAP_SYNTHESIS_CHECK_BLOCKED' });
+    const check = content.data.synthesisCheck;
+    expect(check.realmPointProblems).toBe(2);
+    expect(check.realmPoints.map(({ code, tag }) => [code, tag]).sort()).toEqual([
+      ['MAP_WORLD_REALM_POINTS_TOO_CLOSE', 'BBB'],
+      ['MAP_WORLD_REALM_POINT_WATER', 'AAA'],
+    ]);
+    expect(
+      check.realmPoints.find(({ tag }) => tag === 'AAA')?.nearestLand?.distance,
+    ).toBeGreaterThan(0);
+    // The failing rivers of the same model are listed in the same run.
+    expect(check.unreachableRivers).toBe(2);
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  }, 180_000);
+
   it('reports only the generation blocker when a world fails over an existing map', async () => {
     const { client, modRoot } = await fixture({ emptyMod: true });
     const first = await client.callTool({

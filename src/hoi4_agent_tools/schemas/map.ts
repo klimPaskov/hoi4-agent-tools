@@ -31,7 +31,9 @@ const realmPolygonsSchema = z.array(realmPolygonSchema).min(1).max(64);
 export const workspaceRealmSchema = z
   .object({
     tag: countryTagSchema,
-    capital: pointSchema.describe('World pixel, top-left origin, on land; the capital province.'),
+    capital: pointSchema.describe(
+      'World pixel, top-left origin, on land; the capital province. Capitals and seeds of different realms must be at least 10 pixels apart; each gets a province of its own.',
+    ),
     seeds: z
       .array(pointSchema)
       .max(256)
