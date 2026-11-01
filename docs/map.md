@@ -426,7 +426,7 @@ Measured on project-owned synthetic fixtures (ADR 0060): country-border enrichme
 
 `hoi4.map_rewrite` also moves and merges states, moves provinces between strategic regions, merges or removes provinces, changes province definitions and types, adds or removes normal and special adjacency, and updates supply, railway, building, unit, weather, and entity-locator records. Send one ordered operation list when several connected changes belong together.
 
-Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnostic, and rendered comparison evidence. A failed operation does not leave a partial multi-file result.
+Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnostic, and rendered comparison evidence. A failed operation does not leave a partial multi-file result. The before and proposed renders (`map-before.*`, `map-proposed.*`) draw every overlay but list building, unit and weather positions only as counts (`positionRecords: "counts"`); `hoi4.map_inspect` returns the records. `map-diff.json` lists at most 2,000 changed building, unit and weather positions per kind and gives the full number in `positionChanges`. The review of a replaced world, where every position changes, would otherwise reach hundreds of megabytes.
 
 ## Check script references
 
