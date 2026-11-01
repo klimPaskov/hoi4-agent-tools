@@ -1,0 +1,38 @@
+spriteTypes = {
+	SpriteType = { name = "GFX_goal_alpha" texturefile = "gfx/interface/goals/alpha.dds" }
+	SpriteType = {
+		name = "GFX_goal_alpha_shine"
+		texturefile = "gfx/interface/goals/alpha.dds"
+		effectFile = "gfx/FX/buttonstate_onlydisable.lua"
+		animation = { animationtype = "scrolling" }
+	}
+	spriteType = { name = "GFX_goal_beta" texturefile = "gfx\interface\goals\beta.dds" }
+	spriteType = { name = "GFX_goal_cond_a" texturefile = "gfx/interface/goals/cond_a.dds" }
+	spriteType = { name = "GFX_goal_cond_a_shine" texturefile = "gfx/interface/goals/cond_a.dds" }
+	spriteType = { name = "GFX_goal_cond_b" texturefile = "gfx/interface/goals/cond_b.dds" }
+	spriteType = { name = "GFX_goal_cond_b_shine" texturefile = "gfx/interface/goals/cond_b.dds" }
+	spriteType = { name = "GFX_shared" texturefile = "gfx/interface/shared.dds" }
+	spriteType = { name = "GFX_idea_spirit_one" texturefile = "gfx/interface/ideas/spirit_one.dds" }
+	spriteType = { name = "GFX_idea_fallback" texturefile = "gfx/interface/ideas/fallback.dds" }
+	spriteType = { name = "GFX_idea_concern_one" texturefile = "gfx/interface/ideas/concern_one.dds" }
+	spriteType = { name = "GFX_idea_adv_one" texturefile = "gfx/interface/ideas/adv_one.dds" }
+	spriteType = { name = "GFX_idea_adv_token" texturefile = "gfx/interface/ideas/adv_token.dds" }
+	spriteType = { name = "GFX_idea_officer_one" texturefile = "gfx/interface/ideas/officer_one.dds" }
+	spriteType = { name = "GFX_decision_alpha" texturefile = "gfx/interface/decisions/alpha.dds" }
+	spriteType = { name = "GFX_decision_tex_a" texturefile = "gfx/interface/decisions/shared_tex.dds" }
+	spriteType = { name = "GFX_modifiers_tex_b" texturefile = "gfx/interface/decisions/shared_tex.dds" }
+	spriteType = { name = "GFX_modifiers_dyn" texturefile = "gfx/interface/decisions/dyn.dds" }
+	spriteType = { name = "GFX_decision_category_cat" texturefile = "gfx/interface/decisions/cat.dds" }
+	spriteType = { name = "GFX_decision_cat_picture_pic" texturefile = "gfx/interface/decisions/pic.dds" }
+	spriteType = { name = "GFX_report_event_one" texturefile = "gfx/event_pictures/report_one.dds" }
+	spriteType = { name = "GFX_news_event_one" texturefile = "gfx/event_pictures/news_one.dds" }
+	spriteType = { name = "GFX_portrait_leader" texturefile = "gfx/leaders/leader.dds" }
+	spriteType = { name = "GFX_portrait_small" texturefile = "gfx/leaders/small.dds" }
+	spriteType = { name = "GFX_portrait_cmd" texturefile = "gfx/leaders/cmd.dds" }
+	spriteType = { name = "GFX_missing_tex" texturefile = "gfx/interface/nothere.dds" }
+	spriteType = { name = "GFX_case_mix" texturefile = "GFX/INTERFACE/Case.DDS" }
+	spriteType = { name = "GFX_tga_icon" texturefile = "gfx/interface/icon.tga" }
+	frameAnimatedSpriteType = { name = "GFX_anim" texturefile = "gfx/interface/anim.dds" noOfFrames = 4 legacy_lazy_load = no loadType = "INGAME" }
+	corneredTileSpriteType = { name = "GFX_tile" texturefile = "gfx/interface/tile.dds" }
+	textSpriteType = { name = "GFX_text_only" }
+}

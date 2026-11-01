@@ -1,0 +1,2 @@
+dyn = { icon = GFX_modifiers_dyn }
+tex_b = { icon = GFX_modifiers_tex_b }

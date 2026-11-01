@@ -1,0 +1,5 @@
+focus_tree = {
+	id = m_tree
+	focus = { id = m_alpha icon = GFX_goal_alpha }
+	focus = { id = m_new icon = GFX_mod_new }
+}
