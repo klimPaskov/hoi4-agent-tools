@@ -27,6 +27,8 @@ export interface NameInput {
   /** Names already fixed by the caller (reference labels), which win over the model. */
   fixedStates?: ReadonlyMap<number, string> | undefined;
   fixedRegions?: ReadonlyMap<number, string> | undefined;
+  /** Victory-point names fixed by the caller, by province; they win over every derived name. */
+  fixedVictory?: ReadonlyMap<number, string> | undefined;
   /** Victory-point provinces by state id, with the value each carries. */
   victoryPoints: ReadonlyMap<number, ReadonlyMap<number, number>>;
   countryNames: ReadonlyMap<string, string>;
@@ -411,6 +413,12 @@ export function nameWorld(input: NameInput): NameResult {
     if (points === undefined) continue;
     for (const id of [...points.keys()].sort((a, b) => a - b)) {
       victoryTotal += 1;
+      const fixed = input.fixedVictory?.get(id);
+      if (fixed !== undefined) {
+        victory.set(id, fixed);
+        usedVictory.add(fixed);
+        continue;
+      }
       const own = siteByProvince.get(id);
       const named = own?.sort(
         (a, b) =>

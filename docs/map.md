@@ -484,6 +484,20 @@ Diagnostics raised when a world is created (they need the model): `MAP_CROSSINGS
 
 Not done: whole provinces inside a massif are not made impassable states, the engine's handling of impassable rows by supply and the AI and of a naval base on an inland sea is not verified, and `positions.txt` stays empty as in the base game. Measured on the project's 5,120 x 2,560 synthetic model with about 6,000 provinces, the gameplay layer adds about 6 seconds to a 30 second `create_world` and the whole run peaks near 0.8 GiB.
 
+### Names from the caller
+
+`create_world` takes `names` (inline) or `namesPath` (a workspace-relative `.json` file of at most 4 MiB, read with the same guards as `geographyPath` and bound to the plan by its SHA-256) with any of three lists of `{ "at": { "x", "y" }, "name" }` in world pixels, origin top left:
+
+```json
+{
+  "states": [{ "at": { "x": 1210, "y": 640 }, "name": "Yeldenne" }],
+  "victoryPoints": [{ "at": { "x": 1222, "y": 655 }, "name": "Yeldenne Harbour" }],
+  "regions": [{ "at": { "x": 1500, "y": 300 }, "name": "Northern Reaches" }]
+}
+```
+
+A state or strategic region takes the name when the pixel lies in one of its provinces, a victory point when the pixel lies in the province that holds it. Caller names win over reference labels, the model and placeholders, and every feature they do not cover keeps its derived name, so a world can be named in part. Only localisation and the state and strategic-region file names change; ids, provinces, ownership and every other file stay as they would be without names. Not matched names are reported, never guessed: `MAP_NAME_UNMATCHED` (the pixel lies outside the world, on no state or region, or on a province without a victory point), `MAP_NAME_POINT_DUPLICATE` (a second name for an already named feature; the first in the list wins) and `MAP_NAME_DUPLICATE` (one text on two features of a kind). Each lists up to 50 examples with the full count.
+
 ## Positions and supply
 
 `regenerate_map_positions` places building, unit-stack and weather positions from province geometry. By default (`mode: missing`) it only adds what is absent: positions for each building model a state or province lacks (from `show_on_map` and the spawn points in `common/buildings`), a full unit-stack set for provinces without one, and a small and a big weather object for strategic regions without one. `mode: replace` rewrites the positions of the selected `stateIds`, `provinceIds` and `regionIds`. Interior points keep away from province borders, naval bases face the sea province they open onto, and floating harbours sit on the water and name their land province. `positions` limits it to `buildings`, `units` or `weather`; heights come from the heightmap.

@@ -71,6 +71,7 @@ import {
 } from './render.js';
 import { validateMapAsync, type MapValidationResult } from './validation.js';
 import { buildWorldPreviewArtifacts, generatedWorldOperationIds } from './world-preview.js';
+import { prepareWorldNames, type PreparedWorldNames } from './world-names.js';
 import type { TerritoryReport } from './territory-operations.js';
 import {
   evaluateTerritoryQuality,
@@ -1180,6 +1181,29 @@ export class AgentNudger {
         else snapshot.referenceSources[previous] = evidence;
       }
     }
+    // A names file is a source of the plan, so a change to it makes the plan stale (ZR-22).
+    const worldNames = new Map<string, PreparedWorldNames>();
+    for (const operation of operations) {
+      if (operation.kind !== 'create_world') continue;
+      const names = await prepareWorldNames(
+        this.resolver,
+        workspaceId,
+        operation,
+        principal,
+        signal,
+      );
+      if (names === undefined) continue;
+      worldNames.set(operation.id, names);
+      if (names.source.kind === 'file') {
+        const evidence = names.source.evidence;
+        snapshot.referenceSources ??= [];
+        const previous = snapshot.referenceSources.findIndex(
+          (file) => file.displayPath === evidence.displayPath,
+        );
+        if (previous < 0) snapshot.referenceSources.push(evidence);
+        else snapshot.referenceSources[previous] = evidence;
+      }
+    }
     // An imported reference reports what it supplied and how far the model agrees with it.
     const imports: PreparedImport[] = [];
     const importDiagnostics: Diagnostic[] = [];
@@ -1206,6 +1230,7 @@ export class AgentNudger {
     const plan = await planMapOperationsAsync(snapshot.index, operations, signal, {
       referenceWorlds,
       geographyModels,
+      worldNames,
       ...(synthesisCheck ? { synthesisCheck: true } : {}),
     });
     // Model diagnostics (including warnings of a model that is otherwise usable) travel with the plan.

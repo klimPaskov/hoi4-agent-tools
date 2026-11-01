@@ -54,6 +54,8 @@ import {
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
 import type { ResolvedGeography } from './geography/index.js';
+import { matchWorldNames, unmatchedNote } from './world-names.js';
+import type { WorldNamesInput } from '../schemas/map.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import {
   checkTerrainRivers,
@@ -139,6 +141,8 @@ export interface WorldSpec {
   /** Resolved reference data is internal; callers provide a guarded workspace image path. */
   referenceSurface?: ReferenceWorldRaster;
   referenceCities?: ReadonlyArray<{ name: string; x: number; y: number; countryTag?: string }>;
+  /** Names the caller gives to states, victory points and regions by world pixel (ZR-22). */
+  names?: WorldNamesInput;
   referenceLabels?: ReadonlyArray<{
     name: string;
     x: number;
@@ -1636,6 +1640,19 @@ export function generateWorld(
       regionNames.set(region, previous === undefined ? label.name : `${previous} / ${label.name}`);
     }
   }
+  // Names the caller gives by pixel win over labels, the model and placeholders (ZR-22).
+  const callerNames =
+    spec.names === undefined
+      ? undefined
+      : matchWorldNames(spec.names, {
+          width,
+          height,
+          pixel: provinces.pixel,
+          stateOf: (id) => stateOf.get(id)?.id,
+          regionOf: (id) => regionOf.get(id),
+        });
+  for (const [id, name] of callerNames?.states ?? []) stateNames.set(id, name);
+  for (const [id, name] of callerNames?.regions ?? []) regionNames.set(id, name);
   const lakeNames = new Map<number, string>();
   // State values from size, terrain and development, with the country capital boosted.
   const categories = [
@@ -1687,6 +1704,7 @@ export function generateWorld(
           regionOf,
           fixedStateNames: stateNames,
           fixedRegionNames: regionNames,
+          fixedVictoryNames: callerNames?.victory,
           countryNames: new Map(spec.countries.map(({ tag, name }) => [tag, name])),
         });
   if (economy !== undefined) {
@@ -1815,6 +1833,20 @@ export function generateWorld(
       }
       if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
     }
+  }
+  if (callerNames !== undefined) {
+    // A victory name applies only where the world places a victory point.
+    for (const [id, name] of callerNames.victory) {
+      if (stateOf.get(id)?.victoryPoints.has(id) === true) cityNames.set(id, name);
+      else
+        callerNames.unmatched.push({
+          kind: 'victory point',
+          ...callerNames.victoryAt.get(id)!,
+          name,
+        });
+    }
+    if (callerNames.unmatched.length > 0) notes.push(unmatchedNote(callerNames.unmatched));
+    notes.push(...callerNames.notes);
   }
   // Province IDs: 1-based in reading order of the province's first pixel; 0 is the null row.
   const provinceId = (index: number) => index + 1;

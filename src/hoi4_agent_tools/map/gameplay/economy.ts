@@ -28,6 +28,7 @@ export interface EconomyInput {
   regionOf: ReadonlyMap<number, number>;
   fixedStateNames?: ReadonlyMap<number, string> | undefined;
   fixedRegionNames?: ReadonlyMap<number, string> | undefined;
+  fixedVictoryNames?: ReadonlyMap<number, string> | undefined;
   countryNames: ReadonlyMap<string, string>;
 }
 
@@ -85,6 +86,7 @@ export function planEconomy(base: GameplayBase, input: EconomyInput): EconomyPla
     regionOf: input.regionOf,
     fixedStates: input.fixedStateNames,
     fixedRegions: input.fixedRegionNames,
+    fixedVictory: input.fixedVictoryNames,
     victoryPoints,
     countryNames: input.countryNames,
   });

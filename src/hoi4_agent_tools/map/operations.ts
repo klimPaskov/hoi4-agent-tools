@@ -79,9 +79,11 @@ import type {
   WorldPartitionTuningInput,
   WorldReferenceInput,
   WorkspaceCountriesInput,
+  WorldNamesInput,
 } from '../schemas/map.js';
 import type { GeographyModelInput } from '../schemas/geography.js';
 import type { PreparedGeography } from './geography/preparation.js';
+import type { PreparedWorldNames } from './world-names.js';
 import { unsupportedGeographyParts } from './relief/index.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
@@ -102,6 +104,8 @@ export interface MapPlanningContext {
   referenceWorlds?: ReadonlyMap<string, PreparedReferenceWorld>;
   /** Geography models prepared and validated by the authorized workspace service. */
   geographyModels?: ReadonlyMap<string, PreparedGeography>;
+  /** Caller names of `create_world` operations, loaded by the workspace service (ZR-22). */
+  worldNames?: ReadonlyMap<string, PreparedWorldNames>;
   /** Plan only the river check of `create_world.synthesisCheck`: nothing is generated or written. */
   synthesisCheck?: boolean;
 }
@@ -512,6 +516,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   reference?: WorldReferenceInput;
   geography?: GeographyModelInput;
   geographyPath?: string;
+  names?: WorldNamesInput;
+  namesPath?: string;
   synthesisCheck?: boolean;
   continentNames?: string[];
   startDate?: string;
@@ -5594,6 +5600,13 @@ function applyCreateWorld(
   signal: AbortSignal | undefined,
 ): Diagnostic[] {
   const geography = context.geographyModels?.get(operation.id);
+  // Inline names need no loading; a names file is read by the authorized workspace service.
+  const worldNames = context.worldNames?.get(operation.id)?.names ?? operation.names;
+  if (operation.namesPath !== undefined && context.worldNames?.get(operation.id) === undefined)
+    throw new ServiceError(
+      'MAP_NAMES_NOT_PREPARED',
+      'A create_world namesPath must be read by the authorized workspace service before planning',
+    );
   const hasGeography = operation.geography !== undefined || operation.geographyPath !== undefined;
   if (hasGeography) {
     if (geography === undefined)
@@ -5768,6 +5781,7 @@ function applyCreateWorld(
       ...(operation.continentNames === undefined
         ? {}
         : { continentNames: operation.continentNames }),
+      ...(worldNames === undefined ? {} : { names: worldNames }),
       startDate: operation.startDate ?? '1936.1.1',
       rivers:
         typeof operation.rivers === 'number' ? operation.rivers : reference === undefined ? 8 : 80,

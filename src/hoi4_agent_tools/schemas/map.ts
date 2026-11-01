@@ -88,6 +88,44 @@ export const workspaceCountriesSchema = z
   });
 export type WorkspaceCountriesInput = z.input<typeof workspaceCountriesSchema>;
 
+/** Names a caller gives to states, victory points and strategic regions by world pixel (ZR-22). */
+const worldNamePointSchema = z
+  .object({
+    at: z
+      .object({ x: z.number().int().min(0).max(16_383), y: z.number().int().min(0).max(16_383) })
+      .strict()
+      .describe('A world pixel, origin top-left, as in reference labels.'),
+    name: z.string().trim().min(1).max(128),
+  })
+  .strict();
+export const worldNamesSchema = z
+  .object({
+    states: z
+      .array(worldNamePointSchema)
+      .max(20_000)
+      .optional()
+      .describe('A state takes the name when the pixel lies in one of its provinces.'),
+    victoryPoints: z
+      .array(worldNamePointSchema)
+      .max(20_000)
+      .optional()
+      .describe('A victory point takes the name when the pixel lies in its province.'),
+    regions: z
+      .array(worldNamePointSchema)
+      .max(20_000)
+      .optional()
+      .describe(
+        'A strategic region takes the name when the pixel lies in one of its provinces, land or sea.',
+      ),
+  })
+  .strict();
+export type WorldNamesInput = z.infer<typeof worldNamesSchema>;
+/** A workspace-relative `.json` file holding world names. */
+export const worldNamesPathSchema = workspaceRelativePathSchema.refine(
+  (value) => !value.includes(':') && /\.json$/iu.test(value),
+  'Names must be a workspace-relative .json file',
+);
+
 const operationBase = {
   id: identifier,
   summary: z.string().max(1000).optional(),
@@ -1106,6 +1144,16 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe(
           'Workspace-relative .json file holding a geography model (at most 4 MiB). Alternative to the inline geography field; give one of them.',
         ),
+      names: worldNamesSchema
+        .optional()
+        .describe(
+          'Names for states, victory points and strategic regions by world pixel; they win over every name the world would derive. Features the names do not cover keep the derived names. Use namesPath for large tables.',
+        ),
+      namesPath: worldNamesPathSchema
+        .optional()
+        .describe(
+          'Workspace-relative .json file holding the same names object (at most 4 MiB). Alternative to names; give one of them.',
+        ),
       width: z.number().int().min(256).max(8_192).multipleOf(256).optional(),
       height: z.number().int().min(256).max(4_096).multipleOf(256).optional(),
       seed: z.number().int().min(0).max(2_147_483_647).default(1),
@@ -1198,6 +1246,10 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         message: 'Give the geography inline (geography) or by file (geographyPath), not both',
       },
     )
+    .refine((operation) => operation.names === undefined || operation.namesPath === undefined, {
+      path: ['namesPath'],
+      message: 'Give the names inline (names) or by file (namesPath), not both',
+    })
     .refine(
       (operation) =>
         (operation.reference?.fit !== 'frame' &&
