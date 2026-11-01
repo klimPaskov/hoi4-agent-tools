@@ -1372,7 +1372,14 @@ describe('content-addressed artifacts', () => {
     const broadStore = new ArtifactStore(1_000_000_000, 100, 400_000_000);
     await expect(
       broadStore.withAtomicChunkedWrites(workspace, oversizedWrites, () => Promise.resolve()),
-    ).rejects.toMatchObject({ code: 'ARTIFACT_LOGICAL_BATCH_LIMIT' });
+    ).rejects.toMatchObject({
+      code: 'ARTIFACT_LOGICAL_BATCH_LIMIT',
+      // The refusal names the size reached, the ceiling and the largest artifacts.
+      message: expect.stringMatching(
+        /\(\d+\.\d MiB in \d+ artifacts, limit 512\.0 MiB; largest: \S+ \d+\.\d MiB/u,
+      ),
+      details: expect.objectContaining({ maximumBytes: 536_870_912, largest: expect.any(Array) }),
+    });
     await expect(
       broadStore.withAtomicWrites(workspace, oversizedWrites, () => Promise.resolve()),
     ).rejects.toMatchObject({ code: 'ARTIFACT_LOGICAL_BATCH_LIMIT' });

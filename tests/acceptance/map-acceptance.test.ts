@@ -1464,6 +1464,19 @@ describe('Agent Nudger project-owned map acceptance fixture', () => {
     expect(diffEvidence.review.unresolvedChoices).toEqual([]);
     expect(diffEvidence.review.allocations).toEqual([]);
     expect(diffEvidence.review.validation.passed).toBe(true);
+    // Review renders count positions instead of listing them, so a replaced world stays small.
+    for (const comparison of [firstDiff.beforeBundle!, firstDiff.proposedBundle]) {
+      const evidence = JSON.parse(comparison.json) as Record<string, unknown> & {
+        counts: { unitPositions: number };
+      };
+      expect(evidence).toMatchObject({
+        positionRecords: 'counts',
+        buildingPositions: [],
+        unitPositions: [],
+        weatherPositions: [],
+      });
+      expect(evidence.counts.unitPositions).toBeGreaterThan(0);
+    }
     expect(firstDiff.artifacts.map(({ mimeType }) => mimeType).sort()).toEqual([
       'application/json',
       'application/json',

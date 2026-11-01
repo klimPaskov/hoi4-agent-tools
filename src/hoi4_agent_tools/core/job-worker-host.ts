@@ -389,9 +389,14 @@ export class JobWorkerHost {
       }
       if (child.exitCode !== null || child.signalCode !== null) {
         const evidence = await this.exits.get(child);
+        const message =
+          evidence === undefined ? WORKER_EXIT_MESSAGE : classifyWorkerExit(evidence).message;
+        // The job's last progress report says how far the worker got before it stopped.
         throw new ServiceError(
           'JOB_WORKER_EXIT',
-          evidence === undefined ? WORKER_EXIT_MESSAGE : classifyWorkerExit(evidence).message,
+          record.progress === undefined
+            ? message
+            : `${message}; last progress: ${record.progress.message.slice(0, 160)}`,
         );
       }
       await delay(100);
