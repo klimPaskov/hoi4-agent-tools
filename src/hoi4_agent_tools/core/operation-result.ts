@@ -220,10 +220,24 @@ function boundedResult(
   };
 }
 
+/** An image carried in the response itself, for clients that cannot or should not fetch a link. */
+export interface ToolResultImage {
+  /** Base64 of the encoded image. */
+  data: string;
+  mimeType: string;
+}
+
+/**
+ * Images are outside the 32 KiB structured-result budget; they have their own: a response never
+ * carries more than this many base64 characters of images.
+ */
+export const MAX_TOOL_RESULT_IMAGE_CHARACTERS = 3_000_000;
+
 interface ToolResultOutput {
   [key: string]: unknown;
   content: Array<
     | { type: 'text'; text: string }
+    | { type: 'image'; data: string; mimeType: string }
     | {
         type: 'resource_link';
         uri: string;
@@ -466,7 +480,7 @@ function compactDescriptions(unfiltered: ServiceResult<unknown>): ServiceResult<
   };
 }
 
-function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
+function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): ToolResultOutput {
   const structuredContent = operationResultSchema.parse(selected) as Record<string, unknown>;
   const shown = selected.artifacts
     .map((artifact, order) => ({ artifact, order }))
@@ -492,6 +506,7 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
     code: selected.code,
     workspaceId: selected.workspaceId,
     artifactCount: selected.artifacts.length,
+    ...(imageCount > 0 ? { inlineImages: imageCount } : {}),
     ...(selected.artifacts.length > shown.length
       ? { artifactsListedInStructuredContent: selected.artifacts.length }
       : {}),
@@ -514,7 +529,15 @@ function buildToolResult(selected: ServiceResult<unknown>): ToolResultOutput {
   };
 }
 
-export function toolResult(result: ServiceResult<unknown>): ToolResultOutput {
+export function toolResult(
+  result: ServiceResult<unknown>,
+  options: { images?: readonly ToolResultImage[] } = {},
+): ToolResultOutput {
+  let imageCharacters = 0;
+  const images = (options.images ?? []).filter((image) => {
+    imageCharacters += image.data.length;
+    return imageCharacters <= MAX_TOOL_RESULT_IMAGE_CHARACTERS;
+  });
   const completeResult = preserveDeferredFilesDiagnostic(result);
   const compact = compactDescriptions(completeResult);
   const estimatedBytes = jsonBytesWithin(compact, MAX_TOOL_RESULT_BYTES)
@@ -522,16 +545,23 @@ export function toolResult(result: ServiceResult<unknown>): ToolResultOutput {
     : MAX_TOOL_RESULT_BYTES + 1;
   const selected =
     estimatedBytes > MAX_TOOL_RESULT_BYTES ? boundedResult(compact, estimatedBytes) : compact;
-  let output = buildToolResult(selected);
+  let output = buildToolResult(selected, images.length);
   const wireBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (wireBytes > MAX_TOOL_RESULT_BYTES) {
-    output = buildToolResult(boundedResult(compact, wireBytes));
+    output = buildToolResult(boundedResult(compact, wireBytes), images.length);
   }
   const finalBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (finalBytes > MAX_TOOL_RESULT_BYTES) {
     throw new Error('Constant MCP response-limit result exceeded its wire budget');
   }
-  return output;
+  if (images.length === 0) return output;
+  return {
+    ...output,
+    content: [
+      ...output.content,
+      ...images.map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType })),
+    ],
+  };
 }
 
 /** Paths in a message can name private folders; the file name is enough to act on. */

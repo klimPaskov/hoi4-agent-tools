@@ -102,6 +102,7 @@
     "fixtures:generate:technology": "tsx scripts/generate-technology-fixture.ts",
     "fixtures:generate:probability": "tsx scripts/generate-probability-fixture.ts",
     "fixtures:check": "npm run fixtures:generate && tsx scripts/check-generated.ts fixtures",
+    "focus:calibrate": "tsx scripts/focus-quality-calibration.ts",
     "schemas:generate": "tsx scripts/generate-schemas.ts",
     "schemas:check": "tsx scripts/generate-schemas.ts && tsx scripts/check-generated.ts schemas",
     "registry:validate": "tsx scripts/validate-registry.ts",

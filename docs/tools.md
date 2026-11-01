@@ -27,11 +27,11 @@ MCP clients may ask for approval to create review files.
 
 ## Focus trees
 
-| Tool                 | Purpose                                                                                                                    | Writes       |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `hoi4.focus_inspect` | Read focus trees, continuous-focus placement, and structural or reference problems.                                        | review files |
-| `hoi4.focus_render`  | Render a tree or palette as a PNG with decoded icons plus HTML, SVG, JSON and source maps; `png: false` for vector only.   | review files |
-| `hoi4.focus_rewrite` | Create a focus tree or continuous-focus palette from a complete plan, or compact an existing tree's layout without a plan. | mod files    |
+| Tool                 | Purpose                                                                                                                           | Writes       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `hoi4.focus_inspect` | Read focus trees, structural or reference problems and a layout verdict with scorecard, fixes and, with `previous`, a delta.      | review files |
+| `hoi4.focus_render`  | Return an in-game-style picture of a tree inline with close-ups, plus PNG with icons, HTML, SVG, JSON and source maps.            | review files |
+| `hoi4.focus_rewrite` | Create a focus tree or palette from a plan, or repair a layout; returns the layout verdict and delta, or says nothing to improve. | mod files    |
 
 ## Scripted GUIs
 
