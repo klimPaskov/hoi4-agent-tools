@@ -1,4 +1,14 @@
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -20,7 +30,7 @@ afterEach(async () => {
   for (const action of cleanup.splice(0).reverse()) await action();
 });
 
-async function fixture(options: { emptyMod?: boolean } = {}) {
+async function fixture(options: { emptyMod?: boolean; scanLimit?: number } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-map-geography-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const fixtureRoot = path.resolve('fixtures', 'map', 'roots');
@@ -38,6 +48,9 @@ async function fixture(options: { emptyMod?: boolean } = {}) {
         version: 1,
         serverStateRoot: path.join(root, 'state'),
         storageRoots: [runtimeRoot],
+        ...(options.scanLimit === undefined
+          ? {}
+          : { scanMaxBytes: options.scanLimit, scanMaxFileBytes: options.scanLimit }),
         workspaces: [
           {
             id: 'test',
@@ -577,6 +590,75 @@ describe('geography model through hoi4.map_rewrite', () => {
     ).toBeGreaterThan(0);
     // The failing rivers of the same model are listed in the same run.
     expect(check.unreachableRivers).toBe(2);
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  }, 180_000);
+
+  it('writes a world whose bitmaps together exceed the scan limit', async () => {
+    // The check after the write reads the changed text files, not the bitmaps and textures: a
+    // large world (150 MB of binary files) must not fail it on the default limit.
+    const { client, modRoot } = await fixture({ emptyMod: true, scanLimit: 4_718_592 });
+    const result = await client.callTool(
+      {
+        name: 'hoi4.map_rewrite',
+        arguments: {
+          workspaceId: 'test',
+          operations: [
+            create({
+              width: 1024,
+              height: 512,
+              seed: 3,
+              rivers: 0,
+              countries: [{ tag: 'AAA', name: 'Aster' }],
+            }),
+          ],
+        },
+      },
+      undefined,
+      { timeout: 170_000 },
+    );
+    const content = result.structuredContent as unknown as PublicResult;
+    expect(content.status).toBe('ok');
+    const written = await readdir(path.join(modRoot, 'map'));
+    expect(written).toEqual(
+      expect.arrayContaining(['provinces.bmp', 'heightmap.bmp', 'terrain.bmp']),
+    );
+    // Everything the write changed is larger than the limit; the check reads only its text.
+    const sizes = await Promise.all(
+      written.map(async (name) => {
+        const file = path.join(modRoot, 'map', name);
+        return (await stat(file)).isFile() ? (await readFile(file)).length : 0;
+      }),
+    );
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeGreaterThan(4_718_592);
+  }, 180_000);
+
+  it('stops before writing a file that no scan could read back, and names it', async () => {
+    const { client, modRoot } = await fixture({ emptyMod: true, scanLimit: 1_048_576 });
+    const before = await sourceInventory(modRoot);
+    const result = await client.callTool(
+      {
+        name: 'hoi4.map_rewrite',
+        arguments: {
+          workspaceId: 'test',
+          operations: [
+            create({
+              width: 1024,
+              height: 512,
+              seed: 3,
+              rivers: 0,
+              countries: [{ tag: 'AAA', name: 'Aster' }],
+            }),
+          ],
+        },
+      },
+      undefined,
+      { timeout: 170_000 },
+    );
+    const text = JSON.stringify(result.structuredContent);
+    expect(result.isError ?? false).toBe(true);
+    expect(text).toContain('SCAN_BYTE_LIMIT');
+    expect(text).toContain('map/provinces.bmp');
+    expect(text).toContain('scanMaxFileBytes');
     expect(await sourceInventory(modRoot)).toEqual(before);
   }, 180_000);
 

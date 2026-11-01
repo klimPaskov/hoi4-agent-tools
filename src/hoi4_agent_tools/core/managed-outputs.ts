@@ -42,6 +42,12 @@ export interface ManagedOutputPlan {
   retired: string[];
   /** Edited recorded outputs left to the workspace and dropped from the inventory, sorted. */
   released: string[];
+  /**
+   * Recorded paths this kind of output does not manage (safe relative paths outside the allow-list,
+   * such as files another tool registered): never read, edited or deleted, and dropped from the
+   * inventory. Sorted.
+   */
+  ignored: string[];
 }
 
 /** Pure planning only: the shared transaction engine performs every replacement and deletion. */
@@ -80,14 +86,15 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
   );
   const next = new Set(outputs.map((f) => f.relativePath.toLowerCase()));
   const released = new Set<string>();
+  const ignored = new Set<string>();
   const seen = new Set<string>();
   for (const file of previous) {
     const key = file.relativePath.toLowerCase();
+    // A path that could leave the workspace, or a duplicate, makes the whole inventory untrustworthy.
     if (
       file.relativePath.includes('\\') ||
       file.relativePath.split('/').some((s) => !s || s === '.' || s === '..') ||
       /^[a-z]:/iu.test(file.relativePath) ||
-      !input.permitsPath(file.relativePath) ||
       seen.has(key)
     )
       throw new ServiceError(
@@ -95,6 +102,11 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
         'Generated-output inventory contains an unsupported or duplicate path',
       );
     seen.add(key);
+    // A safe path this inventory does not manage is left alone: not compared, not deleted.
+    if (!input.permitsPath(file.relativePath)) {
+      ignored.add(file.relativePath);
+      continue;
+    }
     const current = sources.get(key);
     if (current === undefined || sha256Bytes(current.bytes) === file.sha256) continue;
     if (!next.has(key) && input.releasable?.(file.relativePath) === true) {
@@ -107,10 +119,11 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
       { relativePath: file.relativePath },
     );
   }
+  const ignoredKeys = new Set([...ignored].map((path) => path.toLowerCase()));
   const deletions: ProposedFileChange[] = previous
     .filter((f) => {
       const key = f.relativePath.toLowerCase();
-      return !next.has(key) && !released.has(key) && sources.has(key);
+      return !next.has(key) && !released.has(key) && !ignoredKeys.has(key) && sources.has(key);
     })
     .map((f) => ({
       relativePath: f.relativePath,
@@ -141,5 +154,6 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
     released: sorted(
       previous.filter((f) => released.has(f.relativePath.toLowerCase())).map((f) => f.relativePath),
     ),
+    ignored: sorted(ignored),
   };
 }

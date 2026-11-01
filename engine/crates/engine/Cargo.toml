@@ -1,0 +1,19 @@
+[package]
+name = "hoi4-engine"
+description = "Shared Hearts of Iron IV engine: workspace layers, symbol index, reference closure, lints, override audit and findings baseline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+hoi4-syntax.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+rayon.workspace = true
+
+[lints]
+workspace = true

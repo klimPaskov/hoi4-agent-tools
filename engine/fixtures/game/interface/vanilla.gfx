@@ -1,0 +1,10 @@
+spriteTypes = {
+	spriteType = {
+		name = "GFX_vanilla_focus"
+		texturefile = "gfx/interface/goals/vanilla.dds"
+	}
+	spriteType = {
+		name = "GFX_vanilla_picture"
+		texturefile = "gfx/event_pictures/vanilla.dds"
+	}
+}

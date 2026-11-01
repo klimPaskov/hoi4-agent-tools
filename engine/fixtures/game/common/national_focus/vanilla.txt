@@ -1,0 +1,25 @@
+focus_tree = {
+	id = vanilla_tree
+	focus = {
+		id = VAN_left
+		icon = GFX_vanilla_focus
+		x = 0
+		y = 0
+		cost = 10
+		mutually_exclusive = { focus = VAN_right }
+		completion_reward = {
+			add_political_power = 50
+		}
+	}
+	focus = {
+		id = VAN_right
+		icon = GFX_vanilla_focus
+		x = 2
+		y = 0
+		cost = 10
+		mutually_exclusive = { focus = VAN_left }
+		completion_reward = {
+			vanilla_effect = yes
+		}
+	}
+}

@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/syntax", "crates/engine", "crates/drawio", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/klimPaskov/hoi4-agent-tools"
+rust-version = "1.88"
+publish = false
+
+[workspace.dependencies]
+hoi4-syntax = { path = "crates/syntax" }
+hoi4-engine = { path = "crates/engine" }
+hoi4-drawio = { path = "crates/drawio" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+rayon = "1"
+roxmltree = "0.20"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

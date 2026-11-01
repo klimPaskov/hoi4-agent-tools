@@ -1,4 +1,4 @@
-# ADR 0074: Focus layout quality is a verdict, measured against the game's own trees
+# ADR 0075: Focus layout quality is a verdict, measured against the game's own trees
 
 ## Context
 

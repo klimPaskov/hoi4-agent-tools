@@ -1,0 +1,15 @@
+[package]
+name = "hoi4-syntax"
+description = "Lossless Clausewitz and localisation parser with byte spans for Hearts of Iron IV sources"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "bare",
+    "xml": "<mxGraphModel><root>\n<mxCell id=\"0\"/>\n<mxCell id=\"n1\" value=\"&lt;b&gt;Alpha &amp;amp; Beta&lt;/b&gt;\" vertex=\"1\"><mxGeometry x=\"-20\" y=\"-110\"/></mxCell>\n<mxCell id=\"n2\" value=\"Alpha &amp; Beta\" vertex=\"1\"><mxGeometry x=\"bad\" y=\"3\"/></mxCell>\n<mxCell id=\"n3\" value=\"***\" vertex=\"1\"><mxGeometry x=\"0\" y=\"0\"/></mxCell>\n<mxCell id=\"e1\" edge=\"1\" source=\"n1\" target=\"n2\"/>\n<mxCell id=\"e2\" edge=\"1\" source=\"n2\" target=\"n2\"/>\n<mxCell id=\"e3\" edge=\"1\" source=\"n2\" target=\"missing\"/>\n</root></mxGraphModel>",
+    "prefix": "",
+    "expected": {
+      "nodes": [
+        {"focus_id": "Alpha_Beta", "name": "Alpha & Beta", "x": 0, "y": 0},
+        {"focus_id": "Alpha_Beta_2", "name": "Alpha & Beta", "x": 1, "y": 2},
+        {"focus_id": "focus", "name": "***", "x": 2, "y": 2}
+      ],
+      "edges": [{"source": "Alpha_Beta", "target": "Alpha_Beta_2"}],
+      "warnings": [
+        "cell n2: invalid geometry · using (0,0)",
+        "focus_id collision · 'Alpha_Beta' renamed to 'Alpha_Beta_2'",
+        "negative canvas coords · shifted all nodes by (1,2) to keep grid positions non-negative",
+        "grid collision · focus 'focus' moved from (1,2) to (2,2) to avoid overlap",
+        "self-loop edge on 'Alpha_Beta_2' · dropped (a focus cannot be its own prerequisite)",
+        "edge e3: dangling source / target · skipped"
+      ]
+    }
+  },
+  {
+    "name": "wrapped",
+    "xml": "<mxfile><diagram><mxGraphModel><root>\n<object id=\"o1\" label=\"&lt;i&gt;First Node&lt;/i&gt;\"><mxCell vertex=\"1\"><mxGeometry x=\"100\" y=\"200\"/></mxCell></object>\n<mxCell id=\"bare\" value=\"Bare\" vertex=\"1\"><mxGeometry x=\"300\" y=\"400\"/></mxCell>\n<UserObject id=\"u1\" label=\"Second Node\"><mxCell vertex=\"1\"><mxGeometry x=\"200\" y=\"300\"/></mxCell></UserObject>\n<object id=\"oe\" source=\"o1\" target=\"u1\"><mxCell edge=\"1\"/></object>\n</root></mxGraphModel></diagram></mxfile>",
+    "prefix": "GER",
+    "expected": {
+      "nodes": [
+        {"focus_id": "GER_First_Node", "name": "First Node", "x": 1, "y": 2},
+        {"focus_id": "GER_Second_Node", "name": "Second Node", "x": 2, "y": 3},
+        {"focus_id": "GER_Bare", "name": "Bare", "x": 3, "y": 4}
+      ],
+      "edges": [{"source": "GER_First_Node", "target": "GER_Second_Node"}],
+      "warnings": []
+    }
+  },
+  {
+    "name": "namespace_ignored",
+    "xml": "<mxGraphModel xmlns=\"urn:test\"><root><mxCell id=\"n\" value=\"Nope\" vertex=\"1\"/></root></mxGraphModel>",
+    "prefix": "",
+    "expected": {"nodes": [], "edges": [], "warnings": []}
+  },
+  {
+    "name": "mixed_negative",
+    "xml": "<mxGraphModel><root><mxCell id=\"a\" value=\"A\" vertex=\"1\"><mxGeometry x=\"250\" y=\"-1\"/></mxCell><mxCell id=\"b\" value=\"B\" vertex=\"1\"><mxGeometry x=\"350\" y=\"99\"/></mxCell></root></mxGraphModel>",
+    "prefix": "",
+    "expected": {
+      "nodes": [
+        {"focus_id": "A", "name": "A", "x": 0, "y": 0},
+        {"focus_id": "B", "name": "B", "x": 1, "y": 1}
+      ],
+      "edges": [],
+      "warnings": ["negative canvas coords · shifted all nodes by (-2,1) to keep grid positions non-negative"]
+    }
+  },
+  {
+    "name": "empty_coord",
+    "xml": "<mxGraphModel><root><mxCell id=\"a\" value=\"A\" vertex=\"1\"><mxGeometry x=\"\" y=\"200\"/></mxCell></root></mxGraphModel>",
+    "prefix": "",
+    "expected": {
+      "nodes": [{"focus_id": "A", "name": "A", "x": 0, "y": 0}],
+      "edges": [],
+      "warnings": ["cell a: invalid geometry · using (0,0)"]
+    }
+  }
+]
