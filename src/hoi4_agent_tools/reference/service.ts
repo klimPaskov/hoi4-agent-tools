@@ -95,7 +95,20 @@ interface RankedSection {
 interface CachedFile {
   revision: string;
   bytes: number;
+  /** Size, modification time and file identity when the revision was hashed. */
+  stamp: string;
   sections: IndexedSection[];
+}
+
+/** An unchanged stamp lets a repeated query reuse the hashed revision without rereading. */
+function fileStamp(metadata: {
+  size: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  ino: number;
+  dev: number;
+}) {
+  return `${metadata.size}:${metadata.mtimeMs}:${metadata.ctimeMs}:${metadata.ino}:${metadata.dev}`;
 }
 
 interface SourceRoot {
@@ -424,8 +437,15 @@ export class ReferenceService {
             coverage[root.kind].files++;
             admittedSources.push(source);
           }
+          const keyOf = (source: PreparedSource) =>
+            `${root.kind}:${canonicalRoot}:${source.canonicalPath}`;
           const reads = await Promise.allSettled(
             admittedSources.map(async (source) => {
+              const known = this.#cache.get(keyOf(source));
+              if (known?.stamp === fileStamp(source.metadata)) {
+                await verifySource(readRoot, source);
+                return known;
+              }
               const content = await readBoundedFile(source.handle, source.metadata.size, signal);
               await verifySource(readRoot, source);
               if (content.length !== source.metadata.size)
@@ -445,17 +465,24 @@ export class ReferenceService {
             );
           for (const [index, read] of reads.entries()) {
             if (read.status !== 'fulfilled') continue;
-            const canonical = admittedSources[index]!.canonicalPath;
-            const content = read.value;
-            const key = `${root.kind}:${canonicalRoot}:${canonical}`;
-            const revision = sha256Bytes(content);
-            let cached = this.#cache.get(key);
-            if (cached?.revision !== revision)
-              cached = {
-                revision,
-                bytes: content.length,
-                sections: sectionize(root, canonical, referenceText(content), revision),
-              };
+            const source = admittedSources[index]!;
+            const canonical = source.canonicalPath;
+            const key = keyOf(source);
+            let cached: CachedFile;
+            if (Buffer.isBuffer(read.value)) {
+              const content = read.value;
+              const revision = sha256Bytes(content);
+              const previous = this.#cache.get(key);
+              cached =
+                previous?.revision === revision
+                  ? { ...previous, stamp: fileStamp(source.metadata) }
+                  : {
+                      revision,
+                      bytes: content.length,
+                      stamp: fileStamp(source.metadata),
+                      sections: sectionize(root, canonical, referenceText(content), revision),
+                    };
+            } else cached = read.value;
             this.retain(key, cached);
             const admitted = cached.sections.slice(0, MAX_SECTIONS - sections.length);
             if (admitted.length < cached.sections.length) skipped++;
