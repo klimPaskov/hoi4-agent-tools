@@ -113,9 +113,19 @@ version = "0.1.0"
 dependencies = [
  "hoi4-drawio",
  "hoi4-engine",
+ "hoi4-focus-layout",
  "hoi4-syntax",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "hoi4-focus-layout"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
