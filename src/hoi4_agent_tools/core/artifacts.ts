@@ -487,12 +487,21 @@ async function preflightArtifactBatch(
   const preparationCeiling = Math.min(maxBytes, artifactLogicalBatchMaxBytes);
   if (totalBytes > preparationCeiling) {
     const fixedCeilingApplies = artifactLogicalBatchMaxBytes <= maxBytes;
+    const largest = writes
+      .map(({ name }, index) => ({ name, size: contentLengths[index]! }))
+      .sort((left, right) => right.size - left.size || compareCodeUnits(left.name, right.name))
+      .slice(0, 3);
+    const mib = (bytes: number): string => `${(bytes / 1_048_576).toFixed(1)} MiB`;
     throw new ServiceError(
       fixedCeilingApplies ? 'ARTIFACT_LOGICAL_BATCH_LIMIT' : 'ARTIFACT_STORAGE_LIMIT',
-      fixedCeilingApplies
-        ? 'Logical artifact batch exceeds the fixed in-memory preparation ceiling'
-        : 'Logical artifact batch exceeds the configured aggregate artifact-byte limit',
-      { size: totalBytes, maximumBytes: preparationCeiling },
+      `${
+        fixedCeilingApplies
+          ? 'Logical artifact batch exceeds the fixed in-memory preparation ceiling'
+          : 'Logical artifact batch exceeds the configured aggregate artifact-byte limit'
+      } (${mib(totalBytes)} in ${writes.length} artifacts, limit ${mib(preparationCeiling)}; largest: ${largest
+        .map(({ name, size }) => `${name} ${mib(size)}`)
+        .join(', ')})`,
+      { size: totalBytes, maximumBytes: preparationCeiling, artifacts: writes.length, largest },
     );
   }
   if (projectedEntries > maxEntries) {

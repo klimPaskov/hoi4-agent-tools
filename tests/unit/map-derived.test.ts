@@ -14,6 +14,7 @@ import {
 import {
   collectMapScriptReferences,
   missingMapReferenceDiagnostics,
+  mapScriptConsistency,
 } from '../../src/hoi4_agent_tools/map/references.js';
 import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
 import { validateMap } from '../../src/hoi4_agent_tools/map/validation.js';
@@ -193,6 +194,48 @@ describe('script references to map entities', () => {
     expect(missing).toMatchObject([
       { code: 'MAP_SCRIPT_REFERENCE_MISSING', severity: 'error', details: { id: 7 } },
     ]);
+  });
+
+  it('reads a province in prioritize and the state 0 sentinel as what they are', async () => {
+    // From vanilla `common/decisions/AST.txt` (`prioritize = { 521 7564 }`, a state and a port
+    // province) and Chaos Redux's scripted triggers (`NOT = { state = 0 }`).
+    const sentinels = [
+      'refs_effect = {',
+      '\trandom_owned_state = { prioritize = { 1 4 } add_manpower = 1 }',
+      '\trandom_owned_state = { prioritize = { 9 } add_manpower = 1 }',
+      '\tif = { limit = { NOT = { state = 0 } } add_manpower = 1 }',
+      '\tif = { limit = { state = 9 } add_manpower = 1 }',
+      '}',
+      '',
+    ].join('\n');
+    const { scan } = await workspace({
+      ...baseMap(),
+      'common/scripted_effects/refs.txt': sentinels,
+    });
+    const { index } = await scan(true);
+    const { references } = collectMapScriptReferences(index.sourceFiles);
+    expect(references.map(({ entity, id, key }) => [entity, id, key])).toEqual([
+      ['state', 1, 'prioritize'],
+      ['state', 4, 'prioritize'],
+      ['state', 9, 'prioritize'],
+      ['state', 9, 'state'],
+    ]);
+    const missing = missingMapReferenceDiagnostics(references, {
+      state: (id) => index.statesById.has(id),
+      province: (id) => index.definitionsById.has(id),
+      'strategic-region': (id) => index.regionsById.has(id),
+    });
+    expect(missing).toMatchObject([
+      { code: 'MAP_SCRIPT_PRIORITIZE_PROVINCE', severity: 'warning', details: { id: 4 } },
+      { code: 'MAP_SCRIPT_REFERENCE_MISSING', severity: 'error', details: { id: 9 } },
+      {
+        code: 'MAP_SCRIPT_REFERENCE_MISSING',
+        severity: 'error',
+        details: { id: 9, key: 'state' },
+      },
+    ]);
+    // The province in prioritize is its own finding, not a missing reference.
+    expect(mapScriptConsistency(index)).toMatchObject({ references: 4, missing: 2 });
   });
 
   it('copies a reference for each successor state and removes references to removed ones', async () => {
