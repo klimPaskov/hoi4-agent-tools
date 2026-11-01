@@ -69,7 +69,7 @@ A small invented world, from the model you write to the map the server writes. T
 | [![Geography model overlay](docs/images/maps/model-overlay.png)](docs/images/maps/model-overlay.png) | [![Countries placed](docs/images/maps/world-owners.png)](docs/images/maps/world-owners.png)                                        |
 | [![Provinces](docs/images/maps/world-provinces.png)](docs/images/maps/world-provinces.png)           | [![Terrain, wall, crossing and ports](docs/images/maps/world-terrain-crossings.png)](docs/images/maps/world-terrain-crossings.png) |
 
-Each realm grows from its capital point; the wall's gate, the strait across the gulf, the ports and the river through the cone of the volcano all come from the model. See [the map guide](docs/map.md#from-a-model-to-a-world-an-example).
+Each realm grows from its capital point; the wall with its gate, the strait across the gulf and the ports all come from the model. See [the map guide](docs/map.md#from-a-model-to-a-world-an-example).
 
 ## Tools
 
