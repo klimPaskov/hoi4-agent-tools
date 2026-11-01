@@ -18,7 +18,7 @@ Make focus trees, events and decisions. Edit maps and generate a new world. Prev
 
 Your agent can build and edit focus trees, events, decisions and maps, and generate a new world.
 
-For a new map, give it a cleaned local reference image and preview the interpreted geography before writing. The [map workflow](docs/map.md#generate-a-world-from-one-image) creates provinces, states, terrain, cities, countries, supply and a provisional starting scenario. Reviewed names and masks refine ambiguous artwork; offline validation is separate from [native campaign acceptance](https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.1.0/docs/evaluations/worldgen_acceptance_2026-10-15.md).
+For a new map, describe the world as a [geography model](docs/map.md#describe-a-world-as-a-geography-model) (seas, lands, ranges with passes, volcanoes, rivers, straits) or give it a cleaned local reference image or a drawing made of registered sheets, and preview the interpreted geography before writing. The [map workflow](docs/map.md#generate-a-world-from-one-image) creates provinces, states, terrain, rivers, cities, supply and a provisional starting scenario, and places the countries your mod already declares from their capitals, claims and exclusions. Straits become named crossings, walls close continents except at their gates, and a river that a model draws is cut through the relief it crosses, with a warning that says where. Offline validation is separate from [native campaign acceptance](https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.1.0/docs/evaluations/worldgen_acceptance_2026-10-15.md).
 It previews focus trees, technology folders, windows and maps, finds the right rule in the game's documentation, fixes broken script and tunes AI choices.
 You describe what you want; the agent picks the right tools.
 
@@ -59,6 +59,17 @@ Each pair shows a capture from the game next to the server's preview of the same
 | [![Video options in game](docs/images/comparisons/gui/options-video-ingame.png)](docs/images/comparisons/gui/options-video-ingame.png) | [![Video options preview](docs/images/comparisons/gui/options-video-mcp.png)](docs/images/comparisons/gui/options-video-mcp.png) |
 
 See more in the [examples gallery](docs/examples.md).
+
+### Maps
+
+A small invented world, from the model you write to the map the server writes. These are offline renders of the files the server generated, not game screenshots; the model is project-owned and the images are rebuilt by [`scripts/docs-map-gallery.ts`](scripts/docs-map-gallery.ts).
+
+| The model you give (before)                                                                          | The world it writes (after): owners                                                                                                |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [![Geography model overlay](docs/images/maps/model-overlay.png)](docs/images/maps/model-overlay.png) | [![Countries placed](docs/images/maps/world-owners.png)](docs/images/maps/world-owners.png)                                        |
+| [![Provinces](docs/images/maps/world-provinces.png)](docs/images/maps/world-provinces.png)           | [![Terrain, wall, crossing and ports](docs/images/maps/world-terrain-crossings.png)](docs/images/maps/world-terrain-crossings.png) |
+
+Each realm grows from its capital point; the wall's gate, the strait across the gulf, the ports and the river through the cone of the volcano all come from the model. See [the map guide](docs/map.md#from-a-model-to-a-world-an-example).
 
 ## Tools
 

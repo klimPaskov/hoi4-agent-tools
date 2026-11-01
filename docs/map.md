@@ -85,6 +85,27 @@ A request with sheets, `fit: "frame"`, `paletteMatch: "exact"` or a geography mo
 
 Only relative paths inside the authorized mod workspace are accepted. URLs, absolute paths, traversal, generated storage and symlink escapes are refused. The source is bounded to 1 GiB and 300 million decoded pixels; analysis uses a reduced working PNG up to 3072 pixels per side, or, with `fit: "frame"`, a copy at the frame resolution (never enlarged, at most 32 million pixels; nearest-neighbour reduction under `paletteMatch: "exact"`, so no new colours appear). The verified source handle is streamed into an exclusive private temporary snapshot, and the same copied bytes are hashed and decoded; the snapshot is removed on completion, failure or cancellation. The original SHA-256 is checked again before writing, using a streaming read, so replacing the source after preparation blocks application. CI image fixtures are synthetic and project-owned. Attributed comparison images may be published separately with permission and remain outside the npm package.
 
+## From a model to a world: an example
+
+The images below come from one invented world: the model is [`scripts/docs-map-gallery.ts`](../scripts/docs-map-gallery.ts), the files are what `hoi4.map_rewrite` wrote from it, and the pictures are offline renders of those files (`hoi4.map_inspect` with a layer and overlays), never game screenshots. The model has two lands, a gulf, a wall with a gate, a ridge, a volcano, three rivers and a strait; four countries that the mod declares are placed from a capital point each.
+
+| The model (preview overlay)                     | Provinces                                     |
+| ----------------------------------------------- | --------------------------------------------- |
+| ![Model overlay](images/maps/model-overlay.png) | ![Provinces](images/maps/world-provinces.png) |
+| **States and victory points**                   | **Owners**                                    |
+| ![States](images/maps/world-states.png)         | ![Owners](images/maps/world-owners.png)       |
+
+Terrain with the crossings the model asked for: the red lines are the impassable wall (open at its gate), the violet line is the strait across the gulf and the dots are ports.
+
+![Terrain with adjacencies and ports](images/maps/world-terrain-crossings.png)
+
+The steps behind them:
+
+1. `hoi4.map_rewrite` with `preview: true` draws the model and reports its errors without planning a map (the first picture).
+2. The same call with `synthesisCheck: true` runs only the relief and river synthesis and lists every river that cannot reach its mouth, every crossing where a river's valley is carved through a divide, every pass that is not lower than its crest and every realm point that is in water or too close to another ([Rivers, carved valleys and the river check](#rivers-carved-valleys-and-the-river-check)).
+3. Without `preview` the world is written in one call with `countries: { source: "workspace", realms }` ([Countries the mod already owns](#countries-the-mod-already-owns)): the map files, states, strategic regions and names, and none of the countries' own files.
+4. `hoi4.map_inspect` renders any layer (`province`, `state`, `owner`, `terrain`, ...) with overlays (`coastlines`, `adjacencies`, `ports`, `victory-points`, ...) for review.
+
 ## Describe a world as a geography model
 
 A reference picture says where land and water are. A geography model says what the world is: seas, lands, mountain ranges with passes, volcanoes, rivers from a lake to a sea, lakes, forests and deserts, straits, sites and climate, each with an id and a name. `create_world` accepts one as `geography` (inline) or `geographyPath` (a workspace-relative `.json` file of at most 4 MiB; prefer the file for anything beyond a few hundred vertices). It may stand alone or accompany a `reference` picture. [geography-model.schema.json](../schemas/geography-model.schema.json) is the complete schema; [ADR 0055](adr/0055-geography-model-input.md) records the design.

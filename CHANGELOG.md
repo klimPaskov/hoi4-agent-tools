@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a map gallery to the README and the map guide: one invented world from the geography model you write to the owners, provinces, states, terrain, crossings and ports the server writes (`docs/images/maps/`, offline renders, not game screenshots), rebuilt by `scripts/docs-map-gallery.ts`. The README text describes geography models, workspace countries, carved river valleys and crossings.
+
 ## 4.6.4 - 2026-11-01
 
 - Write a large world without hitting the scan limit. The check after a map write read every changed file again, bitmaps and textures included, with the base game's files of the same names: 270 MB for a 5120 x 2560 world, past the default `scanMaxBytes` of 256 MiB, so the write was restored after seven minutes with `SCAN_BYTE_LIMIT`. It now reads the changed text files only. See the amendment to ADR 0047.
