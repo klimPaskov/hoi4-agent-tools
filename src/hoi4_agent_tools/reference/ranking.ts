@@ -8,6 +8,8 @@
  * both the exact identifier and a question about what is "controlled by" a country.
  */
 
+import { handVocabulary, localisationVocabulary } from './vocabulary.js';
+
 const stopWords = new Set([
   'a',
   'about',
@@ -192,6 +194,21 @@ export interface QueryPlan {
 /** Script names abbreviate counts as `num_`, as in `num_divisions` or `num_of_factories`. */
 const countWords = new Set(['count', 'number', 'amount', 'many', 'much']);
 
+/** A script word reached through player vocabulary counts this much of a query word. */
+const vocabularyWeight = 0.6;
+let vocabulary: Array<{ player: string[]; content: string[]; script: string }> | undefined;
+function playerVocabulary() {
+  vocabulary ??= [...localisationVocabulary, ...handVocabulary].map(({ player, script }) => {
+    const words = player.toLowerCase().split(/\s+/u);
+    return {
+      player: words.map(stemTerm),
+      content: words.filter((word) => !stopWords.has(word)).map(stemTerm),
+      script: script.includes('_') ? script : stemTerm(script),
+    };
+  });
+  return vocabulary;
+}
+
 const headingWeight = 4;
 const titleWeight = 0.5;
 const bodyWeight = 1;
@@ -233,7 +250,27 @@ export class RankingIndex {
       if (this.#documentFrequency.has(joined) && !weights.has(joined)) weights.set(joined, 1);
     }
     if (words.some((word) => countWords.has(word)) && !weights.has('num')) weights.set('num', 0.6);
-    const terms = [...weights].map(([term, weight]) => ({ term, idf: this.idf(term), weight }));
+    // Player words also search the script word the documentation uses; the script word is
+    // never more informative than the player words it stands for.
+    const spoken = (normalized.replace(/'s\b/gu, '').match(tokenPattern) ?? [])
+      .filter((word) => !word.includes('_'))
+      .map(stemTerm);
+    const ceilings = new Map<string, number>();
+    for (const { player, content, script } of playerVocabulary()) {
+      if (weights.has(script) || content.length === 0) continue;
+      const found = spoken.some((_, start) =>
+        player.every((word, offset) => spoken[start + offset] === word),
+      );
+      if (!found) continue;
+      const ceiling = Math.max(...content.map((word) => this.idf(word)));
+      ceilings.set(script, Math.max(ceilings.get(script) ?? 0, ceiling));
+    }
+    for (const script of ceilings.keys()) weights.set(script, vocabularyWeight);
+    const terms = [...weights].map(([term, weight]) => ({
+      term,
+      idf: Math.min(this.idf(term), ceilings.get(term) ?? Number.POSITIVE_INFINITY),
+      weight,
+    }));
     const plain = sequence.filter((term) => !term.includes('_'));
     const pairs = [...new Set(plain.slice(1).map((term, index) => `${plain[index]} ${term}`))].map(
       (pair) => {
@@ -245,7 +282,7 @@ export class RankingIndex {
       terms,
       pairs,
       normalized,
-      identifiers: new Set(terms.map(({ term }) => term).filter((term) => term.includes('_'))),
+      identifiers: new Set(sequence.filter((term) => term.includes('_'))),
       wants: {
         console: words.some((word) => word === 'console' || word.startsWith('command')),
         define: words.some((word) => word.startsWith('define')) || /\b[A-Z]{2,}_[A-Z]/u.test(query),
