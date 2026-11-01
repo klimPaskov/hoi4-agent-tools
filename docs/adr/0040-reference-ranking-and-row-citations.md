@@ -46,3 +46,10 @@ On the original nine-question set, which was assembled with the previous ranking
 In three repeated runs on the same machine, the first query after a source change took 370–386 milliseconds to index about twelve thousand sections, compared with 147–159 before; later queries took a median of 37 milliseconds, compared with 49–63, because term statistics are reused rather than rescanning each section body.
 Vocabulary that the documentation never uses still misses, such as "national spirit" for `remove_ideas`, "give a state" for `transfer_state`, and "repeat effects" for `for_loop_effect`.
 `scripts/evaluate-reference-discovery.ts` reruns both question sets against a supplied mod and game root; see `docs/research/reference-benchmark.md`.
+
+## Amendment (2026-11-01): player vocabulary trial
+
+A trial expanded plain-word queries with script words mined from the game's English localisation (tooltip phrases such as "at war" for `has_war`, and word pairs such as technology for `tech`) and five hand-checked entries such as national spirit for idea.
+It placed 22 rather than 19 of the 37 discovery answers first, the set it was tuned on, but left the 24 validation questions unchanged and placed 8 rather than 7 of 24 new held-out questions first, with one question in each held-out set falling a place.
+That gain is too small for the extra vocabulary to maintain, so the trial was reverted and the rule against added synonyms stands.
+ADR 0075 adds the game's own tooltip and modifier names to command entries and a preference for the kind of command a question asks for; see `docs/research/reference-benchmark.md`.

@@ -57,14 +57,124 @@ Most use vocabulary the documentation does not: "national spirit" where script s
 Search the script name when it is known; the ranking does not add synonyms for individual questions.
 These are 61 task questions over one documentation snapshot, not a general precision guarantee.
 
-Run both sets with:
+Run the sets with:
 
 ```bash
 npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT
 npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --validation
+npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --held-out
 ```
 
 The script exits with a failure when a case has no expected answer in the supplied sources.
+
+## Refreshed wiki snapshot and a player vocabulary trial
+
+Measured on 2026-11-01 against the Chaos Redux wiki snapshot refreshed on 2026-10-31 (54 wiki pages and 10 kit pages, 11,340 sections) and the installed 1.19.3.0 documentation (50 files, 3,281 sections).
+The refresh renamed pages to snake case (`event_modding.md`), and the benchmark still expected `Event modding - Hearts of Iron 4 Wiki.md`, so it scored every wiki answer as a miss: 10 of 37 discovery answers first and seven cases reported as unanswerable.
+The cases now accept both names.
+
+A third set, `--held-out`, has 24 new questions written by a separate agent that was not told about the change below.
+The validation set was no longer a clean check: two of its misses, "remove a national spirit" and "repeat effects", had been named in ADR 0040 as the motivating examples.
+
+The trial expanded a plain-word query with the script word the documentation uses, at 0.6 of a query word's weight and never more informative than the player words it replaces.
+`scripts/derive-reference-vocabulary.ts` mined the vocabulary from the game's English localisation, where `EFFECT_`, `TRIGGER_` and `MODIFIER_` keys name script and their text is what the player reads: 128 tooltip phrases of two or three words for documented commands ("at war" for `has_war`, "moves capital to" for `set_capital`) and 11 of 25 mined word pairs that name the same thing (conference for `pc`, technology for `tech`, freedom for `autonomy`).
+The other 14 pairs only appear together ("male" and "female").
+Five hand-checked entries covered what the localisation names only indirectly: national spirit to idea, temporary and expire to timed, repeat to loop, and skip to bypass ("at war" was listed by hand as well).
+The entries and the weight were chosen on the discovery set alone: a hand entry from build to construction moved one discovery answer from first to second and was dropped, and weights of 0.4, 0.8 and 1.0 each placed 21 rather than 22 discovery answers first.
+The held-out baseline was measured before the entries were final, but no entry was chosen from it; validation and held-out were each scored once with the final entries.
+
+| Set and ranking                    | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| ---------------------------------- | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Discovery, current ranking         |        19/37 |        27/37 |       28/37 |              25/37 |                0.595 |
+| Discovery, with vocabulary (tuned) |        22/37 |        29/37 |       30/37 |              26/37 |                0.668 |
+| Validation, current ranking        |        11/24 |        15/24 |       18/24 |              15/24 |                0.559 |
+| Validation, with vocabulary        |        11/24 |        15/24 |       18/24 |              15/24 |                0.552 |
+| Held-out, current ranking          |         7/24 |        12/24 |       15/24 |               9/24 |                0.402 |
+| Held-out, with vocabulary          |         8/24 |        12/24 |       16/24 |               9/24 |                0.440 |
+
+Both rankings placed all five exact identifiers first and returned nothing for the two negative queries.
+The October discovery figures (19, 28 and 29 of 37) were measured on the previous snapshot and game documentation, so they are not a direct comparison.
+
+The vocabulary lifted the set it was tuned on but not the questions it had never seen.
+On validation, "is controlled by the AI" fell from second to third because "controlled by" also names `is_controlled_by`; on the held-out set "has researched" and "technology" found `has_tech`, "national spirit" moved `has_idea` no closer, and "does not own" pushed a claim question from third to fourth.
+Across the 48 held-out and validation questions that is one more answer first and one more within five.
+The trial was reverted and ADR 0040's rule against added synonyms stands; commit `ab56af1` reproduces it.
+
+Two causes of the remaining misses are not vocabulary:
+
+- The refreshed wiki documents some commands on more pages than the hand-checked answers name. `scopes.md` has a `for_loop_effect` row, `data_structures.md` a `check_variable` row, and `event_modding.md` a `news_event` row. The strict answers do not count them, before or after.
+- When several sources have the same heading, later copies wait behind every distinct answer. For "remove a national spirit from a country" the console command `remove_ideas` ranks second, so the effect documentation and wiki copies of `remove_ideas` fall out of the first five.
+
+## Game text, question intent and a blind test set
+
+Measured on 2026-11-01 on the same sources (ADR 0075).
+Two changes were developed on the discovery, validation and held-out sets together (85 plain-word questions): each command entry also carries the words of its in-game tooltip or modifier name from the game's English localisation, and a question that starts with a check or an action verb prefers triggers or effects over other commands, on actions and dynamic variables.
+A fourth set, `--test`, was then written by a second agent that saw none of the other sets' results: 36 plain-word questions, four exact names and two negative queries. It was scored once, before and after.
+
+| Set                       | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| ------------------------- | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Development, before       |        37/85 |        54/85 |       61/85 |              49/85 |                0.530 |
+| Development, after        |        40/85 |        58/85 |       63/85 |              53/85 |                0.570 |
+| Discovery, after          |        20/37 |        27/37 |       28/37 |              25/37 |                0.623 |
+| Validation, after         |        14/24 |        17/24 |       19/24 |              17/24 |                0.660 |
+| Held-out, after           |         6/24 |        14/24 |       16/24 |              11/24 |                0.401 |
+| Blind test, before (once) |        16/40 |        25/40 |       31/40 |              22/40 |                0.547 |
+| Blind test, after (once)  |        20/40 |        28/40 |       31/40 |              25/40 |                0.606 |
+
+All exact names stayed first in every set.
+One blind negative query ("how to fix my graphics card driver crashing in a shooter") returned one result before and after; the other negatives returned none.
+Within the development sets the held-out set lost one first place (7 to 6) while the other two gained four.
+On the blind set, four questions moved to first ("some command power", "the ruling party and elections", "at war with anyone", "a decision is currently active") and "extra manpower" entered the first five, while "make all buildings construct faster" fell out of the first five because the action intent lowers modifier rows, and "use less supply" fell from second to third.
+
+On the development sets, the question intent alone placed three more answers first (40 of 85, with 61 within five). The in-game words alone placed one fewer first and one more within five, and on top of the intent they placed two more within five and none more first; they are kept for the questions they lift into reach of a first read.
+Weights of 0.4 and 0.8 for the intent penalty scored within one question of 0.6.
+Pooling the full text of every copy of a command into each entry placed fewer answers first (34 of 85) and was dropped. So was a rule that kept console-command copies from demoting the script entry with the same name, which changed nothing.
+Following links between wiki pages was not tried: cross-page links mostly point at whole pages, and their text repeats the target heading ("Flags" for `data_structures.md#Flags`), so they add no words a section does not already have.
+
+Half of the blind questions still miss first place, and nine miss the first five.
+The remaining misses mostly need meaning rather than shared words: "access to the sea" for `is_coastal`, "share a border" for `is_neighbor_of`, "research faster" for `research_speed_factor`, "free a puppet" for `end_puppet`.
+
+The maintainer updated the game to 1.19.4.1 the same day; its documentation adds the `stockpile_fuel` AI strategy, changes a token list and removes one console command.
+Every expected answer in all four sets is still present. Rescored on 1.19.4.1, before and after:
+
+| Set (1.19.4.1)     | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| ------------------ | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Discovery, before  |        19/37 |        27/37 |       28/37 |              25/37 |                0.595 |
+| Discovery, after   |        20/37 |        27/37 |       28/37 |              25/37 |                0.623 |
+| Validation, before |        11/24 |        15/24 |       18/24 |              15/24 |                0.559 |
+| Validation, after  |        14/24 |        17/24 |       19/24 |              17/24 |                0.660 |
+| Held-out, before   |         7/24 |        12/24 |       15/24 |               9/24 |                0.402 |
+| Held-out, after    |         6/24 |        14/24 |       16/24 |              11/24 |                0.401 |
+| Blind test, before |        16/40 |        25/40 |       31/40 |              22/40 |                0.547 |
+| Blind test, after  |        21/40 |        27/40 |       31/40 |              24/40 |                0.613 |
+
+The maintainer's target is the right answer first for at least 22 of 24 blind questions and within three for all of them. This ranking places about half first and two thirds within three, so the gap remains large.
+
+### Optional meaning layer trial
+
+With the maintainer's approval, a local sentence-embedding layer was tried on top of the word ranking (commit `bb3c019`, reverted in `b5c1a46`).
+It ran only when `HOI4_REFERENCE_EMBEDDINGS` named a cache folder and `@huggingface/transformers` 4.3.1 was installed, fetched the pinned `Xenova/all-MiniLM-L6-v2` revision `751bff37182d3f1213fa05d7196b954e230abad9` (the 22,972,370-byte quantized ONNX model and three tokenizer and config files, each checked against its pinned SHA-256), and embedded each section's page, heading and opening lines once into a 14 MB vector cache.
+Meaning ranks were fused with word ranks by reciprocal rank (meaning weight 0.25, k = 10, cosine floor 0.35); exact names stayed with word ranking, and each result said which ranking ordered it.
+Weights of 0.25 and 0.5 with k of 10 and 30, and embedding cleaned plain text instead of the Markdown excerpt, were compared on the development sets only.
+
+| Set                                  | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| ------------------------------------ | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Development, words                   |        40/85 |        58/85 |       63/85 |              53/85 |                0.570 |
+| Development, words and meaning       |        45/85 |        59/85 |       63/85 |              54/85 |                0.609 |
+| Blind test, words (once)             |        20/40 |        28/40 |       31/40 |              25/40 |                0.606 |
+| Blind test, words and meaning (once) |        20/40 |        26/40 |       32/40 |              23/40 |                0.602 |
+
+The gain on the development sets did not carry over to the blind set: the same number of first answers, two fewer within three, and the nonsense query "how to fix my graphics card driver crashing in a shooter" returned five troubleshooting sections rather than one. Exact names stayed first.
+Installing the runtime adds about 470 MB (`onnxruntime-node` 288 MB, `onnxruntime-web` 141 MB, `sharp` and its images 29 MB, the library 14 MB), the model download is 23 MB, loading the model took 2.1 seconds, embedding all 14,621 sections took about 53 seconds once, and a query embedding took about 25 milliseconds.
+The layer did not clearly win, so it was reverted, and the default install and ranking carry no model.
+A stronger model or embedding the game's own text per command may do better, but would need a new blind set, because this one has now been used for both comparisons.
+
+### Speed
+
+Before the change, every search reopened, reread and hashed all 114 documentation files. On a lightly loaded machine that inventory took a median of 70 ms of a 94 ms warm search, and with the file stamps reused it took 36 ms of 50 ms.
+A warm read took 13 ms rather than 25–84 ms.
+Later end-to-end runs shared the machine with other heavy work: three alternating rounds of the old and new code measured warm search medians of 145–183 ms and 84–583 ms, so no end-to-end speed gain is claimed from them.
+The first `hoi4.source_lookup` still builds the whole game and mod symbol index: 53–66 seconds in three runs before this change on a lightly loaded machine, 108–192 seconds under the later load. This change does not touch it, and moving that index to the shared Rust engine is planned separately.
 
 ## Compact context budgets
 
