@@ -6,7 +6,7 @@ import {
   autonomousResultArtifacts,
   type TransactionExecutionResult,
 } from '../core/transaction-execution.js';
-import { emptyServiceResult } from '../core/result.js';
+import { emptyServiceResult, ServiceError } from '../core/result.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
 import type { TransactionManifest } from '../core/transactions.js';
 import type {
@@ -197,6 +197,17 @@ export async function inspectGui(
           return { graph: linted.graph, linted };
         })();
   const { graph, linted } = inspected;
+  // A window the scene could not find is a small not-found, before any artifact is written.
+  // The lint scans only the sources of the named window, so it has no names to suggest.
+  if (
+    input.windowName !== undefined &&
+    linted?.scene.diagnostics.some(({ code }) => code === 'GUI_WINDOW_MISSING') === true
+  )
+    throw new ServiceError(
+      'GUI_WINDOW_NOT_FOUND',
+      `No GUI window named ${input.windowName.slice(0, 256)} is defined; hoi4.reference_search or hoi4.source_lookup can find window names`,
+      { windowName: input.windowName.slice(0, 256) },
+    );
   const sharedRevision = hashCanonical(graph.sourceHashes);
   const workspace = engine.resolver.get(context.workspaceId, context.principal);
   const sourceEvidence = boundedSourceHashEvidence(graph.sourceHashes);
