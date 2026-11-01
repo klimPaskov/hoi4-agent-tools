@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.6.4 - 2026-11-01
+
+- Write a large world without hitting the scan limit. The check after a map write read every changed file again, bitmaps and textures included, with the base game's files of the same names: 270 MB for a 5120 x 2560 world, past the default `scanMaxBytes` of 256 MiB, so the write was restored after seven minutes with `SCAN_BYTE_LIMIT`. It now reads the changed text files only. See the amendment to ADR 0047.
+- Name what a scan limit error crossed. A restored rewrite stopped by `SCAN_BYTE_LIMIT` or `SCAN_FILE_LIMIT` now says which file, how many bytes were read and the limit in its message, and a file larger than `scanMaxFileBytes` stops the rewrite before anything is written.
+
 ## 4.6.3 - 2026-11-01
 
 - Write a world over a mod whose output inventory lists files the world does not manage. `.hoi4-agent-world.json` could record files that were never outputs of a generated world (for example country tag files and localisation files registered by the mod's own tooling), and one such entry made every write fail with `MANAGED_OUTPUT_MANIFEST_INVALID`. A safe relative path outside the allow-list is now left alone (never read, compared, edited or deleted), dropped from the next inventory and reported (`MAP_WORLD_OUTPUT_RECORD_IGNORED`, `data.outputs`). A path that could leave the workspace, or a duplicate, still refuses the inventory. See the amendment to ADR 0052.

@@ -318,14 +318,43 @@ export class JobTransactions {
  * Why the write stopped: the error code and message of a service error, else only the error
  * kind, followed by the first check or diagnostic of the transaction that failed validation.
  */
-function failureCause(error: unknown, transaction: TransactionManifest): string {
+/** The size figures of a scan limit error, so the message names the file and the limit. */
+function scanLimitText(details: Record<string, unknown> | undefined): string {
+  if (details === undefined) return '';
+  const mb = (value: unknown): string =>
+    typeof value === 'number' ? `${(value / 1_048_576).toFixed(1)} MiB` : '?';
+  const parts: string[] = [];
+  if (typeof details.file === 'string')
+    parts.push(
+      `file ${details.file}${details.fileBytes === undefined ? '' : ` (${mb(details.fileBytes)})`}`,
+    );
+  if (details.bytes !== undefined && details.limit !== undefined)
+    parts.push(`${mb(details.bytes)} read of the ${mb(details.limit)} scan limit`);
+  if (details.perFileLimit !== undefined) parts.push(`per-file limit ${mb(details.perFileLimit)}`);
+  if (
+    typeof details.files === 'number' &&
+    typeof details.limit === 'number' &&
+    details.bytes === undefined
+  )
+    parts.push(`${details.files} files against the limit of ${details.limit}`);
+  return parts.length === 0 ? '' : ` [${parts.join('; ')}]`;
+}
+
+export function failureCause(error: unknown, transaction: TransactionManifest): string {
   const recorded =
     transaction.failure === undefined
       ? ''
       : `${transaction.failure.code}: ${transaction.failure.message}`;
+  // A rewrite that was restored wraps the error that stopped it; the wrapped error is the cause.
+  const inner = (error as { details?: { cause?: unknown } } | undefined)?.details?.cause as
+    { code?: string; message?: string; details?: Record<string, unknown> } | undefined;
   const cause =
     error instanceof ServiceError
-      ? `${error.code}: ${error.message}`
+      ? inner?.code === undefined
+        ? `${error.code}: ${error.message}`
+        : `${inner.code}: ${inner.message ?? error.message}${
+            inner.code.startsWith('SCAN_') ? scanLimitText(inner.details) : ''
+          }`
       : error instanceof Error
         ? error.name
         : recorded;

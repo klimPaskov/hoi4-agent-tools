@@ -28,6 +28,7 @@ export class AutonomousRewriteError extends ServiceError {
       {
         execution: 'failed',
         automaticRecovery: restored ? 'restored' : 'incomplete',
+        cause: { code: cause.code, message: cause.message, details: cause.details },
       },
     );
     this.name = 'AutonomousRewriteError';
@@ -118,6 +119,21 @@ export interface TransactionExecutionResult {
   artifacts: ArtifactLink[];
 }
 
+/**
+ * A written file larger than the per-file scan limit could never be read back by a later scan, so
+ * the rewrite stops before it writes anything, naming the file and the limit.
+ */
+function assertFilesWithinScanLimit(engine: CoreEngine, transaction: TransactionManifest): void {
+  const limit = engine.resolver.config().scanMaxFileBytes;
+  const over = transaction.files.find(({ afterSize }) => (afterSize ?? 0) > limit);
+  if (over !== undefined)
+    throw new ServiceError(
+      'SCAN_BYTE_LIMIT',
+      `${over.relativePath} would be ${over.afterSize} bytes, above the per-file scan limit of ${limit} bytes (scanMaxFileBytes); raise the limit in the server configuration or shrink the file`,
+      { file: over.relativePath, fileBytes: over.afterSize, perFileLimit: limit },
+    );
+}
+
 export interface TransactionExecutionHooks {
   /** Persist a background request's journal binding before any source write begins. */
   beforeApply?: (transaction: Readonly<TransactionManifest>) => Promise<void>;
@@ -139,6 +155,7 @@ export async function executePlannedTransaction(
   }
   if (transaction.files.length === 0) return { transaction, outcome: 'unchanged', artifacts: [] };
   signal?.throwIfAborted();
+  assertFilesWithinScanLimit(engine, transaction);
   await hooks.beforeApply?.(transaction);
   signal?.throwIfAborted();
   let executionArtifacts: ArtifactLink[] = [];
