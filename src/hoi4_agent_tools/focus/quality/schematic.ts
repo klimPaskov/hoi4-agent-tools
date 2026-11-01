@@ -234,7 +234,14 @@ function schematicDocument(graph: QualityGraph, options: SchematicOptions): Sche
   }
   parts.push('</g>', '<g id="plaques">');
   for (const node of graph.nodes) {
-    if (!inRegion(node.x, node.y)) continue;
+    // Only whole plaques: a focus outside the region would show as a cut-off slice in the margin.
+    if (
+      node.x < region.minimumX ||
+      node.x > region.maximumX ||
+      node.y < region.minimumY ||
+      node.y > region.maximumY
+    )
+      continue;
     const branch = graph.branchOf.get(node.id) ?? '';
     const fill = branchColours.get(branch) ?? SHARED_FILL;
     const severity = options.highlight?.get(node.id);

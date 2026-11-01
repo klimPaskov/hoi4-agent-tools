@@ -231,7 +231,7 @@ export interface ToolResultImage {
  * Images are outside the 32 KiB structured-result budget; they have their own: a response never
  * carries more than this many base64 characters of images.
  */
-export const MAX_TOOL_RESULT_IMAGE_CHARACTERS = 4_000_000;
+export const MAX_TOOL_RESULT_IMAGE_CHARACTERS = 3_000_000;
 
 interface ToolResultOutput {
   [key: string]: unknown;
