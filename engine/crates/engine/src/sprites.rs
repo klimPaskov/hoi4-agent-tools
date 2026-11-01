@@ -114,6 +114,9 @@ pub struct ResolvedTexture {
 /// Forward slashes, no leading `/` or `./`, trimmed. The case is kept.
 pub fn normalize_texture_path(raw: &str) -> String {
     let mut path = raw.trim().replace('\\', "/");
+    while path.contains("//") {
+        path = path.replace("//", "/");
+    }
     while let Some(rest) = path.strip_prefix("./") {
         path = rest.to_string();
     }
@@ -143,7 +146,11 @@ impl TextureResolver {
             layers: ws
                 .layers
                 .iter()
-                .map(|l| ResolverLayer { name: l.name.clone(), root: l.path.clone(), replace: l.replace_paths.iter().map(|p| p.to_ascii_lowercase()).collect() })
+                .map(|l| ResolverLayer {
+                    name: l.name.clone(),
+                    root: l.path.clone(),
+                    replace: l.replace_paths.iter().map(|p| p.to_ascii_lowercase()).collect(),
+                })
                 .collect(),
             dirs: HashMap::new(),
         }
