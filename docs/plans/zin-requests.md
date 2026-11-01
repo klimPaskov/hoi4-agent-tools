@@ -338,6 +338,15 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Status: released in 4.6.4 and installed in `runtime-v464` (2026-11-01); verified in ZIN pending
 - Verification: pending (lead: the write; a second identical write is a no-op)
 
+## ZR-21: The inline result of a large write reads as "0 changed"
+
+- Opened: 2026-11-01 by lead
+- Priority: low
+- Current behaviour: the inline result of a map rewrite carries a bounded `changedFiles` list; when it is cut for a world write of thousands of files, a summary built from it can read as if nothing changed.
+- Implementation: branch `claude/zr21-changed-summary`. Every applied map rewrite adds `data.changedSummary`: `total`, `created`, `removed`, `modified`, and the same counts for the 40 folders with the most changes (two levels deep, largest first, `.` for the mod root, `omittedFolders` for the rest). One optional output data field; no input schema change. Release 4.6.5 announced here; it installs into `runtime-v465` after CI and the release workflow pass.
+- Status: in progress
+- Verification: pending (lead: `data.changedSummary` on the next write)
+
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
 - Opened: 2026-10-24 by lead, on the owner's instruction (the lead asked for id ZR-3, which was already taken by the PR 36 findings). Owner's words, relayed verbatim: "Try many different maps from the web. Like at least 100 different maps and each time you fix any defects and improve the tool more and more until its like extremely reliable."
