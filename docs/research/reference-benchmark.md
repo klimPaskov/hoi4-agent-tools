@@ -107,7 +107,7 @@ Two causes of the remaining misses are not vocabulary:
 
 ## Game text, question intent and a blind test set
 
-Measured on 2026-11-01 on the same sources (ADR 0075).
+Measured on 2026-11-01 on the same sources (ADR 0076).
 Two changes were developed on the discovery, validation and held-out sets together (85 plain-word questions): each command entry also carries the words of its in-game tooltip or modifier name from the game's English localisation, and a question that starts with a check or an action verb prefers triggers or effects over other commands, on actions and dynamic variables.
 A fourth set, `--test`, was then written by a second agent that saw none of the other sets' results: 36 plain-word questions, four exact names and two negative queries. It was scored once, before and after.
 

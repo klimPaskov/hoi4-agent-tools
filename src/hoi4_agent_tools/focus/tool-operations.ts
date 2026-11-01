@@ -20,6 +20,7 @@ import type {
   FocusRenderToolRequest,
   FocusRewriteToolRequest,
 } from '../schemas/focus-requests.js';
+import type { Diagnostic } from '../core/diagnostics.js';
 import { PACKAGE_VERSION } from '../version.js';
 import {
   focusPlanHash,
@@ -51,6 +52,20 @@ import {
   validationFromDiagnostics,
 } from './tool-support.js';
 import { inspectFocusScenario, type FocusScenarioEvidence } from './scenario.js';
+import {
+  describeLayoutDelta,
+  evaluateFocusLayoutQuality,
+  layoutQualityOutput,
+  layoutValidationCheck,
+  layoutVerdictDiagnostic,
+  withoutCurvedConnectorDiagnostics,
+  worstVerdict,
+  type FocusLayoutDelta,
+  type FocusLayoutQualityEvaluation,
+  type FocusLayoutQualityOutput,
+  renderInlineImages,
+  type LayoutQualityDetail,
+} from './quality/index.js';
 
 const LARGE_FOCUS_RENDER_NODE_THRESHOLD = 200;
 const LARGE_FOCUS_RENDER_SCALE = 0.5;
@@ -147,6 +162,11 @@ export function normalizeFocusRenderRequest(input: unknown): FocusRenderToolRequ
 
 export function normalizeFocusRewriteRequest(input: unknown): FocusRewriteToolRequest {
   return input as FocusRewriteToolRequest;
+}
+
+/** Many trees in one result share the response budget, so each gets less of its scorecard. */
+function inspectDetail(treeCount: number): LayoutQualityDetail {
+  return treeCount === 1 ? 'full' : treeCount <= 4 ? 'compact' : 'minimal';
 }
 
 function compactDrift(drift: { status: string; sourceChanged: boolean; planChanged: boolean }) {
@@ -422,7 +442,10 @@ export async function prepareFocusRewrite(
       ...(context.signal === undefined ? {} : { signal: context.signal }),
     }));
   if (input.layoutMode === 'compact')
-    assertCompactLayoutQuality(currentLayout, proposedLayout, input.compactFocusIds !== undefined);
+    assertCompactLayoutQuality(currentLayout, proposedLayout, input.compactFocusIds !== undefined, {
+      ...(currentPlan === undefined ? {} : { current: currentPlan }),
+      proposed: plan,
+    });
   const proposed = await workbench.renderAndStore(context.workspaceId, reviewPlan, {
     ...(context.principal === undefined ? {} : { principal: context.principal }),
     index: snapshot.index,
@@ -459,6 +482,17 @@ export async function prepareFocusRewrite(
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
   await context.progress(4, 5, 'Focus rewrite prepared for journaled application');
+  const after = evaluateFocusLayoutQuality(plan, planned.layout.nodes);
+  const delta = describeLayoutDelta(
+    currentPlan === undefined || currentLayout === undefined
+      ? undefined
+      : {
+          plan: currentPlan,
+          nodes: currentLayout.nodes,
+          report: evaluateFocusLayoutQuality(currentPlan, currentLayout.nodes).report,
+        },
+    { plan, nodes: planned.layout.nodes, report: after.report },
+  );
   return {
     transaction: planned.transaction,
     recipe: focusRewriteRecipeSchema.parse({
@@ -468,6 +502,18 @@ export async function prepareFocusRewrite(
         drift: compactDrift(planned.drift),
         created: planned.drift.status === 'target_missing',
         layoutHash: planned.layout.layoutHash,
+        layoutQuality: layoutQualityOutput(after.report, 'full'),
+        layoutDelta: delta,
+        sourcePath: plan.provenance.sourcePath,
+        ...(compactPlanning?.outcome === 'nothing_to_improve'
+          ? {
+              compactOutcome: {
+                outcome: 'nothing_to_improve',
+                reason: compactPlanning.reason ?? 'no_better_candidate',
+                blockedBy: compactPlanning.blockedBy ?? [],
+              },
+            }
+          : {}),
       }),
       filesScanned: [
         ...new Set([
@@ -477,6 +523,11 @@ export async function prepareFocusRewrite(
       ].sort(compareCodeUnits),
     }),
   };
+}
+
+/** A string recorded in a write recipe, or an empty one. */
+function recipeText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
 }
 
 export function completeFocusRewrite(
@@ -494,6 +545,9 @@ export function completeFocusRewrite(
     artifactCount: transaction.artifacts.length,
   });
   result.status = transaction.validation.passed ? 'ok' : 'blocked';
+  const quality = parsed.data.layoutQuality as FocusLayoutQualityOutput | undefined;
+  const compactOutcome = parsed.data.compactOutcome as
+    { outcome: string; reason: string; blockedBy: string[] } | undefined;
   result.code =
     mode === 'continuous'
       ? execution.outcome === 'applied'
@@ -509,9 +563,57 @@ export function completeFocusRewrite(
   setInlineFilesScanned(result, parsed.filesScanned);
   result.proposedFiles = transaction.files.slice(0, 100).map(({ relativePath }) => relativePath);
   result.changedFiles = transaction.appliedFiles.slice(0, 100);
-  result.diagnostics = transaction.diagnostics.slice(0, 100);
+  const sourcePath = recipeText(parsed.data.sourcePath);
+  const treeId = recipeText(parsed.data.treeId);
+  const noteLocation =
+    sourcePath === ''
+      ? undefined
+      : {
+          path: sourcePath,
+          start: { line: 1, column: 1, offset: 0 },
+          end: { line: 1, column: 1, offset: 0 },
+        };
+  const layoutNotes: Diagnostic[] = [
+    ...(compactOutcome === undefined
+      ? []
+      : [
+          {
+            code: 'FOCUS_COMPACT_NOTHING_TO_IMPROVE',
+            severity: 'info' as const,
+            category: 'layout' as const,
+            message:
+              compactOutcome.reason === 'verdict_pass'
+                ? 'The layout already passes every calibrated metric, so compact reflow has nothing to improve; the source is unchanged'
+                : compactOutcome.blockedBy.length === 0
+                  ? 'Compact reflow found no layout that beats the current one under the in-game connector model; the source is unchanged'
+                  : `Compact reflow found no layout that is at least as good as the current one (${compactOutcome.blockedBy.join(', ')}); the source is unchanged`,
+            ...(noteLocation === undefined ? {} : { location: noteLocation }),
+            details: {
+              reason: compactOutcome.reason,
+              blockedBy: compactOutcome.blockedBy,
+              verdict: quality?.verdict ?? null,
+            },
+          },
+        ]),
+    ...(quality === undefined
+      ? []
+      : [layoutVerdictDiagnostic(treeId, quality, noteLocation)].filter(
+          (entry): entry is Diagnostic => entry !== undefined,
+        )),
+  ];
+  result.diagnostics = [...layoutNotes, ...transaction.diagnostics].slice(0, 100);
   result.artifacts = autonomousResultArtifacts(execution);
-  result.validation = transaction.validation;
+  result.validation =
+    quality === undefined
+      ? transaction.validation
+      : {
+          passed: transaction.validation.passed,
+          // First, because the inline list of checks is capped and the layout verdict must stay.
+          checks: [
+            layoutValidationCheck([{ treeId, report: quality }]),
+            ...transaction.validation.checks,
+          ],
+        };
   result.blockers = transaction.diagnostics
     .filter(({ severity }) => severity === 'error' || severity === 'blocker')
     .map(({ code, message, details }) => ({
@@ -673,6 +775,8 @@ export async function inspectFocus(
     plan: FocusTreePlan;
     layout: FocusLayoutResult;
     diagnosticCount: number;
+    quality: FocusLayoutQualityEvaluation;
+    delta?: FocusLayoutDelta;
     scenario?: FocusScenarioEvidence;
   }> = [];
   for (const plan of plans) {
@@ -688,10 +792,25 @@ export async function inspectFocus(
       layout,
     });
     diagnostics.push(...lintDiagnostics);
+    const quality = evaluateFocusLayoutQuality(plan, layout.nodes);
+    const previousLayout = input.previous as FocusLayoutResult | undefined;
+    const delta =
+      previousLayout === undefined
+        ? undefined
+        : describeLayoutDelta(
+            {
+              plan,
+              nodes: previousLayout.nodes,
+              report: evaluateFocusLayoutQuality(plan, previousLayout.nodes).report,
+            },
+            { plan, nodes: layout.nodes, report: quality.report },
+          );
     inspectedPlans.push({
       plan,
       layout,
-      diagnosticCount: lintDiagnostics.length,
+      diagnosticCount: withoutCurvedConnectorDiagnostics(lintDiagnostics).length,
+      quality,
+      ...(delta === undefined ? {} : { delta }),
       ...(input.scenario === undefined
         ? {}
         : { scenario: inspectFocusScenario(plan, input.scenario.completedFocusIds) }),
@@ -728,12 +847,16 @@ export async function inspectFocus(
       schemaVersion: 1,
       revision: snapshot.revision,
       plans,
-      layouts: inspectedPlans.map(({ plan, layout, diagnosticCount, scenario }) => ({
-        treeId: plan.id,
-        layout,
-        diagnosticCount,
-        ...(scenario === undefined ? {} : { scenario }),
-      })),
+      layouts: inspectedPlans.map(
+        ({ plan, layout, diagnosticCount, scenario, quality, delta }) => ({
+          treeId: plan.id,
+          layout,
+          diagnosticCount,
+          layoutQuality: quality.report,
+          ...(delta === undefined ? {} : { layoutDelta: delta }),
+          ...(scenario === undefined ? {} : { scenario }),
+        }),
+      ),
       continuousFocusPalettes: paletteImport.palettes,
       presentation: focusPresentationEvidence(presentation),
       sourceHashes: completeSourceHashes,
@@ -754,31 +877,36 @@ export async function inspectFocus(
     revision: snapshot.revision,
     treeCount: plans.length,
     paletteCount: paletteImport.palettes.length,
-    trees: inspectedPlans.slice(0, 100).map(({ plan, layout, diagnosticCount, scenario }) => ({
-      id: plan.id,
-      sourcePath: plan.provenance.sourcePath,
-      focusCount: plan.focuses.length,
-      branchCount: plan.branchGroups.length,
-      continuousPaletteCount: plan.continuousFocusPaletteIds.length,
-      continuousFocusCount: plan.continuousFocusIds.length,
-      continuousFocusPosition: plan.continuousFocusPosition ?? null,
-      continuousFocusPaletteIds: plan.continuousFocusPaletteIds.slice(0, 100),
-      resolvedTitleCount: plan.focuses.filter(
-        ({ id }) => presentation.entries[id]?.titleSourceLocation !== undefined,
-      ).length,
-      layoutHash: layout.layoutHash,
-      layoutDecisionCount: layout.decisions.length,
-      layoutMetrics: layout.metrics!,
-      diagnosticCount,
-      ...(scenario === undefined
-        ? {}
-        : {
-            scenarioSummary: {
-              ...scenario.counts,
-              choiceConflictCount: scenario.mutualExclusionConflicts.length,
-            },
-          }),
-    })),
+    layoutVerdict: worstVerdict(inspectedPlans.map(({ quality }) => quality.report.verdict)),
+    trees: inspectedPlans
+      .slice(0, 100)
+      .map(({ plan, layout, diagnosticCount, scenario, quality, delta }) => ({
+        id: plan.id,
+        sourcePath: plan.provenance.sourcePath,
+        focusCount: plan.focuses.length,
+        branchCount: plan.branchGroups.length,
+        continuousPaletteCount: plan.continuousFocusPaletteIds.length,
+        continuousFocusCount: plan.continuousFocusIds.length,
+        continuousFocusPosition: plan.continuousFocusPosition ?? null,
+        continuousFocusPaletteIds: plan.continuousFocusPaletteIds.slice(0, 100),
+        resolvedTitleCount: plan.focuses.filter(
+          ({ id }) => presentation.entries[id]?.titleSourceLocation !== undefined,
+        ).length,
+        layoutHash: layout.layoutHash,
+        layoutDecisionCount: layout.decisions.length,
+        layoutMetrics: layout.metrics!,
+        layoutQuality: layoutQualityOutput(quality.report, inspectDetail(inspectedPlans.length)),
+        ...(delta === undefined ? {} : { layoutDelta: delta }),
+        diagnosticCount,
+        ...(scenario === undefined
+          ? {}
+          : {
+              scenarioSummary: {
+                ...scenario.counts,
+                choiceConflictCount: scenario.mutualExclusionConflicts.length,
+              },
+            }),
+      })),
     palettes: [],
   });
   result.code = 'FOCUS_INSPECTED';
@@ -793,9 +921,28 @@ export async function inspectFocus(
       ]),
     ].sort((left, right) => compareCodeUnits(left, right)),
   );
-  result.diagnostics = diagnostics.slice(0, 100);
+  // The curved-connector findings are replaced by the in-game connector model in the scorecard;
+  // the linked report keeps every raw diagnostic.
+  // The verdicts come first: the inline list is capped, and a verdict must never be cut off.
+  const reported = [
+    ...inspectedPlans.flatMap(({ plan, quality }) => {
+      const verdict = layoutVerdictDiagnostic(plan.id, quality.report, plan.sourceLocation);
+      return verdict === undefined ? [] : [verdict];
+    }),
+    ...withoutCurvedConnectorDiagnostics(diagnostics),
+  ];
+  result.diagnostics = reported.slice(0, 100);
   result.artifacts = [publicArtifactLink(artifact)];
-  result.validation = validationFromDiagnostics(diagnostics);
+  const structure = validationFromDiagnostics(reported);
+  result.validation = {
+    passed: structure.passed,
+    checks: [
+      ...structure.checks,
+      layoutValidationCheck(
+        inspectedPlans.map(({ plan, quality }) => ({ treeId: plan.id, report: quality.report })),
+      ),
+    ],
+  };
   await context.progress(3, 3, 'Focus inspection complete');
   return { result, sourceRevision: snapshot.revision };
 }
@@ -921,10 +1068,35 @@ export async function renderFocus(
     budget: renderBudget,
     ...(context.signal === undefined ? {} : { signal: context.signal }),
   });
+  const quality = evaluateFocusLayoutQuality(plan, rendered.layout.nodes);
+  // The inline pictures are the in-game-style schematic the scorecard measures: right-angle
+  // connectors, 1.6-column plaques, cropped to branches and to the places the metrics blame.
+  const inline =
+    input.inline === false
+      ? undefined
+      : await renderInlineImages(
+          quality.graph,
+          quality.report,
+          {
+            ...(input.cropBranchIds === undefined ? {} : { cropBranchIds: input.cropBranchIds }),
+            ...(input.cropFocusIds === undefined ? {} : { cropFocusIds: input.cropFocusIds }),
+            budget: renderBudget,
+          },
+          `${plan.id} · ${plan.focuses.length} focuses · layout ${quality.report.verdict}`,
+        );
+  // The layout verdict and the crop notes come first: the inline list is capped.
   const diagnostics = [
+    ...[layoutVerdictDiagnostic(plan.id, quality.report, plan.sourceLocation)].filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== undefined,
+    ),
+    // A location keeps these in the group of the mod's own findings, which the inline list shows first.
+    ...(inline?.diagnostics ?? []).map((diagnostic) => ({
+      ...diagnostic,
+      ...(plan.sourceLocation === undefined ? {} : { location: plan.sourceLocation }),
+    })),
     ...paletteImport.diagnostics,
     ...imported.diagnostics,
-    ...rendered.diagnostics,
+    ...withoutCurvedConnectorDiagnostics(rendered.diagnostics),
   ];
   const result = emptyServiceResult(context.workspaceId, {
     mode: 'national' as const,
@@ -933,6 +1105,8 @@ export async function renderFocus(
     hashes: rendered.bundle.hashes,
     width: rendered.bundle.width,
     height: rendered.bundle.height,
+    layoutQuality: layoutQualityOutput(quality.report, 'compact'),
+    ...(inline === undefined ? {} : { inlineImages: inline.descriptions }),
   });
   result.code = rasterize ? 'FOCUS_RASTERIZED' : 'FOCUS_RENDERED';
   setInlineFilesScanned(
@@ -943,7 +1117,18 @@ export async function renderFocus(
   );
   result.diagnostics = diagnostics.slice(0, 100);
   result.artifacts = rendered.artifacts.map(publicArtifactLink);
-  result.validation = validationFromDiagnostics(diagnostics);
+  const structure = validationFromDiagnostics(diagnostics);
+  result.validation = {
+    passed: structure.passed,
+    checks: [
+      ...structure.checks,
+      layoutValidationCheck([{ treeId: plan.id, report: quality.report }]),
+    ],
+  };
   await context.progress(4, 4, `Focus ${outputName} complete`);
-  return { result, sourceRevision: snapshot.revision };
+  return {
+    result,
+    sourceRevision: snapshot.revision,
+    ...(inline === undefined || inline.images.length === 0 ? {} : { images: inline.images }),
+  };
 }

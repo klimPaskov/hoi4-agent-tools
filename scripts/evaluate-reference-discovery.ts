@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -112,7 +113,10 @@ for (const item of cases) {
 }
 
 // Every case needs at least one answer that exists in the local sources, or it is invalid.
-const wikiRoot = path.join(modRoot, 'paradox_wiki');
+// The kit's wiki folder is `hoi4_wiki/`; mods it has not updated still use `paradox_wiki/`.
+const wikiRoot = existsSync(path.join(modRoot, 'hoi4_wiki'))
+  ? path.join(modRoot, 'hoi4_wiki')
+  : path.join(modRoot, 'paradox_wiki');
 const wikiNames = new Map(
   (await readdir(wikiRoot).catch(() => [])).map((name) => [documentKey(name), name]),
 );

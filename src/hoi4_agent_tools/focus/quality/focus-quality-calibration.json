@@ -1,0 +1,2265 @@
+{
+  "buckets": [
+    {
+      "id": "small",
+      "limits": {},
+      "maximumFocuses": 39,
+      "minimumFocuses": 0,
+      "statistics": {},
+      "treeCount": 2
+    },
+    {
+      "id": "medium",
+      "limits": {
+        "D1": {
+          "direction": "high",
+          "review": 4,
+          "revise": 4
+        },
+        "D2": {
+          "direction": "high",
+          "review": 0.4074,
+          "revise": 0.4074
+        },
+        "H4": {
+          "direction": "high",
+          "review": 6.6038,
+          "revise": 11.4578
+        },
+        "H5": {
+          "direction": "high",
+          "review": 2.4,
+          "revise": 4.8
+        },
+        "S1": {
+          "direction": "high",
+          "review": 0.2972,
+          "revise": 0.4658
+        },
+        "S10": {
+          "direction": "high",
+          "review": 4,
+          "revise": 7
+        },
+        "S11": {
+          "direction": "high",
+          "review": 0.2609,
+          "revise": 0.4218
+        },
+        "S2": {
+          "direction": "high",
+          "review": 0.3448,
+          "revise": 0.5825
+        },
+        "S3": {
+          "direction": "high",
+          "review": 0.2213,
+          "revise": 0.3879
+        },
+        "S4": {
+          "direction": "low",
+          "review": 0.3462,
+          "revise": 0.2363
+        },
+        "S5": {
+          "direction": "high",
+          "review": 0.5742,
+          "revise": 0.7744
+        },
+        "S6": {
+          "direction": "high",
+          "review": 3.2,
+          "revise": 6.4
+        },
+        "S7": {
+          "direction": "high",
+          "review": 0.05,
+          "revise": 0.1
+        },
+        "S9": {
+          "direction": "high",
+          "review": 7.4627,
+          "revise": 14.9254
+        }
+      },
+      "maximumFocuses": 120,
+      "minimumFocuses": 40,
+      "statistics": {
+        "D1": {
+          "max": 4,
+          "min": 1,
+          "p10": 2,
+          "p50": 2,
+          "p90": 4
+        },
+        "D2": {
+          "max": 0.4074,
+          "min": 0.2093,
+          "p10": 0.2232,
+          "p50": 0.2694,
+          "p90": 0.3604
+        },
+        "H4": {
+          "max": 6.6038,
+          "min": 0,
+          "p10": 0,
+          "p50": 1.7498,
+          "p90": 4.1453
+        },
+        "H5": {
+          "max": 2.4,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0.5814
+        },
+        "S1": {
+          "max": 0.2972,
+          "min": 0.0652,
+          "p10": 0.0736,
+          "p50": 0.1286,
+          "p90": 0.1845
+        },
+        "S10": {
+          "max": 4,
+          "min": 0,
+          "p10": 0.5,
+          "p50": 1,
+          "p90": 3
+        },
+        "S11": {
+          "max": 0.2609,
+          "min": 0,
+          "p10": 0,
+          "p50": 0.1,
+          "p90": 0.1987
+        },
+        "S2": {
+          "max": 0.3448,
+          "min": 0,
+          "p10": 0.0277,
+          "p50": 0.1071,
+          "p90": 0.2435
+        },
+        "S3": {
+          "max": 0.2213,
+          "min": 0.0027,
+          "p10": 0.0043,
+          "p50": 0.0547,
+          "p90": 0.1341
+        },
+        "S4": {
+          "max": 0.59,
+          "min": 0.3462,
+          "p10": 0.3732,
+          "p50": 0.4561,
+          "p90": 0.5833
+        },
+        "S5": {
+          "max": 0.5742,
+          "min": 0.1487,
+          "p10": 0.201,
+          "p50": 0.374,
+          "p90": 0.4986
+        },
+        "S6": {
+          "max": 3.2,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 2.7548
+        },
+        "S7": {
+          "max": 0.05,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "S9": {
+          "max": 7.4627,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 2.396
+        }
+      },
+      "treeCount": 26
+    },
+    {
+      "id": "large",
+      "limits": {
+        "D1": {
+          "direction": "high",
+          "review": 4,
+          "revise": 4
+        },
+        "D2": {
+          "direction": "high",
+          "review": 0.4464,
+          "revise": 0.4464
+        },
+        "H4": {
+          "direction": "high",
+          "review": 6.1611,
+          "revise": 10.4265
+        },
+        "H5": {
+          "direction": "high",
+          "review": 7.7982,
+          "revise": 15.5964
+        },
+        "S1": {
+          "direction": "high",
+          "review": 0.4818,
+          "revise": 0.7937
+        },
+        "S10": {
+          "direction": "high",
+          "review": 7,
+          "revise": 12
+        },
+        "S11": {
+          "direction": "high",
+          "review": 0.5172,
+          "revise": 0.8711
+        },
+        "S2": {
+          "direction": "high",
+          "review": 0.619,
+          "revise": 1.0968
+        },
+        "S3": {
+          "direction": "high",
+          "review": 0.4144,
+          "revise": 0.7412
+        },
+        "S4": {
+          "direction": "low",
+          "review": 0.1373,
+          "revise": -0.0213
+        },
+        "S5": {
+          "direction": "high",
+          "review": 0.6806,
+          "revise": 0.9207
+        },
+        "S6": {
+          "direction": "high",
+          "review": 2.1277,
+          "revise": 4.2554
+        },
+        "S7": {
+          "direction": "high",
+          "review": 0.163,
+          "revise": 0.326
+        },
+        "S9": {
+          "direction": "high",
+          "review": 2.8571,
+          "revise": 4.6504
+        }
+      },
+      "maximumFocuses": 100000,
+      "minimumFocuses": 121,
+      "statistics": {
+        "D1": {
+          "max": 4,
+          "min": 2,
+          "p10": 2,
+          "p50": 3,
+          "p90": 3.2
+        },
+        "D2": {
+          "max": 0.4464,
+          "min": 0.0796,
+          "p10": 0.1941,
+          "p50": 0.2903,
+          "p90": 0.3581
+        },
+        "H4": {
+          "max": 6.1611,
+          "min": 0,
+          "p10": 0.375,
+          "p50": 1.8957,
+          "p90": 3.7641
+        },
+        "H5": {
+          "max": 7.7982,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 2.2776
+        },
+        "S1": {
+          "max": 0.4818,
+          "min": 0.0745,
+          "p10": 0.0889,
+          "p50": 0.1699,
+          "p90": 0.2585
+        },
+        "S10": {
+          "max": 7,
+          "min": 1,
+          "p10": 1.8,
+          "p50": 2,
+          "p90": 5.2
+        },
+        "S11": {
+          "max": 0.5172,
+          "min": 0,
+          "p10": 0.031,
+          "p50": 0.1633,
+          "p90": 0.3279
+        },
+        "S2": {
+          "max": 0.619,
+          "min": 0,
+          "p10": 0.026,
+          "p50": 0.1412,
+          "p90": 0.3399
+        },
+        "S3": {
+          "max": 0.4144,
+          "min": 0.0018,
+          "p10": 0.018,
+          "p50": 0.0876,
+          "p90": 0.1947
+        },
+        "S4": {
+          "max": 0.8073,
+          "min": 0.1373,
+          "p10": 0.2118,
+          "p50": 0.2959,
+          "p90": 0.4681
+        },
+        "S5": {
+          "max": 0.6806,
+          "min": 0.1751,
+          "p10": 0.2845,
+          "p50": 0.4405,
+          "p90": 0.5723
+        },
+        "S6": {
+          "max": 2.1277,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 1.5937
+        },
+        "S7": {
+          "max": 0.163,
+          "min": 0,
+          "p10": 0,
+          "p50": 0,
+          "p90": 0.0118
+        },
+        "S9": {
+          "max": 2.8571,
+          "min": 0,
+          "p10": 0,
+          "p50": 1.0638,
+          "p90": 2.2147
+        }
+      },
+      "treeCount": 39
+    }
+  ],
+  "game": {
+    "revision": "c01a3d507f10bd8c713e88234de69ca110618138",
+    "versionLabel": "1.19.3.0"
+  },
+  "generatedBy": "scripts/focus-quality-calibration.ts",
+  "metricDefinitionsVersion": 1,
+  "minimumFocusesForSoftMetrics": 8,
+  "schemaVersion": 1,
+  "scoreWeights": {
+    "H4": 1,
+    "H5": 1,
+    "S1": 1.5,
+    "S10": 0.5,
+    "S11": 0.5,
+    "S2": 1.5,
+    "S3": 1.5,
+    "S4": 1,
+    "S5": 1,
+    "S6": 1,
+    "S7": 1,
+    "S9": 0.5
+  },
+  "sources": [
+    {
+      "file": "00_titlebar_styles.txt",
+      "sha256": "a3f51bfc7a8429cf3895271d259c0d65b5c4f65055b550927e6c92ab4f2f6949"
+    },
+    {
+      "file": "TSR_lingguang_incident_joint_branch.txt",
+      "sha256": "116ab54bcc9d0fb66cf176bd43d8a568ecf336e09dce3e7dc09978ae661de0aa"
+    },
+    {
+      "file": "abdacom_shared_branch.txt",
+      "sha256": "521d3b7c0241ed49e2867ec5cf1bd70910b79d67f83d32163b78ae29fac91fc7"
+    },
+    {
+      "file": "afghanistan.txt",
+      "sha256": "3b8d5b4218c1c3b2701fc22416f2279d9e439d2c8d1d767d14d95c38aa504ae4"
+    },
+    {
+      "file": "argentina.txt",
+      "sha256": "e7b06a02bfe938ae96c455fb13923c23a160178e74a1733cf92a7c1a38ed2a7e"
+    },
+    {
+      "file": "australia.txt",
+      "sha256": "b9c6207acd259396f7bc34cc836bffa248fcd9bb4d4b78dfc37e71588676b7e9"
+    },
+    {
+      "file": "australia_taog.txt",
+      "sha256": "903d19624a5db0cbe62c1270d5bc8a4dadec841a23abb29873ad63c3418a6bbb"
+    },
+    {
+      "file": "austria.txt",
+      "sha256": "0f197e321cb9e0c267a11c78bccb570ef42d1fc251e7af05fb4f385de27a1059"
+    },
+    {
+      "file": "austro_hungarian_releasable_shared.txt",
+      "sha256": "d8c5985f46e8558bc152c8b1bc217055ebf35dd7e3017799deb337ceb5d1e193"
+    },
+    {
+      "file": "baltic_shared.txt",
+      "sha256": "a95fc995b2cc6b84cb7bdefa2e7934f745917ecf5aae5753824dcdebcc0ab5a0"
+    },
+    {
+      "file": "belgium.txt",
+      "sha256": "af11c03e97bb4ca11ffffc8b4c4913c4ae5c32d7a246221d2aea001f743523c6"
+    },
+    {
+      "file": "brazil.txt",
+      "sha256": "69bbe15c03aa46959c8fcea8935a3010f70b7c0706acba6563f42b94e4e58129"
+    },
+    {
+      "file": "bulgaria.txt",
+      "sha256": "98002b892f0d85af59cb16489068ef916bfd4d9934e16781f9d2b3d9ba9646cf"
+    },
+    {
+      "file": "canada.txt",
+      "sha256": "e40f395d0331e8dc29af68ae5e36af2df7686edca2500a6642eb1081423b8cca"
+    },
+    {
+      "file": "chile.txt",
+      "sha256": "21254a36bf95dd781f4cc4ea4abc0be202d0dcd6674dbc41375166f1164fc901"
+    },
+    {
+      "file": "china_communist.txt",
+      "sha256": "3bd533ca4bbff23cf9d0a3f7d31c60712b09675b0f45d75826bce606a1053164"
+    },
+    {
+      "file": "china_communist_sea.txt",
+      "sha256": "d8af0a3af38b9ab4f946478da5fe2b9a21ecfbf740b0ba945192092f4acf468e"
+    },
+    {
+      "file": "china_communist_warlord_TSR.txt",
+      "sha256": "c940d076fb9f2e847271973412a2e00453201a2d2ca4dbf77f1799c8b1d81630"
+    },
+    {
+      "file": "china_nationalist.txt",
+      "sha256": "071f0a2227be13c0948d30d74976f2da611b5891f0c3e7d2f9a3f240e2ba3e52"
+    },
+    {
+      "file": "china_nationalist_sea.txt",
+      "sha256": "fbe3c2d160e5da06d27ac43d7fe6df05f0179f45e081584bc8735d948e0bda45"
+    },
+    {
+      "file": "china_nationalist_warlord_TSR.txt",
+      "sha256": "7a941cd733ebc88cd85b2a0e6589d2f3f694416a3da6980f9b0be4ce8d6b4ece"
+    },
+    {
+      "file": "china_shared.txt",
+      "sha256": "1334e650de33d22a18bc4fec0d9974409dbde3997e8b38eae55e4561752cd246"
+    },
+    {
+      "file": "china_shared_TSR.txt",
+      "sha256": "47e69ebfdbe449ebde575295aadeb3fafa7563d31696b8794127959ae39099d8"
+    },
+    {
+      "file": "china_warlord.txt",
+      "sha256": "bf99d78bf0a577c1e81706d254c710adddd6ed4b22e7065355052335273dd7f5"
+    },
+    {
+      "file": "china_warlord_sea.txt",
+      "sha256": "ff7405a4e488d46b80eda25c100b6ed2e0ef3e1474bec0d4e10e5046f6b951f4"
+    },
+    {
+      "file": "congo.txt",
+      "sha256": "cbf5bead75a182be14bc46e359176046f4443d3d239f57d6631f504c384b5125"
+    },
+    {
+      "file": "congo_shared.txt",
+      "sha256": "79e26e864f20529446be56e651d2ba3119d17a99c0f4d8b0f8bc3e13c7552dbf"
+    },
+    {
+      "file": "czechoslovakia.txt",
+      "sha256": "181253957006490219cb0076f8c6a7e8c42e3a438e0762e49978096787bb31c3"
+    },
+    {
+      "file": "czechoslovakia_mu.txt",
+      "sha256": "979e554468daee5fe87ae9ca171c46516948b3998819bddb45467ec5a81407d7"
+    },
+    {
+      "file": "denmark.txt",
+      "sha256": "af18f60714955ec85a7fe9e70d8dd9dcb4f14a40600008d27a50807ff2350482"
+    },
+    {
+      "file": "estonia.txt",
+      "sha256": "99d22ed186446eb83ca536daa13c6c13bca20241ed5e61fb66b56b8fa5a24d3c"
+    },
+    {
+      "file": "ethiopia.txt",
+      "sha256": "3e157bff1956dafa476728f56b26ee167273fb63d62aeaa6dea383e794f54912"
+    },
+    {
+      "file": "finland.txt",
+      "sha256": "13e67b2521beaf8696bc61cfd169abb0c5a743d6bda83877d071f1129d57b221"
+    },
+    {
+      "file": "france.txt",
+      "sha256": "e0f51b0d3d98362276d55d62a63d75cd6839fb9b3035965ce4172e75ce226b15"
+    },
+    {
+      "file": "free_france.txt",
+      "sha256": "787e7d5922d1459aafde3d2a6405231bdb7c4129db267a6d6685bab8c6b2319f"
+    },
+    {
+      "file": "generic.txt",
+      "sha256": "da7d2ad989fe174a904838d55481bcfd07d652940260466259cb27dd21893768"
+    },
+    {
+      "file": "germany.txt",
+      "sha256": "fb1696057654e8733e1a5f4146af75529a3372bf7917a902311c7accea71e4bc"
+    },
+    {
+      "file": "goe_shared_saadabad_branch.txt",
+      "sha256": "d087ffcb432515b52e0d064b8a446f5f5af299270b3af4e377cd80050b584d95"
+    },
+    {
+      "file": "greece.txt",
+      "sha256": "111969311a7d6a154bfadd99c745815235cdc6229803f599017d600381614dca"
+    },
+    {
+      "file": "habsburg_joint.txt",
+      "sha256": "adab7ef64c988b4b43c3b16383d1dfef77f5e5ece83be2ca0b0ca56ef6a22318"
+    },
+    {
+      "file": "horn_of_africa.txt",
+      "sha256": "af49b9a0a6a627bac8ac743404271cdb152ba76d1cb5049d3efcb14bbaf589c7"
+    },
+    {
+      "file": "hungary.txt",
+      "sha256": "c7788cda20d2153d25eaafb52557006b096877181b38d5be9abbbaa4e93ad286"
+    },
+    {
+      "file": "hungary_wuw.txt",
+      "sha256": "e622fa1dcac2b276735133fcfcdd7f1c6f1fdf3afb7ed78103fd891702f4239f"
+    },
+    {
+      "file": "iceland.txt",
+      "sha256": "a6c5c2428a213d8698aaa14250e612277889cc64a5a418346c3c51179017d30b"
+    },
+    {
+      "file": "india.txt",
+      "sha256": "2130c8d3b7c563c109729c3ecf8e27daebd4eba2c0889085be1c8d50e984f7f4"
+    },
+    {
+      "file": "india_goe.txt",
+      "sha256": "b41b990dae9086ed513e2ded367cecf26bb2f0f4cf1ff54726910b0f37c69481"
+    },
+    {
+      "file": "indonesia.txt",
+      "sha256": "c8f60e4b4d4a6236555278547b4a824265a95a6fb4856c3e3fa3e6e55911812d"
+    },
+    {
+      "file": "indonesia_joint.txt",
+      "sha256": "e04a419593765713b269322386a60427a8e63a45abae11581f3fb66bcbd372dd"
+    },
+    {
+      "file": "iraq.txt",
+      "sha256": "a1869262f48b19f059223a96c473265b55ac3bedf816e5994fda3303adbf6c3c"
+    },
+    {
+      "file": "italy.txt",
+      "sha256": "8fb8b2b2b13c7413651349da8a54eb10142cdb99c727cb2b3327b64787cf343c"
+    },
+    {
+      "file": "japan.txt",
+      "sha256": "bf5ef4b6a17e70e4ad83030a0aac4de72105cb8803ca6f93a9bf3fcef8662623"
+    },
+    {
+      "file": "latvia.txt",
+      "sha256": "3a456d1588f882fc892fb60d140efd2d0a13d8e86ef21d55af249dc8acfb3577"
+    },
+    {
+      "file": "lithuania.txt",
+      "sha256": "ceb1a0d739877b111231534c4585f8eb5da901ae3820924eb510739cc7618fe4"
+    },
+    {
+      "file": "manchukuo.txt",
+      "sha256": "402c08f878954cda91fcdd90855aca9ead9b26ea4e4b23bc084013eec21c255d"
+    },
+    {
+      "file": "manchukuo_TSR.txt",
+      "sha256": "5fc408d5d0040fdec426c0d5ae72317396bb528b68a3ebc63f26af6fe169630e"
+    },
+    {
+      "file": "mexico.txt",
+      "sha256": "d15e5737015d6d5d5fd758c650deecd19be0e1b6ce31a44cfafd596887622fcd"
+    },
+    {
+      "file": "ncns_ma_clique_joint_branch.txt",
+      "sha256": "0961e26e0d6fc8e7a241bcc1bd80489cee85d0ce557b10bc7b5881bddd3a86bd"
+    },
+    {
+      "file": "netherlands.txt",
+      "sha256": "6ac50fd2df8b1f396af35ec1b923c29870d0ad821eec59739b272210df7bdd31"
+    },
+    {
+      "file": "new_zealand.txt",
+      "sha256": "8c8921d89c9dbd906df6dc80e07ec9657a784fb0a526efde864e0fb0cab9532f"
+    },
+    {
+      "file": "nordic_shared.txt",
+      "sha256": "bd21f0272e645c55dae5f61954e131ff5d066e680a00274fa650a79a2d5d3b35"
+    },
+    {
+      "file": "norway.txt",
+      "sha256": "8f79ad782160d6bee22057cad98bca497c4bebaf3404ea3f4f25b09eee79601b"
+    },
+    {
+      "file": "paraguay.txt",
+      "sha256": "578df7e7647e5f45e77e6990a8379d27d5571be7893427997fe37908a4e7b7db"
+    },
+    {
+      "file": "paraguay_uruguay_shared_branch.txt",
+      "sha256": "96f392ff7aa4e493b1608f6169d3c7a6c36ef28aff283763027dffffda629383"
+    },
+    {
+      "file": "persia.txt",
+      "sha256": "c5d2209aafba583fed5eceafeaca6d721471d6c50ec2dff40bd02113025c2411"
+    },
+    {
+      "file": "philippines.txt",
+      "sha256": "d3304a5d57cbc1867a25f40127b36aad463723d8171139fe5638720c33683242"
+    },
+    {
+      "file": "poland.txt",
+      "sha256": "8c9abbb5430b0d70aa7daae315f1d570fc51e79a8046b33fabf2921b0b161ac6"
+    },
+    {
+      "file": "portugal.txt",
+      "sha256": "474d3ba080b06526c2a315ba5bcd9bd08a333e8a15e4d4dec31d5c2fa96791d0"
+    },
+    {
+      "file": "romania.txt",
+      "sha256": "5ed936f32292675bda0c1ae1880128b4102728ad16dfb33c9ba0ebe0ca7c0aea"
+    },
+    {
+      "file": "siam.txt",
+      "sha256": "eda13a48d44ab0f5857734f18b2cb8bc010a93580aa082ad4a94e7f758ad3fc9"
+    },
+    {
+      "file": "south_africa.txt",
+      "sha256": "9c31d5f48e9995f410337b1dc83acb2120c436ed486e8a9d4dfbbbab0e3151b8"
+    },
+    {
+      "file": "soviet.txt",
+      "sha256": "31f9d74394ffa1dbfbd91a6daec1fb50b2aa42d46fb7ae1698ca62caa80e40fd"
+    },
+    {
+      "file": "spain.txt",
+      "sha256": "c9ee0e314cb663d84765219f13c9e4c358daf343f32469a4e1c091394b9798d6"
+    },
+    {
+      "file": "sweden.txt",
+      "sha256": "df8732e149fffaf56a09fd0b8c849612002f1bb113cad186f01db8cd679e2c38"
+    },
+    {
+      "file": "switzerland.txt",
+      "sha256": "ffc6a67a7b5a0cc4df67595120af53f320023565f07d2c6eb98b4c6c9b6c8ac1"
+    },
+    {
+      "file": "toa_shared_military_branch.txt",
+      "sha256": "0563fcf6b5af106743d73bc1ab9fec226ddced3674b6cd434f31a572f47b170a"
+    },
+    {
+      "file": "turkey.txt",
+      "sha256": "7220facca3c25cff654891786b86f7f36dce42fdddaa49d18391fc463aacee6a"
+    },
+    {
+      "file": "uk.txt",
+      "sha256": "053a43e77eb5152abaf638cc72ea019b44301397f50c16c9d75d77f42a668f77"
+    },
+    {
+      "file": "uruguay.txt",
+      "sha256": "3d060bd184c8f0cb54b1b6862e8f28f392278063fe55f5d88d0128c957ec423d"
+    },
+    {
+      "file": "usa.txt",
+      "sha256": "61be3307ed17539fbb245680be136bebde0789724b213be9375e5c99711c67e2"
+    },
+    {
+      "file": "vichy_france.txt",
+      "sha256": "79c5cfc428eac495d44d22c151af477046fd0f76c8306564d19af32d9a5f9858"
+    },
+    {
+      "file": "yugoslavia.txt",
+      "sha256": "dad4b74227abb439956c05bef0aa4be41b59f2c6176a3f018736fb999f34e8c3"
+    }
+  ],
+  "trees": [
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "afghanistan.txt",
+      "focusCount": 201,
+      "id": "afghanistan_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.3234,
+        "H4": 0.4202,
+        "H5": 0,
+        "S1": 0.1628,
+        "S10": 2,
+        "S11": 0.0323,
+        "S2": 0.1959,
+        "S3": 0.1128,
+        "S4": 0.3895,
+        "S5": 0.3646,
+        "S6": 0.4202,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "argentina.txt",
+      "focusCount": 150,
+      "id": "argentine_focus_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.22,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.1609,
+        "S10": 2,
+        "S11": 0.0357,
+        "S2": 0.1111,
+        "S3": 0.0755,
+        "S4": 0.2874,
+        "S5": 0.4411,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0.5587
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "australia_taog.txt",
+      "focusCount": 231,
+      "id": "australia_taog_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3377,
+        "H4": 2.7682,
+        "H5": 0.346,
+        "S1": 0.155,
+        "S10": 1,
+        "S11": 0.1633,
+        "S2": 0.087,
+        "S3": 0.0876,
+        "S4": 0.2776,
+        "S5": 0.3382,
+        "S6": 2.0761,
+        "S7": 0.0094,
+        "S9": 2.4221
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "australia.txt",
+      "focusCount": 94,
+      "id": "australian_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2447,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.1489,
+        "S10": 1,
+        "S11": 0.1333,
+        "S2": 0.011,
+        "S3": 0.0288,
+        "S4": 0.5109,
+        "S5": 0.521,
+        "S6": 0.9009,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "austria.txt",
+      "focusCount": 214,
+      "id": "austria_focus_tree",
+      "values": {
+        "D1": 2,
+        "D2": 0.2336,
+        "H4": 1.3333,
+        "H5": 0.3333,
+        "S1": 0.1941,
+        "S10": 2,
+        "S11": 0.0256,
+        "S2": 0.2,
+        "S3": 0.1289,
+        "S4": 0.2765,
+        "S5": 0.4432,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.3333
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "austro_hungarian_releasable_shared.txt",
+      "focusCount": 56,
+      "id": "austro_hungarian_releasable_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2143,
+        "H4": 1.6129,
+        "H5": 0,
+        "S1": 0.099,
+        "S10": 1,
+        "S11": 0.1111,
+        "S2": 0.1071,
+        "S3": 0.0195,
+        "S4": 0.5833,
+        "S5": 0.4364,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "belgium.txt",
+      "focusCount": 173,
+      "id": "belgium_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2775,
+        "H4": 1.8957,
+        "H5": 0.4739,
+        "S1": 0.2865,
+        "S10": 7,
+        "S11": 0.2581,
+        "S2": 0.6,
+        "S3": 0.3062,
+        "S4": 0.2002,
+        "S5": 0.5142,
+        "S6": 0.4739,
+        "S7": 0,
+        "S9": 1.4218
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "brazil.txt",
+      "focusCount": 171,
+      "id": "brazil_tree",
+      "values": {
+        "D1": 2,
+        "D2": 0.2807,
+        "H4": 1.6807,
+        "H5": 0,
+        "S1": 0.1384,
+        "S10": 3,
+        "S11": 0.1333,
+        "S2": 0.061,
+        "S3": 0.0318,
+        "S4": 0.3654,
+        "S5": 0.4412,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0.4202
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "uk.txt",
+      "focusCount": 164,
+      "id": "british_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3171,
+        "H4": 5.8511,
+        "H5": 2.6596,
+        "S1": 0.1026,
+        "S10": 3,
+        "S11": 0.3143,
+        "S2": 0.0552,
+        "S3": 0.0141,
+        "S4": 0.4205,
+        "S5": 0.3233,
+        "S6": 2.1277,
+        "S7": 0,
+        "S9": 2.1277
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "bulgaria.txt",
+      "focusCount": 150,
+      "id": "bulgarian_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.32,
+        "H4": 3.1915,
+        "H5": 0.5319,
+        "S1": 0.181,
+        "S10": 3,
+        "S11": 0.5,
+        "S2": 0.3655,
+        "S3": 0.1614,
+        "S4": 0.3233,
+        "S5": 0.3101,
+        "S6": 0.5319,
+        "S7": 0,
+        "S9": 1.0638
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "canada.txt",
+      "focusCount": 95,
+      "id": "canadian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2842,
+        "H4": 0.8264,
+        "H5": 0,
+        "S1": 0.1576,
+        "S10": 1,
+        "S11": 0.1429,
+        "S2": 0.0851,
+        "S3": 0.0469,
+        "S4": 0.5163,
+        "S5": 0.3278,
+        "S6": 2.4793,
+        "S7": 0.05,
+        "S9": 0.8264
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "chile.txt",
+      "focusCount": 205,
+      "id": "chilean_focus_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.3415,
+        "H4": 2.6217,
+        "H5": 0,
+        "S1": 0.0793,
+        "S10": 2,
+        "S11": 0.303,
+        "S2": 0.1531,
+        "S3": 0.0104,
+        "S4": 0.3173,
+        "S5": 0.4679,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0.7491
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "china_communist.txt",
+      "focusCount": 43,
+      "id": "china_communist_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2093,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.1691,
+        "S10": 1,
+        "S11": 0.1,
+        "S2": 0.0952,
+        "S3": 0.0166,
+        "S4": 0.4343,
+        "S5": 0.4762,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "china_communist_sea.txt",
+      "focusCount": 203,
+      "id": "china_communist_focus_sea",
+      "values": {
+        "D1": 3,
+        "D2": 0.1429,
+        "H4": 1.875,
+        "H5": 1.25,
+        "S1": 0.1357,
+        "S10": 2,
+        "S11": 0.0769,
+        "S2": 0.1188,
+        "S3": 0.022,
+        "S4": 0.2563,
+        "S5": 0.5545,
+        "S6": 0,
+        "S7": 0,
+        "S9": 1.875
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "china_communist_warlord_TSR.txt",
+      "focusCount": 41,
+      "id": "china_communist_warlord_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2439,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.162,
+        "S10": 1,
+        "S11": 0.0833,
+        "S2": 0.1707,
+        "S3": 0.0554,
+        "S4": 0.3796,
+        "S5": 0.4545,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "china_nationalist.txt",
+      "focusCount": 50,
+      "id": "china_nationalist_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.28,
+        "H4": 1.8868,
+        "H5": 0,
+        "S1": 0.2381,
+        "S10": 1,
+        "S11": 0.1,
+        "S2": 0.2917,
+        "S3": 0.1354,
+        "S4": 0.3968,
+        "S5": 0.375,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "china_nationalist_sea.txt",
+      "focusCount": 275,
+      "id": "china_nationalist_sea_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3418,
+        "H4": 3.6932,
+        "H5": 1.7045,
+        "S1": 0.1425,
+        "S10": 3,
+        "S11": 0.1385,
+        "S2": 0.0632,
+        "S3": 0.0622,
+        "S4": 0.2859,
+        "S5": 0.3787,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.2727
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "china_nationalist_warlord_TSR.txt",
+      "focusCount": 78,
+      "id": "china_nationalist_warlord_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2436,
+        "H4": 1.1765,
+        "H5": 0,
+        "S1": 0.1905,
+        "S10": 1,
+        "S11": 0.0667,
+        "S2": 0.1892,
+        "S3": 0.1327,
+        "S4": 0.3714,
+        "S5": 0.325,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "china_warlord.txt",
+      "focusCount": 41,
+      "id": "china_warlord_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3415,
+        "H4": 4.4444,
+        "H5": 0,
+        "S1": 0.1371,
+        "S10": 1,
+        "S11": 0,
+        "S2": 0.1667,
+        "S3": 0.1432,
+        "S4": 0.4881,
+        "S5": 0.3913,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.2222
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "china_warlord_sea.txt",
+      "focusCount": 155,
+      "id": "china_warlord_sea_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2903,
+        "H4": 12.4294,
+        "H5": 1.1299,
+        "S1": 0.0893,
+        "S10": 1,
+        "S11": 0.0714,
+        "S2": 0.3113,
+        "S3": 0.102,
+        "S4": 0.8073,
+        "S5": 0.1925,
+        "S6": 0,
+        "S7": 0,
+        "S9": 46.3277
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "congo.txt",
+      "focusCount": 152,
+      "id": "congo_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3882,
+        "H4": 22.093,
+        "H5": 2.3256,
+        "S1": 0.1,
+        "S10": 2,
+        "S11": 0.5172,
+        "S2": 0.2297,
+        "S3": 0.2122,
+        "S4": 0.4825,
+        "S5": 0.4729,
+        "S6": 0,
+        "S7": 0.163,
+        "S9": 40.6977
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "czechoslovakia.txt",
+      "focusCount": 89,
+      "id": "czech_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3146,
+        "H4": 3.0303,
+        "H5": 0,
+        "S1": 0.1311,
+        "S10": 1,
+        "S11": 0.1667,
+        "S2": 0.0714,
+        "S3": 0.0592,
+        "S4": 0.4238,
+        "S5": 0.2785,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "denmark.txt",
+      "focusCount": 175,
+      "id": "danish_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.28,
+        "H4": 2.1186,
+        "H5": 0.8475,
+        "S1": 0.0791,
+        "S10": 2,
+        "S11": 0.0789,
+        "S2": 0.1609,
+        "S3": 0.1168,
+        "S4": 0.4679,
+        "S5": 0.2418,
+        "S6": 0,
+        "S7": 0,
+        "S9": 10.1695
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "estonia.txt",
+      "focusCount": 59,
+      "id": "estonia_tree",
+      "values": {
+        "D1": 1,
+        "D2": 0.2712,
+        "H4": 2.6316,
+        "H5": 0,
+        "S1": 0.0762,
+        "S10": 2,
+        "S11": 0.0769,
+        "S2": 0,
+        "S3": 0.0027,
+        "S4": 0.59,
+        "S5": 0.1996,
+        "S6": 1.3158,
+        "S7": 0,
+        "S9": 6.5789
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "ethiopia.txt",
+      "focusCount": 204,
+      "id": "ethiopia_tree",
+      "values": {
+        "D1": 2,
+        "D2": 0.2647,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.2274,
+        "S10": 2,
+        "S11": 0,
+        "S2": 0.3366,
+        "S3": 0.1565,
+        "S4": 0.3487,
+        "S5": 0.5273,
+        "S6": 0,
+        "S7": 0.0602,
+        "S9": 9.3284
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "finland.txt",
+      "focusCount": 166,
+      "id": "finnish_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3554,
+        "H4": 6.1611,
+        "H5": 0,
+        "S1": 0.0872,
+        "S10": 2,
+        "S11": 0.3333,
+        "S2": 0.1043,
+        "S3": 0.0634,
+        "S4": 0.4729,
+        "S5": 0.439,
+        "S6": 0,
+        "S7": 0,
+        "S9": 1.8957
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "small",
+      "file": "free_france.txt",
+      "focusCount": 23,
+      "id": "free_french_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3043,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.2444,
+        "S10": 2,
+        "S11": 0,
+        "S2": 0.2222,
+        "S3": 0.1304,
+        "S4": 0.213,
+        "S5": 0.7391,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "france.txt",
+      "focusCount": 185,
+      "id": "french_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.3027,
+        "H4": 1.4286,
+        "H5": 0,
+        "S1": 0.1714,
+        "S10": 2,
+        "S11": 0.075,
+        "S2": 0.1412,
+        "S3": 0.0804,
+        "S4": 0.3146,
+        "S5": 0.2952,
+        "S6": 0,
+        "S7": 0.0267,
+        "S9": 3.3333
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "generic.txt",
+      "focusCount": 56,
+      "id": "generic_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2143,
+        "H4": 1.6129,
+        "H5": 0,
+        "S1": 0.099,
+        "S10": 1,
+        "S11": 0.1111,
+        "S2": 0.1071,
+        "S3": 0.0195,
+        "S4": 0.5833,
+        "S5": 0.4364,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "germany.txt",
+      "focusCount": 438,
+      "id": "german_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2671,
+        "H4": 6.0137,
+        "H5": 3.6082,
+        "S1": 0.2054,
+        "S10": 7,
+        "S11": 0.3205,
+        "S2": 0.2587,
+        "S3": 0.1544,
+        "S4": 0.2959,
+        "S5": 0.4405,
+        "S6": 0.5155,
+        "S7": 0,
+        "S9": 6.8729
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "greece.txt",
+      "focusCount": 123,
+      "id": "greek_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.1707,
+        "H4": 0.6579,
+        "H5": 0,
+        "S1": 0.1509,
+        "S10": 1,
+        "S11": 0.0909,
+        "S2": 0.3051,
+        "S3": 0.1934,
+        "S4": 0.3534,
+        "S5": 0.3615,
+        "S6": 1.3158,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "horn_of_africa.txt",
+      "focusCount": 58,
+      "id": "horn_of_africa_tree",
+      "values": {
+        "D1": 2,
+        "D2": 0.2759,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.0714,
+        "S10": 1,
+        "S11": 0.0769,
+        "S2": 0.0877,
+        "S3": 0.0836,
+        "S4": 0.5179,
+        "S5": 0.1487,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "hungary.txt",
+      "focusCount": 99,
+      "id": "hungarian_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2929,
+        "H4": 6.6038,
+        "H5": 0,
+        "S1": 0.0682,
+        "S10": 4,
+        "S11": 0.2609,
+        "S2": 0.2371,
+        "S3": 0.1164,
+        "S4": 0.375,
+        "S5": 0.2946,
+        "S6": 1.8868,
+        "S7": 0,
+        "S9": 0.9434
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "iceland.txt",
+      "focusCount": 89,
+      "id": "iceland_tree",
+      "values": {
+        "D1": 4,
+        "D2": 0.3034,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.1622,
+        "S10": 0,
+        "S11": 0,
+        "S2": 0.15,
+        "S3": 0.1095,
+        "S4": 0.4944,
+        "S5": 0.2638,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "india.txt",
+      "focusCount": 71,
+      "id": "indian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2676,
+        "H4": 2.381,
+        "H5": 0,
+        "S1": 0.0884,
+        "S10": 1,
+        "S11": 0.0667,
+        "S2": 0.0588,
+        "S3": 0.0028,
+        "S4": 0.483,
+        "S5": 0.3196,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "india_goe.txt",
+      "focusCount": 412,
+      "id": "indian_focus_goe",
+      "values": {
+        "D1": 3,
+        "D2": 0.318,
+        "H4": 0.8264,
+        "H5": 1.2397,
+        "S1": 0.2618,
+        "S10": 7,
+        "S11": 0.0899,
+        "S2": 0.2537,
+        "S3": 0.1456,
+        "S4": 0.2201,
+        "S5": 0.5694,
+        "S6": 0.4132,
+        "S7": 0,
+        "S9": 1.0331
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "indonesia.txt",
+      "focusCount": 168,
+      "id": "indonesia_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.4464,
+        "H4": 1.0811,
+        "H5": 1.0811,
+        "S1": 0.4818,
+        "S10": 3,
+        "S11": 0.2432,
+        "S2": 0.619,
+        "S3": 0.4144,
+        "S4": 0.1373,
+        "S5": 0.437,
+        "S6": 0,
+        "S7": 0,
+        "S9": 4.3243
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "iraq.txt",
+      "focusCount": 136,
+      "id": "iraq_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3676,
+        "H4": 3.7037,
+        "H5": 0,
+        "S1": 0.0952,
+        "S10": 2,
+        "S11": 0.1786,
+        "S2": 0.1061,
+        "S3": 0.0583,
+        "S4": 0.3988,
+        "S5": 0.4002,
+        "S6": 0,
+        "S7": 0,
+        "S9": 1.8519
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "italy.txt",
+      "focusCount": 314,
+      "id": "italian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3217,
+        "H4": 2.9412,
+        "H5": 0.7353,
+        "S1": 0.2022,
+        "S10": 4,
+        "S11": 0.1964,
+        "S2": 0.0194,
+        "S3": 0.0091,
+        "S4": 0.2643,
+        "S5": 0.5556,
+        "S6": 0.9804,
+        "S7": 0,
+        "S9": 2.9412
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "japan.txt",
+      "focusCount": 448,
+      "id": "japan_wtt_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2813,
+        "H4": 2.0067,
+        "H5": 0.6689,
+        "S1": 0.1699,
+        "S10": 4,
+        "S11": 0.1889,
+        "S2": 0.2072,
+        "S3": 0.1791,
+        "S4": 0.2337,
+        "S5": 0.5477,
+        "S6": 0.3344,
+        "S7": 0,
+        "S9": 2.1739
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "latvia.txt",
+      "focusCount": 56,
+      "id": "latvia_tree",
+      "values": {
+        "D1": 2,
+        "D2": 0.2321,
+        "H4": 2.3256,
+        "H5": 1.1628,
+        "S1": 0.0758,
+        "S10": 1,
+        "S11": 0,
+        "S2": 0.0545,
+        "S3": 0.067,
+        "S4": 0.5657,
+        "S5": 0.5446,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.3256
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "lithuania.txt",
+      "focusCount": 86,
+      "id": "lithuania_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.2326,
+        "H4": 1.6,
+        "H5": 2.4,
+        "S1": 0.1,
+        "S10": 1,
+        "S11": 0.1333,
+        "S2": 0.1707,
+        "S3": 0.0822,
+        "S4": 0.4778,
+        "S5": 0.4524,
+        "S6": 3.2,
+        "S7": 0,
+        "S9": 1.6
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "manchukuo.txt",
+      "focusCount": 46,
+      "id": "manchukuo_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2609,
+        "H4": 3.8462,
+        "H5": 0,
+        "S1": 0.1261,
+        "S10": 3,
+        "S11": 0.1667,
+        "S2": 0.1,
+        "S3": 0.0029,
+        "S4": 0.4107,
+        "S5": 0.4667,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "manchukuo_TSR.txt",
+      "focusCount": 87,
+      "id": "manchukuo_focus_tsr",
+      "values": {
+        "D1": 2,
+        "D2": 0.3793,
+        "H4": 3.0303,
+        "H5": 0,
+        "S1": 0.1785,
+        "S10": 3,
+        "S11": 0.0952,
+        "S2": 0.0513,
+        "S3": 0.0524,
+        "S4": 0.3655,
+        "S5": 0.4471,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "mexico.txt",
+      "focusCount": 114,
+      "id": "mexico_focus_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.2456,
+        "H4": 2.2222,
+        "H5": 0,
+        "S1": 0.1765,
+        "S10": 2,
+        "S11": 0.15,
+        "S2": 0.156,
+        "S3": 0.0755,
+        "S4": 0.3945,
+        "S5": 0.3909,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "czechoslovakia_mu.txt",
+      "focusCount": 275,
+      "id": "mu_czech_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3055,
+        "H4": 3.1169,
+        "H5": 2.8571,
+        "S1": 0.1708,
+        "S10": 5,
+        "S11": 0.1818,
+        "S2": 0.1345,
+        "S3": 0.1108,
+        "S4": 0.2654,
+        "S5": 0.4019,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.8571
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "netherlands.txt",
+      "focusCount": 152,
+      "id": "netherlands_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2566,
+        "H4": 6.3158,
+        "H5": 2.1053,
+        "S1": 0.0909,
+        "S10": 4,
+        "S11": 0.2188,
+        "S2": 0,
+        "S3": 0.0387,
+        "S4": 0.4691,
+        "S5": 0.5305,
+        "S6": 1.5789,
+        "S7": 0,
+        "S9": 4.2105
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "new_zealand.txt",
+      "focusCount": 73,
+      "id": "new_zealander_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.3151,
+        "H4": 3.5294,
+        "H5": 0,
+        "S1": 0.0652,
+        "S10": 0,
+        "S11": 0,
+        "S2": 0.0423,
+        "S3": 0.0056,
+        "S4": 0.529,
+        "S5": 0.2196,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.3529
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "norway.txt",
+      "focusCount": 192,
+      "id": "norwegian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2604,
+        "H4": 2.4096,
+        "H5": 0,
+        "S1": 0.24,
+        "S10": 2,
+        "S11": 0.0789,
+        "S2": 0.2292,
+        "S3": 0.1295,
+        "S4": 0.2743,
+        "S5": 0.365,
+        "S6": 0,
+        "S7": 0,
+        "S9": 1.2048
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "paraguay.txt",
+      "focusCount": 54,
+      "id": "paraguay_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.4074,
+        "H4": 4.4776,
+        "H5": 1.4925,
+        "S1": 0.125,
+        "S10": 3,
+        "S11": 0.2308,
+        "S2": 0.2075,
+        "S3": 0.054,
+        "S4": 0.3462,
+        "S5": 0.2024,
+        "S6": 1.4925,
+        "S7": 0.0435,
+        "S9": 7.4627
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "persia.txt",
+      "focusCount": 272,
+      "id": "persian_focus_tree",
+      "values": {
+        "D1": 3,
+        "D2": 0.2316,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.2577,
+        "S10": 2,
+        "S11": 0.0364,
+        "S2": 0.3532,
+        "S3": 0.1999,
+        "S4": 0.245,
+        "S5": 0.542,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0.5602
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "philippines.txt",
+      "focusCount": 169,
+      "id": "philippines_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.1657,
+        "H4": 0.8264,
+        "H5": 0,
+        "S1": 0.19,
+        "S10": 2,
+        "S11": 0.12,
+        "S2": 0.2857,
+        "S3": 0.1782,
+        "S4": 0.2855,
+        "S5": 0.5463,
+        "S6": 1.6529,
+        "S7": 0,
+        "S9": 0.4132
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "poland.txt",
+      "focusCount": 301,
+      "id": "polish_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3189,
+        "H4": 5.2764,
+        "H5": 5.5276,
+        "S1": 0.1322,
+        "S10": 4,
+        "S11": 0.3333,
+        "S2": 0.2308,
+        "S3": 0.0716,
+        "S4": 0.346,
+        "S5": 0.2168,
+        "S6": 0.2513,
+        "S7": 0,
+        "S9": 5.2764
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "portugal.txt",
+      "focusCount": 126,
+      "id": "portuguese_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2857,
+        "H4": 3.4483,
+        "H5": 0,
+        "S1": 0.2029,
+        "S10": 1,
+        "S11": 0.2273,
+        "S2": 0.0968,
+        "S3": 0.057,
+        "S4": 0.3706,
+        "S5": 0.5841,
+        "S6": 0.6897,
+        "S7": 0,
+        "S9": 1.3793
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "romania.txt",
+      "focusCount": 92,
+      "id": "romanian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3261,
+        "H4": 2.0202,
+        "H5": 0,
+        "S1": 0.1752,
+        "S10": 1,
+        "S11": 0.2609,
+        "S2": 0.1648,
+        "S3": 0.0822,
+        "S4": 0.3932,
+        "S5": 0.373,
+        "S6": 3.0303,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "siam.txt",
+      "focusCount": 222,
+      "id": "siam_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2883,
+        "H4": 1.4815,
+        "H5": 0,
+        "S1": 0.2947,
+        "S10": 2,
+        "S11": 0.025,
+        "S2": 0.1171,
+        "S3": 0.1175,
+        "S4": 0.2124,
+        "S5": 0.622,
+        "S6": 1.8519,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "south_africa.txt",
+      "focusCount": 80,
+      "id": "south_african_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2375,
+        "H4": 1.0526,
+        "H5": 0,
+        "S1": 0.0857,
+        "S10": 1,
+        "S11": 0.0769,
+        "S2": 0.013,
+        "S3": 0.0409,
+        "S4": 0.5882,
+        "S5": 0.1653,
+        "S6": 3.1579,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": true,
+      "bucket": "large",
+      "file": "soviet.txt",
+      "focusCount": 311,
+      "id": "soviet_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3569,
+        "H4": 1.25,
+        "H5": 0.75,
+        "S1": 0.1823,
+        "S10": 3,
+        "S11": 0.2545,
+        "S2": 0.0258,
+        "S3": 0.0265,
+        "S4": 0.27,
+        "S5": 0.6806,
+        "S6": 0.75,
+        "S7": 0.0057,
+        "S9": 2.25
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "spain.txt",
+      "focusCount": 281,
+      "id": "spanish_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.2633,
+        "H4": 3.8043,
+        "H5": 0,
+        "S1": 0.106,
+        "S10": 3,
+        "S11": 0.2653,
+        "S2": 0.0071,
+        "S3": 0.0018,
+        "S4": 0.4482,
+        "S5": 0.1751,
+        "S6": 0.8152,
+        "S7": 0,
+        "S9": 1.3587
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "sweden.txt",
+      "focusCount": 168,
+      "id": "sweden_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.3631,
+        "H4": 2.7523,
+        "H5": 7.7982,
+        "S1": 0.2205,
+        "S10": 6,
+        "S11": 0.1429,
+        "S2": 0.0818,
+        "S3": 0.0487,
+        "S4": 0.2087,
+        "S5": 0.6069,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "switzerland.txt",
+      "focusCount": 160,
+      "id": "swiss_focus",
+      "values": {
+        "D1": 4,
+        "D2": 0.2,
+        "H4": 0.4975,
+        "H5": 0,
+        "S1": 0.1197,
+        "S10": 3,
+        "S11": 0,
+        "S2": 0.026,
+        "S3": 0.019,
+        "S4": 0.2778,
+        "S5": 0.5331,
+        "S6": 0.4975,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "turkey.txt",
+      "focusCount": 201,
+      "id": "turkish_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.0796,
+        "H4": 0.3448,
+        "H5": 0,
+        "S1": 0.1797,
+        "S10": 2,
+        "S11": 0.0938,
+        "S2": 0.2205,
+        "S3": 0.1225,
+        "S4": 0.2094,
+        "S5": 0.3468,
+        "S6": 0,
+        "S7": 0.0213,
+        "S9": 0.3448
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "uruguay.txt",
+      "focusCount": 45,
+      "id": "uruguay_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.4,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.1087,
+        "S10": 0,
+        "S11": 0,
+        "S2": 0.25,
+        "S3": 0.0455,
+        "S4": 0.4091,
+        "S5": 0.2222,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "usa.txt",
+      "focusCount": 135,
+      "id": "usa_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3037,
+        "H4": 2.7027,
+        "H5": 0,
+        "S1": 0.1733,
+        "S10": 2,
+        "S11": 0.1724,
+        "S2": 0.1045,
+        "S3": 0.0606,
+        "S4": 0.4054,
+        "S5": 0.3095,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0.6757
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "small",
+      "file": "vichy_france.txt",
+      "focusCount": 24,
+      "id": "vichy_french_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2917,
+        "H4": 0,
+        "H5": 0,
+        "S1": 0.2727,
+        "S10": 1,
+        "S11": 0,
+        "S2": 0.2381,
+        "S3": 0.1154,
+        "S4": 0.3117,
+        "S5": 0.8462,
+        "S6": 0,
+        "S7": 0,
+        "S9": 0
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "large",
+      "file": "hungary_wuw.txt",
+      "focusCount": 238,
+      "id": "wuw_hungarian_focus",
+      "values": {
+        "D1": 2,
+        "D2": 0.3151,
+        "H4": 3.4364,
+        "H5": 1.0309,
+        "S1": 0.0745,
+        "S10": 2,
+        "S11": 0.3265,
+        "S2": 0.1008,
+        "S3": 0.0492,
+        "S4": 0.3696,
+        "S5": 0.3769,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.0619
+      }
+    },
+    {
+      "ambiguousPositions": false,
+      "bucket": "medium",
+      "file": "yugoslavia.txt",
+      "focusCount": 118,
+      "id": "yugoslavian_focus",
+      "values": {
+        "D1": 3,
+        "D2": 0.2458,
+        "H4": 0.6098,
+        "H5": 0,
+        "S1": 0.2972,
+        "S10": 1,
+        "S11": 0.1,
+        "S2": 0.3448,
+        "S3": 0.2213,
+        "S4": 0.3782,
+        "S5": 0.5742,
+        "S6": 0,
+        "S7": 0,
+        "S9": 2.439
+      }
+    }
+  ],
+  "verdictRules": {
+    "advisoryMetrics": ["H4", "H5", "S9"],
+    "convergenceMinimumRows": 6,
+    "reviseCount": 5,
+    "reviseMargin": 1
+  }
+}

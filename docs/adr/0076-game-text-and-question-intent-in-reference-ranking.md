@@ -1,4 +1,4 @@
-# ADR 0075: Game text and question intent in reference ranking
+# ADR 0076: Game text and question intent in reference ranking
 
 Status: accepted
 

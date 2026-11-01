@@ -25,7 +25,7 @@ src/hoi4_agent_tools/
 Before implementation:
 
 - Write the standalone project's own `AGENTS.md`.
-- Read the offline Paradox wiki pages for national focuses, event modding, on actions, interface modding, scripted GUI, graphical assets, maps, states, provinces, data structures, effects, triggers, scopes, and localisation.
+- Read the kit's HOI4 wiki pages for national focuses, event modding, on actions, interface modding, scripted GUI, graphical assets, maps, states, provinces, data structures, effects, triggers, scopes, and localisation.
 - Read relevant official documentation under the installed Hearts of Iron IV `documentation` folder.
 - Inspect vanilla implementations.
 - Inspect approved reference mods only when vanilla and official documentation do not answer a concrete question.

@@ -78,4 +78,5 @@ Implementation rationale for contributors. For using the server, start with the 
 68. [Declared passes are saddles](0072-declared-passes-are-saddles.md)
 69. [Realm points are checked together and pinned to provinces](0073-realm-points-checked-together-and-pinned.md)
 70. [The shared Rust HOI4 engine](0074-shared-rust-engine.md)
-71. [Game text and question intent in reference ranking](0075-game-text-and-question-intent-in-reference-ranking.md)
+71. [Focus layout quality is a verdict, measured against the game's own trees](0075-focus-layout-quality-verdict.md)
+72. [Game text and question intent in reference ranking](0076-game-text-and-question-intent-in-reference-ranking.md)

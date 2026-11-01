@@ -8,6 +8,9 @@ import {
 } from './model.js';
 import { FOCUS_LAYOUT_WORK_MAX } from './limits.js';
 import { FocusLayoutWorkBudget, layoutFocusTree, layoutFocusTreeAsync } from './layout.js';
+import { evaluateFocusLayoutQuality } from './quality/index.js';
+import { buildQualityGraph } from './quality/graph.js';
+import { measureOrthogonalConnectors } from './quality/orthogonal.js';
 
 const COMPACT_SAME_ROW_SPACING = 2;
 const COMPACT_LANE_SPACING = 8;
@@ -55,6 +58,114 @@ function absoluteCompactRegressions(layout: FocusLayoutResult): string[] {
     ...(metrics.spacing.tooCloseSameRowPairCount > 0 ? ['sameRowSpacing'] : []),
     ...(metrics.symmetry.boundingCenterOffsetTwice > 1 ? ['boundingCenter'] : []),
   ];
+}
+
+/** The curved-connector diagnostics are replaced by the orthogonal model below. */
+const CURVED_CONNECTOR_DIAGNOSTICS = new Set([
+  'FOCUS_LAYOUT_CONNECTOR_CROSSING_UNSATISFIED',
+  'FOCUS_LAYOUT_CONNECTOR_THROUGH_NODE',
+]);
+
+interface CompactGateSide {
+  plan: FocusTreePlan;
+  layout: FocusLayoutResult;
+}
+
+interface GateReading {
+  hardDiagnostics: number;
+  crossings: number;
+  stemsThroughPlaques: number;
+  tooCloseSameRow: number;
+  boundingCenterOffsetTwice: number;
+}
+
+const gateReadings = new WeakMap<FocusLayoutResult, GateReading>();
+
+/**
+ * Reads a layout under the in-game connector model. Connectors inside an all-to-all bundle share
+ * one bar in the game, so a bundle never counts against a layout; the curved model counts every
+ * pair inside it as a crossing, which refused every tree that contains one.
+ */
+function readGate(side: CompactGateSide): GateReading {
+  const cached = gateReadings.get(side.layout);
+  if (cached !== undefined) return cached;
+  const metrics = requiredMetrics(side.layout);
+  const orthogonal = measureOrthogonalConnectors(buildQualityGraph(side.plan, side.layout.nodes));
+  const reading: GateReading = {
+    hardDiagnostics: side.layout.diagnostics.filter(
+      ({ code }) => COMPACT_HARD_DIAGNOSTICS.has(code) && !CURVED_CONNECTOR_DIAGNOSTICS.has(code),
+    ).length,
+    crossings: orthogonal.crossings.length,
+    stemsThroughPlaques: orthogonal.stemsThroughPlaques.length,
+    tooCloseSameRow: metrics.spacing.tooCloseSameRowPairCount,
+    boundingCenterOffsetTwice: metrics.symmetry.boundingCenterOffsetTwice,
+  };
+  gateReadings.set(side.layout, reading);
+  return reading;
+}
+
+/**
+ * A candidate may not be worse than the layout it replaces, and a new tree starts from zero.
+ * Whole-tree reflow also keeps the bounding box centred unless it already was not.
+ */
+function bundleAwareRegressions(
+  candidate: CompactGateSide,
+  baseline: CompactGateSide | undefined,
+  wholeTree: boolean,
+): string[] {
+  const after = readGate(candidate);
+  const before: GateReading =
+    baseline === undefined
+      ? {
+          hardDiagnostics: 0,
+          crossings: 0,
+          stemsThroughPlaques: 0,
+          tooCloseSameRow: 0,
+          boundingCenterOffsetTwice: 1,
+        }
+      : readGate(baseline);
+  return [
+    ...(after.hardDiagnostics > before.hardDiagnostics ? ['hardLayoutDiagnostics'] : []),
+    ...(after.crossings > before.crossings ? ['connectorCrossingCount'] : []),
+    ...(after.stemsThroughPlaques > before.stemsThroughPlaques
+      ? ['connectorNodeIntersections']
+      : []),
+    ...(after.tooCloseSameRow > before.tooCloseSameRow ? ['sameRowSpacing'] : []),
+    ...(wholeTree && after.boundingCenterOffsetTwice > Math.max(1, before.boundingCenterOffsetTwice)
+      ? ['boundingCenter']
+      : []),
+  ];
+}
+
+/**
+ * Regressions that refuse a candidate. A candidate the curved-connector gate accepted is still
+ * accepted; one that only failed it because of a bundle or an artefact of the curve model is
+ * accepted when it is no worse than the current layout under the in-game connector model.
+ */
+function candidateRegressions(
+  candidate: CompactGateSide,
+  baseline: CompactGateSide | undefined,
+  bounded: boolean,
+): string[] {
+  const legacy =
+    bounded && baseline !== undefined
+      ? relativeCompactRegressions(baseline.layout, candidate.layout)
+      : absoluteCompactRegressions(candidate.layout);
+  const regressions =
+    legacy.length === 0 ? legacy : bundleAwareRegressions(candidate, baseline, !bounded);
+  // Whatever the curve model says, compaction may not leave a layout that hoi4.focus_inspect would
+  // judge worse than the one in place.
+  if (regressions.length === 0 && baseline !== undefined && worseVerdict(candidate, baseline))
+    return ['layoutVerdict'];
+  return regressions;
+}
+
+const VERDICT_RANK = { pass: 0, review: 1, revise: 2, blocked: 3 } as const;
+
+function worseVerdict(candidate: CompactGateSide, baseline: CompactGateSide): boolean {
+  const verdictOf = (side: CompactGateSide) =>
+    evaluateFocusLayoutQuality(side.plan, side.layout.nodes).report.verdict;
+  return VERDICT_RANK[verdictOf(candidate)] > VERDICT_RANK[verdictOf(baseline)];
 }
 
 function prerequisiteIds(plan: FocusTreePlan, focusId: string): string[] {
@@ -686,6 +797,7 @@ export function compactFocusTreePlan(
 ): FocusTreePlan {
   const selection = validatedSelection(plan, requested);
   const currentLayout = layoutFocusTree(plan, { aggressiveAestheticRepair: true });
+  if (alreadyPasses(plan, currentLayout, selection)) return plan;
   const normalizedPlan = needsPresentationNormalization(plan)
     ? compactCandidate(
         plan,
@@ -744,18 +856,26 @@ export function compactFocusTreePlan(
     if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
       fallback = { plan: candidate, layout };
     if (
-      (selection.focusIds === undefined
-        ? absoluteCompactRegressions(layout)
-        : relativeCompactRegressions(currentLayout, layout)
+      candidateRegressions(
+        { plan: candidate, layout },
+        { plan, layout: currentLayout },
+        selection.focusIds !== undefined,
       ).length > 0
     )
       continue;
     if (selected === undefined || betterScore(compactScore(layout), compactScore(selected.layout)))
       selected = { plan: candidate, layout };
   }
-  if (selected !== undefined) return selected.plan;
+  if (selected !== undefined)
+    return strictlyBetter(selected.layout, currentLayout) ? selected.plan : plan;
   if (fallback !== undefined) {
-    assertCompactLayoutQuality(currentLayout, fallback.layout, selection.focusIds !== undefined);
+    const regressions = candidateRegressions(
+      { plan: fallback.plan, layout: fallback.layout },
+      { plan, layout: currentLayout },
+      selection.focusIds !== undefined,
+    );
+    // Every candidate is worse than the layout in place on something the gate protects: keep it.
+    if (regressions.length > 0) return plan;
     return fallback.plan;
   }
   if (blockedFocusIds.size > 0)
@@ -790,6 +910,71 @@ export interface CompactFocusTreePlanAsyncResult {
   plan: FocusTreePlan;
   currentLayout: FocusLayoutResult;
   proposedLayout: FocusLayoutResult;
+  /**
+   * `improved`: the plan holds a better layout. `nothing_to_improve`: no candidate beats the layout
+   * in place under the in-game connector model, so the plan is returned unchanged.
+   */
+  outcome: 'improved' | 'nothing_to_improve';
+  /** Why a candidate could not replace the layout in place, when the outcome is `nothing_to_improve`. */
+  blockedBy?: string[];
+  /**
+   * `verdict_pass`: the layout already passes every calibrated metric, so no search was run.
+   * `no_better_candidate`: no candidate scores better. `candidates_regress`: the best candidate
+   * would be worse than the layout in place on something the gate protects (see `blockedBy`).
+   */
+  reason?: 'verdict_pass' | 'no_better_candidate' | 'candidates_regress';
+}
+
+function nothingToImprove(
+  plan: FocusTreePlan,
+  currentLayout: FocusLayoutResult,
+  blockedBy: string[],
+  reason: NonNullable<CompactFocusTreePlanAsyncResult['reason']>,
+): CompactFocusTreePlanAsyncResult {
+  return {
+    plan,
+    currentLayout,
+    proposedLayout: currentLayout,
+    outcome: 'nothing_to_improve',
+    blockedBy,
+    reason,
+  };
+}
+
+/**
+ * A whole-tree reflow of a layout that already passes every calibrated metric has nothing to gain
+ * and would only cost 20 to 70 seconds and churn in the source; an explicit branch, pins or
+ * symmetry request is still honoured.
+ */
+function alreadyPasses(
+  plan: FocusTreePlan,
+  layout: FocusLayoutResult,
+  selection: ReturnType<typeof validatedSelection>,
+): boolean {
+  if (
+    selection.focusIds !== undefined ||
+    selection.pinnedFocusIds.size > 0 ||
+    selection.symmetryGroups.length > 0
+  )
+    return false;
+  const report = evaluateFocusLayoutQuality(plan, layout.nodes).report;
+  return report.softMetricsEvaluated && report.verdict === 'pass';
+}
+
+/**
+ * The candidate beats the layout in place. The score tuple is compared without its trailing layout
+ * hash, which only breaks ties between equal layouts, and a tree that is off the centre of its
+ * bounding box is improved by recentring it even when the score tuple does not change.
+ */
+function strictlyBetter(candidate: FocusLayoutResult, current: FocusLayoutResult): boolean {
+  const left = compactScore(candidate).slice(0, -1);
+  const right = compactScore(current).slice(0, -1);
+  if (betterScore(left, right)) return true;
+  if (betterScore(right, left)) return false;
+  return (
+    requiredMetrics(candidate).symmetry.boundingCenterOffsetTwice <
+    requiredMetrics(current).symmetry.boundingCenterOffsetTwice - 1
+  );
 }
 
 /**
@@ -808,6 +993,8 @@ export async function compactFocusTreePlanAsync(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
   const currentLayout = await layoutFocusTreeAsync(plan, layoutOptions);
+  if (alreadyPasses(plan, currentLayout, selection))
+    return nothingToImprove(plan, currentLayout, [], 'verdict_pass');
   const normalizedPlan = needsPresentationNormalization(plan)
     ? compactCandidate(
         plan,
@@ -870,9 +1057,10 @@ export async function compactFocusTreePlanAsync(
     if (fallback === undefined || betterScore(compactScore(layout), compactScore(fallback.layout)))
       fallback = { plan: candidate, layout };
     if (
-      (selection.focusIds === undefined
-        ? absoluteCompactRegressions(layout)
-        : relativeCompactRegressions(currentLayout, layout)
+      candidateRegressions(
+        { plan: candidate, layout },
+        { plan, layout: currentLayout },
+        selection.focusIds !== undefined,
       ).length > 0
     )
       continue;
@@ -881,12 +1069,32 @@ export async function compactFocusTreePlanAsync(
   }
 
   if (selected !== undefined) {
-    return { plan: selected.plan, currentLayout, proposedLayout: selected.layout };
+    if (!strictlyBetter(selected.layout, currentLayout))
+      return nothingToImprove(plan, currentLayout, [], 'no_better_candidate');
+    return {
+      plan: selected.plan,
+      currentLayout,
+      proposedLayout: selected.layout,
+      outcome: 'improved',
+    };
   }
   if (exhausted !== undefined) throw exhausted;
   if (fallback !== undefined) {
-    assertCompactLayoutQuality(currentLayout, fallback.layout, selection.focusIds !== undefined);
-    return { plan: fallback.plan, currentLayout, proposedLayout: fallback.layout };
+    const regressions = candidateRegressions(
+      { plan: fallback.plan, layout: fallback.layout },
+      { plan, layout: currentLayout },
+      selection.focusIds !== undefined,
+    );
+    // Every candidate is worse than the layout in place on something the gate protects: keep it
+    // and name what blocked the best one.
+    if (regressions.length > 0)
+      return nothingToImprove(plan, currentLayout, regressions, 'candidates_regress');
+    return {
+      plan: fallback.plan,
+      currentLayout,
+      proposedLayout: fallback.layout,
+      outcome: 'improved',
+    };
   }
   if (blockedFocusIds.size > 0)
     throw new ServiceError(
@@ -907,17 +1115,74 @@ export async function compactFocusTreePlanAsync(
   );
 }
 
-/** Refuses compact rewrites that still contain invalid or unreadable geometry. */
+const REGRESSION_REMEDIES: Record<string, string> = {
+  hardLayoutDiagnostics:
+    'Fix the hard layout errors first (hoi4.focus_inspect lists them: overlaps, a prerequisite that is not above, lane bounds)',
+  connectorCrossingCount:
+    'Move one of the crossing connectors to another column, or declare the crossing group as a bundle by giving every parent the same children',
+  connectorNodeIntersections:
+    'Move the focus a connector runs through out of the column of its parent, or pass compactFocusIds for the branch and pinnedFocusIds for its neighbours',
+  sameRowSpacing: 'Keep focuses on one row at least 2 columns apart',
+  boundingCenter: 'Recentre the tree: pin the trunk and compact each side with compactFocusIds',
+  layoutVerdict:
+    'The candidate would be judged worse by hoi4.focus_inspect than the layout in place; compact only keeps layouts that are not worse',
+};
+
+function blockingItems(
+  regressions: readonly string[],
+  proposed: CompactGateSide,
+  baseline: CompactGateSide | undefined,
+): Array<{ name: string; before: number | null; after: number; remedy: string }> {
+  const after = readGate(proposed);
+  const before = baseline === undefined ? undefined : readGate(baseline);
+  const reading: Record<string, [number | undefined, number]> = {
+    layoutVerdict: [
+      baseline === undefined
+        ? undefined
+        : VERDICT_RANK[
+            evaluateFocusLayoutQuality(baseline.plan, baseline.layout.nodes).report.verdict
+          ],
+      VERDICT_RANK[evaluateFocusLayoutQuality(proposed.plan, proposed.layout.nodes).report.verdict],
+    ],
+    hardLayoutDiagnostics: [before?.hardDiagnostics, after.hardDiagnostics],
+    connectorCrossingCount: [before?.crossings, after.crossings],
+    connectorNodeIntersections: [before?.stemsThroughPlaques, after.stemsThroughPlaques],
+    sameRowSpacing: [before?.tooCloseSameRow, after.tooCloseSameRow],
+    boundingCenter: [before?.boundingCenterOffsetTwice, after.boundingCenterOffsetTwice],
+  };
+  return regressions.map((name) => ({
+    name,
+    before: reading[name]?.[0] ?? null,
+    after: reading[name]?.[1] ?? 0,
+    remedy: REGRESSION_REMEDIES[name] ?? 'Inspect the layout and repair the named metric',
+  }));
+}
+
+/**
+ * Refuses compact rewrites that still contain invalid or unreadable geometry. With the plans, the
+ * check reads connectors in the in-game model, treats bundles as one bar and only refuses a layout
+ * that is worse than the one in place; without them it keeps the strict curved-connector gate.
+ */
 export function assertCompactLayoutQuality(
   _current: FocusLayoutResult | undefined,
   proposed: FocusLayoutResult,
   relativeToBaseline = false,
+  plans?: { current?: FocusTreePlan; proposed: FocusTreePlan },
 ): void {
-  const regressions = [
-    ...(relativeToBaseline && _current !== undefined
-      ? relativeCompactRegressions(_current, proposed)
-      : absoluteCompactRegressions(proposed)),
-  ].filter((value, index, all) => all.indexOf(value) === index);
+  const proposedSide = plans === undefined ? undefined : { plan: plans.proposed, layout: proposed };
+  const baselineSide =
+    plans?.current === undefined || _current === undefined
+      ? undefined
+      : { plan: plans.current, layout: _current };
+  const regressions = (
+    proposedSide !== undefined
+      ? candidateRegressions(proposedSide, baselineSide, relativeToBaseline)
+      : [
+          ...(relativeToBaseline && _current !== undefined
+            ? relativeCompactRegressions(_current, proposed)
+            : absoluteCompactRegressions(proposed)),
+        ]
+  ).filter((value, index, all) => all.indexOf(value) === index);
   if (regressions.length === 0) return;
   throw new ServiceError(
     'FOCUS_COMPACT_QUALITY_BLOCKED',
@@ -925,6 +1190,9 @@ export function assertCompactLayoutQuality(
     {
       treeId: proposed.treeId,
       regressions,
+      ...(proposedSide === undefined
+        ? {}
+        : { blocking: blockingItems(regressions, proposedSide, baselineSide) }),
       ...(_current === undefined ? {} : { before: requiredMetrics(_current) }),
       proposed: requiredMetrics(proposed),
     },
