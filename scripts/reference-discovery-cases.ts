@@ -583,3 +583,159 @@ export const heldOutCases: DiscoveryCase[] = [
     ],
   },
 ];
+
+/**
+ * Final test questions written on 2026-11-01 by a second agent that saw none of the other
+ * sets' results. Ranking changes are developed on the three sets above; this one is scored
+ * only to report a finished change.
+ */
+export const testCases: DiscoveryCase[] = [
+  ...(
+    [
+      ['give a country extra manpower', effects, 'add_manpower'],
+      ['raise war support by a few percent', effects, 'add_war_support'],
+      ['give a country some command power', effects, 'add_command_power'],
+      [
+        "queue up tanks or rifles in a country's equipment production",
+        effects,
+        'add_equipment_production',
+      ],
+      ['change the ruling party and turn elections on or off', effects, 'set_politics'],
+      ['rename a state, for example when a country takes it over', effects, 'set_state_name'],
+      [
+        'improve how much one country likes another with a diplomatic opinion bonus',
+        effects,
+        'add_opinion_modifier',
+      ],
+      ['switch a country over to a different focus tree', effects, 'load_focus_tree'],
+      [
+        'tell the AI to prioritise or avoid something towards another country',
+        effects,
+        'add_ai_strategy',
+      ],
+      ['give a research bonus that discounts the next few technologies', effects, 'add_tech_bonus'],
+      ['give a general or advisor a new trait', effects, 'add_trait'],
+      ['check if a country is at war with anyone', triggers, 'has_war'],
+      ['check how much political power a country has', triggers, 'has_political_power'],
+      ['check if a country is a member of any faction', triggers, 'is_in_faction'],
+      ['check whether a decision is currently active', triggers, 'has_decision'],
+      ["check if a country is someone else's puppet", triggers, 'is_puppet'],
+      ['check whether a country owns a particular state', triggers, 'owns_state'],
+      ['check if a country has enough army experience', triggers, 'has_army_experience'],
+      ['check if a character exists for a country', triggers, 'has_character'],
+      ['check if two countries are allies', triggers, 'is_ally_with'],
+      ["check how big a country's navy is", triggers, 'has_navy_size'],
+    ] as const
+  ).map(([query, file, name]): DiscoveryCase => ({
+    query,
+    kind: 'question',
+    answers: [
+      { file, line: heading(name) },
+      { file: wiki(file === effects ? 'Effects' : 'Triggers'), line: row(name) },
+    ],
+  })),
+  {
+    query: 'add a number to a variable',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('add_to_variable') },
+      { file: wiki('Effects'), line: row('add_to_variable') },
+      { file: wiki('Data structures'), line: row('add_to_variable') },
+    ],
+  },
+  ...(
+    [
+      ['gain more political power every day', 'political_power_gain'],
+      ['make all buildings construct faster', 'production_speed_buildings_factor'],
+      ['make my army use less supply', 'supply_consumption_factor'],
+      ['increase how much of the population can be recruited', 'conscription_factor'],
+    ] as const
+  ).map(([query, name]): DiscoveryCase => ({
+    query,
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading(name) },
+      { file: wiki('Modifiers'), line: row(name) },
+      { file: wiki('List of modifiers'), line: row(name) },
+    ],
+  })),
+  ...(
+    [
+      [
+        'how do I give an event several option buttons with different outcomes',
+        'Event modding',
+        ['Options'],
+      ],
+      [
+        'place a focus on the tree relative to another focus',
+        'National focus modding',
+        ['Position'],
+      ],
+      [
+        'decision that works as a timed mission with a deadline',
+        'Decision modding',
+        ['Missions', 'Mission example'],
+      ],
+      [
+        'how are idea categories and slots defined for advisors',
+        'Idea modding',
+        ['Idea category arguments', 'Categories'],
+      ],
+      ['set up a political advisor as a character', 'Character modding', ['Advisors']],
+      ['put a little icon inside a piece of text', 'Localisation', ['Text icons']],
+      [
+        'write a state history file with buildings and owner',
+        'State modding',
+        ['History', 'Buildings'],
+      ],
+      [
+        'add a new tab to the research screen for my own technologies',
+        'Technology modding',
+        ['Folders', 'Folder tabs'],
+      ],
+      [
+        'create a new start date with its own description and list of featured countries',
+        'Bookmark modding',
+        ['Attributes', 'File example'],
+      ],
+    ] as const
+  ).map(([query, page, titles]): DiscoveryCase => ({
+    query,
+    kind: 'question',
+    answers: titles.map((title) => ({ file: wiki(page), line: section(title) })),
+  })),
+  {
+    query: 'run something when a state is captured by another country',
+    kind: 'question',
+    answers: [
+      { file: wiki('On actions'), line: section('States') },
+      { file: wiki('On actions'), line: row('on_state_control_changed') },
+    ],
+  },
+  {
+    query: 'swap_ideas',
+    kind: 'identifier',
+    answers: [{ file: effects, line: heading('swap_ideas') }],
+  },
+  {
+    query: 'activate_decision',
+    kind: 'identifier',
+    answers: [{ file: effects, line: heading('activate_decision') }],
+  },
+  {
+    query: 'has_template',
+    kind: 'identifier',
+    answers: [{ file: triggers, line: heading('has_template') }],
+  },
+  {
+    query: 'any_neighbor_country',
+    kind: 'identifier',
+    answers: [{ file: triggers, line: heading('any_neighbor_country') }],
+  },
+  { query: 'banana bread recipe with extra walnuts', kind: 'negative', answers: [] },
+  {
+    query: 'how to fix my graphics card driver crashing in a shooter',
+    kind: 'negative',
+    answers: [],
+  },
+];

@@ -9,6 +9,7 @@ import {
   discoveryCases,
   documentKey,
   heldOutCases,
+  testCases,
   validationCases,
 } from './reference-discovery-cases.js';
 
@@ -26,10 +27,12 @@ const cases =
     ? validationCases
     : process.argv[4] === '--held-out'
       ? heldOutCases
-      : discoveryCases;
+      : process.argv[4] === '--test'
+        ? testCases
+        : discoveryCases;
 if (modRoot === undefined || gameRoot === undefined) {
   process.stderr.write(
-    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out]\n',
+    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test]\n',
   );
   process.exit(2);
 }
