@@ -87,7 +87,21 @@ Only relative paths inside the authorized mod workspace are accepted. URLs, abso
 
 ## From a model to a world: an example
 
-The images below come from one invented world: the model is [`scripts/docs-map-gallery.ts`](../scripts/docs-map-gallery.ts), the files are what `hoi4.map_rewrite` wrote from it, and the pictures are offline renders of those files (`hoi4.map_inspect` with a layer and overlays), never game screenshots. The model has two lands, a gulf, a wall with a gate, a ridge, a volcano, three rivers and a strait; four countries that the mod declares are placed from a capital point each.
+### A real world
+
+The ZIN map of the README is the largest map this server has written for a mod: 5,120 x 2,560 pixels, 7,109 provinces, 1,332 states, 275 strategic regions and 186 ports, with a geography model of its own (seas, lands, ranges with passes, volcanoes, rivers and straits) and countries that the mod declares. The pictures are offline renders of the written files, not game screenshots.
+
+![The states of the ZIN map](images/maps/zin-states.png)
+
+| Terrain classes                             | A zoomed area (state borders, ports, crossings) |
+| ------------------------------------------- | ----------------------------------------------- |
+| ![ZIN terrain](images/maps/zin-terrain.png) | ![ZIN detail](images/maps/zin-detail.png)       |
+
+The [manifest](images/maps/manifest.json) records the source revision, the tool version and the calls behind each picture.
+
+### A small world you can rebuild
+
+The images below come from one invented world with project-owned data: the model is [`scripts/docs-map-gallery.ts`](../scripts/docs-map-gallery.ts), the files are what `hoi4.map_rewrite` wrote from it, and the pictures are offline renders of those files (`hoi4.map_inspect` with a layer and overlays), never game screenshots. The model has two lands, a gulf, a wall with a gate, a ridge, a volcano, three rivers and a strait; four countries that the mod declares are placed from a capital point each.
 
 | The model (preview overlay)                     | Provinces                                     |
 | ----------------------------------------------- | --------------------------------------------- |

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "description": "Offline renders of the ZIN map by hoi4.map_inspect. Tool-generated evidence; not game screenshots.",
+  "toolVersion": "4.6.4",
+  "renderedAt": "2026-11-01",
+  "source": {
+    "mod": "ZIN",
+    "repository": "https://github.com/klimPaskov/zin",
+    "revision": "d392ce62b80dede73c413d59fd71ad027c321add",
+    "generatedWorld": ".hoi4-agent-world.json of 24 October 2026 (3,471 generated files)"
+  },
+  "world": {
+    "width": 5120,
+    "height": 2560,
+    "provinces": 7109,
+    "states": 1332,
+    "strategicRegions": 275,
+    "ports": 186
+  },
+  "images": [
+    {
+      "file": "zin-states.png",
+      "tool": "hoi4.map_inspect",
+      "layer": "state",
+      "overlays": ["coastlines", "victory-points"],
+      "scale": 1,
+      "published": "downscaled to 2560 px wide"
+    },
+    {
+      "file": "zin-terrain.png",
+      "tool": "hoi4.map_inspect",
+      "layer": "terrain",
+      "overlays": ["coastlines"],
+      "scale": 1,
+      "published": "downscaled to 2560 px wide"
+    },
+    {
+      "file": "zin-detail.png",
+      "tool": "hoi4.map_inspect",
+      "layer": "state",
+      "overlays": ["coastlines", "ports", "adjacencies"],
+      "tile": {
+        "x": 2000,
+        "y": 600,
+        "width": 1400,
+        "height": 900
+      },
+      "scale": 1
+    },
+    {
+      "file": "model-overlay.png",
+      "synthetic": true,
+      "script": "scripts/docs-map-gallery.ts"
+    },
+    {
+      "file": "world-provinces.png",
+      "synthetic": true,
+      "script": "scripts/docs-map-gallery.ts"
+    },
+    {
+      "file": "world-states.png",
+      "synthetic": true,
+      "script": "scripts/docs-map-gallery.ts"
+    },
+    {
+      "file": "world-owners.png",
+      "synthetic": true,
+      "script": "scripts/docs-map-gallery.ts"
+    },
+    {
+      "file": "world-terrain-crossings.png",
+      "synthetic": true,
+      "script": "scripts/docs-map-gallery.ts"
+    }
+  ],
+  "attribution": "ZIN map by its author; the author's private drawing is not published or embedded."
+}

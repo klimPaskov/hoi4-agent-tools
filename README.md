@@ -62,14 +62,15 @@ See more in the [examples gallery](docs/examples.md).
 
 ### Maps
 
-A small invented world, from the model you write to the map the server writes. These are offline renders of the files the server generated, not game screenshots; the model is project-owned and the images are rebuilt by [`scripts/docs-map-gallery.ts`](scripts/docs-map-gallery.ts).
+The server generates complete maps for total-conversion mods. These are renders of one of them: [ZIN](https://github.com/klimPaskov/zin), an original world of 5,120 x 2,560 pixels with 7,109 provinces, 1,332 states, 275 strategic regions and 186 ports, generated with this server from the mod author's own drawing and geography, then loaded in Hearts of Iron IV by the mod. The images are the server's offline renders of the files it wrote (`hoi4.map_inspect`), not game screenshots; the drawing the author started from is private and is not part of the project.
 
-| The model you give (before)                                                                          | The world it writes (after): owners                                                                                                |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [![Geography model overlay](docs/images/maps/model-overlay.png)](docs/images/maps/model-overlay.png) | [![Countries placed](docs/images/maps/world-owners.png)](docs/images/maps/world-owners.png)                                        |
-| [![Provinces](docs/images/maps/world-provinces.png)](docs/images/maps/world-provinces.png)           | [![Terrain, wall, crossing and ports](docs/images/maps/world-terrain-crossings.png)](docs/images/maps/world-terrain-crossings.png) |
+[![The states of the ZIN map, rendered from its files](docs/images/maps/zin-states.png)](docs/images/maps/zin-states.png)
 
-Each realm grows from its capital point; the wall with its gate, the strait across the gulf and the ports all come from the model. See [the map guide](docs/map.md#from-a-model-to-a-world-an-example).
+| Terrain classes                                                                      | A zoomed area: state borders, ports and crossings                                 |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| [![ZIN terrain](docs/images/maps/zin-terrain.png)](docs/images/maps/zin-terrain.png) | [![ZIN detail](docs/images/maps/zin-detail.png)](docs/images/maps/zin-detail.png) |
+
+How a map like this is made, step by step, is in [the map guide](docs/map.md#from-a-model-to-a-world-an-example), with a small invented world you can rebuild yourself.
 
 ## Tools
 

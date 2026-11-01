@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add a map gallery to the README and the map guide: one invented world from the geography model you write to the owners, provinces, states, terrain, crossings and ports the server writes (`docs/images/maps/`, offline renders, not game screenshots), rebuilt by `scripts/docs-map-gallery.ts`. The README text describes geography models, workspace countries, carved river valleys and crossings.
+- Show real maps in the README and the map guide: offline renders of the ZIN world (5,120 x 2,560 pixels, 7,109 provinces, 1,332 states), with a manifest of the source revision and tool version (`docs/images/maps/`; not game screenshots), and a small invented world that `scripts/docs-map-gallery.ts` rebuilds. The README text describes geography models, workspace countries, carved river valleys and crossings.
 
 ## 4.6.4 - 2026-11-01
 
