@@ -50,6 +50,29 @@ process.stdin.on('end', () => {
         hashes: { layout: hash, untouched: hash, prerequisites: hash, exclusions: hash },
       }),
     );
+  } else if (mode === 'blocked') {
+    const ids = request.insert?.focusIds ?? [];
+    process.stdout.write(
+      JSON.stringify({
+        schema: 'hoi4-focus-layout/1',
+        status: 'blocked',
+        operation: request.operation,
+        nodes: [],
+        source: [],
+        diagnostics: [
+          {
+            code: 'FOCUS_ENGINE_NO_CORRIDOR',
+            severity: 'error',
+            focusIds: ids,
+            message: 'no free place within 64 columns',
+            details: {},
+          },
+        ],
+        metrics: null,
+        hashes: { layout: null, untouched: hash, prerequisites: hash, exclusions: hash },
+        needsRoom: { shift: [{ fromX: 4, columns: 2, direction: 'right', focusIds: ['b'] }] },
+      }),
+    );
   } else if (mode === 'invalid-json') {
     process.stdout.write('{"schema": "hoi4-focus-layout/1", "status": ');
   } else if (mode === 'wrong-shape') {

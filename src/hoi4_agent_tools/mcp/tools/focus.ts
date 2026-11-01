@@ -153,6 +153,44 @@ const focusDriftOutputSchema = z
   })
   .strict();
 
+const engineShiftOutputSchema = z
+  .object({
+    fromX: z.number().int(),
+    columns: z.number().int().min(1),
+    direction: z.enum(['right', 'left']),
+    focusIds: z.array(z.string().max(256)),
+  })
+  .strict();
+
+/** What the focus layout engine did (layoutMode engine or placement). */
+const focusEngineLayoutOutputSchema = z
+  .object({
+    operation: z.enum(['layout', 'insert']),
+    status: z.literal('ok'),
+    hashes: z
+      .object({
+        layout: sha256Schema.nullable(),
+        untouched: sha256Schema,
+        prerequisites: sha256Schema,
+        exclusions: sha256Schema,
+      })
+      .strict(),
+    metrics: z
+      .object({
+        columns: nonNegativeIntegerSchema,
+        rows: nonNegativeIntegerSchema,
+        orthogonalCrossings: nonNegativeIntegerSchema,
+        stemsThroughPlaques: nonNegativeIntegerSchema,
+        mergedBars: nonNegativeIntegerSchema,
+      })
+      .strict(),
+    movedFocusIds: z.array(z.string().max(256)).max(100),
+    movedFocusCount: nonNegativeIntegerSchema,
+    shifted: z.array(engineShiftOutputSchema).optional(),
+    binarySource: z.enum(['environment', 'package']),
+  })
+  .strict();
+
 const focusPlanOutputSchema = strictOperationResultSchema(
   z.discriminatedUnion('mode', [
     z
@@ -173,6 +211,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
           })
           .strict()
           .optional(),
+        engine: focusEngineLayoutOutputSchema.optional(),
         fileCount: nonNegativeIntegerSchema,
         artifactCount: nonNegativeIntegerSchema,
       })
