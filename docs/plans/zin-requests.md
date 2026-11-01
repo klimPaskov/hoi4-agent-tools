@@ -75,6 +75,11 @@ Order, each with `npm run check` locally and CI green: (1) dependency security u
 | ZR-12 | Declared passes must be saddles, and `synthesisCheck` must report pass problems                           | P0 for the map write         | implemented in PR 50; ships in 4.6.1                                                                              |
 | ZR-13 | Report every realm point problem in one run, and give close capitals a province each                      | P0 for the map write         | released in 4.6.2, installed in `runtime-v462`                                                                    |
 | ZR-14 | `MANAGED_OUTPUT_MANIFEST_INVALID` on the world inventory of the mod                                       | P0 for the map write         | implemented in PR 54; ships in 4.6.3                                                                              |
+| ZR-15 | Staged trees for the GUI and focus routes (lead R1 and R6)                                                | Medium                       | planned for 4.7.0; needs a configured staging root (ADR first)                                                    |
+| ZR-16 | Choose which artifacts a GUI render writes (lead R2)                                                      | Medium                       | planned for 4.7.0                                                                                                 |
+| ZR-17 | Contrast and ground measurement per text element (lead R3)                                                | High                         | planned for 4.7.0                                                                                                 |
+| ZR-18 | Contact sheets of several renders (lead R4)                                                               | Low                          | open                                                                                                              |
+| ZR-19 | Control interaction-state matrix artifact (lead R5)                                                       | Medium                       | open                                                                                                              |
 
 ## ZR-1: Validators fail with `WORKSPACE_CONTEXT_NOT_FOUND` outside the mod folder
 
@@ -305,6 +310,19 @@ Every sampled file held the expected bytes after each apply and after each rollb
 - Implementation: PR 54, amendment to ADR 0052. A safe relative path outside the allow-list is ignored: never read, compared, edited or deleted, left out of the next inventory and reported as `MAP_WORLD_OUTPUT_RECORD_IGNORED` (`data.outputs.ignored`). Unsafe paths and duplicates still refuse. A test caught that an ignored file present on disk would have been deleted; fixed. No change is needed in the mod, and the 5 files stay in place.
 - Status: implemented in PR 54; ships in 4.6.3
 - Verification: pending (lead: the write, or the preview first)
+
+## ZR-15 to ZR-19: GUI and focus requests of the ZIN UI overhaul (lead R1 to R6)
+
+Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 October and 1 November 2026. None blocks the lead's phase 1; each has a workaround in the mod's render harness.
+
+- **ZR-15 (R1 and R6): render, inspect and lint a staged tree.** Wanted: an optional root argument on `hoi4.gui_render`, `hoi4.gui_inspect`, `hoi4.focus_inspect`, `hoi4.focus_render` and the focus lint, so a tree built outside the mod folder (the builder's staged output under `%TEMP%`) is read as a temporary, read-only workspace with the mod's other files as context, with an `ephemeral` artifact store. **Design constraint:** the project rule is that the server reads only inside configured roots and canonical-path checks are never weakened, so a free `modPath` argument is not acceptable. Plan: a new optional configuration key `stagingRoots` (directories the owner declares, such as the builder's temp folder); a call may name `stagedPath` only when its canonical path lies inside a staging root; the staged tree overlays the workspace's files (staged files win) for that call only, read-only, with its artifacts in a store the call deletes when `ephemeral: true`. Needs an ADR before code, and principal grants stay as they are. Acceptance as the lead wrote it (same full-PNG hash as a render under a mod root; nothing written under the workspaces folder; no files left after an ephemeral call).
+- **ZR-16 (R2): artifact filter.** Wanted: `artifacts: ["full.png", "layout.json"]` on `hoi4.gui_render` so only the named artifacts are produced and stored. Plan: additive optional field; unnamed artifacts are neither rendered nor stored; the named full PNG is byte-identical to an unfiltered render.
+- **ZR-17 (R3, High): contrast and ground per text element.** Wanted: in the layout JSON per text element `ground.mean`, `ground.lumaStd`, the drawn colour after alpha and `contrast` (WCAG), optionally a `GUI_TEXT_LOW_CONTRAST` diagnostic with a caller threshold. Plan: the renderer composites the layers below each text and masks the glyph coverage; acceptance on `countrydoctrineview` at 1920x1080 as the lead wrote it (the five `*_title` elements under 3:1, the `*_desc` elements above, within 0.3 of the harness).
+- **ZR-18 (R4, Low): contact sheets.** A batch render with one sheet image per request list, every tile labelled as an offline tool render. Deferred: the harness covers it.
+- **ZR-19 (R5): control states matrix.** A `-control-states.png` artifact with a strip of frames per clickable element in each requested state, marking identical frames. Planned after ZR-17.
+- Order: 4.6.3 (manifest fix, in CI) first; then ZR-17 and ZR-16 (additive, no security change), then the ADR and ZR-15, then ZR-19; ZR-18 last.
+- Status: filed; not started
+- Verification: pending
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
