@@ -359,9 +359,15 @@ function eventScanPatterns(
   const roots = workspace.registration.roots;
   const under = (values: readonly string[], glob: string): string[] =>
     values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
-  if (focused) {
-    return ['events/**/*.txt', 'common/on_actions/**/*.txt'].sort(compareCodeUnits);
-  }
+  // A focused route still resolves scripted-effect helpers and follows callers back through
+  // them, so it scans every folder that can define or call one. Only localisation, which
+  // feeds the skipped lint passes, is left out.
+  const localisation = focused
+    ? []
+    : [
+        ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
+        ...under(roots.localisation, '*.{yml,yaml}'),
+      ];
   return [
     'events/**/*.txt',
     'history/countries/**/*.txt',
@@ -380,8 +386,7 @@ function eventScanPatterns(
     'common/scripted_effects/**/*.txt',
     ...under(roots.focus, '**/*.txt'),
     ...under(roots.scriptedGui, '**/*.txt'),
-    ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
-    ...under(roots.localisation, '*.{yml,yaml}'),
+    ...localisation,
   ].sort(compareCodeUnits);
 }
 

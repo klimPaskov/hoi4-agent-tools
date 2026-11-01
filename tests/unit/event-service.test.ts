@@ -121,6 +121,71 @@ describe('Event Chain Viewer service', () => {
     expect(JSON.parse(focused.render.json).filters.compactLayout).toBe(true);
   });
 
+  it('traces through scripted effects defined and called outside events and on_actions', async () => {
+    const { engine, sourcePath } = await fixture();
+    const mod = path.dirname(path.dirname(sourcePath));
+    await mkdir(path.join(mod, 'common', 'scripted_effects'), { recursive: true });
+    await writeFile(
+      sourcePath,
+      `add_namespace = chain
+country_event = {
+	id = chain.1
+	is_triggered_only = yes
+	option = {
+		name = chain.1.a
+		chain_follow_up_effect = yes
+	}
+}
+country_event = { id = chain.2 is_triggered_only = yes option = { name = chain.2.a } }
+country_event = { id = chain.9 is_triggered_only = yes option = { name = chain.9.a } }
+`,
+    );
+    await writeFile(
+      path.join(mod, 'common', 'scripted_effects', 'chain_effects.txt'),
+      `chain_follow_up_effect = { country_event = { id = chain.2 } }
+chain_entry_effect = { country_event = { id = chain.9 } }
+`,
+    );
+    const viewer = new EventChainViewer(engine);
+    const downstream = await viewer.inspect({
+      workspaceId: 'event-service',
+      mode: 'trace',
+      selector: { kind: 'event', eventId: 'chain.1' },
+      direction: 'downstream',
+      expandHelpers: true,
+    });
+    expect(JSON.stringify(downstream.report)).not.toContain('EVENT_HELPER_UNRESOLVED');
+    expect(JSON.stringify(downstream.report)).toContain('chain_follow_up_effect');
+    expect(JSON.stringify(downstream.report)).toContain('chain.2');
+    // A caller that lives in a decision, reached only through a scripted effect.
+    await mkdir(path.join(mod, 'common', 'decisions'), { recursive: true });
+    await writeFile(
+      path.join(mod, 'common', 'decisions', 'chain_decisions.txt'),
+      'chain_category = { chain_decision = { complete_effect = { chain_entry_effect = yes } } }\n',
+    );
+    const upstream = await new EventChainViewer(engine).inspect({
+      workspaceId: 'event-service',
+      mode: 'trace',
+      selector: { kind: 'event', eventId: 'chain.9' },
+      direction: 'upstream',
+      refresh: true,
+    });
+    const text = JSON.stringify(upstream.report);
+    expect(text).toContain('chain_entry_effect');
+    expect(text).toContain('chain_decision');
+    // The inline summary names the caller too, for clients that do not open the report.
+    expect(upstream.summary).toMatchObject({
+      trace: { entryPoints: ['chain_decision'], helpers: ['chain_entry_effect'] },
+    });
+    const roots = await new EventChainViewer(engine).inspect({
+      workspaceId: 'event-service',
+      mode: 'roots',
+      selector: { kind: 'event', eventId: 'chain.9' },
+      refresh: true,
+    });
+    expect(JSON.stringify(roots.report)).not.toMatch(/callerless[^}]*chain\.9/u);
+  });
+
   it('keeps dotted namespaces distinct in source selection', async () => {
     const { engine, sourcePath } = await fixture();
     await writeFile(
