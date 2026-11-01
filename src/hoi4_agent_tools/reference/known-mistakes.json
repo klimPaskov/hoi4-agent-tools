@@ -106,10 +106,10 @@
       "status": "active",
       "severity": "error",
       "surfaces": ["event"],
-      "title": "Event number that is not a whole number below 100000",
-      "mistake": "The part of an event id after the last dot is not an integer, or is 100000 or more.",
-      "symptom": "Every non-integer id becomes number 0, and numbers from 100000 reach the next namespace, so events share one internal id and one fires the other (\"Failed to create id ... Already exists in game\").",
-      "fix": "End the id with a whole number from 0 to 99999, unique within its namespace.",
+      "title": "Event number of 100000 or more",
+      "mistake": "The part of an event id after the last dot is a whole number of 100000 or more. A text suffix is not flagged: vanilla 1.19.4.1 ships ids such as BBA_italy_missiolinis.02_north and tutorial ids, and a game launch that loads them logs no id collision.",
+      "symptom": "Numbers from 100000 reach the next namespace, so events share one internal id and one fires the other (\"Failed to create id ... Already exists in game\").",
+      "fix": "End the id with a number from 0 to 99999, unique within its namespace.",
       "sources": [
         {
           "kind": "wiki",

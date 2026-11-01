@@ -54,15 +54,22 @@ export interface ScriptFileContext {
 
 /**
  * Scope links from the wiki Scopes page: the scopes each link is usable in and the scope it
- * enters. The engine accepts these keys in any letter case.
+ * enters. The engine accepts these keys in any letter case. The game's documentation does not
+ * list scope links, so vanilla script that loads widens the wiki's list: vanilla 1.19.4.1 uses
+ * `controller` in country scope (common/decisions/ENG.txt, common/national_focus/sweden.txt)
+ * and `capital_scope` in state scope (common/decisions/SOV.txt).
  */
 const scopeLinks: Readonly<Record<string, { from: readonly string[]; to: string }>> = {
   owner: { from: ['state', 'character', 'combatant'], to: 'country' },
-  controller: { from: ['state'], to: 'country' },
-  capital_scope: { from: ['country'], to: 'state' },
+  controller: { from: ['state', 'country'], to: 'country' },
+  capital_scope: { from: ['country', 'state'], to: 'state' },
   overlord: { from: ['country'], to: 'country' },
   faction_leader: { from: ['country'], to: 'country' },
 };
+
+/** A scope a link can be compared with: a keyword chain, a country tag or a saved target. */
+const scopeTargetPattern =
+  /^(?:(?:ROOT|THIS|PREV|FROM|root|this|prev|from)(?:\.(?:ROOT|THIS|PREV|FROM|OWNER|CONTROLLER|root|this|prev|from|owner|controller))*|[A-Z][A-Z0-9]{2}|(?:event_target|var):[\w.@:]+)$/u;
 
 interface ScriptRoot {
   block: BlockNode;
@@ -70,11 +77,16 @@ interface ScriptRoot {
   scope: string;
 }
 
+/**
+ * The scope an event's trigger, immediate and options run in. A unit leader event fires "for
+ * owner country" (effects documentation) and vanilla options use country effects directly;
+ * an operative leader event runs in the operative (vanilla events/LaR_agent_events.txt).
+ */
 const eventScopes: Readonly<Record<string, string>> = {
   country_event: 'country',
   news_event: 'country',
   state_event: 'state',
-  unit_leader_event: 'character',
+  unit_leader_event: 'country',
   operative_leader_event: 'character',
 };
 const optionMetadata = new Set([
@@ -387,6 +399,26 @@ export async function validateScript(
         (explicitScope !== undefined || fixedScope !== undefined)
       ) {
         walk(entry.value, kind, explicitScope ?? fixedScope!, scope);
+        continue;
+      }
+      // `owner = ROOT` or `owner = GER` compares the linked scope with a target; vanilla
+      // common/decisions/_documentation.md uses `owner = ROOT` in a state target trigger.
+      const compared = scopeLinks[raw.toLowerCase()];
+      if (
+        compared !== undefined &&
+        kind === 'trigger' &&
+        entry.value.type === 'scalar' &&
+        entry.operator.text === '=' &&
+        scopeTargetPattern.test(entry.value.value)
+      ) {
+        checkedCommands++;
+        if (scope !== UNKNOWN_SCOPE && !compared.from.includes(scope))
+          report(entry, kind, scope, {
+            code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
+            status: 'error',
+            message: `${raw} is usable only within ${compared.from.join(', ')} scope`,
+            suggestions: [],
+          });
         continue;
       }
       const link = entry.value.type === 'block' ? scopeLinks[raw.toLowerCase()] : undefined;

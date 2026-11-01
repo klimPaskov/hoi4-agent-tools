@@ -114,6 +114,23 @@ const sweepCaseSchema = z
         where: z.record(z.string(), scalar),
       })
       .strict(),
+    /**
+     * Real errors in a known-good file, checked by hand: matching items are not false
+     * positives. Each names its file, line and code and says why it is a real error.
+     */
+    knownErrors: z
+      .array(
+        z
+          .object({
+            file: z.string().min(1).max(256),
+            line: z.number().int().positive(),
+            code: z.string().min(1).max(128),
+            evidence: z.string().min(1).max(1000),
+          })
+          .strict(),
+      )
+      .max(64)
+      .default([]),
   })
   .strict();
 

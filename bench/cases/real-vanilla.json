@@ -202,7 +202,15 @@
       "files": ["common/national_focus/*.txt"],
       "limit": 60,
       "arguments": { "path": "{path}", "limit": 32 },
-      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } },
+      "knownErrors": [
+        {
+          "file": "common/national_focus/TSR_lingguang_incident_joint_branch.txt",
+          "line": 420,
+          "code": "SOURCE_UNEXPECTED_RIGHT_BRACE",
+          "evidence": "The 1.19.4.1 file has 101 opening and 102 closing braces; the last line closes a block that was never opened. The game skips the stray brace, so the file still loads."
+        }
+      ]
     },
     {
       "id": "vanilla.validation.known-good-helpers",

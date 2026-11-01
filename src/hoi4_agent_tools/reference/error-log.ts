@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { z } from 'zod/v4';
 import { ServiceError } from '../core/result.js';
 import { knownMistakeForLogMessage } from './known-mistakes.js';
-import type { ResolvedWorkspace } from '../core/workspace.js';
+import { readModDescriptor, type ResolvedWorkspace } from '../core/workspace.js';
 import type { errorLogDataSchema, errorLogRequestSchema } from '../schemas/mod-tools.js';
 
 /**
@@ -207,6 +207,30 @@ function userDataCandidates(workspace: ResolvedWorkspace, configured?: string): 
   return [...new Set(candidates)];
 }
 
+/**
+ * The mods of the launch that wrote the logs, read from `system.log` beside `error.log`, which
+ * the game writes anew on every launch with one `Active Mod: <name>` line per mod.
+ */
+async function launchOf(
+  workspace: ResolvedWorkspace,
+  logs: string,
+): Promise<Output['launch'] | undefined> {
+  const file = path.join(logs, 'system.log');
+  const info = await stat(file).catch(() => undefined);
+  if (info?.isFile() !== true) return undefined;
+  const { text } = await readTail(file, info.size);
+  const activeMods = [...text.matchAll(/\]:\s*Active Mod:\s*(.+?)\s*$/gmu)]
+    .map((match) => match[1]!.slice(0, 256))
+    .slice(0, 64);
+  const name = (await readModDescriptor(workspace.modRoot))?.name?.trim().toLowerCase();
+  return {
+    activeMods,
+    ...(name === undefined || name === ''
+      ? {}
+      : { modLoaded: activeMods.some((mod) => mod.trim().toLowerCase() === name) }),
+  };
+}
+
 async function readTail(file: string, size: number): Promise<{ text: string; truncated: boolean }> {
   const start = Math.max(0, size - MAX_LOG_BYTES);
   const handle = await open(file, 'r');
@@ -391,6 +415,7 @@ export async function readErrorLog(
     categories.set(entry.category, totals);
   }
   const page = selected.slice(input.offset, input.offset + input.limit);
+  const launch = await launchOf(workspace, path.dirname(found.file));
   return {
     log: {
       path: 'user:logs/error.log',
@@ -399,6 +424,7 @@ export async function readErrorLog(
       truncated,
       entries: raw.length,
     },
+    ...(launch === undefined ? {} : { launch }),
     scope: input.scope,
     totalEntries: selected.reduce((sum, entry) => sum + entry.count, 0),
     distinctEntries: selected.length,
