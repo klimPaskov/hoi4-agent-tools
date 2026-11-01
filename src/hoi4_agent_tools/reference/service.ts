@@ -23,6 +23,7 @@ import {
 import { decodeSource } from '../core/source/encoding.js';
 import { activeKnownMistakes } from './known-mistakes.js';
 import { readBoundedJsonLines } from './lines.js';
+import { cosine, meaningLayer, VectorStore } from './embeddings.js';
 import { commandTexts, readGameText, type GameText } from './game-text.js';
 import { RankingIndex, sectionTerms, textTerms, type SectionTerms } from './ranking.js';
 
@@ -41,6 +42,15 @@ const MAX_SECTIONS = 20_000;
 const MAX_REFERENCE_METADATA_BYTES = 24_000;
 const PHRASE_CANDIDATES = 60;
 const EXACT_HEADING_SCORE = 1000;
+/** Below this cosine similarity a section is not a meaning match; unrelated questions stay empty. */
+const MEANING_FLOOR = 0.35;
+const MEANING_CANDIDATES = 100;
+/** Meaning ranks count a quarter as much as word ranks in the fused order. */
+const MEANING_WEIGHT = 0.25;
+const FUSION_K = 10;
+/** The text a section is embedded by: its page, its heading and its opening lines. */
+const meaningText = (section: ReferenceSection) =>
+  `${section.title}. ${section.heading}. ${section.excerpt}`;
 const sourceOrder: Record<SourceKind, number> = { game_doc: 0, wiki: 1, script_doc: 2 };
 
 function referenceText(bytes: Buffer): string {
@@ -358,6 +368,7 @@ function commandCards(
 export class ReferenceService {
   readonly #cache = new Map<string, CachedFile>();
   readonly #indexes = new Map<string, RankingIndex>();
+  #vectors: VectorStore | undefined;
   #cacheBytes = 0;
 
   private retain(key: string, value: CachedFile): void {
@@ -537,11 +548,10 @@ export class ReferenceService {
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
     const inventory = await this.inventory(workspace, signal, input.sources);
-    const { ranked: matches, describe } = this.rank(
-      inventory.sections,
-      input.query,
-      await this.gameText(workspace),
-    );
+    const ranking = this.rank(inventory.sections, input.query, await this.gameText(workspace));
+    const { describe } = ranking;
+    const blended = await this.blendMeaning(inventory.sections, input.query, ranking);
+    const matches = blended.ranked;
     const results = matches.slice(0, input.limit).map((match) => {
       const { section, score, excerpt, matchLine } = describe(match);
       return { ...this.publicSection(section), score, excerpt, matchLine };
@@ -564,6 +574,63 @@ export class ReferenceService {
       limitedByBytes: results.length < requested,
       coverage: inventory.coverage,
       skipped: inventory.skipped,
+      ranking: blended.method,
+    };
+  }
+
+  /**
+   * Blend meaning similarity into the word ranking by reciprocal rank (ADR 0075). Exact
+   * names stay with word ranking, and a question that neither ranking matches well enough
+   * still returns nothing.
+   */
+  private async blendMeaning(
+    sections: readonly IndexedSection[],
+    question: string,
+    words: ReturnType<ReferenceService['rank']>,
+  ): Promise<{
+    ranked: ReturnType<ReferenceService['rank']>['ranked'];
+    method: { method: 'words' | 'words+meaning'; reason?: string };
+  }> {
+    const layer = await meaningLayer();
+    if (layer.status === 'off') return { ranked: words.ranked, method: { method: 'words' } };
+    if (layer.status === 'unavailable')
+      return { ranked: words.ranked, method: { method: 'words', reason: layer.reason } };
+    if (words.identifiers || (words.ranked[0]?.score ?? 0) >= EXACT_HEADING_SCORE)
+      return { ranked: words.ranked, method: { method: 'words', reason: 'exact name' } };
+    this.#vectors ??= VectorStore.forCache(layer.cacheRoot);
+    const candidates = sections.filter(
+      ({ terms }) => !terms.navigation && terms.specialty === undefined,
+    );
+    const vectors = await this.#vectors.vectors(candidates.map(meaningText), layer.embed);
+    const [query] = await layer.embed([question]);
+    const similar = candidates
+      .map((section, index) => ({ section, similarity: cosine(query!, vectors[index]!) }))
+      .filter(({ similarity }) => similarity >= MEANING_FLOOR)
+      .sort((left, right) => right.similarity - left.similarity)
+      .slice(0, MEANING_CANDIDATES);
+    if (similar.length === 0) return { ranked: words.ranked, method: { method: 'words+meaning' } };
+    const fused = new Map<string, { section: IndexedSection; score: number; fused: number }>();
+    for (const [rank, entry] of words.ranked.slice(0, MEANING_CANDIDATES).entries())
+      fused.set(entry.section.id, { ...entry, fused: 1 / (FUSION_K + rank + 1) });
+    for (const [rank, { section, similarity }] of similar.entries()) {
+      const known = fused.get(section.id);
+      const share = MEANING_WEIGHT / (FUSION_K + rank + 1);
+      if (known !== undefined) known.fused += share;
+      else
+        fused.set(section.id, {
+          section,
+          score: Math.round(similarity * 1000) / 1000,
+          fused: share,
+        });
+    }
+    const leading = [...fused.values()].sort((left, right) => right.fused - left.fused);
+    const seen = new Set(leading.map(({ section }) => section.id));
+    return {
+      ranked: [
+        ...leading.map(({ section, score }) => ({ section, score })),
+        ...words.ranked.filter(({ section }) => !seen.has(section.id)),
+      ],
+      method: { method: 'words+meaning' },
     };
   }
 
@@ -644,6 +711,7 @@ export class ReferenceService {
     ranked.splice(0, ranked.length, ...distinct, ...repeated);
     return {
       ranked,
+      identifiers: plan.identifiers.size > 0,
       describe: ({ section, score }: { section: IndexedSection; score: number }): RankedSection => {
         const offset = index.bestLine(plan, section.lines);
         return {

@@ -160,6 +160,14 @@ export const referenceSearchDataSchema = z
     limitedByBytes: z.boolean(),
     coverage: coverageBySource,
     skipped: count,
+    /** Which ranking ordered the results, and why meaning matching was not used. */
+    ranking: z
+      .object({
+        method: z.enum(['words', 'words+meaning']),
+        reason: z.string().max(300).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const referenceReadDataSchema = referenceSectionSchema
