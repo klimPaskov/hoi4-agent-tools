@@ -347,6 +347,16 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Status: in progress
 - Verification: pending (lead: `data.changedSummary` on the next write)
 
+## ZR-22: Caller names for states, victory points and strategic regions in `create_world`
+
+- Opened: 2026-11-01 by lead (record in the mod: `docs/plans/zin-map/naming_request.md`)
+- Priority: high for ZIN (removes a second definition of about 6,000 localisation keys and the dependence on replace-file load order)
+- Current behaviour: `nameWorld` names states, victory points and regions from the model (site, lake, river, range, coast, region), with compass and Roman-numeral suffixes, a "<state> Town" fallback and placeholders; `reference.cities` is ignored when a geography is given; no route names a victory point exactly.
+- Wanted: an optional `names` (inline) or `namesPath` (workspace JSON) input on `create_world` with `states`, `victoryPoints` and `regions` keyed by world pixel; caller names win; diagnostics `MAP_NAME_UNMATCHED`, `MAP_NAME_POINT_DUPLICATE`, `MAP_NAME_DUPLICATE`, `MAP_NAME_PLACEHOLDER` counted after the override; no new keys; part of the request hash. Lower priority: anchor pixels of every state, victory-point province and region in the preview.
+- Plan: after ZR-21 (4.6.5) and the map reference fix (issue 61, 4.6.6), ahead of the UI requests R1 to R6. Generic input, documented in `docs/map.md`; input schema change, so a minor release (4.7.0 or the next free minor). Version reported here when installed.
+- Status: queued
+- Verification: pending (lead: acceptance 1 to 4 of the mod record)
+
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
 
 - Opened: 2026-10-24 by lead, on the owner's instruction (the lead asked for id ZR-3, which was already taken by the PR 36 findings). Owner's words, relayed verbatim: "Try many different maps from the web. Like at least 100 different maps and each time you fix any defects and improve the tool more and more until its like extremely reliable."
