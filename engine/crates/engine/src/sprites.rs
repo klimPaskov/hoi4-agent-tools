@@ -137,7 +137,9 @@ struct ResolverLayer {
 #[derive(Default)]
 struct TextureResolver {
     layers: Vec<ResolverLayer>,
-    dirs: HashMap<PathBuf, Option<HashMap<String, String>>>,
+    /// Lower-case name to every actual name with that spelling. A case-sensitive file system can hold
+    /// `Interface` and `interface` side by side, and the game sees both.
+    dirs: HashMap<PathBuf, Option<HashMap<String, Vec<String>>>>,
 }
 
 impl TextureResolver {
@@ -156,20 +158,39 @@ impl TextureResolver {
         }
     }
 
-    fn listing(&mut self, dir: &Path) -> Option<&HashMap<String, String>> {
+    fn listing(&mut self, dir: &Path) -> Option<&HashMap<String, Vec<String>>> {
         self.dirs
             .entry(dir.to_path_buf())
             .or_insert_with(|| {
                 let entries = fs::read_dir(dir).ok()?;
-                let mut map = HashMap::new();
+                let mut map: HashMap<String, Vec<String>> = HashMap::new();
                 let mut names: Vec<String> = entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
                 names.sort();
                 for name in names {
-                    map.entry(name.to_ascii_lowercase()).or_insert(name);
+                    map.entry(name.to_ascii_lowercase()).or_default().push(name);
                 }
                 Some(map)
             })
             .as_ref()
+    }
+
+    /// Walks `parts` below `dir`, trying every case variant of each name, and returns the first file found.
+    fn walk(&mut self, dir: &Path, parts: &[&str], relative: &mut Vec<String>) -> Option<PathBuf> {
+        let (first, rest) = parts.split_first()?;
+        let candidates = self.listing(dir).and_then(|m| m.get(*first)).cloned().unwrap_or_default();
+        for actual in candidates {
+            let next = dir.join(&actual);
+            relative.push(actual);
+            if rest.is_empty() {
+                if next.is_file() {
+                    return Some(next);
+                }
+            } else if let Some(found) = self.walk(&next, rest, relative) {
+                return Some(found);
+            }
+            relative.pop();
+        }
+        None
     }
 
     /// Finds the file for a lower-case key: `(layer index, absolute path, relative path)`.
@@ -184,22 +205,10 @@ impl TextureResolver {
             if hidden {
                 continue;
             }
-            let mut current = self.layers[index].root.clone();
+            let root = self.layers[index].root.clone();
             let mut relative = Vec::new();
-            let mut found = true;
-            for (n, part) in parts.iter().enumerate() {
-                let Some(actual) = self.listing(&current).and_then(|m| m.get(*part)).cloned() else {
-                    found = false;
-                    break;
-                };
-                current.push(&actual);
-                relative.push(actual);
-                if n + 1 == parts.len() && !current.is_file() {
-                    found = false;
-                }
-            }
-            if found {
-                return Some((index, current, relative.join("/")));
+            if let Some(found) = self.walk(&root, &parts, &mut relative) {
+                return Some((index, found, relative.join("/")));
             }
         }
         None
