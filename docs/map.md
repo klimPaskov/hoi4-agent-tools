@@ -517,6 +517,8 @@ The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continen
 
 Each write records its generated files in `.hoi4-agent-world.json`. A later `create_world` deletes the recorded files it no longer writes (retires them) in the same transaction and refuses with `MANAGED_OUTPUT_EDITED` when a recorded file was edited since. `MAP_WORLD_OUTPUTS_RECONCILED` and `data.outputs` give the counts of written, retired and released files with up to 200 paths each; `map-world-outputs.json` lists them all.
 
+Every applied map rewrite also returns `data.changedSummary` with the number of changed files (`total`, `created`, `removed`, `modified`) and the same counts for the 40 folders with the most changes (two levels deep, `.` for the mod root, `omittedFolders` for the rest), so the size of a write is visible even when the inline `changedFiles` list is cut.
+
 ### Countries the mod already owns
 
 A mod that writes its own country tags, country files, histories, orders of battle, flags and names gives `countries` as an object instead of an array (ADR 0069):

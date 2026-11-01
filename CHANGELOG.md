@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.6.5 - 2026-11-01
+
+- Say how much a map rewrite changed when its file list is cut. The inline result lists at most a bounded number of changed files, so a world write of thousands of files could read as if little or nothing changed. Every applied map rewrite now adds `data.changedSummary`: the total of changed files, how many were created, removed and modified, and the same counts for the 40 folders with the most changes (two levels deep, largest first, `omittedFolders` for the rest). The full list stays in the transaction artifacts.
+
 ## 4.6.4 - 2026-11-01
 
 - Write a large world without hitting the scan limit. The check after a map write read every changed file again, bitmaps and textures included, with the base game's files of the same names: 270 MB for a 5120 x 2560 world, past the default `scanMaxBytes` of 256 MiB, so the write was restored after seven minutes with `SCAN_BYTE_LIMIT`. It now reads the changed text files only. See the amendment to ADR 0047.

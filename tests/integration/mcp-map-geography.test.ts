@@ -618,6 +618,15 @@ describe('geography model through hoi4.map_rewrite', () => {
     );
     const content = result.structuredContent as unknown as PublicResult;
     expect(content.status).toBe('ok');
+    // The counts arrive in the bounded result however long the file list is.
+    const summary = (
+      content.data as unknown as {
+        changedSummary: { total: number; created: number; folders: Array<{ folder: string }> };
+      }
+    ).changedSummary;
+    expect(summary.total).toBeGreaterThan(10);
+    expect(summary.created).toBe(summary.total);
+    expect(summary.folders.map(({ folder }) => folder)).toEqual(expect.arrayContaining(['map']));
     const written = await readdir(path.join(modRoot, 'map'));
     expect(written).toEqual(
       expect.arrayContaining(['provinces.bmp', 'heightmap.bmp', 'terrain.bmp']),
