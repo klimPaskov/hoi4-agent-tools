@@ -100,9 +100,18 @@ export function countryAssetDiscoveryPatterns(workspace: ResolvedWorkspace): str
  * lists provinces that `map/definition.csv` defines, usually in the base game, so a scan of the
  * changed files alone would report every listed province as unresolved.
  */
+/** Bitmaps, textures and flags carry no script to parse; the map validation reads the ones it needs. */
+const BINARY_EXTENSION = /\.(?:bmp|dds|tga|png|jpg|jpeg|gif|wav|ogg|mp3|ttf|otf)$/iu;
+
+/**
+ * What the check after a map write reads: the changed text files, without the large binary files of
+ * a world (a 5120 x 2560 world is 150 MB of bitmaps and textures, 270 MB with the base game's files
+ * of the same names, past the default scan limit). The map validation that follows reads the
+ * bitmaps it needs itself.
+ */
 export function mapChangeScanPatterns(relativePaths: readonly string[]): string[] {
   return uniquePatterns([
-    ...exactChangedFilePatterns(relativePaths),
+    ...exactChangedFilePatterns(relativePaths.filter((path) => !BINARY_EXTENSION.test(path))),
     'map/default.map',
     'map/*.csv',
   ]);
