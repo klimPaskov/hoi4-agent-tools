@@ -138,13 +138,13 @@ async function workspace(files: Record<string, string>) {
   const game = path.join(root, 'game');
   await mkdir(path.join(mod, 'paradox_wiki'), { recursive: true });
   await mkdir(path.join(game, 'documentation'), { recursive: true });
-  for (const [name, content] of Object.entries(files))
-    await writeFile(
-      name.startsWith('game/')
-        ? path.join(game, name.slice(5))
-        : path.join(mod, 'paradox_wiki', name),
-      content,
-    );
+  for (const [name, content] of Object.entries(files)) {
+    const file = name.startsWith('game/')
+      ? path.join(game, name.slice(5))
+      : path.join(mod, 'paradox_wiki', name);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, content);
+  }
   const resolver = await WorkspaceResolver.create(
     serverConfigurationSchema.parse({
       version: 1,
@@ -294,5 +294,74 @@ describe('reference sections and citations', () => {
       referenceSearchRequestSchema.parse({ workspaceId: 'fixture', query: 'add_stability' }),
     );
     expect(exact.results.map(({ source }) => source)).toEqual(['game_doc', 'wiki', 'wiki']);
+  });
+});
+
+describe('reference ranking with game text and question intent', () => {
+  const docs = {
+    'game/documentation/triggers_documentation.md': [
+      '# Triggers',
+      '## is_coastal',
+      'check if state is coastal',
+      '## has_stability',
+      'check the stability of a country',
+      '',
+    ].join('\n'),
+    'game/documentation/effects_documentation.md': [
+      '# Effects',
+      '## add_stability',
+      'add stability to a country',
+      '',
+    ].join('\n'),
+  };
+  const search = async (
+    service: ReferenceService,
+    target: Awaited<ReturnType<typeof workspace>>,
+    query: string,
+  ) =>
+    (
+      await service.search(
+        target,
+        referenceSearchRequestSchema.parse({ workspaceId: 'fixture', query }),
+      )
+    ).results.map(({ heading }) => heading);
+
+  it("finds a command by the words of the game's own tooltip", async () => {
+    const plain = await workspace(docs);
+    expect(await search(new ReferenceService(), plain, 'state borders the sea')).not.toContain(
+      'is_coastal',
+    );
+    const localised = await workspace({
+      ...docs,
+      'game/localisation/english/triggers_l_english.yml':
+        '﻿l_english:\n TRIGGER_IS_COASTAL: "§HBorders the sea§!"\n TRIGGER_IS_NOT_COASTAL: "Landlocked $STATE$"\n',
+    });
+    const service = new ReferenceService();
+    expect((await search(service, localised, 'state borders the sea'))[0]).toBe('is_coastal');
+    expect((await search(service, localised, 'landlocked state'))[0]).toBe('is_coastal');
+  });
+
+  it('prefers an effect for an action and a trigger for a check', async () => {
+    const target = await workspace(docs);
+    const service = new ReferenceService();
+    expect((await search(service, target, 'increase the stability of a country'))[0]).toBe(
+      'add_stability',
+    );
+    expect((await search(service, target, 'check the stability of a country'))[0]).toBe(
+      'has_stability',
+    );
+  });
+
+  it('rereads a reference file whose stamp changed', async () => {
+    const target = await workspace({ 'game/documentation/effects_documentation.md': '## alpha\n' });
+    const service = new ReferenceService();
+    const first = await service.inventory(target);
+    await writeFile(
+      path.join(target.gameRoot!, 'documentation', 'effects_documentation.md'),
+      '## gamma\n',
+    );
+    const second = await service.inventory(target);
+    expect(first.sections.map(({ heading }) => heading)).toContain('alpha');
+    expect(second.sections.map(({ heading }) => heading)).toEqual(['gamma']);
   });
 });
