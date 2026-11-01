@@ -114,12 +114,16 @@ pub fn layout(input: &BandInput) -> BandLayout {
         }
     }
 
+    // Rows without any wanted column are centred on the median of the outside parents (so the
+    // band moves with its anchors), or on 0 for a band that is placed as a whole afterwards.
+    let mut outside: Vec<i64> = locals.iter().flat_map(|l| l.external_parent_x.iter().copied()).collect();
+    let reference = median_half(&mut outside).unwrap_or(0);
     let mut x: Vec<Option<i64>> = vec![None; locals.len()];
     for pass in PASSES {
         match pass {
             Pass::Down => {
                 for (_, row) in &rows {
-                    down_row(&locals, row, &mut x, sp);
+                    down_row(&locals, row, &mut x, sp, reference);
                 }
             }
             Pass::Up => {
@@ -139,7 +143,7 @@ struct Item {
     target: i64,
 }
 
-fn down_row(locals: &[Local], row: &[usize], x: &mut [Option<i64>], sp: i64) {
+fn down_row(locals: &[Local], row: &[usize], x: &mut [Option<i64>], sp: i64, reference: i64) {
     // Wanted centre per focus.
     let mut keyed: Vec<(i64, usize)> = Vec::new();
     let mut keyless: Vec<usize> = Vec::new();
@@ -174,7 +178,7 @@ fn down_row(locals: &[Local], row: &[usize], x: &mut [Option<i64>], sp: i64) {
     for (m, &l) in keyless.iter().enumerate() {
         let target = match base {
             Some(b) => b + 2 * sp * (m as i64 + 1),
-            None => (2 * m as i64 - (k - 1)) * sp,
+            None => reference + (2 * m as i64 - (k - 1)) * sp,
         };
         items.push(Item { local: l, key: target, target });
     }
