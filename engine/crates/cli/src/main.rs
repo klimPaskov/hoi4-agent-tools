@@ -1,4 +1,5 @@
-//! `hoi4-engine`: checks a Hearts of Iron IV mod from the command line.
+//! `hoi4-engine`: checks a Hearts of Iron IV mod from the command line. `focus-layout` lays out focus trees
+//! (JSON in, JSON out; exit 2 for an invalid request).
 //!
 //! Exit codes: 0 when no new finding reaches the failure severity, 1 when one does, 2 for usage
 //! or input errors.
@@ -23,6 +24,7 @@ USAGE:
     hoi4-engine delta     BEFORE.json AFTER.json [--format text|json]
     hoi4-engine vocab     --game DIR [--format text|json]
     hoi4-engine drawio    FILE [--prefix TAG]
+    hoi4-engine focus-layout [--request FILE]
     hoi4-engine --version
 
 WORKSPACE:
@@ -41,7 +43,7 @@ struct Args {
     options: Vec<(String, Option<String>)>,
 }
 
-const VALUE_OPTIONS: &[&str] = &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix"];
+const VALUE_OPTIONS: &[&str] = &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix", "--request"];
 
 impl Args {
     fn parse(raw: Vec<String>) -> Result<Args, String> {
@@ -372,6 +374,29 @@ fn cmd_drawio(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+fn cmd_focus_layout(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&["--request"])?;
+    if args.positional.len() > 1 {
+        return Err("focus-layout reads the request from --request FILE or stdin".into());
+    }
+    let text = match args.value("--request") {
+        Some(path) => fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut text).map_err(|e| format!("cannot read stdin: {e}"))?;
+            text
+        }
+    };
+    let (json, code) = hoi4_focus_layout::respond_json(&text);
+    if code != 0
+        && let Ok(value) = serde_json::from_str::<serde_json::Value>(&json)
+    {
+        eprintln!("hoi4-engine: focus-layout: {}", value["error"]["message"].as_str().unwrap_or("invalid request"));
+    }
+    std::io::stdout().lock().write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(ExitCode::from(code))
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -392,6 +417,7 @@ fn main() -> ExitCode {
         Some("delta") => cmd_delta(&args),
         Some("vocab") => cmd_vocab(&args),
         Some("drawio") => cmd_drawio(&args),
+        Some("focus-layout") => cmd_focus_layout(&args),
         Some("help") | None => {
             print!("{HELP}");
             return ExitCode::SUCCESS;
