@@ -213,6 +213,23 @@ export async function sourceLookup(
     path: entry.path,
     line: entry.location?.start.line ?? null,
   }));
+  // A complete index that neither defines nor uses the symbol answers not-found, never an
+  // empty success.
+  if (matchedDefinitions.length === 0 && matchedReferences.length === 0 && snapshot.complete) {
+    const suggestions = nearestNames(
+      symbol,
+      new Set(
+        snapshot.index.symbols
+          .filter((entry) => input.kind === undefined || entry.kind === input.kind)
+          .map(({ id }) => id),
+      ),
+    );
+    throw new ServiceError(
+      'SOURCE_SYMBOL_NOT_FOUND',
+      `No indexed file defines${input.includeReferences ? ' or uses' : ''} ${symbol.slice(0, 256)}${input.kind === undefined ? '' : ` as a ${input.kind}`}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+      { symbol: symbol.slice(0, 256), suggestions },
+    );
+  }
   const result: SourceLookupResult = {
     sourceScope:
       input.kind === 'event'
