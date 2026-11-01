@@ -24,15 +24,32 @@ export interface SweepResult {
   breakpoints: SweepPoint[];
   localElasticities: LocalElasticity[];
   pairwiseInteractions: PairwiseInteraction[];
+  /** Paths swept over a default range because the scenario declared only a current value. */
+  defaultedRanges: DefaultedSweepRange[];
+}
+
+export interface DefaultedSweepRange {
+  scenarioId: string;
+  path: string;
+  current: number;
+  min: number;
+  max: number;
 }
 
 const MAX_SWEEP_POINTS = 250_000;
+
+/** From zero to twice the current value, so the declared value sits in the middle of the sweep. */
+function defaultRange(current: number): { min: number; max: number } {
+  if (current === 0) return { min: 0, max: 1 };
+  return current > 0 ? { min: 0, max: current * 2 } : { min: current * 2, max: 0 };
+}
 
 function declaredValues(
   surface: WeightedSurface,
   scenario: ProbabilityScenario,
   path: string,
   steps: number,
+  defaulted: DefaultedSweepRange[],
 ): number[] {
   const uncertain = scenario.uncertainInputs?.find((input) => input.path === path);
   if (uncertain?.range !== undefined)
@@ -49,7 +66,14 @@ function declaredValues(
     if (values.length > 0) return [...new Set(values)].sort((left, right) => left - right);
   }
   const current = scenarioPathValue(scenario, path);
-  if (typeof current === 'number') return [current];
+  if (typeof current === 'number') {
+    // Only a current value is declared. Sweeping it as one point would ignore the requested
+    // steps, so spread them over a default range and report the range that was chosen.
+    const range = defaultRange(current);
+    if (!defaulted.some((item) => item.scenarioId === scenario.id && item.path === path))
+      defaulted.push({ scenarioId: scenario.id, path, current, ...range });
+    return values(range, steps);
+  }
   throw new ServiceError(
     'PROBABILITY_SWEEP_RANGE_REQUIRED',
     'Every sweep path requires a scenario range, numeric alternatives, or numeric state value',
@@ -301,14 +325,27 @@ export function sweepSurface(
       },
     );
   const points: SweepPoint[] = [];
+  const defaultedRanges: DefaultedSweepRange[] = [];
   for (const scenario of scenarios) {
     if (request.pairwise && request.paths.length > 1) {
       for (let leftIndex = 0; leftIndex < request.paths.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < request.paths.length; rightIndex += 1) {
           const leftPath = request.paths[leftIndex]!;
           const rightPath = request.paths[rightIndex]!;
-          const leftValues = declaredValues(surface, scenario, leftPath, request.steps);
-          const rightValues = declaredValues(surface, scenario, rightPath, request.steps);
+          const leftValues = declaredValues(
+            surface,
+            scenario,
+            leftPath,
+            request.steps,
+            defaultedRanges,
+          );
+          const rightValues = declaredValues(
+            surface,
+            scenario,
+            rightPath,
+            request.steps,
+            defaultedRanges,
+          );
           for (const left of leftValues) {
             for (const right of rightValues) {
               if ((points.length & 1023) === 0) signal?.throwIfAborted();
@@ -330,7 +367,13 @@ export function sweepSurface(
       }
     } else {
       for (const path of request.paths) {
-        for (const value of declaredValues(surface, scenario, path, request.steps)) {
+        for (const value of declaredValues(
+          surface,
+          scenario,
+          path,
+          request.steps,
+          defaultedRanges,
+        )) {
           if ((points.length & 1023) === 0) signal?.throwIfAborted();
           if (points.length >= MAX_SWEEP_POINTS)
             throw new ServiceError(
@@ -359,5 +402,6 @@ export function sweepSurface(
     breakpoints,
     localElasticities: localElasticities(points),
     pairwiseInteractions: pairwiseInteractions(points),
+    defaultedRanges,
   };
 }

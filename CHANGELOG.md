@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Evaluate the probability request that was asked. A sweep of a decision with `days_remove = -1` no longer runs as a mission, a sweep path with only a current value now spreads the requested `steps` over zero to twice that value (reported as `PROBABILITY_SWEEP_RANGE_DEFAULTED`), an adapter that matches nothing is refused with the adapters that do match instead of being replaced silently, a requested metric that cannot be computed gets a `PROBABILITY_METRIC_NOT_COMPUTED` reason (for example `cumulative_chance` without `horizonDays`), and `probability_inspect` with an event id and no adapter now evaluates the event's options. (#63)
+
 ## 4.6.4 - 2026-11-01
 
 - Write a large world without hitting the scan limit. The check after a map write read every changed file again, bitmaps and textures included, with the base game's files of the same names: 270 MB for a 5120 x 2560 world, past the default `scanMaxBytes` of 256 MiB, so the write was restored after seven minutes with `SCAN_BYTE_LIMIT`. It now reads the changed text files only. See the amendment to ADR 0047.
