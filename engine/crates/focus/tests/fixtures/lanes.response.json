@@ -1,0 +1,166 @@
+{
+  "schema": "hoi4-focus-layout/1",
+  "status": "ok",
+  "operation": "layout",
+  "treeId": "golden_lanes",
+  "nodes": [
+    {
+      "id": "IND_both",
+      "x": 2,
+      "y": 2,
+      "laneId": "industry",
+      "moved": true
+    },
+    {
+      "id": "IND_civ",
+      "x": 1,
+      "y": 1,
+      "laneId": "industry",
+      "moved": true
+    },
+    {
+      "id": "IND_mil",
+      "x": 3,
+      "y": 1,
+      "laneId": "industry",
+      "moved": true
+    },
+    {
+      "id": "IND_res",
+      "x": 5,
+      "y": 1,
+      "laneId": "industry",
+      "moved": true
+    },
+    {
+      "id": "IND_start",
+      "x": 3,
+      "y": 0,
+      "laneId": "industry",
+      "moved": true
+    },
+    {
+      "id": "POL_end",
+      "x": -4,
+      "y": 3,
+      "laneId": "politics",
+      "moved": true
+    },
+    {
+      "id": "POL_left",
+      "x": -5,
+      "y": 1,
+      "laneId": "politics",
+      "moved": true
+    },
+    {
+      "id": "POL_left_2",
+      "x": -5,
+      "y": 2,
+      "laneId": "politics",
+      "moved": true
+    },
+    {
+      "id": "POL_right",
+      "x": -3,
+      "y": 1,
+      "laneId": "politics",
+      "moved": true
+    },
+    {
+      "id": "POL_right_2",
+      "x": -3,
+      "y": 2,
+      "laneId": "politics",
+      "moved": true
+    },
+    {
+      "id": "POL_start",
+      "x": -4,
+      "y": 0,
+      "laneId": "politics",
+      "moved": true
+    }
+  ],
+  "source": [
+    {
+      "id": "IND_both",
+      "relativeTo": "IND_start",
+      "x": -1,
+      "y": 2
+    },
+    {
+      "id": "IND_civ",
+      "relativeTo": "IND_start",
+      "x": -2,
+      "y": 1
+    },
+    {
+      "id": "IND_mil",
+      "relativeTo": "IND_start",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "IND_res",
+      "relativeTo": "IND_start",
+      "x": 2,
+      "y": 1
+    },
+    {
+      "id": "IND_start",
+      "x": 3,
+      "y": 0
+    },
+    {
+      "id": "POL_end",
+      "relativeTo": "POL_start",
+      "x": 0,
+      "y": 3
+    },
+    {
+      "id": "POL_left",
+      "relativeTo": "POL_start",
+      "x": -1,
+      "y": 1
+    },
+    {
+      "id": "POL_left_2",
+      "relativeTo": "POL_start",
+      "x": -1,
+      "y": 2
+    },
+    {
+      "id": "POL_right",
+      "relativeTo": "POL_start",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "POL_right_2",
+      "relativeTo": "POL_start",
+      "x": 1,
+      "y": 2
+    },
+    {
+      "id": "POL_start",
+      "x": -4,
+      "y": 0
+    }
+  ],
+  "diagnostics": [],
+  "metrics": {
+    "columns": 11,
+    "rows": 4,
+    "orthogonalCrossings": 0,
+    "stemsThroughPlaques": 0,
+    "mergedBars": 0,
+    "durationMicros": 0
+  },
+  "hashes": {
+    "layout": "66543755db7619b4e3816f11c315a20fe722216dcced8121bc5d70144f659f55",
+    "untouched": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "prerequisites": "ec87f6902c2a9922a9846b9182babfad75eba0182675aee65996eb274093f1e6",
+    "exclusions": "f419eda68eb98be12892e4329a02cd3672cd4e429197c81c4eef5623cf8da38c"
+  }
+}

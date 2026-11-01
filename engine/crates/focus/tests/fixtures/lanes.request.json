@@ -1,0 +1,23 @@
+{
+  "schema": "hoi4-focus-layout-request/1",
+  "operation": "layout",
+  "treeId": "golden_lanes",
+  "options": { "nodeSpacing": 2, "laneSpacing": 2 },
+  "lanes": [
+    { "id": "politics", "order": 0 },
+    { "id": "industry", "order": 1 }
+  ],
+  "focuses": [
+    { "id": "POL_start", "laneId": "politics" },
+    { "id": "POL_left", "laneId": "politics", "prerequisites": [["POL_start"]], "mutuallyExclusive": ["POL_right"] },
+    { "id": "POL_right", "laneId": "politics", "prerequisites": [["POL_start"]], "mutuallyExclusive": ["POL_left"] },
+    { "id": "POL_left_2", "laneId": "politics", "prerequisites": [["POL_left"]] },
+    { "id": "POL_right_2", "laneId": "politics", "prerequisites": [["POL_right"]] },
+    { "id": "POL_end", "laneId": "politics", "prerequisites": [["POL_left_2", "POL_right_2"]] },
+    { "id": "IND_start", "laneId": "industry" },
+    { "id": "IND_civ", "laneId": "industry", "prerequisites": [["IND_start"]] },
+    { "id": "IND_mil", "laneId": "industry", "prerequisites": [["IND_start"]] },
+    { "id": "IND_res", "laneId": "industry", "prerequisites": [["IND_start"]] },
+    { "id": "IND_both", "laneId": "industry", "prerequisites": [["IND_civ"], ["IND_mil"]] }
+  ]
+}

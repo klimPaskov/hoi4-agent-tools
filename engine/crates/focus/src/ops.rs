@@ -272,7 +272,8 @@ fn insert(request: &Request, tree: &Tree, started: Instant) -> Result<Response, 
     let offset = match search.cheapest(&band, preferred, (None, None), spec.prefer_side, SEARCH_WINDOW) {
         Some(o) => o,
         None => {
-            let plan = propose_shift(&occupancy, &band, preferred, sp, spec.prefer_side).expect("a conflict exists when no offset is free");
+            let anchors: Vec<usize> = members.iter().flat_map(|&m| tree.parents[m].iter().copied()).filter(|&p| !placed[p]).collect();
+            let plan = propose_shift(&occupancy, &band, preferred, sp, spec.prefer_side, &anchors).expect("a conflict exists when no offset is free");
             let shift = Shift { from_x: plan.from_x, columns: plan.columns, direction: plan.direction, focus_ids: tree.names(plan.moved.iter().copied()) };
             if !spec.allow_shift {
                 ctx.diagnostics.push(diagnostic(
@@ -316,7 +317,7 @@ fn insert(request: &Request, tree: &Tree, started: Instant) -> Result<Response, 
                 json!({}),
             ));
             shifted.push(shift);
-            preferred
+            plan.band_offset
         }
     };
     for (i, &m) in members.iter().enumerate() {

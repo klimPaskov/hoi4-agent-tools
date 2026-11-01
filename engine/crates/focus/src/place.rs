@@ -191,9 +191,20 @@ pub struct ShiftPlan {
     pub columns: i64,
     pub direction: Direction,
     pub moved: Vec<usize>,
+    /// Where the band goes after the shift: `offset`, or moved along with its parents.
+    pub band_offset: i64,
 }
 
-pub fn propose_shift(occupancy: &Occupancy, band: &Band, offset: i64, sp: i64, side: Side) -> Option<ShiftPlan> {
+/// Proposes one vertical cut: every existing focus right of `from_x` (or left of it) moves
+/// `columns` columns away. Two kinds of cut are considered:
+///
+/// - the band stays at `offset` and the cut moves everything it overlaps out of the way;
+/// - the band moves with its parents (`anchors`, all on the shifted side), and the cut leaves
+///   behind the focuses it overlaps.
+///
+/// The chosen cut keeps the band with its parents if any cut can, then has the fewest columns,
+/// then moves the fewest focuses, then goes to `side` (right for `either`), then is nearest the band.
+pub fn propose_shift(occupancy: &Occupancy, band: &Band, offset: i64, sp: i64, side: Side, anchors: &[usize]) -> Option<ShiftPlan> {
     let cells: Vec<(i64, i64)> = band.x.iter().zip(&band.y).map(|(&x, &y)| (x + offset, y)).collect();
     let conflicting = band.conflicting(occupancy, offset, sp);
     if conflicting.is_empty() {
@@ -201,56 +212,76 @@ pub fn propose_shift(occupancy: &Occupancy, band: &Band, offset: i64, sp: i64, s
     }
     let (blo, bhi) = band.extent();
     let (blo, bhi) = (blo + offset, bhi + offset);
-    let mut right_most: BTreeMap<i64, i64> = BTreeMap::new();
-    let mut left_most: BTreeMap<i64, i64> = BTreeMap::new();
-    for &(x, y) in &cells {
-        right_most.entry(y).and_modify(|v| *v = (*v).max(x)).or_insert(x);
-        left_most.entry(y).and_modify(|v| *v = (*v).min(x)).or_insert(x);
-    }
     let existing: Vec<(i64, i64, usize)> = occupancy.all().collect();
-    let conflict_x: Vec<i64> = existing.iter().filter(|e| conflicting.binary_search(&e.2).is_ok()).map(|e| e.0).collect();
+    let x_of = |v: usize| existing.iter().find(|e| e.2 == v).map(|e| e.0);
+    let conflict_x: Vec<i64> = conflicting.iter().filter_map(|&v| x_of(v)).collect();
     let min_conflict = *conflict_x.iter().min().expect("conflicts");
     let max_conflict = *conflict_x.iter().max().expect("conflicts");
-    // (columns, moved count, direction rank, cut) -> plan
-    let mut best: Option<((i64, usize, u8, i64), ShiftPlan)> = None;
+    let anchor_x: Vec<i64> = anchors.iter().filter_map(|&v| x_of(v)).collect();
     let rank = |d: Direction| -> u8 {
         match (side, d) {
             (Side::Left, Direction::Left) | (Side::Right | Side::Either, Direction::Right) => 0,
             _ => 1,
         }
     };
-    for c in (blo - sp + 1)..=(bhi + sp).min(min_conflict) {
-        let mut columns = 0;
+    let centre = blo + bhi;
+    // (separates the band from a parent, columns, moved count, direction rank, distance, cut)
+    type Key = (bool, i64, usize, u8, i64, i64);
+    let mut best: Option<(Key, ShiftPlan)> = None;
+    let mut consider = |c: i64, direction: Direction, follow: bool| {
+        let shifted = |x: i64| match direction {
+            Direction::Right => x >= c,
+            Direction::Left => x <= c,
+        };
+        let mut columns: i64 = 0;
         let mut moved = Vec::new();
         for &(x, y, v) in &existing {
-            if x >= c {
+            let is_shifted = shifted(x);
+            if is_shifted {
                 moved.push(v);
-                if let Some(&r) = right_most.get(&y) {
-                    columns = columns.max(r + sp - x);
+            }
+            for &(bx, by) in &cells {
+                if by != y {
+                    continue;
                 }
+                // The band stays: shifted focuses must end up clear of it. The band follows:
+                // the band must end up clear of the focuses that stay.
+                let need = match (follow, is_shifted, direction) {
+                    (false, true, Direction::Right) => bx + sp - x,
+                    (false, true, Direction::Left) => x - (bx - sp),
+                    (true, false, Direction::Right) if x > bx - sp => x + sp - bx,
+                    (true, false, Direction::Left) if x < bx + sp => bx + sp - x,
+                    _ => 0,
+                };
+                columns = columns.max(need);
             }
         }
-        let key = (columns, moved.len(), rank(Direction::Right), -c);
-        if columns > 0 && best.as_ref().is_none_or(|(b, _)| key < *b) {
-            moved.sort_unstable();
-            best = Some((key, ShiftPlan { from_x: c, columns, direction: Direction::Right, moved }));
+        if columns <= 0 {
+            return;
         }
+        let separated = !follow && anchor_x.iter().any(|&a| shifted(a));
+        let key: Key = (separated, columns, moved.len(), rank(direction), (2 * c - centre).abs(), c);
+        if best.as_ref().is_none_or(|(b, _)| key < *b) {
+            moved.sort_unstable();
+            let delta = if direction == Direction::Right { columns } else { -columns };
+            let band_offset = if follow { offset + delta } else { offset };
+            best = Some((key, ShiftPlan { from_x: c, columns, direction, moved, band_offset }));
+        }
+    };
+    // The band stays: every focus it overlaps is on the shifted side.
+    for c in (blo - sp + 1)..=(bhi + sp).min(min_conflict) {
+        consider(c, Direction::Right, false);
     }
     for c in (blo - sp).max(max_conflict)..=(bhi + sp - 1) {
-        let mut columns = 0;
-        let mut moved = Vec::new();
-        for &(x, y, v) in &existing {
-            if x <= c {
-                moved.push(v);
-                if let Some(&l) = left_most.get(&y) {
-                    columns = columns.max(x - (l - sp));
-                }
-            }
+        consider(c, Direction::Left, false);
+    }
+    // The band follows its parents: they are shifted, every focus it overlaps stays.
+    if let (Some(&amin), Some(&amax)) = (anchor_x.iter().min(), anchor_x.iter().max()) {
+        for c in (max_conflict + 1)..=amin {
+            consider(c, Direction::Right, true);
         }
-        let key = (columns, moved.len(), rank(Direction::Left), c);
-        if columns > 0 && best.as_ref().is_none_or(|(b, _)| key < *b) {
-            moved.sort_unstable();
-            best = Some((key, ShiftPlan { from_x: c, columns, direction: Direction::Left, moved }));
+        for c in amax..min_conflict {
+            consider(c, Direction::Left, true);
         }
     }
     best.map(|(_, plan)| plan)

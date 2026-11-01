@@ -12,7 +12,7 @@ fn generated(seed: u64) -> Value {
     let size = 5 + rng.below(120) as usize;
     let lanes = 1 + rng.below(3) as usize;
     let mut request = layout_request(random_tree(&mut rng, size, lanes));
-    if seed % 3 == 0 {
+    if seed.is_multiple_of(3) {
         request["options"] = json!({ "nodeSpacing": 3, "laneSpacing": 1 });
     }
     request
