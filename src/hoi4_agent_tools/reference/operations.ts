@@ -20,7 +20,12 @@ import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
-import { validateScript } from './script-validation.js';
+import {
+  identifierArgumentCommands,
+  validateScript,
+  type IdentifierContext,
+  type IdentifierKind,
+} from './script-validation.js';
 import { readErrorLog } from './error-log.js';
 import { modIndex } from './mod-index.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
@@ -346,28 +351,6 @@ export class ReferenceToolService {
     principal?: string,
     signal?: AbortSignal,
   ) {
-    if (request.path === undefined) {
-      if (request.kind !== undefined)
-        return validateScript(this.references, workspace, request, signal);
-      // A snippet without a kind is checked as an effect and as a trigger; the reading with
-      // fewer errors and unresolved commands is the one the author meant.
-      const effect = await validateScript(
-        this.references,
-        workspace,
-        { ...request, kind: 'effect' },
-        signal,
-      );
-      const trigger = await validateScript(
-        this.references,
-        workspace,
-        { ...request, kind: 'trigger' },
-        signal,
-      );
-      const misses = (checked: typeof effect): number =>
-        checked.findings.filter(({ status }) => status === 'error').length * 100_000 +
-        checked.unresolvedCount;
-      return misses(trigger) < misses(effect) ? trigger : effect;
-    }
     // Every file check of the supported families shares one scan, so checking files across
     // folders reuses one snapshot and its incremental index; other folders add their own.
     const scan = (extra: readonly string[]) =>
@@ -377,6 +360,38 @@ export class ReferenceToolService {
         principal,
         signal,
       );
+    if (request.path === undefined) {
+      // A snippet that names definitions is checked against a scan; others need none.
+      const named = new RegExp(
+        `\\b(?:${[...identifierArgumentCommands].join('|')})\\s*=`,
+        'u',
+      ).test(request.source ?? '');
+      const identifiers = named ? identifierContext(await scan([])) : undefined;
+      if (request.kind !== undefined)
+        return validateScript(this.references, workspace, request, signal, undefined, identifiers);
+      // A snippet without a kind is checked as an effect and as a trigger; the reading with
+      // fewer errors and unresolved commands is the one the author meant.
+      const effect = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'effect' },
+        signal,
+        undefined,
+        identifiers,
+      );
+      const trigger = await validateScript(
+        this.references,
+        workspace,
+        { ...request, kind: 'trigger' },
+        signal,
+        undefined,
+        identifiers,
+      );
+      const misses = (checked: typeof effect): number =>
+        checked.findings.filter(({ status }) => status === 'error').length * 100_000 +
+        checked.unresolvedCount;
+      return misses(trigger) < misses(effect) ? trigger : effect;
+    }
     let snapshot = await scan([]);
     let file;
     try {
@@ -392,16 +407,23 @@ export class ReferenceToolService {
       : undefined;
     const helpers = (kind: string) =>
       new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
-    return validateScript(this.references, workspace, request, signal, {
-      path: file.displayPath,
-      relativePath: file.relativePath,
-      bytes: file.bytes,
-      helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
-      implicitTriggers: implicitTriggerNames(snapshot),
-      ...(playerText === undefined ? {} : { playerText }),
-      eventPopups: this.eventPopupContext(workspaceId, snapshot),
-      knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
-    });
+    return validateScript(
+      this.references,
+      workspace,
+      request,
+      signal,
+      {
+        path: file.displayPath,
+        relativePath: file.relativePath,
+        bytes: file.bytes,
+        helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
+        implicitTriggers: implicitTriggerNames(snapshot),
+        ...(playerText === undefined ? {} : { playerText }),
+        eventPopups: this.eventPopupContext(workspaceId, snapshot),
+        knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
+      },
+      identifierContext(snapshot),
+    );
   }
 
   readonly #eventNamespaces = new Map<string, { key: string; namespaces: ReadonlySet<string> }>();
@@ -517,7 +539,32 @@ const fileCheckPatterns = [
   ...Object.keys(implicitTriggerSources).map((folder) => `common/${folder}/*.txt`),
   'localisation/**/*_l_english.yml',
   'common/scripted_localisation/**/*.txt',
+  // Definitions that identifier arguments name.
+  'common/ideas/**/*.txt',
+  'common/technologies/**/*.txt',
 ] as const;
+
+/** Index kinds whose ids identifier arguments name. */
+const identifierKinds: Readonly<Record<string, IdentifierKind>> = {
+  idea: 'idea',
+  event: 'event',
+  decision: 'decision',
+  focus: 'focus',
+  continuous_focus: 'focus',
+  technology: 'technology',
+};
+
+function identifierContext(snapshot: ScanSnapshot): IdentifierContext {
+  const ids = new Map<IdentifierKind, Set<string>>();
+  for (const symbol of snapshot.index.symbols) {
+    const kind = identifierKinds[symbol.kind];
+    if (kind === undefined) continue;
+    let set = ids.get(kind);
+    if (set === undefined) ids.set(kind, (set = new Set()));
+    set.add(symbol.id);
+  }
+  return { ids, complete: snapshot.complete };
+}
 
 function playerTextSource(relativePath: string): boolean {
   const file = relativePath.replaceAll('\\', '/').toLowerCase();

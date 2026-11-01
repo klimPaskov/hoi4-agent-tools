@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { ReferenceService } from '../../src/hoi4_agent_tools/reference/service.js';
-import { validateScript } from '../../src/hoi4_agent_tools/reference/script-validation.js';
+import {
+  validateScript,
+  type IdentifierContext,
+} from '../../src/hoi4_agent_tools/reference/script-validation.js';
 import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
@@ -43,6 +46,9 @@ async function fixture() {
       ['every_state', 'any'],
       ['hidden_effect', 'any'],
       ['set_variable', 'any'],
+      ['add_ideas', 'COUNTRY'],
+      ['add_timed_idea', 'COUNTRY'],
+      ['country_event', 'COUNTRY'],
     ]),
   );
   await writeFile(
@@ -67,7 +73,11 @@ async function fixture() {
     }),
   );
   const service = new ReferenceService();
-  const check = async (source: string, options: Record<string, unknown> = {}) =>
+  const check = async (
+    source: string,
+    options: Record<string, unknown> = {},
+    identifiers?: IdentifierContext,
+  ) =>
     scriptValidateDataSchema.parse(
       await validateScript(
         service,
@@ -79,6 +89,9 @@ async function fixture() {
           scope: 'country',
           ...options,
         }),
+        undefined,
+        undefined,
+        identifiers,
       ),
     );
   return { effects, generated, check };
@@ -168,6 +181,61 @@ describe('documentation-backed script checks', () => {
     expect((await check('capital_scope = { add_population = 1 }', { scope: 'state' })).valid).toBe(
       true,
     );
+  });
+
+  it('checks identifier arguments against the definitions the workspace has', async () => {
+    const { check } = await fixture();
+    const identifiers = (complete: boolean): IdentifierContext => ({
+      ids: new Map([
+        ['idea', new Set(['GER_mefo_bills_1'])],
+        ['event', new Set(['news.1'])],
+      ]),
+      complete,
+    });
+    const wrong = await check(
+      'add_timed_idea = { idea = GER_mefo_bill_1 days = 10 } add_ideas = { GER_mefo_bills_1 no_idea } country_event = { id = news.2 }',
+      {},
+      identifiers(true),
+    );
+    expect(wrong.parametersChecked).toBe(true);
+    expect(wrong.checksPerformed).toContain('identifier_arguments');
+    expect(
+      wrong.findings
+        .filter(({ code }) => code === 'SCRIPT_ARGUMENT_UNKNOWN_ID')
+        .map(({ status, message, suggestions }) => ({ status, message, suggestions })),
+    ).toEqual([
+      {
+        status: 'error',
+        message: 'add_timed_idea names idea GER_mefo_bill_1, which no loaded file defines',
+        suggestions: ['GER_mefo_bills_1'],
+      },
+      {
+        status: 'error',
+        message: 'add_ideas names idea no_idea, which no loaded file defines',
+        suggestions: [],
+      },
+      {
+        status: 'error',
+        message: 'country_event names event news.2, which no loaded file defines',
+        suggestions: ['news.1'],
+      },
+    ]);
+    // Real ids pass, computed values are not read, and a partial index cannot rule an id out.
+    expect(
+      (
+        await check(
+          'add_timed_idea = { idea = GER_mefo_bills_1 days = 10 } add_ideas = $idea$ country_event = news.1',
+          {},
+          identifiers(true),
+        )
+      ).findings.filter(({ status }) => status === 'error'),
+    ).toEqual([]);
+    const partial = await check('add_ideas = no_idea', {}, identifiers(false));
+    expect(partial.findings[0]).toMatchObject({
+      code: 'SCRIPT_ARGUMENT_UNKNOWN_ID',
+      status: 'unresolved',
+    });
+    expect((await check('add_ideas = no_idea')).parametersChecked).toBe(false);
   });
 
   it('keeps undocumented helpers unresolved and suggests close documented names', async () => {
