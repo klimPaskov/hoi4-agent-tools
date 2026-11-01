@@ -14,6 +14,10 @@ The interpretation preview is mandatory evidence for uncertain artwork, not a gu
 
 Failed generation emits failure/validation evidence without presenting the unchanged inherited world as a proposed world. Complete-world semantic diffs have an aggregate inline byte limit, preserving the response budget for counts and image links; full diffs remain content-addressed artifacts.
 
+## Amendment: recorded paths the world does not manage
+
+The inventory `.hoi4-agent-world.json` can come to list files that were never outputs of a generated world, for example when the mod's own tooling records the files it owns in the same inventory. Refusing the whole inventory for one such entry made every later world write fail with `MANAGED_OUTPUT_MANIFEST_INVALID`. A recorded path that is a safe relative path (no `..`, no drive, no backslash, not a duplicate) but outside the allow-list is now ignored: it is never read, compared, edited or deleted, it is left out of the next inventory, and the write reports it (`MAP_WORLD_OUTPUT_RECORD_IGNORED`, `data.outputs`). Paths that could leave the workspace, and duplicates, still refuse the inventory.
+
 ## Consequences
 
 The MCP surface remains offline. Loading a world, advancing simulation, moving units and saving/reloading require separate user-authorized acceptance. A starter scenario does not supply authored politics, demographics or a balanced campaign. Public schema additions require the 4.1.0 minor release and regenerated schemas.

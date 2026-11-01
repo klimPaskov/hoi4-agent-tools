@@ -646,6 +646,8 @@ export interface WorldOutputReport {
   written: string[];
   retired: string[];
   released: string[];
+  /** Recorded paths outside the world's outputs, left alone and dropped from the inventory. */
+  ignored: string[];
   /** Workspace-owned countries the world placed and the states nobody owns (ADR 0069). */
   realms?: NonNullable<GeneratedWorld['realms']>;
 }
@@ -5901,6 +5903,7 @@ function applyCreateWorld(
     written: outputs.written,
     retired: outputs.retired,
     released: outputs.released,
+    ignored: outputs.ignored,
     ...(world.realms === undefined ? {} : { realms: world.realms }),
   });
   return [
@@ -5932,6 +5935,21 @@ function applyCreateWorld(
           },
         ]),
     worldOutputsDiagnostic(operation.id, outputs),
+    ...(outputs.ignored.length === 0
+      ? []
+      : [
+          {
+            code: 'MAP_WORLD_OUTPUT_RECORD_IGNORED',
+            severity: 'warning' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message: `${outputs.ignored.length} path(s) in the world's output inventory are not outputs of a generated world; they were left in place and dropped from the inventory`,
+            details: {
+              count: outputs.ignored.length,
+              files: outputs.ignored.slice(0, WORLD_OUTPUT_PATH_SAMPLE),
+            },
+          },
+        ]),
     ...worldTagDiagnostics(operation.id, tagCatalog, world, workspaceCountries !== undefined),
     ...worldRealmDiagnostics(operation.id, world),
     ...(outputs.released.length === 0
