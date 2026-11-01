@@ -197,7 +197,7 @@
     {
       "id": "invented_add_ideas_effect",
       "hasError": true,
-      "why": "add_ideas_effect does not exist in 1.19.3 (add_ideas does).",
+      "why": "add_ideas_effect does not exist in 1.19.4.1 (add_ideas does).",
       "text": "add_namespace = seed\ncountry_event = {\n\tid = seed.1\n\ttitle = seed.1.t\n\tdesc = seed.1.d\n\tis_triggered_only = yes\n\timmediate = {\n\t\tadd_ideas_effect = generic_idea\n\t}\n\toption = {\n\t\tname = seed.1.a\n\t}\n}\n"
     },
     {

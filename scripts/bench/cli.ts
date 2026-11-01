@@ -17,6 +17,7 @@ import { baselineSchema, type Baseline } from './schema.js';
  *   npm run bench -- --suite real       # installed game and mods; results stay on this machine
  *   npm run bench -- --suite real --corpus chaos_redux --case event.
  *   npm run bench -- --update-baseline  # accept this run as the new baseline
+ *   npm run bench -- --suite real --from-results <results.json>   # accept a finished run
  *   npm run bench -- --suite real --watch-game --accept-if-clean   # what nightly.sh runs
  *
  * The real suite keeps its results, report and baseline in the benchmark data folder
@@ -62,6 +63,7 @@ const { values } = parseArgs({
     'update-baseline': { type: 'boolean', default: false },
     'accept-if-clean': { type: 'boolean', default: false },
     'watch-game': { type: 'boolean', default: false },
+    'from-results': { type: 'string' },
     'no-hash': { type: 'boolean', default: false },
     dump: { type: 'boolean', default: false },
   },
@@ -86,6 +88,21 @@ const baselinePath =
   (suite === 'real'
     ? path.join(dataRoot, 'baseline.json')
     : path.join(BENCH_ROOT, 'baselines', 'synthetic.json'));
+if (values['from-results'] !== undefined) {
+  // Accepts a finished run as the baseline without running it again.
+  const result = JSON.parse(await readFile(values['from-results'], 'utf8')) as Parameters<
+    typeof toBaseline
+  >[0];
+  await mkdir(path.dirname(baselinePath), { recursive: true });
+  await writeFile(
+    baselinePath,
+    `${JSON.stringify(JSON.parse(canonicalJson(toBaseline(result, suite === 'real'))), null, 2)}
+`,
+  );
+  process.stderr.write(`Baseline written to ${baselinePath}
+`);
+  process.exit(0);
+}
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-bench-'));
 try {
   // The game-update watcher runs first, so a new build's baseline is kept before the run moves it.
