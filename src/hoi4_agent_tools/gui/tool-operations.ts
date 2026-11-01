@@ -19,6 +19,7 @@ import { compileGuiHelpers } from './helpers.js';
 import { encodeGuiInspectionArtifact, projectGuiGraphForArtifact } from './inspection-artifact.js';
 import type { ScriptedGuiStudio } from './studio.js';
 import type { GuiValidationResult } from './types.js';
+import type { Diagnostic } from '../core/diagnostics.js';
 
 export interface GuiOperationContext {
   workspaceId: string;
@@ -43,6 +44,22 @@ const guiRewriteRecipeSchema = z
   .strict();
 
 export type GuiRewriteRecipe = z.infer<typeof guiRewriteRecipeSchema>;
+
+const INLINE_DIAGNOSTIC_LIMIT = 100;
+
+/**
+ * Inline results carry a bounded diagnostic list. When it overflows, errors and blockers keep
+ * their places ahead of warnings so a flood of low-severity findings cannot hide a defect.
+ */
+export function inlineDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic[] {
+  if (diagnostics.length <= INLINE_DIAGNOSTIC_LIMIT) return [...diagnostics];
+  const hard = (diagnostic: Diagnostic): boolean =>
+    diagnostic.severity === 'error' || diagnostic.severity === 'blocker';
+  return [
+    ...diagnostics.filter(hard),
+    ...diagnostics.filter((diagnostic) => !hard(diagnostic)),
+  ].slice(0, INLINE_DIAGNOSTIC_LIMIT);
+}
 
 function validationSummary(validation: GuiValidationResult) {
   return {
@@ -136,7 +153,7 @@ export function completeGuiRewrite(
   setInlineFilesScanned(result, parsed.filesScanned);
   result.proposedFiles = transaction.files.slice(0, 100).map(({ relativePath }) => relativePath);
   result.changedFiles = transaction.appliedFiles.slice(0, 100);
-  result.diagnostics = transaction.diagnostics.slice(0, 100);
+  result.diagnostics = inlineDiagnostics(transaction.diagnostics);
   result.artifacts = autonomousResultArtifacts(execution);
   result.validation = transaction.validation;
   result.blockers = transaction.diagnostics
@@ -256,7 +273,7 @@ export async function inspectGui(
   });
   result.code = graph.complete ? 'GUI_INSPECTED' : 'GUI_INSPECTED_PARTIAL';
   setInlineFilesScanned(result, graph.filesScanned);
-  result.diagnostics = diagnostics.slice(0, 100);
+  result.diagnostics = inlineDiagnostics(diagnostics);
   result.artifacts = [publicArtifactLink(artifact)];
   result.validation =
     linted === undefined
@@ -345,7 +362,7 @@ export async function renderGui(
   });
   result.code = 'GUI_RENDERED';
   setInlineFilesScanned(result, rendered.filesScanned);
-  result.diagnostics = diagnostics.slice(0, 100);
+  result.diagnostics = inlineDiagnostics(diagnostics);
   result.artifacts = rendered.artifacts.map(publicArtifactLink);
   result.validation = validationSummary({ diagnostics, checks: rendered.validation.checks });
   await context.progress(4, 4, 'GUI render complete');
