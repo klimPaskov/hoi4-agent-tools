@@ -1,11 +1,16 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { serverConfigurationSchema } from '../src/hoi4_agent_tools/core/configuration.js';
 import { WorkspaceResolver } from '../src/hoi4_agent_tools/core/workspace.js';
 import { ReferenceService } from '../src/hoi4_agent_tools/reference/service.js';
 import { referenceSearchRequestSchema } from '../src/hoi4_agent_tools/schemas/reference.js';
-import { discoveryCases, validationCases } from './reference-discovery-cases.js';
+import {
+  discoveryCases,
+  documentKey,
+  heldOutCases,
+  validationCases,
+} from './reference-discovery-cases.js';
 
 /**
  * Measures held-out documentation discovery against a real offline wiki and installed game.
@@ -16,9 +21,16 @@ import { discoveryCases, validationCases } from './reference-discovery-cases.js'
 const LANDING_LINES = 8;
 const modRoot = process.argv[2];
 const gameRoot = process.argv[3];
-const cases = process.argv[4] === '--validation' ? validationCases : discoveryCases;
+const cases =
+  process.argv[4] === '--validation'
+    ? validationCases
+    : process.argv[4] === '--held-out'
+      ? heldOutCases
+      : discoveryCases;
 if (modRoot === undefined || gameRoot === undefined) {
-  process.stderr.write('Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT\n');
+  process.stderr.write(
+    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out]\n',
+  );
   process.exit(2);
 }
 
@@ -64,7 +76,9 @@ for (const item of cases) {
   let answerRank: number | null = null;
   let landingRank: number | null = null;
   for (const [index, result] of response.results.entries()) {
-    const answers = item.answers.filter(({ file }) => path.basename(result.path) === file);
+    const answers = item.answers.filter(
+      ({ file }) => documentKey(path.basename(result.path)) === file,
+    );
     if (answers.length === 0) continue;
     const source = await lines(result.path);
     const cited = result.matchLine ?? result.startLine;
@@ -95,12 +109,16 @@ for (const item of cases) {
 }
 
 // Every case needs at least one answer that exists in the local sources, or it is invalid.
+const wikiRoot = path.join(modRoot, 'paradox_wiki');
+const wikiNames = new Map(
+  (await readdir(wikiRoot).catch(() => [])).map((name) => [documentKey(name), name]),
+);
 for (const item of cases) {
   let found = item.answers.length === 0;
   for (const answer of item.answers)
     for (const candidate of [
       path.join(gameRoot, 'documentation', answer.file),
-      path.join(modRoot, 'paradox_wiki', answer.file),
+      path.join(wikiRoot, wikiNames.get(answer.file) ?? answer.file),
     ]) {
       try {
         if ((await lines(candidate)).some((line) => answer.line.test(line))) found = true;

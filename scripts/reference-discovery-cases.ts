@@ -17,11 +17,23 @@ export interface DiscoveryCase {
   answers: DiscoveryAnswer[];
 }
 
+/**
+ * One name for a documentation file across snapshot naming schemes. Wiki snapshots taken
+ * since 2026-10-31 name pages `event_modding.md`; earlier ones used
+ * `Event modding - Hearts of Iron 4 Wiki.md`. Both reduce to `event_modding.md`.
+ */
+export function documentKey(file: string): string {
+  return file
+    .replace(/ - Hearts of Iron 4 Wiki\.md$/u, '.md')
+    .toLowerCase()
+    .replaceAll(' ', '_');
+}
+
 const effects = 'effects_documentation.md';
 const triggers = 'triggers_documentation.md';
 const heading = (name: string) => new RegExp(`^## ${name}$`, 'u');
 const row = (name: string) => new RegExp(`^\\| ${name} \\|`, 'u');
-const wiki = (page: string) => `${page} - Hearts of Iron 4 Wiki.md`;
+const wiki = (page: string) => documentKey(`${page}.md`);
 const section = (title: string) => new RegExp(`^#{2,4} ${title}( <a |$)`, 'u');
 
 export const discoveryCases: DiscoveryCase[] = [
@@ -373,3 +385,201 @@ export const validationCases: DiscoveryCase[] = (
       answers: [{ file: wiki('National focus modding'), line: section('Shared focuses') }],
     },
   ]);
+
+/**
+ * Held-out questions written on 2026-11-01 by a separate agent that was not told about the
+ * player vocabulary, before that change was measured on them. Two validation misses had
+ * already been named as examples for the vocabulary, so this set is the cleaner check.
+ */
+export const heldOutCases: DiscoveryCase[] = [
+  {
+    query: 'change a country name and flag mid-game',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('set_cosmetic_tag') },
+      { file: wiki('Effects'), line: row('set_cosmetic_tag') },
+      { file: wiki('Cosmetic tag modding'), line: section('Application') },
+    ],
+  },
+  {
+    query: 'let a country claim a state it does not own',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('add_state_claim') },
+      { file: effects, line: heading('add_claim_by') },
+      { file: wiki('Effects'), line: row('add_state_claim') },
+      { file: wiki('Effects'), line: row('add_claim_by') },
+    ],
+  },
+  {
+    query: 'make one country guarantee the independence of another',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('give_guarantee') },
+      { file: wiki('Effects'), line: row('give_guarantee') },
+    ],
+  },
+  {
+    query: 'free a puppet so it becomes independent again',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('end_puppet') },
+      { file: wiki('Effects'), line: row('end_puppet') },
+    ],
+  },
+  {
+    query: 'create a new leader for a country with a portrait and ideology',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('create_country_leader') },
+      { file: wiki('Effects'), line: row('create_country_leader') },
+    ],
+  },
+  {
+    query: 'start a civil war in a country',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('start_civil_war') },
+      { file: wiki('Effects'), line: row('start_civil_war') },
+    ],
+  },
+  {
+    query: 'create a division template with infantry and artillery regiments',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('division_template') },
+      { file: wiki('Effects'), line: row('division_template') },
+      { file: wiki('Division modding'), line: section('Division template') },
+    ],
+  },
+  {
+    query: 'check if a country has researched a technology',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('has_tech') },
+      { file: wiki('Triggers'), line: row('has_tech') },
+    ],
+  },
+  {
+    query: 'check whether a country currently has a certain national spirit',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('has_idea') },
+      { file: wiki('Triggers'), line: row('has_idea') },
+    ],
+  },
+  {
+    query: 'check if a country still exists on the map',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('country_exists') },
+      { file: triggers, line: heading('exists') },
+      { file: wiki('Triggers'), line: row('country_exists') },
+      { file: wiki('Triggers'), line: row('exists') },
+    ],
+  },
+  {
+    query: 'check if a state has access to the sea',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_coastal') },
+      { file: wiki('Triggers'), line: row('is_coastal') },
+    ],
+  },
+  {
+    query: 'check how many members a faction has',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('num_faction_members') },
+      { file: wiki('Triggers'), line: row('num_faction_members') },
+    ],
+  },
+  {
+    query: 'check if two countries share a border',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_neighbor_of') },
+      { file: wiki('Triggers'), line: row('is_neighbor_of') },
+    ],
+  },
+  {
+    query: 'check whether a country has enough tanks in its equipment stockpile',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('has_equipment') },
+      { file: wiki('Triggers'), line: row('has_equipment') },
+    ],
+  },
+  {
+    query: 'make an event that happens silently without a popup',
+    kind: 'question',
+    answers: [{ file: wiki('Event modding'), line: section('Additional arguments') }],
+  },
+  {
+    query: 'make two national focuses that cannot both be taken',
+    kind: 'question',
+    answers: [
+      { file: wiki('National focus modding'), line: section('Interaction with other focuses') },
+    ],
+  },
+  {
+    query: 'let a decision be taken again after a cooldown',
+    kind: 'question',
+    answers: [{ file: wiki('Decision modding'), line: section('Decision reappearing') }],
+  },
+  {
+    query: 'run effects when the player clicks a button in my custom window',
+    kind: 'question',
+    answers: [
+      { file: wiki('Scripted GUI modding'), line: section('Effects') },
+      { file: wiki('Scripted GUI modding'), line: section('Template') },
+    ],
+  },
+  {
+    query: 'color part of a localisation string red',
+    kind: 'question',
+    answers: [{ file: wiki('Localisation'), line: section('Colouring characters') }],
+  },
+  {
+    query: 'give a state oil and steel',
+    kind: 'question',
+    answers: [
+      { file: wiki('State modding'), line: section('Optional') },
+      { file: effects, line: heading('add_resource') },
+      { file: wiki('Effects'), line: row('add_resource') },
+    ],
+  },
+  {
+    query: 'make a technology unlock a new building',
+    kind: 'question',
+    answers: [{ file: wiki('Technology modding'), line: section('Enabling objects') }],
+  },
+  {
+    query: 'run an effect when a country changes its government',
+    kind: 'question',
+    answers: [
+      { file: wiki('On actions'), line: row('on_government_change') },
+      { file: wiki('On actions'), line: row('on_ruling_party_change') },
+      { file: wiki('On actions'), line: section('Politics') },
+    ],
+  },
+  {
+    query: 'make the AI want to conquer a specific country',
+    kind: 'question',
+    answers: [
+      { file: wiki('AI modding'), line: section('AI strategies') },
+      { file: wiki('AI modding'), line: row('conquer') },
+      { file: effects, line: heading('add_ai_strategy') },
+      { file: wiki('Effects'), line: row('add_ai_strategy') },
+    ],
+  },
+  {
+    query: 'make a country research faster',
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: /^## research_speed_factor$/u },
+      { file: wiki('Modifiers'), line: row('research_speed_factor') },
+      { file: wiki('List of modifiers'), line: row('research_speed_factor') },
+    ],
+  },
+];
