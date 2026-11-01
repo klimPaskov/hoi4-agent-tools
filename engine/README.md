@@ -4,12 +4,13 @@ A Rust workspace with the one shared Hearts of Iron IV engine for hoi4-agent-too
 HOI4 Modding Kit, Chaos Redux and HOI4 Factory (ADR 0074). It reads a mod with the game and its
 dependencies in load order, and reports what the game would reject or silently lose.
 
-| Crate             | What it does                                                                                                                                                                                                                                                                       |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hoi4-syntax`     | Lossless Clausewitz parser (`.txt`, `.gui`, `.gfx`, `.asset`, `descriptor.mod`) and localisation reader (`.yml`). Every byte belongs to one token, every node has a byte span, and the tree rebuilds the input byte for byte. UTF-8, UTF-8 with a byte order mark and Windows-1252 |
-| `hoi4-engine`     | Layers and load order, symbol index, reference closure, lints, override audit, findings baseline, finding delta and hash-guarded repair plans                                                                                                                                      |
-| `hoi4-drawio`     | Imports a draw.io sketch of a focus tree into focus ids, grid positions and prerequisite links                                                                                                                                                                                     |
-| `hoi4-engine-cli` | The `hoi4-engine` command                                                                                                                                                                                                                                                          |
+| Crate               | What it does                                                                                                                                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hoi4-syntax`       | Lossless Clausewitz parser (`.txt`, `.gui`, `.gfx`, `.asset`, `descriptor.mod`) and localisation reader (`.yml`). Every byte belongs to one token, every node has a byte span, and the tree rebuilds the input byte for byte. UTF-8, UTF-8 with a byte order mark and Windows-1252 |
+| `hoi4-engine`       | Layers and load order, symbol index, reference closure, lints, override audit, findings baseline, finding delta and hash-guarded repair plans                                                                                                                                      |
+| `hoi4-drawio`       | Imports a draw.io sketch of a focus tree into focus ids, grid positions and prerequisite links                                                                                                                                                                                     |
+| `hoi4-focus-layout` | Lays out focus trees and inserts branches on the focus grid with an in-game connector model ([README](crates/focus/README.md))                                                                                                                                                     |
+| `hoi4-engine-cli`   | The `hoi4-engine` command                                                                                                                                                                                                                                                          |
 
 ## Build
 
@@ -32,7 +33,11 @@ hoi4-engine roundtrip <folder>...
 hoi4-engine delta before.json after.json
 hoi4-engine vocab --game "<game>"
 hoi4-engine drawio sketch.drawio --prefix GER
+hoi4-engine focus-layout --request request.json
 ```
+
+`focus-layout` reads one JSON request (`hoi4-focus-layout-request/1`) from `--request` or stdin and
+writes the layout (`hoi4-focus-layout/1`) to stdout; see [the crate README](crates/focus/README.md).
 
 `--game` defaults to the `HOI4_GAME_DIR` environment variable. Without `--mod` the game itself is
 checked. `--dependency` adds a mod loaded before the checked one; repeat it in load order.
