@@ -7,7 +7,7 @@
 //! | `GFX-FAMILY-REUSE`      | warning  | A sprite name, or a resolved texture, is used by two or more different families            |
 //! | `GFX-TEXTURE-MISSING`   | warning  | A sprite's `texturefile` (or a texture path a script names) resolves to no file            |
 //! | `GFX-SPRITE-UNDEFINED`  | warning  | A script names a sprite that no loaded `.gfx` file defines                                 |
-//! | `GFX-FOCUS-SHINE-MISSING` | info   | A focus sprite has no `<name>_shine` sprite                                                |
+//! | `GFX-FOCUS-SHINE-MISSING` | error  | A focus sprite has no `<name>_shine` sprite (the game then draws a ? for the icon)        |
 //!
 //! An allowlist (JSON, see [`Allowlist`]) records intentional aliases.
 
@@ -250,7 +250,14 @@ pub fn audit(ws: &Workspace, index: &SpriteIndex, uses: &[SpriteUse], allow: &Al
         if seen.insert(key, ()).is_some() || index.contains(&format!("{}_shine", u.sprite)) || allow.allows_no_shine(&u.sprite) {
             continue;
         }
-        let mut f = Finding::new("GFX-FOCUS-SHINE-MISSING", Severity::Info, format!("focus sprite {} has no {}_shine sprite", u.sprite, u.sprite));
+        let mut f = Finding::new(
+            "GFX-FOCUS-SHINE-MISSING",
+            Severity::Error,
+            format!(
+                "focus sprite {} has no {}_shine sprite; the game logs \"Missing icon shine for focus\" and draws a ? instead of the icon",
+                u.sprite, u.sprite
+            ),
+        );
         at(&mut f, u);
         f.subject = Some(u.sprite.clone());
         f.suggestion = Some(format!("{}_shine", u.sprite));

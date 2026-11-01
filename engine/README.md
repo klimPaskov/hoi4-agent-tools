@@ -221,7 +221,7 @@ reported only when the sprite is defined, so a missing fallback is never a findi
 | `GFX-FAMILY-REUSE`        | warning  | A sprite name, or a resolved texture reached through two or more sprites, is used by two or more families. The message lists every use |
 | `GFX-TEXTURE-MISSING`     | warning  | A sprite's `texturefile` (or a texture path a script names) resolves to no file in any layer                                           |
 | `GFX-SPRITE-UNDEFINED`    | warning  | A script names a sprite that no loaded `.gfx` file defines                                                                             |
-| `GFX-FOCUS-SHINE-MISSING` | info     | A focus sprite has no `<name>_shine` sprite                                                                                            |
+| `GFX-FOCUS-SHINE-MISSING` | error    | A focus sprite has no `<name>_shine` sprite; the game then draws a ? instead of the icon (seen in game on 1.19.4.1)                    |
 
 `--allowlist file.json` records intentional aliases:
 
