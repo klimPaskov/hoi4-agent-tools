@@ -1,0 +1,4 @@
+state = {
+	id = 1
+	name = "STATE_1"
+}

@@ -1,0 +1,5 @@
+opinion_modifiers = {
+	vanilla_opinion = {
+		value = 10
+	}
+}

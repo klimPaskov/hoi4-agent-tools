@@ -1,0 +1,4 @@
+﻿l_english:
+ b001_test.1.t:0 "B001 test"
+ b001_test.1.d:0 "Uses a scripted trigger and a scripted effect."
+ b001_test.1.a:0 "Fine."

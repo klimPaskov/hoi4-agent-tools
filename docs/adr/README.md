@@ -77,3 +77,4 @@ Implementation rationale for contributors. For using the server, start with the 
 67. [Drawn rivers carve their valleys](0071-drawn-rivers-carve-their-valleys.md)
 68. [Declared passes are saddles](0072-declared-passes-are-saddles.md)
 69. [Realm points are checked together and pinned to provinces](0073-realm-points-checked-together-and-pinned.md)
+70. [The shared Rust HOI4 engine](0074-shared-rust-engine.md)
