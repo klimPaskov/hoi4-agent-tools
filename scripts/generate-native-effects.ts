@@ -43,6 +43,9 @@ export function renderNativeEffects(names: readonly string[], build: string): st
     ...names.map((name) => `  '${name}',`),
     ']);',
     '',
+    '/** Backward-compatible focus-domain name for the shared official effect catalog. */',
+    'export const nativeFocusEffectKeys = nativeEffectKeys;',
+    '',
   ].join('\n');
 }
 
