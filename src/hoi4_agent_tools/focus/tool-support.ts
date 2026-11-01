@@ -215,7 +215,7 @@ export function validationFromDiagnostics(diagnostics: FocusImportResult['diagno
         passed: blocking.length === 0,
         message:
           blocking.length === 0
-            ? 'Focus source, references, and layout have no blocking diagnostics'
+            ? 'Structure ok: focus source, references, prerequisites and positions have no blocking diagnostics. This is not a layout verdict'
             : `${blocking.length} blocking focus diagnostics`,
       },
     ],

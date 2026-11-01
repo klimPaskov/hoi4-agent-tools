@@ -248,6 +248,8 @@ export function collectMapScriptReferences(files: readonly ScannedFile[]): Colle
       if (!NUMBER.test(entry.value.value)) return;
       const entity = fieldEntity(file.relativePath, key);
       if (entity === undefined) return;
+      // State ids start at 1: `state = 0` (usually `NOT = { state = 0 }`) tests for a valid state.
+      if (entity === 'state' && Number(entry.value.value) === 0) return;
       references.push({
         entity,
         id: Number(entry.value.value),
@@ -273,6 +275,30 @@ export function missingMapReferenceDiagnostics(
   for (const reference of references) {
     if (exists[reference.entity](reference.id)) continue;
     const owned = reference.file.rootKind === 'mod' || reference.file.rootKind === 'fixture';
+    if (
+      reference.entity === 'state' &&
+      reference.form === 'list' &&
+      STATE_LIST_BLOCKS.has(reference.key) &&
+      exists.province(reference.id)
+    ) {
+      // The game's documentation gives `prioritize` state ids only; a province id there (vanilla
+      // pairs a state with a port, `prioritize = { 521 7564 }`) is a separate, milder finding.
+      diagnostics.push({
+        code: 'MAP_SCRIPT_PRIORITIZE_PROVINCE',
+        severity: owned ? 'warning' : 'info',
+        category: 'map',
+        message: `${reference.file.relativePath} lists ${reference.id} in prioritize, which the map defines as a province, not a state; the effects documentation gives prioritize state ids only`,
+        location: nodeLocation(reference.document, reference.node),
+        details: {
+          entity: reference.entity,
+          id: reference.id,
+          key: reference.key,
+          form: reference.form,
+          layer: reference.file.rootKind,
+        },
+      });
+      continue;
+    }
     diagnostics.push({
       code: 'MAP_SCRIPT_REFERENCE_MISSING',
       severity: owned ? 'error' : 'warning',
@@ -594,7 +620,7 @@ export function mapScriptConsistency(index: MapConsistencyIndex): {
     province: (id) => index.definitionsById.has(id),
     'strategic-region': (id) => index.regionsById.has(id),
   });
-  const missing = diagnostics.length;
+  const missing = diagnostics.filter(({ code }) => code === 'MAP_SCRIPT_REFERENCE_MISSING').length;
   const tags = declaredCountryTags(index.sourceFiles);
   if (tags !== undefined)
     for (const state of index.states) {

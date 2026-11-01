@@ -42,31 +42,47 @@ const automaticPositionSchema = z
   .object({
     mode: z.literal('auto'),
     pinned: z.literal(false),
-    preferredX: z.number().int().min(-100_000).max(100_000).optional(),
-    preferredY: z.number().int().min(-100_000).max(100_000).optional(),
+    preferredX: z
+      .number()
+      .int()
+      .min(-100_000)
+      .max(100_000)
+      .optional()
+      .describe('Column the solver aims for; it still spaces and balances the branch.'),
+    preferredY: z
+      .number()
+      .int()
+      .min(-100_000)
+      .max(100_000)
+      .optional()
+      .describe('Row the solver aims for; a focus always sits below its lowest prerequisite.'),
   })
   .strict();
 
-const positionSchema = z.discriminatedUnion('mode', [
-  z
-    .object({
-      mode: z.literal('fixed'),
-      x: z.number().int().min(-100_000).max(100_000),
-      y: z.number().int().min(-100_000).max(100_000),
-      pinned: z.boolean(),
-    })
-    .strict(),
-  z
-    .object({
-      mode: z.literal('relative'),
-      x: z.number().int().min(-100_000).max(100_000),
-      y: z.number().int().min(-100_000).max(100_000),
-      relativeTo: z.string().min(1),
-      pinned: z.boolean(),
-    })
-    .strict(),
-  automaticPositionSchema,
-]);
+const positionSchema = z
+  .discriminatedUnion('mode', [
+    z
+      .object({
+        mode: z.literal('fixed'),
+        x: z.number().int().min(-100_000).max(100_000),
+        y: z.number().int().min(-100_000).max(100_000),
+        pinned: z.boolean(),
+      })
+      .strict(),
+    z
+      .object({
+        mode: z.literal('relative'),
+        x: z.number().int().min(-100_000).max(100_000),
+        y: z.number().int().min(-100_000).max(100_000),
+        relativeTo: z.string().min(1),
+        pinned: z.boolean(),
+      })
+      .strict(),
+    automaticPositionSchema,
+  ])
+  .describe(
+    'fixed = an exact grid coordinate; relative = an offset from another focus, so the branch moves with it; auto = the solver places the focus (prefer it for new trees). One x unit is half a plaque: neighbouring plaques are 2 apart on a row, and a focus directly below its parent has the same x.',
+  );
 
 const routeLockSchema = z
   .object({
@@ -102,8 +118,14 @@ const focusNodeSchema = z
   .object({
     id: z.string().min(1).max(256),
     label: z.string().max(1024),
-    branchId: z.string().optional(),
-    laneId: z.string().optional(),
+    branchId: z
+      .string()
+      .optional()
+      .describe('Branch family of this focus; per-branch crops and the layout scorecard use it.'),
+    laneId: z
+      .string()
+      .optional()
+      .describe('Lane the solver keeps this focus in: one column band per lane.'),
     prerequisites: prerequisitesSchema,
     mutuallyExclusive: z.array(z.string()).max(10_000),
     routeLocks: z.array(routeLockSchema).max(10_000),
@@ -427,5 +449,106 @@ export const focusLayoutSchema = z
     diagnostics: z.array(z.unknown()),
     metrics: focusLayoutMetricsSchema.optional(),
     layoutHash: z.string().regex(/^[a-f0-9]{64}$/u),
+  })
+  .strict();
+
+const qualityMetricIdSchema = z.enum([
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'S1',
+  'S2',
+  'S3',
+  'S4',
+  'S5',
+  'S6',
+  'S7',
+  'S8',
+  'S9',
+  'S10',
+  'S11',
+  'D1',
+  'D2',
+  'D3',
+  'D4',
+]);
+const qualityVerdictSchema = z.enum(['blocked', 'revise', 'review', 'pass']);
+
+export const focusScorecardRowSchema = z
+  .object({
+    id: qualityMetricIdSchema,
+    name: z.string().max(128),
+    group: z.enum(['H', 'S', 'D']),
+    value: z.number(),
+    unit: z.string().max(64),
+    reviewLimit: z.number().nullable(),
+    reviseLimit: z.number().nullable(),
+    vanillaMedian: z.number().nullable(),
+    status: z.enum(['ok', 'review', 'revise', 'blocked', 'flag', 'not_evaluated']),
+    inVerdict: z.boolean(),
+    where: z.array(z.string().max(256)).max(8),
+    message: z.string().max(600),
+    fix: z
+      .object({
+        action: z.string().max(64),
+        targetFocusIds: z.array(z.string().max(256)).max(16),
+        suggested: z.string().max(500),
+        expectedMetricChange: z.string().max(300),
+        preservesGameplay: z.boolean(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/** Verdict, scorecard and fix hints for one layout of a national focus tree. */
+export const focusLayoutQualitySchema = z
+  .object({
+    verdict: qualityVerdictSchema,
+    score: z.number().int().min(0).max(100),
+    summary: z.string().max(500),
+    focusCount: z.number().int().nonnegative(),
+    bucket: z.enum(['small', 'medium', 'large']),
+    softMetricsEvaluated: z.boolean(),
+    scorecard: z.array(focusScorecardRowSchema).max(20),
+    failingRowCount: z.number().int().nonnegative(),
+    nextActions: z.array(z.string().max(500)).max(6),
+    notEvaluated: z.array(z.string().max(400)).max(8),
+    branches: z
+      .array(
+        z
+          .object({
+            id: z.string().max(256),
+            focusCount: z.number().int().nonnegative(),
+            minimumX: z.number().int(),
+            maximumX: z.number().int(),
+            minimumY: z.number().int(),
+            maximumY: z.number().int(),
+          })
+          .strict(),
+      )
+      .max(12),
+  })
+  .strict();
+
+/** What a layout change did: verdicts, moved focuses and proof that gameplay relations are intact. */
+export const focusLayoutDeltaSchema = z
+  .object({
+    verdictBefore: qualityVerdictSchema.nullable(),
+    verdictAfter: qualityVerdictSchema,
+    scoreBefore: z.number().int().min(0).max(100).nullable(),
+    scoreAfter: z.number().int().min(0).max(100),
+    improved: z.array(qualityMetricIdSchema).max(20),
+    regressed: z.array(qualityMetricIdSchema).max(20),
+    movedFocusCount: z.number().int().nonnegative(),
+    movedFocusIds: z.array(z.string().max(256)).max(100),
+    unmovedFocusCount: z.number().int().nonnegative(),
+    unmovedHash: z.string().max(64),
+    prerequisiteHash: z.string().max(64),
+    prerequisitesUnchanged: z.boolean().nullable(),
+    mutualExclusionHash: z.string().max(64),
+    mutualExclusionsUnchanged: z.boolean().nullable(),
   })
   .strict();

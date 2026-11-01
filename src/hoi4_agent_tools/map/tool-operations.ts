@@ -21,6 +21,7 @@ import type {
   MapRewriteToolRequest,
 } from '../schemas/map-requests.js';
 import { PACKAGE_VERSION } from '../version.js';
+import { summarizeChangedFiles } from '../core/changed-summary.js';
 import {
   allocateMapIdentifiersAsync,
   type AllocationEvidence,
@@ -452,6 +453,10 @@ export function completeMapRewrite(
     ...parsed.data,
     fileCount: transaction.files.length,
     artifactCount: transaction.artifacts.length,
+    // The file list is cut to 100 and a long response is cut again; the counts always arrive.
+    ...(execution.outcome === 'applied'
+      ? { changedSummary: summarizeChangedFiles(transaction.files) }
+      : {}),
   });
   result.status = transaction.validation.passed ? 'ok' : 'blocked';
   result.code =

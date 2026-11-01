@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { globFiles } from '../core/file-glob.js';
@@ -222,6 +223,21 @@ function sectionize(
   ];
 }
 
+/** The kit's HOI4 wiki folder, and the name it had before the kit renamed it. */
+const WIKI_FOLDER = 'hoi4_wiki';
+const LEGACY_WIKI_FOLDER = 'paradox_wiki';
+
+/** `hoi4_wiki/` when the mod has it, otherwise the older `paradox_wiki/` of a mod the kit has not updated. */
+function defaultWikiRoot(modRoot: string): string {
+  const current = path.join(modRoot, WIKI_FOLDER);
+  try {
+    if (statSync(current).isDirectory()) return current;
+  } catch {
+    // Not there: fall back to the legacy name, which is reported unavailable when absent too.
+  }
+  return path.join(modRoot, LEGACY_WIKI_FOLDER);
+}
+
 function sourceRoots(workspace: ResolvedWorkspace): SourceRoot[] {
   const gameRoot =
     workspace.gameRoot ?? (workspace.registration.kind === 'game' ? workspace.modRoot : undefined);
@@ -238,9 +254,9 @@ function sourceRoots(workspace: ResolvedWorkspace): SourceRoot[] {
         ]),
     {
       kind: 'wiki',
-      root: workspace.wikiRoot ?? path.join(workspace.modRoot, 'paradox_wiki'),
+      root: workspace.wikiRoot ?? defaultWikiRoot(workspace.modRoot),
       patterns: ['**/*.md'],
-      authority: 'Offline Paradox Wiki snapshot',
+      authority: 'HOI4 wiki (kit)',
     },
     {
       kind: 'script_doc',
