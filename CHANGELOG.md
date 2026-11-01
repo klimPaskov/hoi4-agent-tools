@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.6.3 - 2026-11-01
+
+- Write a world over a mod whose output inventory lists files the world does not manage. `.hoi4-agent-world.json` could record files that were never outputs of a generated world (for example country tag files and localisation files registered by the mod's own tooling), and one such entry made every write fail with `MANAGED_OUTPUT_MANIFEST_INVALID`. A safe relative path outside the allow-list is now left alone (never read, compared, edited or deleted), dropped from the next inventory and reported (`MAP_WORLD_OUTPUT_RECORD_IGNORED`, `data.outputs`). A path that could leave the workspace, or a duplicate, still refuses the inventory. See the amendment to ADR 0052.
+
 ## 4.6.2 - 2026-10-31
 
 - Check the points of workspace countries together and give each capital a province (ADR 0073). `create_world` now reports every capital or seed that lies outside the world or in water (with the nearest land), in the unowned area, an own exclusion or another realm's claim, or within 10 pixels of a point of another realm, in one error (`MAP_WORLD_REALM_POINTS_INVALID`, `details.problems`; a single problem keeps its own code), before the relief synthesis starts. `create_world.synthesisCheck` runs the same check and lists the points beside the failing rivers (`data.synthesisCheck.realmPoints`). In the feature-aware partition every capital and seed is a province seed of its own, so capitals that are 20 to 40 pixels apart no longer fail with `MAP_WORLD_REALM_POINT_CONFLICT`. Feature-aware worlds with workspace countries get a slightly different province partition; other worlds are unchanged.

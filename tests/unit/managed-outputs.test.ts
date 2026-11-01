@@ -166,14 +166,92 @@ describe('managed output regeneration', () => {
       written: [],
     });
   });
+  it('writes a world over a mod whose inventory records files the world does not manage', () => {
+    const operation = {
+      id: 'world',
+      kind: 'create_world' as const,
+      width: 256,
+      height: 256,
+      seed: 2,
+      rivers: 0,
+      provincesPerState: 3,
+      countries: [{ tag: 'AAA', name: 'Aster' }],
+    };
+    const first = planMapOperations(MapWorkspaceIndex.build([]), [operation]);
+    expect(first.blockers).toEqual([]);
+    const authored = [
+      [
+        'common/country_tags/00_mod_countries.txt',
+        'MOD = "countries/MOD.txt"' + String.fromCharCode(10),
+      ],
+      [
+        'localisation/english/state_names_l_english.yml',
+        'l_english:' + String.fromCharCode(10) + ' STATE_1:0 "Own"',
+      ],
+    ] as const;
+    const sources = first.changes
+      .filter((f) => f.content !== null)
+      .map((f) => source(f.relativePath, f.content!))
+      .map((f) => {
+        if (f.relativePath !== WORLD_OUTPUT_MANIFEST) return f;
+        const recorded = JSON.parse(f.bytes.toString()) as {
+          version: number;
+          files: Array<{ relativePath: string; sha256: string }>;
+        };
+        // The mod's own tooling recorded files that were never outputs of a world.
+        for (const [relativePath, text] of authored)
+          recorded.files.push({ relativePath, sha256: sha256Bytes(Buffer.from('older ' + text)) });
+        return source(f.relativePath, JSON.stringify(recorded));
+      });
+    for (const [relativePath, text] of authored) sources.push(source(relativePath, text));
+    const next = planMapOperations(MapWorkspaceIndex.build(sources), [operation]);
+    expect(next.blockers).toEqual([]);
+    expect(next.worldOutputs?.[0]?.ignored).toEqual([...authored.map(([path]) => path)].sort());
+    expect(next.changes.filter((f) => authored.some(([path]) => path === f.relativePath))).toEqual(
+      [],
+    );
+    expect(next.diagnostics.map(({ code }) => code)).toContain('MAP_WORLD_OUTPUT_RECORD_IGNORED');
+  });
+  it('leaves recorded paths it does not manage alone and drops them from the inventory', () => {
+    const first = planManagedOutputs({ ...input, sources: [], proposed: [one, two] });
+    const foreign = { relativePath: 'notes.txt', sha256: 'a'.repeat(64) };
+    const recorded = JSON.parse(Buffer.from(first.changes.at(-1)!.content!).toString()) as {
+      version: number;
+      files: Array<{ relativePath: string; sha256: string }>;
+    };
+    recorded.files.push(foreign, { relativePath: 'common/other.txt', sha256: 'b'.repeat(64) });
+    const sources = [
+      source(WORLD_OUTPUT_MANIFEST, JSON.stringify(recorded)),
+      source(one.relativePath, one.content),
+      source(two.relativePath, two.content),
+      // The file exists and differs from its recorded hash: it is not ours to compare or delete.
+      source('notes.txt', 'authored'),
+    ];
+    const plan = planManagedOutputs({ ...input, sources, proposed: [one] });
+    expect(plan.ignored).toEqual(['common/other.txt', 'notes.txt']);
+    expect(plan.retired).toEqual([two.relativePath]);
+    expect(plan.changes.some((f) => f.relativePath === 'notes.txt')).toBe(false);
+    const inventory = JSON.parse(Buffer.from(plan.changes.at(-1)!.content!).toString()) as {
+      files: Array<{ relativePath: string }>;
+    };
+    expect(inventory.files.map((f) => f.relativePath)).toEqual([one.relativePath]);
+    // A duplicate record is still refused, whatever it names.
+    recorded.files.push(foreign);
+    expect(() =>
+      planManagedOutputs({
+        ...input,
+        sources: [source(WORLD_OUTPUT_MANIFEST, JSON.stringify(recorded))],
+        proposed: [],
+      }),
+    ).toThrow('duplicate');
+  });
   it.each([
     '../secret.txt',
     '/absolute.txt',
     'history/states/../2-B.txt',
     'history\\states\\2-B.txt',
-    'notes.txt',
     'C:/secret.txt',
-  ])('rejects unsupported manifest path %s', (relativePath) => {
+  ])('rejects an unsafe manifest path %s', (relativePath) => {
     const manifest = source(
       WORLD_OUTPUT_MANIFEST,
       JSON.stringify({ version: 1, files: [{ relativePath, sha256: 'a'.repeat(64) }] }),
