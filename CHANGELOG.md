@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Lay out focus trees with the shared Rust engine. `hoi4.focus_rewrite` takes `layoutMode: "engine"`, which places the tree's automatic focuses with `hoi4-engine focus-layout` and writes lane roots with x and y and every other placed focus with `relative_position_id`, and `placement` (`focusIds`, `anchorId`, `preferSide`, `allowShift`), which fits new focuses in while every other focus keeps its coordinates. The result adds the engine's metrics and hashes (`hashes.untouched` proves the other focuses did not move) to the layout verdict and delta. A blocked layout is refused with `needsRoom` and a missing engine with `FOCUS_ENGINE_UNAVAILABLE`, and nothing is written; there is no fallback to the TypeScript solver. The engine is found through `HOI4_ENGINE` or a binary shipped under `engine/bin`. `authored` and `compact` are unchanged.
+
 ## 4.6.5 - 2026-11-01
 
 - Say how much a map rewrite changed when its file list is cut. The inline result lists at most a bounded number of changed files, so a world write of thousands of files could read as if little or nothing changed. Every applied map rewrite now adds `data.changedSummary`: the total of changed files, how many were created, removed and modified, and the same counts for the 40 folders with the most changes (two levels deep, largest first, `omittedFolders` for the rest). The full list stays in the transaction artifacts.

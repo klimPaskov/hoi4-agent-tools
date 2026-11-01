@@ -190,7 +190,7 @@ For a layout-only cleanup of an existing national tree, call `hoi4.focus_rewrite
 }
 ```
 
-A plan-free call is accepted only in national mode with `layoutMode: "compact"`.
+A plan-free call is accepted only in national mode with `layoutMode: "compact"` or `layoutMode: "engine"` (see [Engine layout and placement](#engine-layout-and-placement)).
 It requires `treeId`, works on an existing focus source, and rejects `createIfMissing: true`.
 Every other national rewrite requires a `plan`.
 `compactFocusIds` (1 to 10,000 IDs), `pinnedFocusIds` (up to 10,000 IDs), and `symmetryGroups` (up to 64 groups) are accepted only with `layoutMode: "compact"`.
@@ -206,6 +206,42 @@ For a bounded layout repair, set `compactFocusIds` to the focus IDs whose positi
 Pass `symmetryGroups` with a `centerFocusId` and one or more `{ "leftFocusId": "...", "rightFocusId": "..." }` pairs to `hoi4.focus_rewrite` in compact mode when named branches should align at equal distance and row around a center focus. A pair may contain a pinned or unselected focus; incompatible fixed positions produce a conflict with the specific pair and offsets.
 
 A cleanup should not change gameplay relationships to improve the picture. One `prerequisite` block containing several focus IDs is an OR group; several prerequisite blocks are AND requirements.
+
+## Engine layout and placement
+
+`layoutMode: "engine"` lays out the tree's `auto` focuses with the shared Rust engine (`hoi4-engine focus-layout`, [ADR 0074](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/docs/adr/0074-shared-rust-engine.md)) instead of the TypeScript solver. Fixed and relative focuses keep their coordinates. The engine places each lane as a band, centres parents over their children and children under their parents, keeps mutually exclusive focuses side by side, and never changes prerequisites or exclusions. The result is written through the ordinary source update: the topmost focus of each lane gets `x` and `y`, and every other placed focus of the lane gets `relative_position_id` to it, so moving a lane later means editing one focus. A plan is optional: `{"treeId":"my_tree","layoutMode":"engine"}` lays out the existing tree's automatic focuses.
+
+`placement` fits new focuses into a tree whose other focuses keep their exact coordinates (the engine's `insert`). Add the new focuses with position mode `auto` to the plan that `hoi4.focus_inspect` returned, then:
+
+```json
+{
+  "relativePath": "common/national_focus/my_tree.txt",
+  "plan": { "...": "the inspected plan with two new auto focuses" },
+  "placement": {
+    "focusIds": ["my_new_focus", "my_new_focus_2"],
+    "anchorId": "my_new_focus",
+    "preferSide": "right",
+    "allowShift": false
+  }
+}
+```
+
+- `focusIds` (1 to 10,000) are the focuses to place. With the default `layoutMode: "authored"` they must be new to the tree. With `layoutMode: "engine"` they may be existing focuses to move. Pinned focuses cannot be placed.
+- `anchorId` (one of `focusIds`) is the branch root, written relative to its first prerequisite outside the branch. The other new focuses are written relative to it.
+- `preferSide` is `left`, `right` or `either` (default).
+- `allowShift` (default false) lets the engine move existing focuses aside when no place is free within 64 columns.
+- Every focus outside `focusIds` keeps the coordinates the current source gives it. An automatic focus that has none yet is refused with `FOCUS_PLACEMENT_INVALID`: add it to `focusIds` or give it `x` and `y`.
+
+The result has the usual `layoutQuality` verdict and `layoutDelta`, plus `data.engine`: the operation, the connector metrics the engine measured, `movedFocusIds`, any `shifted` focuses, and the engine's SHA-256 `hashes`. `hashes.untouched` covers `[{id,x,y}]` of every focus the call did not move (canonical JSON, sorted by id), so a caller can check that those focuses stayed where they were. `hashes.prerequisites` and `hashes.exclusions` show that the graph is unchanged. Engine warnings such as `FOCUS_ENGINE_LANE_BOUNDS_UNSATISFIED` and `FOCUS_ENGINE_EXISTING_CONFLICT` join the result's diagnostics. Calling again plan-free, or with the freshly inspected plan, leaves the source unchanged.
+
+Nothing is written when the engine refuses:
+
+- `FOCUS_ENGINE_BLOCKED`: the tree cannot be placed without breaking a layout rule. The message names the engine's reasons (`FOCUS_ENGINE_NO_CORRIDOR`, `FOCUS_ENGINE_SPACING_CONFLICT` or `FOCUS_ENGINE_PARENT_NOT_ABOVE`) and, for a placement with no free place, `needsRoom`: the shift that would make room (`fromX`, `columns`, `direction` and the focuses that would move). Retry with `allowShift: true` to apply it.
+- `FOCUS_ENGINE_UNAVAILABLE`: no usable `hoi4-engine` binary. The tool uses `HOI4_ENGINE` (an absolute path) and otherwise the binary a release ships under `engine/bin/<platform>-<arch>/`. The message gives the reason (`binary_not_found`, `binary_path_invalid`, `spawn_failed`, `timeout` after 30 seconds, `output_too_large`, `exit_status` or `invalid_output`). Set `HOI4_ENGINE` to a built binary (`cargo build --release -p hoi4-engine-cli` in `engine/`) or install a release that ships the engine. There is no silent fallback to the TypeScript solver. `authored` and `compact` do not need the engine.
+- `FOCUS_ENGINE_REQUEST_INVALID`: the engine refused the tree, for example for a prerequisite or relative-position cycle. The message has the engine's code.
+- `FOCUS_ENGINE_LAYOUT_MISMATCH`: the coordinates prepared for the source differ from the engine's result.
+
+The engine's algorithm and limits are in [engine/crates/focus/README.md](https://github.com/klimPaskov/hoi4-agent-tools/blob/main/engine/crates/focus/README.md).
 
 ## Continuous focus palettes
 
