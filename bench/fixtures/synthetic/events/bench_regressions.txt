@@ -1,0 +1,12 @@
+add_namespace = bench_regress
+
+# Called only through a scripted effect that a decision runs (live-test problem 2).
+country_event = {
+	id = bench_regress.1
+	title = bench_regress.1.t
+	desc = bench_regress.1.d
+	is_triggered_only = yes
+	option = {
+		name = bench_regress.1.a
+	}
+}

@@ -1,0 +1,3 @@
+bench_regress_fire_effect = {
+	country_event = bench_regress.1
+}

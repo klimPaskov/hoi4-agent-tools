@@ -1,0 +1,8 @@
+bench_regress_category = {
+	bench_regress_decision = {
+		available = { always = yes }
+		complete_effect = {
+			bench_regress_fire_effect = yes
+		}
+	}
+}
