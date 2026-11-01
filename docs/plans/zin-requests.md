@@ -347,6 +347,17 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Status: in progress
 - Verification: pending (lead: `data.changedSummary` on the next write)
 
+## ZR-23: The replace-world write fails three ways (allocation, native crash, `ARTIFACT_LOGICAL_BATCH_LIMIT`)
+
+- Opened: 2026-11-01 by lead
+- Priority: high (blocks the second ZIN map write: Yeldenne ownership under K56, two capitals on lakes)
+- Current behaviour: the same `create_world` call on 4.6.4, writing a world over the existing world of the same size, failed with `MAP_OPERATION_FAILED` "Array buffer allocation failed", then `JOB_WORKER_EXIT` 0xC0000409, then `ARTIFACT_LOGICAL_BATCH_LIMIT`; the mod stayed unchanged each time.
+- Worker diagnosis (2026-11-01): the review artifacts stored before the write list every building, unit and weather position. Measured on the ZIN artifacts of the first write: `map-proposed.json` 88.5 MB, of which unit positions 44.8 MB and building positions 19.4 MB; the HTML of each render embeds the same catalog (91 MB). Before and proposed together are about 360 MB. The first write and its repeat passed because the diff was small (`map-diff.html` 0.9 MB); with new realm seeds every position changes, so the diff render grows to the same order and the batch passes the fixed 512 MiB in-memory ceiling. The memory this needs is the likely cause of the allocation failure and the native crash too. Raising a config limit would not help: the ceiling is fixed in code, and the memory is the problem.
+- Implementation: branch `claude/zr23-world-replace-artifacts`. Before and proposed renders count positions instead of listing them (pictures unchanged); `map-diff.json` lists at most 2,000 changed positions per kind with the total in `positionChanges`; the batch-limit errors name the size, the limit and the three largest artifacts; `JOB_WORKER_EXIT` adds the job's last progress message. No input schema change.
+- Plan: released together with the map reference fix as 4.6.6, right after 4.6.5 (ZR-21); version reported here when installed.
+- Status: in progress
+- Verification: pending (lead: the call returns `MAP_CHANGES_APPLIED`, a repeat `MAP_CHANGES_UNCHANGED`)
+
 ## ZR-22: Caller names for states, victory points and strategic regions in `create_world`
 
 - Opened: 2026-11-01 by lead (record in the mod: `docs/plans/zin-map/naming_request.md`)
