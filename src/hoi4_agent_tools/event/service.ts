@@ -27,6 +27,7 @@ import {
   type StoredArtifact,
 } from '../core/artifacts.js';
 import { ServiceError } from '../core/result.js';
+import { nearestNames } from '../reference/suggestions.js';
 import { RenderBudget } from '../core/render-budget.js';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { isPortablePathSegment } from '../core/workspace.js';
@@ -61,6 +62,7 @@ import {
   explainEventPath,
   inspectEventStateFlow,
   lintEventGraph,
+  selectEventNodes,
   traceSelectedEvents,
   type EventFeatureManifest,
   type EventImpactSubject,
@@ -1271,6 +1273,21 @@ export class EventChainViewer {
       case 'trace':
         if (input.selector === undefined)
           throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
+        if (
+          input.selector.kind === 'event' &&
+          selectEventNodes(graph, input.selector).length === 0
+        ) {
+          // An event no file defines or fires is not-found, never an empty trace.
+          const suggestions = nearestNames(
+            input.selector.eventId,
+            new Set(graph.nodes.flatMap(({ eventId }) => (eventId === undefined ? [] : [eventId]))),
+          );
+          throw new ServiceError(
+            'EVENT_NOT_FOUND',
+            `No scanned file defines or fires event ${input.selector.eventId.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+            { eventId: input.selector.eventId.slice(0, 256), suggestions },
+          );
+        }
         {
           const trace = traceSelectedEvents(
             graph,

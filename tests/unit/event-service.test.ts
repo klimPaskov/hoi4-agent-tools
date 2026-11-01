@@ -177,6 +177,19 @@ chain_entry_effect = { country_event = { id = chain.9 } }
     expect(upstream.summary).toMatchObject({
       trace: { entryPoints: ['chain_decision'], helpers: ['chain_entry_effect'] },
     });
+    // An event nothing defines or fires is not-found, with the close ids.
+    await expect(
+      new EventChainViewer(engine).inspect({
+        workspaceId: 'event-service',
+        mode: 'trace',
+        selector: { kind: 'event', eventId: 'chain.99' },
+        direction: 'both',
+      }),
+    ).rejects.toMatchObject({
+      code: 'EVENT_NOT_FOUND',
+      message: expect.stringContaining('chain.99'),
+      details: { suggestions: expect.arrayContaining(['chain.9']) },
+    });
     const roots = await new EventChainViewer(engine).inspect({
       workspaceId: 'event-service',
       mode: 'roots',
