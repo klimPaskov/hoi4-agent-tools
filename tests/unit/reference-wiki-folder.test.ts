@@ -53,7 +53,7 @@ describe('the kit wiki folder name', () => {
     const { workspace, pages } = await modWith({ hoi4_wiki: 'renamed' });
     const found = await search(workspace, 'renamed');
     expect(found.coverage.wiki.unavailable).toBe(false);
-    expect(found.results.map(({ path: source }) => source)).toContain(pages['hoi4_wiki']);
+    expect(found.results.map(({ path: source }) => source)).toContain(pages.hoi4_wiki);
     expect(found.results.find(({ source }) => source === 'wiki')?.authority).toBe(
       'HOI4 wiki (kit)',
     );
@@ -63,7 +63,7 @@ describe('the kit wiki folder name', () => {
     const { workspace, pages } = await modWith({ paradox_wiki: 'legacy' });
     const found = await search(workspace, 'legacy');
     expect(found.coverage.wiki.unavailable).toBe(false);
-    expect(found.results.map(({ path: source }) => source)).toContain(pages['paradox_wiki']);
+    expect(found.results.map(({ path: source }) => source)).toContain(pages.paradox_wiki);
     expect(found.results.find(({ source }) => source === 'wiki')?.authority).toBe(
       'HOI4 wiki (kit)',
     );
@@ -72,9 +72,9 @@ describe('the kit wiki folder name', () => {
   it('prefers hoi4_wiki/ and does not mix in a leftover paradox_wiki/', async () => {
     const { workspace, pages } = await modWith({ hoi4_wiki: 'current', paradox_wiki: 'stale' });
     const current = await search(workspace, 'current');
-    expect(current.results.map(({ path: source }) => source)).toEqual([pages['hoi4_wiki']]);
+    expect(current.results.map(({ path: source }) => source)).toEqual([pages.hoi4_wiki]);
     const stale = await search(workspace, 'stale');
-    expect(stale.results.map(({ path: source }) => source)).not.toContain(pages['paradox_wiki']);
+    expect(stale.results.map(({ path: source }) => source)).not.toContain(pages.paradox_wiki);
   });
 
   it('reports the wiki unavailable when the mod has neither folder', async () => {
