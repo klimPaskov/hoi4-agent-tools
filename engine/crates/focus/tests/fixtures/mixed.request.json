@@ -1,0 +1,16 @@
+{
+  "schema": "hoi4-focus-layout-request/1",
+  "operation": "layout",
+  "treeId": "golden_mixed",
+  "focuses": [
+    { "id": "ROOT", "position": { "mode": "fixed", "x": 10, "y": 0 } },
+    { "id": "OLD_a", "prerequisites": [["ROOT"]], "position": { "mode": "relative", "x": -2, "y": 1, "relativeTo": "ROOT" } },
+    { "id": "OLD_b", "prerequisites": [["OLD_a"]], "position": { "mode": "relative", "x": 0, "y": 1, "relativeTo": "OLD_a" } },
+    { "id": "ROCK", "laneId": "decor", "position": { "mode": "fixed", "x": 11, "y": 2 } },
+    { "id": "NEW_a", "prerequisites": [["ROOT"]] },
+    { "id": "NEW_b", "prerequisites": [["NEW_a"]] },
+    { "id": "NEW_c", "prerequisites": [["NEW_a"]] },
+    { "id": "NEW_tail", "prerequisites": [["NEW_b"]], "position": { "mode": "relative", "x": 0, "y": 1, "relativeTo": "NEW_b" } },
+    { "id": "NEW_late", "prerequisites": [["OLD_b"]], "position": { "mode": "auto", "preferredY": 5 } }
+  ]
+}

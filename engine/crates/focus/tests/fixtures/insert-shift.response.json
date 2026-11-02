@@ -1,0 +1,344 @@
+{
+  "schema": "hoi4-focus-layout/1",
+  "status": "ok",
+  "operation": "insert",
+  "treeId": "golden_insert_shift",
+  "nodes": [
+    {
+      "id": "N",
+      "x": 3,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "R",
+      "x": 14,
+      "y": 0,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W00",
+      "x": -80,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W01",
+      "x": -72,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W02",
+      "x": -64,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W03",
+      "x": -56,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W04",
+      "x": -48,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W05",
+      "x": -40,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W06",
+      "x": -32,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W07",
+      "x": -24,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W08",
+      "x": -16,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W09",
+      "x": -8,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "W10",
+      "x": 11,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W11",
+      "x": 19,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W12",
+      "x": 27,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W13",
+      "x": 35,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W14",
+      "x": 43,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W15",
+      "x": 51,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W16",
+      "x": 59,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W17",
+      "x": 67,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W18",
+      "x": 75,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W19",
+      "x": 83,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "W20",
+      "x": 91,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    }
+  ],
+  "source": [
+    {
+      "id": "N",
+      "relativeTo": "R",
+      "x": -11,
+      "y": 1
+    },
+    {
+      "id": "R",
+      "x": 14,
+      "y": 0
+    },
+    {
+      "id": "W00",
+      "x": -80,
+      "y": 1
+    },
+    {
+      "id": "W01",
+      "x": -72,
+      "y": 1
+    },
+    {
+      "id": "W02",
+      "x": -64,
+      "y": 1
+    },
+    {
+      "id": "W03",
+      "x": -56,
+      "y": 1
+    },
+    {
+      "id": "W04",
+      "x": -48,
+      "y": 1
+    },
+    {
+      "id": "W05",
+      "x": -40,
+      "y": 1
+    },
+    {
+      "id": "W06",
+      "x": -32,
+      "y": 1
+    },
+    {
+      "id": "W07",
+      "x": -24,
+      "y": 1
+    },
+    {
+      "id": "W08",
+      "x": -16,
+      "y": 1
+    },
+    {
+      "id": "W09",
+      "x": -8,
+      "y": 1
+    },
+    {
+      "id": "W10",
+      "x": 11,
+      "y": 1
+    },
+    {
+      "id": "W11",
+      "x": 19,
+      "y": 1
+    },
+    {
+      "id": "W12",
+      "x": 27,
+      "y": 1
+    },
+    {
+      "id": "W13",
+      "x": 35,
+      "y": 1
+    },
+    {
+      "id": "W14",
+      "x": 43,
+      "y": 1
+    },
+    {
+      "id": "W15",
+      "x": 51,
+      "y": 1
+    },
+    {
+      "id": "W16",
+      "x": 59,
+      "y": 1
+    },
+    {
+      "id": "W17",
+      "x": 67,
+      "y": 1
+    },
+    {
+      "id": "W18",
+      "x": 75,
+      "y": 1
+    },
+    {
+      "id": "W19",
+      "x": 83,
+      "y": 1
+    },
+    {
+      "id": "W20",
+      "x": 91,
+      "y": 1
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "FOCUS_ENGINE_SHIFTED",
+      "severity": "info",
+      "focusIds": [
+        "R",
+        "W10",
+        "W11",
+        "W12",
+        "W13",
+        "W14",
+        "W15",
+        "W16",
+        "W17",
+        "W18",
+        "W19",
+        "W20"
+      ],
+      "message": "Shifted 12 focuses 11 columns right from column 0 to make room",
+      "details": {}
+    }
+  ],
+  "metrics": {
+    "columns": 172,
+    "rows": 2,
+    "orthogonalCrossings": 0,
+    "stemsThroughPlaques": 0,
+    "mergedBars": 0,
+    "durationMicros": 0
+  },
+  "hashes": {
+    "layout": "801a5ef5a6a4a6ff52a4637a43b0a93ac9aa809799e3babdd8e66fc63bebfbc0",
+    "untouched": "c07104aacab11d80390febfa1ce5aa62e200ef0e7254a2f69764a9931e7d288a",
+    "prerequisites": "bd9dc4b13dd2f9decb582da1147d4065306bfcd9b73a4e091b76eaea45c37e9f",
+    "exclusions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "shifted": [
+    {
+      "fromX": 0,
+      "columns": 11,
+      "direction": "right",
+      "focusIds": [
+        "R",
+        "W10",
+        "W11",
+        "W12",
+        "W13",
+        "W14",
+        "W15",
+        "W16",
+        "W17",
+        "W18",
+        "W19",
+        "W20"
+      ]
+    }
+  ]
+}

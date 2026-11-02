@@ -1,0 +1,32 @@
+{
+  "schema": "hoi4-focus-layout-request/1",
+  "operation": "insert",
+  "treeId": "golden_insert_needs-room",
+  "options": { "nodeSpacing": 8, "laneSpacing": 2 },
+  "focuses": [
+    { "id": "R", "position": { "mode": "fixed", "x": 3, "y": 0 } },
+    { "id": "W00", "position": { "mode": "fixed", "x": -80, "y": 1 } },
+    { "id": "W01", "position": { "mode": "fixed", "x": -72, "y": 1 } },
+    { "id": "W02", "position": { "mode": "fixed", "x": -64, "y": 1 } },
+    { "id": "W03", "position": { "mode": "fixed", "x": -56, "y": 1 } },
+    { "id": "W04", "position": { "mode": "fixed", "x": -48, "y": 1 } },
+    { "id": "W05", "position": { "mode": "fixed", "x": -40, "y": 1 } },
+    { "id": "W06", "position": { "mode": "fixed", "x": -32, "y": 1 } },
+    { "id": "W07", "position": { "mode": "fixed", "x": -24, "y": 1 } },
+    { "id": "W08", "position": { "mode": "fixed", "x": -16, "y": 1 } },
+    { "id": "W09", "position": { "mode": "fixed", "x": -8, "y": 1 } },
+    { "id": "W10", "position": { "mode": "fixed", "x": 0, "y": 1 } },
+    { "id": "W11", "position": { "mode": "fixed", "x": 8, "y": 1 } },
+    { "id": "W12", "position": { "mode": "fixed", "x": 16, "y": 1 } },
+    { "id": "W13", "position": { "mode": "fixed", "x": 24, "y": 1 } },
+    { "id": "W14", "position": { "mode": "fixed", "x": 32, "y": 1 } },
+    { "id": "W15", "position": { "mode": "fixed", "x": 40, "y": 1 } },
+    { "id": "W16", "position": { "mode": "fixed", "x": 48, "y": 1 } },
+    { "id": "W17", "position": { "mode": "fixed", "x": 56, "y": 1 } },
+    { "id": "W18", "position": { "mode": "fixed", "x": 64, "y": 1 } },
+    { "id": "W19", "position": { "mode": "fixed", "x": 72, "y": 1 } },
+    { "id": "W20", "position": { "mode": "fixed", "x": 80, "y": 1 } },
+    { "id": "N", "prerequisites": [["R"]] }
+  ],
+  "insert": { "focusIds": ["N"], "allowShift": false }
+}

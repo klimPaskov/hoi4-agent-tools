@@ -1,0 +1,139 @@
+{
+  "schema": "hoi4-focus-layout/1",
+  "status": "ok",
+  "operation": "layout",
+  "treeId": "golden_mixed",
+  "nodes": [
+    {
+      "id": "NEW_a",
+      "x": 14,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "NEW_b",
+      "x": 13,
+      "y": 2,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "NEW_c",
+      "x": 15,
+      "y": 2,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "NEW_late",
+      "x": 12,
+      "y": 5,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "NEW_tail",
+      "x": 13,
+      "y": 3,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "OLD_a",
+      "x": 8,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "OLD_b",
+      "x": 8,
+      "y": 2,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "ROCK",
+      "x": 11,
+      "y": 2,
+      "laneId": "decor",
+      "moved": false
+    },
+    {
+      "id": "ROOT",
+      "x": 10,
+      "y": 0,
+      "laneId": "default",
+      "moved": false
+    }
+  ],
+  "source": [
+    {
+      "id": "NEW_a",
+      "x": 14,
+      "y": 1
+    },
+    {
+      "id": "NEW_b",
+      "relativeTo": "NEW_a",
+      "x": -1,
+      "y": 1
+    },
+    {
+      "id": "NEW_c",
+      "relativeTo": "NEW_a",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "NEW_late",
+      "relativeTo": "NEW_a",
+      "x": -2,
+      "y": 4
+    },
+    {
+      "id": "NEW_tail",
+      "relativeTo": "NEW_b",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "OLD_a",
+      "relativeTo": "ROOT",
+      "x": -2,
+      "y": 1
+    },
+    {
+      "id": "OLD_b",
+      "relativeTo": "OLD_a",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "ROCK",
+      "x": 11,
+      "y": 2
+    },
+    {
+      "id": "ROOT",
+      "x": 10,
+      "y": 0
+    }
+  ],
+  "diagnostics": [],
+  "metrics": {
+    "columns": 8,
+    "rows": 6,
+    "orthogonalCrossings": 0,
+    "stemsThroughPlaques": 0,
+    "mergedBars": 0,
+    "durationMicros": 0
+  },
+  "hashes": {
+    "layout": "78267178693d756091c57621cee6b2725997bb527cdc44ce55caa903ef71b4e6",
+    "untouched": "4855e16189252a39cb09006c4625aef39ae274976ba342df1943210ade09f25e",
+    "prerequisites": "13b12d7885e59c4624e937db0d829a78bbd1aa7ba8e58411f63e2c8ec729e2fa",
+    "exclusions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}

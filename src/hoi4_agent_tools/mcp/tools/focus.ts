@@ -153,6 +153,44 @@ const focusDriftOutputSchema = z
   })
   .strict();
 
+const engineShiftOutputSchema = z
+  .object({
+    fromX: z.number().int(),
+    columns: z.number().int().min(1),
+    direction: z.enum(['right', 'left']),
+    focusIds: z.array(z.string().max(256)),
+  })
+  .strict();
+
+/** What the focus layout engine did (layoutMode engine or placement). */
+const focusEngineLayoutOutputSchema = z
+  .object({
+    operation: z.enum(['layout', 'insert']),
+    status: z.literal('ok'),
+    hashes: z
+      .object({
+        layout: sha256Schema.nullable(),
+        untouched: sha256Schema,
+        prerequisites: sha256Schema,
+        exclusions: sha256Schema,
+      })
+      .strict(),
+    metrics: z
+      .object({
+        columns: nonNegativeIntegerSchema,
+        rows: nonNegativeIntegerSchema,
+        orthogonalCrossings: nonNegativeIntegerSchema,
+        stemsThroughPlaques: nonNegativeIntegerSchema,
+        mergedBars: nonNegativeIntegerSchema,
+      })
+      .strict(),
+    movedFocusIds: z.array(z.string().max(256)).max(100),
+    movedFocusCount: nonNegativeIntegerSchema,
+    shifted: z.array(engineShiftOutputSchema).optional(),
+    binarySource: z.enum(['environment', 'package']),
+  })
+  .strict();
+
 const focusPlanOutputSchema = strictOperationResultSchema(
   z.discriminatedUnion('mode', [
     z
@@ -173,6 +211,7 @@ const focusPlanOutputSchema = strictOperationResultSchema(
           })
           .strict()
           .optional(),
+        engine: focusEngineLayoutOutputSchema.optional(),
         fileCount: nonNegativeIntegerSchema,
         artifactCount: nonNegativeIntegerSchema,
       })
@@ -244,7 +283,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_rewrite',
     title: 'Build or arrange a focus tree',
     description:
-      'Create or repair a focus tree or palette. For a new tree use lanes and position mode auto so the solver centres and balances branches; set x/y by hand only for exact anchors. layoutMode compact repairs a layout: compactFocusIds picks a branch, pinnedFocusIds keeps neighbours fixed; says so if nothing beats the layout. Never changes prerequisites or rewards. Returns files, layout verdict and delta. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}.',
+      'Create or repair a focus tree or palette. New trees: lanes and position mode auto; x/y only for exact anchors. layoutMode compact repairs a layout (compactFocusIds picks a branch, pinnedFocusIds keeps neighbours); engine lays out with the Rust engine; placement adds focuses, moving no others; both need hoi4-engine. Keeps prerequisites and rewards. Returns files, layout verdict and delta. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}.',
     inputSchema: focusRewriteRequestSchema,
     outputSchema: focusPlanOutputSchema,
     annotations: {

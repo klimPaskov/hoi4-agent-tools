@@ -39,3 +39,9 @@ The kit and Chaos Redux can call `hoi4-engine check` with a baseline today. HOI4
 Limits: scopes and argument types are not checked; folders without a context model (technologies, AI strategies, history, GUI scripts and others) are counted as unchecked; sprites inside zipped DLC archives are not read.
 
 Tests: the parser's unit tests, a valid and an invalid fixture for every rule, the B001 classes, a copied `00_on_actions.txt` that drops hooks, coverage including zero counts, the baseline flow, the delta, the draw.io parity fixtures and command-line exit codes (`cargo test` in `engine/`).
+
+## Amendment (2026-11-02): the engine client and the opt-in focus layout
+
+Step 2 exists: `src/hoi4_agent_tools/core/engine-client.ts` finds `hoi4-engine` through `HOI4_ENGINE` (an absolute path) or `engine/bin/<platform>-<arch>/` in the package, runs it without a shell with a 30 second timeout and a bounded output, and validates the response with a zod schema that mirrors the engine's JSON schema. A missing binary, a crash, a timeout or output that does not match is reported as unavailable with a reason. Nothing falls back.
+
+`hoi4.focus_rewrite` uses it only when asked: `layoutMode: "engine"` and `placement` call `hoi4-engine focus-layout`, and an unavailable engine refuses the call with `FOCUS_ENGINE_UNAVAILABLE`. The default `authored` and the `compact` modes stay in TypeScript and do not need the engine, so step 3 still holds for them. Shipping the binary in the npm package (step 1) is separate work.

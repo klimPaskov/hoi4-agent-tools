@@ -1,0 +1,124 @@
+{
+  "schema": "hoi4-focus-layout/1",
+  "status": "ok",
+  "operation": "insert",
+  "treeId": "golden_insert_corridor",
+  "nodes": [
+    {
+      "id": "A",
+      "x": -1,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "B",
+      "x": 1,
+      "y": 1,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "E",
+      "x": -2,
+      "y": 0,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "F",
+      "x": -2,
+      "y": 2,
+      "laneId": "default",
+      "moved": false
+    },
+    {
+      "id": "N1",
+      "x": 3,
+      "y": 1,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "N2",
+      "x": 2,
+      "y": 2,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "N3",
+      "x": 4,
+      "y": 2,
+      "laneId": "default",
+      "moved": true
+    },
+    {
+      "id": "R",
+      "x": 0,
+      "y": 0,
+      "laneId": "default",
+      "moved": false
+    }
+  ],
+  "source": [
+    {
+      "id": "A",
+      "x": -1,
+      "y": 1
+    },
+    {
+      "id": "B",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "E",
+      "x": -2,
+      "y": 0
+    },
+    {
+      "id": "F",
+      "x": -2,
+      "y": 2
+    },
+    {
+      "id": "N1",
+      "relativeTo": "R",
+      "x": 3,
+      "y": 1
+    },
+    {
+      "id": "N2",
+      "relativeTo": "N1",
+      "x": -1,
+      "y": 1
+    },
+    {
+      "id": "N3",
+      "relativeTo": "N1",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "id": "R",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "diagnostics": [],
+  "metrics": {
+    "columns": 7,
+    "rows": 3,
+    "orthogonalCrossings": 0,
+    "stemsThroughPlaques": 0,
+    "mergedBars": 0,
+    "durationMicros": 0
+  },
+  "hashes": {
+    "layout": "9e34e43d53ae74b243fdf965b8b69474aa7179918f4c3a17a86e46bffff93abe",
+    "untouched": "bfa013d13125038dd82c3635cf0ebd2f320fb3b2d2e33bb47f4f9a6e82fa8b1a",
+    "prerequisites": "8701741ee5998805f242fb293850454a261120ca04e4cdbac2bb27ca6d364a9d",
+    "exclusions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}
