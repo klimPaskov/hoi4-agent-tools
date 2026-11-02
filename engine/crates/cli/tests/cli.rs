@@ -145,3 +145,63 @@ fn usage_errors_exit_with_two() {
     assert_eq!(engine(&["frobnicate"]).status.code(), Some(2));
     assert_eq!(engine(&["--version"]).status.code(), Some(0));
 }
+
+#[test]
+fn focus_layout_reads_a_request_file_or_stdin() {
+    let request = Path::new(env!("CARGO_MANIFEST_DIR")).join("../focus/tests/fixtures/lanes.request.json");
+    let expected = fs::read_to_string(request.with_file_name("lanes.response.json")).unwrap().replace("\r\n", "\n");
+    let out = engine(&["focus-layout", "--request", &path(&request)]);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let mut response: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    response["metrics"]["durationMicros"] = 0.into();
+    assert_eq!(response, serde_json::from_str::<serde_json::Value>(&expected).unwrap());
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hoi4-engine"))
+        .arg("focus-layout")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("run hoi4-engine");
+    std::io::Write::write_all(&mut child.stdin.take().unwrap(), &fs::read(&request).unwrap()).unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let from_stdin: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(from_stdin["hashes"], response["hashes"]);
+}
+
+#[test]
+fn focus_layout_refuses_an_invalid_request_with_two() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli-focus-layout");
+    fs::create_dir_all(&work).unwrap();
+    let bad = work.join("bad.json");
+    fs::write(&bad, r#"{"schema":"hoi4-focus-layout-request/1","operation":"layout","focuses":[{"id":"a","prerequisites":[["a"]]}]}"#).unwrap();
+    let out = engine(&["focus-layout", "--request", &path(&bad)]);
+    assert_eq!(out.status.code(), Some(2));
+    let error: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(error["schema"], "hoi4-focus-layout/1");
+    assert_eq!(error["status"], "invalid");
+    assert_eq!(error["error"]["code"], "FOCUS_ENGINE_PREREQUISITE_CYCLE");
+    fs::write(&bad, "not json").unwrap();
+    let out = engine(&["focus-layout", "--request", &path(&bad)]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(engine(&["focus-layout", "--request", &path(&work.join("missing.json"))]).status.code(), Some(2));
+}
+
+#[test]
+fn sprites_reports_json_and_honours_fail_on() {
+    let game = path(&fixtures().join("sprites/game"));
+    let out = engine(&["sprites", "--game", &game, "--format", "json", "--index"]);
+    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    let report: serde_json::Value = serde_json::from_str(&stdout(&out)).expect("json");
+    assert_eq!(report["schema"], "hoi4-engine-sprites/1");
+    assert_eq!(report["summary"]["sprites_indexed"], 31);
+    assert_eq!(report["sprites"].as_array().map(Vec::len), Some(31));
+    let focus = report["uses"].as_array().unwrap().iter().find(|u| u["subject"] == "focus:t_alpha").unwrap();
+    assert_eq!((focus["family"].as_str(), focus["sprite"].as_str()), (Some("focus"), Some("GFX_goal_alpha")));
+    // The fixture has no texture files, so every texture is missing and the run can fail on it.
+    let failing = engine(&["sprites", "--game", &game, "--fail-on", "warning"]);
+    assert_eq!(failing.status.code(), Some(1), "{}", stdout(&failing));
+    assert!(stdout(&failing).contains("GFX-TEXTURE-MISSING"));
+    let bad = engine(&["sprites", "--game", &game, "--allowlist", "does-not-exist.json"]);
+    assert_eq!(bad.status.code(), Some(2));
+}

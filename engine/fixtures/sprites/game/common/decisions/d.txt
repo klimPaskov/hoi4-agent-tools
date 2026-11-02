@@ -1,0 +1,6 @@
+t_category = {
+	t_dec = { icon = alpha }
+	t_mission = { icon = GFX_decision_alpha days_mission_timeout = 30 }
+	t_shared = { icon = GFX_shared }
+	t_a = { icon = GFX_decision_tex_a }
+}

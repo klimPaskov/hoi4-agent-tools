@@ -1,0 +1,52 @@
+{
+  "schema": "hoi4-focus-layout/1",
+  "status": "blocked",
+  "operation": "insert",
+  "treeId": "golden_insert_needs-room",
+  "nodes": [],
+  "source": [],
+  "diagnostics": [
+    {
+      "code": "FOCUS_ENGINE_NO_CORRIDOR",
+      "severity": "error",
+      "focusIds": [
+        "W10",
+        "W11"
+      ],
+      "message": "No free place within 64 columns; shifting 12 focuses 11 columns right from column 0 makes room (allowShift)",
+      "details": {
+        "window": 64
+      }
+    }
+  ],
+  "metrics": null,
+  "hashes": {
+    "layout": null,
+    "untouched": "f23c7c731cf02ca0184af5e9b4d92792ceadfcb81a9ec2fc796b35dad9c67b95",
+    "prerequisites": "bd9dc4b13dd2f9decb582da1147d4065306bfcd9b73a4e091b76eaea45c37e9f",
+    "exclusions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "needsRoom": {
+    "shift": [
+      {
+        "fromX": 0,
+        "columns": 11,
+        "direction": "right",
+        "focusIds": [
+          "R",
+          "W10",
+          "W11",
+          "W12",
+          "W13",
+          "W14",
+          "W15",
+          "W16",
+          "W17",
+          "W18",
+          "W19",
+          "W20"
+        ]
+      }
+    ]
+  }
+}

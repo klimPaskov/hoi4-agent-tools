@@ -21,3 +21,5 @@ engine/target/
 engine/fixtures/
 engine/crates/*/tests/data/
 bench/fixtures/
+engine/crates/focus/schemas/
+engine/crates/focus/tests/fixtures/

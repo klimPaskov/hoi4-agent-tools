@@ -187,7 +187,8 @@ function coordinateKey(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-function laneFor(plan: FocusTreePlan, focus: FocusNodePlan): string {
+/** The lane a focus is laid out in: its own lane, its branch's lane, its branch, or 'default'. */
+export function focusLaneId(plan: FocusTreePlan, focus: FocusNodePlan): string {
   if (focus.laneId !== undefined) return focus.laneId;
   if (focus.branchId !== undefined) {
     const branch = plan.branchGroups.find(({ id }) => id === focus.branchId);
@@ -2765,7 +2766,9 @@ function* layoutFocusTreeSteps(
     }
     focuses.set(focus.id, focus);
   }
-  const laneIds = new Map([...focuses.values()].map((focus) => [focus.id, laneFor(plan, focus)]));
+  const laneIds = new Map(
+    [...focuses.values()].map((focus) => [focus.id, focusLaneId(plan, focus)]),
+  );
   const discoveredLanes = [...new Set(laneIds.values())].sort((left, right) =>
     compareCodeUnits(left, right),
   );

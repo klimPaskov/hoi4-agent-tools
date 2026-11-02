@@ -24,7 +24,8 @@ import {
 import { decodeSource } from '../core/source/encoding.js';
 import { activeKnownMistakes } from './known-mistakes.js';
 import { readBoundedJsonLines } from './lines.js';
-import { RankingIndex, sectionTerms, type SectionTerms } from './ranking.js';
+import { commandTexts, readGameText, type GameText } from './game-text.js';
+import { RankingIndex, sectionTerms, textTerms, type SectionTerms } from './ranking.js';
 
 type SourceKind = z.infer<typeof referenceSourceSchema>;
 type SearchInput = z.infer<typeof referenceSearchRequestSchema>;
@@ -96,7 +97,20 @@ interface RankedSection {
 interface CachedFile {
   revision: string;
   bytes: number;
+  /** Size, modification time and file identity when the revision was hashed. */
+  stamp: string;
   sections: IndexedSection[];
+}
+
+/** An unchanged stamp lets a repeated query reuse the hashed revision without rereading. */
+function fileStamp(metadata: {
+  size: number;
+  mtimeMs: number;
+  ctimeMs: number;
+  ino: number;
+  dev: number;
+}) {
+  return `${metadata.size}:${metadata.mtimeMs}:${metadata.ctimeMs}:${metadata.ino}:${metadata.dev}`;
 }
 
 interface SourceRoot {
@@ -323,6 +337,39 @@ const gameDocNames: Record<ContextInput['surface'], string[]> = {
   ai: ['common/ai_strategy/_documentation', 'documentation/triggers_documentation'],
 };
 
+const commandHeading = /^[a-z][a-z0-9_]*$/u;
+
+/**
+ * For each entry about one command, the words the game shows players for it: the installed
+ * documentation says "check if state is coastal" and the tooltip "Is coastal"; a modifier
+ * entry gains its in-game name, such as "Supply Consumption". Console commands and defines
+ * gain nothing.
+ */
+function commandCards(
+  sections: readonly IndexedSection[],
+  gameText: GameText,
+): Map<SectionTerms, Map<string, number>> {
+  const commands = new Set(
+    sections
+      .filter(({ source, heading }) => source === 'game_doc' && commandHeading.test(heading.trim()))
+      .map(({ heading }) => heading.trim()),
+  );
+  const spoken = new Map<string, Map<string, number>>();
+  for (const [name, texts] of commandTexts(commands, gameText)) {
+    const card = new Map<string, number>();
+    for (const term of texts.flatMap((text) => textTerms(text)))
+      card.set(term, Math.min((card.get(term) ?? 0) + 1, 3));
+    spoken.set(name, card);
+  }
+  const cards = new Map<SectionTerms, Map<string, number>>();
+  for (const section of sections) {
+    if (section.terms.specialty !== undefined || section.terms.navigation) continue;
+    const card = spoken.get(section.heading.trim());
+    if (card !== undefined) cards.set(section.terms, card);
+  }
+  return cards;
+}
+
 /** A workspace-private, read-only reference index over explicitly known local roots. */
 export class ReferenceService {
   readonly #cache = new Map<string, CachedFile>();
@@ -440,8 +487,15 @@ export class ReferenceService {
             coverage[root.kind].files++;
             admittedSources.push(source);
           }
+          const keyOf = (source: PreparedSource) =>
+            `${root.kind}:${canonicalRoot}:${source.canonicalPath}`;
           const reads = await Promise.allSettled(
             admittedSources.map(async (source) => {
+              const known = this.#cache.get(keyOf(source));
+              if (known?.stamp === fileStamp(source.metadata)) {
+                await verifySource(readRoot, source);
+                return known;
+              }
               const content = await readBoundedFile(source.handle, source.metadata.size, signal);
               await verifySource(readRoot, source);
               if (content.length !== source.metadata.size)
@@ -461,17 +515,24 @@ export class ReferenceService {
             );
           for (const [index, read] of reads.entries()) {
             if (read.status !== 'fulfilled') continue;
-            const canonical = admittedSources[index]!.canonicalPath;
-            const content = read.value;
-            const key = `${root.kind}:${canonicalRoot}:${canonical}`;
-            const revision = sha256Bytes(content);
-            let cached = this.#cache.get(key);
-            if (cached?.revision !== revision)
-              cached = {
-                revision,
-                bytes: content.length,
-                sections: sectionize(root, canonical, referenceText(content), revision),
-              };
+            const source = admittedSources[index]!;
+            const canonical = source.canonicalPath;
+            const key = keyOf(source);
+            let cached: CachedFile;
+            if (Buffer.isBuffer(read.value)) {
+              const content = read.value;
+              const revision = sha256Bytes(content);
+              const previous = this.#cache.get(key);
+              cached =
+                previous?.revision === revision
+                  ? { ...previous, stamp: fileStamp(source.metadata) }
+                  : {
+                      revision,
+                      bytes: content.length,
+                      stamp: fileStamp(source.metadata),
+                      sections: sectionize(root, canonical, referenceText(content), revision),
+                    };
+            } else cached = read.value;
             this.retain(key, cached);
             const admitted = cached.sections.slice(0, MAX_SECTIONS - sections.length);
             if (admitted.length < cached.sections.length) skipped++;
@@ -492,7 +553,11 @@ export class ReferenceService {
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
     const inventory = await this.inventory(workspace, signal, input.sources);
-    const { ranked: matches, describe } = this.rank(inventory.sections, input.query);
+    const { ranked: matches, describe } = this.rank(
+      inventory.sections,
+      input.query,
+      await this.gameText(workspace),
+    );
     const results = matches.slice(0, input.limit).map((match) => {
       const { section, score, excerpt, matchLine } = describe(match);
       return { ...this.publicSection(section), score, excerpt, matchLine };
@@ -519,8 +584,8 @@ export class ReferenceService {
   }
 
   /** One index per distinct set of section revisions; IDF depends on the whole inventory. */
-  private rankingIndex(sections: readonly IndexedSection[]): RankingIndex {
-    const parts: string[] = [];
+  private rankingIndex(sections: readonly IndexedSection[], gameText: GameText): RankingIndex {
+    const parts: string[] = [`game-text\0${gameText.revision}`];
     let previous: IndexedSection | undefined;
     for (const section of sections) {
       if (previous?.path !== section.path || previous.revision !== section.revision)
@@ -534,7 +599,10 @@ export class ReferenceService {
       this.#indexes.set(key, cached);
       return cached;
     }
-    const index = new RankingIndex(sections.map(({ terms }) => terms));
+    const index = new RankingIndex(
+      sections.map(({ terms }) => terms),
+      commandCards(sections, gameText),
+    );
     this.#indexes.set(key, index);
     while (this.#indexes.size > 4) {
       const oldest = this.#indexes.keys().next().value;
@@ -544,8 +612,8 @@ export class ReferenceService {
     return index;
   }
 
-  private rank(sections: readonly IndexedSection[], question: string) {
-    const index = this.rankingIndex(sections);
+  private rank(sections: readonly IndexedSection[], question: string, gameText: GameText) {
+    const index = this.rankingIndex(sections, gameText);
     const plan = index.plan(question);
     const scored: Array<{ section: IndexedSection; score: number }> = [];
     for (const section of sections) {
@@ -662,7 +730,9 @@ export class ReferenceService {
     const inventory = await this.inventory(workspace, signal);
     const wanted = surfaceNames[input.surface];
     const ranking =
-      input.question === undefined ? undefined : this.rank(inventory.sections, input.question);
+      input.question === undefined
+        ? undefined
+        : this.rank(inventory.sections, input.question, await this.gameText(workspace));
     const ranked = ranking?.ranked ?? [];
     const required: Array<{ name: string; section: IndexedSection }> = [];
     const missing: string[] = [];
@@ -754,6 +824,13 @@ export class ReferenceService {
         fix,
       })),
     };
+  }
+
+  private async gameText(workspace: ResolvedWorkspace): Promise<GameText> {
+    const gameRoot =
+      workspace.gameRoot ??
+      (workspace.registration.kind === 'game' ? workspace.modRoot : undefined);
+    return readGameText(gameRoot);
   }
 
   private publicSection(section: IndexedSection): ReferenceSection {

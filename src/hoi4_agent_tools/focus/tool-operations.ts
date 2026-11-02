@@ -25,6 +25,7 @@ import { PACKAGE_VERSION } from '../version.js';
 import {
   focusPlanHash,
   focusPresentationEvidence,
+  importFocusTrees,
   importContinuousFocusPalettes,
   assertCompactLayoutQuality,
   compactFocusTreePlanAsync,
@@ -52,6 +53,11 @@ import {
   validationFromDiagnostics,
 } from './tool-support.js';
 import { inspectFocusScenario, type FocusScenarioEvidence } from './scenario.js';
+import {
+  assertFocusEngineLayoutWritten,
+  layoutFocusTreeWithEngine,
+  type FocusEngineLayoutResult,
+} from './engine-layout.js';
 import {
   describeLayoutDelta,
   evaluateFocusLayoutQuality,
@@ -367,17 +373,20 @@ export async function prepareFocusRewrite(
     if (imported === undefined)
       throw new ServiceError(
         'FOCUS_COMPACT_SOURCE_REQUIRED',
-        'Plan-free compact reflow requires an existing national focus source',
+        'Plan-free compact or engine layout requires an existing national focus source',
         { relativePath },
       );
-    compactSourcePlan = selectPlan(imported.result, input.treeId);
-    compactPlanning = await compactFocusTreePlanAsync(compactSourcePlan, {
-      ...(context.signal === undefined ? {} : { signal: context.signal }),
-      ...(input.compactFocusIds === undefined ? {} : { focusIds: input.compactFocusIds }),
-      ...(input.pinnedFocusIds === undefined ? {} : { pinnedFocusIds: input.pinnedFocusIds }),
-      ...(input.symmetryGroups === undefined ? {} : { symmetryGroups: input.symmetryGroups }),
-    });
-    plan = compactPlanning.plan;
+    if (input.layoutMode === 'engine') plan = selectPlan(imported.result, input.treeId);
+    else {
+      compactSourcePlan = selectPlan(imported.result, input.treeId);
+      compactPlanning = await compactFocusTreePlanAsync(compactSourcePlan, {
+        ...(context.signal === undefined ? {} : { signal: context.signal }),
+        ...(input.compactFocusIds === undefined ? {} : { focusIds: input.compactFocusIds }),
+        ...(input.pinnedFocusIds === undefined ? {} : { pinnedFocusIds: input.pinnedFocusIds }),
+        ...(input.symmetryGroups === undefined ? {} : { symmetryGroups: input.symmetryGroups }),
+      });
+      plan = compactPlanning.plan;
+    }
   }
   const currentPlan = imported?.result.plans.find(({ id }) => id === plan.id);
   if (currentPlan === undefined && !createIfMissing) {
@@ -426,6 +435,34 @@ export async function prepareFocusRewrite(
         : await workbench.layoutAsync(currentPlan, {
             ...(context.signal === undefined ? {} : { signal: context.signal }),
           });
+  let engineLayout: FocusEngineLayoutResult | undefined;
+  if (input.layoutMode === 'engine' || input.placement !== undefined) {
+    await context.progress(1, 5, 'Laying out the tree with the focus layout engine');
+    // Raw source coordinates, without the planning sidecar's automatic-placement intent.
+    const sourcePlan =
+      imported === undefined
+        ? undefined
+        : importFocusTrees(imported.document).plans.find(({ id }) => id === plan.id);
+    engineLayout = await layoutFocusTreeWithEngine(
+      {
+        plan,
+        layoutMode: input.layoutMode === 'engine' ? 'engine' : 'authored',
+        ...(input.placement === undefined ? {} : { placement: input.placement }),
+        ...(sourcePlan === undefined
+          ? {}
+          : {
+              currentSourcePositions: new Map(
+                sourcePlan.focuses.map(({ id, position }) => [id, position]),
+              ),
+            }),
+        ...(currentPlan === undefined
+          ? {}
+          : { currentFocusIds: new Set(currentPlan.focuses.map(({ id }) => id)) }),
+      },
+      context.signal === undefined ? {} : { signal: context.signal },
+    );
+    plan = engineLayout.plan;
+  }
   await context.progress(1, 5, 'Building proposed focus review');
   const proposedPlanHash = focusPlanHash(plan);
   const reviewPlan: FocusTreePlan = {
@@ -441,6 +478,8 @@ export async function prepareFocusRewrite(
     (await workbench.layoutAsync(reviewPlan, {
       ...(context.signal === undefined ? {} : { signal: context.signal }),
     }));
+  if (engineLayout !== undefined)
+    assertFocusEngineLayoutWritten(engineLayout.response, proposedLayout.nodes);
   if (input.layoutMode === 'compact')
     assertCompactLayoutQuality(currentLayout, proposedLayout, input.compactFocusIds !== undefined, {
       ...(currentPlan === undefined ? {} : { current: currentPlan }),
@@ -505,6 +544,12 @@ export async function prepareFocusRewrite(
         layoutQuality: layoutQualityOutput(after.report, 'full'),
         layoutDelta: delta,
         sourcePath: plan.provenance.sourcePath,
+        ...(engineLayout === undefined
+          ? {}
+          : {
+              engine: engineLayout.summary,
+              engineDiagnostics: engineLayout.diagnostics.slice(0, 50),
+            }),
         ...(compactPlanning?.outcome === 'nothing_to_improve'
           ? {
               compactOutcome: {
@@ -538,8 +583,10 @@ export function completeFocusRewrite(
   const parsed = focusRewriteRecipeSchema.parse(recipe);
   const transaction = execution.transaction;
   const mode = parsed.data.mode;
+  // Engine diagnostics travel in the recipe and join the result's diagnostics, not its data.
+  const { engineDiagnostics, ...data } = parsed.data;
   const result = emptyServiceResult(workspaceId, {
-    ...parsed.data,
+    ...data,
     execution: execution.outcome,
     fileCount: transaction.files.length,
     artifactCount: transaction.artifacts.length,
@@ -601,7 +648,11 @@ export function completeFocusRewrite(
           (entry): entry is Diagnostic => entry !== undefined,
         )),
   ];
-  result.diagnostics = [...layoutNotes, ...transaction.diagnostics].slice(0, 100);
+  result.diagnostics = [
+    ...layoutNotes,
+    ...((engineDiagnostics ?? []) as unknown as Diagnostic[]),
+    ...transaction.diagnostics,
+  ].slice(0, 100);
   result.artifacts = autonomousResultArtifacts(execution);
   result.validation =
     quality === undefined

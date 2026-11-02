@@ -16,6 +16,7 @@ path = "src/main.rs"
 hoi4-syntax.workspace = true
 hoi4-engine.workspace = true
 hoi4-drawio.workspace = true
+hoi4-focus-layout.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
