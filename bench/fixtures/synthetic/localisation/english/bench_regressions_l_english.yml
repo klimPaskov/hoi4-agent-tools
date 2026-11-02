@@ -1,0 +1,6 @@
+﻿l_english:
+  bench_regress.1.t: 'Benchmark regression'
+  bench_regress.1.d: 'Fired through a scripted effect.'
+  bench_regress.1.a: 'Fine'
+  bench_regress_category: 'Benchmark'
+  bench_regress_decision: 'Fire the regression event'

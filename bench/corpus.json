@@ -1,0 +1,49 @@
+{
+  "about": "Benchmark corpora (decisions M-6 and M-12). Only the synthetic corpus ships with the repository; the others are read where they are installed and never copied. Workshop items are pinned by their Workshop manifest and a content hash, and a run on another version is reported as a corpus change.",
+  "corpora": [
+    {
+      "id": "synthetic",
+      "name": "Project fixtures",
+      "kind": "synthetic",
+      "note": "The CI smoke workspace (fixtures/*/workspace merged into one mod with a stand-in game) plus the hand-written regression mod in bench/fixtures/synthetic."
+    },
+    {
+      "id": "vanilla",
+      "name": "Installed game",
+      "kind": "game",
+      "version": "1.19.4.1"
+    },
+    {
+      "id": "chaos_redux",
+      "name": "Chaos Redux",
+      "kind": "mod",
+      "folder": "chaos_redux"
+    },
+    {
+      "id": "zin",
+      "name": "ZIN",
+      "kind": "mod",
+      "folder": "zin"
+    },
+    {
+      "id": "ito",
+      "name": "Ireland Total Overhaul",
+      "kind": "mod",
+      "folder": "ireland_total_overhaul"
+    },
+    {
+      "id": "kaiserreich",
+      "name": "Kaiserreich",
+      "kind": "workshop",
+      "workshopId": "1521695605",
+      "version": "1.7"
+    },
+    {
+      "id": "owb",
+      "name": "Old World Blues",
+      "kind": "workshop",
+      "workshopId": "2265420196",
+      "version": "5.1.12"
+    }
+  ]
+}
