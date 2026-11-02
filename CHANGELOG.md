@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the benchmark harness (`bench/`, `npm run bench`; decisions Q-1, M-6, M-12). Each case is one tool call over the real stdio server with a hand-checked expected answer and its evidence. Sweeps count false positives over known-good files. Runs report correctness, inline answers, latency and result size per surface, against a stored baseline. The synthetic suite runs in CI on every platform (`tests/integration/bench-synthetic.test.ts`) and fails on any regression. The real suite runs on the installed game, Chaos Redux, ZIN, Ireland Total Overhaul, Kaiserreich 1.7 and Old World Blues 5.1.12 on the maintainer's machine (`scripts/bench/nightly.sh`). It pins each corpus by game build, Git commit, Workshop manifest and content hash, and keeps its results there. `scripts/bench/hoi4-mcp/` holds the one-time isolated head-to-head with cpntodd/HOI4-MCP. CI gains a macOS arm64 job. The npm package is unchanged. The test setup runs in the temporary folder's real path, so the suite also passes on macOS.
+
 ## 4.7.0 - 2026-11-02
 
 - Lay out focus trees with the shared Rust engine. `hoi4.focus_rewrite` takes `layoutMode: "engine"`, which places the tree's automatic focuses with `hoi4-engine focus-layout` and writes lane roots with x and y and every other placed focus with `relative_position_id`, and `placement` (`focusIds`, `anchorId`, `preferSide`, `allowShift`), which fits new focuses in while every other focus keeps its coordinates. The result adds the engine's metrics and hashes (`hashes.untouched` proves the other focuses did not move) to the layout verdict and delta. A blocked layout is refused with `needsRoom` and a missing engine with `FOCUS_ENGINE_UNAVAILABLE`, and nothing is written; there is no fallback to the TypeScript solver. The engine is found through `HOI4_ENGINE` or a binary shipped under `engine/bin`. `authored` and `compact` are unchanged.

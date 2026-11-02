@@ -1,0 +1,342 @@
+{
+  "about": "Cases on Chaos Redux, from the 50 live calls of 2026-11-01 (plan problems 1 to 14). Run locally only: the mod's files never leave the machine, only the expected identifiers are recorded here.",
+  "cases": [
+    {
+      "id": "chaos_redux.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "chaos_redux",
+      "problem": 13,
+      "title": "The first overview of Chaos Redux answers within 2 seconds",
+      "evidence": "Live test: 13 to 15 s cold. Target from the plan: at most 2 s.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.source_lookup.cold-first",
+      "surface": "source_lookup",
+      "corpus": "chaos_redux",
+      "problem": 13,
+      "title": "The first source lookup finds the event definition within 3 seconds",
+      "evidence": "events/010_death.txt:158 defines chaosx.nr10.20 (read 2026-11-01). Live test: 58.9 s for the first lookup.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "chaosx.nr10.20",
+        "kind": "event",
+        "maxLines": 5
+      },
+      "timing": "cold",
+      "budgetMs": 3000,
+      "expect": [
+        {
+          "path": "data.definitions[0].path",
+          "equals": "mod:events/010_death.txt"
+        },
+        {
+          "path": "data.definitions[0].startLine",
+          "equals": 158
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.source_lookup.event-caller",
+      "surface": "source_lookup",
+      "corpus": "chaos_redux",
+      "problem": 2,
+      "title": "The lookup names the scripted effect that fires chaosx.nr10.20",
+      "evidence": "common/scripted_effects/010_death_effects.txt:2572 fires chaosx.nr10.20 inside death_decision_whisper_to_zol_effect (read 2026-11-01).",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "chaosx.nr10.20",
+        "kind": "event",
+        "maxLines": 5
+      },
+      "timing": "warm",
+      "repeat": 10,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "data.references[*].from",
+          "includes": "death_decision_whisper_to_zol_effect"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.event.upstream-caller",
+      "surface": "event",
+      "corpus": "chaos_redux",
+      "problem": 2,
+      "title": "An upstream trace of chaosx.nr10.20 shows its scripted-effect caller",
+      "evidence": "Same caller as chaos_redux.source_lookup.event-caller. Live test: 0 callers, and 5,895 events counted as callerless.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": {
+          "kind": "event",
+          "eventId": "chaosx.nr10.20"
+        },
+        "direction": "upstream"
+      },
+      "expect": [
+        {
+          "path": "**",
+          "includes": "death_decision_whisper_to_zol_effect"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.event.helpers-resolved",
+      "surface": "event",
+      "corpus": "chaos_redux",
+      "problem": 1,
+      "title": "The helpers chaosx.nr9.1 calls resolve to their definitions",
+      "evidence": "Live test: 6 helpers defined in common/scripted_effects/009_white_peace_effects.txt marked EVENT_HELPER_UNRESOLVED, and expandHelpers: true changed nothing.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": {
+          "kind": "event",
+          "eventId": "chaosx.nr9.1"
+        },
+        "direction": "downstream",
+        "expandHelpers": true
+      },
+      "expect": [
+        {
+          "path": "**",
+          "excludes": "EVENT_HELPER_UNRESOLVED"
+        },
+        {
+          "path": "**",
+          "excludes": "EVENT_HELPER_UNRESOLVED",
+          "artifact": "event-trace"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.event.unknown-event",
+      "surface": "event",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown event id is an explicit not-found",
+      "evidence": "Namespace chaosx.nr10 has no event 99999.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": "chaosx.nr10.99999",
+        "direction": "both"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx.nr10.99999"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.event.focused-noise",
+      "surface": "event",
+      "corpus": "chaos_redux",
+      "problem": 10,
+      "title": "A focused trace lists only its own files and stays under 8 KB",
+      "evidence": "Live test: every reply carried 12 unrelated filesScanned entries (on_actions of other events).",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": {
+          "kind": "event",
+          "eventId": "chaosx.nr10.20"
+        },
+        "direction": "downstream"
+      },
+      "expect": [
+        {
+          "path": "filesScanned[*]",
+          "excludes": "001_communism_spread_on_actions"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 8192
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.decision.unknown-id",
+      "surface": "decision",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown decision id is an explicit not-found",
+      "evidence": "No decision named chaosx_no_such_decision exists.",
+      "tool": "hoi4.decision_inspect",
+      "arguments": {
+        "mode": "inspect",
+        "id": "chaosx_no_such_decision",
+        "scenarios": [
+          {
+            "id": "base",
+            "actor": "GER",
+            "state": {}
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_decision"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.gui.unknown-window",
+      "surface": "gui",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown window is a small not-found, not a huge artifact",
+      "evidence": "Live test: a missing GUI window returned a 116 MB artifact.",
+      "tool": "hoi4.gui_inspect",
+      "arguments": {
+        "windowName": "chaosx_no_such_window"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_window"
+        },
+        {
+          "path": "artifacts",
+          "atMost": 0,
+          "note": "A not-found writes no artifact."
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.source_lookup.unknown-symbol",
+      "surface": "source_lookup",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown symbol is an explicit not-found",
+      "evidence": "No file defines or uses chaosx_no_such_symbol.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "chaosx_no_such_symbol"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_symbol"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.probability.adapter-and-steps",
+      "surface": "probability",
+      "corpus": "chaos_redux",
+      "problem": 7,
+      "title": "A sweep of a decision uses the decision adapter and the requested 5 steps",
+      "evidence": "death_consume_another_island in common/decisions/010_death_decisions.txt:22 is a decision with ai_will_do and no mission timeout. Live test: decision_ai_will_do came back as mission_ai_will_do with 1 sweep point instead of 5.",
+      "tool": "hoi4.probability_analyze",
+      "arguments": {
+        "analysis": "sweep",
+        "adapter": "decision_ai_will_do",
+        "source": "common/decisions/010_death_decisions.txt",
+        "candidatePool": ["death_consume_another_island"],
+        "scenarioSet": [
+          {
+            "actor": "GER",
+            "state": {
+              "variable.death_souls": 10
+            }
+          }
+        ],
+        "sweep": {
+          "paths": ["variable.death_souls"],
+          "steps": 5
+        }
+      },
+      "expect": [
+        {
+          "path": "data.adapterId",
+          "equals": "decision_ai_will_do"
+        },
+        {
+          "path": "data.sweepPoints",
+          "equals": 5
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.error_log.other-mod-launch",
+      "surface": "error_log",
+      "corpus": "chaos_redux",
+      "problem": 9,
+      "title": "The log of a launch that did not load Chaos Redux says so",
+      "evidence": "dlc_load.json enables only mod/zin.mod and the log's start date is 1748 (ZIN), checked 2026-11-01. Live test: \"no errors in this mod\". This case holds while the last launch is not a Chaos Redux one.",
+      "tool": "hoi4.error_log",
+      "arguments": {
+        "scope": "mod"
+      },
+      "expect": [
+        {
+          "path": "$text",
+          "includes": "did not load"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.validation.complete-snippet",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "problem": 9,
+      "title": "A fully checked snippet is reported complete",
+      "evidence": "add_political_power is documented for country scope in the installed 1.19.4.1 effects documentation.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_political_power = 10",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "code",
+          "equals": "SCRIPT_CHECKED"
+        },
+        {
+          "path": "data.valid",
+          "equals": true
+        }
+      ]
+    }
+  ]
+}
