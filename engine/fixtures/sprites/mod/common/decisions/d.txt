@@ -1,0 +1,3 @@
+m_category = {
+	m_dec = { icon = GFX_goal_alpha }
+}

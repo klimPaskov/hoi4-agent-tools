@@ -1,0 +1,3 @@
+add_namespace = t
+country_event = { id = t.1 picture = GFX_report_event_one }
+news_event = { id = t.2 picture = GFX_news_event_one }
