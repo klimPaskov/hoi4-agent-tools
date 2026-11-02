@@ -91,7 +91,7 @@ async function client() {
     expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
     return result.structuredContent as { code: string; data: Record<string, unknown> };
   };
-  return { call, log };
+  return { call, log, mcp };
 }
 
 interface LogEntry {
@@ -197,6 +197,30 @@ describe('error log and mod index tools', () => {
       firstGapId: 'fixture.3',
     });
   });
+  it('says when the logged launch did not load the mod', async () => {
+    const { call, log, mcp } = await client();
+    const system = path.join(path.dirname(log), 'system.log');
+    // The game writes one Active Mod line per mod to system.log on every launch.
+    await write(
+      system,
+      '[09:14:00][no_game_date]: Active Mod Count: 1\n[09:14:00][no_game_date]: Active Mod: Other mod\n',
+    );
+    const other = await mcp.callTool({
+      name: 'hoi4.error_log',
+      arguments: { workspaceId: 'fixture' },
+    });
+    const structured = other.structuredContent as {
+      data: { launch: unknown };
+      validation: { passed: boolean };
+    };
+    expect(structured.data.launch).toEqual({ activeMods: ['Other mod'], modLoaded: false });
+    expect(structured.validation.passed).toBe(false);
+    expect(JSON.stringify(other.content)).toContain('did not load this mod');
+    await write(system, '[09:14:00][no_game_date]: Active Mod: Mod tools fixture\n');
+    const loaded = (await call('hoi4.error_log', {})).data as { launch: unknown };
+    expect(loaded.launch).toEqual({ activeMods: ['Mod tools fixture'], modLoaded: true });
+  });
+
   it('says which errors a fix removed and which are new since the previous launch', async () => {
     const { call, log } = await client();
     const first = (await call('hoi4.error_log', {})).data as {

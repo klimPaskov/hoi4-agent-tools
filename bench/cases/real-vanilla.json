@@ -8,10 +8,19 @@
       "title": "The first lookup of a vanilla event finds its definition",
       "evidence": "events/PoliticalEvents.txt:9 holds id = political.1 inside the event that starts on line 8.",
       "tool": "hoi4.source_lookup",
-      "arguments": { "symbol": "political.1", "kind": "event", "includeReferences": false },
+      "arguments": {
+        "symbol": "political.1",
+        "kind": "event",
+        "includeReferences": false
+      },
       "timing": "cold",
       "budgetMs": 3000,
-      "expect": [{ "path": "data.definitions[0].path", "matches": "events/PoliticalEvents\\.txt$" }]
+      "expect": [
+        {
+          "path": "data.definitions[0].path",
+          "matches": "events/PoliticalEvents\\.txt$"
+        }
+      ]
     },
     {
       "id": "vanilla.source_lookup.warm-event",
@@ -20,33 +29,68 @@
       "title": "A repeated vanilla lookup answers from the warm index",
       "evidence": "Same as vanilla.source_lookup.cold-event.",
       "tool": "hoi4.source_lookup",
-      "arguments": { "symbol": "political.1", "kind": "event", "includeReferences": false },
+      "arguments": {
+        "symbol": "political.1",
+        "kind": "event",
+        "includeReferences": false
+      },
       "timing": "warm",
       "repeat": 10,
       "budgetMs": 50,
-      "expect": [{ "path": "data.definitionCount", "equals": 1 }]
+      "expect": [
+        {
+          "path": "data.definitionCount",
+          "equals": 1
+        }
+      ]
     },
     {
       "id": "vanilla.validation.owner-target-trigger",
       "surface": "validation",
       "corpus": "vanilla",
       "problem": 11,
-      "title": "owner = ROOT in state scope is a valid scope comparison",
-      "evidence": "The game's own common/decisions/_documentation.md:43 says state-targeted decisions can add owner = ROOT to target_trigger. The plan's citation, common/decisions/AFG.txt:824, is a create_unit argument, not a trigger.",
+      "title": "owner = ROOT in state scope is an error that names is_owned_by",
+      "evidence": "In-game check 2026-11-02 (run26, 1.19.4.1, vanilla plus a probe mod): owner = ROOT, owner = GER and owner = SOV inside a state-scope limit each log \"Invalid trigger 'owner'\" and \"Unknown trigger-type: owner\" at load, and all three limits then pass, the SOV one included. The plan read common/decisions/_documentation.md:43 as allowing it; the game does not.",
       "tool": "hoi4.script_validate",
-      "arguments": { "source": "owner = ROOT", "kind": "trigger", "scope": "state" },
-      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+      "arguments": {
+        "source": "owner = ROOT",
+        "kind": "trigger",
+        "scope": "state"
+      },
+      "expect": [
+        {
+          "path": "data.findings[*].code",
+          "includes": "SCRIPT_SCOPE_LINK_AS_TRIGGER"
+        },
+        {
+          "path": "data.findings[*].suggestions[*]",
+          "includes": "is_owned_by"
+        }
+      ]
     },
     {
       "id": "vanilla.validation.owner-tag-trigger",
       "surface": "validation",
       "corpus": "vanilla",
       "problem": 11,
-      "title": "owner = GER in state scope is a valid scope comparison",
-      "evidence": "Same rule as vanilla.validation.owner-target-trigger with a country tag as the target. Live test: SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER error.",
+      "title": "owner = GER in state scope is an error that names is_owned_by",
+      "evidence": "In-game check 2026-11-02 (run26, 1.19.4.1, vanilla plus a probe mod): owner = ROOT, owner = GER and owner = SOV inside a state-scope limit each log \"Invalid trigger 'owner'\" and \"Unknown trigger-type: owner\" at load, and all three limits then pass, the SOV one included.",
       "tool": "hoi4.script_validate",
-      "arguments": { "source": "owner = GER", "kind": "trigger", "scope": "state" },
-      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+      "arguments": {
+        "source": "owner = GER",
+        "kind": "trigger",
+        "scope": "state"
+      },
+      "expect": [
+        {
+          "path": "data.findings[*].code",
+          "includes": "SCRIPT_SCOPE_LINK_AS_TRIGGER"
+        },
+        {
+          "path": "data.findings[*].suggestions[*]",
+          "includes": "is_owned_by"
+        }
+      ]
     },
     {
       "id": "vanilla.validation.owner-comparison-still-flagged",
@@ -55,8 +99,17 @@
       "title": "A numeric comparison with a dynamic variable is still an error",
       "evidence": "num_owned_states is documented as a dynamic variable; comparing it with > outside check_variable needs the trigger of the same name, which takes a number. owner > 3 has no meaning.",
       "tool": "hoi4.script_validate",
-      "arguments": { "source": "owner > 3", "kind": "trigger", "scope": "state" },
-      "expect": [{ "path": "data.findings[*].status", "includes": "error" }]
+      "arguments": {
+        "source": "owner > 3",
+        "kind": "trigger",
+        "scope": "state"
+      },
+      "expect": [
+        {
+          "path": "data.findings[*].status",
+          "includes": "error"
+        }
+      ]
     },
     {
       "id": "vanilla.validation.timed-idea-wrong-id",
@@ -72,9 +125,18 @@
         "scope": "country"
       },
       "expect": [
-        { "path": "data.parametersChecked", "equals": true },
-        { "path": "**", "includes": "bench_no_such_idea" },
-        { "path": "data.findings[*].status", "includes": "error" }
+        {
+          "path": "data.parametersChecked",
+          "equals": true
+        },
+        {
+          "path": "**",
+          "includes": "bench_no_such_idea"
+        },
+        {
+          "path": "data.findings[*].status",
+          "includes": "error"
+        }
       ]
     },
     {
@@ -89,7 +151,12 @@
         "kind": "effect",
         "scope": "country"
       },
-      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+      "expect": [
+        {
+          "path": "data.findings[*].status",
+          "excludes": "error"
+        }
+      ]
     },
     {
       "id": "vanilla.probability.verified-build",
@@ -102,9 +169,19 @@
       "arguments": {
         "path": "common/national_focus/germany.txt",
         "candidatePool": ["GER_remilitarize_the_rhineland"],
-        "scenarioSet": [{ "actor": "GER", "state": {} }]
+        "scenarioSet": [
+          {
+            "actor": "GER",
+            "state": {}
+          }
+        ]
       },
-      "expect": [{ "path": "**", "includes": "workspace_verified" }]
+      "expect": [
+        {
+          "path": "**",
+          "includes": "workspace_verified"
+        }
+      ]
     },
     {
       "id": "vanilla.lookup.exact-timed-idea",
@@ -114,11 +191,18 @@
       "title": "The exact name add_timed_idea is the first hit",
       "evidence": "The installed effects documentation has a section named add_timed_idea.",
       "tool": "hoi4.reference_search",
-      "arguments": { "query": "add_timed_idea" },
+      "arguments": {
+        "query": "add_timed_idea"
+      },
       "timing": "warm",
       "repeat": 5,
       "budgetMs": 50,
-      "expect": [{ "path": "data.results[0].heading", "equals": "add_timed_idea" }]
+      "expect": [
+        {
+          "path": "data.results[0].heading",
+          "equals": "add_timed_idea"
+        }
+      ]
     },
     {
       "id": "vanilla.lookup.exact-has-war-with",
@@ -128,8 +212,15 @@
       "title": "The exact name has_war_with is the first hit",
       "evidence": "The installed triggers documentation has a section named has_war_with.",
       "tool": "hoi4.reference_search",
-      "arguments": { "query": "has_war_with" },
-      "expect": [{ "path": "data.results[0].heading", "equals": "has_war_with" }]
+      "arguments": {
+        "query": "has_war_with"
+      },
+      "expect": [
+        {
+          "path": "data.results[0].heading",
+          "equals": "has_war_with"
+        }
+      ]
     },
     {
       "id": "vanilla.lookup.negative",
@@ -138,8 +229,15 @@
       "title": "A query for something that does not exist returns nothing",
       "evidence": "No document mentions zzqx_imaginary_command.",
       "tool": "hoi4.reference_search",
-      "arguments": { "query": "zzqx_imaginary_command" },
-      "expect": [{ "path": "data.total", "equals": 0 }]
+      "arguments": {
+        "query": "zzqx_imaginary_command"
+      },
+      "expect": [
+        {
+          "path": "data.total",
+          "equals": 0
+        }
+      ]
     },
     {
       "id": "vanilla.technology.explain",
@@ -148,10 +246,19 @@
       "title": "infantry_weapons is explained with what it leads to",
       "evidence": "common/technologies/infantry.txt:16 defines infantry_weapons with leads_to_tech = infantry_weapons1.",
       "tool": "hoi4.tech_inspect",
-      "arguments": { "mode": "explain", "technologyId": "infantry_weapons" },
+      "arguments": {
+        "mode": "explain",
+        "technologyId": "infantry_weapons"
+      },
       "expect": [
-        { "path": "status", "equals": "ok" },
-        { "path": "**", "includes": "infantry_weapons1" }
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "**",
+          "includes": "infantry_weapons1"
+        }
       ]
     },
     {
@@ -161,8 +268,16 @@
       "title": "Brandenburg is found as state 64",
       "evidence": "history/states/64-Brandenburg.txt.",
       "tool": "hoi4.map_inspect",
-      "arguments": { "query": "Brandenburg", "lookupOnly": true },
-      "expect": [{ "path": "**", "includes": 64 }]
+      "arguments": {
+        "query": "Brandenburg",
+        "lookupOnly": true
+      },
+      "expect": [
+        {
+          "path": "**",
+          "includes": 64
+        }
+      ]
     },
     {
       "id": "vanilla.validation.known-good-events",
@@ -174,8 +289,16 @@
       "tool": "hoi4.script_validate",
       "files": ["events/*.txt"],
       "limit": 120,
-      "arguments": { "path": "{path}", "limit": 32 },
-      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
     },
     {
       "id": "vanilla.validation.known-good-decisions",
@@ -188,8 +311,16 @@
       "files": ["common/decisions/*.txt"],
       "exclude": ["common/decisions/_documentation.md"],
       "limit": 80,
-      "arguments": { "path": "{path}", "limit": 32 },
-      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
     },
     {
       "id": "vanilla.validation.known-good-focus",
@@ -201,8 +332,24 @@
       "tool": "hoi4.script_validate",
       "files": ["common/national_focus/*.txt"],
       "limit": 60,
-      "arguments": { "path": "{path}", "limit": 32 },
-      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      },
+      "knownErrors": [
+        {
+          "file": "common/national_focus/TSR_lingguang_incident_joint_branch.txt",
+          "line": 420,
+          "code": "SOURCE_UNEXPECTED_RIGHT_BRACE",
+          "evidence": "The 1.19.4.1 file has 101 opening and 102 closing braces; the last line closes a block that was never opened. The game skips the stray brace, so the file still loads."
+        }
+      ]
     },
     {
       "id": "vanilla.validation.known-good-helpers",
@@ -218,8 +365,16 @@
         "common/on_actions/*.txt"
       ],
       "limit": 120,
-      "arguments": { "path": "{path}", "limit": 32 },
-      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
     }
   ]
 }

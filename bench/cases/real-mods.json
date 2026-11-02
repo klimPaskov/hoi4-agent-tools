@@ -364,7 +364,39 @@
         "where": {
           "status": "error"
         }
-      }
+      },
+      "knownErrors": [
+        {
+          "file": "events/nf_brotherhood.txt",
+          "line": 7432,
+          "code": "KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID",
+          "evidence": "An event number of 100000 or more reaches the next namespace. In-game check 2026-11-02 (run26): fp_probe.100001 and the next namespace's fp_probf.1 collide (\"Failed to create id 44100001 50. Already exists in game\") and only one of them fires."
+        },
+        {
+          "file": "events/nf_brotherhood.txt",
+          "line": 7463,
+          "code": "KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID",
+          "evidence": "An event number of 100000 or more reaches the next namespace. In-game check 2026-11-02 (run26): fp_probe.100001 and the next namespace's fp_probf.1 collide (\"Failed to create id 44100001 50. Already exists in game\") and only one of them fires."
+        },
+        {
+          "file": "events/nf_brotherhood.txt",
+          "line": 7494,
+          "code": "KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID",
+          "evidence": "An event number of 100000 or more reaches the next namespace. In-game check 2026-11-02 (run26): fp_probe.100001 and the next namespace's fp_probf.1 collide (\"Failed to create id 44100001 50. Already exists in game\") and only one of them fires."
+        },
+        {
+          "file": "events/nf_brotherhood.txt",
+          "line": 7510,
+          "code": "KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID",
+          "evidence": "An event number of 100000 or more reaches the next namespace. In-game check 2026-11-02 (run26): fp_probe.100001 and the next namespace's fp_probf.1 collide (\"Failed to create id 44100001 50. Already exists in game\") and only one of them fires."
+        },
+        {
+          "file": "events/nf_brotherhood.txt",
+          "line": 7540,
+          "code": "KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID",
+          "evidence": "An event number of 100000 or more reaches the next namespace. In-game check 2026-11-02 (run26): fp_probe.100001 and the next namespace's fp_probf.1 collide (\"Failed to create id 44100001 50. Already exists in game\") and only one of them fires."
+        }
+      ]
     },
     {
       "id": "owb.validation.known-good-decisions",
