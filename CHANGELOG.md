@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Check duplicate ids of every definition kind in the shared Rust engine (`hoi4-engine check`). `LINT_DUPLICATE_DEFINITION` now covers focuses (shared and joint ones included), ideas, decisions, characters and technologies as errors, the same localisation key twice in one language as a warning, and the same sprite twice as information. Advisor `idea_token`s repeated across a character's instances and keys under `localisation/replace/` are not duplicates. The new `LINT_DUPLICATE_ACROSS_LAYERS` reports an id that a dependency or the game also defines in a file the mod does not replace: an error for events, whose ids collide, and a warning otherwise. On Chaos Redux, ZIN, Ireland Total Overhaul, Kaiserreich 1.7 and Old World Blues 5.1.12 it raises no new error.
+
 ## 4.7.0 - 2026-11-02
 
 - Lay out focus trees with the shared Rust engine. `hoi4.focus_rewrite` takes `layoutMode: "engine"`, which places the tree's automatic focuses with `hoi4-engine focus-layout` and writes lane roots with x and y and every other placed focus with `relative_position_id`, and `placement` (`focusIds`, `anchorId`, `preferSide`, `allowShift`), which fits new focuses in while every other focus keeps its coordinates. The result adds the engine's metrics and hashes (`hashes.untouched` proves the other focuses did not move) to the layout verdict and delta. A blocked layout is refused with `needsRoom` and a missing engine with `FOCUS_ENGINE_UNAVAILABLE`, and nothing is written; there is no fallback to the TypeScript solver. The engine is found through `HOI4_ENGINE` or a binary shipped under `engine/bin`. `authored` and `compact` are unchanged.
