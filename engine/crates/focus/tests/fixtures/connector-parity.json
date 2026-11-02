@@ -1,0 +1,82 @@
+{
+  "description": "Shared connector-model test vector, checked by engine/crates/focus/tests/connector_parity.rs and tests/unit/focus-connector-parity.test.ts. Counts are worked out by hand from the in-game rules (run of 2026-11-02, game 1.19.4.1, default UI scale and zoom): a plaque is centred on its focus, 1.61 columns wide and 0.28 rows high, its icon reaches 0.66 rows above the row; a short stem leaves the parent plaque's bottom (y + 0.14), the bar runs 0.28 rows under the parent's row, and the vertical drops in the child's column to the child's icon top (child y - 0.66). `old` gives the counts of the earlier model (bar 0.25 rows above the child's row, long stem in the parent's column) for the cases where the two differ. In `needs`, each entry is one prerequisite block and an array entry is an OR group.",
+  "cases": [
+    {
+      "name": "adjacent rows: the models agree",
+      "focuses": [
+        { "id": "p1", "x": 0, "y": 0 },
+        { "id": "p2", "x": 2, "y": 0 },
+        { "id": "c1", "x": 4, "y": 1, "needs": ["p1"] },
+        { "id": "c2", "x": 6, "y": 1, "needs": ["p2"] }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 1 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 1 }
+    },
+    {
+      "name": "multi-row: the vertical runs in the child's column through a plaque",
+      "focuses": [
+        { "id": "top", "x": 0, "y": 0 },
+        { "id": "mid", "x": 2, "y": 1 },
+        { "id": "bottom", "x": 2, "y": 2, "needs": ["top"] }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 1, "mergedBars": 0 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 0 }
+    },
+    {
+      "name": "multi-row: the child's vertical crosses a bar under a middle row",
+      "focuses": [
+        { "id": "a", "x": 0, "y": 0 },
+        { "id": "b", "x": 4, "y": 3, "needs": ["a"] },
+        { "id": "c", "x": 2, "y": 1 },
+        { "id": "d", "x": 6, "y": 2, "needs": ["c"] }
+      ],
+      "expected": { "crossings": 1, "stemsThroughPlaques": 0, "mergedBars": 0 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 0 }
+    },
+    {
+      "name": "multi-row: parents on one row share the bar height instead of crossing",
+      "focuses": [
+        { "id": "a", "x": 0, "y": 0 },
+        { "id": "b", "x": 4, "y": 2, "needs": ["a"] },
+        { "id": "c", "x": -2, "y": 0 },
+        { "id": "d", "x": 2, "y": 1, "needs": ["c"] }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 1 },
+      "old": { "crossings": 1, "stemsThroughPlaques": 0, "mergedBars": 0 }
+    },
+    {
+      "name": "multi-row: two verticals in one column share more than 0.3 rows",
+      "focuses": [
+        { "id": "a", "x": 0, "y": 0 },
+        { "id": "b", "x": 4, "y": 0 },
+        { "id": "c", "x": 2, "y": 3, "needs": ["a"] },
+        { "id": "d", "x": 2, "y": 2, "needs": ["b"] }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 1, "mergedBars": 1 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 0 }
+    },
+    {
+      "name": "all-to-all bundle: members are exempt, an unrelated plaque is not",
+      "focuses": [
+        { "id": "p1", "x": -2, "y": 0 },
+        { "id": "p2", "x": 2, "y": 0 },
+        { "id": "c1", "x": -2, "y": 1, "needs": ["p1", "p2"] },
+        { "id": "c2", "x": 2, "y": 2, "needs": ["p1", "p2"] },
+        { "id": "u", "x": 2, "y": 1 }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 2, "mergedBars": 0 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 1, "mergedBars": 0 }
+    },
+    {
+      "name": "OR group: one vertical in the child's column",
+      "focuses": [
+        { "id": "a", "x": -2, "y": 0 },
+        { "id": "b", "x": 2, "y": 0 },
+        { "id": "x", "x": 0, "y": 1 },
+        { "id": "c", "x": 0, "y": 2, "needs": [["a", "b"]] }
+      ],
+      "expected": { "crossings": 0, "stemsThroughPlaques": 2, "mergedBars": 0 },
+      "old": { "crossings": 0, "stemsThroughPlaques": 0, "mergedBars": 0 }
+    }
+  ]
+}
