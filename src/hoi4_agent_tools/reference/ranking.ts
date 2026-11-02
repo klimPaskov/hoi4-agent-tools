@@ -150,6 +150,8 @@ export interface SectionTerms {
   navigation: boolean;
   /** Console commands and engine defines answer only questions that ask for them. */
   specialty: 'console' | 'define' | undefined;
+  /** What a command entry is, so a question can prefer the kind it asks for. */
+  role: 'trigger' | 'effect' | 'on_action' | 'variable' | 'other' | undefined;
 }
 
 export function sectionTerms(
@@ -176,8 +178,30 @@ export function sectionTerms(
       : /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/u.test(heading.trim())
         ? 'define'
         : undefined,
+    role: commandRole(title, heading.trim()),
   };
 }
+
+function commandRole(title: string, heading: string): SectionTerms['role'] {
+  if (!/^[a-z][a-z0-9_]*$/u.test(heading)) return undefined;
+  const page = title.toLowerCase();
+  if (page.includes('dynamic variables')) return 'variable';
+  if (heading.startsWith('on_')) return 'on_action';
+  if (page.startsWith('trigger')) return 'trigger';
+  if (page.startsWith('effect')) return 'effect';
+  return 'other';
+}
+
+/** A question that starts with one of these asks for a condition; with these, for an effect. */
+const conditionWords = new Set(['check', 'whether', 'is', 'has', 'does', 'if', 'condition']);
+const actionWords = new Set(
+  (
+    'add give make set remove change create increase decrease raise lower reduce grant declare ' +
+    'annex move start spawn build rename switch kill transfer fire hide run pick free put queue ' +
+    'improve tell gain lose destroy release puppet end apply load swap upgrade unlock'
+  ).split(' '),
+);
+const timingWords = new Set(['when', 'whenever', 'happens', 'happen', 'after', 'once']);
 
 export interface QueryPlan {
   /** Distinct query terms with inverse document frequency and query weight. */
@@ -186,7 +210,35 @@ export interface QueryPlan {
   pairs: Array<{ pair: string; idf: number }>;
   normalized: string;
   identifiers: Set<string>;
-  wants: { console: boolean; define: boolean };
+  wants: {
+    console: boolean;
+    define: boolean;
+    role: 'trigger' | 'effect' | undefined;
+    onAction: boolean;
+    variable: boolean;
+  };
+}
+
+/** A command of another kind than the question asks for keeps this share of its score. */
+const intentPenalty = 0.6;
+
+function questionIntent(normalized: string): Omit<QueryPlan['wants'], 'console' | 'define'> {
+  const raw = normalized.match(tokenPattern) ?? [];
+  const first = raw.find((word) => !['how', 'to', 'i', 'can', 'do', 'a', 'the'].includes(word));
+  const onAction = raw.some((word) => timingWords.has(word)) || /on[ _]actions?/u.test(normalized);
+  return {
+    role:
+      // "Run an effect when ..." asks for the moment, not for an effect.
+      onAction || first === undefined || first.includes('_')
+        ? undefined
+        : conditionWords.has(first)
+          ? 'trigger'
+          : actionWords.has(first)
+            ? 'effect'
+            : undefined,
+    onAction,
+    variable: raw.some((word) => word.startsWith('variable')),
+  };
 }
 
 /** Script names abbreviate counts as `num_`, as in `num_divisions` or `num_of_factories`. */
@@ -197,13 +249,19 @@ const titleWeight = 0.5;
 const bodyWeight = 1;
 const saturation = 1.2;
 const lengthNormalization = 0.75;
+/** Words other copies of the same command use, per occurrence, relative to body text. */
+const cardWeight = 0.5;
 
 /** Corpus statistics for one immutable inventory of sections. */
 export class RankingIndex {
   readonly #documentFrequency = new Map<string, number>();
   readonly #averageBodyLength: number;
 
-  constructor(private readonly entries: readonly SectionTerms[]) {
+  constructor(
+    private readonly entries: readonly SectionTerms[],
+    /** For a command entry, the words of its other documentation and in-game text. */
+    private readonly cards: ReadonlyMap<SectionTerms, ReadonlyMap<string, number>> = new Map(),
+  ) {
     let total = 0;
     for (const entry of entries) {
       total += entry.bodyLength;
@@ -247,6 +305,7 @@ export class RankingIndex {
       normalized,
       identifiers: new Set(terms.map(({ term }) => term).filter((term) => term.includes('_'))),
       wants: {
+        ...questionIntent(normalized),
         console: words.some((word) => word === 'console' || word.startsWith('command')),
         define: words.some((word) => word.startsWith('define')) || /\b[A-Z]{2,}_[A-Z]/u.test(query),
       },
@@ -264,7 +323,8 @@ export class RankingIndex {
       const weighted =
         headingWeight * (entry.heading.get(term) ?? 0) +
         titleWeight * (entry.title.get(term) ?? 0) +
-        (bodyWeight * (entry.body.get(term) ?? 0)) / lengthFactor;
+        (bodyWeight * (entry.body.get(term) ?? 0)) / lengthFactor +
+        cardWeight * (this.cards.get(entry)?.get(term) ?? 0);
       if (weighted === 0) continue;
       matched++;
       score += (weight * idf * weighted * (saturation + 1)) / (weighted + saturation);
@@ -297,6 +357,13 @@ export class RankingIndex {
     if (entry.navigation) score *= 0.25;
     if (entry.specialty === 'console' && !plan.wants.console) score *= 0.7;
     if (entry.specialty === 'define' && !plan.wants.define) score *= 0.6;
+    {
+      const { role } = entry;
+      if (role === 'on_action' && !plan.wants.onAction) score *= intentPenalty;
+      else if (role === 'variable' && !plan.wants.variable) score *= intentPenalty;
+      else if (plan.wants.role !== undefined && role !== undefined && role !== plan.wants.role)
+        score *= intentPenalty;
+    }
     return score;
   }
 
