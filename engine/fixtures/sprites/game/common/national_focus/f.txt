@@ -1,0 +1,14 @@
+focus_tree = {
+	id = t_tree
+	focus = { id = t_alpha icon = GFX_goal_alpha }
+	focus = { id = t_beta icon = GFX_goal_beta }
+	focus = {
+		id = t_cond
+		icon = {
+			GFX_goal_cond_a = { has_government = democratic }
+			GFX_goal_cond_b = yes
+		}
+	}
+	focus = { id = t_shared icon = GFX_shared }
+	focus = { id = t_unknown icon = GFX_goal_not_defined }
+}
