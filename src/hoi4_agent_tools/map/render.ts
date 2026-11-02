@@ -49,7 +49,15 @@ export interface MapRenderOptions {
   };
   budget?: RenderBudget;
   signal?: AbortSignal;
+  /**
+   * `counts` leaves the building, unit and weather position records out of the JSON and HTML
+   * catalog (the picture still draws them), for review renders of whole worlds.
+   */
+  positionRecords?: 'all' | 'counts';
 }
+
+/** Position records named in a review diff artifact, per kind; the rest are counted. */
+export const MAP_DIFF_POSITION_RECORD_LIMIT = 2_000;
 
 export interface MapRenderBundle {
   width: number;
@@ -543,14 +551,22 @@ async function applyOverlays(
   }
 }
 
+type RenderMetadataOptions = Required<
+  Omit<MapRenderOptions, 'signal' | 'budget' | 'tile' | 'area' | 'positionRecords'>
+>;
+
 async function renderMetadata(
   index: MapWorkspaceIndex,
-  options: Required<Omit<MapRenderOptions, 'signal' | 'budget' | 'tile' | 'area'>>,
+  options: RenderMetadataOptions,
   signal?: AbortSignal,
+  positionRecords: 'all' | 'counts' = 'all',
 ): Promise<Record<string, unknown>> {
   const catalog = buildMapCatalog(index);
   return {
     ...catalog,
+    ...(positionRecords === 'counts'
+      ? { buildingPositions: [], unitPositions: [], weatherPositions: [], positionRecords }
+      : {}),
     renderer: 'hoi4-agent-tools-map-workbench',
     layer: options.layer,
     overlays: options.overlays,
@@ -646,7 +662,7 @@ export async function renderMap(
       'Cannot render without a valid province bitmap and definitions',
     );
   }
-  const resolved: Required<Omit<MapRenderOptions, 'signal' | 'budget' | 'tile' | 'area'>> = {
+  const resolved: RenderMetadataOptions = {
     layer: options.layer ?? 'province',
     overlays: [...new Set(options.overlays ?? [])].sort(),
     scale: options.scale ?? 1,
@@ -774,7 +790,7 @@ export async function renderMap(
   }
   const png = await encodePng(raw, raster.width, raster.height, resolved.scale);
   options.signal?.throwIfAborted();
-  const json = `${canonicalJson(await renderMetadata(index, resolved, options.signal))}\n`;
+  const json = `${canonicalJson(await renderMetadata(index, resolved, options.signal, options.positionRecords))}\n`;
   const provinceHitMap = await encodeProvinceHitMap(index);
   const html = htmlDocument(
     `HOI4 map - ${resolved.layer}`,
@@ -1051,6 +1067,30 @@ export function semanticMapDiff(
   };
 }
 
+/**
+ * The semantic diff for the artifact, with at most `MAP_DIFF_POSITION_RECORD_LIMIT` building,
+ * unit and weather position changes listed per kind: a replaced world changes every position,
+ * which would make the review artifact hundreds of megabytes. The counts stay complete.
+ */
+export function boundedPositionDiffs(semantic: MapSemanticDiff): {
+  semantic: MapSemanticDiff;
+  positionChanges?: Record<string, { total: number; listed: number }>;
+} {
+  const kinds = ['buildingPositions', 'unitPositions', 'weatherPositions'] as const;
+  const over = kinds.filter((kind) => semantic[kind].length > MAP_DIFF_POSITION_RECORD_LIMIT);
+  if (over.length === 0) return { semantic };
+  const bounded: MapSemanticDiff = { ...semantic };
+  const positionChanges: Record<string, { total: number; listed: number }> = {};
+  for (const kind of over) {
+    bounded[kind] = semantic[kind].slice(0, MAP_DIFF_POSITION_RECORD_LIMIT);
+    positionChanges[kind] = {
+      total: semantic[kind].length,
+      listed: MAP_DIFF_POSITION_RECORD_LIMIT,
+    };
+  }
+  return { semantic: bounded, positionChanges };
+}
+
 function uniqueNumbers(values: readonly number[]): number[] {
   return [...new Set(values)].sort((left, right) => left - right);
 }
@@ -1131,7 +1171,7 @@ export async function renderMapDiff(
     renderer: 'hoi4-agent-tools-map-diff',
     changedBounds: changedBounds ?? null,
     changedProvinceIds: [...changedProvinceIds].sort((a, b) => a - b),
-    semantic,
+    ...boundedPositionDiffs(semantic),
     ...(options.review === undefined ? {} : { review: options.review }),
   };
   const json = `${canonicalJson(metadata)}\n`;

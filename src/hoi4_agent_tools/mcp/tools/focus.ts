@@ -9,7 +9,11 @@ import {
   type FocusVisualRevision,
   type FocusVisualRevisionSelector,
 } from '../../focus/tool-operations.js';
-import { focusLayoutMetricsSchema } from '../../schemas/focus.js';
+import {
+  focusLayoutDeltaSchema,
+  focusLayoutMetricsSchema,
+  focusLayoutQualitySchema,
+} from '../../schemas/focus.js';
 import {
   focusInspectRequestSchema,
   focusRenderRequestSchema,
@@ -28,6 +32,7 @@ const focusInspectOutputSchema = strictOperationResultSchema(
     .object({
       mode: z.enum(['national', 'continuous']),
       revision: sha256Schema,
+      layoutVerdict: z.enum(['blocked', 'revise', 'review', 'pass']).optional(),
       treeCount: nonNegativeIntegerSchema,
       paletteCount: nonNegativeIntegerSchema,
       trees: z
@@ -49,6 +54,8 @@ const focusInspectOutputSchema = strictOperationResultSchema(
               layoutHash: sha256Schema,
               layoutDecisionCount: nonNegativeIntegerSchema,
               layoutMetrics: focusLayoutMetricsSchema,
+              layoutQuality: focusLayoutQualitySchema.optional(),
+              layoutDelta: focusLayoutDeltaSchema.optional(),
               diagnosticCount: nonNegativeIntegerSchema,
               scenarioSummary: z
                 .object({
@@ -90,6 +97,30 @@ const focusRenderOutputSchema = strictOperationResultSchema(
         hashes: renderHashesSchema,
         width: nonNegativeIntegerSchema,
         height: nonNegativeIntegerSchema,
+        layoutQuality: focusLayoutQualitySchema.optional(),
+        inlineImages: z
+          .array(
+            z
+              .object({
+                kind: z.enum(['overview', 'branch', 'focus', 'problem']),
+                label: z.string().max(300),
+                focusIds: z.array(z.string().max(256)).max(50),
+                region: z
+                  .object({
+                    minimumX: z.number().int(),
+                    maximumX: z.number().int(),
+                    minimumY: z.number().int(),
+                    maximumY: z.number().int(),
+                  })
+                  .strict(),
+                width: nonNegativeIntegerSchema,
+                height: nonNegativeIntegerSchema,
+                bytes: nonNegativeIntegerSchema,
+              })
+              .strict(),
+          )
+          .max(6)
+          .optional(),
       })
       .strict(),
     z
@@ -132,6 +163,16 @@ const focusPlanOutputSchema = strictOperationResultSchema(
         created: z.boolean(),
         execution: z.enum(['applied', 'blocked', 'unchanged']),
         layoutHash: sha256Schema,
+        layoutQuality: focusLayoutQualitySchema.optional(),
+        layoutDelta: focusLayoutDeltaSchema.optional(),
+        compactOutcome: z
+          .object({
+            outcome: z.literal('nothing_to_improve'),
+            reason: z.enum(['verdict_pass', 'no_better_candidate', 'candidates_regress']),
+            blockedBy: z.array(z.string().max(64)).max(10),
+          })
+          .strict()
+          .optional(),
         fileCount: nonNegativeIntegerSchema,
         artifactCount: nonNegativeIntegerSchema,
       })
@@ -185,7 +226,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_inspect',
     title: 'Inspect focus trees',
     description:
-      'Find focus branches, prerequisites, layout problems and missing references in national trees and continuous-focus palettes. Example: {"treeId":"my_focus_tree"}. Returns counts and the main diagnostics inline; the full report is a linked resource.',
+      'Check a focus tree\'s structure and layout. Returns blocking errors, a layout verdict (pass, review, revise, blocked) with the metrics behind it, a fix for each failing metric and next actions. Revise or blocked means the tree is not finished, however clean its structure; review is advisory, so look at hoi4.focus_render. Example: {"treeId":"my_focus_tree"}. The full report is a linked resource.',
     inputSchema: focusInspectRequestSchema,
     outputSchema: focusInspectOutputSchema,
     annotations: artifactProducing,
@@ -194,7 +235,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_render',
     title: 'Preview a focus tree or continuous palette',
     description:
-      'Preview a focus tree or palette with its icons. Export PNG, HTML, SVG and JSON source maps; png:false skips the PNG and cropFocusIds adds close-ups. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}. Images are linked artifacts, not inline.',
+      'Render a focus tree in the in-game style (right-angle connectors) and return it inline, with close-ups of the worst places; cropBranchIds and cropFocusIds add more. Look before you judge a layout: metrics cannot see composition. Also exports PNG with icons, HTML, SVG and JSON as linked artifacts. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}.',
     inputSchema: focusRenderRequestSchema,
     outputSchema: focusRenderOutputSchema,
     annotations: artifactProducing,
@@ -203,7 +244,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_rewrite',
     title: 'Build or arrange a focus tree',
     description:
-      'Create focus trees and continuous-focus palettes, or rearrange existing branches. Use createIfMissing with a complete plan to create content, or layoutMode to arrange an existing tree. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}. Returns the changed files.',
+      'Create or repair a focus tree or palette. For a new tree use lanes and position mode auto so the solver centres and balances branches; set x/y by hand only for exact anchors. layoutMode compact repairs a layout: compactFocusIds picks a branch, pinnedFocusIds keeps neighbours fixed; says so if nothing beats the layout. Never changes prerequisites or rewards. Returns files, layout verdict and delta. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}.',
     inputSchema: focusRewriteRequestSchema,
     outputSchema: focusPlanOutputSchema,
     annotations: {

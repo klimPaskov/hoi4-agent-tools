@@ -426,14 +426,15 @@ Measured on project-owned synthetic fixtures (ADR 0060): country-border enrichme
 
 `hoi4.map_rewrite` also moves and merges states, moves provinces between strategic regions, merges or removes provinces, changes province definitions and types, adds or removes normal and special adjacency, and updates supply, railway, building, unit, weather, and entity-locator records. Send one ordered operation list when several connected changes belong together.
 
-Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnostic, and rendered comparison evidence. A failed operation does not leave a partial multi-file result.
+Every rewrite returns changed-area, changed-ID, semantic, affected-file, diagnostic, and rendered comparison evidence. A failed operation does not leave a partial multi-file result. The before and proposed renders (`map-before.*`, `map-proposed.*`) draw every overlay but list building, unit and weather positions only as counts (`positionRecords: "counts"`); `hoi4.map_inspect` returns the records. `map-diff.json` lists at most 2,000 changed building, unit and weather positions per kind and gives the full number in `positionChanges`. The review of a replaced world, where every position changes, would otherwise reach hundreds of megabytes.
 
 ## Check script references
 
 Set `references: true` on `hoi4.map_inspect` to also read events, focuses, decisions, scripted effects and triggers, on-actions, ideas, characters, AI strategies and areas, and country and unit history.
 It reports:
 
-- `MAP_SCRIPT_REFERENCE_MISSING`: a state, province or strategic region named by number that the map does not define, as `owns_state = 64`, `has_full_control_of_state = 64`, `transfer_state = 64`, `set_state_controller = 64`, `capital = 64`, a state scope `64 = { ... }`, a `prioritize = { 64 65 }` list, a `state`, `to_state` or `start_state` argument, a province argument such as `set_province_controller` or `province = { id = 3314 }`, a strategic region in `region = 12` or `ships_in_area`, a unit `location`, or an AI area's `strategic_regions`; an error in the mod's own files and a warning in game or dependency files;
+- `MAP_SCRIPT_REFERENCE_MISSING`: a state, province or strategic region named by number that the map does not define, as `owns_state = 64`, `has_full_control_of_state = 64`, `transfer_state = 64`, `set_state_controller = 64`, `capital = 64`, a state scope `64 = { ... }`, a `prioritize = { 64 65 }` list, a `state`, `to_state` or `start_state` argument, a province argument such as `set_province_controller` or `province = { id = 3314 }`, a strategic region in `region = 12` or `ships_in_area`, a unit `location`, or an AI area's `strategic_regions`; an error in the mod's own files and a warning in game or dependency files; `state = 0` (as in `NOT = { state = 0 }`, a test for a valid state) is not a reference;
+- `MAP_SCRIPT_PRIORITIZE_PROVINCE`: a number in a `prioritize` list that the map defines as a province, not a state; `prioritize` takes state ids, so the entry is reported on its own (a warning in the mod's files, information in game or dependency files) and not as a missing reference;
 - `MAP_STATE_TAG_UNKNOWN`: a state owner, controller, core or claim whose tag no `common/country_tags` file declares;
 - `MAP_COUNTRY_CAPITAL_NOT_OWNED`: a country that owns states but has its capital in another country's state.
 
@@ -516,6 +517,8 @@ Width and height are multiples of 256 with at most 13,238,272 pixels. Land comes
 The operation writes `provinces.bmp`, `definition.csv`, `default.map`, `continent.txt`, `heightmap.bmp`, `terrain.bmp`, `rivers.bmp` (rivers run downhill to the coast), `trees.bmp`, `cities.bmp`, `world_normal.bmp`, the land and water colour maps, `adjacencies.csv`, strategic regions (`landProvincesPerRegion`, `seaProvincesPerRegion`) with weather by latitude, states (`provincesPerState`) with population, category, buildings, resources, victory points and ports, country tags, country files, history and three-band flags, a bookmark, localisation, and every position, supply node and railway. Countries grow from spread-out capitals in proportion to `share`; each state lies within one country and one strategic region.
 
 Each write records its generated files in `.hoi4-agent-world.json`. A later `create_world` deletes the recorded files it no longer writes (retires them) in the same transaction and refuses with `MANAGED_OUTPUT_EDITED` when a recorded file was edited since. `MAP_WORLD_OUTPUTS_RECONCILED` and `data.outputs` give the counts of written, retired and released files with up to 200 paths each; `map-world-outputs.json` lists them all.
+
+Every applied map rewrite also returns `data.changedSummary` with the number of changed files (`total`, `created`, `removed`, `modified`) and the same counts for the 40 folders with the most changes (two levels deep, `.` for the mod root, `omittedFolders` for the rest), so the size of a write is visible even when the inline `changedFiles` list is cut.
 
 ### Countries the mod already owns
 

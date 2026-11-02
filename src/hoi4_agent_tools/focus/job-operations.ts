@@ -2,7 +2,7 @@ import { z } from 'zod/v4';
 import type { CoreEngine } from '../core/engine.js';
 import { IdleCacheLifetime } from '../core/idle-cache-lifetime.js';
 import type { JobOperations } from '../core/job-executor.js';
-import { errorResult, toolResult } from '../core/operation-result.js';
+import { errorResult, toolResult, type ToolResultImage } from '../core/operation-result.js';
 import { ServiceError, type ServiceResult } from '../core/result.js';
 import {
   focusInspectRequestSchema,
@@ -26,6 +26,8 @@ const wireResult = z.record(z.string(), z.json());
 interface FocusExecution {
   result: ServiceResult<unknown>;
   sourceRevision: string;
+  /** Inline images that travel in the tool result beside the structured data. */
+  images?: readonly ToolResultImage[];
 }
 
 /** Registers read-only focus operations without invoking transport handlers. */
@@ -53,7 +55,13 @@ export function registerFocusJobs(operations: JobOperations, engine: CoreEngine)
           progress: (completed, total, message) => context.progress({ completed, total, message }),
         });
         const wire = wireResult.parse(
-          JSON.parse(JSON.stringify(toolResult(execution.result))) as unknown,
+          JSON.parse(
+            JSON.stringify(
+              toolResult(execution.result, {
+                ...(execution.images === undefined ? {} : { images: execution.images }),
+              }),
+            ),
+          ) as unknown,
         );
         await context.stageResult(wire, { sourceRevision: execution.sourceRevision });
         return wire;

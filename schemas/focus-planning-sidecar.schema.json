@@ -1,5 +1,5 @@
 {
-  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.6.4/schemas/focus-planning-sidecar.schema.json",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.6.5/schemas/focus-planning-sidecar.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -216,14 +216,12 @@
                 "const": false
               },
               "preferredX": {
-                "type": "integer",
-                "minimum": -100000,
-                "maximum": 100000
+                "description": "Column the solver aims for; it still spaces and balances the branch.",
+                "$ref": "#/$defs/__schema12"
               },
               "preferredY": {
-                "type": "integer",
-                "minimum": -100000,
-                "maximum": 100000
+                "description": "Row the solver aims for; a focus always sits below its lowest prerequisite.",
+                "$ref": "#/$defs/__schema13"
               }
             },
             "required": [
@@ -402,6 +400,16 @@
         "offset"
       ],
       "additionalProperties": false
+    },
+    "__schema12": {
+      "type": "integer",
+      "minimum": -100000,
+      "maximum": 100000
+    },
+    "__schema13": {
+      "type": "integer",
+      "minimum": -100000,
+      "maximum": 100000
     }
   }
 }

@@ -83,7 +83,7 @@ Entries that are not plain relative folders, such as `../outside` or wildcard pa
 
 ## Add local reference material
 
-Place an offline wiki snapshot in `paradox_wiki/` inside the mod.
+Place the kit's HOI4 wiki in `hoi4_wiki/` inside the mod. A mod the kit has not updated yet keeps working with the older `paradox_wiki/` name; when both exist, `hoi4_wiki/` wins.
 An optional generated documentation dump can go in `script_docs/`.
 For a configured workspace, `wikiRoot` and `scriptDocsRoot` can point to other absolute directories.
 The server reads these local files; it does not download the wiki.

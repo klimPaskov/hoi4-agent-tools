@@ -1,7 +1,7 @@
 {
   "name": "hoi4-agent-tools",
   "mcpName": "io.github.klimPaskov/hoi4-agent-tools",
-  "version": "4.6.4",
+  "version": "4.6.5",
   "description": "Build HOI4 mods: focus trees, events, decisions, worlds, GUI previews, docs and AI balance.",
   "type": "module",
   "license": "Apache-2.0",
@@ -103,6 +103,7 @@
     "fixtures:generate:technology": "tsx scripts/generate-technology-fixture.ts",
     "fixtures:generate:probability": "tsx scripts/generate-probability-fixture.ts",
     "fixtures:check": "npm run fixtures:generate && tsx scripts/check-generated.ts fixtures",
+    "focus:calibrate": "tsx scripts/focus-quality-calibration.ts",
     "schemas:generate": "tsx scripts/generate-schemas.ts",
     "schemas:check": "tsx scripts/generate-schemas.ts && tsx scripts/check-generated.ts schemas",
     "registry:validate": "tsx scripts/validate-registry.ts",
