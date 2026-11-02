@@ -18,6 +18,7 @@ hoi4-engine.workspace = true
 hoi4-drawio.workspace = true
 hoi4-focus-layout.workspace = true
 hoi4-texture.workspace = true
+hoi4-preview.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

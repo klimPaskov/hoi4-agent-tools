@@ -155,6 +155,7 @@ dependencies = [
  "hoi4-drawio",
  "hoi4-engine",
  "hoi4-focus-layout",
+ "hoi4-preview",
  "hoi4-syntax",
  "hoi4-texture",
  "rayon",
@@ -170,6 +171,18 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "hoi4-preview"
+version = "0.1.0"
+dependencies = [
+ "hoi4-engine",
+ "hoi4-syntax",
+ "hoi4-texture",
+ "rayon",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
