@@ -1,0 +1,15 @@
+[package]
+name = "hoi4-texture"
+description = "Decodes the DDS, TGA and PNG textures Hearts of Iron IV draws, and encodes PNG"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+png.workspace = true
+
+[lints]
+workspace = true
