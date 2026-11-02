@@ -375,8 +375,57 @@ describe(
         expect(added2.y).toBeGreaterThan(added.y);
       },
     );
+
+    it.skipIf(engineBinary === undefined)(
+      'renders the PNG as the game view and names every asset it could not draw',
+      async () => {
+        const { client, mod } = await fixture();
+        const created = await rewrite(client, {
+          plan: treePlan(baseFocuses),
+          createIfMissing: true,
+          layoutMode: 'engine',
+        });
+        expect(created.structuredContent.code).toBe('FOCUS_CHANGES_APPLIED');
+        const rendered = (await client.callTool({
+          name: 'hoi4.focus_render',
+          arguments: { workspaceId: 'engine', relativePath, treeId, inline: false },
+        })) as unknown as {
+          isError?: boolean;
+          structuredContent: {
+            status: string;
+            code: string;
+            data: { width: number; height: number };
+            diagnostics: Array<{ code: string; details?: { name?: string; focusIds?: string[] } }>;
+          };
+        };
+        expect(rendered.isError, JSON.stringify(rendered.structuredContent)).not.toBe(true);
+        expect(rendered.structuredContent).toMatchObject({
+          status: 'ok',
+          code: 'FOCUS_RASTERIZED',
+        });
+        const codes = rendered.structuredContent.diagnostics.map(({ code }) => code);
+        expect(codes).not.toContain('FOCUS_GAME_VIEW_UNAVAILABLE');
+        // The fixture has no game folder, so the view's own sprites are missing, and each is named.
+        const missing = rendered.structuredContent.diagnostics.filter(
+          ({ code }) => code === 'FOCUS_GAME_VIEW_ASSET_MISSING',
+        );
+        expect(missing.map(({ details }) => details?.name)).toContain('GFX_focus_can_start');
+        // The game view is drawn on the game's 96 by 130 grid, not the schematic's.
+        const { width } = rendered.structuredContent.data;
+        expect(width).toBeGreaterThan(0);
+        const pngs = await findFiles(mod, (name) => name.endsWith('.focus.png'));
+        expect(pngs.length).toBeGreaterThan(0);
+      },
+    );
   },
 );
+
+async function findFiles(root: string, accept: (name: string) => boolean): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true, recursive: true }))
+    if (entry.isFile() && accept(entry.name)) found.push(path.join(entry.parentPath, entry.name));
+  return found;
+}
 
 describe('hoi4.focus_rewrite engine refusals', () => {
   it('refuses with FOCUS_ENGINE_UNAVAILABLE and writes nothing when the engine is missing', async () => {

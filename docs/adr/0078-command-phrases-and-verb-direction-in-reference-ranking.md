@@ -1,4 +1,4 @@
-# ADR 0077: Command phrasings and verb direction in reference ranking
+# ADR 0078: Command phrasings and verb direction in reference ranking
 
 Status: accepted
 

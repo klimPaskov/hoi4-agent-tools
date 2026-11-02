@@ -1,17 +1,36 @@
-# HOI4 Agent Tools
+<p align="center">
+  <img src="https://raw.githubusercontent.com/klimPaskov/hoi4-agent-tools/main/docs/images/logo.svg" width="96" height="96" alt="HOI4 Agent Tools">
+</p>
 
-[![Watch the HOI4 Agent Tools demo](https://raw.githubusercontent.com/klimPaskov/hoi4-agent-tools/main/docs/images/agent-tools-demo-thumbnail.png)](https://www.youtube.com/watch?v=Dd36E_NK4rQ)
+<h1 align="center">HOI4 Agent Tools</h1>
 
-[![npm](https://img.shields.io/npm/v/hoi4-agent-tools)](https://www.npmjs.com/package/hoi4-agent-tools)
-[![Node.js](https://img.shields.io/node/v/hoi4-agent-tools)](https://nodejs.org/)
-[![License](https://img.shields.io/npm/l/hoi4-agent-tools)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white)](https://discord.gg/rAXesGcT2t)
-[![YouTube](https://img.shields.io/badge/YouTube-Chaos%20Redux-ff0000?logo=youtube&logoColor=white)](https://www.youtube.com/@ChaosRedux)
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20Project-ff5e5b?logo=kofi&logoColor=white)](https://ko-fi.com/klimpaskov)
-[![Download](https://img.shields.io/github/v/release/klimPaskov/hoi4-agent-tools?label=Release&logo=github&color=2ea44f)](https://github.com/klimPaskov/hoi4-agent-tools/releases/latest)
-[![Issues](https://img.shields.io/badge/Bugs%20%26%20Ideas-Issues-24292f?logo=github&logoColor=white)](https://github.com/klimPaskov/hoi4-agent-tools/issues)
+<p align="center">
+  An <a href="https://modelcontextprotocol.io/">MCP</a> server that helps coding agents build and edit <em>Hearts of Iron IV</em> mods.
+</p>
 
-An [MCP](https://modelcontextprotocol.io/) server that helps coding agents build and edit Hearts of Iron IV mods.
+<p align="center">
+  <a href="https://www.npmjs.com/package/hoi4-agent-tools"><img alt="npm" src="https://img.shields.io/npm/v/hoi4-agent-tools"></a>
+  <a href="https://nodejs.org/"><img alt="Node.js" src="https://img.shields.io/node/v/hoi4-agent-tools"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/npm/l/hoi4-agent-tools"></a>
+  <a href="https://github.com/klimPaskov/hoi4-agent-tools/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/klimPaskov/hoi4-agent-tools?label=Release&logo=github&color=2ea44f"></a>
+  <a href="https://discord.gg/rAXesGcT2t"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white"></a>
+  <a href="https://www.youtube.com/@ChaosRedux"><img alt="YouTube" src="https://img.shields.io/badge/YouTube-Chaos%20Redux-ff0000?logo=youtube&logoColor=white"></a>
+  <a href="https://ko-fi.com/klimpaskov"><img alt="Ko-fi" src="https://img.shields.io/badge/Ko--fi-Support%20the%20Project-ff5e5b?logo=kofi&logoColor=white"></a>
+  <a href="https://github.com/klimPaskov/hoi4-agent-tools/issues"><img alt="Issues" src="https://img.shields.io/badge/Bugs%20%26%20Ideas-Issues-24292f?logo=github&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="https://www.npmjs.com/package/hoi4-agent-tools">npm</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=Dd36E_NK4rQ"><img src="https://raw.githubusercontent.com/klimPaskov/hoi4-agent-tools/main/docs/images/agent-tools-demo-thumbnail.png" alt="Watch the HOI4 Agent Tools demo"></a>
+</p>
+
 Make focus trees, events and decisions. Edit maps and generate a new world. Preview windows, trees and maps, find the right rule in the docs, fix broken script and balance AI choices.
 
 ## What it does

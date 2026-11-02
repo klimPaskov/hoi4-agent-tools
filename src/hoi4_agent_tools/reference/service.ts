@@ -350,7 +350,7 @@ let phraseTerms: Map<string, Map<string, number>> | undefined;
 /**
  * The terms of `command-phrases.json`: four plain-word phrasings of each documented effect,
  * trigger and modifier, such as "state on the coast" for `is_coastal`, written once from
- * the command's documentation and in-game text (ADR 0077). A command the file does not
+ * the command's documentation and in-game text (ADR 0078). A command the file does not
  * name, such as one a later game version adds, keeps only its documentation and game text.
  */
 function phraseCards(): Map<string, Map<string, number>> {

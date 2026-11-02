@@ -80,4 +80,5 @@ Implementation rationale for contributors. For using the server, start with the 
 70. [The shared Rust HOI4 engine](0074-shared-rust-engine.md)
 71. [Focus layout quality is a verdict, measured against the game's own trees](0075-focus-layout-quality-verdict.md)
 72. [Game text and question intent in reference ranking](0076-game-text-and-question-intent-in-reference-ranking.md)
-73. [Command phrasings and verb direction in reference ranking](0077-command-phrases-and-verb-direction-in-reference-ranking.md)
+73. [A resident engine process](0077-resident-engine.md)
+74. [Command phrasings and verb direction in reference ranking](0078-command-phrases-and-verb-direction-in-reference-ranking.md)

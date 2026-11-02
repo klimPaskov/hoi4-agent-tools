@@ -4,7 +4,7 @@ import { commandTexts, readGameText } from '../src/hoi4_agent_tools/reference/ga
 
 /**
  * Writes the input for regenerating `src/hoi4_agent_tools/reference/command-phrases.json`
- * (ADR 0077): every documented effect, trigger and modifier with its documentation text and
+ * (ADR 0078): every documented effect, trigger and modifier with its documentation text and
  * in-game tooltip text, in batches of about 234 commands. Each batch goes to a writer that
  * sees nothing else and returns four plain-word phrasings per command.
  */

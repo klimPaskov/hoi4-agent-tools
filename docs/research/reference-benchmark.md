@@ -178,7 +178,7 @@ The first `hoi4.source_lookup` still builds the whole game and mod symbol index:
 
 ## Command phrasings, verb direction and a fresh blind set
 
-Measured on 2026-11-02 against the kit's `hoi4_wiki/` at `93d010f` and the installed 1.19.4.1 documentation (ADR 0077).
+Measured on 2026-11-02 against the kit's `hoi4_wiki/` at `93d010f` and the installed 1.19.4.1 documentation (ADR 0078).
 Each change was developed on the discovery, validation and held-out sets (85 questions), scored on the blind test set, and kept only if it improved that set.
 Before any change the sets scored as on 1.19.4.1 above, apart from wiki edits since: blind test 21 of 40 first, mean reciprocal rank 0.611.
 

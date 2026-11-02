@@ -54,8 +54,20 @@ export interface FocusRenderOptions {
   presentation?: FocusPresentationResolution;
   sourceHashes?: Record<string, string>;
   renderProfile?: Record<string, unknown>;
+  /**
+   * A finished raster of the tree, such as the engine's game view: it becomes the PNG artifact
+   * instead of a rasterized SVG, and problem crops are cut around its focus boxes.
+   */
+  raster?: FocusRenderRaster;
   budget?: RenderBudget;
   signal?: AbortSignal;
+}
+
+export interface FocusRenderRaster {
+  png: Buffer;
+  width: number;
+  height: number;
+  boxes: ReadonlyMap<string, { x: number; y: number; width: number; height: number }>;
 }
 
 export interface FocusRenderBundle {
@@ -655,8 +667,14 @@ export async function renderFocusTree(
   const rendered = svgDocument(plan, layout, diagnostics, resolvedOptions);
   const json = `${canonicalJson({ ...rendered.graph, generatedSourceMap: compiled.sourceMap })}\n`;
   const html = htmlDocument(plan, rendered.svg, json, diagnostics);
-  let png = Buffer.alloc(0);
-  if (options.rasterize !== false) {
+  let png: Buffer = Buffer.alloc(0);
+  const raster = options.raster;
+  const outputWidth = raster?.width ?? rendered.width;
+  const outputHeight = raster?.height ?? rendered.height;
+  if (raster !== undefined && options.rasterize !== false) {
+    assertRenderDimensions(raster.width, raster.height, 'focus tree game view');
+    png = raster.png;
+  } else if (options.rasterize !== false) {
     assertRenderDimensions(rendered.width, rendered.height, 'focus tree Sharp raster');
     budget.reserveRasterOperation(
       `focus-tree:${sha256Bytes(rendered.svg)}`,
@@ -691,13 +709,20 @@ export async function renderFocusTree(
           focusId,
         });
       const origin = focusNodeOrigin(node, minimumX, minimumY, padding, horizontal, vertical);
-      const centerX = Math.round((origin.x + FOCUS_NODE_WIDTH_PIXELS / 2) * scale);
-      const centerY = Math.round((origin.y + FOCUS_NODE_HEIGHT_PIXELS / 2) * scale);
-      const width = Math.min(rendered.width, 640);
-      const height = Math.min(rendered.height, 440);
+      const box = raster?.boxes.get(focusId);
+      const centerX =
+        box === undefined
+          ? Math.round((origin.x + FOCUS_NODE_WIDTH_PIXELS / 2) * scale)
+          : Math.round(box.x + box.width / 2);
+      const centerY =
+        box === undefined
+          ? Math.round((origin.y + FOCUS_NODE_HEIGHT_PIXELS / 2) * scale)
+          : Math.round(box.y + box.height / 2);
+      const width = Math.min(outputWidth, 640);
+      const height = Math.min(outputHeight, 440);
       budget.reserve(width, height, 'focus problem crop PNG');
-      const x = Math.max(0, Math.min(rendered.width - width, centerX - Math.floor(width / 2)));
-      const y = Math.max(0, Math.min(rendered.height - height, centerY - Math.floor(height / 2)));
+      const x = Math.max(0, Math.min(outputWidth - width, centerX - Math.floor(width / 2)));
+      const y = Math.max(0, Math.min(outputHeight - height, centerY - Math.floor(height / 2)));
       const crop = await sharp(png)
         .extract({ left: x, top: y, width, height })
         .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
@@ -725,8 +750,8 @@ export async function renderFocusTree(
       json: sha256Bytes(json),
     },
     sourceMap: compiled.sourceMap,
-    width: rendered.width,
-    height: rendered.height,
+    width: outputWidth,
+    height: outputHeight,
     ...(problemCrops.length === 0 ? {} : { problemCrops }),
   };
 }

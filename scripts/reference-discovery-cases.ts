@@ -742,7 +742,7 @@ export const testCases: DiscoveryCase[] = [
 
 /**
  * A second blind set, written on 2026-11-02 by an agent that saw no ranking code, no search
- * results and none of the sets above. It was scored once, for the change in ADR 0077.
+ * results and none of the sets above. It was scored once, for the change in ADR 0078.
  */
 export const freshCases: DiscoveryCase[] = [
   // Effects
