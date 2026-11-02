@@ -343,8 +343,8 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Opened: 2026-11-01 by lead
 - Priority: low
 - Current behaviour: the inline result of a map rewrite carries a bounded `changedFiles` list; when it is cut for a world write of thousands of files, a summary built from it can read as if nothing changed.
-- Implementation: branch `claude/zr21-changed-summary`. Every applied map rewrite adds `data.changedSummary`: `total`, `created`, `removed`, `modified`, and the same counts for the 40 folders with the most changes (two levels deep, largest first, `.` for the mod root, `omittedFolders` for the rest). One optional output data field; no input schema change. Release 4.6.5 announced here; it installs into `runtime-v465` after CI and the release workflow pass.
-- Status: in progress
+- Implementation: branch `claude/zr21-changed-summary`. Every applied map rewrite adds `data.changedSummary`: `total`, `created`, `removed`, `modified`, and the same counts for the 40 folders with the most changes (two levels deep, largest first, `.` for the mod root, `omittedFolders` for the rest). One optional output data field; no input schema change. Released in 4.6.5 (2026-11-02, PR #72) and installed in `runtime-v465`.
+- Status: released, awaiting the lead's check
 - Verification: pending (lead: `data.changedSummary` on the next write)
 
 ## ZR-23: The replace-world write fails three ways (allocation, native crash, `ARTIFACT_LOGICAL_BATCH_LIMIT`)
@@ -354,8 +354,8 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Current behaviour: the same `create_world` call on 4.6.4, writing a world over the existing world of the same size, failed with `MAP_OPERATION_FAILED` "Array buffer allocation failed", then `JOB_WORKER_EXIT` 0xC0000409, then `ARTIFACT_LOGICAL_BATCH_LIMIT`; the mod stayed unchanged each time.
 - Worker diagnosis (2026-11-01): the review artifacts stored before the write list every building, unit and weather position. Measured on the ZIN artifacts of the first write: `map-proposed.json` 88.5 MB, of which unit positions 44.8 MB and building positions 19.4 MB; the HTML of each render embeds the same catalog (91 MB). Before and proposed together are about 360 MB. The first write and its repeat passed because the diff was small (`map-diff.html` 0.9 MB); with new realm seeds every position changes, so the diff render grows to the same order and the batch passes the fixed 512 MiB in-memory ceiling. The memory this needs is the likely cause of the allocation failure and the native crash too. Raising a config limit would not help: the ceiling is fixed in code, and the memory is the problem.
 - Implementation: branch `claude/zr23-world-replace-artifacts`. Before and proposed renders count positions instead of listing them (pictures unchanged); `map-diff.json` lists at most 2,000 changed positions per kind with the total in `positionChanges`; the batch-limit errors name the size, the limit and the three largest artifacts; `JOB_WORKER_EXIT` adds the job's last progress message. No input schema change.
-- Plan: released together with the map reference fix as 4.6.6, right after 4.6.5 (ZR-21); version reported here when installed.
-- Status: in progress
+- Released: 4.6.5 (2026-11-02, PR #72, together with ZR-21 and the #61 map reference fix), installed as `runtime-v465`.
+- Status: released, awaiting the lead's check
 - Verification: pending (lead: the call returns `MAP_CHANGES_APPLIED`, a repeat `MAP_CHANGES_UNCHANGED`)
 
 ## ZR-22: Caller names for states, victory points and strategic regions in `create_world`
@@ -364,8 +364,9 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Priority: high for ZIN (removes a second definition of about 6,000 localisation keys and the dependence on replace-file load order)
 - Current behaviour: `nameWorld` names states, victory points and regions from the model (site, lake, river, range, coast, region), with compass and Roman-numeral suffixes, a "<state> Town" fallback and placeholders; `reference.cities` is ignored when a geography is given; no route names a victory point exactly.
 - Wanted: an optional `names` (inline) or `namesPath` (workspace JSON) input on `create_world` with `states`, `victoryPoints` and `regions` keyed by world pixel; caller names win; diagnostics `MAP_NAME_UNMATCHED`, `MAP_NAME_POINT_DUPLICATE`, `MAP_NAME_DUPLICATE`, `MAP_NAME_PLACEHOLDER` counted after the override; no new keys; part of the request hash. Lower priority: anchor pixels of every state, victory-point province and region in the preview.
-- Plan: after ZR-21 (4.6.5) and the map reference fix (issue 61, 4.6.6), ahead of the UI requests R1 to R6. Generic input, documented in `docs/map.md`; input schema change, so a minor release (4.7.0 or the next free minor). Version reported here when installed.
-- Status: queued
+- Implementation: branch `claude/zr22-caller-names` (committed, not yet merged): `create_world` takes `names` or `namesPath` with states, victory points and regions by world pixel; unmatched, point-duplicate and duplicate names are reported (`MAP_NAME_UNMATCHED`, `MAP_NAME_POINT_DUPLICATE`, `MAP_NAME_DUPLICATE`).
+- Plan: after 4.6.5 (which also carried the map reference fix of issue 61), ahead of the UI requests R1 to R6. Generic input, documented in `docs/map.md`; input schema change, so a minor release (4.7.0 or the next free minor). Version reported here when installed.
+- Status: in progress
 - Verification: pending (lead: acceptance 1 to 4 of the mod record)
 
 ## ZR-4: Reliability campaign: at least 100 web maps through the import
