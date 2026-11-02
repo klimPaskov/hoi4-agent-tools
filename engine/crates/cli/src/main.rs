@@ -22,6 +22,9 @@ USAGE:
     hoi4-engine roundtrip PATH... [--format text|json]
     hoi4-engine delta     BEFORE.json AFTER.json [--format text|json]
     hoi4-engine vocab     --game DIR [--format text|json]
+    hoi4-engine sprites   [--game DIR] [--mod DIR] [--dependency DIR]... [--no-dlc] [--allowlist FILE]
+                          [--all-layers] [--index] [--format text|json] [--output FILE]
+                          [--fail-on error|warning|never]
     hoi4-engine drawio    FILE [--prefix TAG]
     hoi4-engine --version
 
@@ -30,6 +33,12 @@ WORKSPACE:
     --game DIR         The game installation. Defaults to HOI4_GAME_DIR.
     --dependency DIR   A mod loaded before the checked mod. Repeat in load order.
     --no-dlc           Do not load the game's dlc/ and integrated_dlc/ folders.
+
+The `sprites` command indexes every sprite in interface/**/*.gfx (texture resolved across the
+game, DLC and mods, headers read), traces which sprite each focus, idea, decision, character,
+event and more shows, and reports sprites or textures used by two asset families, missing
+textures and focus sprites without a `_shine` companion. It traces the mod (or the game without
+--mod); --all-layers traces every loaded file. --index adds every sprite to the JSON output.
 
 A check reports `pass`, `incomplete` (something could not be checked: no game, unknown names,
 folders without a model) or `fail` (a new finding at or above --fail-on, default warning).
@@ -41,7 +50,7 @@ struct Args {
     options: Vec<(String, Option<String>)>,
 }
 
-const VALUE_OPTIONS: &[&str] = &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix"];
+const VALUE_OPTIONS: &[&str] = &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix", "--allowlist"];
 
 impl Args {
     fn parse(raw: Vec<String>) -> Result<Args, String> {
@@ -363,6 +372,72 @@ fn cmd_vocab(args: &Args) -> Result<ExitCode, String> {
     Ok(if vocab.has_commands() { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }
 
+#[derive(serde::Serialize)]
+struct SpriteView<'a> {
+    #[serde(flatten)]
+    def: &'a hoi4_engine::sprites::SpriteDef,
+    texture: Option<&'a hoi4_engine::sprites::ResolvedTexture>,
+}
+
+#[derive(serde::Serialize)]
+struct SpritesOut<'a> {
+    #[serde(flatten)]
+    report: &'a hoi4_engine::sprite_audit::SpriteReport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sprites: Option<Vec<SpriteView<'a>>>,
+}
+
+fn cmd_sprites(args: &Args) -> Result<ExitCode, String> {
+    let mut known = WORKSPACE_OPTIONS.to_vec();
+    known.extend(["--allowlist", "--all-layers", "--index", "--output", "--fail-on"]);
+    args.check_known(&known)?;
+    let json = json_format(args)?;
+    let fail_on = severity(args.value("--fail-on").unwrap_or("never"))?;
+    let allow = match args.value("--allowlist") {
+        Some(path) => hoi4_engine::sprite_audit::Allowlist::load(&PathBuf::from(path))?,
+        None => hoi4_engine::sprite_audit::Allowlist::default(),
+    };
+    let ws = Workspace::load(&workspace_options(args)?);
+    let options = hoi4_engine::sprite_trace::TraceOptions { all_layers: args.flag("--all-layers") };
+    let (index, report) = hoi4_engine::sprite_audit::SpriteReport::run(&ws, &allow, &options);
+    if json {
+        let sprites = args.flag("--index").then(|| index.definitions().iter().map(|def| SpriteView { def, texture: index.texture_of(def) }).collect());
+        let mut text = serde_json::to_string_pretty(&SpritesOut { report: &report, sprites }).map_err(|e| e.to_string())?;
+        text.push('\n');
+        emit(args, &text)?;
+    } else {
+        let s = &report.summary;
+        let mut text = String::new();
+        text.push_str(&format!(
+            "sprites: {} indexed ({} definitions, {} shadowed); textures {} found, {} missing, {} unreadable headers\n",
+            s.sprites_indexed, s.definitions, s.shadowed_definitions, s.textures_resolved, s.textures_missing, s.header_errors
+        ));
+        text.push_str(&format!(
+            "uses: {} traced, {} undefined, {} dynamic, {} in unclassified slots ({} ms index, {} ms trace, {} ms audit)\n",
+            s.uses, s.undefined_uses, s.dynamic_uses, s.unknown_family_uses, s.index_ms, s.trace_ms, s.audit_ms
+        ));
+        for (family, t) in &s.uses_by_family {
+            text.push_str(&format!(
+                "  {family}: {} uses, {} undefined, {} dynamic, {} texture paths, {} implicit, {} textures missing\n",
+                t.uses, t.undefined, t.dynamic, t.direct_texture, t.implicit, t.texture_missing
+            ));
+        }
+        let shown: Vec<&Finding> = report.findings.iter().filter(|f| f.severity != Severity::Info).collect();
+        for f in shown.iter().take(25) {
+            let message: String = f.message.chars().take(240).collect();
+            text.push_str(&format!("{}: {:?} {}: {}\n", location(f), f.severity, f.code, message));
+        }
+        if shown.len() > 25 {
+            text.push_str(&format!("... {} more warnings (use --format json for all; info findings are JSON only)\n", shown.len() - 25));
+        }
+        let counts: Vec<String> = s.findings_by_code.iter().map(|(c, n)| format!("{c} {n}")).collect();
+        text.push_str(&format!("findings: {}\n", if counts.is_empty() { "none".to_string() } else { counts.join(", ") }));
+        emit(args, &text)?;
+    }
+    let failed = fail_on.is_some_and(|level| report.findings.iter().any(|f| f.severity >= level));
+    Ok(if failed { ExitCode::from(1) } else { ExitCode::SUCCESS })
+}
+
 fn cmd_drawio(args: &Args) -> Result<ExitCode, String> {
     args.check_known(&["--prefix"])?;
     let path = args.positional.get(1).ok_or("drawio needs a file")?;
@@ -392,6 +467,7 @@ fn main() -> ExitCode {
         Some("delta") => cmd_delta(&args),
         Some("vocab") => cmd_vocab(&args),
         Some("drawio") => cmd_drawio(&args),
+        Some("sprites") => cmd_sprites(&args),
         Some("help") | None => {
             print!("{HELP}");
             return ExitCode::SUCCESS;

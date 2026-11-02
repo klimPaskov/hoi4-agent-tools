@@ -1,0 +1,17 @@
+characters = {
+	LEADER = {
+		portraits = { civilian = { large = GFX_portrait_leader small = GFX_portrait_small } }
+		country_leader = { ideology = neutrality }
+	}
+	CMD = {
+		portraits = { army = { large = GFX_portrait_cmd } }
+		corps_commander = { skill = 1 }
+	}
+	ADV = {
+		advisor = { slot = political_advisor idea_token = adv_token }
+	}
+	DIRECT = {
+		portraits = { civilian = { large = "gfx\leaders\direct.dds" } }
+		country_leader = { ideology = neutrality }
+	}
+}
