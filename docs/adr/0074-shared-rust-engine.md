@@ -45,3 +45,13 @@ Tests: the parser's unit tests, a valid and an invalid fixture for every rule, t
 Step 2 exists: `src/hoi4_agent_tools/core/engine-client.ts` finds `hoi4-engine` through `HOI4_ENGINE` (an absolute path) or `engine/bin/<platform>-<arch>/` in the package, runs it without a shell with a 30 second timeout and a bounded output, and validates the response with a zod schema that mirrors the engine's JSON schema. A missing binary, a crash, a timeout or output that does not match is reported as unavailable with a reason. Nothing falls back.
 
 `hoi4.focus_rewrite` uses it only when asked: `layoutMode: "engine"` and `placement` call `hoi4-engine focus-layout`, and an unavailable engine refuses the call with `FOCUS_ENGINE_UNAVAILABLE`. The default `authored` and the `compact` modes stay in TypeScript and do not need the engine, so step 3 still holds for them. Shipping the binary in the npm package (step 1) is separate work.
+
+## Amendment (2026-11-02): one package with every binary (step 1)
+
+Step 1 ships the binaries inside the main `hoi4-agent-tools` package instead of one optional package per platform: each extra package would need its own trusted-publishing setup on npmjs.com, and a bundle of four builds of about 2.3 MB each adds about 4 MB to the tarball. The supported platforms are Windows x64, macOS arm64 and Linux x64 and arm64 (glibc); others report the engine unavailable.
+
+The reusable workflow `engine-binaries.yml` builds the release binary on each platform (Linux on Ubuntu 22.04, glibc 2.35), checks that it runs and prints the workspace version, and runs on every pull request that touches `engine/`. The release calls it, `npm run engine:bundle` copies the builds to `engine/bin/<platform>-<arch>/` and writes `engine/bin/manifest.json` (SHA-256, size and engine version per platform), and `release:artifact:verify` refuses a pack that lacks a platform, holds a binary without the executable bit or with a different size, or has a binary that differs from the manifest. The public install check runs the installed package's own client against its bundle.
+
+The client runs a bundled binary only when its SHA-256 matches the manifest, hashing each binary once per process, and reports `binary_checksum_mismatch` otherwise. `HOI4_ENGINE` is the user's own binary and is not checked.
+
+The container image keeps the Git build context, so its provenance is unchanged; the bundle arrives as the named build context `engine-bin`, and each architecture copies only its own binary and runs it once during the build. A plain `docker build` has an empty `engine-bin` stage and builds without the engine.

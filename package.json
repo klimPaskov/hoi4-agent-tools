@@ -38,6 +38,7 @@
   },
   "files": [
     "dist/",
+    "engine/bin/",
     "docs/README.md",
     "docs/setup.md",
     "docs/troubleshooting.md",
@@ -109,6 +110,7 @@
     "registry:validate": "tsx scripts/validate-registry.ts",
     "publication:verify": "tsx scripts/verify-publication.ts",
     "publication:install": "tsx scripts/verify-public-install.ts",
+    "engine:bundle": "tsx scripts/bundle-engine.ts",
     "release:artifact:verify": "tsx scripts/verify-release-artifact.ts",
     "release:order:verify": "tsx scripts/verify-npm-release-order.ts",
     "pack:check": "tsx scripts/check-package.ts",

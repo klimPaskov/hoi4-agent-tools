@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod/v4';
@@ -20,6 +21,7 @@ const ENGINE_REASON_TEXT_LIMIT = 300;
 export type EngineUnavailableReason =
   | 'binary_not_found'
   | 'binary_path_invalid'
+  | 'binary_checksum_mismatch'
   | 'spawn_failed'
   | 'timeout'
   | 'output_too_large'
@@ -70,6 +72,82 @@ function isFile(candidate: string): boolean {
   }
 }
 
+export const ENGINE_BUNDLE_MANIFEST_SCHEMA = 'hoi4-engine-bundle/1';
+
+/** `engine/bin/manifest.json`: the SHA-256 and size of every bundled binary, keyed by `<platform>-<arch>`. */
+export const engineBundleManifestSchema = z.strictObject({
+  schema: z.literal(ENGINE_BUNDLE_MANIFEST_SCHEMA),
+  engineVersion: z.string().min(1),
+  binaries: z.record(
+    z.string().regex(/^[a-z0-9]+-[a-z0-9]+$/u),
+    z.strictObject({
+      file: z.string().regex(/^[a-z0-9]+-[a-z0-9]+\/hoi4-engine(?:\.exe)?$/u),
+      sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+      size: z.number().int().positive(),
+    }),
+  ),
+});
+export type EngineBundleManifest = z.infer<typeof engineBundleManifestSchema>;
+
+export function engineBundleManifestPath(packageRoot: string = defaultPackageRoot()): string {
+  return path.join(packageRoot, 'engine', 'bin', 'manifest.json');
+}
+
+/** Hashes already checked in this process, keyed by path; a changed size or time is hashed again. */
+const verifiedBinaries = new Map<string, { size: number; mtimeMs: number; sha256: string }>();
+
+function sha256OfFile(file: string): string {
+  const stat = statSync(file);
+  const known = verifiedBinaries.get(file);
+  if (known?.size === stat.size && known.mtimeMs === stat.mtimeMs) return known.sha256;
+  const sha256 = createHash('sha256').update(readFileSync(file)).digest('hex');
+  verifiedBinaries.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, sha256 });
+  return sha256;
+}
+
+/**
+ * A bundled binary runs only when the package's manifest lists it with the same SHA-256, so a
+ * damaged or replaced file is reported instead of run.
+ */
+function verifyPackagedBinary(
+  packageRoot: string,
+  binary: string,
+): { reason: EngineUnavailableReason; message: string } | undefined {
+  const key = `${process.platform}-${process.arch}`;
+  let manifest: EngineBundleManifest;
+  try {
+    manifest = engineBundleManifestSchema.parse(
+      JSON.parse(readFileSync(engineBundleManifestPath(packageRoot), 'utf8')),
+    );
+  } catch {
+    return {
+      reason: 'binary_checksum_mismatch',
+      message: `The bundled hoi4-engine for ${key} has no valid engine/bin/manifest.json to check it against`,
+    };
+  }
+  const entry = manifest.binaries[key];
+  if (entry === undefined)
+    return {
+      reason: 'binary_checksum_mismatch',
+      message: `engine/bin/manifest.json lists no hoi4-engine for ${key}`,
+    };
+  let sha256: string;
+  try {
+    sha256 = sha256OfFile(binary);
+  } catch {
+    return {
+      reason: 'binary_not_found',
+      message: `The bundled hoi4-engine for ${key} cannot be read`,
+    };
+  }
+  if (sha256 !== entry.sha256)
+    return {
+      reason: 'binary_checksum_mismatch',
+      message: `The bundled hoi4-engine for ${key} does not match the SHA-256 in engine/bin/manifest.json; reinstall hoi4-agent-tools`,
+    };
+  return undefined;
+}
+
 /** The bundled binary's path for this platform, whether or not it exists. */
 export function packagedEngineBinaryPath(
   packageRoot: string = defaultPackageRoot(),
@@ -87,7 +165,8 @@ export function packagedEngineBinaryPath(
 
 /**
  * `HOI4_ENGINE` (an absolute path) wins; a set but unusable `HOI4_ENGINE` is reported instead of
- * silently using the bundled binary. Otherwise the package's own `engine/bin` binary, if present.
+ * silently using the bundled binary. Otherwise the package's own `engine/bin` binary, if present
+ * and matching the SHA-256 in `engine/bin/manifest.json`.
  */
 export function locateEngineBinary(
   options: Pick<EngineRunOptions, 'env' | 'packageRoot'> = {},
@@ -106,8 +185,12 @@ export function locateEngineBinary(
       };
     return { path: configured, source: 'environment' };
   }
-  const packaged = packagedEngineBinaryPath(options.packageRoot ?? defaultPackageRoot());
-  if (isFile(packaged)) return { path: packaged, source: 'package' };
+  const packageRoot = options.packageRoot ?? defaultPackageRoot();
+  const packaged = packagedEngineBinaryPath(packageRoot);
+  if (isFile(packaged)) {
+    const rejected = verifyPackagedBinary(packageRoot, packaged);
+    return rejected ?? { path: packaged, source: 'package' };
+  }
   return {
     reason: 'binary_not_found',
     message: `No hoi4-engine binary for ${process.platform}-${process.arch} is installed with this package and ${ENGINE_BINARY_ENV} is not set`,

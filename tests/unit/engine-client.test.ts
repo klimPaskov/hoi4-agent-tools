@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  ENGINE_BUNDLE_MANIFEST_SCHEMA,
+  engineBundleManifestPath,
   locateEngineBinary,
   packagedEngineBinaryPath,
   runFocusLayoutEngine,
@@ -149,12 +152,62 @@ describe('engine client', () => {
     expect(result.message).toContain('HOI4_ENGINE');
   });
 
-  it('does not fall back to the bundled binary when HOI4_ENGINE is unusable', async () => {
+  /** A package root holding a bundled binary for this platform and, optionally, its manifest. */
+  async function bundledPackage(
+    contents: string,
+    manifestSha256?: string,
+  ): Promise<{ root: string; bundled: string }> {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-engine-client-'));
     cleanup.push(() => rm(root, { recursive: true, force: true }));
     const bundled = packagedEngineBinaryPath(root);
     await mkdir(path.dirname(bundled), { recursive: true });
-    await writeFile(bundled, '');
+    await writeFile(bundled, contents);
+    if (manifestSha256 !== undefined) {
+      const key = `${process.platform}-${process.arch}`;
+      await writeFile(
+        engineBundleManifestPath(root),
+        JSON.stringify({
+          schema: ENGINE_BUNDLE_MANIFEST_SCHEMA,
+          engineVersion: '0.1.0',
+          binaries: {
+            [key]: {
+              file: `${key}/${path.basename(bundled)}`,
+              sha256: manifestSha256,
+              size: Math.max(1, Buffer.byteLength(contents)),
+            },
+          },
+        }),
+      );
+    }
+    return { root, bundled };
+  }
+
+  const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
+
+  it('uses a bundled binary only when the manifest lists its SHA-256', async () => {
+    const good = await bundledPackage('engine', sha256('engine'));
+    expect(locateEngineBinary({ env: {}, packageRoot: good.root })).toEqual({
+      path: good.bundled,
+      source: 'package',
+    });
+    const changed = await bundledPackage('replaced', sha256('engine'));
+    expect(locateEngineBinary({ env: {}, packageRoot: changed.root })).toMatchObject({
+      reason: 'binary_checksum_mismatch',
+      message: expect.stringContaining('reinstall hoi4-agent-tools') as unknown,
+    });
+    const unlisted = await bundledPackage('engine');
+    expect(locateEngineBinary({ env: {}, packageRoot: unlisted.root })).toMatchObject({
+      reason: 'binary_checksum_mismatch',
+      message: expect.stringContaining('manifest.json') as unknown,
+    });
+    await writeFile(engineBundleManifestPath(unlisted.root), '{"schema":"other"}');
+    expect(locateEngineBinary({ env: {}, packageRoot: unlisted.root })).toMatchObject({
+      reason: 'binary_checksum_mismatch',
+    });
+  });
+
+  it('does not fall back to the bundled binary when HOI4_ENGINE is unusable', async () => {
+    const { root, bundled } = await bundledPackage('engine', sha256('engine'));
     expect(locateEngineBinary({ env: {}, packageRoot: root })).toEqual({
       path: bundled,
       source: 'package',

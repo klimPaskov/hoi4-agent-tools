@@ -236,6 +236,7 @@ describe('offline package and Registry metadata', () => {
     expect(packageJson.bin).toEqual(PACKAGE_BIN_TARGETS);
     expect(packageJson.files).toEqual([
       'dist/',
+      'engine/bin/',
       'docs/README.md',
       'docs/setup.md',
       'docs/troubleshooting.md',

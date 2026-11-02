@@ -14,13 +14,21 @@ env:
   CONTAINER_ARTIFACT_DIR: container-release
   CONTAINER_ARTIFACT_NAME: container-release
   CONTAINER_IMAGE: ghcr.io/klimpaskov/hoi4-agent-tools
+  ENGINE_ARTIFACT_DIR: engine-artifacts
   RELEASE_ARTIFACT_DIR: release
   RELEASE_ARTIFACT_NAME: npm-release
   RELEASE_NODE_VERSION: 24.18.0
   RELEASE_NPM_VERSION: 11.16.0
 
 jobs:
+  build_engine:
+    if: github.repository == 'klimPaskov/hoi4-agent-tools'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/engine-binaries.yml
+
   validate_pack:
+    needs: build_engine
     if: github.repository == 'klimPaskov/hoi4-agent-tools'
     permissions:
       contents: read
@@ -101,6 +109,12 @@ jobs:
       - run: npm run inspector
       - name: Require generated release inputs to remain clean
         run: git diff --exit-code
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: engine-*
+          path: ${{ env.ENGINE_ARTIFACT_DIR }}
+      - name: Bundle hoi4-engine for every platform with its SHA-256 manifest
+        run: npm run engine:bundle -- "$ENGINE_ARTIFACT_DIR"
       - name: Pack and bind the single canonical npm release artifact
         shell: bash
         run: |
@@ -301,6 +315,12 @@ jobs:
           node-version: ${{ env.RELEASE_NODE_VERSION }}
       - run: npm ci --ignore-scripts
       - run: npm audit signatures --ignore-scripts
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: engine-*
+          path: ${{ env.ENGINE_ARTIFACT_DIR }}
+      - name: Bundle hoi4-engine for the image's architectures
+        run: npm run engine:bundle -- "$ENGINE_ARTIFACT_DIR"
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
         with:
           platforms: arm64
@@ -397,6 +417,11 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.image_state.outputs.version }}
           platforms: linux/amd64,linux/arm64
+          # The source stays the Git context; the bundled engine arrives as a named context.
+          build-contexts: |
+            engine-bin=./engine/bin
+          build-args: |
+            REQUIRE_ENGINE=1
           provenance: mode=max,version=v0.2
           sbom: true
       - name: Refuse replacement and create the exact SemVer tag once
