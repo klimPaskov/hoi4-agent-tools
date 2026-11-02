@@ -283,7 +283,7 @@ export const focusTaskTools = [
     name: 'hoi4.focus_rewrite',
     title: 'Build or arrange a focus tree',
     description:
-      'Create or repair a focus tree or palette. For a new tree use lanes and position mode auto so the solver centres and balances branches; set x/y by hand only for exact anchors. layoutMode compact repairs a layout: compactFocusIds picks a branch, pinnedFocusIds keeps neighbours fixed; says so if nothing beats the layout. layoutMode engine lays out auto focuses with the Rust engine and writes relative_position_id anchors; placement {focusIds} fits new focuses in and moves nothing else; both refuse with FOCUS_ENGINE_UNAVAILABLE if hoi4-engine is missing (set HOI4_ENGINE). Never changes prerequisites or rewards. Returns files, layout verdict and delta. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}.',
+      'Create or repair a focus tree or palette. New trees: lanes and position mode auto; x/y only for exact anchors. layoutMode compact repairs a layout (compactFocusIds picks a branch, pinnedFocusIds keeps neighbours); engine lays out with the Rust engine; placement adds focuses, moving no others; both need hoi4-engine. Keeps prerequisites and rewards. Returns files, layout verdict and delta. Example: {"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}.',
     inputSchema: focusRewriteRequestSchema,
     outputSchema: focusPlanOutputSchema,
     annotations: {
