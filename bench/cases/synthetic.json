@@ -136,8 +136,12 @@
       },
       "expect": [
         {
-          "path": "$isError",
-          "equals": false
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "my_scripted_effect"
         }
       ]
     },

@@ -197,7 +197,7 @@ describe('near-miss identifier suggestions', () => {
         request({ symbol: 'locate.2', kind: 'event', includeReferences: false }),
       ),
     ).rejects.toMatchObject({
-      code: 'SOURCE_SYMBOL_NOT_FOUND',
+      code: 'SYMBOL_NOT_FOUND',
       message: expect.stringContaining('locate.2'),
       details: { suggestions: ['locate.1'] },
     });

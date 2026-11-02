@@ -225,7 +225,7 @@ export async function sourceLookup(
       ),
     );
     throw new ServiceError(
-      'SOURCE_SYMBOL_NOT_FOUND',
+      'SYMBOL_NOT_FOUND',
       `No indexed file defines${input.includeReferences ? ' or uses' : ''} ${symbol.slice(0, 256)}${input.kind === undefined ? '' : ` as a ${input.kind}`}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
       { symbol: symbol.slice(0, 256), suggestions },
     );
