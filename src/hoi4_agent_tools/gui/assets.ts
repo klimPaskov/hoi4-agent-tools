@@ -8,6 +8,7 @@ import { ServiceError } from '../core/result.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { DETERMINISTIC_TOOL_FONT_HASH, shapeFontkitOutline } from '../core/svg-text.js';
 import { decodeDds } from './dds.js';
+import { decodeTextureWithEngine, ENGINE_TEXTURE_HINT } from './engine-textures.js';
 import {
   GUI_BMFONT_MAX_CHARACTERS,
   GUI_BINARY_FONT_MAX_BYTES,
@@ -1305,6 +1306,23 @@ export class GuiAssetCatalog {
     const operationKey = `gui-raster:${file.displayPath}:${file.sha256}`;
     if (extension === '.dds') {
       const decoded = decodeDds(file.bytes, this.budget, operationKey);
+      // Formats the TypeScript decoder does not read go to the Rust engine; the decoder has
+      // already reserved the pixel budget. RXGB is a swizzled map format, not GUI colour art.
+      if ('unsupported' in decoded && decoded.format !== 'RXGB') {
+        const engine = await decodeTextureWithEngine(file.bytes, 'dds', RENDER_MAX_DECODED_PIXELS);
+        return 'decoded' in engine
+          ? { ...engine.decoded, supported: true }
+          : {
+              width: 0,
+              height: 0,
+              data: Buffer.alloc(0),
+              format: engine.engineAvailable ? engine.format : decoded.format,
+              supported: false,
+              reason: engine.engineAvailable
+                ? engine.reason
+                : `${decoded.reason} ${ENGINE_TEXTURE_HINT}`,
+            };
+      }
       return 'unsupported' in decoded
         ? {
             width: 0,

@@ -2,7 +2,52 @@ import { RenderBudget, RENDER_MAX_DECODED_PIXELS } from '../core/render-budget.j
 import { sha256Bytes } from '../core/canonical.js';
 
 export type DdsPixelFormat =
-  'rgb16' | 'rgb24' | 'rgba32' | 'dxt1' | 'dxt3' | 'dxt5' | 'dx10-rgba8-srgb' | 'dx10-bgra8-srgb';
+  | 'rgb16'
+  | 'rgb24'
+  | 'rgba32'
+  | 'dxt1'
+  | 'dxt3'
+  | 'dxt5'
+  | 'dx10-rgba8'
+  | 'dx10-rgba8-srgb'
+  | 'dx10-bgra8'
+  | 'dx10-bgrx8'
+  | 'dx10-bgra8-srgb'
+  | 'dx10-bc1'
+  | 'dx10-bc2'
+  | 'dx10-bc3';
+
+/**
+ * The DX10 formats this decoder reads itself: 8-bit RGBA and BGRA layouts and BC1 to BC3. The
+ * rest (BC4, BC5, BC7 and packed 16-bit formats) is decoded by the Rust engine
+ * (`gui/engine-textures.ts`).
+ */
+const DX10_FORMATS: Readonly<
+  Record<
+    number,
+    { format: DdsPixelFormat; layout: 'rgba' | 'bgra' | 'bgrx' | 'dxt1' | 'dxt3' | 'dxt5' }
+  >
+> = {
+  27: { format: 'dx10-rgba8', layout: 'rgba' },
+  28: { format: 'dx10-rgba8', layout: 'rgba' },
+  29: { format: 'dx10-rgba8-srgb', layout: 'rgba' },
+  30: { format: 'dx10-rgba8', layout: 'rgba' },
+  70: { format: 'dx10-bc1', layout: 'dxt1' },
+  71: { format: 'dx10-bc1', layout: 'dxt1' },
+  72: { format: 'dx10-bc1', layout: 'dxt1' },
+  73: { format: 'dx10-bc2', layout: 'dxt3' },
+  74: { format: 'dx10-bc2', layout: 'dxt3' },
+  75: { format: 'dx10-bc2', layout: 'dxt3' },
+  76: { format: 'dx10-bc3', layout: 'dxt5' },
+  77: { format: 'dx10-bc3', layout: 'dxt5' },
+  78: { format: 'dx10-bc3', layout: 'dxt5' },
+  87: { format: 'dx10-bgra8', layout: 'bgra' },
+  88: { format: 'dx10-bgrx8', layout: 'bgrx' },
+  90: { format: 'dx10-bgra8', layout: 'bgra' },
+  91: { format: 'dx10-bgra8-srgb', layout: 'bgra' },
+  92: { format: 'dx10-bgrx8', layout: 'bgrx' },
+  93: { format: 'dx10-bgrx8', layout: 'bgrx' },
+};
 
 export interface DecodedDds {
   width: number;
@@ -264,20 +309,26 @@ export function decodeDds(
           `DX10/${dxgiFormat}`,
           'DDS texture arrays are not supported by the offline GUI renderer.',
         );
-      const format =
-        dxgiFormat === 29 ? 'dx10-rgba8-srgb' : dxgiFormat === 91 ? 'dx10-bgra8-srgb' : undefined;
-      if (format === undefined)
+      const known = DX10_FORMATS[dxgiFormat];
+      if (known === undefined)
         return unsupported(
           `DX10/${dxgiFormat}`,
-          `DXGI format ${dxgiFormat} is not one of the vanilla GUI formats (29 or 91).`,
+          `DXGI format ${dxgiFormat} is not one of the 8-bit RGBA, BGRA or BC1 to BC3 formats this decoder reads.`,
         );
+      const { format, layout } = known;
+      if (layout === 'dxt1' || layout === 'dxt3' || layout === 'dxt5') {
+        const output = decodeDxt(bytes, 148, width, height, layout);
+        return output === undefined
+          ? unsupported(format, 'The DDS block data is truncated.')
+          : { width, height, data: output, format };
+      }
       const required = 148 + width * height * 4;
       if (bytes.length < required) return unsupported(format, 'The DDS pixel data is truncated.');
       const output = Buffer.alloc(width * height * 4);
       for (let index = 0; index < width * height; index += 1) {
         const source = 148 + index * 4;
         const target = index * 4;
-        if (format === 'dx10-rgba8-srgb') {
+        if (layout === 'rgba') {
           output[target] = byte(bytes, source);
           output[target + 1] = byte(bytes, source + 1);
           output[target + 2] = byte(bytes, source + 2);
@@ -286,7 +337,7 @@ export function decodeDds(
           output[target + 1] = byte(bytes, source + 1);
           output[target + 2] = byte(bytes, source);
         }
-        output[target + 3] = byte(bytes, source + 3);
+        output[target + 3] = layout === 'bgrx' ? 255 : byte(bytes, source + 3);
       }
       return { width, height, data: output, format };
     }

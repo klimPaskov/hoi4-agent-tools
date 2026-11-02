@@ -17,11 +17,15 @@ hoi4-syntax.workspace = true
 hoi4-engine.workspace = true
 hoi4-drawio.workspace = true
 hoi4-focus-layout.workspace = true
+hoi4-texture.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+rayon.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+hoi4-texture.workspace = true
 serde_json.workspace = true
