@@ -150,6 +150,8 @@ const eventInspectSummarySchema = z
         edges: nonNegativeIntegerSchema,
         events: nonNegativeIntegerSchema,
         eventIds: inlineIdsSchema,
+        entryPoints: inlineIdsSchema,
+        helpers: inlineIdsSchema,
         boundaryNodes: nonNegativeIntegerSchema,
         truncated: z.boolean(),
       })

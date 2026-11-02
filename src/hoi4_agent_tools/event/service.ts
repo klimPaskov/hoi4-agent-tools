@@ -27,6 +27,7 @@ import {
   type StoredArtifact,
 } from '../core/artifacts.js';
 import { ServiceError } from '../core/result.js';
+import { nearestNames } from '../reference/suggestions.js';
 import { RenderBudget } from '../core/render-budget.js';
 import { SOURCE_MAX_BYTES } from '../core/source/index.js';
 import { isPortablePathSegment } from '../core/workspace.js';
@@ -61,6 +62,7 @@ import {
   explainEventPath,
   inspectEventStateFlow,
   lintEventGraph,
+  selectEventNodes,
   traceSelectedEvents,
   type EventFeatureManifest,
   type EventImpactSubject,
@@ -359,9 +361,15 @@ function eventScanPatterns(
   const roots = workspace.registration.roots;
   const under = (values: readonly string[], glob: string): string[] =>
     values.map((root) => `${root.replaceAll('\\', '/').replace(/\/$/u, '')}/${glob}`);
-  if (focused) {
-    return ['events/**/*.txt', 'common/on_actions/**/*.txt'].sort(compareCodeUnits);
-  }
+  // A focused route still resolves scripted-effect helpers and follows callers back through
+  // them, so it scans every folder that can define or call one. Only localisation, which
+  // feeds the skipped lint passes, is left out.
+  const localisation = focused
+    ? []
+    : [
+        ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
+        ...under(roots.localisation, '*.{yml,yaml}'),
+      ];
   return [
     'events/**/*.txt',
     'history/countries/**/*.txt',
@@ -380,8 +388,7 @@ function eventScanPatterns(
     'common/scripted_effects/**/*.txt',
     ...under(roots.focus, '**/*.txt'),
     ...under(roots.scriptedGui, '**/*.txt'),
-    ...under(roots.localisation, 'english/**/*.{yml,yaml}'),
-    ...under(roots.localisation, '*.{yml,yaml}'),
+    ...localisation,
   ].sort(compareCodeUnits);
 }
 
@@ -1266,6 +1273,21 @@ export class EventChainViewer {
       case 'trace':
         if (input.selector === undefined)
           throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
+        if (
+          input.selector.kind === 'event' &&
+          selectEventNodes(graph, input.selector).length === 0
+        ) {
+          // An event no file defines or fires is not-found, never an empty trace.
+          const suggestions = nearestNames(
+            input.selector.eventId,
+            new Set(graph.nodes.flatMap(({ eventId }) => (eventId === undefined ? [] : [eventId]))),
+          );
+          throw new ServiceError(
+            'EVENT_NOT_FOUND',
+            `No scanned file defines or fires event ${input.selector.eventId.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+            { eventId: input.selector.eventId.slice(0, 256), suggestions },
+          );
+        }
         {
           const trace = traceSelectedEvents(
             graph,

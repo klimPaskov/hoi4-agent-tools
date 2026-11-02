@@ -583,6 +583,35 @@ function validateSourceCosts(
   }
 }
 
+/**
+ * A plain image drawn beneath an element that lies wholly inside it is a background, frame or
+ * fill layer, not a collision: panels sit under their titles and frames sit over their fills.
+ */
+function isBackdropLayering(left: GuiSceneElement, right: GuiSceneElement): boolean {
+  const isBackdrop = (candidate: GuiSceneElement, other: GuiSceneElement): boolean =>
+    candidate.text === undefined &&
+    !candidate.clickable &&
+    candidate.sprite !== undefined &&
+    candidate.zIndex <= other.zIndex &&
+    contains(candidate.rect, other.rect, 0.5);
+  return isBackdrop(left, right) || isBackdrop(right, left);
+}
+
+/**
+ * Meters slide a fill image through a clipping window: an icon parked beyond the leading edge
+ * is the empty state. Only an image that never reaches past the window's far edges counts, so
+ * an icon overflowing to the right or bottom is still reported.
+ */
+function isSlidingFill(element: GuiSceneElement): boolean {
+  const clip = element.clipRect;
+  if (clip === undefined || element.text !== undefined || element.clickable) return false;
+  const rect = element.unclippedRect;
+  return (
+    rect.x + rect.width <= clip.x + clip.width + 0.5 &&
+    rect.y + rect.height <= clip.y + clip.height + 0.5
+  );
+}
+
 function validateOverlapAndGeometry(
   scene: GuiScene,
   diagnostics: DiagnosticCollector,
@@ -627,7 +656,7 @@ function validateOverlapAndGeometry(
         ),
       );
     }
-    if (element.clipped)
+    if (element.clipped && !isSlidingFill(element))
       diagnostics.push(
         issue(
           'GUI_ACCIDENTAL_CLIPPING',
@@ -720,7 +749,7 @@ function validateOverlapAndGeometry(
             ),
           );
         }
-        if (left.depth === right.depth && ratio > 0.2) {
+        if (left.depth === right.depth && ratio > 0.2 && !isBackdropLayering(left, right)) {
           diagnostics.push(
             issue(
               'GUI_VISIBLE_OVERLAP',
