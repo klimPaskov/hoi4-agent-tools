@@ -355,8 +355,8 @@ Source: `docs/plans/ui_overhaul/mcp_requests.md` in the mod (read-only), 31 Octo
 - Worker diagnosis (2026-11-01): the review artifacts stored before the write list every building, unit and weather position. Measured on the ZIN artifacts of the first write: `map-proposed.json` 88.5 MB, of which unit positions 44.8 MB and building positions 19.4 MB; the HTML of each render embeds the same catalog (91 MB). Before and proposed together are about 360 MB. The first write and its repeat passed because the diff was small (`map-diff.html` 0.9 MB); with new realm seeds every position changes, so the diff render grows to the same order and the batch passes the fixed 512 MiB in-memory ceiling. The memory this needs is the likely cause of the allocation failure and the native crash too. Raising a config limit would not help: the ceiling is fixed in code, and the memory is the problem.
 - Implementation: branch `claude/zr23-world-replace-artifacts`. Before and proposed renders count positions instead of listing them (pictures unchanged); `map-diff.json` lists at most 2,000 changed positions per kind with the total in `positionChanges`; the batch-limit errors name the size, the limit and the three largest artifacts; `JOB_WORKER_EXIT` adds the job's last progress message. No input schema change.
 - Released: 4.6.5 (2026-11-02, PR #72, together with ZR-21 and the #61 map reference fix), installed as `runtime-v465`.
-- Status: released, awaiting the lead's check
-- Verification: pending (lead: the call returns `MAP_CHANGES_APPLIED`, a repeat `MAP_CHANGES_UNCHANGED`)
+- Status: done
+- Verification: accepted by the lead (2026-11-02, runtime-v465): the replace-world write returned `MAP_CHANGES_APPLIED` and the identical repeat `MAP_CHANGES_UNCHANGED`
 
 ## ZR-22: Caller names for states, victory points and strategic regions in `create_world`
 
