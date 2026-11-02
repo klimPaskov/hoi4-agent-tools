@@ -57,19 +57,20 @@ fn a_branch_goes_into_the_free_corridor_and_nothing_else_moves() {
 
 #[test]
 fn the_cheaper_side_wins_over_a_crossing() {
-    // E's long link runs down column -2 through row 1, so a new child of R on the left would cross it.
+    // E's long link drops down column -2 past R's row, so the bar under R to a new child on the
+    // left would cross it.
     let focuses = vec![
-        fixed("R", 0, 0, &[]),
-        fixed("A", -1, 1, &["R"]),
-        fixed("B", 1, 1, &["R"]),
         fixed("E", -2, 0, &[]),
-        fixed("F", -2, 2, &["E"]),
+        fixed("R", 0, 1, &[]),
+        fixed("A", -1, 2, &["R"]),
+        fixed("B", 1, 2, &["R"]),
+        fixed("F", -2, 3, &["E"]),
         json!({ "id": "N", "prerequisites": [["R"]] }),
     ];
     let request = insert_request(focuses, &["N"], json!({ "preferSide": "either" }));
     let response = run(&request);
     assert_invariants(&request, &response);
-    assert_eq!(positions(&response)["N"], (3, 1));
+    assert_eq!(positions(&response)["N"], (3, 2));
     assert_eq!(response.metrics.unwrap().orthogonal_crossings, 0);
 }
 

@@ -154,9 +154,20 @@ export class ReferenceToolService {
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
       result.code = 'ERROR_LOG_READ';
+      // A log from a launch without the mod says nothing about the mod.
+      const otherLaunch = log.launch?.modLoaded === false;
       result.validation = {
-        passed: log.modEntries === 0,
+        passed: log.modEntries === 0 && !otherLaunch,
         checks: [
+          ...(otherLaunch
+            ? [
+                {
+                  id: 'error-log-launch',
+                  passed: false,
+                  message: `The last game launch did not load this mod (it ran with ${log.launch!.activeMods.join(', ') || 'no mods'}), so its log does not show this mod's errors`,
+                },
+              ]
+            : []),
           {
             id: 'error-log-mod-entries',
             passed: log.modEntries === 0,

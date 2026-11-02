@@ -229,16 +229,20 @@ const detectors: Readonly<Record<string, Detector>> = {
     }),
 
   event_namespace_missing: (document, _family, context) => {
-    const declared = new Set<string>(context.eventNamespaces ?? []);
+    // Namespaces match in any letter case: vanilla 1.19.4.1 declares TAOG_news and uses
+    // taog_news.1, and declares nsb_news and uses NSB_news.200.
+    const declared = new Set<string>(
+      [...(context.eventNamespaces ?? [])].map((namespace) => namespace.toLowerCase()),
+    );
     for (const node of assignmentsOf(document.root))
       if (node.key.value === 'add_namespace' && node.value.type === 'scalar')
-        declared.add(node.value.value);
+        declared.add(node.value.value.toLowerCase());
     return eventsOf(document).flatMap(({ body, id }) => {
       const idNode = field(body, 'id');
       const dot = id?.lastIndexOf('.') ?? -1;
       if (idNode === undefined || id === undefined || dot < 1) return [];
       const namespace = id.slice(0, dot);
-      return declared.has(namespace)
+      return declared.has(namespace.toLowerCase())
         ? []
         : [
             {
@@ -255,11 +259,12 @@ const detectors: Readonly<Record<string, Detector>> = {
       const dot = id?.lastIndexOf('.') ?? -1;
       if (idNode === undefined || id === undefined || dot < 1) return [];
       const number = id.slice(dot + 1);
-      if (/^\d+$/u.test(number) && Number(number) < 100_000) return [];
+      // A text suffix loads: vanilla ships BBA_italy_missiolinis.02_north and its siblings.
+      if (!/^\d+$/u.test(number) || Number(number) < 100_000) return [];
       return [
         {
           node: idNode,
-          message: `${id} ends in "${number}", which is not a whole number from 0 to 99999`,
+          message: `${id} ends in ${number}, which reaches the next namespace (the limit is 99999)`,
         },
       ];
     }),

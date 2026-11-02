@@ -211,7 +211,7 @@ export async function sweepTemporaryDirectories(
       if ((await owner(entry.directory, SWEEP_LOCK))?.token !== token) continue;
       await lock.close();
       lock = undefined;
-      await rm(entry.directory, { recursive: true, force: true });
+      await rm(entry.directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
       retainedBytes -= entry.bytes;
       removed += 1;
     } catch {
@@ -308,7 +308,8 @@ export class TemporaryDirectoryLifetime {
     }
     if ((await lstat(directory)).isSymbolicLink() || (await realpath(directory)) !== directory)
       throw new Error('Temporary directory changed before cleanup');
-    await rm(directory, { recursive: true, force: true });
+    // Windows can hold a file a closed process wrote for a moment (ENOTEMPTY, EBUSY).
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     this.#owned.delete(directory);
     this.#forgetFiles(directory);
   }

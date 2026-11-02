@@ -11,7 +11,7 @@ import type { QualityGraph, QualityRegion } from './types.js';
 
 /**
  * A no-icon schematic of a focus layout in the in-game connector model: right-angle connectors, a
- * plaque 1.6 columns wide and half a row high, red marks between exclusive choices and dotted
+ * plaque 1.61 columns wide and 0.28 rows high, red marks between exclusive choices and dotted
  * connectors for alternative prerequisites. It is cheap, and it draws what the metrics measure, so
  * an agent that looks at it judges the same picture the scorecard describes. It is a tool render,
  * never a game screenshot.
@@ -190,7 +190,9 @@ function schematicDocument(graph: QualityGraph, options: SchematicOptions): Sche
         fill: '#7d8aa0',
       }),
     );
-  // Connectors: stem down, bar just above the child's row, stem into the child.
+  // Connectors: a short stem down, a bar just under the parent's row, a vertical in the child's
+  // column. A plaque is drawn from py(y) down, so a model height h maps to py(h) + half a plaque.
+  // The schematic has no icons, so the vertical runs on to the top of the child's plaque.
   const connectors = graph.edges.map((edge) => {
     const parent = graph.position.get(edge.parent)!;
     const child = graph.position.get(edge.child)!;
@@ -207,7 +209,7 @@ function schematicDocument(graph: QualityGraph, options: SchematicOptions): Sche
     )
       continue;
     const startY = py(connector.parentY) + plaqueHeight;
-    const barY = py(connector.barY);
+    const barY = py(connector.barY) + plaqueHeight / 2;
     const endY = py(connector.childY);
     const d = `M ${px(connector.parentX)} ${startY} V ${barY} H ${px(connector.childX)} V ${endY}`;
     parts.push(

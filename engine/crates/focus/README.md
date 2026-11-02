@@ -111,20 +111,23 @@ Invalid requests (exit 2): `FOCUS_ENGINE_REQUEST_INVALID` (not JSON or wrong sha
    never returned for focuses this call moved: the call is `blocked` with a diagnostic naming them.
 
 All placement arithmetic is integer (half columns and exact rationals); the connector geometry
-compares in tenths of columns and quarter rows. Outputs never depend on hash-map order or on the
+compares in hundredths of columns and rows. Outputs never depend on hash-map order or on the
 order of `focuses` in the request.
 
 ### Connector model (`geometry.rs`)
 
-Ported from `src/hoi4_agent_tools/focus/quality/orthogonal.ts`: a connector runs from the bottom
-centre of the parent plaque (plaques are 1.6 columns wide, 0.5 rows high) down to a bar a quarter
-row above the child's row, along the bar and down into the child. A crossing is a parent stem
-passing strictly inside another connector's bar on a row strictly between its ends; a stem through
-a plaque passes within 0.8 columns of another focus's centre on such a row; merged bars share at
-least half a column of one bar row, or more than 0.3 rows of one column. Connectors with the same
-parent or child, or inside one all-to-all bundle (two or more parents that each lead to the same two
-or more children), are drawn as one bar and never counted against each other. The model was read
-from one in-game screenshot; numbers derived from it are advisory.
+Ported from `src/hoi4_agent_tools/focus/quality/orthogonal.ts`: a short stem leaves the bottom
+of the parent plaque (plaques are centred on the focus, 1.61 columns wide and 0.28 rows high), a bar
+runs 0.28 rows under the parent's row, and a vertical drops in the child's column to the top of the
+child's icon, 0.66 rows above the child's row. A crossing is a child's vertical passing strictly
+inside the bar of another connector whose parent row lies strictly between its ends; a stem through
+a plaque is that vertical passing within 0.805 columns of another focus's centre on such a row;
+merged bars share at least half a column under one row, or more than 0.3 rows of one column.
+Connectors with the same parent or child, or inside one all-to-all bundle (two or more parents that
+each lead to the same two or more children), are drawn as one bar and never counted against each
+other. The plaque width and bar placement were confirmed by an in-game run on 2026-11-02 (game
+1.19.4.1, default UI scale and zoom); other scales are unverified. `tests/fixtures/connector-parity.json`
+holds hand-counted trees that this crate and the TypeScript model both check.
 
 ## Limits
 

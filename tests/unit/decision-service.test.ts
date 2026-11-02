@@ -147,6 +147,24 @@ describe('authorized decision analysis service', () => {
     expect((await engine.scan('fixture')).revision).toBe(inventory.data.sourceRevision);
   });
 
+  it('answers an unknown decision with not-found and close names', async () => {
+    const { analyzer } = await fixture();
+    await expect(
+      analyzer.inspect(
+        decisionInspectRequestSchema.parse({
+          workspaceId: 'fixture',
+          mode: 'inspect',
+          id: 'fnd',
+          scenarios: [{ id: 'base', actor: 'AAA', state: {} }],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'DECISION_NOT_FOUND',
+      message: expect.stringContaining('fnd'),
+      details: { suggestions: ['fund'] },
+    });
+  });
+
   it('rejects a stale source revision', async () => {
     const { analyzer } = await fixture();
     const request = decisionInspectRequestSchema.parse({ workspaceId: 'fixture' });

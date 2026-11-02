@@ -510,6 +510,15 @@ function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): Tool
     ...(selected.artifacts.length > shown.length
       ? { artifactsListedInStructuredContent: selected.artifacts.length }
       : {}),
+    // Clients that show only the text still see why a check failed.
+    ...(selected.validation.checks.some(({ passed }) => !passed)
+      ? {
+          failedChecks: selected.validation.checks
+            .filter(({ passed }) => !passed)
+            .slice(0, 3)
+            .map(({ message }) => message.slice(0, 300)),
+        }
+      : {}),
     ...(selected.status === 'ok' || selected.blockers.length === 0
       ? {}
       : {

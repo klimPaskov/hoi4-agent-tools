@@ -142,12 +142,32 @@ describe('documentation-backed script checks', () => {
     const linked = await check('capital_scope = { add_population = 1 OWNER = { add_power = 1 } }');
     expect(linked.valid).toBe(true);
     expect(linked.checkedCommands).toBe(4);
-    const misplaced = await check('controller = { add_power = 1 }');
+    const misplaced = await check('capital_scope = { faction_leader = { add_power = 1 } }');
     expect(misplaced.valid).toBe(false);
     expect(misplaced.findings[0]).toMatchObject({
       code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
-      command: 'controller',
+      command: 'faction_leader',
     });
+    // A link compared with a target is not a trigger: the game drops it (in-game run26), so it
+    // is an error that names the trigger to use.
+    for (const [source, replacement] of [
+      ['owner = ROOT', 'is_owned_by'],
+      ['owner = GER', 'is_owned_by'],
+      ['controller = event_target:x', 'is_controlled_by'],
+    ] as const)
+      expect(
+        (await check(source, { kind: 'trigger', scope: 'state' })).findings[0],
+        source,
+      ).toMatchObject({
+        code: 'SCRIPT_SCOPE_LINK_AS_TRIGGER',
+        status: 'error',
+        suggestions: [replacement],
+      });
+    // Vanilla 1.19.4.1 uses controller in country scope and capital_scope in state scope.
+    expect((await check('controller = { add_power = 1 }')).valid).toBe(true);
+    expect((await check('capital_scope = { add_population = 1 }', { scope: 'state' })).valid).toBe(
+      true,
+    );
   });
 
   it('keeps undocumented helpers unresolved and suggests close documented names', async () => {
