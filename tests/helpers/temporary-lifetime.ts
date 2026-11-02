@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -7,6 +8,10 @@ import {
   TemporaryDirectoryLifetime,
   sweepTemporaryDirectories,
 } from '../../src/hoi4_agent_tools/core/temporary-directories.js';
+
+// macOS reaches os.tmpdir() through a symbolic link (/var is /private/var), and the server
+// refuses a state root reached through one, so tests use the temporary folder's real path.
+if (process.platform !== 'win32') process.env.TMPDIR = realpathSync(tmpdir());
 
 const lifetime = new TemporaryDirectoryLifetime();
 let shared = new Set<string>();

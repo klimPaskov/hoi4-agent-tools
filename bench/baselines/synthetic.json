@@ -1,0 +1,120 @@
+{
+  "cases": {
+    "synthetic.decision.inventory": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.decision.unknown-id": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.error_log.mod-entries": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.event.scan-file-selector": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.event.trace-downstream": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.event.unknown-event": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.event.upstream-through-helper": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.focus.inspect": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.focus.unknown-tree": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.gui.inspect": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.gui.unknown-window": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.impact.helper-consumers": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.lookup.exact-name": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.lookup.negative": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.mod_index.cold-overview": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.mod_index.next-id": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.probability.sweep-steps": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.render.focus": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.source_lookup.description-example": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.source_lookup.helper-definition": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.source_lookup.unknown-symbol": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.source_lookup.warm": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.technology.explain": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.technology.unknown-id": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.validation.complete-file": {
+      "inline": false,
+      "passed": false
+    },
+    "synthetic.validation.supported-effect": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.validation.typo": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.validation.wrong-scope": {
+      "inline": true,
+      "passed": true
+    }
+  },
+  "corpora": {
+    "synthetic": "|||"
+  },
+  "suite": "synthetic"
+}

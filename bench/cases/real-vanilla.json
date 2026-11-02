@@ -1,0 +1,225 @@
+{
+  "about": "Cases on the installed game (1.19.4.1). Vanilla script loads in the game, so a validation error on a vanilla file is a false positive unless the game's own error.log reports the same line; such files are excluded with the reason.",
+  "cases": [
+    {
+      "id": "vanilla.source_lookup.cold-event",
+      "surface": "source_lookup",
+      "corpus": "vanilla",
+      "title": "The first lookup of a vanilla event finds its definition",
+      "evidence": "events/PoliticalEvents.txt:9 holds id = political.1 inside the event that starts on line 8.",
+      "tool": "hoi4.source_lookup",
+      "arguments": { "symbol": "political.1", "kind": "event", "includeReferences": false },
+      "timing": "cold",
+      "budgetMs": 3000,
+      "expect": [{ "path": "data.definitions[0].path", "matches": "events/PoliticalEvents\\.txt$" }]
+    },
+    {
+      "id": "vanilla.source_lookup.warm-event",
+      "surface": "source_lookup",
+      "corpus": "vanilla",
+      "title": "A repeated vanilla lookup answers from the warm index",
+      "evidence": "Same as vanilla.source_lookup.cold-event.",
+      "tool": "hoi4.source_lookup",
+      "arguments": { "symbol": "political.1", "kind": "event", "includeReferences": false },
+      "timing": "warm",
+      "repeat": 10,
+      "budgetMs": 50,
+      "expect": [{ "path": "data.definitionCount", "equals": 1 }]
+    },
+    {
+      "id": "vanilla.validation.owner-target-trigger",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "problem": 11,
+      "title": "owner = ROOT in state scope is a valid scope comparison",
+      "evidence": "The game's own common/decisions/_documentation.md:43 says state-targeted decisions can add owner = ROOT to target_trigger. The plan's citation, common/decisions/AFG.txt:824, is a create_unit argument, not a trigger.",
+      "tool": "hoi4.script_validate",
+      "arguments": { "source": "owner = ROOT", "kind": "trigger", "scope": "state" },
+      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+    },
+    {
+      "id": "vanilla.validation.owner-tag-trigger",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "problem": 11,
+      "title": "owner = GER in state scope is a valid scope comparison",
+      "evidence": "Same rule as vanilla.validation.owner-target-trigger with a country tag as the target. Live test: SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER error.",
+      "tool": "hoi4.script_validate",
+      "arguments": { "source": "owner = GER", "kind": "trigger", "scope": "state" },
+      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+    },
+    {
+      "id": "vanilla.validation.owner-comparison-still-flagged",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "A numeric comparison with a dynamic variable is still an error",
+      "evidence": "num_owned_states is documented as a dynamic variable; comparing it with > outside check_variable needs the trigger of the same name, which takes a number. owner > 3 has no meaning.",
+      "tool": "hoi4.script_validate",
+      "arguments": { "source": "owner > 3", "kind": "trigger", "scope": "state" },
+      "expect": [{ "path": "data.findings[*].status", "includes": "error" }]
+    },
+    {
+      "id": "vanilla.validation.timed-idea-wrong-id",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "problem": 12,
+      "title": "A wrong idea id inside add_timed_idea is caught",
+      "evidence": "No idea named bench_no_such_idea exists in vanilla; GER_mefo_bills_1 does (common/ideas/GER.txt:1313).",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_timed_idea = { idea = bench_no_such_idea days = 10 }",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "expect": [
+        { "path": "data.parametersChecked", "equals": true },
+        { "path": "**", "includes": "bench_no_such_idea" },
+        { "path": "data.findings[*].status", "includes": "error" }
+      ]
+    },
+    {
+      "id": "vanilla.validation.timed-idea-right-id",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "A real idea id inside add_timed_idea passes",
+      "evidence": "GER_mefo_bills_1 is defined at common/ideas/GER.txt:1313.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_timed_idea = { idea = GER_mefo_bills_1 days = 10 }",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "expect": [{ "path": "data.findings[*].status", "excludes": "error" }]
+    },
+    {
+      "id": "vanilla.probability.verified-build",
+      "surface": "probability",
+      "corpus": "vanilla",
+      "problem": 14,
+      "title": "The probability adapters are verified for the installed 1.19.4.1 build",
+      "evidence": "launcher-settings.json reports Operation Postern v1.19.4.1.99a5 (f584); the adapters are pinned to 1.19.2.0 (d245).",
+      "tool": "hoi4.probability_inspect",
+      "arguments": {
+        "path": "common/national_focus/germany.txt",
+        "candidatePool": ["GER_remilitarize_the_rhineland"],
+        "scenarioSet": [{ "actor": "GER", "state": {} }]
+      },
+      "expect": [{ "path": "**", "includes": "workspace_verified" }]
+    },
+    {
+      "id": "vanilla.lookup.exact-timed-idea",
+      "surface": "lookup",
+      "corpus": "vanilla",
+      "problem": 8,
+      "title": "The exact name add_timed_idea is the first hit",
+      "evidence": "The installed effects documentation has a section named add_timed_idea.",
+      "tool": "hoi4.reference_search",
+      "arguments": { "query": "add_timed_idea" },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 50,
+      "expect": [{ "path": "data.results[0].heading", "equals": "add_timed_idea" }]
+    },
+    {
+      "id": "vanilla.lookup.exact-has-war-with",
+      "surface": "lookup",
+      "corpus": "vanilla",
+      "problem": 8,
+      "title": "The exact name has_war_with is the first hit",
+      "evidence": "The installed triggers documentation has a section named has_war_with.",
+      "tool": "hoi4.reference_search",
+      "arguments": { "query": "has_war_with" },
+      "expect": [{ "path": "data.results[0].heading", "equals": "has_war_with" }]
+    },
+    {
+      "id": "vanilla.lookup.negative",
+      "surface": "lookup",
+      "corpus": "vanilla",
+      "title": "A query for something that does not exist returns nothing",
+      "evidence": "No document mentions zzqx_imaginary_command.",
+      "tool": "hoi4.reference_search",
+      "arguments": { "query": "zzqx_imaginary_command" },
+      "expect": [{ "path": "data.total", "equals": 0 }]
+    },
+    {
+      "id": "vanilla.technology.explain",
+      "surface": "technology",
+      "corpus": "vanilla",
+      "title": "infantry_weapons is explained with what it leads to",
+      "evidence": "common/technologies/infantry.txt:16 defines infantry_weapons with leads_to_tech = infantry_weapons1.",
+      "tool": "hoi4.tech_inspect",
+      "arguments": { "mode": "explain", "technologyId": "infantry_weapons" },
+      "expect": [
+        { "path": "status", "equals": "ok" },
+        { "path": "**", "includes": "infantry_weapons1" }
+      ]
+    },
+    {
+      "id": "vanilla.map.state-lookup",
+      "surface": "map",
+      "corpus": "vanilla",
+      "title": "Brandenburg is found as state 64",
+      "evidence": "history/states/64-Brandenburg.txt.",
+      "tool": "hoi4.map_inspect",
+      "arguments": { "query": "Brandenburg", "lookupOnly": true },
+      "expect": [{ "path": "**", "includes": 64 }]
+    },
+    {
+      "id": "vanilla.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "Vanilla event files raise no validation errors",
+      "evidence": "Vanilla event files load in 1.19.4.1.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/*.txt"],
+      "limit": 120,
+      "arguments": { "path": "{path}", "limit": 32 },
+      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+    },
+    {
+      "id": "vanilla.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "Vanilla decision files raise no validation errors",
+      "evidence": "Vanilla decision files load in 1.19.4.1.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "exclude": ["common/decisions/_documentation.md"],
+      "limit": 80,
+      "arguments": { "path": "{path}", "limit": 32 },
+      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+    },
+    {
+      "id": "vanilla.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "Vanilla focus files raise no validation errors",
+      "evidence": "Vanilla national focus files load in 1.19.4.1.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 60,
+      "arguments": { "path": "{path}", "limit": 32 },
+      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+    },
+    {
+      "id": "vanilla.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "title": "Vanilla scripted effects, triggers and on_actions raise no validation errors",
+      "evidence": "These vanilla files load in 1.19.4.1.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 120,
+      "arguments": { "path": "{path}", "limit": 32 },
+      "falsePositives": { "path": "data.findings[*]", "where": { "status": "error" } }
+    }
+  ]
+}

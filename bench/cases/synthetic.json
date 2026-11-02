@@ -1,0 +1,675 @@
+{
+  "about": "Cases on the project fixtures, run in CI on every platform. The expected answers come from the fixture source itself.",
+  "cases": [
+    {
+      "id": "synthetic.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "synthetic",
+      "title": "The first overview of the mod answers with its event namespaces",
+      "evidence": "fixtures/event/workspace/events/synthetic_alpha_01.txt declares add_namespace = synthetic_alpha.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "synthetic.mod_index.next-id",
+      "surface": "mod_index",
+      "corpus": "synthetic",
+      "title": "The next free synthetic_alpha event id follows the highest one",
+      "evidence": "synthetic_alpha_01.txt and synthetic_alpha_02.txt define synthetic_alpha.1 to synthetic_alpha.80 with no gaps after 80.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "next_id",
+        "kind": "event",
+        "namespace": "synthetic_alpha"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "data.next.nextId",
+          "equals": "synthetic_alpha.81"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.source_lookup.helper-definition",
+      "surface": "source_lookup",
+      "corpus": "synthetic",
+      "title": "A scripted effect is found at its definition with its event caller",
+      "evidence": "synthetic_alpha_outer is defined at common/scripted_effects/synthetic_event_helpers.txt:2 and called at events/synthetic_alpha_01.txt:60.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "synthetic_alpha_outer"
+      },
+      "timing": "cold",
+      "budgetMs": 3000,
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "data.definitions[0].path",
+          "equals": "mod:common/scripted_effects/synthetic_event_helpers.txt"
+        },
+        {
+          "path": "data.definitions[0].startLine",
+          "equals": 2
+        },
+        {
+          "path": "data.references[*].path",
+          "includes": "mod:events/synthetic_alpha_01.txt"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.source_lookup.warm",
+      "surface": "source_lookup",
+      "corpus": "synthetic",
+      "title": "A repeated lookup answers from the warm index",
+      "evidence": "Same symbol as synthetic.source_lookup.helper-definition.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "synthetic_alpha_outer"
+      },
+      "timing": "warm",
+      "repeat": 10,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "data.definitionCount",
+          "equals": 1
+        }
+      ]
+    },
+    {
+      "id": "synthetic.source_lookup.unknown-symbol",
+      "surface": "source_lookup",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown symbol is an explicit not-found, not ok with nothing",
+      "evidence": "No file of the fixture or stand-in game mentions synthetic_no_such_symbol.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "synthetic_no_such_symbol"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "SYMBOL_NOT_FOUND"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_symbol"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.source_lookup.description-example",
+      "surface": "source_lookup",
+      "corpus": "synthetic",
+      "problem": 9,
+      "title": "The example call in the tool description works",
+      "evidence": "The tools/list description shows {\"symbol\":\"my_scripted_effect\"}; an agent copying it on a mod without that symbol must get a clear not-found, not an argument error.",
+      "tool": "hoi4.source_lookup",
+      "arguments": {
+        "symbol": "my_scripted_effect"
+      },
+      "expect": [
+        {
+          "path": "$isError",
+          "equals": false
+        }
+      ]
+    },
+    {
+      "id": "synthetic.validation.supported-effect",
+      "surface": "validation",
+      "corpus": "synthetic",
+      "title": "A documented effect in its scope is valid and fully checked",
+      "evidence": "The stand-in effects documentation lists add_political_power for COUNTRY.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_political_power = 10",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "data.valid",
+          "equals": true
+        },
+        {
+          "path": "code",
+          "equals": "SCRIPT_CHECKED"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.validation.wrong-scope",
+      "surface": "validation",
+      "corpus": "synthetic",
+      "title": "A country effect in state scope is a scope error",
+      "evidence": "The stand-in documentation supports add_political_power in COUNTRY only.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_political_power = 10",
+        "kind": "effect",
+        "scope": "state"
+      },
+      "expect": [
+        {
+          "path": "data.valid",
+          "equals": false
+        },
+        {
+          "path": "data.findings[*].code",
+          "includes": "SCRIPT_COMMAND_WRONG_SCOPE"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.validation.typo",
+      "surface": "validation",
+      "corpus": "synthetic",
+      "title": "A misspelled effect names the documented one",
+      "evidence": "add_politcal_power is one letter from add_political_power.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_politcal_power = 10",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "expect": [
+        {
+          "path": "data.findings[0].suggestions",
+          "includes": "add_political_power"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.validation.complete-file",
+      "surface": "validation",
+      "corpus": "synthetic",
+      "problem": 9,
+      "title": "A file with nothing unresolved is reported complete, not partial",
+      "evidence": "bench/fixtures/synthetic/common/scripted_effects/bench_regression_effects.txt holds one documented effect, country_event, inside a scripted effect.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "path": "common/scripted_effects/bench_regression_effects.txt"
+      },
+      "expect": [
+        {
+          "path": "data.unresolvedCount",
+          "equals": 0
+        },
+        {
+          "path": "$text",
+          "includes": "scope",
+          "note": "A partial check says inline which scope it could not check."
+        }
+      ]
+    },
+    {
+      "id": "synthetic.event.trace-downstream",
+      "surface": "event",
+      "corpus": "synthetic",
+      "title": "A downstream trace reaches the event an option calls",
+      "evidence": "synthetic_alpha_01.txt:71 calls country_event = { id = synthetic_alpha.6 } from an option of an earlier event.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": "synthetic_alpha.5",
+        "direction": "downstream"
+      },
+      "expect": [
+        {
+          "path": "data.summary.trace.eventIds",
+          "includes": "synthetic_alpha.6"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.event.upstream-through-helper",
+      "surface": "event",
+      "corpus": "synthetic",
+      "problem": 2,
+      "title": "An event fired only through a scripted effect has that effect as its caller",
+      "evidence": "bench_regress.1 is fired by bench_regress_fire_effect, which the decision bench_regress_decision runs (bench/fixtures/synthetic).",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": "bench_regress.1",
+        "direction": "upstream"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "**",
+          "includes": "bench_regress_fire_effect",
+          "note": "The helper caller appears in the inline answer."
+        }
+      ]
+    },
+    {
+      "id": "synthetic.event.unknown-event",
+      "surface": "event",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown event id is an explicit not-found",
+      "evidence": "synthetic_alpha events stop at synthetic_alpha.80.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "trace",
+        "selector": "synthetic_alpha.9999",
+        "direction": "downstream"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_alpha.9999"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.event.scan-file-selector",
+      "surface": "event",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "A scan of one file covers only that file's events",
+      "evidence": "events/bench_regressions.txt defines exactly one event, bench_regress.1.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "scan",
+        "selector": {
+          "kind": "file",
+          "sourcePath": "events/bench_regressions.txt"
+        }
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "data.summary.findings[*].path",
+          "excludes": "mod:events/synthetic_",
+          "note": "Findings come only from the selected file."
+        }
+      ]
+    },
+    {
+      "id": "synthetic.decision.inventory",
+      "surface": "decision",
+      "corpus": "synthetic",
+      "title": "The decision inventory lists the regression decision",
+      "evidence": "bench/fixtures/synthetic/common/decisions/bench_regression_decisions.txt defines bench_regress_decision.",
+      "tool": "hoi4.decision_inspect",
+      "arguments": {
+        "mode": "inventory"
+      },
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        },
+        {
+          "path": "**",
+          "includes": "bench_regress_decision",
+          "note": "The inventory names the decisions inline."
+        }
+      ]
+    },
+    {
+      "id": "synthetic.decision.unknown-id",
+      "surface": "decision",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown decision id is an explicit not-found",
+      "evidence": "No decision named synthetic_no_such_decision exists.",
+      "tool": "hoi4.decision_inspect",
+      "arguments": {
+        "mode": "inspect",
+        "id": "synthetic_no_such_decision",
+        "scenarios": [
+          {
+            "id": "base",
+            "actor": "S01",
+            "state": {}
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_decision"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.technology.explain",
+      "surface": "technology",
+      "corpus": "synthetic",
+      "title": "A technology is explained",
+      "evidence": "fixtures/technology defines synthetic_tech_0001.",
+      "tool": "hoi4.tech_inspect",
+      "arguments": {
+        "mode": "explain",
+        "technologyId": "synthetic_tech_0001"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "**",
+          "includes": "synthetic_tech_0002",
+          "note": "The explanation names what the technology leads to."
+        },
+        {
+          "path": "**",
+          "includes": "synthetic_folder_00"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.technology.unknown-id",
+      "surface": "technology",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown technology id is an explicit not-found",
+      "evidence": "The fixture has 1,040 technologies numbered synthetic_tech_0001 upward; synthetic_tech_9999 is not one.",
+      "tool": "hoi4.tech_inspect",
+      "arguments": {
+        "mode": "explain",
+        "technologyId": "synthetic_tech_9999"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_tech_9999"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.focus.inspect",
+      "surface": "focus",
+      "corpus": "synthetic",
+      "title": "The acceptance focus tree is read",
+      "evidence": "fixtures/focus defines synthetic_acceptance_tree with 255 focuses.",
+      "tool": "hoi4.focus_inspect",
+      "arguments": {
+        "treeId": "synthetic_acceptance_tree"
+      },
+      "expect": [
+        {
+          "path": "data.trees[0].focusCount",
+          "equals": 255
+        }
+      ]
+    },
+    {
+      "id": "synthetic.focus.unknown-tree",
+      "surface": "focus",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown focus tree is an explicit not-found",
+      "evidence": "No tree named synthetic_no_such_tree exists.",
+      "tool": "hoi4.focus_inspect",
+      "arguments": {
+        "treeId": "synthetic_no_such_tree"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_tree"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.gui.inspect",
+      "surface": "gui",
+      "corpus": "synthetic",
+      "title": "The fixture window is read",
+      "evidence": "fixtures/gui defines synthetic_gui_window.",
+      "tool": "hoi4.gui_inspect",
+      "arguments": {
+        "windowName": "synthetic_gui_window"
+      },
+      "expect": [
+        {
+          "path": "data.elements",
+          "equals": 158
+        }
+      ]
+    },
+    {
+      "id": "synthetic.gui.unknown-window",
+      "surface": "gui",
+      "corpus": "synthetic",
+      "problem": 3,
+      "title": "An unknown window is an explicit not-found with a small result",
+      "evidence": "No window named synthetic_no_such_window exists.",
+      "tool": "hoi4.gui_inspect",
+      "arguments": {
+        "windowName": "synthetic_no_such_window"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "matches": "_NOT_FOUND$"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_window"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 8192
+        }
+      ]
+    },
+    {
+      "id": "synthetic.probability.sweep-steps",
+      "surface": "probability",
+      "corpus": "synthetic",
+      "problem": 7,
+      "title": "A sweep honours the requested adapter and step count",
+      "evidence": "The request asks for decision_ai_will_do with 5 steps over variable.pressure.",
+      "tool": "hoi4.probability_analyze",
+      "arguments": {
+        "analysis": "sweep",
+        "adapter": "decision_ai_will_do",
+        "source": "common/decisions/synthetic_probability_decisions.txt",
+        "candidatePool": ["synthetic_decision_00_choice"],
+        "scenarioSet": [
+          {
+            "actor": "S01",
+            "state": {
+              "has_war": false,
+              "variable.pressure": 10
+            }
+          }
+        ],
+        "sweep": {
+          "paths": ["variable.pressure"],
+          "steps": 5
+        }
+      },
+      "expect": [
+        {
+          "path": "data.adapterId",
+          "equals": "decision_ai_will_do"
+        },
+        {
+          "path": "data.sweepPoints",
+          "equals": 5
+        }
+      ]
+    },
+    {
+      "id": "synthetic.impact.helper-consumers",
+      "surface": "impact",
+      "corpus": "synthetic",
+      "title": "A scripted effect's consumers include the event that calls it",
+      "evidence": "events/synthetic_alpha_01.txt:60 calls synthetic_alpha_outer.",
+      "tool": "hoi4.impact_inspect",
+      "arguments": {
+        "symbols": [
+          {
+            "kind": "scripted_effect",
+            "id": "synthetic_alpha_outer"
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "data.affectedFilePaths",
+          "includes": "mod:events/synthetic_alpha_01.txt"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.render.focus",
+      "surface": "render",
+      "corpus": "synthetic",
+      "title": "The focus tree renders to a PNG",
+      "evidence": "fixtures/focus/workspace/common/national_focus/synthetic_acceptance.txt.",
+      "tool": "hoi4.focus_render",
+      "arguments": {
+        "relativePath": "common/national_focus/synthetic_acceptance.txt",
+        "treeId": "synthetic_acceptance_tree"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "artifacts[*].mimeType",
+          "includes": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.lookup.exact-name",
+      "surface": "lookup",
+      "corpus": "synthetic",
+      "title": "An exact command name is the first hit",
+      "evidence": "The stand-in effects documentation has a section named add_political_power.",
+      "tool": "hoi4.reference_search",
+      "arguments": {
+        "query": "add_political_power"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 50,
+      "expect": [
+        {
+          "path": "data.results[0].heading",
+          "equals": "add_political_power"
+        }
+      ]
+    },
+    {
+      "id": "synthetic.lookup.negative",
+      "surface": "lookup",
+      "corpus": "synthetic",
+      "title": "A query for something that does not exist returns nothing",
+      "evidence": "No document mentions zzqx_imaginary_command.",
+      "tool": "hoi4.reference_search",
+      "arguments": {
+        "query": "zzqx_imaginary_command"
+      },
+      "expect": [
+        {
+          "path": "data.total",
+          "equals": 0
+        }
+      ]
+    },
+    {
+      "id": "synthetic.error_log.mod-entries",
+      "surface": "error_log",
+      "corpus": "synthetic",
+      "title": "The log's mod error points at its source file",
+      "evidence": "tests/helpers/smoke-fixture.ts writes an error.log whose first line names events/synthetic_alpha_01.txt near line 14.",
+      "tool": "hoi4.error_log",
+      "arguments": {
+        "scope": "mod"
+      },
+      "expect": [
+        {
+          "path": "data.entries[0].source.relativePath",
+          "equals": "events/synthetic_alpha_01.txt"
+        },
+        {
+          "path": "data.entries[0].source.line",
+          "equals": 14
+        }
+      ]
+    }
+  ]
+}

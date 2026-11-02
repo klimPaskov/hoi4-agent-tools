@@ -1,0 +1,525 @@
+{
+  "about": "Cold-path timings and known-good validation sweeps on the other benchmark mods (decision M-6), and the Chaos Redux sweeps. Workshop mods are read where Steam installed them.",
+  "cases": [
+    {
+      "id": "zin.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "zin",
+      "problem": 13,
+      "title": "The first overview of ZIN answers within 2 seconds",
+      "evidence": "Target from the plan for workspaces of Chaos Redux size; recorded here to show how the cold path scales.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "zin.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "zin",
+      "title": "ZIN events files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's events files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/**/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "zin.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "zin",
+      "title": "ZIN decisions files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's decisions files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "zin.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "zin",
+      "title": "ZIN helpers files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's helpers files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "zin.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "zin",
+      "title": "ZIN focus files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's focus files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "ito.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "ito",
+      "problem": 13,
+      "title": "The first overview of Ireland Total Overhaul answers within 2 seconds",
+      "evidence": "Target from the plan for workspaces of Chaos Redux size; recorded here to show how the cold path scales.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "ito.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "ito",
+      "title": "Ireland Total Overhaul events files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's events files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/**/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "ito.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "ito",
+      "title": "Ireland Total Overhaul decisions files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's decisions files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "ito.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "ito",
+      "title": "Ireland Total Overhaul helpers files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's helpers files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "ito.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "ito",
+      "title": "Ireland Total Overhaul focus files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's focus files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "kaiserreich.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "kaiserreich",
+      "problem": 13,
+      "title": "The first overview of Kaiserreich 1.7 answers within 2 seconds",
+      "evidence": "Target from the plan for workspaces of Chaos Redux size; recorded here to show how the cold path scales.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "kaiserreich.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "kaiserreich",
+      "title": "Kaiserreich 1.7 events files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's events files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/**/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "kaiserreich.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "kaiserreich",
+      "title": "Kaiserreich 1.7 decisions files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's decisions files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "kaiserreich.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "kaiserreich",
+      "title": "Kaiserreich 1.7 helpers files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's helpers files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "kaiserreich.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "kaiserreich",
+      "title": "Kaiserreich 1.7 focus files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's focus files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "owb.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "owb",
+      "problem": 13,
+      "title": "The first overview of Old World Blues 5.1.12 answers within 2 seconds",
+      "evidence": "Target from the plan for workspaces of Chaos Redux size; recorded here to show how the cold path scales.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "owb.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "owb",
+      "title": "Old World Blues 5.1.12 events files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's events files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/**/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "owb.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "owb",
+      "title": "Old World Blues 5.1.12 decisions files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's decisions files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "owb.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "owb",
+      "title": "Old World Blues 5.1.12 helpers files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's helpers files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "owb.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "owb",
+      "title": "Old World Blues 5.1.12 focus files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's focus files. Every error found was checked by hand against the game's documentation, vanilla usage and error.log; files with a confirmed real error are excluded with the reason.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "chaos_redux.validation.known-good-events",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "Chaos Redux events files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's events files, checked by hand as above.",
+      "tool": "hoi4.script_validate",
+      "files": ["events/**/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "chaos_redux.validation.known-good-decisions",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "Chaos Redux decisions files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's decisions files, checked by hand as above.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/decisions/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "chaos_redux.validation.known-good-helpers",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "Chaos Redux helpers files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's helpers files, checked by hand as above.",
+      "tool": "hoi4.script_validate",
+      "files": [
+        "common/scripted_effects/*.txt",
+        "common/scripted_triggers/*.txt",
+        "common/on_actions/*.txt"
+      ],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    },
+    {
+      "id": "chaos_redux.validation.known-good-focus",
+      "kind": "sweep",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "Chaos Redux focus files raise no validation errors that the game does not report",
+      "evidence": "A sample of the mod's focus files, checked by hand as above.",
+      "tool": "hoi4.script_validate",
+      "files": ["common/national_focus/*.txt"],
+      "limit": 40,
+      "arguments": {
+        "path": "{path}",
+        "limit": 32
+      },
+      "falsePositives": {
+        "path": "data.findings[*]",
+        "where": {
+          "status": "error"
+        }
+      }
+    }
+  ]
+}
