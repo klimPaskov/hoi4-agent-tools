@@ -12,7 +12,8 @@
 //! | `LINT_FLAG_NEVER_SET` | A flag is checked but no loaded file ever sets it (Hagane dead-flag rule) |
 //! | `LINT_FLAG_NEVER_CHECKED` | A flag is set but no loaded file ever checks it (Hagane dead-flag rule) |
 //! | `LINT_UNKNOWN_DLC` | `has_dlc` names a DLC the game does not know (Hagane DLC rule) |
-//! | `LINT_DUPLICATE_DEFINITION` | The checked layer defines the same event, scripted effect or scripted trigger twice |
+//! | `LINT_DUPLICATE_DEFINITION` | The checked layer defines the same event, scripted effect or trigger, focus, idea, decision, character or technology twice (error), or the same sprite or localisation key in one language twice (warning, the later one wins) |
+//! | `LINT_DUPLICATE_ACROSS_LAYERS` | A dependency or the game defines the same id in a file the mod does not replace, so both load (error for events, whose ids collide; warning otherwise) |
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -31,6 +32,7 @@ pub const LINT_CODES: &[&str] = &[
     "LINT_FLAG_NEVER_CHECKED",
     "LINT_UNKNOWN_DLC",
     "LINT_DUPLICATE_DEFINITION",
+    "LINT_DUPLICATE_ACROSS_LAYERS",
 ];
 
 pub fn run(analysis: &mut Analysis) {
@@ -328,24 +330,98 @@ fn dlc(analysis: &mut Analysis) {
     analysis.findings.extend(out);
 }
 
+/// Kinds whose ids are global: a second definition is an error in the checked layer.
+const UNIQUE_KINDS: &[Kind] =
+    &[Kind::Event, Kind::ScriptedEffect, Kind::ScriptedTrigger, Kind::Focus, Kind::Idea, Kind::Decision, Kind::Character, Kind::Technology];
+
+/// Kinds where the later definition wins, so a second one in the checked layer is a warning.
+const LATER_WINS_KINDS: &[Kind] = &[Kind::Sprite, Kind::LocalisationKey];
+
+/// The localisation language of a file (`foo_l_english.yml` and `Foo l_english.yml` are
+/// `english`), so a key defined once per language is not a duplicate. Files under
+/// `localisation/replace/` override on purpose.
+fn localisation_group(relative: &str) -> Option<String> {
+    let path = relative.to_ascii_lowercase().replace('\\', "/");
+    if path.contains("/replace/") {
+        return None;
+    }
+    let stem = path.rsplit('/').next()?.strip_suffix(".yml").or_else(|| path.rsplit('/').next()?.strip_suffix(".yaml"))?;
+    let language = stem.rfind("l_").filter(|&at| at == 0 || matches!(stem.as_bytes()[at - 1], b'_' | b' ' | b'-' | b'.'));
+    Some(language.map_or_else(String::new, |at| stem[at + 2..].to_owned()))
+}
+
 fn duplicates(analysis: &mut Analysis) {
     let Some(target) = analysis.target_layer() else { return };
     let mut out = Vec::new();
-    for kind in [Kind::Event, Kind::ScriptedEffect, Kind::ScriptedTrigger] {
+    for &kind in UNIQUE_KINDS.iter().chain(LATER_WINS_KINDS) {
+        let unique = UNIQUE_KINDS.contains(&kind);
         for (name, defs) in analysis.index.definitions(kind) {
-            let mine: Vec<_> = defs.iter().filter(|d| analysis.workspace.files[d.file].layer == target).collect();
-            if mine.len() < 2 {
-                continue;
+            // Localisation keys collide only within one language.
+            let mut groups: BTreeMap<String, Vec<_>> = BTreeMap::new();
+            for d in defs {
+                let relative = &analysis.workspace.files[d.file].relative;
+                // An advisor's idea_token repeats on purpose across a character's instances.
+                if kind == Kind::Idea && !relative.to_ascii_lowercase().replace('\\', "/").starts_with("common/ideas/") {
+                    continue;
+                }
+                let group = if kind == Kind::LocalisationKey {
+                    match localisation_group(relative) {
+                        Some(language) => language,
+                        None => continue,
+                    }
+                } else {
+                    String::new()
+                };
+                groups.entry(group).or_default().push(d);
             }
-            for d in &mine[1..] {
-                let first = &analysis.workspace.files[mine[0].file].relative;
+            for group in groups.values() {
+                let mine: Vec<_> = group.iter().filter(|d| analysis.workspace.files[d.file].layer == target).collect();
+                let Some(first_mine) = mine.first() else { continue };
+                let label = kind.as_str().replace('_', " ");
+                for d in &mine[1..] {
+                    let first = &analysis.workspace.files[first_mine.file].relative;
+                    let mut f = analysis.finding(
+                        "LINT_DUPLICATE_DEFINITION",
+                        // A repeated sprite still draws, so it is only information.
+                        if unique {
+                            Severity::Error
+                        } else if kind == Kind::Sprite {
+                            Severity::Info
+                        } else {
+                            Severity::Warning
+                        },
+                        if unique {
+                            format!("{label} `{name}` is defined again; the first definition is in {first} line {}", first_mine.line)
+                        } else {
+                            format!("{label} `{name}` is defined again and this definition replaces the one in {first} line {}", first_mine.line)
+                        },
+                        d.file,
+                        d.start,
+                        d.start + name.len() as u32,
+                    );
+                    f.subject = Some(name.clone());
+                    out.push(f);
+                }
+                // The same id in a dependency or the game, in a file the mod does not replace,
+                // loads twice. Event ids then collide; for other kinds the outcome depends on load
+                // order, so it is a warning. Sprites and localisation are overridden on purpose.
+                if !unique {
+                    continue;
+                }
+                let Some(other) = group.iter().find(|d| analysis.workspace.files[d.file].layer != target) else { continue };
+                let source = &analysis.workspace.files[other.file];
+                let layer = &analysis.workspace.layers[source.layer];
+                let where_ = match layer.kind {
+                    LayerKind::Game | LayerKind::Dlc => "the game".to_owned(),
+                    _ => format!("dependency {}", layer.name),
+                };
                 let mut f = analysis.finding(
-                    "LINT_DUPLICATE_DEFINITION",
-                    Severity::Error,
-                    format!("{} `{name}` is defined again; the first definition is in {first} line {}", kind.as_str().replace('_', " "), mine[0].line),
-                    d.file,
-                    d.start,
-                    d.start + name.len() as u32,
+                    "LINT_DUPLICATE_ACROSS_LAYERS",
+                    if kind == Kind::Event { Severity::Error } else { Severity::Warning },
+                    format!("{label} `{name}` is also defined by {where_} in {} line {}, and both load", source.relative, other.line),
+                    first_mine.file,
+                    first_mine.start,
+                    first_mine.start + name.len() as u32,
                 );
                 f.subject = Some(name.clone());
                 out.push(f);
