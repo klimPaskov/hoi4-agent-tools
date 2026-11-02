@@ -148,17 +148,21 @@ describe('documentation-backed script checks', () => {
       code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
       command: 'faction_leader',
     });
-    // A link compared with a target is a trigger; a number comparison is still a misuse.
-    for (const source of ['owner = ROOT', 'owner = GER', 'controller = event_target:x'])
+    // A link compared with a target is not a trigger: the game drops it (in-game run26), so it
+    // is an error that names the trigger to use.
+    for (const [source, replacement] of [
+      ['owner = ROOT', 'is_owned_by'],
+      ['owner = GER', 'is_owned_by'],
+      ['controller = event_target:x', 'is_controlled_by'],
+    ] as const)
       expect(
-        (await check(source, { kind: 'trigger', scope: 'state' })).findings.filter(
-          ({ status }) => status === 'error',
-        ),
+        (await check(source, { kind: 'trigger', scope: 'state' })).findings[0],
         source,
-      ).toEqual([]);
-    expect(
-      (await check('owner = ROOT', { kind: 'trigger', scope: 'country' })).findings[0]?.code,
-    ).toBe('SCRIPT_SCOPE_LINK_WRONG_SCOPE');
+      ).toMatchObject({
+        code: 'SCRIPT_SCOPE_LINK_AS_TRIGGER',
+        status: 'error',
+        suggestions: [replacement],
+      });
     // Vanilla 1.19.4.1 uses controller in country scope and capital_scope in state scope.
     expect((await check('controller = { add_power = 1 }')).valid).toBe(true);
     expect((await check('capital_scope = { add_population = 1 }', { scope: 'state' })).valid).toBe(

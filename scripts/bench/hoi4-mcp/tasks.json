@@ -153,9 +153,9 @@
       "text": "add_namespace = seed\ncountry_event = {\n\tid = seed.1\n\ttitle = seed.1.t\n\tdesc = seed.1.d\n\tis_triggered_only = yes\n\timmediate = {\n\t\tadd_political_power = 10\n\t}\n\toption = {\n\t\tname = seed.1.a\n\t}\n}\n"
     },
     {
-      "id": "control_owner_target",
-      "hasError": false,
-      "why": "owner = ROOT in a state scope is a scope comparison (game docs common/decisions/_documentation.md:43).",
+      "id": "owner_as_trigger",
+      "hasError": true,
+      "why": "owner = ROOT is not a trigger: the game logs \"Unknown trigger-type: owner\" and drops it (in-game check 2026-11-02, run26). This was a control in the 2026-11-01 run, where hoi4-agent-tools flagged it correctly.",
       "text": "add_namespace = seed\ncountry_event = {\n\tid = seed.1\n\ttitle = seed.1.t\n\tdesc = seed.1.d\n\tis_triggered_only = yes\n\ttrigger = {\n\t\tany_owned_state = {\n\t\t\towner = ROOT\n\t\t}\n\t}\n\toption = {\n\t\tname = seed.1.a\n\t}\n}\n"
     },
     {

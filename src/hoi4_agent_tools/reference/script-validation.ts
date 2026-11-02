@@ -78,16 +78,31 @@ interface ScriptRoot {
 }
 
 /**
- * The scope an event's trigger, immediate and options run in. A unit leader event fires "for
- * owner country" (effects documentation) and vanilla options use country effects directly;
- * an operative leader event runs in the operative (vanilla events/LaR_agent_events.txt).
+ * The scope an event's trigger, immediate and options run in. In a unit leader event ROOT and
+ * THIS are the general and FROM is the country, yet country effects run there without a scope
+ * error (in-game check 2026-11-02, run26), as vanilla options use them; `unit_leader` accepts
+ * both kinds. An operative leader event runs in the operative (vanilla LaR_agent_events.txt).
  */
 const eventScopes: Readonly<Record<string, string>> = {
   country_event: 'country',
   news_event: 'country',
   state_event: 'state',
-  unit_leader_event: 'country',
+  unit_leader_event: 'unit_leader',
   operative_leader_event: 'character',
+};
+
+/** A command or link documented for `scopes` is usable in `scope`. */
+function scopeAccepts(scopes: readonly string[], scope: string): boolean {
+  return (
+    scopes.includes(scope) ||
+    (scope === 'unit_leader' && (scopes.includes('character') || scopes.includes('country')))
+  );
+}
+
+/** Triggers that test what a scope link would enter, for links misused as triggers. */
+const linkTriggers: Readonly<Record<string, string>> = {
+  owner: 'is_owned_by',
+  controller: 'is_controlled_by',
 };
 const optionMetadata = new Set([
   'name',
@@ -401,8 +416,9 @@ export async function validateScript(
         walk(entry.value, kind, explicitScope ?? fixedScope!, scope);
         continue;
       }
-      // `owner = ROOT` or `owner = GER` compares the linked scope with a target; vanilla
-      // common/decisions/_documentation.md uses `owner = ROOT` in a state target trigger.
+      // `owner = ROOT` or `owner = GER` is not a trigger: the game drops it at load ("Unknown
+      // trigger-type: owner", in-game check 2026-11-02, run26) and the surrounding limit then
+      // passes. The trigger that tests the linked scope is named instead.
       const compared = scopeLinks[raw.toLowerCase()];
       if (
         compared !== undefined &&
@@ -412,19 +428,19 @@ export async function validateScript(
         scopeTargetPattern.test(entry.value.value)
       ) {
         checkedCommands++;
-        if (scope !== UNKNOWN_SCOPE && !compared.from.includes(scope))
-          report(entry, kind, scope, {
-            code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
-            status: 'error',
-            message: `${raw} is usable only within ${compared.from.join(', ')} scope`,
-            suggestions: [],
-          });
+        const replacement = linkTriggers[raw.toLowerCase()];
+        report(entry, kind, scope, {
+          code: 'SCRIPT_SCOPE_LINK_AS_TRIGGER',
+          status: 'error',
+          message: `${raw} is a scope link, not a trigger; the game drops it and the condition always passes${replacement === undefined ? '' : `. Use ${replacement} = ${entry.value.value.slice(0, 64)}`}`,
+          suggestions: replacement === undefined ? [] : [replacement],
+        });
         continue;
       }
       const link = entry.value.type === 'block' ? scopeLinks[raw.toLowerCase()] : undefined;
       if (link !== undefined && entry.value.type === 'block') {
         checkedCommands++;
-        if (scope !== UNKNOWN_SCOPE && !link.from.includes(scope))
+        if (scope !== UNKNOWN_SCOPE && !scopeAccepts(link.from, scope))
           report(entry, kind, scope, {
             code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE',
             status: 'error',
@@ -512,7 +528,7 @@ export async function validateScript(
         const wrongScope =
           scope !== UNKNOWN_SCOPE &&
           !signature.scopes.includes('any') &&
-          !signature.scopes.includes(scope);
+          !scopeAccepts(signature.scopes, scope);
         report(entry, kind, scope, {
           code: signature.conflict
             ? 'SCRIPT_DOCUMENTATION_CONFLICT'
