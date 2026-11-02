@@ -1,0 +1,4 @@
+spriteTypes = {
+	SpriteType = { name = "GFX_goal_alpha" texturefile = "gfx/interface/goals/alpha_mod.dds" }
+	SpriteType = { name = "GFX_mod_new" texturefile = "gfx/interface/goals/mod_new.dds" }
+}

@@ -1,0 +1,10 @@
+ideas = {
+	country = {
+		spirit_one = { picture = spirit_one }
+		fallback = { modifier = { stability_factor = 0.1 } }
+		explicit_gfx = { picture = GFX_idea_spirit_one }
+	}
+	industrial_concern = { concern_one = { picture = concern_one } }
+	political_advisor = { adv_one = { picture = adv_one } }
+	army_spirit = { officer_one = { picture = officer_one } }
+}
