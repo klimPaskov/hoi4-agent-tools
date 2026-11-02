@@ -21,12 +21,12 @@
       "passed": true
     },
     "synthetic.event.unknown-event": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.event.upstream-through-helper": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.focus.inspect": {
       "inline": true,
@@ -41,8 +41,8 @@
       "passed": true
     },
     "synthetic.gui.unknown-window": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.impact.helper-consumers": {
       "inline": true,
@@ -65,8 +65,8 @@
       "passed": true
     },
     "synthetic.probability.sweep-steps": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.render.focus": {
       "inline": true,

@@ -1332,6 +1332,22 @@ function linkGraph(
   for (const definition of scriptedLocalisation) {
     for (const key of definition.localisationKeys) {
       const entry = localisationByKey.get(key);
+      // Vanilla returns sprite names from defined_text (`localization_key = GFX_...`) to pick a
+      // sprite or frame at runtime, so a key that names a sprite is a sprite reference.
+      const sprite =
+        entry === undefined ? spriteByName.get(key.toLocaleLowerCase('en-US')) : undefined;
+      if (sprite !== undefined) {
+        addEdge(
+          edges,
+          'uses_sprite',
+          definition.id,
+          sprite.id,
+          true,
+          { spriteName: key },
+          definition.location,
+        );
+        continue;
+      }
       addEdge(
         edges,
         'uses_localisation',

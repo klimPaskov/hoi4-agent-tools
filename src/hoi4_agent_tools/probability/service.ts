@@ -229,6 +229,22 @@ function resolveSourceBackedAdapter(
           error.code !== 'PROBABILITY_IDENTIFIER_NOT_FOUND')
       )
         throw error;
+      // An explicit adapter is honoured or refused. Running another one would answer a
+      // different question than the one asked.
+      const alternatives = inventoryWeightedSurfaces(
+        snapshot,
+        source,
+        candidatePool,
+      ).adapters.filter(({ candidateCount }) => candidateCount > 0);
+      throw new ServiceError(
+        error.code,
+        `Adapter ${requested} found no matching weighted blocks in this source${
+          alternatives.length === 0
+            ? ''
+            : `; adapters with weighted blocks here: ${alternatives.map(({ adapterId }) => adapterId).join(', ')}`
+        }`,
+        { requestedAdapter: requested, source, candidatePool, availableAdapters: alternatives },
+      );
     }
   }
   const inventory = inventoryWeightedSurfaces(snapshot, source, candidatePool);
@@ -430,6 +446,66 @@ function filterCandidateMetrics(
   };
 }
 
+/** A requested metric that no candidate carries gets a reason instead of a silent null. */
+function unmetMetricDiagnostics(
+  scenarios: ProbabilityAnalysisResult['scenarios'],
+  surface: WeightedSurface,
+  requested: readonly ProbabilityMetric[] | undefined,
+): Diagnostic[] {
+  const output: Diagnostic[] = [];
+  const candidates = scenarios.flatMap((scenario) => scenario.candidates);
+  const timed = surface.adapter.id === 'event_mean_time_to_happen';
+  const pending =
+    candidates.some(({ eligibility }) => eligibility === 'unresolved') ||
+    scenarios.some(({ unresolved }) => unresolved.length > 0);
+  const reasonFor = (metric: ProbabilityMetric): string | undefined => {
+    if (
+      candidates.some((candidate) => {
+        if (metric === 'conditional_probability')
+          return (
+            candidate.conditionalProbability !== undefined &&
+            candidate.conditionalProbability !== null
+          );
+        if (metric === 'cumulative_chance') return candidate.cumulativeChance !== undefined;
+        if (metric === 'effective_mtth_days') return candidate.effectiveMtthDays !== undefined;
+        return candidate.rawValue !== undefined && candidate.rawValue !== null;
+      })
+    )
+      return undefined;
+    if (metric === 'conditional_probability') {
+      if (surface.adapter.selectionRule === 'score_only')
+        return `${surface.adapter.id} is score-only, so its weights are not normalized into probabilities`;
+      if (timed)
+        return 'a mean time to happen is a timing model with no categorical probability; use cumulative_chance with horizonDays';
+      if (!surface.poolComplete && surface.adapter.completePoolRequired)
+        return 'the candidate pool is not proven complete';
+    }
+    if (metric === 'cumulative_chance' || metric === 'effective_mtth_days') {
+      if (!timed) return `${surface.adapter.id} has no timing model`;
+      if (
+        metric === 'cumulative_chance' &&
+        scenarios.every(({ horizonDays }) => horizonDays === undefined)
+      )
+        return 'cumulative_chance needs horizonDays, the number of days to accumulate over';
+    }
+    return pending
+      ? 'a condition or value in the source needs a scenario fact that was not declared (see missingInputs)'
+      : 'the adapter did not produce this metric for the evaluated candidates';
+  };
+  for (const metric of requested ?? []) {
+    const reason = reasonFor(metric);
+    if (reason !== undefined)
+      output.push({
+        code: 'PROBABILITY_METRIC_NOT_COMPUTED',
+        severity: 'warning',
+        category: 'validation',
+        message: `${metric} was requested but not computed: ${reason}`,
+        details: { metric, adapterId: surface.adapter.id },
+      });
+  }
+  return output;
+}
+
 function diagnosticsFor(
   scenarios: ProbabilityAnalysisResult['scenarios'],
   surface: WeightedSurface,
@@ -439,9 +515,12 @@ function diagnosticsFor(
     acceptanceBands?: ProbabilityAcceptanceBand[];
     diagnosticThresholds?: ProbabilityDiagnosticThresholds;
     unresolved?: ProbabilityUnresolved[];
+    requestedMetrics?: readonly ProbabilityMetric[];
   } = {},
 ): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...unmetMetricDiagnostics(scenarios, surface, extra.requestedMetrics),
+  ];
   const thresholds = resolvedThresholds(extra.diagnosticThresholds);
   if (!surface.poolComplete && surface.adapter.completePoolRequired)
     diagnostics.push({
@@ -1206,6 +1285,7 @@ export class ProbabilityAnalyzer {
       unresolved?: ProbabilityUnresolved[];
       acceptanceBands?: ProbabilityAcceptanceBand[];
       diagnosticThresholds?: ProbabilityDiagnosticThresholds;
+      diagnostics?: Diagnostic[];
     } = {},
   ): ProbabilityAnalysisResult {
     const unresolved = deduplicateUnresolved([
@@ -1267,15 +1347,23 @@ export class ProbabilityAnalyzer {
       adapter: surface.adapter,
       scenarios,
       ...(prevalenceAggregate === undefined ? {} : { prevalenceAggregate }),
-      diagnostics: diagnosticsFor(scenarios, surface, {
-        ...(extra.sweep === undefined ? {} : { sweep: extra.sweep }),
-        ...(extra.simulation === undefined ? {} : { simulation: extra.simulation }),
-        ...(extra.acceptanceBands === undefined ? {} : { acceptanceBands: extra.acceptanceBands }),
-        ...(extra.diagnosticThresholds === undefined
-          ? {}
-          : { diagnosticThresholds: extra.diagnosticThresholds }),
-        ...(extra.unresolved === undefined ? {} : { unresolved: extra.unresolved }),
-      }),
+      diagnostics: [
+        ...diagnosticsFor(scenarios, surface, {
+          ...(metadata.requestedMetrics === undefined
+            ? {}
+            : { requestedMetrics: metadata.requestedMetrics }),
+          ...(extra.sweep === undefined ? {} : { sweep: extra.sweep }),
+          ...(extra.simulation === undefined ? {} : { simulation: extra.simulation }),
+          ...(extra.acceptanceBands === undefined
+            ? {}
+            : { acceptanceBands: extra.acceptanceBands }),
+          ...(extra.diagnosticThresholds === undefined
+            ? {}
+            : { diagnosticThresholds: extra.diagnosticThresholds }),
+          ...(extra.unresolved === undefined ? {} : { unresolved: extra.unresolved }),
+        }),
+        ...(extra.diagnostics ?? []),
+      ],
       unresolved,
       ...(extra.sweep === undefined ? {} : { sweep: extra.sweep }),
       ...(extra.simulation === undefined ? {} : { simulation: extra.simulation }),
@@ -1736,7 +1824,7 @@ export class ProbabilityAnalyzer {
         request.signal,
         request.principal,
       );
-    const sweep = sweepSurface(
+    const { defaultedRanges, ...sweep } = sweepSurface(
       analyzed.surface,
       request.scenarioSet.scenarios,
       analyzed.definitions,
@@ -1750,6 +1838,20 @@ export class ProbabilityAnalyzer {
       analyzed.result.scenarios,
       {
         sweep,
+        ...(defaultedRanges.length === 0
+          ? {}
+          : {
+              diagnostics: [
+                {
+                  code: 'PROBABILITY_SWEEP_RANGE_DEFAULTED',
+                  severity: 'info' as const,
+                  category: 'configuration' as const,
+                  message:
+                    'No range or alternatives were declared for some sweep paths, so the requested steps were spread from zero to twice the current value; declare uncertainInputs to choose the range',
+                  details: { ranges: defaultedRanges },
+                },
+              ],
+            }),
         ...(request.acceptanceBands === undefined
           ? {}
           : { acceptanceBands: request.acceptanceBands }),
