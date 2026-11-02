@@ -152,6 +152,8 @@ export interface SectionTerms {
   specialty: 'console' | 'define' | undefined;
   /** What a command entry is, so a question can prefer the kind it asks for. */
   role: 'trigger' | 'effect' | 'on_action' | 'variable' | 'other' | undefined;
+  /** The first word of a command name, which says whether it grants or takes away. */
+  verb: string | undefined;
 }
 
 export function sectionTerms(
@@ -179,6 +181,8 @@ export function sectionTerms(
         ? 'define'
         : undefined,
     role: commandRole(title, heading.trim()),
+    verb:
+      commandRole(title, heading.trim()) === undefined ? undefined : heading.trim().split('_')[0],
   };
 }
 
@@ -216,8 +220,35 @@ export interface QueryPlan {
     role: 'trigger' | 'effect' | undefined;
     onAction: boolean;
     variable: boolean;
+    /** Whether the question's verb grants something or takes it away. */
+    direction: 'grant' | 'revoke' | undefined;
   };
 }
+
+/**
+ * Command names open with a verb from a small closed set. A question that grants something
+ * asks for an `add_`, `create_` or `give_` command and not for its `remove_` counterpart.
+ */
+const grantVerbs = new Set(['add', 'give', 'create', 'unlock', 'activate', 'start', 'spawn']);
+const revokeVerbs = new Set(
+  'remove clear clr delete destroy cancel end deactivate retire kill subtract'.split(' '),
+);
+const questionDirection = new Map<string, 'grant' | 'revoke'>([
+  ...'add give grant create gain unlock activate start spawn award'
+    .split(' ')
+    .map((word) => [word, 'grant'] as const),
+  ...'remove delete clear cancel end stop lose destroy kill free revoke retire deactivate drop strip'
+    .split(' ')
+    .map((word) => [word, 'revoke'] as const),
+]);
+const verbDirection = (verb: string | undefined) =>
+  verb === undefined
+    ? undefined
+    : grantVerbs.has(verb)
+      ? 'grant'
+      : revokeVerbs.has(verb)
+        ? 'revoke'
+        : undefined;
 
 /** A command of another kind than the question asks for keeps this share of its score. */
 const intentPenalty = 0.6;
@@ -238,6 +269,7 @@ function questionIntent(normalized: string): Omit<QueryPlan['wants'], 'console' 
             : undefined,
     onAction,
     variable: raw.some((word) => word.startsWith('variable')),
+    direction: first === undefined ? undefined : questionDirection.get(first),
   };
 }
 
@@ -348,8 +380,12 @@ export class RankingIndex {
     if (headingText === plan.normalized) return 1000;
     else if (plan.identifiers.has(headingText)) score += 40;
     // A short heading whose every word the question names is usually the topic itself.
+    const direction = verbDirection(entry.verb);
     if (entry.headingWords.length > 0) {
       const queryTerms = new Set(plan.terms.map(({ term }) => term));
+      // "Give a war goal" names `create_wargoal` as fully as "create a war goal" would.
+      if (direction !== undefined && direction === plan.wants.direction)
+        queryTerms.add(stemTerm(entry.verb!));
       const covered = entry.headingWords.filter((word) => queryTerms.has(word));
       const fraction = covered.length / entry.headingWords.length;
       score += fraction * fraction * covered.reduce((sum, word) => sum + this.idf(word), 0) * 0.6;
@@ -364,6 +400,13 @@ export class RankingIndex {
       else if (plan.wants.role !== undefined && role !== undefined && role !== plan.wants.role)
         score *= intentPenalty;
     }
+    // A `remove_` command rarely answers a question about adding, and the other way round.
+    if (
+      direction !== undefined &&
+      plan.wants.direction !== undefined &&
+      direction !== plan.wants.direction
+    )
+      score *= intentPenalty;
     return score;
   }
 
