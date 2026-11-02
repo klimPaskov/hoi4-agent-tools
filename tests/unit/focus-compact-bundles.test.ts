@@ -87,11 +87,12 @@ describe('bundle-aware compact gate', () => {
   });
 
   it('still refuses a real crossing in a new tree and names the remedy', () => {
+    // p1 -> c1 drops down column 4 past the bar under row 1 of p2 -> c2.
     const plan = qualityPlan([
       { id: 'p1', x: 0, y: 0 },
-      { id: 'p2', x: -2, y: 0 },
+      { id: 'p2', x: 2, y: 1 },
       { id: 'c1', x: 4, y: 2, needs: ['p1'] },
-      { id: 'c2', x: 2, y: 1, needs: ['p2'] },
+      { id: 'c2', x: 6, y: 2, needs: ['p2'] },
     ]);
     const layout = layoutFocusTree(plan);
     const error = refusal(() =>
@@ -111,11 +112,12 @@ describe('bundle-aware compact gate', () => {
   });
 
   it('does not refuse a crossing the layout in place already has', () => {
+    // p1 -> c1 drops down column 4 past the bar under row 1 of p2 -> c2.
     const plan = qualityPlan([
       { id: 'p1', x: 0, y: 0 },
-      { id: 'p2', x: -2, y: 0 },
+      { id: 'p2', x: 2, y: 1 },
       { id: 'c1', x: 4, y: 2, needs: ['p1'] },
-      { id: 'c2', x: 2, y: 1, needs: ['p2'] },
+      { id: 'c2', x: 6, y: 2, needs: ['p2'] },
     ]);
     const layout = layoutFocusTree(plan);
     expect(() =>

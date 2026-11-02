@@ -147,15 +147,15 @@ describe('layout verdict', () => {
     expect(report.verdict).toBe('review');
   });
 
-  it('lets connector metrics raise a tree to review at most while the model is unverified', () => {
+  it('lets the advisory connector metrics raise a tree to review at most', () => {
     const limits = { H5: { review: 0, revise: 0 } };
     const crossing: FixtureFocus[] = [
       ...symmetricLanes(11, 4),
-      // A stem of x1 drops past the bar of x2 on row 6.
+      // The vertical of x1 -> y1 drops down column 6 past the bar under row 6 of x2 -> y2.
       { id: 'x1', x: 2, y: 5 },
-      { id: 'x2', x: -2, y: 5 },
+      { id: 'x2', x: 4, y: 6 },
       { id: 'y1', x: 6, y: 7, needs: ['x1'] },
-      { id: 'y2', x: 4, y: 6, needs: ['x2'] },
+      { id: 'y2', x: 8, y: 7, needs: ['x2'] },
     ];
     const { report } = evaluate(crossing, withMediumLimits(limits));
     expect(row(report, 'H5')).toMatchObject({ status: 'review' });
