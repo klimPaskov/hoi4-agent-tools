@@ -130,6 +130,11 @@ describe('known-mistake detectors', () => {
     const source = 'country_event = { id = other.1 is_triggered_only = yes }\n';
     expect(codes('events', source)).toEqual(['KNOWN_MISTAKE_EVENT_NAMESPACE_MISSING']);
     expect(codes('events', source, ['other'])).toEqual([]);
+    // Vanilla declares TAOG_news and uses taog_news.1.
+    expect(codes('events', source, ['OTHER'])).toEqual([]);
+    expect(
+      codes('events', 'add_namespace = A\ncountry_event = { id = a.1 is_triggered_only = yes }\n'),
+    ).toEqual([]);
     expect(
       codes(
         'events',
@@ -138,19 +143,17 @@ describe('known-mistake detectors', () => {
     ).toEqual([]);
   });
 
-  it('flags event numbers that are not whole numbers below 100000', () => {
+  it('flags event numbers of 100000 or more and accepts text suffixes vanilla ships', () => {
     const source = [
       'add_namespace = a',
       'country_event = { id = a.abc is_triggered_only = yes }',
+      'country_event = { id = a.02_north is_triggered_only = yes }',
       'country_event = { id = a.100000 is_triggered_only = yes }',
       'country_event = { id = a.99999 is_triggered_only = yes }',
       'country_event = { id = a.0 is_triggered_only = yes }',
       '',
     ].join('\n');
-    expect(codes('events', source)).toEqual([
-      'KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID',
-      'KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID',
-    ]);
+    expect(codes('events', source)).toEqual(['KNOWN_MISTAKE_EVENT_NUMERIC_ID_INVALID']);
   });
 
   it('flags a scope prefix on a variable that is only ever temporary', () => {

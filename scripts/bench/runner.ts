@@ -288,6 +288,11 @@ async function runSweep(
       result.structured,
       benchCase.falsePositives.path,
       benchCase.falsePositives.where,
+    ).filter(
+      (item) =>
+        !benchCase.knownErrors.some(
+          (known) => known.file === file && known.line === item.line && known.code === item.code,
+        ),
     );
     falsePositives += items.length;
     for (const item of items) {

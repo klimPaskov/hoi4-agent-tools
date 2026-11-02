@@ -38,6 +38,17 @@ export const errorLogDataSchema = z
         entries: z.number().int().min(0),
       })
       .strict(),
+    /**
+     * The mods the launch that wrote the log ran with, from `logs/system.log` of the same launch.
+     * Absent when that log is missing; `modLoaded` is absent when the mod has no descriptor name.
+     */
+    launch: z
+      .object({
+        activeMods: z.array(z.string().max(256)).max(64),
+        modLoaded: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     scope: z.enum(['all', 'mod', 'unlocated']),
     totalEntries: z.number().int().min(0),
     distinctEntries: z.number().int().min(0),

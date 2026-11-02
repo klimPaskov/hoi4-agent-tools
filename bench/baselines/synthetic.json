@@ -5,8 +5,8 @@
       "passed": false
     },
     "synthetic.decision.unknown-id": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.error_log.mod-entries": {
       "inline": true,
@@ -81,8 +81,8 @@
       "passed": true
     },
     "synthetic.source_lookup.unknown-symbol": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.source_lookup.warm": {
       "inline": true,

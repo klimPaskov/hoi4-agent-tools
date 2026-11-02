@@ -78,12 +78,25 @@ async function client() {
       '\t}',
       '\timmediate = {',
       '\t\tcapital_scope = { add_population = 1 OWNER = { add_power = 1 } }',
-      '\t\tcontroller = { add_power = 1 }',
+      '\t\tcapital_scope = { overlord = { add_power = 1 } }',
       '\t\tgrant_power = yes',
       '\t\tFROM = { add_power = 1 }',
       '\t\tadd_powr = 1',
       '\t}',
       '\toption = { name = check.1.a add_power = 1 }',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    path.join(mod, 'events', 'leaders.txt'),
+    [
+      'add_namespace = leader',
+      // A unit leader event runs in the owner country, as vanilla 1.19.4.1 options do.
+      'unit_leader_event = {',
+      '\tid = leader.1',
+      '\ttrigger = { has_flag = ready }',
+      '\toption = { name = leader.1.a add_power = 1 controller = { add_power = 1 } }',
       '}',
       '',
     ].join('\n'),
@@ -215,9 +228,22 @@ describe('script_validate file mode', () => {
       .map(({ code, command, line }) => ({ code, command, line }));
     expect(found).toEqual([
       { code: 'SCRIPT_DYNAMIC_VARIABLE_AS_TRIGGER', command: 'num_owned_states', line: 8 },
-      { code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE', command: 'controller', line: 12 },
+      { code: 'SCRIPT_SCOPE_LINK_WRONG_SCOPE', command: 'overlord', line: 12 },
       { code: 'SCRIPT_COMMAND_UNRESOLVED', command: 'add_powr', line: 15 },
     ]);
+  });
+
+  it('checks a unit leader event in its owner country', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: { workspaceId: 'fixture', path: 'events/leaders.txt', limit: 32 },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+    const data = (result.structuredContent as { data: { findings: Finding[] } }).data;
+    expect(
+      data.findings.filter(({ code }) => code.startsWith('SCRIPT_')).map(({ code }) => code),
+    ).toEqual([]);
   });
 
   it('checks player-facing text and requirement tooltips', async () => {

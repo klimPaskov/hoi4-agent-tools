@@ -190,13 +190,17 @@ describe('source position lookup', () => {
 describe('near-miss identifier suggestions', () => {
   it('suggests indexed identifiers within three edits when a symbol has no definition', async () => {
     const { engine } = await fixture();
-    const missing = await sourceLookup(
-      engine,
-      'locate',
-      request({ symbol: 'locate.2', kind: 'event', includeReferences: false }),
-    );
-    expect(missing.definitionCount).toBe(0);
-    expect(missing.suggestions).toEqual(['locate.1']);
+    await expect(
+      sourceLookup(
+        engine,
+        'locate',
+        request({ symbol: 'locate.2', kind: 'event', includeReferences: false }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'SYMBOL_NOT_FOUND',
+      message: expect.stringContaining('locate.2'),
+      details: { suggestions: ['locate.1'] },
+    });
     const found = await sourceLookup(
       engine,
       'locate',

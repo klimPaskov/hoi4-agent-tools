@@ -6,6 +6,7 @@ import type { CoreEngine } from '../core/engine.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
 import { emptyServiceResult, ServiceError } from '../core/result.js';
 import { buildProposedSourceOverlay } from '../core/source-overlay.js';
+import { nearestNames } from '../reference/suggestions.js';
 import { PACKAGE_VERSION } from '../version.js';
 import type { DecisionInspectRequest } from '../schemas/analysis.js';
 import { inspectDecisionAi } from './ai.js';
@@ -46,6 +47,21 @@ export class DecisionAnalyzer {
     if (input.mode !== 'compare' && input.proposedSources !== undefined)
       throw new ServiceError('DECISION_PROPOSAL_MODE', 'Proposed sources require compare mode');
     const inventory = decisionSourceInventory(before);
+    if (
+      input.mode === 'inspect' &&
+      input.id !== undefined &&
+      !inventory.decisions.some((source) => source.id === input.id)
+    ) {
+      const suggestions = nearestNames(
+        input.id,
+        new Set(inventory.decisions.map((source) => source.id)),
+      );
+      throw new ServiceError(
+        'DECISION_NOT_FOUND',
+        `No decision ${input.id.slice(0, 256)} is defined${before.complete ? '' : ' in the scanned files (the scan is incomplete)'}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+        { id: input.id.slice(0, 256), suggestions, scanComplete: before.complete },
+      );
+    }
     const overlay =
       input.proposedSources === undefined
         ? undefined

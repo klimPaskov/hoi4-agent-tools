@@ -221,13 +221,14 @@ describe('hard defects', () => {
 });
 
 describe('orthogonal connector model', () => {
-  it('counts a stem that crosses the bar of an unrelated connector once', () => {
-    // p1 -> c1 drops down column 0 past row 1; p2 -> c2 runs a bar along row 1 from x=-2 to x=2.
+  it('counts a vertical that crosses the bar of an unrelated connector once', () => {
+    // p1 -> c1 runs its bar just under row 0 and drops down column 4 past row 1; p2 -> c2 runs its
+    // bar just under row 1 from x=2 to x=6, so the drop crosses it.
     const measurement = measureSpecs([
       { id: 'p1', x: 0, y: 0 },
-      { id: 'p2', x: -2, y: 0 },
+      { id: 'p2', x: 2, y: 1 },
       { id: 'c1', x: 4, y: 2, needs: ['p1'] },
-      { id: 'c2', x: 2, y: 1, needs: ['p2'] },
+      { id: 'c2', x: 6, y: 2, needs: ['p2'] },
     ]);
     expect(measurement.counts.crossings).toBe(1);
     expect(measurement.locators.crossings).toEqual([
@@ -235,6 +236,19 @@ describe('orthogonal connector model', () => {
     ]);
     expect(measurement.values.H5).toBeCloseTo(50, 10); // 1 crossing per 2 links
     expect(measurement.counts.stemsThroughPlaques).toBe(0);
+  });
+
+  it('reads parents on one row as sharing a bar height, not as a crossing', () => {
+    // Both bars run just under row 0 and overlap from x=0 to x=2; the drop down column 4 passes
+    // no bar. The earlier model put the second bar above row 1 and counted a crossing.
+    const measurement = measureSpecs([
+      { id: 'p1', x: 0, y: 0 },
+      { id: 'p2', x: -2, y: 0 },
+      { id: 'c1', x: 4, y: 2, needs: ['p1'] },
+      { id: 'c2', x: 2, y: 1, needs: ['p2'] },
+    ]);
+    expect(measurement.counts.crossings).toBe(0);
+    expect(measurement.counts.mergedBars).toBe(1);
   });
 
   it('does not count connectors that share a parent or a child', () => {

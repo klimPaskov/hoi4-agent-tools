@@ -3,18 +3,25 @@ import { FOCUS_PAIR_COMPARISON_MAX } from '../limits.js';
 import type { QualityBundle, QualityGraph } from './types.js';
 
 /**
- * Orthogonal connector model "O1". The game draws right-angle connectors: a stem leaves the bottom
- * of the parent, a horizontal bar runs in the gap just above the child's row, and a short stem
- * enters the child. A plaque is about 1.6 grid columns wide and half a row high. This model was
- * read from one in-game screenshot for adjacent rows; multi-row bar placement is unverified, so
- * every number derived from it is advisory until it is confirmed in the game.
+ * Orthogonal connector model "O1". The game draws right-angle connectors: a short stem leaves the
+ * bottom centre of the parent's plaque, a horizontal bar runs just under the parent (0.28 rows
+ * below the parent's row), and a long vertical drops in the child's column from the bar into the
+ * top of the child's icon. All-to-all bundles and OR groups share one bar at that height. A focus's
+ * plaque is centred on its (x, y); it is 1.61 columns wide and 0.28 rows high, and the icon sits
+ * above it, so icon and plaque together reach 0.66 rows above the focus's row.
+ *
+ * Plaque width and bar placement were confirmed by the in-game run of 2026-11-02 on game 1.19.4.1
+ * at the default UI scale and zoom (1 column = 96 px, 1 row = 130 px), including multi-row
+ * connectors. Other UI scales and zoom levels are unverified.
  */
-export const ORTHOGONAL_PLAQUE_WIDTH = 1.6;
-export const ORTHOGONAL_PLAQUE_HEIGHT = 0.5;
-/** A stem closer than this many columns to another plaque's centre runs through that plaque. */
+export const ORTHOGONAL_PLAQUE_WIDTH = 1.61;
+export const ORTHOGONAL_PLAQUE_HEIGHT = 0.28;
+/** A vertical closer than this many columns to another plaque's centre runs through that plaque. */
 export const ORTHOGONAL_STEM_CLEARANCE = ORTHOGONAL_PLAQUE_WIDTH / 2;
-/** Distance of the horizontal bar above the child's row. */
-export const ORTHOGONAL_BAR_OFFSET = 0.25;
+/** Distance of the horizontal bar below the parent's row. */
+export const ORTHOGONAL_BAR_OFFSET = 0.28;
+/** Distance of the top of a focus's icon above its row, where the child's vertical ends. */
+export const ORTHOGONAL_ICON_TOP = 0.66;
 export const ORTHOGONAL_MINIMUM_SHARED_BAR = 0.5;
 export const ORTHOGONAL_MINIMUM_SHARED_STEM = 0.3;
 
@@ -23,15 +30,19 @@ const BUNDLE_CANDIDATE_PARENT_MAX = 800;
 export interface OrthogonalConnector {
   parent: string;
   child: string;
-  /** Column of the parent stem. */
+  /** Column of the short parent stem. */
   parentX: number;
-  /** Column of the child stem. */
+  /** Column of the long vertical that drops into the child. */
   childX: number;
   parentY: number;
   childY: number;
+  /** Top of the parent stem: the bottom of the parent's plaque. */
+  stemFrom: number;
   barY: number;
   barFrom: number;
   barTo: number;
+  /** Bottom of the child's vertical: the top of the child's icon. */
+  dropTo: number;
 }
 
 export function orthogonalConnector(
@@ -45,9 +56,11 @@ export function orthogonalConnector(
     childX: child.x,
     parentY: parent.y,
     childY: child.y,
-    barY: child.y - ORTHOGONAL_BAR_OFFSET,
+    stemFrom: parent.y + ORTHOGONAL_PLAQUE_HEIGHT / 2,
+    barY: parent.y + ORTHOGONAL_BAR_OFFSET,
     barFrom: Math.min(parent.x, child.x),
     barTo: Math.max(parent.x, child.x),
+    dropTo: child.y - ORTHOGONAL_ICON_TOP,
   };
 }
 
@@ -145,11 +158,12 @@ export function measureOrthogonalConnectors(graph: QualityGraph): OrthogonalMeas
     return false;
   };
 
+  // Every bar runs just under its parent's row, so bars are grouped by the parent's row.
   const barsByRow = new Map<number, number[]>();
   for (const [index, connector] of connectors.entries()) {
-    const row = barsByRow.get(connector.childY) ?? [];
+    const row = barsByRow.get(connector.parentY) ?? [];
     row.push(index);
-    barsByRow.set(connector.childY, row);
+    barsByRow.set(connector.parentY, row);
   }
   const nodesByRow = new Map<number, Array<{ id: string; x: number }>>();
   for (const node of graph.nodes) {
@@ -161,15 +175,16 @@ export function measureOrthogonalConnectors(graph: QualityGraph): OrthogonalMeas
   const crossings: OrthogonalMeasurement['crossings'] = [];
   const stems: OrthogonalMeasurement['stemsThroughPlaques'] = [];
   for (const [index, connector] of connectors.entries()) {
-    // The parent stem passes every row strictly between the parent and the child.
+    // The child's vertical drops from the bar just under the parent's row to the child's icon, so
+    // it passes every row strictly between the two and the bars just under those rows.
     for (let row = connector.parentY + 1; row <= connector.childY - 1; row += 1) {
       for (const otherIndex of barsByRow.get(row) ?? []) {
         if (!spend()) break;
         if (otherIndex === index) continue;
         const other = connectors[otherIndex]!;
         if (
-          other.barFrom < connector.parentX &&
-          connector.parentX < other.barTo &&
+          other.barFrom < connector.childX &&
+          connector.childX < other.barTo &&
           !exempt(index, otherIndex)
         )
           crossings.push({ firstIndex: index, secondIndex: otherIndex });
@@ -177,7 +192,7 @@ export function measureOrthogonalConnectors(graph: QualityGraph): OrthogonalMeas
       for (const node of nodesByRow.get(row) ?? []) {
         if (!spend()) break;
         if (node.id === connector.parent || node.id === connector.child) continue;
-        if (Math.abs(node.x - connector.parentX) >= ORTHOGONAL_STEM_CLEARANCE) continue;
+        if (Math.abs(node.x - connector.childX) >= ORTHOGONAL_STEM_CLEARANCE) continue;
         const inOwnBundle = (bundleIdsOfEdge[index] ?? []).some((bundleIndex) =>
           bundleMembers[bundleIndex]!.has(node.id),
         );
@@ -208,13 +223,8 @@ export function measureOrthogonalConnectors(graph: QualityGraph): OrthogonalMeas
     verticals.set(x, group);
   };
   for (const [index, connector] of connectors.entries()) {
-    addVertical(
-      connector.parentX,
-      index,
-      connector.parentY + ORTHOGONAL_PLAQUE_HEIGHT,
-      connector.barY,
-    );
-    addVertical(connector.childX, index, connector.barY, connector.childY);
+    addVertical(connector.parentX, index, connector.stemFrom, connector.barY);
+    addVertical(connector.childX, index, connector.barY, connector.dropTo);
   }
   for (const group of verticals.values()) {
     for (const [position, first] of group.entries()) {

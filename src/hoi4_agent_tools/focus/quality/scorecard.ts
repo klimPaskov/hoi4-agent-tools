@@ -92,7 +92,7 @@ const STATUS_ORDER: Record<ScorecardStatus, number> = {
 export const QUALITY_NOT_EVALUATED = [
   'gameplay and balance',
   'visual review: call hoi4.focus_render and look at the image',
-  'in-game connector geometry: the orthogonal model is read from one screenshot and is advisory until confirmed in the game',
+  'in-game connector geometry at other UI scales and zoom levels: the orthogonal model is confirmed in game 1.19.4.1 at the default scale and zoom only',
 ] as const;
 
 function format(value: number): string {
