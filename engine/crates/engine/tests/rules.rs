@@ -182,6 +182,45 @@ const CASES: &[Case] = &[
         valid: &[("common/scripted_effects/a.txt", "t_effect = { log = a }\n"), ("common/scripted_effects/b.txt", "t_other = { log = b }\n")],
     },
     Case {
+        code: "LINT_DUPLICATE_DEFINITION",
+        invalid: &[("common/ideas/a.txt", "ideas = { country = { t_idea = { } } }\n"), ("common/ideas/b.txt", "ideas = { country = { t_idea = { } } }\n")],
+        valid: &[("common/ideas/a.txt", "ideas = { country = { t_idea = { } } }\n"), ("common/ideas/b.txt", "ideas = { country = { t_other_idea = { } } }\n")],
+    },
+    Case {
+        code: "LINT_DUPLICATE_DEFINITION",
+        // One key per language is not a duplicate; the same key twice in one language is.
+        invalid: &[
+            ("localisation/english/a_l_english.yml", "l_english:\n t_key:0 \"A\"\n"),
+            ("localisation/english/b_l_english.yml", "l_english:\n t_key:0 \"B\"\n"),
+        ],
+        valid: &[
+            ("localisation/english/a_l_english.yml", "l_english:\n t_key:0 \"A\"\n"),
+            ("localisation/french/a_l_french.yml", "l_french:\n t_key:0 \"A\"\n"),
+        ],
+    },
+    Case {
+        code: "LINT_DUPLICATE_DEFINITION",
+        // Kaiserreich names files `Name l_english.yml`, and gives a character one instance per
+        // DLC state with the same advisor idea_token.
+        invalid: &[
+            ("localisation/english/A l_english.yml", "l_english:\n t_key:0 \"A\"\n"),
+            ("localisation/english/B l_english.yml", "l_english:\n t_key:0 \"B\"\n"),
+        ],
+        valid: &[
+            ("localisation/english/A l_english.yml", "l_english:\n t_key:0 \"A\"\n"),
+            ("localisation/french/A l_french.yml", "l_french:\n t_key:0 \"A\"\n"),
+            (
+                "common/characters/t.txt",
+                "characters = { t_person = { instance = { advisor = { slot = political_advisor idea_token = t_person_advisor } } instance = { advisor = { slot = political_advisor idea_token = t_person_advisor } } } }\n",
+            ),
+        ],
+    },
+    Case {
+        code: "LINT_DUPLICATE_ACROSS_LAYERS",
+        invalid: &[("events/t.txt", "add_namespace = t\ncountry_event = { id = vanilla.1 is_triggered_only = yes }\n")],
+        valid: &[("events/t.txt", "add_namespace = t\ncountry_event = { id = t.1 is_triggered_only = yes }\n")],
+    },
+    Case {
         code: "OVERRIDE_DROPS_DEFINITION",
         invalid: &[("common/scripted_triggers/00_vanilla_triggers.txt", "t_trigger = { always = yes }\n")],
         valid: &[("common/scripted_triggers/00_vanilla_triggers.txt", "vanilla_trigger = { always = no }\nt_trigger = { always = yes }\n")],
