@@ -47,6 +47,8 @@ export type FocusGameViewOutcome =
       cache: Record<string, unknown>;
       timings: Record<string, unknown>;
       titles: Record<string, { text: string; resolved: boolean }>;
+      /** What the engine was asked to draw, so a preview can be reproduced. */
+      request: Record<string, unknown>;
     }
   | { ok: false; code: string; message: string };
 
@@ -115,12 +117,13 @@ export async function renderFocusGameView(input: {
       },
     ];
   });
+  const request = { focuses, scale: input.scale, maxPixels: input.maxPixels };
   const engine = input.engine ?? sharedResidentEngine();
   const outcome: ResidentEngineOutcome = await engine.request(
     'focus.render',
     {
       layers: gameLayers(input.workspace),
-      request: { focuses, scale: input.scale, maxPixels: input.maxPixels },
+      request,
     },
     undefined,
     input.signal === undefined ? {} : { signal: input.signal },
@@ -146,5 +149,6 @@ export async function renderFocusGameView(input: {
     cache: (result.cache as Record<string, unknown> | undefined) ?? {},
     timings: (result.timings as Record<string, unknown> | undefined) ?? {},
     titles,
+    request,
   };
 }
