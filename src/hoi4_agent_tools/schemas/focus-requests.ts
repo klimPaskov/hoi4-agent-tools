@@ -88,7 +88,26 @@ export const focusRenderRequestSchema = z
       .min(FOCUS_RENDER_MIN_OUTPUT_SCALE)
       .max(FOCUS_RENDER_MAX_OUTPUT_SCALE)
       .optional(),
-    cropFocusIds: z.array(z.string().min(1).max(256)).max(16).optional(),
+    cropFocusIds: z
+      .array(z.string().min(1).max(256))
+      .max(16)
+      .optional()
+      .describe(
+        'Close-ups around these focuses: PNG artifacts of the icon render, and inline schematic crops.',
+      ),
+    cropBranchIds: z
+      .array(z.string().min(1).max(256))
+      .max(8)
+      .optional()
+      .describe(
+        'Inline close-ups of whole branches. Use a declared branch id or the first focus of a derived branch; the scorecard lists them.',
+      ),
+    inline: z
+      .boolean()
+      .optional()
+      .describe(
+        'Default true: return an in-game-style schematic overview and crops of the worst places as inline images, so no second call is needed. False returns only linked artifacts.',
+      ),
     columns: z.number().int().min(1).max(12).optional(),
     padding: z.number().int().min(0).max(1000).optional(),
     png: z
@@ -119,6 +138,8 @@ export const focusRenderRequestSchema = z
             ['verticalSpacing', value.verticalSpacing],
             ['reviewScale', value.reviewScale],
             ['cropFocusIds', value.cropFocusIds],
+            ['cropBranchIds', value.cropBranchIds],
+            ['inline', value.inline],
           ] as const);
     for (const [field, fieldValue] of invalid) {
       if (fieldValue !== undefined)

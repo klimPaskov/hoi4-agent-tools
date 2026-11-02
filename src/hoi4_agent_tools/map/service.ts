@@ -843,6 +843,7 @@ async function wholeMapDiff(
   const rendered = await renderMap(after, {
     layer: 'state',
     overlays: ['coastlines', 'ports', 'victory-points', 'supply-nodes', 'railways'],
+    positionRecords: 'counts',
     ...(options?.scale === undefined ? {} : { scale: options.scale }),
     ...(options?.signal === undefined ? {} : { signal: options.signal }),
     ...(options?.budget === undefined ? {} : { budget: options.budget }),
@@ -1803,6 +1804,7 @@ export class AgentNudger {
         ? renderMap(snapshot.index, {
             layer: 'state',
             overlays: [...comparisonOverlays],
+            positionRecords: 'counts',
             ...(options.scale === undefined ? {} : { scale: options.scale }),
             ...(options.signal === undefined ? {} : { signal: options.signal }),
             budget,
@@ -1811,6 +1813,7 @@ export class AgentNudger {
       renderMap(plan.finalIndex, {
         layer: 'state',
         overlays: [...comparisonOverlays],
+        positionRecords: 'counts',
         ...(options.scale === undefined ? {} : { scale: options.scale }),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
         budget,

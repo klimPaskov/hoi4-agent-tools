@@ -8,7 +8,7 @@ The server discovers these directories for a workspace:
 | Source                         | Default location                                                            | Optional workspace registration                        |
 | ------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Installed game documentation   | `gameRoot/documentation/**/*.md` and `gameRoot/common/**/*documentation.md` | Configure `gameRoot`.                                  |
-| Offline wiki                   | `modRoot/paradox_wiki/**/*.md`                                              | Set absolute `wikiRoot`.                               |
+| HOI4 wiki (kit)                | `modRoot/hoi4_wiki/**/*.md`, else `modRoot/paradox_wiki/**/*.md`            | Set absolute `wikiRoot`.                               |
 | Generated script documentation | `modRoot/script_docs/**/*.md` and `**/*.log`                                | Set absolute `scriptDocsRoot` to a user-supplied dump. |
 
 Markdown headings and recognizable standalone names in generated `.log` files form sections. A Markdown table row whose first cell is an identifier, such as a wiki effect, trigger, modifier, define, or on action, is also its own one-line section, so a citation can name the exact entry inside a long table. A dump that yields one section should be treated as insufficiently parsed; inspect its source format before relying on it. Source bytes are hashed on each request, while unchanged section indexes are reused. Missing roots are reported as unavailable. The public package contains none of these local source files.
