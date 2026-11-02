@@ -53,6 +53,7 @@ export async function gameViewBundle(
   png: Buffer,
   report: FocusGameViewReport,
   titles: Record<string, { text: string; resolved: boolean }>,
+  request: Record<string, unknown>,
 ): Promise<GameViewBundle> {
   const boxes = report.focuses
     .map((box) => {
@@ -77,6 +78,7 @@ ${boxes}
     layout: { hash: layout.layoutHash, nodes: layout.nodes.map(({ id, x, y }) => ({ id, x, y })) },
     render: report,
     titles,
+    request,
   })}\n`;
   const html = `<!doctype html>
 <html lang="en">

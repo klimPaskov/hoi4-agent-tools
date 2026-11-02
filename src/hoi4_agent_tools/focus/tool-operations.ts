@@ -1070,7 +1070,14 @@ async function renderGameViewOnly(
       `The game view could not be drawn: ${view.message}`,
       { reason: view.code },
     );
-  const bundle = await gameViewBundle(plan, layout, view.png, view.report, view.titles);
+  const bundle = await gameViewBundle(
+    plan,
+    layout,
+    view.png,
+    view.report,
+    view.titles,
+    view.request,
+  );
   const stored = await storeGameViewArtifacts(
     workspace,
     plan,
