@@ -249,6 +249,18 @@ describe('in-process durable job operation adapters', () => {
       structuredContent: { status: 'ok', code: 'GUI_INSPECTED' },
     });
     expect(inspected.staged).toEqual([inspected.result]);
+    // An unknown window is a small not-found naming the window, and writes no artifact.
+    const missing = await runRead(engine, operations, 'hoi4.gui_inspect', {
+      workspaceId: 'fixture',
+      windowName: 'synthetic_gui_windw',
+      scenario,
+      generatedScenarios: { enabled: false },
+    });
+    expect(missing.result).toMatchObject({
+      isError: true,
+      structuredContent: { status: 'error', code: 'GUI_WINDOW_NOT_FOUND', artifacts: [] },
+    });
+    expect(JSON.stringify(missing.result.content)).toContain('synthetic_gui_windw');
     const rendered = await runRead(engine, operations, 'hoi4.gui_render', {
       workspaceId: 'fixture',
       windowName: 'synthetic_gui_window',
