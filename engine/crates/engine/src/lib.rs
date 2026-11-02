@@ -15,6 +15,7 @@ pub mod findings;
 pub mod imagehdr;
 pub mod index;
 pub mod lints;
+pub mod localisation;
 pub mod overrides;
 pub mod repair;
 pub mod report;

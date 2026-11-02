@@ -101,6 +101,7 @@ name = "hoi4-engine"
 version = "0.1.0"
 dependencies = [
  "hoi4-syntax",
+ "memchr",
  "rayon",
  "serde",
  "serde_json",

@@ -552,6 +552,48 @@
           "status": "error"
         }
       }
+    },
+    {
+      "id": "zin.localisation.audit-undefined-desc",
+      "surface": "localisation",
+      "corpus": "zin",
+      "title": "A literal \"undefined\" event description is found",
+      "evidence": "events/zin_glo.txt:189 has desc = undefined, and no language defines a key named undefined.",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "audit"
+      },
+      "expect": [
+        {
+          "path": "data.audit.counts.LOC_KEY_UNDEFINED",
+          "equals": 1
+        },
+        {
+          "path": "data.audit.problems[*].key",
+          "includes": "undefined"
+        }
+      ]
+    },
+    {
+      "id": "kaiserreich.localisation.blank-files-quiet",
+      "surface": "localisation",
+      "corpus": "kaiserreich",
+      "title": "Files shipped empty to blank a vanilla file raise no header problem",
+      "evidence": "84 Kaiserreich files, such as localisation/english/Juno_bop_l_english.yml, hold only a byte order mark (3 bytes) to blank the vanilla file of that name.",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "audit"
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].code",
+          "excludes": "LOC_MISSING_LANGUAGE_HEADER"
+        },
+        {
+          "path": "data.supportedLanguages",
+          "equals": ["english"]
+        }
+      ]
     }
   ]
 }

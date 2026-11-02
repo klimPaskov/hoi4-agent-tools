@@ -28,4 +28,10 @@ if [ ! -f "$stamp_file" ] || [ "$(cat "$stamp_file")" != "$lock_hash" ]; then
   printf '%s\n' "$lock_hash" > "$stamp_file"
 fi
 
-npm run --silent bench -- --suite real --watch-game --accept-if-clean
+# Tools built on the Rust engine (ADR 0074) need the checkout's own hoi4-engine build. Cargo
+# reuses CARGO_TARGET_DIR when one is set, so a shared build cache keeps this step short.
+target=${CARGO_TARGET_DIR:-$checkout/engine/target}
+(cd engine && CARGO_TARGET_DIR="$target" cargo build --release --locked --quiet -p hoi4-engine-cli)
+binary=$target/release/hoi4-engine
+[ -f "$binary.exe" ] && binary=$binary.exe
+HOI4_ENGINE=$binary npm run --silent bench -- --suite real --watch-game --accept-if-clean

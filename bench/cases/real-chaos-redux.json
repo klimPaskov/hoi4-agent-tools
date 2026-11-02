@@ -337,6 +337,50 @@
           "equals": true
         }
       ]
+    },
+    {
+      "id": "chaos_redux.localisation.unknown-key",
+      "surface": "localisation",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown localisation key is an explicit not-found",
+      "evidence": "No language in the game or Chaos Redux defines chaosx_no_such_key.",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "key",
+        "key": "chaosx_no_such_key"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "LOCALISATION_KEY_NOT_FOUND"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.localisation.scripted-text-is-information",
+      "surface": "localisation",
+      "corpus": "chaos_redux",
+      "title": "Text scripted localisation shows as written is information, not a problem",
+      "evidence": "common/scripted_localisation/chaosx_scripted_localisation_settings.txt:62 uses localization_key = \"event_system.enabled\" to show a setting name as written.",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "audit"
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].code",
+          "excludes": "LOC_KEY_UNDEFINED"
+        },
+        {
+          "path": "validation.passed",
+          "equals": true
+        }
+      ]
     }
   ]
 }
