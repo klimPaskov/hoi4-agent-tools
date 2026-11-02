@@ -1,0 +1,16 @@
+{
+  "schema": "hoi4-focus-layout-request/1",
+  "operation": "insert",
+  "treeId": "golden_insert_corridor",
+  "focuses": [
+    { "id": "R", "position": { "mode": "fixed", "x": 0, "y": 0 } },
+    { "id": "A", "prerequisites": [["R"]], "position": { "mode": "fixed", "x": -1, "y": 1 } },
+    { "id": "B", "prerequisites": [["R"]], "position": { "mode": "fixed", "x": 1, "y": 1 } },
+    { "id": "E", "position": { "mode": "fixed", "x": -2, "y": 0 } },
+    { "id": "F", "prerequisites": [["E"]], "position": { "mode": "fixed", "x": -2, "y": 2 } },
+    { "id": "N1", "prerequisites": [["R"]] },
+    { "id": "N2", "prerequisites": [["N1"]] },
+    { "id": "N3", "prerequisites": [["N1"]] }
+  ],
+  "insert": { "focusIds": ["N1", "N2", "N3"], "preferSide": "either", "allowShift": false }
+}

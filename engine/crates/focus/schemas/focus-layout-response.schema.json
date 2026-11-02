@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/klimPaskov/hoi4-agent-tools/blob/main/engine/crates/focus/schemas/focus-layout-response.schema.json",
+  "title": "hoi4-focus-layout/1",
+  "oneOf": [{ "$ref": "#/$defs/response" }, { "$ref": "#/$defs/invalid" }],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "shift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fromX", "columns", "direction", "focusIds"],
+      "properties": {
+        "fromX": { "type": "integer" },
+        "columns": { "type": "integer", "minimum": 1 },
+        "direction": { "enum": ["right", "left"] },
+        "focusIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "status", "operation", "nodes", "source", "diagnostics", "metrics", "hashes"],
+      "properties": {
+        "schema": { "const": "hoi4-focus-layout/1" },
+        "status": { "enum": ["ok", "blocked"] },
+        "operation": { "enum": ["layout", "insert"] },
+        "treeId": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "x", "y", "laneId", "moved"],
+            "properties": {
+              "id": { "type": "string" },
+              "x": { "type": "integer" },
+              "y": { "type": "integer" },
+              "laneId": { "type": "string" },
+              "moved": { "type": "boolean" }
+            }
+          }
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "x", "y"],
+            "properties": {
+              "id": { "type": "string" },
+              "relativeTo": { "type": "string" },
+              "x": { "type": "integer" },
+              "y": { "type": "integer" }
+            }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "severity", "focusIds", "message", "details"],
+            "properties": {
+              "code": { "type": "string", "pattern": "^FOCUS_ENGINE_[A-Z_]+$" },
+              "severity": { "enum": ["error", "warning", "info"] },
+              "focusIds": { "type": "array", "items": { "type": "string" } },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
+            }
+          }
+        },
+        "metrics": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["columns", "rows", "orthogonalCrossings", "stemsThroughPlaques", "mergedBars", "durationMicros"],
+              "properties": {
+                "columns": { "type": "integer", "minimum": 0 },
+                "rows": { "type": "integer", "minimum": 0 },
+                "orthogonalCrossings": { "type": "integer", "minimum": 0 },
+                "stemsThroughPlaques": { "type": "integer", "minimum": 0 },
+                "mergedBars": { "type": "integer", "minimum": 0 },
+                "durationMicros": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        },
+        "hashes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layout", "untouched", "prerequisites", "exclusions"],
+          "properties": {
+            "layout": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+            "untouched": { "$ref": "#/$defs/sha256" },
+            "prerequisites": { "$ref": "#/$defs/sha256" },
+            "exclusions": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "needsRoom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["shift"],
+          "properties": { "shift": { "type": "array", "items": { "$ref": "#/$defs/shift" } } }
+        },
+        "shifted": { "type": "array", "items": { "$ref": "#/$defs/shift" } }
+      }
+    },
+    "invalid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "status", "error"],
+      "properties": {
+        "schema": { "const": "hoi4-focus-layout/1" },
+        "status": { "const": "invalid" },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

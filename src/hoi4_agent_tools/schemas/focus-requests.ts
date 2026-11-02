@@ -163,7 +163,7 @@ export const focusRewriteRequestSchema = z
     workspaceId: workspaceIdSchema,
     relativePath: workspaceRelativePathSchema,
     treeId: z.string().min(1).max(256).optional(),
-    layoutMode: z.enum(['authored', 'compact']).default('authored'),
+    layoutMode: z.enum(['authored', 'compact', 'engine']).default('authored'),
     compactFocusIds: z.array(z.string().min(1).max(256)).min(1).max(10_000).optional(),
     pinnedFocusIds: z.array(z.string().min(1).max(256)).max(10_000).optional(),
     symmetryGroups: z
@@ -187,6 +187,15 @@ export const focusRewriteRequestSchema = z
       )
       .max(64)
       .optional(),
+    placement: z
+      .object({
+        focusIds: z.array(z.string().min(1).max(256)).min(1).max(10_000),
+        anchorId: z.string().min(1).max(256).optional(),
+        preferSide: z.enum(['left', 'right', 'either']).optional(),
+        allowShift: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     plan: compactFocusPlanSchema.optional(),
     createIfMissing: z.boolean().default(false),
     horizontalSpacing: z.number().int().min(80).max(1000).optional(),
@@ -209,6 +218,35 @@ export const focusRewriteRequestSchema = z
             path: [field],
             message: `${field} requires compact layout mode`,
           });
+    if (value.placement !== undefined) {
+      if (value.layoutMode === 'compact')
+        context.addIssue({
+          code: 'custom',
+          path: ['placement'],
+          message: 'placement requires authored or engine layout mode',
+        });
+      if (value.layoutMode === 'authored' && value.plan === undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['placement'],
+          message: 'placement in authored layout mode requires a plan that adds the focuses',
+        });
+      if (
+        value.placement.anchorId !== undefined &&
+        !value.placement.focusIds.includes(value.placement.anchorId)
+      )
+        context.addIssue({
+          code: 'custom',
+          path: ['placement', 'anchorId'],
+          message: 'placement.anchorId must be one of placement.focusIds',
+        });
+      if (new Set(value.placement.focusIds).size !== value.placement.focusIds.length)
+        context.addIssue({
+          code: 'custom',
+          path: ['placement', 'focusIds'],
+          message: 'placement.focusIds must not repeat a focus',
+        });
+    }
     const mode = value.mode ?? 'national';
     const schema = mode === 'continuous' ? continuousFocusPaletteSchema : focusTreePlanSchema;
     if (value.plan !== undefined && !schema.safeParse(value.plan).success)
@@ -234,7 +272,13 @@ export const focusRewriteRequestSchema = z
         context.addIssue({
           code: 'custom',
           path: ['layoutMode'],
-          message: 'compact layout mode is only valid in national mode',
+          message: `${value.layoutMode} layout mode is only valid in national mode`,
+        });
+      if (value.placement !== undefined)
+        context.addIssue({
+          code: 'custom',
+          path: ['placement'],
+          message: 'placement is only valid in national mode',
         });
       for (const [field, fieldValue] of [
         ['horizontalSpacing', value.horizontalSpacing],
@@ -249,23 +293,23 @@ export const focusRewriteRequestSchema = z
             message: `${field} is only valid for national focus review renders`,
           });
     } else {
-      if (value.plan === undefined && value.layoutMode !== 'compact')
+      if (value.plan === undefined && value.layoutMode === 'authored')
         context.addIssue({
           code: 'custom',
           path: ['plan'],
-          message: 'plan is required unless layoutMode is compact',
+          message: 'plan is required unless layoutMode is compact or engine',
         });
       if (value.plan === undefined && value.treeId === undefined)
         context.addIssue({
           code: 'custom',
           path: ['treeId'],
-          message: 'treeId is required for plan-free compact reflow',
+          message: 'treeId is required for plan-free compact or engine layout',
         });
       if (value.plan === undefined && value.createIfMissing)
         context.addIssue({
           code: 'custom',
           path: ['createIfMissing'],
-          message: 'plan-free compact reflow requires an existing focus source',
+          message: 'plan-free compact or engine layout requires an existing focus source',
         });
       if (
         value.plan !== undefined &&

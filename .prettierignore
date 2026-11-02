@@ -20,3 +20,5 @@ npm-shrinkwrap.json
 engine/target/
 engine/fixtures/
 engine/crates/*/tests/data/
+engine/crates/focus/schemas/
+engine/crates/focus/tests/fixtures/
