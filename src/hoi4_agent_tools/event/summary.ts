@@ -8,6 +8,7 @@ import type { EventImpactResult, EventPathExplanation, EventRootDiscovery } from
 export const EVENT_INLINE_FINDINGS = 10;
 const EVENT_INLINE_CODES = 10;
 const EVENT_INLINE_EVENT_IDS = 20;
+const EVENT_INLINE_TRACE_NAMES = 20;
 const EVENT_INLINE_MESSAGE_LENGTH = 300;
 
 const CLASSIFICATION_ORDER: Readonly<Record<EventDefectClass, number>> = {
@@ -89,11 +90,21 @@ export function summarizeEventTrace(trace: EventTraceResult): Record<string, Jso
   const events = trace.nodes
     .flatMap(({ kind, eventId }) => (kind === 'event' && eventId !== undefined ? [eventId] : []))
     .sort(compareCodeUnits);
+  // Callers that reach an event through scripted effects, decisions or focuses are not events,
+  // so name them here as well. Otherwise an upstream trace looks callerless without its report.
+  const entries = [
+    ...new Set(trace.nodes.flatMap(({ kind, label }) => (kind === 'entry' ? [label] : []))),
+  ].sort(compareCodeUnits);
+  const helpers = [...new Set(trace.edges.flatMap(({ helperStack }) => helperStack))].sort(
+    compareCodeUnits,
+  );
   return {
     nodes: trace.nodes.length,
     edges: trace.edges.length,
     events: events.length,
     eventIds: events.slice(0, EVENT_INLINE_EVENT_IDS),
+    entryPoints: entries.slice(0, EVENT_INLINE_TRACE_NAMES),
+    helpers: helpers.slice(0, EVENT_INLINE_TRACE_NAMES),
     boundaryNodes: trace.boundaryNodeIds.length,
     truncated: trace.truncated,
   };
