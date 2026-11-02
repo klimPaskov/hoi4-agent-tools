@@ -254,10 +254,10 @@ function decisionCandidates(
       ignored.has(assignment.key.value)
     )
       continue;
+    // days_remove is not a mission marker: ordinary decisions often carry days_remove = -1.
     const mission =
       firstScalar(assignment.value, 'is_mission')?.value === 'yes' ||
-      firstScalar(assignment.value, 'days_mission_timeout') !== undefined ||
-      firstScalar(assignment.value, 'days_remove') !== undefined;
+      firstScalar(assignment.value, 'days_mission_timeout') !== undefined;
     if ((adapterId === 'mission_ai_will_do') !== mission) continue;
     const weight = childBlocks(assignment.value, 'ai_will_do')[0];
     if (weight === undefined) continue;

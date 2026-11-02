@@ -285,12 +285,34 @@ export async function inspectProbabilities(
   );
   // A wrong adapter guess, such as a mission named as a decision, should not cost another call.
   const suggested = inspected.discovery?.suggestedAdapter;
+  // Without an adapter, an identifier or pool that names weighted blocks picks its own adapter:
+  // an event id evaluates its options rather than returning the whole source inventory.
+  const namedBySource =
+    input.adapter === undefined &&
+    inspected.discovery?.reason === 'source_inventory' &&
+    inspected.discovery.availableAdapters.some(
+      ({ adapterId, identifierMatchCount, candidatePoolMatchCount }) =>
+        adapterId === suggested && (identifierMatchCount > 0 || candidatePoolMatchCount > 0),
+    ) &&
+    (source?.identifier !== undefined || candidatePool.length > 0);
+  const alternatives = namedBySource
+    ? inspected
+        .discovery!.availableAdapters.filter(
+          ({ adapterId, identifierMatchCount, candidatePoolMatchCount }) =>
+            adapterId !== suggested &&
+            (source?.identifier === undefined
+              ? candidatePoolMatchCount > 0
+              : identifierMatchCount > 0),
+        )
+        .map(({ adapterId }) => adapterId)
+    : [];
   if (
     input.evaluate !== false &&
     inspected.surface === undefined &&
     suggested !== undefined &&
     suggested !== input.adapter &&
-    (inspected.discovery?.reason === 'candidate_pool_not_found' ||
+    (namedBySource ||
+      inspected.discovery?.reason === 'candidate_pool_not_found' ||
       inspected.discovery?.reason === 'requested_adapter_empty' ||
       inspected.discovery?.reason === 'identifier_not_found')
   )
@@ -335,6 +357,17 @@ export async function inspectProbabilities(
     });
     const result = probabilityAnalysisServiceResult(context.workspaceId, analyzed);
     result.artifacts = [...result.artifacts, ...inspected.artifacts];
+    if (namedBySource && alternatives.length > 0)
+      result.diagnostics = [
+        {
+          code: 'PROBABILITY_ADAPTER_SELECTED',
+          severity: 'info',
+          category: 'configuration',
+          message: `No adapter was requested, so ${surface.adapter.id} was used; pass adapter to evaluate ${alternatives.join(', ')} instead`,
+          details: { adapterId: surface.adapter.id, alternatives },
+        },
+        ...result.diagnostics,
+      ];
     if (input.scenarioSet === undefined)
       result.diagnostics = [
         {
