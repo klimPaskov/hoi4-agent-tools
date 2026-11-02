@@ -739,3 +739,305 @@ export const testCases: DiscoveryCase[] = [
     answers: [],
   },
 ];
+
+/**
+ * A second blind set, written on 2026-11-02 by an agent that saw no ranking code, no search
+ * results and none of the sets above. It was scored once, for the change in ADR 0077.
+ */
+export const freshCases: DiscoveryCase[] = [
+  // Effects
+  {
+    query: 'move the capital of a country to another state',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('set_capital') },
+      { file: wiki('effects'), line: row('set_capital') },
+    ],
+  },
+  {
+    query: 'absorb another nation completely into mine',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('annex_country') },
+      { file: wiki('effects'), line: row('annex_country') },
+    ],
+  },
+  {
+    query: 'start a war against another country from script',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('declare_war_on') },
+      { file: wiki('effects'), line: row('declare_war_on') },
+    ],
+  },
+  {
+    query: 'hand a state over to a different owner',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('transfer_state') },
+      { file: wiki('effects'), line: row('transfer_state') },
+    ],
+  },
+  {
+    query: 'make fascism more popular in a country',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('add_popularity') },
+      { file: wiki('effects'), line: row('add_popularity') },
+    ],
+  },
+  {
+    query: 'grant a country a tech without researching it',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('set_technology') },
+      { file: wiki('effects'), line: row('set_technology') },
+    ],
+  },
+  {
+    query: 'change the displayed name and flag of a country after an event',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('set_cosmetic_tag') },
+      { file: wiki('effects'), line: row('set_cosmetic_tag') },
+    ],
+  },
+  {
+    query: 'mark a national focus as finished through script',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('complete_national_focus') },
+      { file: wiki('effects'), line: row('complete_national_focus') },
+    ],
+  },
+  {
+    query: 'split a country in two with a revolt',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('start_civil_war') },
+      { file: wiki('effects'), line: row('start_civil_war') },
+    ],
+  },
+  {
+    query: 'bring a country into my alliance',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('add_to_faction') },
+      { file: wiki('effects'), line: row('add_to_faction') },
+    ],
+  },
+  {
+    query: 'give a country a justification to attack a neighbour',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('create_wargoal') },
+      { file: wiki('effects'), line: row('create_wargoal') },
+    ],
+  },
+  {
+    query: 'give a country a national spirit',
+    kind: 'question',
+    answers: [
+      { file: effects, line: heading('add_ideas') },
+      { file: wiki('effects'), line: row('add_ideas') },
+    ],
+  },
+  // Triggers
+  {
+    query: 'has the player already finished this focus',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('has_completed_focus') },
+      { file: wiki('triggers'), line: row('has_completed_focus') },
+    ],
+  },
+  {
+    query: 'only run this for computer-controlled countries',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_ai') },
+      { file: wiki('triggers'), line: row('is_ai') },
+    ],
+  },
+  {
+    query: 'check whether the people support the war effort enough',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('has_war_support') },
+      { file: wiki('triggers'), line: row('has_war_support') },
+    ],
+  },
+  {
+    query: 'how close is a country to capitulating',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('surrender_progress') },
+      { file: wiki('triggers'), line: row('surrender_progress') },
+    ],
+  },
+  {
+    query: 'is this country a vassal of anyone',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_subject') },
+      { file: wiki('triggers'), line: row('is_subject') },
+    ],
+  },
+  {
+    query: 'does the country possess a particular state',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('owns_state') },
+      { file: wiki('triggers'), line: row('owns_state') },
+    ],
+  },
+  {
+    query: 'condition on how tense the world currently is',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('threat') },
+      { file: wiki('triggers'), line: row('threat') },
+    ],
+  },
+  {
+    query: 'do these two countries share a border',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_neighbor_of') },
+      { file: wiki('triggers'), line: row('is_neighbor_of') },
+    ],
+  },
+  {
+    query: 'how many scientists can a country research with at once',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('amount_research_slots') },
+      { file: wiki('triggers'), line: row('amount_research_slots') },
+    ],
+  },
+  {
+    query: 'are these two nations in the same alliance',
+    kind: 'question',
+    answers: [
+      { file: triggers, line: heading('is_in_faction_with') },
+      { file: wiki('triggers'), line: row('is_in_faction_with') },
+    ],
+  },
+  // Modifiers
+  {
+    query: 'make buildings get constructed faster',
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading('production_speed_buildings_factor') },
+      { file: wiki('modifiers'), line: row('production_speed_buildings_factor') },
+      { file: wiki('list_of_modifiers'), line: row('production_speed_buildings_factor') },
+    ],
+  },
+  {
+    query: 'shorten the time it takes to train divisions',
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading('training_time_factor') },
+      { file: wiki('modifiers'), line: row('training_time_factor') },
+      { file: wiki('list_of_modifiers'), line: row('training_time_factor') },
+    ],
+  },
+  {
+    query: 'share of industry spent on civilian goods',
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading('consumer_goods_factor') },
+      { file: wiki('modifiers'), line: row('consumer_goods_factor') },
+      { file: wiki('list_of_modifiers'), line: row('consumer_goods_factor') },
+    ],
+  },
+  {
+    query: 'how many victory points can be lost before a country gives up',
+    kind: 'question',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading('surrender_limit') },
+      { file: wiki('modifiers'), line: row('surrender_limit') },
+      { file: wiki('list_of_modifiers'), line: row('surrender_limit') },
+    ],
+  },
+  // Modding concepts
+  {
+    query: 'how do I give an event several choices for the player',
+    kind: 'question',
+    answers: [{ file: wiki('event_modding'), line: section('Options') }],
+  },
+  {
+    query: 'require two other focuses before a focus can be taken',
+    kind: 'question',
+    answers: [
+      { file: wiki('national_focus_modding'), line: section('Interaction with other focuses') },
+    ],
+  },
+  {
+    query: 'make the AI more likely to pick a focus',
+    kind: 'question',
+    answers: [{ file: wiki('national_focus_modding'), line: section('AI will do') }],
+  },
+  {
+    query: 'how to colour part of a text string in game',
+    kind: 'question',
+    answers: [{ file: wiki('localisation'), line: section('Colouring characters') }],
+  },
+  {
+    query: 'decision that lasts some days and then runs a cleanup effect',
+    kind: 'question',
+    answers: [{ file: wiki('decision_modding'), line: section('Timer upon selection') }],
+  },
+  {
+    query: 'what bonuses can a national spirit give while active',
+    kind: 'question',
+    answers: [{ file: wiki('idea_modding'), line: section('Modifiers') }],
+  },
+  {
+    query: 'let units cross a strait between two provinces that are not touching',
+    kind: 'question',
+    answers: [{ file: wiki('map_modding'), line: section('Adjacencies') }],
+  },
+  {
+    query: 'add a clickable button with an image and text to a custom window',
+    kind: 'question',
+    answers: [{ file: wiki('interface_modding'), line: section('buttonType') }],
+  },
+  // Identifiers
+  {
+    query: 'add_political_power',
+    kind: 'identifier',
+    answers: [
+      { file: effects, line: heading('add_political_power') },
+      { file: wiki('effects'), line: row('add_political_power') },
+    ],
+  },
+  {
+    query: 'has_government',
+    kind: 'identifier',
+    answers: [
+      { file: triggers, line: heading('has_government') },
+      { file: wiki('triggers'), line: row('has_government') },
+    ],
+  },
+  {
+    query: 'political_power_factor',
+    kind: 'identifier',
+    answers: [
+      { file: 'modifiers_documentation.md', line: heading('political_power_factor') },
+      { file: wiki('modifiers'), line: row('political_power_factor') },
+      { file: wiki('list_of_modifiers'), line: row('political_power_factor') },
+    ],
+  },
+  {
+    query: 'set_country_flag',
+    kind: 'identifier',
+    answers: [
+      { file: effects, line: heading('set_country_flag') },
+      { file: wiki('effects'), line: row('set_country_flag') },
+    ],
+  },
+  // Negatives
+  { query: 'best hydration percentage for sourdough pizza dough', kind: 'negative', answers: [] },
+  { query: 'how to fix a flat bicycle tire', kind: 'negative', answers: [] },
+];

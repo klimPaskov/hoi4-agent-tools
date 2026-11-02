@@ -176,6 +176,47 @@ A warm read took 13 ms rather than 25–84 ms.
 Later end-to-end runs shared the machine with other heavy work: three alternating rounds of the old and new code measured warm search medians of 145–183 ms and 84–583 ms, so no end-to-end speed gain is claimed from them.
 The first `hoi4.source_lookup` still builds the whole game and mod symbol index: 53–66 seconds in three runs before this change on a lightly loaded machine, 108–192 seconds under the later load. This change does not touch it, and moving that index to the shared Rust engine is planned separately.
 
+## Command phrasings, verb direction and a fresh blind set
+
+Measured on 2026-11-02 against the kit's `hoi4_wiki/` at `93d010f` and the installed 1.19.4.1 documentation (ADR 0077).
+Each change was developed on the discovery, validation and held-out sets (85 questions), scored on the blind test set, and kept only if it improved that set.
+Before any change the sets scored as on 1.19.4.1 above, apart from wiki edits since: blind test 21 of 40 first, mean reciprocal rank 0.611.
+
+| Change                                            | Development first | Blind first | Blind within three | Blind mean reciprocal rank | Kept |
+| ------------------------------------------------- | ----------------: | ----------: | -----------------: | -------------------------: | ---- |
+| None                                              |             40/85 |       21/40 |              27/40 |                      0.611 |      |
+| Verb direction                                    |             42/85 |       22/40 |              27/40 |                      0.628 | Yes  |
+| Abbreviations, spellings, page topic, plural keys |                +1 |   no change |          no change |                  no change | No   |
+| Command phrasings (with verb direction)           |             53/85 |       25/40 |              31/40 |                      0.694 | Yes  |
+
+With all five candidate changes in place, each was left out in turn and the blind set rescored. Only leaving out the verb direction changed it. Together the four dropped changes placed one more development answer first, four more within three and three more within five.
+The phrase weight was chosen on the development sets: 0.25, 0.5, 1, 2, 3, 4 and 6 times a game-text word placed 43, 45, 45, 47, 48, 53 and 53 answers first, and 4 was kept.
+Two cross-encoder rerankers reordered the first twelve word results on the development sets: `Xenova/ms-marco-MiniLM-L-6-v2` placed 34 of 85 first on its own and 46 fused with the word ranking (against 43), at 0.4 seconds per query, and `Xenova/bge-reranker-base` 31 and 45, at 1.6 seconds. Neither was scored on the blind set.
+
+On the blind set the phrasings moved "raise war support by a few percent", "switch a country over to a different focus tree", "queue up tanks or rifles in a country's equipment production", "tell the AI to prioritise or avoid something towards another country", "check whether a country owns a particular state" and "give a general or advisor a new trait" to first, and "make all buildings construct faster" into the first three.
+"Check if a country is at war with anyone" fell from first to third, "check whether a decision is currently active" and "decision that works as a timed mission with a deadline" from first to second, and "make my army use less supply" (third) and "create a new start date with its own description and list of featured countries" (fifth) left the first five.
+
+A fresh blind set, `--fresh`, was written for this round by an agent that saw no ranking code, no results and no other set: 34 plain-word questions, four exact names and two negative queries.
+It was scored once, after every choice above was final.
+
+| Fresh blind set (38 scored) | Answer first | Within three | Within five | Lands within three | Mean reciprocal rank |
+| --------------------------- | -----------: | -----------: | ----------: | -----------------: | -------------------: |
+| Before                      |         9/38 |        12/38 |       16/38 |               9/38 |                0.294 |
+| Verb direction only         |         9/38 |        12/38 |       16/38 |               9/38 |                0.294 |
+| After                       |        17/38 |        23/38 |       26/38 |              20/38 |                0.526 |
+
+Three of its four exact names rank first before and after. For `set_country_flag` the console command of the same name ranks first and the effect second, because both are exact headings and the console penalty applies only to inexact matches.
+The negative query "how to fix a flat bicycle tire" returns five results rather than two, because "flat" names `special_forces_cap_flat`; the other returns none.
+Its writer flagged some answer lists as narrow: "is this country a vassal of anyone" accepts only `is_subject`, and "does the country possess a particular state" only `owns_state`.
+
+The maintainer's target is still far off: 25 of 40 blind answers first, and 17 of 38 on the fresh set, which has now been used once.
+
+Run the fresh set with:
+
+```bash
+npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --fresh
+```
+
 ## Compact context budgets
 
 A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.
