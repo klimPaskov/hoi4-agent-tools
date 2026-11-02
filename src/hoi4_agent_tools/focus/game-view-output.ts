@@ -20,6 +20,8 @@ import type { FocusLayoutResult, FocusTreePlan } from './model.js';
 const artifacts = new ArtifactStore();
 /** Longest edge of the inline overview. */
 const INLINE_EDGE = 1500;
+/** Largest inline overview, the same budget as the schematic pictures. */
+const INLINE_BYTES = 700_000;
 
 function escapeXml(value: string): string {
   return value
@@ -110,18 +112,24 @@ apply();
 </body>
 </html>
 `;
-  const fit = Math.min(1, INLINE_EDGE / Math.max(report.width, report.height));
-  const inlinePng =
-    fit >= 1
-      ? png
-      : await sharp(png)
-          .resize(
-            Math.max(1, Math.round(report.width * fit)),
-            Math.max(1, Math.round(report.height * fit)),
-            { fit: 'fill', kernel: sharp.kernel.lanczos3 },
-          )
-          .png({ compressionLevel: 6 })
-          .toBuffer();
+  // The overview shrinks until it fits the inline byte budget, like the schematic pictures.
+  let fit = Math.min(1, INLINE_EDGE / Math.max(report.width, report.height));
+  let inlinePng = png;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    inlinePng =
+      fit >= 1 && png.length <= INLINE_BYTES
+        ? png
+        : await sharp(png)
+            .resize(
+              Math.max(1, Math.round(report.width * fit)),
+              Math.max(1, Math.round(report.height * fit)),
+              { fit: 'fill', kernel: sharp.kernel.lanczos3 },
+            )
+            .png({ compressionLevel: 9, palette: true, quality: 90 })
+            .toBuffer();
+    if (inlinePng.length <= INLINE_BYTES) break;
+    fit *= 0.75;
+  }
   return {
     png,
     svg,
