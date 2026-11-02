@@ -60,10 +60,54 @@ fn texture_decode(request: &Value, payload: &[u8]) -> Response {
     }
 }
 
+/// The previews of every workspace this server has rendered, kept for its whole life.
+fn preview() -> &'static hoi4_preview::Preview {
+    static PREVIEW: std::sync::OnceLock<hoi4_preview::Preview> = std::sync::OnceLock::new();
+    PREVIEW.get_or_init(hoi4_preview::Preview::new)
+}
+
+/// `layers`: `[{ "name", "path", "replacePaths": [...] }]` in load order.
+fn layers(request: &Value) -> Result<Vec<hoi4_preview::LayerRoot>, String> {
+    let list = request["layers"].as_array().ok_or("the request has no layers")?;
+    list.iter()
+        .map(|layer| {
+            let path = layer["path"].as_str().ok_or("a layer has no path")?;
+            let path = std::path::PathBuf::from(path);
+            if !path.is_absolute() || !path.is_dir() {
+                return Err(format!("layer {} is not an existing absolute folder", path.display()));
+            }
+            Ok(hoi4_preview::LayerRoot {
+                name: layer["name"].as_str().unwrap_or("").to_string(),
+                path,
+                replace_paths: layer["replacePaths"]
+                    .as_array()
+                    .map(|paths| paths.iter().filter_map(Value::as_str).map(|p| p.trim_matches('/').replace('\\', "/").to_ascii_lowercase()).collect())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+fn focus_render(request: &Value) -> Response {
+    let layers = match layers(request) {
+        Ok(layers) => layers,
+        Err(message) => return Response::error("invalid_request", message),
+    };
+    let render: hoi4_preview::focus::FocusRenderRequest = match serde_json::from_value(request["request"].clone()) {
+        Ok(render) => render,
+        Err(e) => return Response::error("invalid_request", format!("invalid focus render request: {e}")),
+    };
+    match preview().focus_png(layers, &render) {
+        Ok((png, report, cache, timings)) => Response { result: Ok(json!({ "report": report, "cache": cache, "timings": timings })), payload: png },
+        Err(message) => Response::error("invalid_request", message),
+    }
+}
+
 fn handle(request: &Value, payload: &[u8]) -> Response {
     match request["op"].as_str() {
-        Some("hello") => Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode"] })),
+        Some("hello") => Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render"] })),
         Some("texture.decode") => texture_decode(request, payload),
+        Some("focus.render") => focus_render(request),
         Some(other) => Response::error("unknown_op", format!("unknown op {other}")),
         None => Response::error("invalid_request", "the request has no op"),
     }

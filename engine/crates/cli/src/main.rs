@@ -32,6 +32,7 @@ USAGE:
     hoi4-engine focus-layout [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
+    hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
     hoi4-engine serve
     hoi4-engine --version
 
@@ -592,6 +593,28 @@ fn cmd_texture(args: &Args) -> Result<ExitCode, String> {
     Ok(if failed > 0 { ExitCode::from(1) } else { ExitCode::SUCCESS })
 }
 
+fn cmd_focus_render(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&["--mod", "--game", "--dependency", "--no-dlc", "--request", "--output"])?;
+    let output = args.value("--output").ok_or("focus-render needs --output FILE.png")?;
+    let options = workspace_options(args)?;
+    let text = match args.value("--request") {
+        Some(path) => fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut text).map_err(|e| format!("cannot read stdin: {e}"))?;
+            text
+        }
+    };
+    let request: hoi4_preview::focus::FocusRenderRequest = serde_json::from_str(&text).map_err(|e| format!("invalid focus render request: {e}"))?;
+    let layers = hoi4_preview::layers_for(options.game.as_deref(), options.include_dlc, &options.dependencies, options.target.as_deref());
+    let preview = hoi4_preview::Preview::new();
+    let (png, report, cache, timings) = preview.focus_png(layers, &request)?;
+    fs::write(output, png).map_err(|e| format!("cannot write {output}: {e}"))?;
+    let value = serde_json::json!({ "schema": "hoi4-focus-render/1", "report": report, "cache": cache, "timings": timings });
+    println!("{}", serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?);
+    Ok(ExitCode::SUCCESS)
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -615,6 +638,7 @@ fn main() -> ExitCode {
         Some("focus-layout") => cmd_focus_layout(&args),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
+        Some("focus-render") => cmd_focus_render(&args),
         Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {
             print!("{HELP}");
