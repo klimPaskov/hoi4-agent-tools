@@ -22,6 +22,7 @@ import {
   type PreparedSource,
 } from '../core/scanner.js';
 import { decodeSource } from '../core/source/encoding.js';
+import commandPhrases from './command-phrases.json' with { type: 'json' };
 import { activeKnownMistakes } from './known-mistakes.js';
 import { readBoundedJsonLines } from './lines.js';
 import { commandTexts, readGameText, type GameText } from './game-text.js';
@@ -340,6 +341,31 @@ const gameDocNames: Record<ContextInput['surface'], string[]> = {
 const commandHeading = /^[a-z][a-z0-9_]*$/u;
 
 /**
+ * Plain-word phrasings count this many times a game text word, because they name the
+ * command the way a question does rather than the way a tooltip labels it.
+ */
+const PHRASE_WEIGHT = 4;
+let phraseTerms: Map<string, Map<string, number>> | undefined;
+
+/**
+ * The terms of `command-phrases.json`: four plain-word phrasings of each documented effect,
+ * trigger and modifier, such as "state on the coast" for `is_coastal`, written once from
+ * the command's documentation and in-game text (ADR 0078). A command the file does not
+ * name, such as one a later game version adds, keeps only its documentation and game text.
+ */
+function phraseCards(): Map<string, Map<string, number>> {
+  if (phraseTerms !== undefined) return phraseTerms;
+  phraseTerms = new Map();
+  for (const [name, phrases] of Object.entries(commandPhrases as Record<string, string[]>)) {
+    const card = new Map<string, number>();
+    for (const term of phrases.flatMap((text) => textTerms(text)))
+      card.set(term, Math.min((card.get(term) ?? 0) + PHRASE_WEIGHT, 3 * PHRASE_WEIGHT));
+    phraseTerms.set(name, card);
+  }
+  return phraseTerms;
+}
+
+/**
  * For each entry about one command, the words the game shows players for it: the installed
  * documentation says "check if state is coastal" and the tooltip "Is coastal"; a modifier
  * entry gains its in-game name, such as "Supply Consumption". Console commands and defines
@@ -360,6 +386,12 @@ function commandCards(
     for (const term of texts.flatMap((text) => textTerms(text)))
       card.set(term, Math.min((card.get(term) ?? 0) + 1, 3));
     spoken.set(name, card);
+  }
+  for (const [name, card] of phraseCards()) {
+    if (!commands.has(name)) continue;
+    const merged = new Map(spoken.get(name));
+    for (const [term, weight] of card) merged.set(term, (merged.get(term) ?? 0) + weight);
+    spoken.set(name, merged);
   }
   const cards = new Map<SectionTerms, Map<string, number>>();
   for (const section of sections) {
