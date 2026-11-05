@@ -5,6 +5,7 @@ import {
   extractReferenceWorld,
   REFERENCE_TERRAIN,
 } from '../../src/hoi4_agent_tools/map/reference-world.js';
+import { realmReachNotes } from '../../src/hoi4_agent_tools/map/gameplay/reachability.js';
 import { generateWorld, type WorldSpec } from '../../src/hoi4_agent_tools/map/world.js';
 import { mapOperationSchema } from '../../src/hoi4_agent_tools/schemas/map.js';
 import {
@@ -236,5 +237,77 @@ describe('impassable regions of the geography model', () => {
     expect(resolution.diagnostics.map(({ code }) => code)).toContain(
       'MAP_GEOGRAPHY_IMPASSABLE_WITHOUT_AREA',
     );
+  });
+});
+
+describe('reach of realms through impassable land', () => {
+  // Five land provinces in a row: 0 - 1 - 2 - 3 - 4, with province 5 an island.
+  const neighbors = [
+    new Set([1]),
+    new Set([0, 2]),
+    new Set([1, 3]),
+    new Set([2, 4]),
+    new Set([3]),
+    new Set<number>(),
+  ];
+  const kind = [1, 1, 1, 1, 1, 1];
+  const base = {
+    kind,
+    neighbors,
+    blocked: [] as Array<readonly [number, number]>,
+    crossings: [] as Array<readonly [number, number]>,
+    tags: ['AAA', 'BBB'],
+  };
+
+  it('reports land cut from its capital by an impassable province, and not an island', () => {
+    const notes = realmReachNotes({
+      ...base,
+      impassable: new Set([2]),
+      owner: new Map([
+        [0, 0],
+        [1, 0],
+        [3, 0],
+        [4, 1],
+        [5, 0],
+      ]),
+      capitals: [0, 4],
+    });
+    expect(notes).toContainEqual(
+      expect.objectContaining({
+        code: 'MAP_REALM_CUT_OFF',
+        details: expect.objectContaining({ tag: 'AAA', provinces: 1, sample: [4] }),
+      }),
+    );
+    expect(notes.filter(({ code }) => code === 'MAP_REALM_CUT_OFF')).toHaveLength(1);
+  });
+
+  it('reports a realm boxed in by impassable borders, unless a sea crossing or pass opens it', () => {
+    const owner = new Map([
+      [0, 0],
+      [1, 0],
+      [2, 1],
+      [3, 1],
+      [4, 1],
+    ]);
+    const enclosed = realmReachNotes({
+      ...base,
+      impassable: new Set(),
+      blocked: [[1, 2]],
+      owner,
+      capitals: [0, 4],
+    });
+    expect(enclosed.map(({ code, details }) => `${code}:${String(details.tag)}`)).toEqual([
+      'MAP_REALM_ENCLOSED:AAA',
+      'MAP_REALM_ENCLOSED:BBB',
+    ]);
+    const opened = realmReachNotes({
+      ...base,
+      impassable: new Set(),
+      blocked: [[1, 2]],
+      crossings: [[0, 4]],
+      owner,
+      capitals: [0, 4],
+    });
+    expect(opened).toEqual([]);
   });
 });

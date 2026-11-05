@@ -28,6 +28,7 @@ import {
   type WorldPartitionSpec,
 } from './world-partition.js';
 import { adjacencyRowText, adjacencyRulesText, type CrossingPlan } from './gameplay/crossings.js';
+import { realmReachNotes } from './gameplay/reachability.js';
 import { convertInlandSeas } from './gameplay/inland-sea.js';
 import { planEconomy, type EconomyPlan } from './gameplay/economy.js';
 import { prepareGameplay, type GameplayBase } from './gameplay/prepare.js';
@@ -2080,6 +2081,27 @@ export function generateWorld(
       details: { rows: rimRows.length },
     });
   const crossingRows = (gameplay?.crossings.rows ?? []).map(adjacencyRowText);
+  // Impassable land and rows must not cut a realm apart or box it in by accident (ZR-28).
+  if (impassableProvinces.size > 0 || (gameplay?.crossings.blocked.length ?? 0) > 0)
+    for (const note of realmReachNotes({
+      kind: provinces.kind,
+      neighbors: provinces.neighbors,
+      impassable: impassableProvinces,
+      blocked: [
+        ...(gameplay?.crossings.blocked ?? []),
+        ...rimRows.map((row) => {
+          const [from, to] = row.split(';').map(Number) as [number, number];
+          return [from - 1, to - 1] as const;
+        }),
+      ],
+      crossings: (gameplay?.crossings.rows ?? [])
+        .filter(({ type }) => type === 'sea')
+        .map(({ from, to }) => [from - 1, to - 1] as const),
+      owner,
+      capitals,
+      tags: spec.countries.map(({ tag }) => tag),
+    }))
+      notes.push(note);
   add(
     `${map}/adjacencies.csv`,
     text(
