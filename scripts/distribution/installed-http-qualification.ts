@@ -26,6 +26,7 @@ const publicToolNames = [
   'hoi4.idea_inspect',
   'hoi4.system_inspect',
   'hoi4.unit_inspect',
+  'hoi4.asset_inspect',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.impact_inspect',
