@@ -107,15 +107,25 @@ describe('edge and ambient frame in the operation schema', () => {
 
   it('rejects unknown modes, tiny or huge sizes, fractions and extra keys', () => {
     for (const edge of [
-      { mode: 'wall' },
+      { mode: 'moat' },
       { bandPx: 4 },
       { bandPx: 5_000 },
       { bandPx: 12.5 },
       { polarPx: -1 },
       { rimPx: 8 },
       { fade: true },
+      { mode: 'wall', wallTerrain: [] },
+      { mode: 'wall', wallTerrain: [{ y0: 10, y1: 5, kind: 'snow' }] },
+      { mode: 'wall', wallTerrain: [{ y0: 0, y1: 5, kind: 'lava' }] },
+      { mode: 'wall', wallTerrain: 'snow' },
     ])
       expect(mapOperationSchema.safeParse({ ...base, edge }).success).toBe(false);
     expect(mapOperationSchema.safeParse({ ...base, ambientFrame: 'yes' }).success).toBe(false);
+    expect(
+      mapOperationSchema.safeParse({
+        ...base,
+        edge: { mode: 'wall', rimPx: 32, wallTerrain: [{ y0: 0, y1: 99, kind: 'desert' }] },
+      }).success,
+    ).toBe(true);
   });
 });

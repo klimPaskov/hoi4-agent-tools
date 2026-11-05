@@ -1,16 +1,37 @@
 /**
  * World edge and seam policy (ADR 0061). The engine wraps the map horizontally and draws it as a
  * sphere for day and night, so land that touches column 0 or the last column is cut by a straight
- * line where the world repeats. This module keeps land away from the seam and the poles, or ends
- * it in an impassable rim, and writes the north and south frame borders the base map has.
+ * line where the world repeats. This module keeps land away from the seam and the poles, ends it in
+ * an impassable rim, or closes the seam with an impassable wall over the full height, and writes the
+ * north and south frame borders the base map has.
  */
 import { ServiceError } from '../core/result.js';
-import { valueNoise } from './world-noise.js';
+import { fractal, valueNoise } from './world-noise.js';
 
 const SEA = 0;
 const LAND = 1;
 
-export type EdgeMode = 'sea-band' | 'rim' | 'none';
+export type EdgeMode = 'sea-band' | 'rim' | 'wall' | 'none';
+
+/** Land classes a wall can take its look from. */
+export const WALL_TERRAIN_KINDS = [
+  'snow',
+  'mountain',
+  'hills',
+  'desert',
+  'forest',
+  'plains',
+  'marsh',
+  'jungle',
+] as const;
+export type WallTerrainKind = (typeof WALL_TERRAIN_KINDS)[number];
+
+/** One stretch of the wall, rows `y0` to `y1` inclusive, counted from the top of the map. */
+export interface WallSegment {
+  y0: number;
+  y1: number;
+  kind: WallTerrainKind;
+}
 
 export interface EdgeSpec {
   mode: EdgeMode;
@@ -18,8 +39,13 @@ export interface EdgeSpec {
   bandPx: number;
   /** Height of the open-sea band at the north and south edge, in pixels. */
   polarPx: number;
-  /** Width of the rim range at the east and west edge when `mode` is `rim`, in pixels. */
+  /** Width of the rim range at the east and west edge when `mode` is `rim` or `wall`, in pixels. */
   rimPx: number;
+  /**
+   * `wall` only: the look of each stretch of the wall. `auto` (the default) takes it from the land
+   * the wall meets; segments set it by rows, and rows no segment covers fall back to `auto`.
+   */
+  wallTerrain?: 'auto' | readonly WallSegment[];
 }
 
 export interface EdgeInput {
@@ -27,7 +53,11 @@ export interface EdgeInput {
   bandPx?: number | undefined;
   polarPx?: number | undefined;
   rimPx?: number | undefined;
+  wallTerrain?: 'auto' | readonly WallSegment[] | undefined;
 }
+
+/** Default wall width: its narrowest rows (60%) still hold a default 400-pixel land province. */
+export const WALL_DEFAULT_PX = 48;
 
 /** Lowest height of the rim range at its inner foot, and its height at the seam. */
 export const RIM_FOOT_HEIGHT = 150;
@@ -53,7 +83,10 @@ export function resolveEdge(input: EdgeInput | undefined, width: number, height:
   const polarLimit = Math.floor(height / 4);
   const bandPx = input.bandPx ?? Math.min(Math.max(192, Math.round(0.04 * width)), quarter);
   const polarPx = input.polarPx ?? Math.min(64, Math.floor(height / 8));
-  const rimPx = input.rimPx ?? Math.min(160, quarter);
+  // A wall closes the seam at any width; the default is the narrowest that still forms its own
+  // provinces at the usual province sizes, so it costs as little of the picture as possible.
+  const rimPx = input.rimPx ?? Math.min(mode === 'wall' ? WALL_DEFAULT_PX : 160, quarter);
+  const ranged = mode === 'rim' || mode === 'wall';
   if (bandPx > quarter || rimPx > quarter || polarPx > polarLimit)
     throw new ServiceError(
       'MAP_EDGE_BAND_TOO_WIDE',
@@ -65,8 +98,16 @@ export function resolveEdge(input: EdgeInput | undefined, width: number, height:
     mode,
     bandPx: mode === 'sea-band' ? bandPx : 0,
     polarPx,
-    rimPx: mode === 'rim' ? rimPx : 0,
+    rimPx: ranged ? rimPx : 0,
+    ...(mode === 'wall' && input.wallTerrain !== undefined
+      ? { wallTerrain: input.wallTerrain }
+      : {}),
   };
+}
+
+/** `rim` and `wall` both end land at the seam in a raised snow range. */
+export function hasRimRange(edge: EdgeSpec): boolean {
+  return edge.mode === 'rim' || edge.mode === 'wall';
 }
 
 export interface EdgeFeature {
@@ -87,8 +128,8 @@ export function assertFeaturesOutsideBand(
   const offenders = features.filter((feature) => {
     if (feature.kind === 'sea') return false;
     const northSouth = feature.y < edge.polarPx || feature.y >= height - edge.polarPx;
-    const eastWest =
-      edge.mode === 'sea-band' && (feature.x < edge.bandPx || feature.x >= width - edge.bandPx);
+    const side = edge.mode === 'sea-band' ? edge.bandPx : edge.mode === 'wall' ? edge.rimPx : 0;
+    const eastWest = side > 0 && (feature.x < side || feature.x >= width - side);
     return northSouth || eastWest;
   });
   if (offenders.length === 0) return;
@@ -102,6 +143,7 @@ export function assertFeaturesOutsideBand(
       mode: edge.mode,
       bandPx: edge.bandPx,
       polarPx: edge.polarPx,
+      ...(edge.mode === 'wall' ? { rimPx: edge.rimPx } : {}),
       features: offenders.slice(0, 20),
     },
   );
@@ -116,13 +158,16 @@ function limits(
 ): { rows: Int32Array; columns: Int32Array } {
   const rows = new Int32Array(height);
   const columns = new Int32Array(width);
-  const scaleY = Math.max(8, edge.bandPx / 3);
+  const scaleY = Math.max(8, (edge.mode === 'wall' ? edge.rimPx : edge.bandPx) / 3);
   const scaleX = Math.max(8, edge.polarPx / 1.5);
   for (let y = 0; y < height; y += 1)
     rows[y] =
       edge.mode === 'sea-band'
         ? edge.bandPx + Math.round(valueNoise(seed + 9187, y / scaleY, 0.5) * edge.bandPx * 0.5)
-        : 0;
+        : edge.mode === 'wall'
+          ? // The wall's inner edge is ragged like a coast, but never wider than the band itself.
+            Math.round(edge.rimPx * (0.6 + 0.4 * fractal(seed + 9187, 0.5, y, scaleY, 5)))
+          : 0;
   for (let x = 0; x < width; x += 1)
     columns[x] =
       edge.polarPx > 0
@@ -165,12 +210,16 @@ function landComponents(kind: Uint8Array, width: number): { label: Int32Array; s
 export interface EdgeApplication {
   notes: EdgeNote[];
   clearedLandPixels: number;
+  /** `wall` only: 1 for every pixel of the wall, which is land after the policy. */
+  wall?: Uint8Array;
 }
 
 /**
  * Clear land and lakes from the east, west, north and south bands (modifying `kind` and
  * `elevation` in place). The outline is ragged so the cleared coast does not read as a ruled
- * line; land fragments the clearing detached sink when smaller than `minimumIsland`.
+ * line; land fragments the clearing detached sink when smaller than `minimumIsland`. A `wall`
+ * instead fills its east and west band with land over the full height, so no water reaches the
+ * seam, and returns the band as `wall`.
  */
 export function applyEdgePolicy(
   kind: Uint8Array,
@@ -185,12 +234,24 @@ export function applyEdgePolicy(
   const before = landComponents(kind, width);
   const { rows, columns } = limits(edge, width, height, seed);
   const cleared = new Uint8Array(kind.length);
+  const wall = edge.mode === 'wall' ? new Uint8Array(kind.length) : undefined;
   let clearedLand = 0;
+  let filledWater = 0;
   for (let y = 0; y < height; y += 1)
     for (let x = 0; x < width; x += 1) {
       const limitX = rows[y]!;
-      const clear =
-        x < limitX || x >= width - limitX || y < columns[x]! || y >= height - columns[x]!;
+      const side = x < limitX || x >= width - limitX;
+      if (wall !== undefined && side) {
+        const pixel = y * width + x;
+        wall[pixel] = 1;
+        if (kind[pixel] !== LAND) {
+          filledWater += 1;
+          kind[pixel] = LAND;
+          elevation[pixel] = Math.max(elevation[pixel]!, 0.05);
+        }
+        continue;
+      }
+      const clear = (wall === undefined && side) || y < columns[x]! || y >= height - columns[x]!;
       if (!clear) continue;
       const pixel = y * width + x;
       cleared[pixel] = 1;
@@ -210,14 +271,25 @@ export function applyEdgePolicy(
   }
   reshapeClearedCoast(kind, elevation, cleared, width, height);
   const notes: EdgeNote[] = [];
+  if (filledWater > 0)
+    notes.push({
+      code: 'MAP_EDGE_WALL_FILLED',
+      severity: 'info',
+      message: `The wall edge policy filled ${filledWater} water pixels of its east and west band with land, so no water reaches the seam`,
+      details: { mode: edge.mode, rimPx: edge.rimPx, filledWaterPixels: filledWater },
+    });
   if (clearedLand + sunk > 0)
     notes.push({
       code: 'MAP_EDGE_LAND_CLEARED',
       severity: 'warning',
-      message: `The ${edge.mode} edge policy cleared ${clearedLand} land pixels to open sea${sunk > 0 ? ` and sank ${sunk} pixels of fragments it detached` : ''}; land that must reach the edge needs edge.mode "rim"`,
+      message: `The ${edge.mode} edge policy cleared ${clearedLand} land pixels to open sea${sunk > 0 ? ` and sank ${sunk} pixels of fragments it detached` : ''}; land that must reach the edge needs edge.mode "rim" or "wall"${edge.mode === 'wall' ? ', and land that must reach the poles needs polarPx 0' : ''}`,
       details: { mode: edge.mode, clearedLandPixels: clearedLand, sunkFragmentPixels: sunk },
     });
-  return { notes, clearedLandPixels: clearedLand + sunk };
+  return {
+    notes,
+    clearedLandPixels: clearedLand + sunk,
+    ...(wall === undefined ? {} : { wall }),
+  };
 }
 
 /**
@@ -285,11 +357,74 @@ function smooth(t: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+export interface WallLookInput {
+  edge: EdgeSpec;
+  width: number;
+  height: number;
+  /** 1 for every pixel of the wall. */
+  wall: Uint8Array;
+  /** The look of a pixel outside the wall, or undefined for water. */
+  landKind: (pixel: number) => WallTerrainKind | undefined;
+}
+
 /**
- * Rim strength 0 to 1 at a column: 0 at the inner foot, 1 at the seam. Zero outside `rim` mode.
+ * The look of the wall row by row on each side. Each row takes the kind of the nearest land
+ * beyond the wall within four wall widths, short of the other side's wall; a row that meets only water is snow in the outer
+ * fifths of the map and mountain elsewhere. Kinds are smoothed by a majority over about half a
+ * wall width of rows, so the look changes in stretches, and caller segments win over all of it.
+ */
+export function wallRowKinds(input: WallLookInput): {
+  west: WallTerrainKind[];
+  east: WallTerrainKind[];
+} {
+  const { edge, width, height, wall } = input;
+  const reach = Math.max(16, edge.rimPx * 4);
+  const fallback = (y: number): WallTerrainKind =>
+    y < height * 0.2 || y >= height * 0.8 ? 'snow' : 'mountain';
+  const side = (step: 1 | -1): WallTerrainKind[] => {
+    const raw: WallTerrainKind[] = [];
+    for (let y = 0; y < height; y += 1) {
+      let x = step === 1 ? 0 : width - 1;
+      while (x >= 0 && x < width && wall[y * width + x] === 1) x += step;
+      let found: WallTerrainKind | undefined;
+      for (let distance = 0; distance < reach && x >= 0 && x < width; distance += 1, x += step) {
+        // The other side's wall ends the search: a narrow map meets only water.
+        if (wall[y * width + x] === 1) break;
+        found = input.landKind(y * width + x);
+        if (found !== undefined) break;
+      }
+      raw.push(found ?? fallback(y));
+    }
+    const window = Math.max(8, Math.round(edge.rimPx / 2));
+    const smoothed: WallTerrainKind[] = [];
+    for (let y = 0; y < height; y += 1) {
+      const counts = new Map<WallTerrainKind, number>();
+      for (let other = Math.max(0, y - window); other <= Math.min(height - 1, y + window); other++)
+        counts.set(raw[other]!, (counts.get(raw[other]!) ?? 0) + 1);
+      // Ties keep the row's own kind, then the order of WALL_TERRAIN_KINDS.
+      smoothed.push(
+        [...counts].sort(
+          ([a, left], [b, right]) =>
+            right - left ||
+            Number(b === raw[y]) - Number(a === raw[y]) ||
+            WALL_TERRAIN_KINDS.indexOf(a) - WALL_TERRAIN_KINDS.indexOf(b),
+        )[0]![0],
+      );
+    }
+    if (Array.isArray(edge.wallTerrain))
+      for (const segment of edge.wallTerrain as readonly WallSegment[])
+        for (let y = Math.max(0, segment.y0); y <= Math.min(height - 1, segment.y1); y += 1)
+          smoothed[y] = segment.kind;
+    return smoothed;
+  };
+  return { west: side(1), east: side(-1) };
+}
+
+/**
+ * Rim strength 0 to 1 at a column: 0 at the inner foot, 1 at the seam. Zero outside `rim` and `wall`.
  */
 export function rimStrength(edge: EdgeSpec, width: number, x: number): number {
-  if (edge.mode !== 'rim') return 0;
+  if (!hasRimRange(edge)) return 0;
   const distance = Math.min(x, width - 1 - x);
   return distance >= edge.rimPx ? 0 : smooth(1 - distance / edge.rimPx);
 }
@@ -330,7 +465,8 @@ export interface RimAdjacencyInput {
 }
 
 /**
- * Impassable rows for every pair of distinct land provinces that meet across the seam, in
+ * Impassable rows for every pair of distinct land provinces that meet across the seam (`rim` and
+ * `wall`), in
  * `adjacencies.csv` order (rows are sorted by the lower then the higher province ID).
  */
 export function rimAdjacencyRows(input: RimAdjacencyInput): string[] {

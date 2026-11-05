@@ -231,10 +231,10 @@ export type WorldReferenceInput = z.infer<typeof worldReferenceSchema>;
 export const worldEdgeSchema = z
   .object({
     mode: z
-      .enum(['sea-band', 'rim', 'none'])
+      .enum(['sea-band', 'rim', 'wall', 'none'])
       .optional()
       .describe(
-        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam; none keeps the picture and warns about land cut by the wrapping seam.',
+        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam, but sea at the seam stays sailable; wall fills rimPx at the east and west edges with land over the full height, in impassable states, so nothing crosses the seam by land or sea; none keeps the picture and warns about land cut by the wrapping seam.',
       ),
     bandPx: z
       .number()
@@ -251,7 +251,9 @@ export const worldEdgeSchema = z
       .min(0)
       .max(1_024)
       .optional()
-      .describe('North and south sea band in pixels; default 64, at most a quarter of the height.'),
+      .describe(
+        'North and south sea band in pixels; default 64, at most a quarter of the height. 0 lets land reach the top and bottom edges.',
+      ),
     rimPx: z
       .number()
       .int()
@@ -259,7 +261,39 @@ export const worldEdgeSchema = z
       .max(2_048)
       .optional()
       .describe(
-        'Rim range width in pixels for mode rim; default 160, at most a quarter of the width.',
+        'Rim range or wall width in pixels for mode rim or wall; default 160 for rim and 48 for wall, at most a quarter of the width. The inner edge of the wall is ragged between 60% and 100% of it.',
+      ),
+    wallTerrain: z
+      .union([
+        z.literal('auto'),
+        z
+          .array(
+            z
+              .object({
+                y0: z.number().int().min(0).max(16_384),
+                y1: z.number().int().min(0).max(16_384),
+                kind: z.enum([
+                  'snow',
+                  'mountain',
+                  'hills',
+                  'desert',
+                  'forest',
+                  'plains',
+                  'marsh',
+                  'jungle',
+                ]),
+              })
+              .strict()
+              .refine((segment) => segment.y1 >= segment.y0, {
+                message: 'y1 must not be above y0',
+              }),
+          )
+          .min(1)
+          .max(256),
+      ])
+      .optional()
+      .describe(
+        'Mode wall only: the look of the wall. auto (default) takes, for each row, the terrain of the nearest land the wall meets on that side, or snow toward the poles and mountain elsewhere where it meets only water, smoothed along the edge. A list of {y0, y1, kind} segments (rows counted from the top, inclusive) sets it by rows; uncovered rows fall back to auto.',
       ),
   })
   .strict();

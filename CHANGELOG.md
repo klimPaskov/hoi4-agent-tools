@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Close the world seam for fleets as well as armies: `create_world.edge.mode: "wall"` (ADR 0061, amended). A `rim` blocks land provinces across the seam but leaves the sea there sailable, so ships crossed from the far west to the far east. A wall fills `rimPx` (default 48) at the east and west edges with land over the full height (`MAP_EDGE_WALL_FILLED`), with a ragged inner edge, the rim's heights and seam rows, and the look of the land it meets row by row (or caller `wallTerrain` segments), and puts its provinces in impassable `enclave` states linked by `force_link_ownership_to` to the nearest passable state, as the base game's impassable states are. Cities and workspace capitals in the wall are refused, and validation reports water on the seam columns of a wall world as `MAP_EDGE_WALL_OPEN`. `polarPx: 0` lets land run off the top and bottom edges.
+
 ## 4.8.0 - 2026-11-05
 
 - Ship `hoi4-engine` inside the npm package and the container image (ADR 0074, amended): the release builds it for Windows x64, macOS arm64 and Linux x64 and arm64 (glibc 2.35 or later) and bundles every platform under `engine/bin/` with a SHA-256 manifest, so `layoutMode: "engine"`, `placement` and the engine checks work after a plain install. The bundled binary runs only when its SHA-256 matches `engine/bin/manifest.json`; otherwise the call reports `binary_checksum_mismatch` and nothing runs. `HOI4_ENGINE` still wins, and other platforms report the engine unavailable as before. Each image holds the binary for its own architecture. The package grows by about 4 MB.
