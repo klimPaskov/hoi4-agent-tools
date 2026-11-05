@@ -26,8 +26,13 @@ import { modIndex } from './mod-index.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
 import { inspectIdeas } from '../ideas/inspect.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
-import { inspectSystem } from '../system/inspect.js';
-import { systemInspectDataSchema, systemInspectRequestSchema } from '../schemas/system.js';
+import { inspectSystem, inspectUnits } from '../system/inspect.js';
+import {
+  systemInspectDataSchema,
+  systemInspectRequestSchema,
+  unitInspectDataSchema,
+  unitInspectRequestSchema,
+} from '../schemas/system.js';
 import {
   localisationInspectDataSchema,
   localisationInspectRequestSchema,
@@ -83,6 +88,7 @@ const schemas = {
   'hoi4.localisation_inspect': localisationInspectRequestSchema,
   'hoi4.idea_inspect': ideaInspectRequestSchema,
   'hoi4.system_inspect': systemInspectRequestSchema,
+  'hoi4.unit_inspect': unitInspectRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -163,19 +169,25 @@ export class ReferenceToolService {
                           systemInspectRequestSchema.parse(parsed),
                           signal,
                         )
-                      : name === 'hoi4.localisation_inspect'
-                        ? await inspectLocalisation(
+                      : name === 'hoi4.unit_inspect'
+                        ? await inspectUnits(
                             workspace,
-                            localisationInspectRequestSchema.parse(parsed),
+                            unitInspectRequestSchema.parse(parsed),
                             signal,
                           )
-                        : await sourceLookup(
-                            this.engine,
-                            workspaceId,
-                            sourceLookupRequestSchema.parse(parsed),
-                            context.principal,
-                            signal,
-                          );
+                        : name === 'hoi4.localisation_inspect'
+                          ? await inspectLocalisation(
+                              workspace,
+                              localisationInspectRequestSchema.parse(parsed),
+                              signal,
+                            )
+                          : await sourceLookup(
+                              this.engine,
+                              workspaceId,
+                              sourceLookupRequestSchema.parse(parsed),
+                              context.principal,
+                              signal,
+                            );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
@@ -253,6 +265,31 @@ export class ReferenceToolService {
         checks: [
           {
             id: 'system-checks',
+            passed: warnings === 0,
+            message:
+              warnings === 0
+                ? 'No problems players would see'
+                : `${warnings} problems players would see`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.unit_inspect') {
+      const inspected = unitInspectDataSchema.parse(data);
+      result.code = inspected.audit === undefined ? 'UNIT_INSPECTED' : 'UNIT_AUDITED';
+      // A missing name or description may be intended, so it is information.
+      const warnings =
+        inspected.audit === undefined
+          ? (inspected.inspection?.problems ?? []).filter(({ severity }) => severity === 'warning')
+              .length
+          : Object.entries(inspected.audit.counts)
+              .filter(([code]) => code !== 'UNIT_NAME_MISSING')
+              .reduce((sum, [, count]) => sum + count, 0);
+      result.validation = {
+        passed: warnings === 0,
+        checks: [
+          {
+            id: 'unit-checks',
             passed: warnings === 0,
             message:
               warnings === 0
