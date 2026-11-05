@@ -1,9 +1,11 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
+import type * as EngineClient from '../src/hoi4_agent_tools/core/engine-client.js';
 import { qualifyInstalledHttpBinary } from './distribution/installed-http-qualification.js';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -117,6 +119,23 @@ try {
     throw new Error('Clean public installation returned mismatched package metadata');
   }
   await runNode([npmCli, 'audit', 'signatures', '--registry=https://registry.npmjs.org']);
+
+  // The installed package's own client must find its bundled engine, pass the SHA-256 check and run it.
+  const installedEngineClient = (await import(
+    pathToFileURL(path.join(installedRoot, 'dist', 'hoi4_agent_tools', 'core', 'engine-client.js'))
+      .href
+  )) as typeof EngineClient;
+  const engine = installedEngineClient.locateEngineBinary({ env: {}, packageRoot: installedRoot });
+  if (!('path' in engine) || engine.source !== 'package')
+    throw new Error(
+      `The installed package does not serve its bundled hoi4-engine: ${'message' in engine ? engine.message : 'unknown'}`,
+    );
+  const engineVersion = execFileSync(engine.path, ['--version'], { encoding: 'utf8' }).trim();
+  if (!/^hoi4-engine \d+\.\d+\.\d+$/u.test(engineVersion))
+    throw new Error(`The bundled hoi4-engine printed an unexpected version: ${engineVersion}`);
+  process.stderr
+    .write(`Bundled ${engineVersion} runs from ${path.relative(installedRoot, engine.path)}
+`);
 
   const modRoot = path.join(temporary, 'mods');
   const mod = path.join(modRoot, 'public');

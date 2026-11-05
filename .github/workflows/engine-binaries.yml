@@ -1,0 +1,65 @@
+name: Engine binaries
+
+# Builds the hoi4-engine release binary for every platform the npm package and the container
+# image ship (ADR 0074). The release workflow calls it; pull requests that touch the engine run it
+# so a broken platform build shows up before a tag.
+
+on:
+  workflow_call:
+  pull_request:
+    paths: ['engine/**', '.github/workflows/engine-binaries.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 links against glibc 2.35, which the bookworm container image (2.36) and
+          # current desktop distributions satisfy.
+          - platform: linux-x64
+            runner: ubuntu-22.04
+            machine: x86_64
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+            machine: aarch64
+          - platform: darwin-arm64
+            runner: macos-latest
+            machine: arm64
+          - platform: win32-x64
+            runner: windows-latest
+            machine: x86_64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Require the runner architecture
+        run: test "$(uname -m)" = '${{ matrix.machine }}'
+      - run: rustup toolchain install
+      - run: cargo build --release --locked -p hoi4-engine-cli
+      - name: Require the binary to run and report the workspace version
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          EXE=hoi4-engine
+          if test "$PLATFORM" = 'win32-x64'; then EXE=hoi4-engine.exe; fi
+          VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version = "\(.*\)"$/\1/p' Cargo.toml)"
+          test -n "$VERSION"
+          test "$("target/release/$EXE" --version | tr -d '\r')" = "hoi4-engine $VERSION"
+          mkdir -p ../engine-out
+          cp "target/release/$EXE" ../engine-out/
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: engine-${{ matrix.platform }}
+          path: engine-out/
+          if-no-files-found: error
+          retention-days: 1

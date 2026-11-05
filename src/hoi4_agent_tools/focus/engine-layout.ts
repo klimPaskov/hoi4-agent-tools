@@ -58,7 +58,7 @@ export interface FocusEngineLayoutResult {
 }
 
 export const FOCUS_ENGINE_REMEDY =
-  'Set HOI4_ENGINE to the absolute path of a hoi4-engine binary (cargo build --release -p hoi4-engine-cli in engine/), or install a hoi4-agent-tools release that ships the engine for this platform. layoutMode authored and compact do not need it.';
+  'The package bundles hoi4-engine for Windows x64, macOS arm64 and Linux x64 and arm64; reinstall it if the bundled binary fails its checksum. Elsewhere, set HOI4_ENGINE to the absolute path of a hoi4-engine binary (cargo build --release -p hoi4-engine-cli in engine/). layoutMode authored and compact do not need it.';
 
 const MOVED_FOCUS_ID_LIMIT = 100;
 

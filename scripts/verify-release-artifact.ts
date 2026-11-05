@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { verifyEngineBundle } from './distribution/engine-bundle.js';
 import { verifyReleaseArtifact } from './distribution/release-verification.js';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -24,6 +25,11 @@ const verified = verifyReleaseArtifact(
   tarballBytes,
   packageJson.name,
   packageJson.version,
+);
+const engine = await verifyEngineBundle(root, verified.manifest.files);
+process.stderr.write(
+  `Bundled hoi4-engine ${engine.engineVersion} verified for ${Object.keys(engine.binaries).join(', ')}
+`,
 );
 process.stderr.write(
   `Release artifact verified: ${verified.filename} (${verified.size} bytes, sha256:${verified.sha256})\n`,
