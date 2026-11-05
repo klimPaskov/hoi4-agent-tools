@@ -352,6 +352,42 @@ describe('reference ranking with game text and question intent', () => {
     );
   });
 
+  it("matches the question's verb to a command's grant or removal verb", async () => {
+    const target = await workspace({
+      'game/documentation/effects_documentation.md': [
+        '# Effects',
+        '## remove_alpha_points',
+        'alpha points of a country',
+        '## add_alpha_points',
+        'alpha points of a country',
+        '',
+      ].join('\n'),
+    });
+    const service = new ReferenceService();
+    expect((await search(service, target, 'give a country alpha points'))[0]).toBe(
+      'add_alpha_points',
+    );
+    expect((await search(service, target, 'clear the alpha points of a country'))[0]).toBe(
+      'remove_alpha_points',
+    );
+  });
+
+  it('finds a command by a plain-word phrasing of what it does', async () => {
+    const target = await workspace({
+      'game/documentation/triggers_documentation.md': [
+        '# Triggers',
+        '## has_border_war',
+        'check if country has border war',
+        '## is_neighbor_of',
+        'check if neighbor ( controlled territory ) with specified country',
+        '',
+      ].join('\n'),
+    });
+    expect(
+      (await search(new ReferenceService(), target, 'check if two countries share a border'))[0],
+    ).toBe('is_neighbor_of');
+  });
+
   it('rereads a reference file whose stamp changed', async () => {
     const target = await workspace({ 'game/documentation/effects_documentation.md': '## alpha\n' });
     const service = new ReferenceService();
