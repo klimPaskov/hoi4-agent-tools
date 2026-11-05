@@ -57,6 +57,7 @@ import {
   type EdgeSpec,
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
+import type { PaintedReliefSettings } from './relief/painted-relief.js';
 import type { ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import {
@@ -160,6 +161,8 @@ export interface WorldSpec {
    */
   geography?: ResolvedGeography;
   relief?: Partial<ReliefSettings>;
+  /** Raise the relief toward the reference picture's painted classes (ZR-27); needs both inputs. */
+  paintedRelief?: PaintedReliefSettings;
   /** Share of land pixels the river network covers (geography worlds); default 2%. */
   riverDensity?: number;
   /** Largest number of unnamed river systems (geography worlds); absent keeps every system. */
@@ -506,6 +509,9 @@ function geographySurface(
   return { kind, elevation: new Float32Array(total), moisture };
 }
 
+/** Land relief of the base game 1.19.4.1 (`reliefStatistics` over its land provinces). */
+export const VANILLA_RELIEF = { median: 107, p99: 213, maximum: 239, meanStep: 2.69 } as const;
+
 function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeography): WorldNote {
   const { relief, riverStatistics } = terrain;
   return {
@@ -515,6 +521,8 @@ function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeog
     details: {
       modelHash: geography.hash,
       relief,
+      // The base game 1.19.4.1 over its land provinces, for comparison.
+      vanilla: VANILLA_RELIEF,
       rivers: riverStatistics,
       // The first of the named rivers only: the response budget is shared with everything else the
       // world reports, and a river that did not complete is always listed.
@@ -894,6 +902,16 @@ export function generateWorld(
       'Reference raster dimensions do not match the world',
     );
   const geography = spec.geography;
+  if (spec.paintedRelief !== undefined && (reference === undefined || geography === undefined))
+    throw new ServiceError(
+      'MAP_RELIEF_PAINTED_INPUTS',
+      'relief.painted raises the relief from the classes of a reference picture onto a geography model; give both reference and geography',
+      { reference: reference !== undefined, geography: geography !== undefined },
+    );
+  const painted =
+    spec.paintedRelief === undefined || reference === undefined
+      ? undefined
+      : { classes: reference.terrain, settings: spec.paintedRelief, seed: spec.seed };
   if (
     geography !== undefined &&
     (geography.frame.width !== width || geography.frame.height !== height)
@@ -987,6 +1005,7 @@ export function generateWorld(
         adjustHeight: hasRimRange(edge)
           ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
           : undefined,
+        painted,
         signal: options.signal,
       });
       for (const note of checked) {
@@ -1050,6 +1069,7 @@ export function generateWorld(
           adjustHeight: hasRimRange(edge)
             ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
             : undefined,
+          painted,
           signal: options.signal,
         });
   if (synthesized !== undefined) {

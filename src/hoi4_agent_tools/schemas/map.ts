@@ -314,6 +314,28 @@ export const worldReliefSchema = z
       .max(1)
       .optional()
       .describe('Full-resolution roughness of the terrain, 0 to 1; default 0.5.'),
+    painted: z
+      .union([
+        z.boolean(),
+        z
+          .object({
+            falloffPx: z
+              .number()
+              .int()
+              .min(2)
+              .max(256)
+              .optional()
+              .describe('Blur radius of class edges in pixels; default 24.'),
+            mountainPeak: z.number().min(0).max(1).optional(),
+            hillsPeak: z.number().min(0).max(1).optional(),
+            volcanoPeak: z.number().min(0).max(1).optional(),
+          })
+          .strict(),
+      ])
+      .optional()
+      .describe(
+        'With a reference picture and a geography model: raise the relief toward the painted mountain, hills and volcano classes before the rivers are routed, blurred over falloffPx so slopes stay natural. Peaks are 0 to 1 on the range relief scale (defaults mountain 0.82, hills 0.27, volcano 0.9, near the base game). Off by default.',
+      ),
   })
   .strict();
 export type WorldReliefInput = z.infer<typeof worldReliefSchema>;
