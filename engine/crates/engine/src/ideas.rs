@@ -183,7 +183,7 @@ pub struct KeyTexts {
     pub texts: Vec<Text>,
 }
 
-fn layer_kind(kind: LayerKind) -> &'static str {
+pub(crate) fn layer_kind(kind: LayerKind) -> &'static str {
     match kind {
         LayerKind::Game => "game",
         LayerKind::Dlc => "dlc",
@@ -192,7 +192,6 @@ fn layer_kind(kind: LayerKind) -> &'static str {
     }
 }
 
-/// Folders whose definitions this module needs.
 /// Folders whose definitions this module needs: ideas and characters, their traits, and what
 /// modifier names are built from (buildings, equipment, resources, sub-units, combat tactics).
 const FOLDERS: &[&str] = &[
@@ -232,38 +231,47 @@ fn error(code: &str, message: &str) -> String {
     serde_json::json!({ "error": { "code": code, "message": message } }).to_string()
 }
 
-struct Loaded {
-    workspace: Workspace,
-    index: SymbolIndex,
-    modifier_definitions: HashSet<String>,
-    sprites: SpriteIndex,
+pub(crate) struct Loaded {
+    pub(crate) workspace: Workspace,
+    pub(crate) index: SymbolIndex,
+    pub(crate) modifier_definitions: HashSet<String>,
+    pub(crate) sprites: SpriteIndex,
     /// Idea categories and their slots from `common/idea_tags`: each has a `<name>_cost_factor`.
-    idea_slots: HashSet<String>,
+    pub(crate) idea_slots: HashSet<String>,
     /// Categories marked `hidden = yes`, whose ideas show no picture or name.
-    hidden_categories: HashSet<String>,
+    pub(crate) hidden_categories: HashSet<String>,
     /// `sub_unit_categories` and operations, which modifier names are built from.
-    unit_categories: HashSet<String>,
-    operations: HashSet<String>,
+    pub(crate) unit_categories: HashSet<String>,
+    pub(crate) operations: HashSet<String>,
     /// Texture paths the game's own sprites use. A missing one is supplied by a DLC that is not
     /// installed here, so a mod's sprite that reuses it is not judged.
-    game_textures: HashSet<String>,
+    pub(crate) game_textures: HashSet<String>,
     /// The checked layer is a mod. A sprite of the game that no loaded file defines may come from
     /// a DLC that is not installed here, so undefined sprites are judged only for a mod's content.
-    judge_sprites: bool,
+    pub(crate) judge_sprites: bool,
 }
 
 fn load(request: &Request) -> Loaded {
-    let workspace = Workspace::load(&WorkspaceOptions {
-        game: request.game.clone(),
-        include_dlc: request.include_dlc,
-        dependencies: request.dependencies.clone(),
-        target: request.target.clone(),
-    });
+    load_with(
+        &WorkspaceOptions {
+            game: request.game.clone(),
+            include_dlc: request.include_dlc,
+            dependencies: request.dependencies.clone(),
+            target: request.target.clone(),
+        },
+        &[],
+    )
+}
+
+/// The workspace with the definitions of `FOLDERS` and `extra` indexed, the modifier names and
+/// the sprites. `hoi4-engine system` passes the folders of the system it checks.
+pub(crate) fn load_with(options: &WorkspaceOptions, extra: &[&str]) -> Loaded {
+    let workspace = Workspace::load(options);
     let files: Vec<usize> = workspace
         .loaded_files()
         .filter(|(_, f)| {
             let p = f.relative.to_ascii_lowercase();
-            p.ends_with(".txt") && FOLDERS.iter().any(|folder| p.starts_with(folder))
+            p.ends_with(".txt") && FOLDERS.iter().chain(extra).any(|folder| p.starts_with(folder))
         })
         .map(|(i, _)| i)
         .collect();
@@ -360,17 +368,17 @@ fn load(request: &Request) -> Loaded {
     Loaded { workspace, index, modifier_definitions, sprites, idea_slots, hidden_categories, unit_categories, operations, game_textures, judge_sprites }
 }
 
-fn place(workspace: &Workspace, file: usize, line: u32) -> Place {
+pub(crate) fn place(workspace: &Workspace, file: usize, line: u32) -> Place {
     let source = &workspace.files[file];
     let layer = &workspace.layers[source.layer];
     Place { path: source.relative.clone(), line, layer: layer.name.clone(), layer_kind: layer_kind(layer.kind) }
 }
 
-fn line_at(doc: &Document, offset: u32) -> u32 {
+pub(crate) fn line_at(doc: &Document, offset: u32) -> u32 {
     1 + doc.line_starts().partition_point(|&s| s <= offset).saturating_sub(1) as u32
 }
 
-fn raw(doc: &Document, entry: &Entry) -> String {
+pub(crate) fn raw(doc: &Document, entry: &Entry) -> String {
     let start = doc.token(entry.tokens.start).start as usize;
     let end = doc.token(entry.tokens.end.saturating_sub(1)).end as usize;
     let text = String::from_utf8_lossy(&doc.bytes[start..end.max(start)]);
@@ -399,7 +407,7 @@ fn find_block<'d>(doc: &'d Document, parent: &'d Block, id: &str, depth: usize) 
     None
 }
 
-fn suggest(id: &str, names: impl Iterator<Item = String>) -> Vec<String> {
+pub(crate) fn suggest(id: &str, names: impl Iterator<Item = String>) -> Vec<String> {
     let wanted: Vec<char> = id.to_ascii_lowercase().chars().collect();
     let first = id.as_bytes().first().map(u8::to_ascii_lowercase);
     let mut close: Vec<(usize, String)> = names
@@ -542,7 +550,7 @@ const IDEA_FIELDS: &[&str] = &[
 ];
 const MODIFIER_BLOCKS: &[&str] = &["modifier", "research_bonus", "equipment_bonus", "targeted_modifier", "rule"];
 
-fn known_modifier(loaded: &Loaded, vocab: &Vocabulary, key: &str) -> bool {
+pub(crate) fn known_modifier(loaded: &Loaded, vocab: &Vocabulary, key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     !vocab.has_modifiers()
         || vocab.modifiers.contains(&lower)

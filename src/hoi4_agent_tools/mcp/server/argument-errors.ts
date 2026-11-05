@@ -21,6 +21,8 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.mod_index': '{"mode":"overview"} or {"mode":"next_id","kind":"event","namespace":"my_mod"}',
   'hoi4.localisation_inspect': '{"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}',
   'hoi4.idea_inspect': '{"kind":"idea","id":"my_idea"} or {"kind":"character","audit":true}',
+  'hoi4.system_inspect':
+    '{"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}',
   'hoi4.event_inspect':
     '{"mode":"lint","selector":"chaosx.nr14"} or {"mode":"trace","selector":"chaosx.nr14.1","direction":"downstream"}',
   'hoi4.event_render': '{"view":"overview","selector":"chaosx.nr14"}',
