@@ -422,6 +422,69 @@
           "equals": "IDEA_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "chaos_redux.system.raids-named-by-id",
+      "surface": "system",
+      "corpus": "chaos_redux",
+      "title": "Raids named by their id instead of raid_type_<id> are not reported",
+      "evidence": "common/raids/016_brilliant_scientist_biological_raids.txt defines brilliant_scientist_anthrax_battlefield_biological_raid; the mod localises it as brilliant_scientist_anthrax_battlefield_biological_raid and _desc rather than raid_type_<id>.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "raid",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].code",
+          "excludes": "SYSTEM_NAME_MISSING"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.system.unknown-hook-is-information",
+      "surface": "system",
+      "corpus": "chaos_redux",
+      "title": "A hook the game never mentions is information, not a problem",
+      "evidence": "common/on_actions/condemnation_sanctions_on_actions.txt:100 adds to on_send_attache, which the game's documentation, its own on_actions files and hoi4.exe never mention.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "on_actions",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].id",
+          "includes": "on_send_attache"
+        },
+        {
+          "path": "data.audit.problems[*].severity",
+          "excludes": "warning"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.system.unknown-id",
+      "surface": "system",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown definition is an explicit not-found",
+      "evidence": "No file of the game or Chaos Redux defines the organization chaosx_no_such_organization.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "mio",
+        "id": "chaosx_no_such_organization"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "SYSTEM_DEFINITION_NOT_FOUND"
+        }
+      ]
     }
   ]
 }

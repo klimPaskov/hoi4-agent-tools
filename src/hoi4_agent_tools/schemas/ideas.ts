@@ -20,7 +20,7 @@ export const ideaInspectRequestSchema = z
     path: ['id'],
   });
 
-const placeSchema = z
+export const placeSchema = z
   .object({
     path: z.string().max(1024),
     line: z.number().int().min(0),
@@ -29,11 +29,11 @@ const placeSchema = z
   })
   .strict();
 
-const fieldSchema = z
+export const fieldSchema = z
   .object({ name: z.string().max(128), text: z.string().max(2400), line: z.number().int() })
   .strict();
 
-const problemSchema = z
+export const problemSchema = z
   .object({
     code: z.string().max(64),
     severity: z.enum(['warning', 'info']),
@@ -42,7 +42,7 @@ const problemSchema = z
   })
   .strict();
 
-const textSchema = z
+export const textSchema = z
   .object({
     language: z.string().max(64),
     text: z.string().max(2400),
