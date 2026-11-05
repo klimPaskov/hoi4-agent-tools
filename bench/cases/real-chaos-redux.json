@@ -381,6 +381,47 @@
           "equals": true
         }
       ]
+    },
+    {
+      "id": "chaos_redux.character.unknown-trait",
+      "surface": "idea",
+      "corpus": "chaos_redux",
+      "title": "A general trait no file defines is found",
+      "evidence": "common/characters/006_independence_wave_characters_registry.txt:258 gives corps_commander trait mountaineer; the game defines trait_mountaineer (common/unit_leader/00_traits.txt:1498).",
+      "tool": "hoi4.idea_inspect",
+      "arguments": {
+        "kind": "character",
+        "id": "NAV_independence_wave_jose_antonio_aguirre"
+      },
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "includes": "CHARACTER_TRAIT_UNKNOWN"
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.idea.unknown-id",
+      "surface": "idea",
+      "corpus": "chaos_redux",
+      "problem": 3,
+      "title": "An unknown idea is an explicit not-found",
+      "evidence": "No file of the game or Chaos Redux defines chaosx_no_such_idea.",
+      "tool": "hoi4.idea_inspect",
+      "arguments": {
+        "kind": "idea",
+        "id": "chaosx_no_such_idea"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "IDEA_NOT_FOUND"
+        }
+      ]
     }
   ]
 }
