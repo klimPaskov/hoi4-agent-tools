@@ -9,6 +9,7 @@ import { referenceSearchRequestSchema } from '../src/hoi4_agent_tools/schemas/re
 import {
   discoveryCases,
   documentKey,
+  freshCases,
   heldOutCases,
   testCases,
   validationCases,
@@ -30,10 +31,12 @@ const cases =
       ? heldOutCases
       : process.argv[4] === '--test'
         ? testCases
-        : discoveryCases;
+        : process.argv[4] === '--fresh'
+          ? freshCases
+          : discoveryCases;
 if (modRoot === undefined || gameRoot === undefined) {
   process.stderr.write(
-    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test]\n',
+    'Usage: tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT [--validation|--held-out|--test|--fresh]\n',
   );
   process.exit(2);
 }
