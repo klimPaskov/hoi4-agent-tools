@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Raise the relief toward a reference picture's painted mountains, hills and volcanoes (`create_world.relief.painted`, ADR 0079). The classes are blurred over `falloffPx` (default 24) before the rivers are routed, so slopes stay natural and the model's rivers flow around the drawn ranges. Painted mountains get permanent snow by latitude. `MAP_RELIEF_SYNTHESIZED` now reports the base game's relief beside the world's.
+- Make land impassable (ADR 0079): paint it with the palette kind `impassable_mountain` or mark a model region `impassable: true`.
+  - Its provinces become impassable `enclave` states linked to the nearest passable state, and it rises to the highest ground.
+  - Cities and capitals on it are refused (`MAP_FEATURE_IN_IMPASSABLE`).
+  - `MAP_REALM_CUT_OFF` and `MAP_REALM_ENCLOSED` warn when impassable land or borders cut a realm apart or box it in.
 - Close the world seam for fleets as well as armies: `create_world.edge.mode: "wall"` (ADR 0061, amended). A `rim` blocks land provinces across the seam but leaves the sea there sailable, so ships crossed from the far west to the far east. A wall fills `rimPx` (default 48) at the east and west edges with land over the full height (`MAP_EDGE_WALL_FILLED`), with a ragged inner edge, the rim's heights and seam rows, and the look of the land it meets row by row (or caller `wallTerrain` segments), and puts its provinces in impassable `enclave` states linked by `force_link_ownership_to` to the nearest passable state, as the base game's impassable states are. Cities and workspace capitals in the wall are refused, and validation reports water on the seam columns of a wall world as `MAP_EDGE_WALL_OPEN`. `polarPx: 0` lets land run off the top and bottom edges.
 
 ## 4.8.0 - 2026-11-05
