@@ -32,6 +32,7 @@ USAGE:
     hoi4-engine focus-layout [--request FILE]
     hoi4-engine localisation [--request FILE]
     hoi4-engine ideas [--request FILE]
+    hoi4-engine system [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
@@ -665,6 +666,7 @@ fn main() -> ExitCode {
         Some("focus-layout") => cmd_focus_layout(&args),
         Some("localisation") => cmd_json_request(&args, "localisation", hoi4_engine::localisation::respond_json),
         Some("ideas") => cmd_json_request(&args, "ideas", hoi4_engine::ideas::respond_json),
+        Some("system") => cmd_json_request(&args, "system", hoi4_engine::system::respond_json),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),

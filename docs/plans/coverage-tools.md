@@ -39,7 +39,7 @@ These come from the 2026-11-01 live test, the first real benchmark run and the h
 
 ### 3. `hoi4.system_inspect`
 
-One tool with a `kind` for each newer system: `on_actions`, `mio`, `balance_of_power`, `special_project`, `operation` and `raid`. Each kind lists the definitions and their hooks, the events and effects they fire, the localisation and pictures they need, and the references that point at nothing. `on_actions` also reports hooks that a mod's same-path file drops, reusing the engine's override audit.
+One tool with a `kind` for each newer system: `on_actions`, `mio`, `balance_of_power`, `special_project`, `operation` and `raid`. Each kind lists the definitions and their hooks, the events and effects they fire, the localisation and pictures they need, and the references that point at nothing. `on_actions` also reports hooks that a mod's same-path file drops. The override audit needs a whole-workspace analysis, so the tool compares the replaced on_actions files itself. Effect and trigger blocks are left to `hoi4.script_validate`.
 
 ### 4. `hoi4.unit_inspect` and `hoi4.asset_inspect`
 
