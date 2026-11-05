@@ -32,6 +32,12 @@
       "folder": "ireland_total_overhaul"
     },
     {
+      "id": "atlantis",
+      "name": "Atlantis: The Seventh Ring",
+      "kind": "mod",
+      "folder": "atlantis_the_seventh_ring"
+    },
+    {
       "id": "kaiserreich",
       "name": "Kaiserreich",
       "kind": "workshop",

@@ -151,6 +151,8 @@ fn parse_gfx(bytes: Vec<u8>, source: &str) -> GfxFile {
 struct Listing {
     stamp: Option<SystemTime>,
     names: HashMap<String, Vec<String>>,
+    /// The refresh this listing was last checked in; a folder is checked once per refresh.
+    checked: u64,
 }
 
 /// Every decoded texture and font, shared by the renders of one workspace.
@@ -180,6 +182,8 @@ pub struct Assets {
     sprites: HashMap<String, Sprite>,
     fonts: HashMap<String, FontDef>,
     listings: Mutex<HashMap<PathBuf, Listing>>,
+    /// Counts refreshes, so each folder is checked against the disk once per render.
+    generation: u64,
     decoded: Mutex<Decoded>,
     /// Decoded textures are dropped, oldest first, above this many bytes.
     cache_limit: usize,
@@ -198,6 +202,7 @@ impl Assets {
             sprites: HashMap::new(),
             fonts: HashMap::new(),
             listings: Mutex::new(HashMap::new()),
+            generation: 0,
             decoded: Mutex::new(Decoded::default()),
             cache_limit: DEFAULT_CACHE_BYTES,
             stats: CacheStats::default(),
@@ -213,6 +218,7 @@ impl Assets {
     /// Re-reads the `.gfx` files that changed since the last call and rebuilds the sprite and
     /// font tables when any did. Cheap when nothing changed: one folder walk and one stat per file.
     pub fn refresh(&mut self) {
+        self.generation += 1;
         let mut effective: HashMap<String, (usize, PathBuf)> = HashMap::new();
         for (index, layer) in self.layers.iter().enumerate() {
             for (relative, absolute) in walk_sources(&layer.path, Some(&["interface"])) {
@@ -312,10 +318,19 @@ impl Assets {
     /// The actual names in `dir` that match `lower` without regard to case. A folder listing is
     /// reused until the folder's modification time changes (adding or removing a file changes it).
     fn names(&self, dir: &Path, lower: &str) -> Vec<String> {
-        let current = fs::metadata(dir).ok().and_then(|m| m.modified().ok());
         let mut listings = self.listings.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(listing) = listings.get(dir)
+            && listing.checked == self.generation
+        {
+            return listing.names.get(lower).cloned().unwrap_or_default();
+        }
+        let current = fs::metadata(dir).ok().and_then(|m| m.modified().ok());
         let fresh = listings.get(dir).is_some_and(|l| l.stamp == current && current.is_some());
-        if !fresh {
+        if fresh {
+            if let Some(listing) = listings.get_mut(dir) {
+                listing.checked = self.generation;
+            }
+        } else {
             let mut names: HashMap<String, Vec<String>> = HashMap::new();
             if let Ok(entries) = fs::read_dir(dir) {
                 let mut all: Vec<String> = entries.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
@@ -324,7 +339,7 @@ impl Assets {
                     names.entry(name.to_ascii_lowercase()).or_default().push(name);
                 }
             }
-            listings.insert(dir.to_path_buf(), Listing { stamp: current, names });
+            listings.insert(dir.to_path_buf(), Listing { stamp: current, names, checked: self.generation });
         }
         listings.get(dir).and_then(|l| l.names.get(lower)).cloned().unwrap_or_default()
     }

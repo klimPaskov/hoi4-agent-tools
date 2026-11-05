@@ -74,21 +74,33 @@ impl Canvas {
     /// Draws `region` of `source` at (`dx`, `dy`), unscaled.
     pub fn blit(&mut self, source: &Image, region: Rect, dx: i32, dy: i32, alpha: u32) {
         let Rect { x: sx, y: sy, width, height } = region;
-        let sw = source.width as i32;
-        let sh = source.height as i32;
+        let (sw, sh) = (source.width as i32, source.height as i32);
+        // Clip the column range once: inside the source and inside the canvas.
+        let x0 = 0.max(-sx).max(-dx);
+        let x1 = width.min(sw - sx).min(self.width() - dx);
+        if x0 >= x1 {
+            return;
+        }
+        let canvas_width = self.image.width as usize;
         for y in 0..height {
             let (py, ty) = (sy + y, dy + y);
             if py < 0 || py >= sh || ty < 0 || ty >= self.height() {
                 continue;
             }
-            for x in 0..width {
-                let px = sx + x;
-                if px < 0 || px >= sw {
-                    continue;
+            let from = (py as usize * source.width as usize + (sx + x0) as usize) * 4;
+            let to = (ty as usize * canvas_width + (dx + x0) as usize) * 4;
+            let count = (x1 - x0) as usize * 4;
+            let row = &source.rgba[from..from + count];
+            if alpha == 255 && row.chunks_exact(4).all(|p| p[3] == 255) {
+                self.image.rgba[to..to + count].copy_from_slice(row);
+                continue;
+            }
+            for (offset, pixel) in row.chunks_exact(4).enumerate() {
+                match pixel[3] {
+                    0 => {}
+                    255 if alpha == 255 => self.image.rgba[to + offset * 4..to + offset * 4 + 4].copy_from_slice(pixel),
+                    _ => self.blend(dx + x0 + offset as i32, ty, [pixel[0], pixel[1], pixel[2], pixel[3]], alpha),
                 }
-                let index = (py as usize * source.width as usize + px as usize) * 4;
-                let pixel = [source.rgba[index], source.rgba[index + 1], source.rgba[index + 2], source.rgba[index + 3]];
-                self.blend(dx + x, ty, pixel, alpha);
             }
         }
     }
