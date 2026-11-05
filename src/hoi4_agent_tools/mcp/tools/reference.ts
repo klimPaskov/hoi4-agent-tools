@@ -18,6 +18,7 @@ import {
   localisationInspectDataSchema,
   localisationInspectRequestSchema,
 } from '../../schemas/localisation.js';
+import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../../schemas/ideas.js';
 import {
   errorLogDataSchema,
   errorLogRequestSchema,
@@ -106,6 +107,15 @@ export const referenceTools = [
       'Read localisation in every language the game and mod ship. key: one key per language with file, line and layer, the languages lacking it and the files mentioning it. audit: keys the mod uses that no language defines, keys missing from a supported language, keys defined twice in one language, and file problems. coverage: keys per language. Example: {"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}. Returns counts per problem and a few examples of each.',
     inputSchema: localisationInspectRequestSchema,
     outputSchema: strictOperationResultSchema(localisationInspectDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.idea_inspect',
+    title: 'Inspect ideas and characters',
+    description:
+      'Read an idea or character across the game, DLC and mod. idea: category, picture sprite and texture, modifiers checked against the game docs, conditions, name in every language, the advisor it belongs to, and files mentioning it. character: name, roles with traits checked, portraits checked. audit: true checks every idea or character of the mod. Example: {"kind":"idea","id":"GER_mefo_bills_1"} or {"kind":"character","audit":true}.',
+    inputSchema: ideaInspectRequestSchema,
+    outputSchema: strictOperationResultSchema(ideaInspectDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

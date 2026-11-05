@@ -38,6 +38,7 @@ hoi4-engine sprites --game "<game>" [--mod "<mod>"] [--allowlist sprites-allow.j
 hoi4-engine drawio sketch.drawio --prefix GER
 hoi4-engine focus-layout --request request.json
 hoi4-engine localisation --request request.json
+hoi4-engine ideas --request request.json
 hoi4-engine texture <file or folder>... [--format text|json] [--output out.png]
 hoi4-engine focus-render [--game DIR] [--mod DIR] [--dependency DIR]... --output out.png [--request FILE]
 hoi4-engine serve
@@ -49,6 +50,8 @@ writes the layout (`hoi4-focus-layout/1`) to stdout; see [the crate README](crat
 `localisation` reads one JSON request from `--request` or stdin, with `game`, `mod`,
 `dependencies`, `includeDlc`, `mode` (`key`, `audit` or `coverage`), `key`, `language` and `limit`,
 and writes its answer to stdout. It backs `hoi4.localisation_inspect`; see `crates/engine/src/localisation.rs`.
+
+`ideas` reads one JSON request with `game`, `mod`, `dependencies`, `includeDlc`, `kind` (`idea` or `character`), `id` or `audit`, and `limit`. It backs `hoi4.idea_inspect`; see `crates/engine/src/ideas.rs`.
 
 `--game` defaults to the `HOI4_GAME_DIR` environment variable. Without `--mod` the game itself is
 checked. `--dependency` adds a mod loaded before the checked one; repeat it in load order.

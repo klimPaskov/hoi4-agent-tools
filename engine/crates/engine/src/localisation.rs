@@ -570,8 +570,52 @@ pub fn respond(request: &Request) -> Result<Response, (&'static str, String)> {
     Ok(response)
 }
 
+/// The texts of `keys` in every language, from every loaded localisation file, in load order.
+/// Other inspectors use it for the names and descriptions of what they show.
+pub(crate) fn texts(workspace: &Workspace, keys: &HashSet<String>) -> BTreeMap<String, Vec<Definition>> {
+    let files: Vec<usize> = workspace.loaded_files().filter(|(_, f)| is_localisation(&f.relative)).map(|(i, _)| i).collect();
+    let mut found: Vec<(String, usize, Definition)> = files
+        .par_iter()
+        .flat_map_iter(|&file| {
+            let mut out = Vec::new();
+            if let Ok(bytes) = fs::read(&workspace.files[file].absolute) {
+                // Most files hold none of the keys; skip parsing those.
+                if keys.iter().any(|k| memchr::memmem::find(&bytes, k.as_bytes()).is_some()) {
+                    let loc = LocFile::parse(bytes);
+                    let language = loc.language.clone().map(|l| l.to_ascii_lowercase()).unwrap_or_default();
+                    let source = &workspace.files[file];
+                    let layer = &workspace.layers[source.layer];
+                    for e in loc.entries.iter().filter(|e| keys.contains(&e.key)) {
+                        let text = String::from_utf8_lossy(&loc.bytes[e.value_range.start as usize..e.value_range.end as usize]);
+                        out.push((
+                            e.key.clone(),
+                            file,
+                            Definition {
+                                language: language.clone(),
+                                text: text.chars().take(MAX_TEXT).collect(),
+                                path: source.relative.clone(),
+                                line: e.line,
+                                layer: layer.name.clone(),
+                                layer_kind: layer_kind(layer.kind),
+                                replace: is_replace(&source.relative),
+                            },
+                        ));
+                    }
+                }
+            }
+            out
+        })
+        .collect();
+    found.sort_by_key(|(_, file, d)| (workspace.files[*file].layer, *file, d.line));
+    let mut out: BTreeMap<String, Vec<Definition>> = BTreeMap::new();
+    for (key, _, definition) in found {
+        out.entry(key).or_default().push(definition);
+    }
+    out
+}
+
 /// Files of every loaded layer that contain the key as a whole token, outside localisation.
-fn mentions(workspace: &Workspace, key: &str, limit: usize) -> (Vec<Mention>, bool) {
+pub(crate) fn mentions(workspace: &Workspace, key: &str, limit: usize) -> (Vec<Mention>, bool) {
     let needle = key.as_bytes();
     let token_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-' | b'\'');
     let files: Vec<usize> = workspace

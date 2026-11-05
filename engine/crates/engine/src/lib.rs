@@ -12,6 +12,7 @@ pub mod context;
 pub mod defs;
 pub mod delta;
 pub mod findings;
+pub mod ideas;
 pub mod imagehdr;
 pub mod index;
 pub mod lints;
