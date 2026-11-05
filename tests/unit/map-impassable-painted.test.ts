@@ -160,3 +160,81 @@ describe('impassable land in a generated world', () => {
     expect(generated.notes.map(({ code }) => code)).toContain('MAP_RELIEF_PAINTED');
   });
 });
+
+describe('impassable regions of the geography model', () => {
+  const width = 1024;
+  const height = 512;
+  const withRegion = (impassable: boolean, polygons = true) => {
+    const model = reliefGeography();
+    delete model.rivers;
+    delete model.lakes;
+    model.regions = [
+      ...(model.regions ?? []),
+      {
+        id: 'giants_ring',
+        name: 'Giants Ring',
+        ...(polygons
+          ? {
+              polygons: [
+                [
+                  [0.3, 0.45],
+                  [0.4, 0.45],
+                  [0.4, 0.62],
+                  [0.3, 0.62],
+                ] as [number, number][],
+              ],
+            }
+          : {}),
+        impassable,
+      },
+    ];
+    return resolveGeography(model, { frame: { width, height }, hasReference: false });
+  };
+  const spec = (geography: WorldSpec['geography']): WorldSpec => ({
+    width,
+    height,
+    seed: 7,
+    landCoverage: 0.4,
+    continents: 1,
+    landProvincePixels: 3_000,
+    seaProvincePixels: 12_000,
+    provincesPerState: 6,
+    landProvincesPerRegion: 30,
+    seaProvincesPerRegion: 10,
+    rivers: 0,
+    startDate: '1936.1.1',
+    countries: [{ tag: 'AAA', name: 'Alpha' }],
+    ...(geography === undefined ? {} : { geography }),
+  });
+
+  it('makes the region impassable states and the highest ground', () => {
+    const resolution = withRegion(true);
+    expect(resolution.valid).toBe(true);
+    expect(resolution.geography.regions.find(({ id }) => id === 'giants_ring')?.impassable).toBe(
+      true,
+    );
+    const world = generateWorld(spec(resolution.geography), plainContext);
+    const states = [...filesOf(world)]
+      .filter(([file]) => file.startsWith('history/states/'))
+      .map(([, content]) => content.toString());
+    expect(states.some((text) => text.includes('\timpassable = yes'))).toBe(true);
+    expect(
+      world.terrain!.heights[Math.round(0.535 * height) * width + Math.round(0.35 * width)]!,
+    ).toBeGreaterThan(200);
+    const open = generateWorld(spec(withRegion(false).geography), plainContext);
+    expect(
+      [...filesOf(open)].some(
+        ([file, content]) =>
+          file.startsWith('history/states/') && content.toString().includes('impassable = yes'),
+      ),
+    ).toBe(false);
+  });
+
+  it('refuses an impassable region without polygons', () => {
+    const resolution = withRegion(true, false);
+    expect(resolution.valid).toBe(false);
+    expect(resolution.diagnostics.map(({ code }) => code)).toContain(
+      'MAP_GEOGRAPHY_IMPASSABLE_WITHOUT_AREA',
+    );
+  });
+});

@@ -58,7 +58,7 @@ import {
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
 import { DEFAULT_PAINTED_RELIEF, type PaintedReliefSettings } from './relief/painted-relief.js';
-import type { ResolvedGeography } from './geography/index.js';
+import { rowStrips, scanAreaStrip, type ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import {
   checkTerrainRivers,
@@ -798,6 +798,27 @@ function realmPins(
   return pins.map(({ pixel }) => pixel);
 }
 
+/** The union of painted impassable land and the model's impassable regions, or undefined. */
+function impassableLand(
+  painted: Uint8Array | undefined,
+  geography: ResolvedGeography | undefined,
+  width: number,
+  height: number,
+): Uint8Array | undefined {
+  const regions = (geography?.regions ?? []).filter(
+    (region) => region.impassable === true && region.area !== undefined,
+  );
+  if (regions.length === 0) return painted;
+  const mask = painted === undefined ? new Uint8Array(width * height) : new Uint8Array(painted);
+  const grid = { width, height };
+  for (const strip of rowStrips(grid))
+    for (const region of regions)
+      scanAreaStrip(region.area!, grid, strip, (y, x0, x1) =>
+        mask.fill(1, y * width + x0, y * width + x1),
+      );
+  return mask;
+}
+
 /**
  * Make the states of a `wall` edge and of impassable land (ZR-28) what the base game's impassable
  * states are: `impassable = yes`,
@@ -909,25 +930,7 @@ export function generateWorld(
       'relief.painted raises the relief from the classes of a reference picture onto a geography model; give both reference and geography',
       { reference: reference !== undefined, geography: geography !== undefined },
     );
-  // Impassable land is the highest ground even without relief.painted: then only it is raised.
-  const painted =
-    reference === undefined || geography === undefined
-      ? undefined
-      : spec.paintedRelief !== undefined
-        ? {
-            classes: reference.terrain,
-            impassable: reference.impassable,
-            settings: spec.paintedRelief,
-            seed: spec.seed,
-          }
-        : reference.impassable !== undefined
-          ? {
-              classes: new Uint8Array(reference.terrain.length),
-              impassable: reference.impassable,
-              settings: DEFAULT_PAINTED_RELIEF,
-              seed: spec.seed,
-            }
-          : undefined;
+
   if (
     geography !== undefined &&
     (geography.frame.width !== width || geography.frame.height !== height)
@@ -953,8 +956,28 @@ export function generateWorld(
   const notes: WorldNote[] = [];
   const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
   let wallMask: Uint8Array | undefined;
-  // Land no army may enter: painted `impassable_mountain` of the reference picture.
-  const impassableMask = reference?.impassable;
+  // Land no army may enter: painted `impassable_mountain` of the reference picture and the
+  // impassable regions of the geography model (ZR-28).
+  const impassableMask = impassableLand(reference?.impassable, geography, width, height);
+  // Impassable land is the highest ground even without relief.painted: then only it is raised.
+  const painted =
+    geography === undefined
+      ? undefined
+      : spec.paintedRelief !== undefined && reference !== undefined
+        ? {
+            classes: reference.terrain,
+            impassable: impassableMask,
+            settings: spec.paintedRelief,
+            seed: spec.seed,
+          }
+        : impassableMask !== undefined
+          ? {
+              classes: new Uint8Array(width * height),
+              impassable: impassableMask,
+              settings: DEFAULT_PAINTED_RELIEF,
+              seed: spec.seed,
+            }
+          : undefined;
   if (edge.mode !== 'none') {
     assertFeaturesOutsideBand(
       edge,
