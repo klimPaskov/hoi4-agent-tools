@@ -3464,6 +3464,7 @@
       "enum": [
         "sea",
         "land",
+        "impassable_mountain",
         "plains",
         "forest",
         "desert",
@@ -5395,7 +5396,7 @@
           "$ref": "#/$defs/__schema224"
         },
         "painted": {
-          "description": "With a reference picture and a geography model: raise the relief toward the painted mountain, hills and volcano classes before the rivers are routed, blurred over falloffPx so slopes stay natural. Peaks are 0 to 1 on the range relief scale (defaults mountain 0.82, hills 0.27, volcano 0.9, near the base game). Off by default.",
+          "description": "With a reference picture and a geography model: raise the relief toward the painted mountain, hills and volcano classes before the rivers are routed, blurred over falloffPx so slopes stay natural. Peaks are 0 to 1 on the range relief scale (defaults mountain 0.82, hills 0.27, volcano 0.9, near the base game; impassable land 0.95, which is raised even when this is off). Off by default.",
           "$ref": "#/$defs/__schema225"
         }
       },
@@ -5437,6 +5438,11 @@
               "maximum": 1
             },
             "volcanoPeak": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "impassablePeak": {
               "type": "number",
               "minimum": 0,
               "maximum": 1

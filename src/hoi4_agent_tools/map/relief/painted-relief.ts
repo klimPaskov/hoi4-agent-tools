@@ -10,6 +10,7 @@
  *   hills toward `hillsPeak` under gentle noise, volcanoes toward `volcanoPeak`;
  * - a cell keeps the model's height where that is higher, and every other cell keeps the model's
  *   broad elevation untouched;
+ * - impassable land (ZR-28) rises toward `impassablePeak`, the highest ground of the map;
  * - painted mountains and volcanoes get permanent snow above a height that falls from the
  *   equator toward the poles, and weight the full-resolution detail as model ranges do.
  */
@@ -29,6 +30,8 @@ export interface PaintedReliefSettings {
   mountainPeak: number;
   hillsPeak: number;
   volcanoPeak: number;
+  /** Peak of impassable land (ZR-28), the highest ground of the map. */
+  impassablePeak: number;
 }
 
 /** Defaults measured against the base game 1.19.4.1: mountain p99 223, hills p90 140. */
@@ -37,11 +40,14 @@ export const DEFAULT_PAINTED_RELIEF: PaintedReliefSettings = {
   mountainPeak: 0.82,
   hillsPeak: 0.27,
   volcanoPeak: 0.9,
+  impassablePeak: 0.95,
 };
 
 export interface PaintedReliefInput {
   /** Full-resolution class code per pixel. */
   classes: Uint8Array;
+  /** Full-resolution mask of impassable land, which rises toward `impassablePeak`. */
+  impassable?: Uint8Array | undefined;
   settings: PaintedReliefSettings;
   seed: number;
 }
@@ -113,14 +119,14 @@ export function applyPaintedRelief(
 ): PaintedReliefSummary {
   const { width: mw, height: mh, kind } = target;
   const fullWidth = mw * 2;
-  const share = (code: number): Float32Array => {
+  const share = (code: number, source: Uint8Array = input.classes): Float32Array => {
     const field = new Float32Array(mw * mh);
     for (let y = 0; y < mh; y += 1)
       for (let x = 0; x < mw; x += 1) {
         const top = 2 * y * fullWidth + 2 * x;
         let count = 0;
         for (const offset of [0, 1, fullWidth, fullWidth + 1])
-          if (input.classes[top + offset] === code) count += 1;
+          if (source[top + offset] === code) count += 1;
         field[y * mw + x] = count / 4;
       }
     return field;
@@ -130,6 +136,8 @@ export function applyPaintedRelief(
   const hills = blur(share(PAINTED_HILLS), mw, mh, radius);
   // Volcanoes are cones: a narrower falloff keeps them peaked.
   const volcano = blur(share(PAINTED_VOLCANO), mw, mh, Math.max(1, radius / 2));
+  const blocked =
+    input.impassable === undefined ? undefined : blur(share(1, input.impassable), mw, mh, radius);
   const lift = (peak: number): number => PEAK_SPAN * peak * target.scale;
   const wavelength = Math.max(6, radius * 3);
   let raisedCells = 0;
@@ -142,7 +150,8 @@ export function applyPaintedRelief(
       const m = smoothstep(mountain[cell]! * 1.6);
       const h = smoothstep(hills[cell]! * 1.6);
       const v = smoothstep(volcano[cell]! * 2);
-      if (m <= 0.001 && h <= 0.001 && v <= 0.001) continue;
+      const i = blocked === undefined ? 0 : smoothstep(blocked[cell]! * 1.6);
+      if (m <= 0.001 && h <= 0.001 && v <= 0.001 && i <= 0.001) continue;
       const ridges = 0.55 + 0.45 * ridged2(input.seed + 4111, x, y, wavelength, 3);
       const swell = 0.7 + 0.3 * fractal2(input.seed + 4127, x, y, wavelength, 3);
       const goal = Math.min(
@@ -151,6 +160,8 @@ export function applyPaintedRelief(
           PEAK_BASE + lift(input.settings.mountainPeak) * m * ridges,
           PEAK_BASE + lift(input.settings.hillsPeak) * h * swell,
           PEAK_BASE + lift(input.settings.volcanoPeak) * v,
+          // Impassable land keeps its crests but never sinks below most of its peak.
+          PEAK_BASE + lift(input.settings.impassablePeak) * i * (0.8 + 0.2 * ridges),
         ),
       );
       if (goal > target.heights[cell]!) {
@@ -158,9 +169,9 @@ export function applyPaintedRelief(
         raisedCells += 1;
         if (goal > highest) highest = goal;
       }
-      const weight = Math.max(m, 0.6 * h, v);
+      const weight = Math.max(m, 0.6 * h, v, i);
       if (weight > target.footprint[cell]!) target.footprint[cell] = weight;
-      if (Math.max(m, v) > 0.25) {
+      if (Math.max(m, v, i) > 0.25) {
         const snow = paintedSnowHeight(y, mh);
         if (snow < target.snowLine[cell]!) target.snowLine[cell] = snow;
       }
@@ -178,5 +189,6 @@ export function resolvePaintedRelief(
     mountainPeak: input.mountainPeak ?? DEFAULT_PAINTED_RELIEF.mountainPeak,
     hillsPeak: input.hillsPeak ?? DEFAULT_PAINTED_RELIEF.hillsPeak,
     volcanoPeak: input.volcanoPeak ?? DEFAULT_PAINTED_RELIEF.volcanoPeak,
+    impassablePeak: input.impassablePeak ?? DEFAULT_PAINTED_RELIEF.impassablePeak,
   };
 }
