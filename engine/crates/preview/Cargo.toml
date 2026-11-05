@@ -1,0 +1,22 @@
+[package]
+name = "hoi4-preview"
+description = "Game-like previews of Hearts of Iron IV interface screens, drawn from the game's own assets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+hoi4-syntax.workspace = true
+hoi4-engine.workspace = true
+hoi4-texture.workspace = true
+serde.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

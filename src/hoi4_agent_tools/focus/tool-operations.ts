@@ -3,7 +3,10 @@ import { boundedSourceHashEvidence, publicArtifactLink } from '../core/artifacts
 import { canonicalJson, compareCodeUnits, hashCanonical } from '../core/canonical.js';
 import { focusDomainScanPatterns } from '../core/domain-scan-patterns.js';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
-import { RenderBudget } from '../core/render-budget.js';
+import { RenderBudget, RENDER_MAX_PIXELS } from '../core/render-budget.js';
+import { sharedResidentEngine } from '../core/resident-engine.js';
+import { renderFocusGameView, type FocusGameViewOutcome } from './game-render.js';
+import { gameViewBundle, storeGameViewArtifacts } from './game-view-output.js';
 import { emptyServiceResult, ServiceError } from '../core/result.js';
 import { parseClausewitz } from '../core/source/index.js';
 import {
@@ -998,6 +1001,153 @@ export async function inspectFocus(
   return { result, sourceRevision: snapshot.revision };
 }
 
+/** Most missing game-view assets listed inline; the PNG artifact's report is complete. */
+const GAME_VIEW_MISSING_DIAGNOSTICS = 20;
+
+/** What the game view could not draw, and why it is absent when the engine failed. */
+function gameViewDiagnostics(
+  gameView: FocusGameViewOutcome | undefined,
+  location: Diagnostic['location'],
+): Diagnostic[] {
+  if (gameView === undefined) return [];
+  const at = location === undefined ? {} : { location };
+  if (!gameView.ok)
+    return [
+      {
+        code: 'FOCUS_GAME_VIEW_UNAVAILABLE',
+        category: 'rendering',
+        severity: 'warning',
+        message: `The game view could not be drawn (${gameView.code}: ${gameView.message}); the PNG is the schematic.`,
+        ...at,
+      },
+    ];
+  return gameView.report.missing.slice(0, GAME_VIEW_MISSING_DIAGNOSTICS).map((missing) => ({
+    code: 'FOCUS_GAME_VIEW_ASSET_MISSING',
+    category: 'rendering' as const,
+    severity: 'warning' as const,
+    message: `${missing.message}${missing.focusIds.length === 0 ? '' : ` (focuses: ${missing.focusIds.slice(0, 5).join(', ')}${missing.focusIds.length > 5 ? ', ...' : ''})`}`,
+    details: { kind: missing.kind, name: missing.name, focusIds: missing.focusIds.slice(0, 50) },
+    ...at,
+  }));
+}
+
+/**
+ * `view: "game"`: the game view alone, for an in-app preview that renders on every edit. No
+ * presentation pass, schematic SVG or schematic raster: titles are localised here, icons and
+ * everything else are resolved by the resident engine.
+ */
+async function renderGameViewOnly(
+  workbench: FocusWorkbench,
+  input: FocusRenderToolRequest,
+  context: FocusOperationContext,
+  source: {
+    snapshot: ScanSnapshot;
+    workspace: ReturnType<CoreEngine['resolver']['get']>;
+    plan: ReturnType<typeof selectPlan>;
+    diagnostics: Diagnostic[];
+  },
+) {
+  const { snapshot, workspace, plan } = source;
+  await context.progress(2, 4, 'Drawing the game view');
+  const layout = await workbench.layoutAsync(
+    plan,
+    context.signal === undefined ? {} : { signal: context.signal },
+  );
+  const scale = input.reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
+  const view = await renderFocusGameView({
+    workspace,
+    plan,
+    layout,
+    index: snapshot.index,
+    language: 'l_english',
+    scale,
+    maxPixels: RENDER_MAX_PIXELS,
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+  });
+  if (!view.ok)
+    throw new ServiceError(
+      'FOCUS_GAME_VIEW_UNAVAILABLE',
+      `The game view could not be drawn: ${view.message}`,
+      { reason: view.code },
+    );
+  const bundle = await gameViewBundle(
+    plan,
+    layout,
+    view.png,
+    view.report,
+    view.titles,
+    view.request,
+  );
+  const stored = await storeGameViewArtifacts(
+    workspace,
+    plan,
+    bundle,
+    { sourceRevision: snapshot.revision, reviewScale: scale, output: 'game' },
+    context.signal,
+  );
+  const quality = evaluateFocusLayoutQuality(plan, layout.nodes);
+  const diagnostics = [
+    ...[layoutVerdictDiagnostic(plan.id, quality.report, plan.sourceLocation)].filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== undefined,
+    ),
+    ...gameViewDiagnostics(view, plan.sourceLocation),
+    ...source.diagnostics,
+  ];
+  const xs = layout.nodes.map(({ x }) => x);
+  const ys = layout.nodes.map(({ y }) => y);
+  const result = emptyServiceResult(context.workspaceId, {
+    mode: 'national' as const,
+    treeId: plan.id,
+    layoutHash: layout.layoutHash,
+    hashes: bundle.hashes,
+    width: view.report.width,
+    height: view.report.height,
+    layoutQuality: layoutQualityOutput(quality.report, 'compact'),
+    ...(input.inline === false
+      ? {}
+      : {
+          inlineImages: [
+            {
+              kind: 'game' as const,
+              label: `${plan.id} as the game draws it`,
+              focusIds: [],
+              region: {
+                minimumX: Math.min(...xs),
+                maximumX: Math.max(...xs),
+                minimumY: Math.min(...ys),
+                maximumY: Math.max(...ys),
+              },
+              width: bundle.inline.width,
+              height: bundle.inline.height,
+              bytes: bundle.inline.png.length,
+            },
+          ],
+        }),
+  });
+  result.code = 'FOCUS_RASTERIZED';
+  setInlineFilesScanned(result, [plan.provenance.sourcePath]);
+  result.diagnostics = diagnostics.slice(0, 100);
+  result.artifacts = stored.map(publicArtifactLink);
+  const structure = validationFromDiagnostics(diagnostics);
+  result.validation = {
+    passed: structure.passed,
+    checks: [
+      ...structure.checks,
+      layoutValidationCheck([{ treeId: plan.id, report: quality.report }]),
+    ],
+  };
+  await context.progress(4, 4, 'Game view complete');
+  return {
+    result,
+    sourceRevision: snapshot.revision,
+    ...(input.inline === false
+      ? {}
+      : {
+          images: [{ data: bundle.inline.png.toString('base64'), mimeType: 'image/png' as const }],
+        }),
+  };
+}
+
 export async function renderFocus(
   engine: CoreEngine,
   workbench: FocusWorkbench,
@@ -1084,21 +1234,64 @@ export async function renderFocus(
   const linkedPalettes = paletteImport.palettes.filter(({ id }) =>
     plan.continuousFocusPaletteIds.includes(id),
   );
-  const presentation = await resolveFocusPresentation({
-    plans: [plan],
-    palettes: linkedPalettes,
-    files: snapshot.files,
-    index: snapshot.index,
-    scanner: engine.scanner,
-    workspace,
-    decodeIcons: rasterize,
-    budget: renderBudget,
-    ...(context.signal === undefined ? {} : { signal: context.signal }),
-  });
+  if (input.view === 'game')
+    return renderGameViewOnly(workbench, input, context, {
+      snapshot,
+      workspace,
+      plan,
+      diagnostics: [...paletteImport.diagnostics, ...imported.diagnostics],
+    });
+  // The PNG is the game view the engine draws from the game's own assets (#75). Without the
+  // engine it is the schematic SVG rasterized here, which needs the icons decoded.
+  const gameViewWanted = rasterize && sharedResidentEngine().available();
+  const resolvePresentation = (decodeIcons: boolean) =>
+    resolveFocusPresentation({
+      plans: [plan],
+      palettes: linkedPalettes,
+      files: snapshot.files,
+      index: snapshot.index,
+      scanner: engine.scanner,
+      workspace,
+      decodeIcons,
+      budget: renderBudget,
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+    });
+  let presentation = await resolvePresentation(rasterize && !gameViewWanted);
   await context.progress(2, 4, `Producing focus ${outputName} artifacts`);
   const effectiveReviewScale = input.reviewScale ?? automaticFocusRenderScale(plan.focuses.length);
+  let gameView: FocusGameViewOutcome | undefined;
+  let layout: FocusLayoutResult | undefined;
+  if (gameViewWanted) {
+    layout = await workbench.layoutAsync(
+      plan,
+      context.signal === undefined ? {} : { signal: context.signal },
+    );
+    gameView = await renderFocusGameView({
+      workspace,
+      plan,
+      layout,
+      index: snapshot.index,
+      language: presentation.language,
+      scale: effectiveReviewScale,
+      maxPixels: RENDER_MAX_PIXELS,
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+    });
+    if (!gameView.ok) presentation = await resolvePresentation(true);
+  }
+  const game = gameView?.ok === true ? gameView : undefined;
   const rendered = await workbench.renderAndStore(context.workspaceId, plan, {
     ...(context.principal === undefined ? {} : { principal: context.principal }),
+    ...(layout === undefined ? {} : { layout }),
+    ...(game === undefined
+      ? {}
+      : {
+          raster: {
+            png: game.png,
+            width: game.report.width,
+            height: game.report.height,
+            boxes: new Map(game.report.focuses.map((box) => [box.id, box])),
+          },
+        }),
     index: snapshot.index,
     references: referenceCatalog(snapshot),
     presentation,
@@ -1115,6 +1308,7 @@ export async function renderFocus(
       sourceRevision: snapshot.revision,
       reviewScale: effectiveReviewScale,
       output: outputName,
+      ...(game === undefined ? {} : { renderer: 'hoi4-engine game view' }),
     },
     budget: renderBudget,
     ...(context.signal === undefined ? {} : { signal: context.signal }),
@@ -1145,6 +1339,7 @@ export async function renderFocus(
       ...diagnostic,
       ...(plan.sourceLocation === undefined ? {} : { location: plan.sourceLocation }),
     })),
+    ...gameViewDiagnostics(gameView, plan.sourceLocation),
     ...paletteImport.diagnostics,
     ...imported.diagnostics,
     ...withoutCurvedConnectorDiagnostics(rendered.diagnostics),

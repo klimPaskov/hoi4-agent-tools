@@ -1,0 +1,172 @@
+{
+  "pillow": "12.2.0",
+  "references": {
+    "bc7_modes.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [64, 84]
+    },
+    "bc7_srgb_odd.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "dx10_r8g8b8a8_unorm.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [37, 23]
+    },
+    "dx10_r8g8b8a8_unorm_srgb.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [37, 23]
+    },
+    "dx10_b8g8r8a8_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_b8g8r8x8_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_b8g8r8a8_unorm_srgb.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_r10g10b10a2_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_b5g6r5_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_b5g5r5a1_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_r8_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_a8_unorm.dds": {
+      "reference": "DXGI definition (generate.py)",
+      "size": [37, 23]
+    },
+    "dx10_bc1.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "dx10_bc2.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "dx10_bc3.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "dx10_bc4.dds": {
+      "reference": "Pillow",
+      "mode": "L",
+      "size": [30, 18]
+    },
+    "dx10_bc5.dds": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [30, 18]
+    },
+    "legacy_dxt1.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "legacy_dxt3.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "legacy_dxt5.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [30, 18]
+    },
+    "legacy_ati1.dds": {
+      "reference": "Pillow",
+      "mode": "L",
+      "size": [30, 18]
+    },
+    "legacy_ati2.dds": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [30, 18]
+    },
+    "legacy_a8r8g8b8.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [21, 13]
+    },
+    "legacy_x8r8g8b8.dds": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [21, 13]
+    },
+    "legacy_a8b8g8r8.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [21, 13]
+    },
+    "legacy_r8g8b8.dds": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [21, 13]
+    },
+    "legacy_r5g6b5.dds": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [21, 13]
+    },
+    "legacy_a1r5g5b5.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [21, 13]
+    },
+    "legacy_a4r4g4b4.dds": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [21, 13]
+    },
+    "legacy_l8.dds": {
+      "reference": "Pillow",
+      "mode": "L",
+      "size": [21, 13]
+    },
+    "legacy_a8l8.dds": {
+      "reference": "Pillow",
+      "mode": "LA",
+      "size": [21, 13]
+    },
+    "tga_32.tga": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [19, 11]
+    },
+    "tga_24_top.tga": {
+      "reference": "Pillow",
+      "mode": "RGB",
+      "size": [19, 11]
+    },
+    "tga_32_rle_top.tga": {
+      "reference": "Pillow",
+      "mode": "RGBA",
+      "size": [19, 11]
+    },
+    "tga_grey.tga": {
+      "reference": "Pillow",
+      "mode": "L",
+      "size": [19, 11]
+    }
+  }
+}

@@ -116,6 +116,12 @@ export const focusRenderRequestSchema = z
       .describe(
         'Default true: add a PNG with decoded source icons. False returns only the faster HTML, SVG and JSON.',
       ),
+    view: z
+      .enum(['full', 'game'])
+      .optional()
+      .describe(
+        'Default full. game: only the tree as the game draws it (PNG, hover map, zoomable HTML, inline overview), without the schematic; fast enough to call after every edit. Needs hoi4-engine.',
+      ),
   })
   .strict()
   .superRefine((value, context) => {

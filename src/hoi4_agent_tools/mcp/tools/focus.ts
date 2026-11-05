@@ -102,7 +102,7 @@ const focusRenderOutputSchema = strictOperationResultSchema(
           .array(
             z
               .object({
-                kind: z.enum(['overview', 'branch', 'focus', 'problem']),
+                kind: z.enum(['overview', 'branch', 'focus', 'problem', 'game']),
                 label: z.string().max(300),
                 focusIds: z.array(z.string().max(256)).max(50),
                 region: z

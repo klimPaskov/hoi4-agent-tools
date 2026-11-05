@@ -375,8 +375,133 @@ describe(
         expect(added2.y).toBeGreaterThan(added.y);
       },
     );
+
+    it.skipIf(engineBinary === undefined)(
+      'renders the PNG as the game view and names every asset it could not draw',
+      async () => {
+        const { client, mod } = await fixture();
+        const created = await rewrite(client, {
+          plan: treePlan(baseFocuses),
+          createIfMissing: true,
+          layoutMode: 'engine',
+        });
+        expect(created.structuredContent.code).toBe('FOCUS_CHANGES_APPLIED');
+        const rendered = (await client.callTool({
+          name: 'hoi4.focus_render',
+          arguments: { workspaceId: 'engine', relativePath, treeId, inline: false },
+        })) as unknown as {
+          isError?: boolean;
+          structuredContent: {
+            status: string;
+            code: string;
+            data: { width: number; height: number };
+            diagnostics: Array<{ code: string; details?: { name?: string; focusIds?: string[] } }>;
+          };
+        };
+        expect(rendered.isError, JSON.stringify(rendered.structuredContent)).not.toBe(true);
+        expect(rendered.structuredContent).toMatchObject({
+          status: 'ok',
+          code: 'FOCUS_RASTERIZED',
+        });
+        const codes = rendered.structuredContent.diagnostics.map(({ code }) => code);
+        expect(codes).not.toContain('FOCUS_GAME_VIEW_UNAVAILABLE');
+        // The fixture has no game folder, so the view's own sprites are missing, and each is named.
+        const missing = rendered.structuredContent.diagnostics.filter(
+          ({ code }) => code === 'FOCUS_GAME_VIEW_ASSET_MISSING',
+        );
+        expect(missing.map(({ details }) => details?.name)).toContain('GFX_focus_can_start');
+        // The game view is drawn on the game's 96 by 130 grid, not the schematic's.
+        const { width } = rendered.structuredContent.data;
+        expect(width).toBeGreaterThan(0);
+        const pngs = await findFiles(mod, (name) => name.endsWith('.focus.png'));
+        expect(pngs.length).toBeGreaterThan(0);
+      },
+    );
+
+    it.skipIf(engineBinary === undefined)(
+      'returns only the game view for view "game", with a zoomable viewer and a hover map',
+      async () => {
+        const { client, mod } = await fixture();
+        await rewrite(client, {
+          plan: treePlan(baseFocuses),
+          createIfMissing: true,
+          layoutMode: 'engine',
+        });
+        const rendered = (await client.callTool({
+          name: 'hoi4.focus_render',
+          arguments: { workspaceId: 'engine', relativePath, treeId, view: 'game' },
+        })) as unknown as {
+          isError?: boolean;
+          content: Array<{ type: string; mimeType?: string }>;
+          structuredContent: {
+            status: string;
+            data: {
+              layoutQuality?: { verdict: string };
+              inlineImages?: Array<{ kind: string }>;
+            };
+          };
+        };
+        expect(rendered.isError, JSON.stringify(rendered.structuredContent)).not.toBe(true);
+        expect(rendered.structuredContent.status).toBe('ok');
+        expect(rendered.structuredContent.data.layoutQuality?.verdict).toBeDefined();
+        expect(rendered.structuredContent.data.inlineImages?.map(({ kind }) => kind)).toEqual([
+          'game',
+        ]);
+        expect(rendered.content.filter(({ type }) => type === 'image')).toHaveLength(1);
+        const pages = await Promise.all(
+          (await findFiles(mod, (name) => name.endsWith('.focus.html'))).map((file) =>
+            readFile(file, 'utf8'),
+          ),
+        );
+        const page = pages.find((text) => text.includes('game view'));
+        expect(page).toBeDefined();
+        expect(page).toContain('data:image/png;base64,');
+        expect(page).toContain('data-focus-id="eng_pol_start"');
+        // No schematic was drawn: the game view's SVG is only the hover map over the PNG.
+        const maps = await Promise.all(
+          (await findFiles(mod, (name) => name.endsWith('.focus.svg'))).map((file) =>
+            readFile(file, 'utf8'),
+          ),
+        );
+        const map = maps.find((text) => text.includes('game view hover map'));
+        expect(map).toBeDefined();
+        expect(map).not.toContain('<path');
+      },
+    );
   },
 );
+
+async function findFiles(root: string, accept: (name: string) => boolean): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true, recursive: true }))
+    if (entry.isFile() && accept(entry.name)) found.push(path.join(entry.parentPath, entry.name));
+  return found;
+}
+
+describe('hoi4.focus_render game view without the engine', () => {
+  it('refuses view "game" with FOCUS_GAME_VIEW_UNAVAILABLE and keeps the full render', async () => {
+    const { client, mod } = await fixture();
+    await rewrite(client, { plan: treePlan(baseFocuses), createIfMissing: true });
+    const restore = withEnvironment({
+      HOI4_ENGINE: path.join(mod, 'no-such-engine', 'hoi4-engine.exe'),
+    });
+    try {
+      const game = await client.callTool({
+        name: 'hoi4.focus_render',
+        arguments: { workspaceId: 'engine', relativePath, treeId, view: 'game', inline: false },
+      });
+      expect(game.isError).toBe(true);
+      expect(JSON.stringify(game.structuredContent)).toContain('FOCUS_GAME_VIEW_UNAVAILABLE');
+      const full = await client.callTool({
+        name: 'hoi4.focus_render',
+        arguments: { workspaceId: 'engine', relativePath, treeId, inline: false },
+      });
+      expect(full.isError).not.toBe(true);
+    } finally {
+      restore();
+    }
+  });
+});
 
 describe('hoi4.focus_rewrite engine refusals', () => {
   it('refuses with FOCUS_ENGINE_UNAVAILABLE and writes nothing when the engine is missing', async () => {

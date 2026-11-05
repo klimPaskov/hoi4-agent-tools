@@ -5,6 +5,7 @@ import { sha256Bytes } from '../core/canonical.js';
 import { assertRenderDimensions } from '../core/render-budget.js';
 import type { ScannedFile } from '../core/scanner.js';
 import { GuiAssetCatalog, type LoadedRaster } from './assets.js';
+import { RISKY_TEXTURE_FORMATS } from './engine-textures.js';
 import {
   GUI_GRAPH_MAX_EDGES,
   GUI_GRAPH_MAX_NODES,
@@ -1510,6 +1511,13 @@ async function validateGuiAnimationsInto(
       );
       continue;
     }
+    const risk = RISKY_TEXTURE_FORMATS[raster.format];
+    if (risk !== undefined)
+      add(
+        'GUI_TEXTURE_FORMAT_RISKY',
+        'warning',
+        `${sprite.name}: ${sprite.texturePath} is ${raster.format}, which the preview draws. ${risk}`,
+      );
     const safeFrameCount = Math.max(1, sprite.frameCount);
     if (raster.width % safeFrameCount !== 0)
       add(

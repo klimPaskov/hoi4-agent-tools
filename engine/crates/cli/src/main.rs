@@ -14,6 +14,8 @@ use hoi4_engine::findings::{Finding, Severity};
 use hoi4_engine::repair;
 use hoi4_engine::{Analysis, Vocabulary, Workspace, WorkspaceOptions};
 
+mod serve;
+
 const HELP: &str = "hoi4-engine: static checks for Hearts of Iron IV mods
 
 USAGE:
@@ -29,6 +31,10 @@ USAGE:
     hoi4-engine drawio    FILE [--prefix TAG]
     hoi4-engine focus-layout [--request FILE]
     hoi4-engine localisation [--request FILE]
+    hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
+    hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
+    hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
+    hoi4-engine serve
     hoi4-engine --version
 
 WORKSPACE:
@@ -43,6 +49,11 @@ event and more shows, and reports sprites or textures used by two asset families
 textures and focus sprites without a `_shine` companion. It traces the mod (or the game without
 --mod); --all-layers traces every loaded file. --index adds every sprite to the JSON output.
 
+The `texture` command decodes DDS and TGA files (folders are searched) and reports each format,
+size and decoded-pixel hash, or why a file cannot be decoded; it exits 1 when one cannot.
+With --output it writes one decoded texture as PNG. `serve` runs the resident engine that the
+MCP server talks to over stdin and stdout (see crates/cli/src/serve.rs for the frames).
+
 A check reports `pass`, `incomplete` (something could not be checked: no game, unknown names,
 folders without a model) or `fail` (a new finding at or above --fail-on, default warning).
 Findings recorded in --baseline never fail; `baseline update` only removes fixed entries.
@@ -53,7 +64,8 @@ struct Args {
     options: Vec<(String, Option<String>)>,
 }
 
-const VALUE_OPTIONS: &[&str] = &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix", "--request", "--allowlist"];
+const VALUE_OPTIONS: &[&str] =
+    &["--mod", "--game", "--dependency", "--baseline", "--fail-on", "--format", "--output", "--prefix", "--request", "--allowlist", "--max-pixels"];
 
 impl Args {
     fn parse(raw: Vec<String>) -> Result<Args, String> {
@@ -473,6 +485,137 @@ fn cmd_focus_layout(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::from(code))
 }
 
+/// One decoded texture in `texture` output.
+#[derive(serde::Serialize)]
+struct TextureReport {
+    path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    height: Option<u32>,
+    /// SHA-256 of the decoded RGBA bytes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rgba_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+fn texture_files(path: &std::path::Path, out: &mut Vec<PathBuf>) {
+    if path.is_dir() {
+        let Ok(entries) = fs::read_dir(path) else { return };
+        let mut children: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+        children.sort();
+        for child in children {
+            texture_files(&child, out);
+        }
+    } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("dds") || e.eq_ignore_ascii_case("tga")) {
+        out.push(path.to_path_buf());
+    }
+}
+
+fn cmd_texture(args: &Args) -> Result<ExitCode, String> {
+    use rayon::prelude::*;
+    args.check_known(&["--output", "--format", "--max-pixels"])?;
+    let max_pixels = match args.value("--max-pixels") {
+        Some(v) => v.parse::<u64>().map_err(|_| format!("--max-pixels must be a number, not {v}"))?,
+        None => hoi4_texture::DEFAULT_MAX_PIXELS,
+    };
+    let inputs = &args.positional[1..];
+    if inputs.is_empty() {
+        return Err("texture needs a file or folder".into());
+    }
+    if let Some(output) = args.value("--output") {
+        let [input] = inputs else { return Err("--output takes exactly one texture".into()) };
+        let decoded = hoi4_texture::decode_file(std::path::Path::new(input), max_pixels).map_err(|e| format!("{input}: {e}"))?;
+        fs::write(output, hoi4_texture::pngio::encode(&decoded.image, false)).map_err(|e| format!("cannot write {output}: {e}"))?;
+        return Ok(ExitCode::SUCCESS);
+    }
+    let json = json_format(args)?;
+    let mut files = Vec::new();
+    for input in inputs {
+        texture_files(std::path::Path::new(input), &mut files);
+    }
+    let reports: Vec<TextureReport> = files
+        .par_iter()
+        .map(|path| {
+            let shown = path.display().to_string();
+            match hoi4_texture::decode_file(path, max_pixels) {
+                Ok(decoded) => {
+                    use sha2::Digest;
+                    let hash = sha2::Sha256::digest(&decoded.image.rgba);
+                    TextureReport {
+                        path: shown,
+                        format: Some(decoded.format),
+                        width: Some(decoded.image.width),
+                        height: Some(decoded.image.height),
+                        rgba_sha256: Some(hash.iter().map(|b| format!("{b:02x}")).collect()),
+                        error: None,
+                    }
+                }
+                Err(e) => TextureReport { path: shown, format: Some(e.format.clone()), width: None, height: None, rgba_sha256: None, error: Some(e.message) },
+            }
+        })
+        .collect();
+    let failed = reports.iter().filter(|r| r.error.is_some()).count();
+    let mut by_format = std::collections::BTreeMap::<String, (usize, usize)>::new();
+    for report in &reports {
+        let entry = by_format.entry(report.format.clone().unwrap_or_default()).or_default();
+        if report.error.is_some() { entry.1 += 1 } else { entry.0 += 1 }
+    }
+    let text = if json {
+        let formats: serde_json::Map<String, serde_json::Value> =
+            by_format.iter().map(|(format, (ok, bad))| (format.clone(), serde_json::json!({ "decoded": ok, "failed": bad }))).collect();
+        let value =
+            serde_json::json!({ "schema": "hoi4-engine-textures/1", "files": reports.len(), "failed": failed, "formats": formats, "textures": reports });
+        serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?
+    } else {
+        let mut text = String::new();
+        for report in &reports {
+            match (&report.error, &report.format) {
+                (Some(error), format) => text.push_str(&format!("FAIL {} ({}): {error}\n", report.path, format.as_deref().unwrap_or("?"))),
+                (None, format) => text.push_str(&format!(
+                    "ok   {} {}x{} {}\n",
+                    report.path,
+                    report.width.unwrap_or(0),
+                    report.height.unwrap_or(0),
+                    format.as_deref().unwrap_or("?")
+                )),
+            }
+        }
+        for (format, (ok, bad)) in &by_format {
+            text.push_str(&format!("{format}: {ok} decoded, {bad} failed\n"));
+        }
+        text.push_str(&format!("{} textures, {failed} failed\n", reports.len()));
+        text
+    };
+    print!("{text}");
+    Ok(if failed > 0 { ExitCode::from(1) } else { ExitCode::SUCCESS })
+}
+
+fn cmd_focus_render(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&["--mod", "--game", "--dependency", "--no-dlc", "--request", "--output"])?;
+    let output = args.value("--output").ok_or("focus-render needs --output FILE.png")?;
+    let options = workspace_options(args)?;
+    let text = match args.value("--request") {
+        Some(path) => fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut text).map_err(|e| format!("cannot read stdin: {e}"))?;
+            text
+        }
+    };
+    let request: hoi4_preview::focus::FocusRenderRequest = serde_json::from_str(&text).map_err(|e| format!("invalid focus render request: {e}"))?;
+    let layers = hoi4_preview::layers_for(options.game.as_deref(), options.include_dlc, &options.dependencies, options.target.as_deref());
+    let preview = hoi4_preview::Preview::new();
+    let (png, report, cache, timings) = preview.focus_png(layers, &request)?;
+    fs::write(output, png).map_err(|e| format!("cannot write {output}: {e}"))?;
+    let value = serde_json::json!({ "schema": "hoi4-focus-render/1", "report": report, "cache": cache, "timings": timings });
+    println!("{}", serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?);
+    Ok(ExitCode::SUCCESS)
+}
+
 /// Reads a JSON request from --request FILE or stdin, answers it with `respond` and prints the
 /// JSON answer. A failed request also names its error on stderr.
 fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) -> Result<ExitCode, String> {
@@ -521,6 +664,9 @@ fn main() -> ExitCode {
         Some("focus-layout") => cmd_focus_layout(&args),
         Some("localisation") => cmd_json_request(&args, "localisation", hoi4_engine::localisation::respond_json),
         Some("sprites") => cmd_sprites(&args),
+        Some("texture") => cmd_texture(&args),
+        Some("focus-render") => cmd_focus_render(&args),
+        Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {
             print!("{HELP}");
             return ExitCode::SUCCESS;
