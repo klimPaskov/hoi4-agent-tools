@@ -12,6 +12,7 @@ import {
   rimAdjacencyRows,
   rimHeight,
   rimStrength,
+  wallRowKinds,
 } from '../../src/hoi4_agent_tools/map/world-edge.js';
 import { generateWorld } from '../../src/hoi4_agent_tools/map/world.js';
 import {
@@ -406,5 +407,205 @@ describe('seam validators', () => {
     expect(
       appearanceDiagnostics(files, 'sea-band').filter(({ code }) => code.includes('EDGE_LAND_CUT')),
     ).toEqual([]);
+  });
+});
+
+describe('the wall', () => {
+  const width = 256;
+  const height = 256;
+  // A continent in the middle and an island near the west edge, with open sea at the seam.
+  const surface = syntheticRaster(width, height, {
+    at: (x, y) =>
+      (x > 70 && x < 190 && y > 30 && y < 226) || (x > 12 && x < 30 && y > 100 && y < 140) ? 1 : 0,
+  });
+  const edge = resolveEdge({ mode: 'wall', rimPx: 48, polarPx: 0 }, width, height);
+  const world = generateWorld(worldSpec(surface, { edge }), plainContext);
+  const files = filesOf(world);
+  const definitions = new Map<string, { id: number; type: string }>();
+  for (const line of files.get('map/definition.csv')!.toString().trim().split(/\r?\n/u)) {
+    const cells = line.split(';');
+    definitions.set(`${cells[1]},${cells[2]},${cells[3]}`, {
+      id: Number(cells[0]),
+      type: cells[4]!,
+    });
+  }
+  const provinces = BmpImage.decode(files.get('map/provinces.bmp')!);
+  const provinceAt = (x: number, y: number) => {
+    const { r, g, b } = provinces.rgbAt(x, y);
+    return definitions.get(`${r},${g},${b}`)!;
+  };
+  const stateFiles = [...files]
+    .filter(([path]) => path.startsWith('history/states/'))
+    .map(([, content]) => content.toString());
+
+  it('resolves to the rim width with no sea band', () => {
+    expect(edge).toEqual({ mode: 'wall', bandPx: 0, polarPx: 0, rimPx: 48 });
+    expect(resolveEdge({ mode: 'wall' }, 5_120, 2_560)).toEqual({
+      mode: 'wall',
+      bandPx: 0,
+      polarPx: 64,
+      rimPx: 48,
+    });
+    expect(resolveEdge({ mode: 'rim', wallTerrain: 'auto' }, 5_120, 2_560)).not.toHaveProperty(
+      'wallTerrain',
+    );
+    expect(() => resolveEdge({ mode: 'wall', rimPx: 100 }, 256, 128)).toThrow(
+      expect.objectContaining({ code: 'MAP_EDGE_BAND_TOO_WIDE' }),
+    );
+  });
+
+  it('closes the seam with land over the full height and reports the water it filled', () => {
+    for (let y = 0; y < height; y += 1) {
+      expect(provinceAt(0, y).type).toBe('land');
+      expect(provinceAt(width - 1, y).type).toBe('land');
+    }
+    const filled = world.notes.find(({ code }) => code === 'MAP_EDGE_WALL_FILLED');
+    expect(filled?.details?.filledWaterPixels).toBeGreaterThan(height * 2 * 28);
+  });
+
+  it('keeps the wall within its ragged band and the sea inland of it', () => {
+    for (let y = 0; y < height; y += 1) expect(provinceAt(60, y).type).not.toBe('land');
+    const heights = readHeights(files);
+    expect(heights[128 * width]).toBeGreaterThanOrEqual(225);
+  });
+
+  it('puts the wall in impassable enclave states linked to a passable neighbour', () => {
+    const walls = stateFiles.filter((text) => text.includes('\timpassable = yes'));
+    const passable = stateFiles.filter((text) => !text.includes('\timpassable = yes'));
+    expect(walls.length).toBeGreaterThan(0);
+    expect(passable.length).toBeGreaterThan(0);
+    const passableIds = new Set(passable.map((text) => Number(/\tid = (\d+)/u.exec(text)![1])));
+    for (const text of walls) {
+      expect(text).toContain('\tstate_category = enclave');
+      expect(text).toContain('infrastructure = 0');
+      expect(text).not.toMatch(/industrial_complex|arms_factory|naval_base|victory_points|bunker/u);
+      // The wall is cut off from the continent by sea; the nearest passable state is still found.
+      const link = /\tforce_link_ownership_to = (\d+)/u.exec(text);
+      expect(link).not.toBeNull();
+      expect(passableIds.has(Number(link![1]))).toBe(true);
+      expect(text).toContain('owner = AAA');
+    }
+    for (const text of walls)
+      expect(parseClausewitz(Buffer.from(text), 'state.txt').diagnostics).toEqual([]);
+  });
+
+  it('blocks every land pair across the seam and passes the wall validator', () => {
+    const rows = files
+      .get('map/adjacencies.csv')!
+      .toString()
+      .split('\r\n')
+      .filter((line) => line.includes(';impassable;'));
+    const expected = new Set<string>();
+    for (let y = 0; y < height; y += 1) {
+      const left = provinceAt(0, y).id;
+      const right = provinceAt(width - 1, y).id;
+      if (left !== right) expected.add(`${Math.min(left, right)};${Math.max(left, right)}`);
+    }
+    expect(new Set(rows.map((row) => row.split(';').slice(0, 2).join(';')))).toEqual(expected);
+    const diagnostics = appearanceDiagnostics(files, 'wall');
+    expect(diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
+    expect(diagnostics.map(({ code }) => code)).not.toContain('MAP_EDGE_LAND_CUT');
+  });
+
+  it('reports water at the seam as an open wall', () => {
+    const open = filesOf(
+      generateWorld(
+        worldSpec(surface, { edge: resolveEdge({ mode: 'rim', rimPx: 48 }, width, height) }),
+        plainContext,
+      ),
+    );
+    const diagnostics = appearanceDiagnostics(open, 'wall');
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'MAP_EDGE_WALL_OPEN', severity: 'error' }),
+    );
+  });
+
+  it('refuses a city in the wall and lets land reach the poles with polarPx 0', () => {
+    expect(() =>
+      generateWorld(
+        worldSpec(surface, { edge, referenceCities: [{ name: 'Wallhold', x: 20, y: 120 }] }),
+        plainContext,
+      ),
+    ).toThrow('Wallhold');
+    expect(provinceAt(120, 0).type).toBe('sea');
+    const polar = generateWorld(
+      worldSpec(syntheticRaster(width, height, { at: (x) => (x > 70 && x < 190 ? 1 : 0) }), {
+        edge,
+      }),
+      plainContext,
+    );
+    const polarFiles = filesOf(polar);
+    expect(
+      appearanceDiagnostics(polarFiles, 'wall').find(({ code }) => code === 'MAP_POLAR_LAND'),
+    ).toBeDefined();
+  });
+
+  it('takes the look of the land it meets and snow where it meets only polar water', () => {
+    const terrain = readTerrainIndices(files);
+    expect(terrain[10 * width + 2]).toBe(16);
+    expect(terrain[128 * width + 2]).toBe(0);
+    expect(terrain[128 * width + width - 3]).toBe(0);
+  });
+
+  it('follows caller segments and falls back to the land it meets elsewhere', () => {
+    const segmented = filesOf(
+      generateWorld(
+        worldSpec(surface, {
+          edge: resolveEdge(
+            {
+              mode: 'wall',
+              rimPx: 48,
+              polarPx: 0,
+              wallTerrain: [{ y0: 100, y1: 160, kind: 'desert' }],
+            },
+            width,
+            height,
+          ),
+        }),
+        plainContext,
+      ),
+    );
+    const terrain = readTerrainIndices(segmented);
+    expect(terrain[120 * width + 2]).toBe(3);
+    expect(terrain[120 * width + width - 3]).toBe(3);
+    expect(terrain[200 * width + 2]).toBe(0);
+  });
+
+  it('smooths the look along the edge and lets segments win', () => {
+    const wall = new Uint8Array(8 * 64);
+    for (let y = 0; y < 64; y += 1) wall[y * 8] = 1;
+    const kinds = wallRowKinds({
+      edge: { mode: 'wall', bandPx: 0, polarPx: 0, rimPx: 16 },
+      width: 8,
+      height: 64,
+      wall,
+      // Desert land beyond the west wall, except one stray forest row.
+      landKind: (pixel) =>
+        pixel % 8 === 1 ? (pixel === 30 * 8 + 1 ? 'forest' : 'desert') : undefined,
+    });
+    expect(new Set(kinds.west)).toEqual(new Set(['desert']));
+    expect(kinds.east.length).toBe(64);
+    const segmented = wallRowKinds({
+      edge: {
+        mode: 'wall',
+        bandPx: 0,
+        polarPx: 0,
+        rimPx: 16,
+        wallTerrain: [{ y0: 60, y1: 400, kind: 'marsh' }],
+      },
+      width: 8,
+      height: 64,
+      wall,
+      landKind: () => undefined,
+    });
+    expect(segmented.west[0]).toBe('snow');
+    expect(segmented.west[32]).toBe('mountain');
+    expect(segmented.west.slice(60)).toEqual(['marsh', 'marsh', 'marsh', 'marsh']);
+  });
+
+  it('is deterministic', () => {
+    const again = filesOf(generateWorld(worldSpec(surface, { edge }), plainContext));
+    expect([...again.keys()]).toEqual([...files.keys()]);
+    for (const [path, content] of files) expect(again.get(path)!.equals(content)).toBe(true);
   });
 });
