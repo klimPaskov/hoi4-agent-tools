@@ -20,6 +20,7 @@ export const SURFACES = [
   'gui',
   'map',
   'probability',
+  'localisation',
   'impact',
   'render',
   'rewrite',

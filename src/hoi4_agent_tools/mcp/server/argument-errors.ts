@@ -19,6 +19,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"path":"events/my_events.txt"} or {"source":"add_political_power = 10","kind":"effect","scope":"country"}',
   'hoi4.error_log': '{"scope":"mod","category":"effect"}',
   'hoi4.mod_index': '{"mode":"overview"} or {"mode":"next_id","kind":"event","namespace":"my_mod"}',
+  'hoi4.localisation_inspect': '{"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}',
   'hoi4.event_inspect':
     '{"mode":"lint","selector":"chaosx.nr14"} or {"mode":"trace","selector":"chaosx.nr14.1","direction":"downstream"}',
   'hoi4.event_render': '{"view":"overview","selector":"chaosx.nr14"}',

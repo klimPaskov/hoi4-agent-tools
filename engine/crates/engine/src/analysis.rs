@@ -151,7 +151,7 @@ fn unloaded_scripted_names(ws: &Workspace) -> HashSet<String> {
     names
 }
 
-fn parse_file(ws: &Workspace, vocab: &Vocabulary, file: usize, target: Option<usize>, unloaded: &HashSet<String>) -> Parsed {
+pub(crate) fn parse_file(ws: &Workspace, vocab: &Vocabulary, file: usize, target: Option<usize>, unloaded: &HashSet<String>) -> Parsed {
     let source = &ws.files[file];
     let in_target = Some(source.layer) == target;
     let mut parsed = Parsed {

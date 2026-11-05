@@ -15,6 +15,10 @@ import {
 } from '../../schemas/reference.js';
 import type { ToolDefinition } from '../server/task-tool-definition.js';
 import {
+  localisationInspectDataSchema,
+  localisationInspectRequestSchema,
+} from '../../schemas/localisation.js';
+import {
   errorLogDataSchema,
   errorLogRequestSchema,
   modIndexDataSchema,
@@ -93,6 +97,15 @@ export const referenceTools = [
       'Summarize the content in a mod or find a free event ID across the mod, game and dependencies. Use overview for descriptors, folders and definitions, or next_id with a namespace or prefix. Example: {"mode":"next_id","kind":"event","namespace":"my_mod"}. Returns a compact summary; the first call indexes the mod, which takes seconds on a large one.',
     inputSchema: modIndexRequestSchema,
     outputSchema: strictOperationResultSchema(modIndexDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.localisation_inspect',
+    title: 'Check localisation in every language',
+    description:
+      'Read localisation in every language the game and mod ship. key: one key per language with file, line and layer, the languages lacking it and the files mentioning it. audit: keys the mod uses that no language defines, keys missing from a supported language, keys defined twice in one language, and file problems. coverage: keys per language. Example: {"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}. Returns counts per problem and a few examples of each.',
+    inputSchema: localisationInspectRequestSchema,
+    outputSchema: strictOperationResultSchema(localisationInspectDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];
