@@ -21,6 +21,7 @@ export const SURFACES = [
   'map',
   'probability',
   'localisation',
+  'idea',
   'impact',
   'render',
   'rewrite',

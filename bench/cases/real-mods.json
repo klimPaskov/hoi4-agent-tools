@@ -594,6 +594,46 @@
           "equals": ["english"]
         }
       ]
+    },
+    {
+      "id": "kaiserreich.idea.audit-no-unknown-modifiers",
+      "surface": "idea",
+      "corpus": "kaiserreich",
+      "title": "Modifiers built from sub-units, categories and buildings are not reported as unknown",
+      "evidence": "Kaiserreich uses modifier_army_sub_unit_category_mobile_infantry_attack_factor and state_production_speed_infrastructure_factor, which the game builds from its unit categories and buildings.",
+      "tool": "hoi4.idea_inspect",
+      "arguments": {
+        "kind": "idea",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].code",
+          "excludes": "IDEA_UNKNOWN_MODIFIER"
+        }
+      ]
+    },
+    {
+      "id": "owb.idea.missing-sprite-found",
+      "surface": "idea",
+      "corpus": "owb",
+      "title": "An idea picture no .gfx file defines is found",
+      "evidence": "common/ideas/PLS_ideas.txt:435 PLS_developing_weapons uses picture = generic_ammo; no loaded .gfx defines GFX_idea_generic_ammo (Old World Blues defines only GFX_goal_generic_ammo_box).",
+      "tool": "hoi4.idea_inspect",
+      "arguments": {
+        "kind": "idea",
+        "id": "PLS_developing_weapons"
+      },
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "includes": "IDEA_PICTURE_MISSING"
+        },
+        {
+          "path": "data.inspection.picture.defined",
+          "equals": false
+        }
+      ]
     }
   ]
 }

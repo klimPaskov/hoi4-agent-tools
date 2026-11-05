@@ -25,6 +25,7 @@ MCP clients may ask for approval to create review files.
 | `hoi4.error_log`            | Group the game's `error.log` from its last launch by category, with the source file, line and layer, and whether that file changed since.                                                        | —      |
 | `hoi4.mod_index`            | Summarize the mod's descriptor and definitions, or find the next free numbered ID for an event namespace or prefix across every layer.                                                           | —      |
 | `hoi4.localisation_inspect` | Read localisation in every language: one key per language with file, line and layer, or audit the mod for undefined, untranslated and duplicate keys and file problems. Runs on the Rust engine. | —      |
+| `hoi4.idea_inspect`         | Read an idea (picture, modifiers, conditions, name in every language, advisor) or a character (roles, traits, portraits), or audit every idea or character of the mod. Runs on the Rust engine.  | —      |
 
 ## Focus trees
 
@@ -121,6 +122,7 @@ The CI stdio smoke suite sends each of these shapes to a real server process.
 | `hoi4.error_log`            | `{"scope":"mod","category":"effect"}`                                                                                                                                                                                   |
 | `hoi4.mod_index`            | `{"mode":"overview"}` or `{"mode":"next_id","kind":"event","namespace":"my_mod"}`                                                                                                                                       |
 | `hoi4.localisation_inspect` | `{"mode":"key","key":"my_event.1.t"}` or `{"mode":"audit"}`                                                                                                                                                             |
+| `hoi4.idea_inspect`         | `{"kind":"idea","id":"my_idea"}` or `{"kind":"character","audit":true}`                                                                                                                                                 |
 | `hoi4.focus_inspect`        | `{"treeId":"my_focus_tree"}`                                                                                                                                                                                            |
 | `hoi4.focus_render`         | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}`                                                                                                                                         |
 | `hoi4.focus_rewrite`        | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}`                                                                                                                  |

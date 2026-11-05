@@ -428,6 +428,37 @@
           "equals": []
         }
       ]
+    },
+    {
+      "id": "vanilla.idea.definition-inline",
+      "surface": "idea",
+      "corpus": "vanilla",
+      "title": "An idea comes back with its picture, modifiers and name in every language, inline",
+      "evidence": "GER_mefo_bills_1 is defined at common/ideas/GER.txt:1313 with name = GER_mefo_bills and picture = ger_mefo_bills (GFX_idea_ger_mefo_bills in interface/ideas.gfx); production_speed_arms_factory_factor is built from the arms_factory building. The head-to-head found HOI4-MCP missing this idea.",
+      "tool": "hoi4.idea_inspect",
+      "arguments": {
+        "kind": "idea",
+        "id": "GER_mefo_bills_1"
+      },
+      "budgetMs": 3000,
+      "expect": [
+        {
+          "path": "data.inspection.picture.sprite",
+          "equals": "GFX_idea_ger_mefo_bills"
+        },
+        {
+          "path": "data.inspection.modifiers[*].key",
+          "includes": "consumer_goods_factor"
+        },
+        {
+          "path": "data.inspection.problems",
+          "equals": []
+        },
+        {
+          "path": "data.inspection.texts[*].key",
+          "includes": "GER_mefo_bills"
+        }
+      ]
     }
   ]
 }

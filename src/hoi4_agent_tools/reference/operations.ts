@@ -24,6 +24,8 @@ import { validateScript } from './script-validation.js';
 import { readErrorLog } from './error-log.js';
 import { modIndex } from './mod-index.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
+import { inspectIdeas } from '../ideas/inspect.js';
+import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
 import {
   localisationInspectDataSchema,
   localisationInspectRequestSchema,
@@ -77,6 +79,7 @@ const schemas = {
   'hoi4.error_log': errorLogRequestSchema,
   'hoi4.mod_index': modIndexRequestSchema,
   'hoi4.localisation_inspect': localisationInspectRequestSchema,
+  'hoi4.idea_inspect': ideaInspectRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -149,19 +152,21 @@ export class ReferenceToolService {
                       context.principal,
                       signal,
                     )
-                  : name === 'hoi4.localisation_inspect'
-                    ? await inspectLocalisation(
-                        workspace,
-                        localisationInspectRequestSchema.parse(parsed),
-                        signal,
-                      )
-                    : await sourceLookup(
-                        this.engine,
-                        workspaceId,
-                        sourceLookupRequestSchema.parse(parsed),
-                        context.principal,
-                        signal,
-                      );
+                  : name === 'hoi4.idea_inspect'
+                    ? await inspectIdeas(workspace, ideaInspectRequestSchema.parse(parsed), signal)
+                    : name === 'hoi4.localisation_inspect'
+                      ? await inspectLocalisation(
+                          workspace,
+                          localisationInspectRequestSchema.parse(parsed),
+                          signal,
+                        )
+                      : await sourceLookup(
+                          this.engine,
+                          workspaceId,
+                          sourceLookupRequestSchema.parse(parsed),
+                          context.principal,
+                          signal,
+                        );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
@@ -194,6 +199,31 @@ export class ReferenceToolService {
     if (name === 'hoi4.mod_index') {
       const index = modIndexDataSchema.parse(data);
       result.code = index.complete ? 'MOD_INDEXED' : 'MOD_INDEXED_PARTIAL';
+    }
+    if (name === 'hoi4.idea_inspect') {
+      const inspected = ideaInspectDataSchema.parse(data);
+      result.code = inspected.audit === undefined ? 'IDEA_INSPECTED' : 'IDEAS_AUDITED';
+      // A missing name may be intended (generic leaders), so it is information, not a problem.
+      const warnings =
+        inspected.audit === undefined
+          ? (inspected.inspection?.problems ?? []).filter(({ severity }) => severity === 'warning')
+              .length
+          : Object.entries(inspected.audit.counts)
+              .filter(([code]) => !code.endsWith('_NAME_MISSING'))
+              .reduce((sum, [, count]) => sum + count, 0);
+      result.validation = {
+        passed: warnings === 0,
+        checks: [
+          {
+            id: 'idea-checks',
+            passed: warnings === 0,
+            message:
+              warnings === 0
+                ? 'No problems players would see'
+                : `${warnings} problems players would see`,
+          },
+        ],
+      };
     }
     if (name === 'hoi4.localisation_inspect') {
       const inspected = localisationInspectDataSchema.parse(data);

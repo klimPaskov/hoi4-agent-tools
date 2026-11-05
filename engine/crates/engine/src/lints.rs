@@ -171,7 +171,7 @@ fn events(analysis: &mut Analysis) {
 /// Modifier families the game builds from definitions but `modifiers_documentation.md` does not
 /// list, for example `production_speed_arms_factory_factor` from the `arms_factory` building.
 /// Each family is used by vanilla 1.19.3.0 with names built from the named definition kind.
-const DERIVED_MODIFIERS: &[(&str, Kind, &str)] = &[
+pub(crate) const DERIVED_MODIFIERS: &[(&str, Kind, &str)] = &[
     ("production_speed_", Kind::Building, "_factor"),
     ("repair_speed_", Kind::Building, "_factor"),
     ("production_cost_max_", Kind::Equipment, ""),

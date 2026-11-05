@@ -38,6 +38,7 @@ const publicToolNames = [
   'hoi4.error_log',
   'hoi4.mod_index',
   'hoi4.localisation_inspect',
+  'hoi4.idea_inspect',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.impact_inspect',
