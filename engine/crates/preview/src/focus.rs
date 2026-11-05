@@ -188,11 +188,16 @@ struct Cell {
     completed: bool,
 }
 
+/// A sprite lookup: the texture and definition, or the miss as (kind, name, message).
+type Lookup = Result<(Arc<Image>, crate::assets::Sprite), (String, String, String)>;
+
 struct Builder<'a> {
     assets: &'a Assets,
     ops: Vec<Op>,
     missing: BTreeMap<(String, String), (String, Vec<String>)>,
     drawn: Drawn,
+    /// Sprites already looked up in this render, by name.
+    seen: HashMap<String, Lookup>,
 }
 
 impl Builder<'_> {
@@ -207,20 +212,33 @@ impl Builder<'_> {
 
     /// A sprite's texture, frame count and definition, or a recorded miss.
     fn sprite(&mut self, name: &str, focus: Option<&str>) -> Option<(Arc<Image>, crate::assets::Sprite)> {
-        let Some(sprite) = self.assets.sprite(name).cloned() else {
-            self.miss("sprite", name, format!("sprite {name} is not defined in any loaded interface/*.gfx file"), focus);
-            return None;
+        let found = match self.seen.get(name) {
+            Some(found) => found.clone(),
+            None => {
+                let found = self.lookup(name);
+                self.seen.insert(name.to_string(), found.clone());
+                found
+            }
         };
-        let Some(texture) = sprite.texture.clone() else {
-            self.miss("sprite", name, format!("sprite {name} has no texturefile"), focus);
-            return None;
-        };
-        match self.assets.texture(&texture) {
-            Ok(image) => Some((image, sprite)),
-            Err(message) => {
-                self.miss("texture", &texture, format!("{name}: {message}"), focus);
+        match found {
+            Ok(found) => Some(found),
+            Err((kind, key, message)) => {
+                self.miss(&kind, &key, message, focus);
                 None
             }
+        }
+    }
+
+    fn lookup(&self, name: &str) -> Lookup {
+        let Some(sprite) = self.assets.sprite(name).cloned() else {
+            return Err(("sprite".into(), name.into(), format!("sprite {name} is not defined in any loaded interface/*.gfx file")));
+        };
+        let Some(texture) = sprite.texture.clone() else {
+            return Err(("sprite".into(), name.into(), format!("sprite {name} has no texturefile")));
+        };
+        match self.assets.texture(&texture) {
+            Ok(image) => Ok((image, sprite)),
+            Err(message) => Err(("texture".into(), texture, format!("{name}: {message}"))),
         }
     }
 }
@@ -270,7 +288,7 @@ pub fn render(assets: &Assets, request: &FocusRenderRequest) -> Result<FocusRend
     let full_height = (origin.1 * 2 + (max_y - min_y) * view.spacing.1 + view.item.1).max(240);
     let item_of = |node: &FocusNode| (origin.0 + (node.x - min_x) * view.spacing.0, origin.1 + (node.y - min_y) * view.spacing.1);
 
-    let mut builder = Builder { assets, ops: Vec::new(), missing: BTreeMap::new(), drawn: Drawn::default() };
+    let mut builder = Builder { assets, ops: Vec::new(), missing: BTreeMap::new(), drawn: Drawn::default(), seen: HashMap::new() };
     let full = Rect::new(0, 0, full_width, full_height);
     for background in &view.backgrounds {
         let Some((image, sprite)) = builder.sprite(background, None) else { continue };
