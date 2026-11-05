@@ -1188,11 +1188,22 @@ function* validateLakesAndEdge(
       if (a !== b) pairs.add(`${Math.min(a, b)}:${Math.max(a, b)}`);
     }
   }
-  if (rows > 0)
+  // A wall closes the seam with land on purpose; there, water at the seam is the defect.
+  if (options.edgeMode === 'wall') {
+    const open = height * 2 - left - right;
+    if (open > 0)
+      report({
+        code: 'MAP_EDGE_WALL_OPEN',
+        severity: 'error',
+        message: `Water reaches the first or last column at ${open} pixels (${height - left} on the west edge, ${height - right} on the east); ships can cross the seam there`,
+        location,
+        details: { west: height - left, east: height - right },
+      });
+  } else if (rows > 0)
     report({
       code: 'MAP_EDGE_LAND_CUT',
       severity: options.edgeMode === 'sea-band' ? 'error' : 'warning',
-      message: `Land touches the first or last column on ${rows} rows (${left} on the west edge, ${right} on the east); where the world wraps, the coast is cut by a straight vertical line. Use edge.mode "sea-band" or "rim"`,
+      message: `Land touches the first or last column on ${rows} rows (${left} on the west edge, ${right} on the east); where the world wraps, the coast is cut by a straight vertical line. Use edge.mode "sea-band", "rim" or "wall"`,
       location,
       details: { rows, west: left, east: right, firstRows: rowSamples },
     });

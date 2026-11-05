@@ -93,7 +93,7 @@ export const GEOGRAPHY_DEFAULTS = {
 
 /** Edge policy the validator may enforce; mirrors the `edge` option of world generation. */
 export interface GeographyEdgePolicy {
-  mode?: 'sea-band' | 'rim' | 'none' | undefined;
+  mode?: 'sea-band' | 'rim' | 'wall' | 'none' | undefined;
   /** Pixels kept free of land east and west; default `max(192, 4% of width)`. */
   bandPx?: number | undefined;
   /** Pixels kept free of land north and south; default 64. */
@@ -1934,8 +1934,9 @@ function edgeChecks(input: {
   grid: RasterGrid;
 }): void {
   const { frame, edgeBand, sink, grid } = input;
-  // A rim wall ends land inside the band by design, and `none` opts out of the check.
-  if (input.policy?.mode === 'none' || input.policy?.mode === 'rim') return;
+  // A rim or wall ends land inside the band by design, and `none` opts out of the check.
+  const mode = input.policy?.mode;
+  if (mode === 'none' || mode === 'rim' || mode === 'wall') return;
   const severity: DiagnosticSeverity = input.policy?.mode === 'sea-band' ? 'error' : 'warning';
   const fx = edgeBand.westEastPx / frame.width;
   const fy = edgeBand.northSouthPx / frame.height;

@@ -45,11 +45,15 @@ import {
   applyEdgePolicy,
   assertFeaturesOutsideBand,
   edgeWaterDarkness,
+  hasRimRange,
   RIM_COLOUR_FACTOR,
   rimAdjacencyRows,
   rimHeight,
   rimStrength,
+  WALL_TERRAIN_KINDS,
+  wallRowKinds,
   type EdgeNote,
+  type WallTerrainKind,
   type EdgeSpec,
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
@@ -745,6 +749,9 @@ interface StateDraft {
   navalBases: Map<number, number>;
   /** Land fort levels by province, from the passes of the model. */
   forts: Map<number, number>;
+  /** A state of the `wall` edge: `impassable = yes`, linked to `link` for its ownership. */
+  impassable?: boolean;
+  link?: number;
 }
 
 export interface WorldGenerationOptions {
@@ -781,6 +788,67 @@ function realmPins(
       pins.push({ pixel: y * width + x, x, y, realm: index });
     }
   return pins.map(({ pixel }) => pixel);
+}
+
+/**
+ * Make the states of a `wall` edge what the base game's impassable states are: `impassable = yes`,
+ * linked by `force_link_ownership_to` to the nearest passable state and owned as it is, `enclave`
+ * where the category exists, and without infrastructure, buildings, resources, victory points,
+ * ports or forts. Nearest counts province steps over land and water, since a wall often stands
+ * in what was sea; ties go to the passable state met through most borders, then the lowest id.
+ */
+function finishWallStates(
+  states: StateDraft[],
+  neighbors: readonly ReadonlySet<number>[],
+  context: WorldContext,
+): void {
+  const stateOfProvince = new Map<number, StateDraft>();
+  for (const state of states) for (const id of state.provinces) stateOfProvince.set(id, state);
+  const enclave = context.stateCategories === undefined || context.stateCategories.has('enclave');
+  const nearestPassable = (start: readonly number[]): number | undefined => {
+    const seen = new Set<number>(start);
+    let frontier = [...start].sort((a, b) => a - b);
+    while (frontier.length > 0) {
+      const found = new Map<number, number>();
+      const next: number[] = [];
+      for (const id of frontier)
+        for (const other of [...neighbors[id]!].sort((a, b) => a - b)) {
+          const state = stateOfProvince.get(other);
+          if (state !== undefined && state.impassable !== true)
+            found.set(state.id, (found.get(state.id) ?? 0) + 1);
+          if (seen.has(other)) continue;
+          seen.add(other);
+          next.push(other);
+        }
+      if (found.size > 0)
+        return [...found].sort(([a, left], [b, right]) => right - left || a - b)[0]![0];
+      frontier = next;
+    }
+    return undefined;
+  };
+  for (const state of states) {
+    if (state.impassable !== true) continue;
+    const link = nearestPassable(state.provinces);
+    if (link === undefined) {
+      delete state.link;
+      delete state.owner;
+    } else {
+      state.link = link;
+      const owner = states[link - 1]!.owner;
+      if (owner === undefined) delete state.owner;
+      else state.owner = owner;
+    }
+    if (enclave) state.category = 'enclave';
+    state.infrastructure = 0;
+    state.civilian = 0;
+    state.military = 0;
+    state.dockyard = 0;
+    state.airBase = 0;
+    state.resources = new Map();
+    state.victoryPoints = new Map();
+    state.navalBases = new Map();
+    state.forts = new Map();
+  }
 }
 
 export function generateWorld(
@@ -850,6 +918,7 @@ export function generateWorld(
           };
   const notes: WorldNote[] = [];
   const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
+  let wallMask: Uint8Array | undefined;
   if (edge.mode !== 'none') {
     assertFeaturesOutsideBand(
       edge,
@@ -867,6 +936,7 @@ export function generateWorld(
       Math.max(40, Math.round(spec.landProvincePixels / 4)),
     );
     notes.push(...applied.notes.map((note: EdgeNote): WorldNote => note));
+    wallMask = applied.wall;
   }
   // Lakes need a minimum size and may not touch the open sea (ADR 0053).
   for (const note of normalizeLakes(surface.kind, surface.elevation, width, height))
@@ -914,10 +984,9 @@ export function generateWorld(
         kind: surface.kind,
         relief: spec.relief,
         rivers: { density: spec.riverDensity, count: spec.riverCount },
-        adjustHeight:
-          edge.mode === 'rim'
-            ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
-            : undefined,
+        adjustHeight: hasRimRange(edge)
+          ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+          : undefined,
         signal: options.signal,
       });
       for (const note of checked) {
@@ -978,10 +1047,9 @@ export function generateWorld(
           kind: surface.kind,
           relief: spec.relief,
           rivers: { density: spec.riverDensity, count: spec.riverCount },
-          adjustHeight:
-            edge.mode === 'rim'
-              ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
-              : undefined,
+          adjustHeight: hasRimRange(edge)
+            ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
+            : undefined,
           signal: options.signal,
         });
   if (synthesized !== undefined) {
@@ -1146,6 +1214,14 @@ export function generateWorld(
   const landIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === LAND);
   const seaIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === SEA);
   const lakeIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === LAKE);
+  // A land province with most of its pixels in the wall belongs to the wall's impassable states.
+  const wallProvinces = new Set<number>();
+  if (wallMask !== undefined) {
+    const inWall = new Uint32Array(count);
+    for (let pixel = 0; pixel < wallMask.length; pixel += 1)
+      if (wallMask[pixel] === 1) inWall[provinces.pixel[pixel]!]! += 1;
+    for (const id of landIds) if (inWall[id]! * 2 > provinces.size[id]!) wallProvinces.add(id);
+  }
   if (landIds.length < spec.countries.length)
     throw new ServiceError(
       'MAP_WORLD_LAND_TOO_SMALL',
@@ -1406,9 +1482,9 @@ export function generateWorld(
     };
   });
   const capitals: number[] = [];
-  const largest = [...landIds].sort(
-    (left, right) => provinces.size[right]! - provinces.size[left]! || left - right,
-  );
+  const largest = landIds
+    .filter((id) => !wallProvinces.has(id))
+    .sort((left, right) => provinces.size[right]! - provinces.size[left]! || left - right);
   const realmRules =
     spec.realms === undefined
       ? undefined
@@ -1419,7 +1495,21 @@ export function generateWorld(
           provinceSize: provinces.size,
           isLand: (id) => provinces.kind[id] === LAND,
         });
-  if (realmRules !== undefined) capitals.push(...realmRules.capitals);
+  if (realmRules !== undefined) {
+    const walled = realmRules.capitals.flatMap((id, index) =>
+      wallProvinces.has(id) ? [{ tag: spec.countries[index]?.tag, ...center(id) }] : [],
+    );
+    if (walled.length > 0)
+      throw new ServiceError(
+        'MAP_EDGE_FEATURE_IN_BAND',
+        `${walled.length} capital(s) stand in the impassable wall at the seam: ${walled
+          .slice(0, 5)
+          .map(({ tag, x, y }) => `${tag ?? '?'} (${Math.round(x)}, ${Math.round(y)})`)
+          .join('; ')}. Move them inland or narrow edge.rimPx.`,
+        { mode: edge.mode, rimPx: edge.rimPx, capitals: walled.slice(0, 20) },
+      );
+    capitals.push(...realmRules.capitals);
+  }
   while (capitals.length < countryCount) {
     const countryIndex = capitals.length;
     const regionCandidates = largest.filter(
@@ -1447,7 +1537,7 @@ export function generateWorld(
     let best = -1;
     let bestDistance = -1;
     for (const id of landIds) {
-      if (capitals.includes(id)) continue;
+      if (capitals.includes(id) || wallProvinces.has(id)) continue;
       const c = center(id);
       const distance = Math.min(
         ...capitals.map((other) => Math.hypot(center(other).x - c.x, center(other).y - c.y)),
@@ -1571,7 +1661,7 @@ export function generateWorld(
   // States: within each region and country, clusters of about provincesPerState.
   const groups = new Map<string, number[]>();
   for (const id of landIds) {
-    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}`;
+    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}${wallProvinces.has(id) ? ':wall' : ''}`;
     const list = groups.get(key) ?? [];
     list.push(id);
     groups.set(key, list);
@@ -1614,6 +1704,7 @@ export function generateWorld(
         victoryPoints: new Map(),
         navalBases: new Map(),
         forts: new Map(),
+        ...(key.endsWith(':wall') ? { impassable: true } : {}),
       };
       states.push(draft);
       for (const id of sorted) stateOf.set(id, draft);
@@ -1800,6 +1891,7 @@ export function generateWorld(
         if (stateOf.get(id)!.navalBases.has(id)) hasPort = true;
         if (
           coastal(id) &&
+          !wallProvinces.has(id) &&
           (bestCoast === undefined || provinces.size[id]! > provinces.size[bestCoast]!)
         )
           bestCoast = id;
@@ -1816,6 +1908,7 @@ export function generateWorld(
       if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
     }
   }
+  if (wallProvinces.size > 0) finishWallStates(states, provinces.neighbors, context);
   // Province IDs: 1-based in reading order of the province's first pixel; 0 is the null row.
   const provinceId = (index: number) => index + 1;
   // Unique colours, never black.
@@ -1886,20 +1979,19 @@ export function generateWorld(
       `continents = {\n${[...new Set([...continentNames.map((_, index) => `world_continent_${index + 1}`), ...(context.continentKeys ?? [])])].map((key) => `\t${key}`).join('\n')}\n}\n`,
     ),
   );
-  const rimRows =
-    edge.mode === 'rim'
-      ? rimAdjacencyRows({
-          provincePixels: provinces.pixel,
-          provinceKinds: provinces.kind,
-          width,
-          height,
-        })
-      : [];
+  const rimRows = hasRimRange(edge)
+    ? rimAdjacencyRows({
+        provincePixels: provinces.pixel,
+        provinceKinds: provinces.kind,
+        width,
+        height,
+      })
+    : [];
   if (rimRows.length > 0)
     notes.push({
       code: 'MAP_EDGE_RIM_ADJACENCIES',
       severity: 'info',
-      message: `The rim edge policy wrote ${rimRows.length} impassable adjacency row(s) for provinces that meet across the seam`,
+      message: `The ${edge.mode} edge policy wrote ${rimRows.length} impassable adjacency row(s) for provinces that meet across the seam`,
       details: { rows: rimRows.length },
     });
   const crossingRows = (gameplay?.crossings.rows ?? []).map(adjacencyRowText);
@@ -2011,36 +2103,66 @@ export function generateWorld(
           heights[Math.max(0, y - 1) * width + x]!,
       ) <=
     2;
+  const snowAt = (pixel: number, type: string): boolean =>
+    synthesized !== undefined
+      ? (synthesized.snow[pixel] === 1 || reference?.terrain[pixel] === 4) &&
+        surface.kind[pixel] === LAND
+      : reference === undefined
+        ? type === 'mountain' && latitude(provinces.pixel[pixel]!) > 0.7
+        : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
+  // A wall takes the look of the land it meets, row by row on each side.
+  const wallLook =
+    wallMask === undefined
+      ? undefined
+      : wallRowKinds({
+          edge,
+          width,
+          height,
+          wall: wallMask,
+          landKind: (pixel) => {
+            if (surface.kind[pixel] !== LAND) return undefined;
+            const type = visualTerrain(pixel);
+            if (snowAt(pixel, type)) return 'snow';
+            return (WALL_TERRAIN_KINDS as readonly string[]).includes(type)
+              ? (type as WallTerrainKind)
+              : 'plains';
+          },
+        });
   for (let pixel = 0; pixel < width * height; pixel += 1) {
-    const id = provinces.pixel[pixel]!;
     const type = visualTerrain(pixel);
-    const snowy =
-      synthesized !== undefined
-        ? (synthesized.snow[pixel] === 1 || reference?.terrain[pixel] === 4) &&
-          surface.kind[pixel] === LAND
-        : reference === undefined
-          ? type === 'mountain' && latitude(id) > 0.7
-          : reference.terrain[pixel] === 4 && surface.kind[pixel] === LAND;
+    const snowy = snowAt(pixel, type);
     const x = pixel % width;
-    const rimmed = rimStrength(edge, width, x) > 0.35 && surface.kind[pixel] === LAND;
-    let index = snowy
-      ? reference === undefined
-        ? 16
-        : 19
-      : rimmed
-        ? 16
-        : type === 'lakes'
-          ? lakeIndex
-          : (terrainIndex.get(type) ?? DEFAULT_TERRAIN_INDEX.get(type) ?? 0);
+    const walled =
+      wallLook === undefined || wallMask![pixel] !== 1 || surface.kind[pixel] !== LAND
+        ? undefined
+        : (x < width / 2 ? wallLook.west : wallLook.east)[(pixel - x) / width]!;
+    const rimmed =
+      walled === undefined &&
+      wallLook === undefined &&
+      rimStrength(edge, width, x) > 0.35 &&
+      surface.kind[pixel] === LAND;
+    let index =
+      walled !== undefined
+        ? walled === 'snow'
+          ? 16
+          : (terrainIndex.get(walled) ?? DEFAULT_TERRAIN_INDEX.get(walled) ?? 0)
+        : snowy
+          ? reference === undefined
+            ? 16
+            : 19
+          : rimmed
+            ? 16
+            : type === 'lakes'
+              ? lakeIndex
+              : (terrainIndex.get(type) ?? DEFAULT_TERRAIN_INDEX.get(type) ?? 0);
     let colour: ColourClass =
-      type === 'lakes' || type === 'ocean' || type === 'urban'
-        ? type === 'urban'
-          ? 'urban'
-          : type
+      walled ??
+      (type === 'lakes' || type === 'ocean' || type === 'urban'
+        ? type
         : snowy || rimmed
           ? 'snow'
-          : (type as ColourClass);
-    if (calibrated && !snowy && !rimmed && surface.kind[pixel] === LAND) {
+          : (type as ColourClass));
+    if (calibrated && walled === undefined && !snowy && !rimmed && surface.kind[pixel] === LAND) {
       // Variant graphical terrains by rule, so one class is not one flat texture.
       const y = (pixel - x) / width;
       if (
@@ -2244,7 +2366,7 @@ export function generateWorld(
         colormap[offset + 3] = cityPixels[source] === 15 ? 200 : 0;
       }
   }
-  if (edge.mode === 'rim')
+  if (hasRimRange(edge))
     for (let y = 0; y < halfHeight; y += 1)
       for (let x = 0; x < halfWidth; x += 1) {
         const strength = rimStrength(edge, width, x * 2);
@@ -2344,6 +2466,12 @@ export function generateWorld(
           `\tid = ${state.id}`,
           `\tname = "STATE_${state.id}"`,
           `\tmanpower = ${state.manpower}`,
+          ...(state.impassable === true
+            ? [
+                '\timpassable = yes',
+                ...(state.link === undefined ? [] : [`\tforce_link_ownership_to = ${state.link}`]),
+              ]
+            : []),
           `\tstate_category = ${state.category}`,
           ...(resources.length === 0
             ? []

@@ -113,7 +113,7 @@ export function indexOfFiles(files: ReadonlyMap<string, Buffer>): MapWorkspaceIn
 
 export function appearanceDiagnostics(
   files: ReadonlyMap<string, Buffer>,
-  edgeMode?: 'sea-band' | 'rim' | 'none',
+  edgeMode?: 'sea-band' | 'rim' | 'wall' | 'none',
 ): Diagnostic[] {
   return validateMap(
     indexOfFiles(files),
