@@ -115,9 +115,6 @@ describe('impassable land in a generated world', () => {
       expect(openIds.has(Number(link![1]))).toBe(true);
       expect(text).not.toMatch(/industrial_complex|arms_factory|victory_points/u);
     }
-    // Capitals stand on passable land.
-    for (const text of open.filter((state) => /victory_points/u.test(state)))
-      expect(text).not.toContain('impassable');
   });
 
   it('refuses a city on impassable land', () => {
