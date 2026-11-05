@@ -19,7 +19,7 @@ it('reports a missing packaged entry without falling back to the source server',
       { id: 'packaged-entry', name: 'Packaged entry test', root },
     ]);
     server = await launchSmokeServer(config);
-    expect(server.toolNames).toHaveLength(28);
+    expect(server.toolNames).toHaveLength(29);
     await server.close();
     server = undefined;
     await expect(

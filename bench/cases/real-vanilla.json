@@ -375,6 +375,59 @@
           "status": "error"
         }
       }
+    },
+    {
+      "id": "vanilla.localisation.key-every-language",
+      "surface": "localisation",
+      "corpus": "vanilla",
+      "title": "One key in all ten vanilla languages, answered inline",
+      "evidence": "AAT_Sweden.21.t is defined in localisation/<language>/aat_events_l_<language>.yml for braz_por, english, french, german, japanese, korean, polish, russian, simp_chinese and spanish (1.19.4.1).",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "key",
+        "key": "AAT_Sweden.21.t"
+      },
+      "budgetMs": 3000,
+      "expect": [
+        {
+          "path": "data.key.definitions[*].language",
+          "includes": "simp_chinese"
+        },
+        {
+          "path": "data.key.definitions[*].language",
+          "includes": "german"
+        },
+        {
+          "path": "data.key.missingLanguages",
+          "equals": []
+        },
+        {
+          "path": "data.supportedLanguages",
+          "includes": "braz_por"
+        }
+      ]
+    },
+    {
+      "id": "vanilla.localisation.language-own-key",
+      "surface": "localisation",
+      "corpus": "vanilla",
+      "title": "A key only one language needs is not missing from the others",
+      "evidence": "ABK_SOV_communism_subject_ADJ_RU_lower is a Russian grammar key defined only in localisation/russian/RU_LOCKEYS_l_russian.yml:15908 (1.19.4.1).",
+      "tool": "hoi4.localisation_inspect",
+      "arguments": {
+        "mode": "key",
+        "key": "ABK_SOV_communism_subject_ADJ_RU_lower"
+      },
+      "expect": [
+        {
+          "path": "data.key.definitions[*].language",
+          "equals": ["russian"]
+        },
+        {
+          "path": "data.key.missingLanguages",
+          "equals": []
+        }
+      ]
     }
   ]
 }

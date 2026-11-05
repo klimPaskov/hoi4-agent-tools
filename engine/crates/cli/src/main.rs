@@ -30,6 +30,7 @@ USAGE:
                           [--fail-on error|warning|never]
     hoi4-engine drawio    FILE [--prefix TAG]
     hoi4-engine focus-layout [--request FILE]
+    hoi4-engine localisation [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
@@ -615,6 +616,31 @@ fn cmd_focus_render(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Reads a JSON request from --request FILE or stdin, answers it with `respond` and prints the
+/// JSON answer. A failed request also names its error on stderr.
+fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) -> Result<ExitCode, String> {
+    args.check_known(&["--request"])?;
+    if args.positional.len() > 1 {
+        return Err(format!("{name} reads the request from --request FILE or stdin"));
+    }
+    let text = match args.value("--request") {
+        Some(path) => fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+        None => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin().lock(), &mut text).map_err(|e| format!("cannot read stdin: {e}"))?;
+            text
+        }
+    };
+    let (json, code) = respond(&text);
+    if code != 0
+        && let Ok(value) = serde_json::from_str::<serde_json::Value>(&json)
+    {
+        eprintln!("hoi4-engine: {name}: {}", value["error"]["message"].as_str().unwrap_or("invalid request"));
+    }
+    std::io::stdout().lock().write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(ExitCode::from(code))
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -636,6 +662,7 @@ fn main() -> ExitCode {
         Some("vocab") => cmd_vocab(&args),
         Some("drawio") => cmd_drawio(&args),
         Some("focus-layout") => cmd_focus_layout(&args),
+        Some("localisation") => cmd_json_request(&args, "localisation", hoi4_engine::localisation::respond_json),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),

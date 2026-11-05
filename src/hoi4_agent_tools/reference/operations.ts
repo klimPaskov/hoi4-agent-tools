@@ -23,6 +23,11 @@ import {
 import { validateScript } from './script-validation.js';
 import { readErrorLog } from './error-log.js';
 import { modIndex } from './mod-index.js';
+import { inspectLocalisation } from '../localisation/inspect.js';
+import {
+  localisationInspectDataSchema,
+  localisationInspectRequestSchema,
+} from '../schemas/localisation.js';
 import {
   errorLogDataSchema,
   errorLogRequestSchema,
@@ -71,6 +76,7 @@ const schemas = {
   'hoi4.script_validate': scriptValidateRequestSchema,
   'hoi4.error_log': errorLogRequestSchema,
   'hoi4.mod_index': modIndexRequestSchema,
+  'hoi4.localisation_inspect': localisationInspectRequestSchema,
 } as const;
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
@@ -143,13 +149,19 @@ export class ReferenceToolService {
                       context.principal,
                       signal,
                     )
-                  : await sourceLookup(
-                      this.engine,
-                      workspaceId,
-                      sourceLookupRequestSchema.parse(parsed),
-                      context.principal,
-                      signal,
-                    );
+                  : name === 'hoi4.localisation_inspect'
+                    ? await inspectLocalisation(
+                        workspace,
+                        localisationInspectRequestSchema.parse(parsed),
+                        signal,
+                      )
+                    : await sourceLookup(
+                        this.engine,
+                        workspaceId,
+                        sourceLookupRequestSchema.parse(parsed),
+                        context.principal,
+                        signal,
+                      );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
@@ -182,6 +194,31 @@ export class ReferenceToolService {
     if (name === 'hoi4.mod_index') {
       const index = modIndexDataSchema.parse(data);
       result.code = index.complete ? 'MOD_INDEXED' : 'MOD_INDEXED_PARTIAL';
+    }
+    if (name === 'hoi4.localisation_inspect') {
+      const inspected = localisationInspectDataSchema.parse(data);
+      result.code = 'LOCALISATION_INSPECTED';
+      if (inspected.audit !== undefined) {
+        // Information (text shown as written on purpose) is not a problem players see.
+        const warnings = Object.entries(inspected.audit.counts)
+          .filter(
+            ([code]) => code !== 'LOC_SCRIPTED_TEXT_LITERAL' && code !== 'LOC_PLACEHOLDER_MISSING',
+          )
+          .reduce((sum, [, count]) => sum + count, 0);
+        result.validation = {
+          passed: warnings === 0,
+          checks: [
+            {
+              id: 'localisation-audit',
+              passed: warnings === 0,
+              message:
+                warnings === 0
+                  ? 'No localisation problems players would see'
+                  : `${warnings} localisation problems players would see`,
+            },
+          ],
+        };
+      }
     }
     if (name === 'hoi4.script_validate') {
       const checked = scriptValidateDataSchema.parse(data);

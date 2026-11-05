@@ -16,6 +16,7 @@ export const ALL_TOOLS = [
   'hoi4.script_validate',
   'hoi4.error_log',
   'hoi4.mod_index',
+  'hoi4.localisation_inspect',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -107,6 +108,13 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
       tolerate: ['ERROR_LOG_NOT_FOUND'],
     },
     { tool: 'hoi4.mod_index', label: 'summarize the mod', args: { mode: 'overview' } },
+    {
+      tool: 'hoi4.localisation_inspect',
+      label: 'count keys per language',
+      args: { mode: 'coverage' },
+      // CI builds no Rust engine; the tool then says so instead of answering.
+      tolerate: ['ENGINE_UNAVAILABLE'],
+    },
     {
       tool: 'hoi4.mod_index',
       label: 'next free event ID in a namespace',
@@ -310,6 +318,7 @@ export function wrongFieldCalls(workspaceId: string): WrongFieldCall[] {
     wrong('hoi4.script_validate', 'script_text', { script_text: 'add_political_power = 10' }),
     wrong('hoi4.error_log', 'severity', { severity: 'error' }),
     wrong('hoi4.mod_index', 'mod', { mode: 'overview', mod: 'my_mod' }),
+    wrong('hoi4.localisation_inspect', 'lang', { mode: 'coverage', lang: 'german' }),
     wrong('hoi4.event_inspect', 'event_id', { mode: 'trace', event_id: 'my_mod.1' }),
     wrong('hoi4.event_render', 'event_id', { view: 'overview', event_id: 'my_mod.1' }),
     wrong('hoi4.focus_inspect', 'tree', { tree: 'my_focus_tree' }),
