@@ -634,6 +634,42 @@
           "equals": false
         }
       ]
+    },
+    {
+      "id": "kaiserreich.system.replaced-on-actions-keep-game-hooks",
+      "surface": "system",
+      "corpus": "kaiserreich",
+      "title": "Hooks of a game file the mod replaces still count as hooks the game runs",
+      "evidence": "Kaiserreich replaces common/on_actions/00_on_actions.txt and adds to on_add_history, which the replaced vanilla file uses (00_on_actions.txt:5837) and hoi4.exe contains.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "on_actions",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].id",
+          "excludes": "on_add_history"
+        }
+      ]
+    },
+    {
+      "id": "owb.system.mio-audit-no-warnings",
+      "surface": "system",
+      "corpus": "owb",
+      "title": "Old World Blues organizations report no problem players would see",
+      "evidence": "The only findings are names its example organizations in mio.txt leave out (custom_2 and on), which are information.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "mio",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.problems[*].severity",
+          "excludes": "warning"
+        }
+      ]
     }
   ]
 }

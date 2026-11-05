@@ -24,6 +24,7 @@ pub mod roundtrip;
 pub mod sprite_audit;
 pub mod sprite_trace;
 pub mod sprites;
+pub mod system;
 pub mod vocab;
 pub mod workspace;
 

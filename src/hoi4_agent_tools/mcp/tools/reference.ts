@@ -18,6 +18,7 @@ import {
   localisationInspectDataSchema,
   localisationInspectRequestSchema,
 } from '../../schemas/localisation.js';
+import { systemInspectDataSchema, systemInspectRequestSchema } from '../../schemas/system.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../../schemas/ideas.js';
 import {
   errorLogDataSchema,
@@ -116,6 +117,15 @@ export const referenceTools = [
       'Read an idea or character across the game, DLC and mod. idea: category, picture sprite and texture, modifiers checked against the game docs, conditions, name in every language, the advisor it belongs to, and files mentioning it. character: name, roles with traits checked, portraits checked. audit: true checks every idea or character of the mod. Example: {"kind":"idea","id":"GER_mefo_bills_1"} or {"kind":"character","audit":true}.',
     inputSchema: ideaInspectRequestSchema,
     outputSchema: strictOperationResultSchema(ideaInspectDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.system_inspect',
+    title: 'Check newer game systems',
+    description:
+      'Read one definition of a newer system, or audit every one the mod makes: on_actions hooks, MIOs and policies, balance of power, special projects, operations and raids. Returns its parts, each reference with whether it exists, pictures, names in every language and problems. Example: {"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}.',
+    inputSchema: systemInspectRequestSchema,
+    outputSchema: strictOperationResultSchema(systemInspectDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

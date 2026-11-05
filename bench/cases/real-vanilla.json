@@ -459,6 +459,91 @@
           "includes": "GER_mefo_bills"
         }
       ]
+    },
+    {
+      "id": "vanilla.system.mio-include-and-traits",
+      "surface": "system",
+      "corpus": "vanilla",
+      "title": "An organization comes back with its include, traits, pictures and names, inline",
+      "evidence": "GER_porsche_organization (common/military_industrial_organization/organizations/GER_organization.txt:18) includes generic_heavy_tank_organization and adds traits such as GER_mio_trait_hoesch_facilities, named in localisation by their token. Its icon GFX_idea_porsche is defined in interface/ideas.gfx.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "mio",
+        "id": "GER_porsche_organization"
+      },
+      "budgetMs": 5000,
+      "expect": [
+        {
+          "path": "data.inspection.references[*].value",
+          "includes": "generic_heavy_tank_organization"
+        },
+        {
+          "path": "data.inspection.parts[*].id",
+          "includes": "GER_mio_trait_hoesch_facilities"
+        },
+        {
+          "path": "data.inspection.problems",
+          "equals": []
+        }
+      ]
+    },
+    {
+      "id": "vanilla.system.on-actions-audit-clean",
+      "surface": "system",
+      "corpus": "vanilla",
+      "title": "The game's own on_actions report nothing, including hooks the documentation omits",
+      "evidence": "00_on_actions.txt uses on_add_history and on_units_paradropped_in_state, which common/on_actions/_documentation.md (updated 2024-11) does not list. Both are in hoi4.exe.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "on_actions",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.counts",
+          "equals": {}
+        }
+      ]
+    },
+    {
+      "id": "vanilla.system.special-projects-audit-clean",
+      "surface": "system",
+      "corpus": "vanilla",
+      "title": "The game's special projects, rewards and specializations report nothing",
+      "evidence": "Reward options without localisation (for example sp_land_reward_option_land_cruiser_overheating in land_projects.txt:460) are the only option of their reward, so the game never shows a choice between them.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "special_project",
+        "audit": true
+      },
+      "expect": [
+        {
+          "path": "data.audit.counts",
+          "equals": {}
+        }
+      ]
+    },
+    {
+      "id": "vanilla.system.bop-decision-category-created",
+      "surface": "system",
+      "corpus": "vanilla",
+      "title": "A balance of power's decision category is not reported missing",
+      "evidence": "common/bop/SWE.txt:6 sets decision_category = SWE_riksdag_balance_of_power_category, which no file in common/decisions/categories defines, and common/decisions/SWE.txt files decisions under it: the balance creates it.",
+      "tool": "hoi4.system_inspect",
+      "arguments": {
+        "kind": "balance_of_power",
+        "id": "SWE_riksdag_political_balance"
+      },
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "excludes": "SYSTEM_REFERENCE_UNKNOWN"
+        },
+        {
+          "path": "data.inspection.parts[*].id",
+          "includes": "SWE_centre_range"
+        }
+      ]
     }
   ]
 }
