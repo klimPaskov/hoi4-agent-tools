@@ -297,9 +297,23 @@ export class DecisionAnalyzer {
     result.code = complete ? 'DECISION_ANALYZED' : 'DECISION_ANALYZED_PARTIAL';
     result.artifacts = [publicArtifactLink(artifact)];
     result.proposedFiles = overlay?.changes.map(({ path }) => path).slice(0, 64) ?? [];
+    // A decision's own files answer an inspection; an inventory spans the workspace (#66).
     setInlineFilesScanned(
       result,
-      before.files.map(({ displayPath }) => displayPath),
+      input.mode === 'inventory'
+        ? before.files.map(({ displayPath }) => displayPath)
+        : [
+            ...new Set(
+              inventory.decisions
+                .filter(({ id }) => id === input.id)
+                .flatMap(({ path, category }) => [
+                  path,
+                  ...inventory.categories
+                    .filter((entry) => entry.id === category)
+                    .map((entry) => entry.path),
+                ]),
+            ),
+          ],
     );
     result.validation = {
       passed: complete,

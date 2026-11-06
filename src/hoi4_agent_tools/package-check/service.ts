@@ -234,6 +234,7 @@ export class PackageAnalyzer {
       'Revision-pinned package connection inventory',
       input.signal,
     );
+    const missing = results.filter(({ status }) => status !== 'present');
     const result = emptyServiceResult(input.workspaceId, {
       sourceRevision: snapshot.revision,
       reportHash,
@@ -243,13 +244,22 @@ export class PackageAnalyzer {
       absent: results.filter(({ status }) => status === 'absent').length,
       shadowed: results.filter(({ status }) => status === 'shadowed').length,
       unresolved: results.filter(({ status }) => status === 'unresolved').length,
+      // The answer is which items are missing; name them inline, not only in the report (#66).
+      notPresent: missing.slice(0, 32).map(({ category, id, status, reason, path }) => ({
+        category,
+        id: id.slice(0, 1024),
+        status: status as 'absent' | 'shadowed' | 'unresolved',
+        ...(reason === undefined ? {} : { reason: reason.slice(0, 256) }),
+        ...(path === undefined ? {} : { path: path.slice(0, 1024) }),
+      })),
+      notPresentTruncated: missing.length > 32,
     });
     result.code = report.complete ? 'PACKAGE_CHECK_PASSED' : 'PACKAGE_CHECK_INCOMPLETE';
     result.artifacts = [publicArtifactLink(artifact)];
-    setInlineFilesScanned(
-      result,
-      snapshot.files.map(({ displayPath }) => displayPath),
-    );
+    // The files that hold the checked items, not the first files of the workspace (#66).
+    setInlineFilesScanned(result, [
+      ...new Set(results.flatMap(({ path }) => (path === undefined ? [] : [path]))),
+    ]);
     result.validation = {
       passed: report.complete,
       checks: [
