@@ -38,7 +38,11 @@ npm run bench -- --update-baseline              # accept this run as the baselin
 
 The game, mod and Workshop folders are found in the default Steam libraries and the game's user folder. `HOI4_GAME_ROOT`, `HOI4_MOD_ROOT`, `HOI4_USER_ROOT` and `HOI4_STEAM_ROOT` override them. A corpus that is not installed is reported as unavailable, not as a failure.
 
+Each run names the machine it ran on (CPU, cores, memory, Node) and the SHA-256 of the `hoi4-engine` binary `HOI4_ENGINE` names. The local baseline keeps the machine with its latency, and the report says when a run is compared with a baseline from other hardware.
+
 The synthetic suite writes to `.tmp/bench/`. The real suite keeps its results, reports and baseline on this machine only, in `HOI4_BENCH_DIR` or else `%LOCALAPPDATA%\hoi4-agent-tools\bench` (Windows), `~/Library/Application Support/hoi4-agent-tools/bench` (macOS) or `~/.local/share/hoi4-agent-tools/bench` (Linux).
+
+The one-time head-to-head with cpntodd/HOI4-MCP (decision M-7) has its own driver in `scripts/bench/hoi4-mcp/` and its result in [docs/research/hoi4-mcp-head-to-head-2026-11-01.md](../docs/research/hoi4-mcp-head-to-head-2026-11-01.md). That result predates the accuracy fixes.
 
 ## Gates
 

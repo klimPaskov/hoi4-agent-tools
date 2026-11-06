@@ -800,9 +800,11 @@ describe('offline package and Registry metadata', () => {
     const releaseCoverage = releaseWorkflow.indexOf('npm run test:coverage');
     const firstReleasePush = releaseWorkflow.indexOf('push-by-digest=true');
 
+    // Pull requests skip coverage to save runners; every push to main measures it.
     expect(ciWorkflow).toContain(
-      "if: matrix.os == 'ubuntu-latest' && matrix.node == 22\n        run: npm run test:coverage",
+      "if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.node == 24\n        run: npm run test:coverage",
     );
+    expect(ciWorkflow).toMatch(/push:\n {4}branches: \[main\]/u);
     expect(releaseCoverage).toBeGreaterThan(0);
     expect(releaseCoverage).toBeLessThan(firstReleasePush);
   });

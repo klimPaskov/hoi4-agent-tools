@@ -1004,6 +1004,128 @@ country_event = {
     expect(graph.issues.filter(({ code }) => code === 'EVENT_TARGET_READ_BEFORE_SAVE')).toEqual([]);
   });
 
+  it('does not report presence checks, guarded reads or meta_effect names as reads before save', async () => {
+    const { engine, sourcePath } = await fixture();
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = yes
+	trigger = { has_event_target = presence_only }
+	immediate = {
+		if = { limit = { has_global_event_target = guarded_global } global_event_target:guarded_global = { add_political_power = 1 } }
+		if = {
+			limit = { has_event_target = guarded_inside }
+			event_target:guarded_inside = { add_political_power = 1 }
+		}
+		if = {
+			limit = { has_event_target = guarded_sibling event_target:guarded_sibling = { is_ai = no } }
+			add_political_power = 1
+		}
+		meta_effect = {
+			text = { event_target:leader_[TAG] = { add_political_power = 1 } }
+			TAG = "[ROOT.GetTag]"
+		}
+		event_target:never_saved = { add_political_power = 1 }
+	}
+	option = { name = service.1.a }
+}
+`,
+      'utf8',
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service', { refresh: true });
+    const flagged = graph.issues
+      .filter(({ code }) => code === 'EVENT_TARGET_READ_BEFORE_SAVE')
+      .map(({ details }) => details.name);
+    // A real read with no producer and no guard is still a probable defect.
+    expect(flagged).toEqual(['never_saved']);
+    // A presence check of a target nothing saves is a gate that never opens, not a defect.
+    expect(graph.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'EVENT_GATE_WITHOUT_WRITER',
+        classification: 'design_warning',
+        details: expect.objectContaining({ name: 'presence_only' }),
+      }),
+    );
+    expect(
+      graph.stateAccesses.filter(({ name }) => name === 'leader_'),
+      'a meta_effect name is not truncated at its first bracket',
+    ).toEqual([]);
+  });
+
+  it('sees targets that shared and joint focuses save', async () => {
+    const { engine, sourcePath } = await fixture();
+    const focusFolder = path.join(
+      path.dirname(path.dirname(sourcePath)),
+      'common',
+      'national_focus',
+    );
+    await mkdir(focusFolder, { recursive: true });
+    await writeFile(
+      path.join(focusFolder, 'shared.txt'),
+      `shared_focus = { id = SHR_one completion_reward = { save_global_event_target_as = shared_leader } }
+joint_focus = { id = SHR_two completion_reward_joint_originator = { if = { limit = { NOT = { has_event_target = joint_leader } } ROOT = { save_global_event_target_as = joint_leader } } } }
+`,
+      'utf8',
+    );
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = yes
+	immediate = {
+		event_target:shared_leader = { add_political_power = 1 }
+		event_target:joint_leader = { add_political_power = 1 }
+	}
+	option = { name = service.1.a }
+}
+`,
+      'utf8',
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service', { refresh: true });
+    expect(graph.issues.filter(({ code }) => code === 'EVENT_TARGET_READ_BEFORE_SAVE')).toEqual([]);
+  });
+
+  it('reads target names past the display cap of a long block in full', async () => {
+    const { engine, sourcePath } = await fixture();
+    // The block's text is cut for display at 16,384 characters. Put the cut inside the name.
+    const lead = '{\n\t\t#\n\t\tevent_target:';
+    const padding = 'x'.repeat(16_384 - 5 - lead.length);
+    await writeFile(
+      sourcePath,
+      `add_namespace = service
+
+country_event = {
+	id = service.1
+	title = service.1.t
+	is_triggered_only = yes
+	immediate = {
+		save_event_target_as = long_saved_target
+		if = {
+		#${padding}
+		event_target:long_saved_target = { add_political_power = 1 }
+		}
+	}
+	option = { name = service.1.a }
+}
+`,
+      'utf8',
+    );
+    const graph = await new EventChainViewer(engine).scan('event-service', { refresh: true });
+    expect(
+      graph.stateAccesses
+        .map(({ name }) => name)
+        .filter((name) => name.startsWith('long') && name !== 'long_saved_target'),
+    ).toEqual([]);
+    expect(graph.issues.filter(({ code }) => code === 'EVENT_TARGET_READ_BEFORE_SAVE')).toEqual([]);
+  });
+
   it('renders removed nodes and edges as source-linked tombstones', async () => {
     const { engine } = await fixture();
     const viewer = new EventChainViewer(engine);

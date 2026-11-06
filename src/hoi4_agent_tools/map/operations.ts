@@ -83,6 +83,7 @@ import type {
 import type { GeographyModelInput } from '../schemas/geography.js';
 import type { PreparedGeography } from './geography/preparation.js';
 import { unsupportedGeographyParts } from './relief/index.js';
+import { resolvePaintedRelief } from './relief/painted-relief.js';
 import type { ReferenceWorldRaster } from './reference-world.js';
 
 export interface PreparedReferenceWorld {
@@ -5654,6 +5655,12 @@ function applyCreateWorld(
       'MAP_LOOK_REQUIRES_CALIBRATED_COLORMAP',
       'look selects a calibrated palette; remove colormap.profile "legacy" or look',
     );
+  if ((operation.relief?.painted ?? false) !== false && (!hasGeography || reference === undefined))
+    throw new ServiceError(
+      'MAP_RELIEF_PAINTED_INPUTS',
+      'relief.painted raises the relief from the classes of a reference picture onto a geography model; give both reference and geography (or geographyPath)',
+      { reference: reference !== undefined, geography: hasGeography },
+    );
   if (!hasGeography && operation.development?.model === 'geography')
     throw new ServiceError(
       'MAP_DEVELOPMENT_REQUIRES_GEOGRAPHY',
@@ -5786,6 +5793,11 @@ function applyCreateWorld(
                       ? {}
                       : { detail: operation.relief.detail }),
                   },
+                }),
+            ...(operation.relief?.painted === undefined || operation.relief.painted === false
+              ? {}
+              : {
+                  paintedRelief: resolvePaintedRelief(operation.relief.painted),
                 }),
             ...(typeof operation.rivers === 'object'
               ? { riverDensity: operation.rivers.density }

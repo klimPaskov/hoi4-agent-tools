@@ -93,13 +93,22 @@ describe('benchmark assertions', () => {
   });
 });
 
-function run(cases: RunResult['cases'], identity = 'v1'): RunResult {
+const machine = {
+  platform: 'win32-x64',
+  cpu: 'Example CPU',
+  cores: 16,
+  memoryGb: 64,
+  node: 'v24.0.0',
+};
+
+function run(cases: RunResult['cases'], identity = 'v1', on = machine): RunResult {
   return {
     suite: 'real',
     startedAt: '2026-11-01T00:00:00.000Z',
     durationMs: 1000,
     platform: 'win32-x64',
     node: 'v24.0.0',
+    machine: on,
     corpora: [{ id: 'mod', identity }],
     cases,
   };
@@ -143,7 +152,9 @@ describe('benchmark comparison', () => {
       files: 10,
     });
     expect(baseline.latency?.slow).toBe(100);
+    expect(baseline.machine).toEqual(machine);
     expect(toBaseline(before, false).latency).toBeUndefined();
+    expect(toBaseline(before, false).machine).toBeUndefined();
   });
 
   it('reports regressions and improvements against the baseline', () => {
@@ -172,6 +183,16 @@ describe('benchmark comparison', () => {
     expect(comparison.regressions).toEqual([]);
     expect(comparison.changedCorpora).toEqual(['mod']);
     expect(comparison.changedCorpusFindings).toEqual(['broken now fails: status is "ok"']);
+  });
+
+  it('says when the baseline was measured on other hardware', () => {
+    expect(compareRun(before, baseline).machineChanged).toBeUndefined();
+    const elsewhere = run([caseResult('kept', 'passed')], 'v1', { ...machine, cores: 8 });
+    const comparison = compareRun(elsewhere, baseline);
+    expect(comparison.machineChanged).toBe('Example CPU, 16 cores, 64 GB');
+    const report = markdownReport(elsewhere, comparison);
+    expect(report).toContain('Machine: Example CPU, 8 cores, 64 GB.');
+    expect(report).toContain('measured on other hardware (Example CPU, 16 cores, 64 GB)');
   });
 
   it('treats a run without a baseline as having nothing to compare', () => {
