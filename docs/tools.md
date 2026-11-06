@@ -192,7 +192,7 @@ Archive images you need to keep rather than relying on temporary server storage.
 
 ## Longer operations
 
-All 19 domain tools accept negotiated MCP tasks, so a client that supports tasks can retrieve a long operation after reconnecting.
+All 20 domain tools accept negotiated MCP tasks, so a client that supports tasks can retrieve a long operation after reconnecting.
 The 7 reference tools and the 2 job tools always answer in the foreground.
 Other clients receive the ordinary synchronous result.
 Use `hoi4.job_inspect` to inspect an authorized job or retrieve its result, and `hoi4.job_cancel` to request cancellation.

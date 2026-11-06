@@ -25,6 +25,7 @@ const expectedToolNames = [
   'hoi4.gui_rewrite',
   'hoi4.map_inspect',
   'hoi4.map_rewrite',
+  'hoi4.localisation_write',
   'hoi4.reference_search',
   'hoi4.reference_read',
   'hoi4.reference_context',

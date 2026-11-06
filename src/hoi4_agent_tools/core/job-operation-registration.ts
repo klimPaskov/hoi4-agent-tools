@@ -29,6 +29,11 @@ export async function registerWorkerOperations(
     (await import('../focus/job-operations.js')).registerFocusJobs(operations, engine);
   else if (toolName.startsWith('hoi4.gui_'))
     (await import('../gui/job-operations.js')).registerGuiJobs(operations, engine);
+  else if (toolName === 'hoi4.localisation_write')
+    (await import('../localisation/job-operations.js')).registerLocalisationJobs(
+      operations,
+      engine,
+    );
   else if (toolName.startsWith('hoi4.map_'))
     (await import('../map/job-operations.js')).registerMapJobs(operations, engine);
   else if (toolName.startsWith('hoi4.probability_'))

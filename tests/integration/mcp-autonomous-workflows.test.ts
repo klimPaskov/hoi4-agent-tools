@@ -137,6 +137,7 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.gui_rewrite',
       'hoi4.map_inspect',
       'hoi4.map_rewrite',
+      'hoi4.localisation_write',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
@@ -167,7 +168,12 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.job_inspect',
       'hoi4.job_cancel',
     ]);
-    for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
+    for (const name of [
+      'hoi4.focus_rewrite',
+      'hoi4.gui_rewrite',
+      'hoi4.map_rewrite',
+      'hoi4.localisation_write',
+    ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
         readOnlyHint: false,
         destructiveHint: true,

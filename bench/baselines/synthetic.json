@@ -72,6 +72,10 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.rewrite.localisation-write-preview": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.source_lookup.description-example": {
       "inline": true,
       "passed": true

@@ -37,6 +37,8 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}',
   'hoi4.focus_rewrite':
     '{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}',
+  'hoi4.localisation_write':
+    '{"mode":"add","entries":[{"key":"my_focus","text":"My focus"}]} or {"mode":"fix","apply":true}',
   'hoi4.gui_inspect': '{"windowName":"my_window"}',
   'hoi4.gui_render': '{"windowName":"my_window","scenario":{"id":"normal"}}',
   'hoi4.gui_rewrite':

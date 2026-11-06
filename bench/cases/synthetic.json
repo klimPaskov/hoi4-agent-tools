@@ -736,6 +736,49 @@
           "atMost": 8192
         }
       ]
+    },
+    {
+      "id": "synthetic.rewrite.localisation-write-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "title": "A new localisation key previews as one appended line in the English file with the most keys, in that file's indent, and nothing is written",
+      "evidence": "fixtures/technology/workspace/localisation/english/synthetic_technology_l_english.yml holds the most English keys, starts with a BOM and l_english:, and indents its keys by nothing. bench_write_probe is defined nowhere. apply is false, so the call writes nothing.",
+      "tool": "hoi4.localisation_write",
+      "arguments": {
+        "mode": "add",
+        "entries": [
+          {
+            "key": "bench_write_probe",
+            "text": "Probe"
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "LOCALISATION_PREVIEW"
+        },
+        {
+          "path": "data.applied",
+          "equals": false
+        },
+        {
+          "path": "data.counts.filesChanged",
+          "equals": 1
+        },
+        {
+          "path": "data.files[0].path",
+          "equals": "localisation/english/synthetic_technology_l_english.yml"
+        },
+        {
+          "path": "data.files[0].diff",
+          "includes": "+bench_write_probe: \"Probe\""
+        }
+      ]
     }
   ]
 }
