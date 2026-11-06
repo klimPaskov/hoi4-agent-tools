@@ -10,11 +10,11 @@
     },
     "id": {
       "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
+      "pattern": "^[a-f0-9]{16,64}$"
     },
     "revision": {
       "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
+      "pattern": "^[a-f0-9]{12,64}$"
     },
     "source": {
       "type": "string",

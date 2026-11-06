@@ -6,14 +6,19 @@ import { compareCodeUnits, sha256Bytes } from '../core/canonical.js';
 import { ServiceError } from '../core/result.js';
 import { isWithin, type ResolvedWorkspace } from '../core/workspace.js';
 import type { z } from 'zod/v4';
-import type {
-  referenceContextRequestSchema,
-  referenceReadRequestSchema,
-  referenceSearchRequestSchema,
-  referenceSourceSchema,
-  referenceSearchDataSchema,
-  referenceReadDataSchema,
-  referenceContextDataSchema,
+import {
+  REFERENCE_HIT_ID_LENGTH,
+  REFERENCE_HIT_REVISION_LENGTH,
+  type referenceContextRequestSchema,
+  type referenceReadRequestSchema,
+  type referenceSearchRequestSchema,
+  type referenceSourceSchema,
+  type referenceSearchDataSchema,
+  type referenceReadDataSchema,
+  type referenceContextDataSchema,
+  type referenceHitSchema,
+  type referenceSearchToolDataSchema,
+  type referenceContextToolDataSchema,
 } from '../schemas/reference.js';
 import {
   prepareSource,
@@ -76,16 +81,37 @@ export interface ReferenceSection {
 }
 
 interface IndexedSection extends ReferenceSection {
+  /** The file under its source's folder, with forward slashes. */
+  relativePath: string;
   lines: string[];
   terms: SectionTerms;
 }
 
 /** The citation fields of a section, without its indexed text or term statistics. */
 export function publicReferenceSection(
-  section: ReferenceSection & { lines?: unknown; terms?: unknown },
+  section: ReferenceSection & { relativePath?: unknown; lines?: unknown; terms?: unknown },
 ): ReferenceSection {
-  const { lines: _lines, terms: _terms, ...citation } = section;
+  const { relativePath: _relativePath, lines: _lines, terms: _terms, ...citation } = section;
   return citation;
+}
+
+export type ReferenceHit = z.infer<typeof referenceHitSchema>;
+export type ReferenceSearchHits = z.infer<typeof referenceSearchToolDataSchema>;
+export type ReferenceContextHits = z.infer<typeof referenceContextToolDataSchema>;
+
+/** A section as a search or context hit: short handles, its file under its source's folder. */
+function referenceHit(section: IndexedSection): ReferenceHit {
+  return {
+    id: section.id.slice(0, REFERENCE_HIT_ID_LENGTH),
+    revision: section.revision.slice(0, REFERENCE_HIT_REVISION_LENGTH),
+    source: section.source,
+    heading: section.heading,
+    ...(section.title === section.heading ? {} : { title: section.title }),
+    path: section.relativePath.slice(0, 1024),
+    startLine: section.startLine,
+    endLine: section.endLine,
+    excerpt: section.excerpt,
+  };
 }
 
 interface RankedSection {
@@ -231,6 +257,7 @@ function isWikiMetaFile(root: SourceRoot, name: string): boolean {
 
 function sectionize(
   root: SourceRoot,
+  canonicalRoot: string,
   filePath: string,
   content: string,
   revision: string,
@@ -238,6 +265,7 @@ function sectionize(
   const raw = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
   const lines = /\.md$/iu.test(filePath) ? withoutComments(raw) : raw;
   const relative = path.relative(root.root, filePath).replaceAll('\\', '/');
+  const relativePath = path.relative(canonicalRoot, filePath).replaceAll('\\', '/');
   const title = path
     .basename(filePath)
     .replace(/\.(md|log)$/iu, '')
@@ -292,6 +320,7 @@ function sectionize(
       title,
       heading: heading.slice(0, 512),
       path: filePath,
+      relativePath,
       startLine: start + 1,
       endLine: end,
       excerpt: snippet(sectionLines),
@@ -636,7 +665,13 @@ export class ReferenceService {
                       revision,
                       bytes: content.length,
                       stamp: fileStamp(source.metadata),
-                      sections: sectionize(root, canonical, referenceText(content), revision),
+                      sections: sectionize(
+                        root,
+                        canonicalRoot,
+                        canonical,
+                        referenceText(content),
+                        revision,
+                      ),
                     };
             } else cached = read.value;
             this.retain(key, cached);
@@ -658,6 +693,24 @@ export class ReferenceService {
     input: SearchInput,
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
+    return this.searchAs(workspace, input, signal, (section) => this.publicSection(section));
+  }
+
+  /** {@link search} with compact hits, as `hoi4.reference_search` returns them. */
+  async searchHits(
+    workspace: ResolvedWorkspace,
+    input: SearchInput,
+    signal?: AbortSignal,
+  ): Promise<ReferenceSearchHits> {
+    return this.searchAs(workspace, input, signal, referenceHit);
+  }
+
+  private async searchAs<Hit extends object>(
+    workspace: ResolvedWorkspace,
+    input: SearchInput,
+    signal: AbortSignal | undefined,
+    present: (section: IndexedSection) => Hit,
+  ) {
     const inventory = await this.inventory(workspace, signal, input.sources);
     const { ranked: matches, describe } = this.rank(
       inventory.sections,
@@ -666,7 +719,7 @@ export class ReferenceService {
     );
     const results = matches.slice(0, input.limit).map((match) => {
       const { section, score, excerpt, matchLine } = describe(match);
-      return { ...this.publicSection(section), score, excerpt, matchLine };
+      return { ...present(section), score, excerpt, matchLine };
     });
     const requested = results.length;
     while (
@@ -783,10 +836,11 @@ export class ReferenceService {
     input: ReadInput,
     signal?: AbortSignal,
   ): Promise<ReferenceReadResult> {
+    // A hit carries a prefix of the section id; a full id is its own prefix.
     let source = input.source;
     if (source === undefined) {
       for (const cached of this.#cache.values()) {
-        const section = cached.sections.find(({ id }) => id === input.id);
+        const section = cached.sections.find(({ id }) => id.startsWith(input.id));
         if (section !== undefined) {
           source = section.source;
           break;
@@ -798,13 +852,19 @@ export class ReferenceService {
       signal,
       source === undefined ? undefined : [source],
     );
-    const section = inventory.sections.find(({ id }) => id === input.id);
+    const matching = inventory.sections.filter(({ id }) => id.startsWith(input.id));
+    const section = matching[0];
     if (section === undefined)
       throw new ServiceError(
         'REFERENCE_SECTION_UNKNOWN',
         'Reference section is not in this workspace',
       );
-    if (section.revision !== input.revision)
+    if (matching.some(({ id }) => id !== section.id))
+      throw new ServiceError(
+        'REFERENCE_SECTION_AMBIGUOUS',
+        'More than one section starts with this id; pass the full id',
+      );
+    if (!section.revision.startsWith(input.revision))
       throw new ServiceError('REFERENCE_REVISION_STALE', 'Reference source changed; search again', {
         currentRevision: section.revision,
       });
@@ -833,6 +893,24 @@ export class ReferenceService {
     input: ContextInput,
     signal?: AbortSignal,
   ): Promise<ReferenceContextResult> {
+    return this.contextAs(workspace, input, signal, (section) => this.publicSection(section));
+  }
+
+  /** {@link context} with compact hits, as `hoi4.reference_context` returns them. */
+  async contextHits(
+    workspace: ResolvedWorkspace,
+    input: ContextInput,
+    signal?: AbortSignal,
+  ): Promise<ReferenceContextHits> {
+    return this.contextAs(workspace, input, signal, referenceHit);
+  }
+
+  private async contextAs<Hit extends object>(
+    workspace: ResolvedWorkspace,
+    input: ContextInput,
+    signal: AbortSignal | undefined,
+    present: (section: IndexedSection) => Hit,
+  ) {
     const inventory = await this.inventory(workspace, signal);
     const wanted = surfaceNames[input.surface];
     const ranking =
@@ -886,18 +964,14 @@ export class ReferenceService {
     const selected = prioritized.slice(0, input.limit);
     const requestedCount = selected.length;
     while (
-      Buffer.byteLength(
-        JSON.stringify(selected.map((section) => this.publicSection(section))),
-        'utf8',
-      ) > MAX_REFERENCE_METADATA_BYTES &&
+      Buffer.byteLength(JSON.stringify(selected.map((section) => present(section))), 'utf8') >
+        MAX_REFERENCE_METADATA_BYTES &&
       selected.length > 1
     )
       selected.pop();
     if (
-      Buffer.byteLength(
-        JSON.stringify(selected.map((section) => this.publicSection(section))),
-        'utf8',
-      ) > MAX_REFERENCE_METADATA_BYTES
+      Buffer.byteLength(JSON.stringify(selected.map((section) => present(section))), 'utf8') >
+      MAX_REFERENCE_METADATA_BYTES
     )
       throw new ServiceError(
         'REFERENCE_RESPONSE_TOO_LARGE',
@@ -907,9 +981,9 @@ export class ReferenceService {
       surface: input.surface,
       sections: selected.map((section) => {
         const match = ranked.find((entry) => entry.section.id === section.id);
-        if (match === undefined || ranking === undefined) return this.publicSection(section);
+        if (match === undefined || ranking === undefined) return present(section);
         const { excerpt, matchLine } = ranking.describe(match);
-        return { ...this.publicSection(section), excerpt, matchLine };
+        return { ...present(section), excerpt, matchLine };
       }),
       omitted: Math.max(0, prioritized.length - selected.length),
       limitedByBytes: selected.length < requestedCount,
