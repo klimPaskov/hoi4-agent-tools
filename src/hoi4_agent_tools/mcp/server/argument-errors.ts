@@ -23,6 +23,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.explain_error': `{"line":"Invalid trigger 'stability' in events/my_events.txt line : 12"}`,
   'hoi4.mod_index': '{"mode":"overview"} or {"mode":"next_id","kind":"event","namespace":"my_mod"}',
   'hoi4.localisation_inspect': '{"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}',
+  'hoi4.compat_check': '{"mode":"mod","other":"my_other_mod"} or {"mode":"patch"}',
   'hoi4.idea_inspect': '{"kind":"idea","id":"my_idea"} or {"kind":"character","audit":true}',
   'hoi4.system_inspect':
     '{"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}',

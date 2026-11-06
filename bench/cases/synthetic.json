@@ -779,6 +779,32 @@
           "includes": "+bench_write_probe: \"Probe\""
         }
       ]
+    },
+    {
+      "id": "synthetic.compat.unknown-other-mod",
+      "surface": "compat",
+      "corpus": "synthetic",
+      "title": "A compatibility check against a mod that is not registered is an explicit not-found, without running the engine",
+      "evidence": "No workspace named synthetic_no_such_mod exists; the check resolves the other mod before it reads any file. The engine-backed modes need the Rust engine, which CI does not build.",
+      "tool": "hoi4.compat_check",
+      "arguments": {
+        "mode": "mod",
+        "other": "synthetic_no_such_mod"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "WORKSPACE_NOT_REGISTERED"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_mod"
+        }
+      ]
     }
   ]
 }

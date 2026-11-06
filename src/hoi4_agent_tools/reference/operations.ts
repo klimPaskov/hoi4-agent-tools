@@ -46,6 +46,14 @@ import { modIndex } from './mod-index.js';
 import { listSkills, loadSkill } from './skills.js';
 import { skillDataSchema, skillRequestSchema } from '../schemas/skill.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
+import { checkModCompatibility } from './compat.js';
+import { checkPatchCompatibility } from './compat-patch.js';
+import {
+  compatCheckDataSchema,
+  compatCheckRequestSchema,
+  type CompatCheckData,
+  type CompatCheckRequest,
+} from '../schemas/compat.js';
 import { inspectIdeas } from '../ideas/inspect.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
 import { inspectAssets, inspectSystem, inspectUnits } from '../system/inspect.js';
@@ -113,6 +121,7 @@ const schemas = {
   'hoi4.script_guard': scriptGuardRequestSchema,
   'hoi4.mod_index': modIndexRequestSchema,
   'hoi4.localisation_inspect': localisationInspectRequestSchema,
+  'hoi4.compat_check': compatCheckRequestSchema,
   'hoi4.idea_inspect': ideaInspectRequestSchema,
   'hoi4.system_inspect': systemInspectRequestSchema,
   'hoi4.unit_inspect': unitInspectRequestSchema,
@@ -245,25 +254,32 @@ export class ReferenceToolService {
                                     unitInspectRequestSchema.parse(parsed),
                                     signal,
                                   )
-                                : name === 'hoi4.skill'
-                                  ? await this.skill(
+                                : name === 'hoi4.compat_check'
+                                  ? await this.checkCompat(
                                       workspace,
-                                      skillRequestSchema.parse(parsed),
+                                      compatCheckRequestSchema.parse(parsed),
+                                      context.principal,
                                       signal,
                                     )
-                                  : name === 'hoi4.localisation_inspect'
-                                    ? await inspectLocalisation(
+                                  : name === 'hoi4.skill'
+                                    ? await this.skill(
                                         workspace,
-                                        localisationInspectRequestSchema.parse(parsed),
+                                        skillRequestSchema.parse(parsed),
                                         signal,
                                       )
-                                    : await sourceLookup(
-                                        this.engine,
-                                        workspaceId,
-                                        sourceLookupRequestSchema.parse(parsed),
-                                        context.principal,
-                                        signal,
-                                      );
+                                    : name === 'hoi4.localisation_inspect'
+                                      ? await inspectLocalisation(
+                                          workspace,
+                                          localisationInspectRequestSchema.parse(parsed),
+                                          signal,
+                                        )
+                                      : await sourceLookup(
+                                          this.engine,
+                                          workspaceId,
+                                          sourceLookupRequestSchema.parse(parsed),
+                                          context.principal,
+                                          signal,
+                                        );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.script_guard') {
       const guard = scriptGuardDataSchema.parse(data);
@@ -470,6 +486,21 @@ export class ReferenceToolService {
           },
         ],
       };
+    }
+    if (name === 'hoi4.compat_check') {
+      const checked = compatCheckDataSchema.parse(data);
+      result.code = checked.mode === 'mod' ? 'COMPAT_MOD_CHECKED' : 'COMPAT_PATCH_CHECKED';
+      if (checked.mode === 'mod')
+        result.validation = {
+          passed: checked.verdict === 'no_conflicts',
+          checks: [
+            {
+              id: 'mod-compatibility',
+              passed: checked.verdict === 'no_conflicts',
+              message: checked.summary,
+            },
+          ],
+        };
     }
     if (name === 'hoi4.localisation_inspect') {
       const inspected = localisationInspectDataSchema.parse(data);
@@ -806,6 +837,17 @@ export class ReferenceToolService {
     return request.name === undefined
       ? listSkills(workspace, signal)
       : loadSkill(workspace, { ...request, name: request.name }, signal);
+  }
+
+  private async checkCompat(
+    workspace: ResolvedWorkspace,
+    input: CompatCheckRequest,
+    principal: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<CompatCheckData> {
+    return input.mode === 'mod'
+      ? checkModCompatibility(this.engine, workspace, input, principal, signal)
+      : checkPatchCompatibility(workspace, input, signal);
   }
 
   private async validateScript(

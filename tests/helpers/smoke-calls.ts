@@ -25,6 +25,7 @@ export const ALL_TOOLS = [
   'hoi4.unit_inspect',
   'hoi4.asset_inspect',
   'hoi4.skill',
+  'hoi4.compat_check',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -166,6 +167,12 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
       tolerate: ['ENGINE_UNAVAILABLE'],
     },
     { tool: 'hoi4.skill', label: 'list the skills', args: {} },
+    {
+      tool: 'hoi4.compat_check',
+      label: 'record the vanilla files the mod overrides',
+      args: { mode: 'patch' },
+      tolerate: ['ENGINE_UNAVAILABLE', 'COMPAT_NO_GAME_ROOT', 'COMPAT_GAME_BUILD_UNKNOWN'],
+    },
     {
       tool: 'hoi4.mod_index',
       label: 'next free event ID in a namespace',
@@ -378,6 +385,7 @@ export function wrongFieldCalls(workspaceId: string): WrongFieldCall[] {
     wrong('hoi4.unit_inspect', 'oob', { oob: 'GER_1936' }),
     wrong('hoi4.asset_inspect', 'sprite', { sprite: 'GFX_my_icon' }),
     wrong('hoi4.skill', 'skill', { skill: 'hoi4-events' }),
+    wrong('hoi4.compat_check', 'other_mod', { mode: 'mod', other_mod: 'my_other_mod' }),
     wrong('hoi4.event_inspect', 'event_id', { mode: 'trace', event_id: 'my_mod.1' }),
     wrong('hoi4.event_render', 'event_id', { view: 'overview', event_id: 'my_mod.1' }),
     wrong('hoi4.focus_inspect', 'tree', { tree: 'my_focus_tree' }),

@@ -26,6 +26,7 @@ import {
   assetInspectDataSchema,
   assetInspectRequestSchema,
 } from '../../schemas/system.js';
+import { compatCheckDataSchema, compatCheckRequestSchema } from '../../schemas/compat.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../../schemas/ideas.js';
 import {
   errorLogDataSchema,
@@ -196,6 +197,15 @@ export const referenceTools = [
       'List the modding skills installed in the mod, or load one by name, at the kit version HOI4 Mod Setup pinned, with its hash. A file edited since Setup installed it is refused unless acceptLocalEdits. Example: {"name":"hoi4-events"}. Returns up to 20,000 bytes of text; continue from nextOffset.',
     inputSchema: skillRequestSchema,
     outputSchema: strictOperationResultSchema(skillDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.compat_check',
+    title: 'Check a mod against another mod or a game patch',
+    description:
+      'mod: compare this mod with another in both load orders: files at the same path and who wins, duplicate ids, definitions and hooks dropped, replace_path losses, and which order loses less. patch: store the vanilla files the mod overrides and list those a game update changed. Example: {"mode":"mod","other":"my_other_mod"} or {"mode":"patch"}',
+    inputSchema: compatCheckRequestSchema,
+    outputSchema: strictOperationResultSchema(compatCheckDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

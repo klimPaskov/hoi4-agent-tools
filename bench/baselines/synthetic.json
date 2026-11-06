@@ -1,5 +1,9 @@
 {
   "cases": {
+    "synthetic.compat.unknown-other-mod": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.decision.inventory": {
       "inline": false,
       "passed": false
