@@ -128,6 +128,8 @@ describe('documentation-backed script checks', () => {
     const args = await check('set_variable = { value = 5 }');
     expect(args.valid).toBeNull();
     expect(args.argumentBlocksUnchecked).toBe(1);
+    // A partial result names what is partial (#65).
+    expect(args.partialReasons?.length).toBeGreaterThan(0);
     expect(args.findings.some(({ command }) => command === 'value')).toBe(false);
   });
 
@@ -307,6 +309,8 @@ describe('documentation-backed script checks', () => {
     expect(large.valid).toBeNull();
     expect(large.truncated).toBe(true);
     expect(large.checkedCommands).toBe(256);
+    expect(large.partialReasons).toContainEqual('only the first 256 commands were checked');
+    expect(result.partialReasons).toBeUndefined();
     await expect(check(`add_power = "${'🟢'.repeat(20_000)}"`)).rejects.toMatchObject({
       code: 'SCRIPT_SOURCE_TOO_LARGE',
     });
