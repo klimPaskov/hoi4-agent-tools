@@ -184,6 +184,77 @@ function fenceMarker(line: string): Fence | undefined {
   return { character: marker[0]!, length: marker.length, info: match[2]!.trim() };
 }
 
+/** Inline code spans and the text between them, so a comment is never matched inside code. */
+const inlineCode = /(`+)[\s\S]*?\1/gu;
+const inlineComment = /<!--[\s\S]*?-->/gu;
+
+/**
+ * Markdown lines with every HTML comment outside code blanked and every line kept, so a
+ * section's line numbers still match the file. A reader never sees a comment, and older
+ * kit wiki pages carry `<!-- kit:begin ... -->` maintenance markers that would otherwise
+ * open search excerpts. A line that starts a comment hides everything up to the line that
+ * closes it, as Markdown does; a comment inside a line is cut out of that line only.
+ */
+export function withoutComments(lines: readonly string[]): string[] {
+  const out: string[] = [];
+  let fence: Fence | undefined;
+  let comment = false;
+  for (const line of lines) {
+    if (comment) {
+      out.push('');
+      comment = !line.includes('-->');
+      continue;
+    }
+    const marker = fenceMarker(line);
+    if (fence !== undefined || marker !== undefined) {
+      if (fence === undefined) fence = marker;
+      else if (
+        marker?.character === fence.character &&
+        marker.length >= fence.length &&
+        marker.info === ''
+      )
+        fence = undefined;
+      out.push(line);
+      continue;
+    }
+    if (/^ {0,3}<!--/u.test(line)) {
+      out.push('');
+      comment = !line.includes('-->', line.indexOf('<!--') + 4);
+      continue;
+    }
+    if (!line.includes('<!--')) {
+      out.push(line);
+      continue;
+    }
+    let cleaned = '';
+    let cursor = 0;
+    for (const code of line.matchAll(inlineCode)) {
+      cleaned += line.slice(cursor, code.index).replace(inlineComment, '') + code[0];
+      cursor = code.index + code[0].length;
+    }
+    out.push((cleaned + line.slice(cursor).replace(inlineComment, '')).trimEnd());
+  }
+  return out;
+}
+
+/**
+ * Files of the kit's wiki folder that hold no modding text: the license, the attribution
+ * list of source pages and the maintenance manifest. The index never serves them, whatever
+ * their extension, so a reference answer never spends a reader's context on them.
+ */
+const WIKI_META_FILES = new Set([
+  'license.txt',
+  'license.md',
+  'sources.json',
+  'sources.md',
+  'manifest.json',
+  'manifest.md',
+]);
+
+function isWikiMetaFile(root: SourceRoot, name: string): boolean {
+  return root.kind === 'wiki' && WIKI_META_FILES.has(path.basename(name).toLowerCase());
+}
+
 function sectionize(
   root: SourceRoot,
   canonicalRoot: string,
@@ -191,7 +262,8 @@ function sectionize(
   content: string,
   revision: string,
 ): IndexedSection[] {
-  const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
+  const raw = content.replace(/^\uFEFF/u, '').split(/\r?\n/u);
+  const lines = /\.md$/iu.test(filePath) ? withoutComments(raw) : raw;
   const relative = path.relative(root.root, filePath).replaceAll('\\', '/');
   const relativePath = path.relative(canonicalRoot, filePath).replaceAll('\\', '/');
   const title = path
@@ -501,11 +573,13 @@ export class ReferenceService {
         );
       }
       coverage[root.kind].unavailable = false;
-      const names = await globFiles(root.patterns, {
-        cwd: canonicalRoot,
-        caseSensitive: false,
-        ...(signal === undefined ? {} : { signal }),
-      });
+      const names = (
+        await globFiles(root.patterns, {
+          cwd: canonicalRoot,
+          caseSensitive: false,
+          ...(signal === undefined ? {} : { signal }),
+        })
+      ).filter((name) => !isWikiMetaFile(root, name));
       names.sort(compareCodeUnits);
       for (let offset = 0; offset < names.length; offset += 8) {
         signal?.throwIfAborted();
