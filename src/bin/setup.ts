@@ -11,6 +11,12 @@ import { CoreEngine } from '../hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../hoi4_agent_tools/core/workspace.js';
 import { configurationPath, defaultConfigurationPath } from '../hoi4_agent_tools/runtime.js';
 import { PACKAGE_VERSION } from '../hoi4_agent_tools/version.js';
+import {
+  defaultDocsRoot,
+  docsPackManifest,
+  fetchDocsPack,
+  installedDocsPackWiki,
+} from '../hoi4_agent_tools/reference/docs-pack.js';
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -132,6 +138,11 @@ Usage:
   hoi4-agent-tools-setup --discover
   hoi4-agent-tools-setup --diagnose [--config PATH]
   hoi4-agent-tools-setup --print-client-config [--config PATH]
+  hoi4-agent-tools-setup --fetch-docs [--config PATH] [--docs-root PATH]
+
+--fetch-docs downloads the HOI4 wiki pages that documentation search reads with no mod open
+(about 3.6 MB, checked against pinned SHA-256 hashes) into the configured docsRoot, or the user's
+data folder.
 
 This utility writes only the explicitly requested server config. It never edits an MCP client's settings.`;
 }
@@ -205,8 +216,31 @@ async function initializeConfig(target: string): Promise<void> {
   process.stdout.write(`${absolute}\n`);
 }
 
+/** The docs root: the flag, the configuration's `docsRoot`, or the user's data folder. */
+async function docsRootFor(configPath: string): Promise<string> {
+  const requested = argument('--docs-root');
+  if (requested !== undefined) return path.resolve(requested);
+  try {
+    await stat(configPath);
+  } catch {
+    return defaultDocsRoot();
+  }
+  return (await loadConfiguration(configPath)).docsRoot ?? defaultDocsRoot();
+}
+
+async function fetchDocs(configPath: string): Promise<void> {
+  const docsRoot = await docsRootFor(configPath);
+  const result = await fetchDocsPack({ docsRoot });
+  process.stdout.write(
+    `${JSON.stringify({ status: 'ok', ...result, license: docsPackManifest.license }, null, 2)}
+`,
+  );
+}
+
 async function diagnose(configPath: string): Promise<void> {
   const configuration = await loadConfiguration(configPath);
+  const docsRoot = configuration.docsRoot ?? defaultDocsRoot();
+  const docsPackWiki = await installedDocsPackWiki(docsRoot);
   const resolver = await WorkspaceResolver.create(configuration);
   const engine = new CoreEngine(resolver);
   const serverState = resolver.serverState();
@@ -243,6 +277,12 @@ async function diagnose(configPath: string): Promise<void> {
         ...(serverState === undefined
           ? {}
           : { serverState: { root: serverState.root, readable: true, writable: true } }),
+        docsPack: {
+          root: docsRoot,
+          installed: docsPackWiki !== undefined,
+          commit: docsPackManifest.commit,
+          ...(docsPackWiki === undefined ? { fix: 'Run hoi4-agent-tools-setup --fetch-docs' } : {}),
+        },
         workspaces,
       },
       null,
@@ -313,6 +353,11 @@ async function main(): Promise<void> {
   if (process.argv.includes('--diagnose')) {
     assertKnownArguments(['--diagnose'], ['--config']);
     await diagnose(config);
+    return;
+  }
+  if (process.argv.includes('--fetch-docs')) {
+    assertKnownArguments(['--fetch-docs'], ['--config', '--docs-root']);
+    await fetchDocs(config);
     return;
   }
   if (process.argv.includes('--print-client-config')) {
