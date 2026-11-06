@@ -36,7 +36,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.gui_inspect': '{"windowName":"my_window"}',
   'hoi4.gui_render': '{"windowName":"my_window","scenario":{"id":"normal"}}',
   'hoi4.gui_rewrite':
-    '{"mode":"patches","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"expectedSourceHash":"<sha256 of the file>","patches":[{"start":120,"end":130,"expectedText":"x = 10 y","text":"x = 40 y"}]}',
+    '{"mode":"patches","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"expectedSourceHash":"<sha256 of the file>","patches":[{"description":"Move the button right","start":120,"end":130,"expectedText":"x = 10 y","text":"x = 40 y"}]}',
   'hoi4.map_inspect':
     '{"query":"Brandenburg","lookupOnly":true} or {"layer":"state","tile":{"x":2600,"y":500,"width":256,"height":256}}',
   'hoi4.map_rewrite':
@@ -66,27 +66,92 @@ interface Issue {
   problem: string;
 }
 
-function describeIssue(issue: z.core.$ZodIssue): Issue {
+interface SchemaDef {
+  type?: string;
+  innerType?: z.ZodType;
+  in?: z.ZodType;
+  out?: z.ZodType;
+  shape?: Record<string, z.ZodType>;
+  element?: z.ZodType;
+  options?: z.ZodType[];
+  valueType?: z.ZodType;
+}
+
+function defOf(schema: z.ZodType | undefined): SchemaDef | undefined {
+  return (schema as { _zod?: { def?: SchemaDef } } | undefined)?._zod?.def;
+}
+
+/**
+ * The fields the object at a path accepts, so an unknown field names the expected shape (#65).
+ * Wrappers are unwrapped and the fields of every union alternative are listed.
+ */
+export function acceptedFields(
+  schema: z.ZodType | undefined,
+  path: readonly PropertyKey[],
+  depth = 0,
+): string[] {
+  const def = defOf(schema);
+  if (def === undefined || depth > 32) return [];
+  switch (def.type) {
+    case 'optional':
+    case 'nullable':
+    case 'default':
+    case 'prefault':
+    case 'readonly':
+    case 'catch':
+    case 'nonoptional':
+      return acceptedFields(def.innerType, path, depth + 1);
+    case 'pipe': {
+      // A preprocess step pipes from an unknown or a transform; then out checks the fields.
+      const fromInput = acceptedFields(def.in, path, depth + 1);
+      return fromInput.length > 0 ? fromInput : acceptedFields(def.out, path, depth + 1);
+    }
+    case 'union':
+      return [
+        ...new Set(
+          (def.options ?? []).flatMap((option) => acceptedFields(option, path, depth + 1)),
+        ),
+      ];
+    case 'array':
+      return typeof path[0] === 'number'
+        ? acceptedFields(def.element, path.slice(1), depth + 1)
+        : [];
+    case 'record':
+      return path.length === 0 ? [] : acceptedFields(def.valueType, path.slice(1), depth + 1);
+    case 'object':
+      if (path.length === 0) return Object.keys(def.shape ?? {});
+      return acceptedFields(def.shape?.[String(path[0])], path.slice(1), depth + 1);
+    default:
+      return [];
+  }
+}
+
+function describeIssue(issue: z.core.$ZodIssue, schema?: z.ZodType): Issue {
   const field = issue.path.length === 0 ? '(arguments)' : issue.path.map(String).join('.');
   let problem = issue.message;
-  if (issue.code === 'unrecognized_keys')
-    problem = `unknown field${issue.keys.length === 1 ? '' : 's'} ${issue.keys.join(', ')}`;
-  else if (issue.code === 'invalid_value')
+  if (issue.code === 'unrecognized_keys') {
+    const accepted = acceptedFields(schema, issue.path);
+    problem = `unknown field${issue.keys.length === 1 ? '' : 's'} ${issue.keys.join(', ')}${accepted.length === 0 ? '' : `; accepted fields: ${accepted.join(', ')}`}`;
+  } else if (issue.code === 'invalid_value')
     problem = `expected one of ${issue.values.map((value) => JSON.stringify(value)).join(', ')}`;
   else if (issue.code === 'invalid_union') {
     // Name the alternative that came closest: the one with the fewest problems.
     const closest = [...issue.errors].sort((left, right) => left.length - right.length)[0];
     const first = closest?.[0];
     if (first !== undefined) {
-      const nested = describeIssue(first);
+      const nested = describeIssue(first, schema);
       problem = `${issue.message}; closest form: ${nested.field === '(arguments)' ? '' : `${nested.field}: `}${nested.problem}`;
     }
   }
   return { field, problem: problem.slice(0, 300) };
 }
 
-export function invalidArgumentsError(toolName: string, error: z.ZodError): ServiceError {
-  const issues = error.issues.slice(0, 6).map(describeIssue);
+export function invalidArgumentsError(
+  toolName: string,
+  error: z.ZodError,
+  schema?: z.ZodType,
+): ServiceError {
+  const issues = error.issues.slice(0, 6).map((issue) => describeIssue(issue, schema));
   const example = ARGUMENT_EXAMPLES[toolName];
   const message = [
     `Invalid arguments for ${toolName}: ${issues.map(({ field, problem }) => `${field}: ${problem}`).join('; ')}.`,
@@ -104,9 +169,10 @@ export function invalidArgumentsResult(
   toolName: string,
   error: z.ZodError,
   workspaceId: unknown,
+  schema?: z.ZodType,
 ): ReturnType<typeof errorResult> {
   return errorResult(
-    invalidArgumentsError(toolName, error),
+    invalidArgumentsError(toolName, error, schema),
     typeof workspaceId === 'string' ? workspaceId : 'current',
   );
 }

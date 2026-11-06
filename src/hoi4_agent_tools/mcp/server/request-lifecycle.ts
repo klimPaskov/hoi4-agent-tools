@@ -51,6 +51,7 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
               params.name,
               parsed.error,
               (params.arguments as { workspaceId?: unknown } | undefined)?.workspaceId,
+              schema,
             ),
           );
       }
