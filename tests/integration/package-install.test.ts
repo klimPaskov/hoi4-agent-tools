@@ -391,6 +391,7 @@ describe('clean npm-pack installation', () => {
     expect(qualified.resourceUris).toEqual([]);
     expect(qualified.resourceTemplateUris).toEqual([
       'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}',
+      'hoi4-agent://workspace/{workspaceId}/skill/{name}',
     ]);
     expect(qualified.resourceMimeType).toBe('application/json');
     expect(qualified.boundedArtifactBytes).toBe(64);
