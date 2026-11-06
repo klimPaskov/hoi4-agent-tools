@@ -466,6 +466,15 @@ export const worldPartitionTuningSchema = z
       .describe(
         'Sea province area in pixels near a coast and on the open sea. Defaults follow seaProvincePixels (0.5 and 2.4 times, scaled so the mean stays seaProvincePixels).',
       ),
+    lakeArea: z
+      .number()
+      .int()
+      .min(20)
+      .max(200_000)
+      .optional()
+      .describe(
+        'Lake province area in pixels; default 6000. A lake no larger than this stays one province.',
+      ),
     provincesPerState: z
       .tuple([z.number().int().min(1).max(64), z.number().int().min(1).max(64)])
       .optional()

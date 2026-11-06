@@ -1023,13 +1023,13 @@
           "$ref": "#/$defs/__schema250"
         },
         "borderQuality": {
-          "$ref": "#/$defs/__schema260"
-        },
-        "borderTargets": {
           "$ref": "#/$defs/__schema261"
         },
-        "replaceBaseGame": {
+        "borderTargets": {
           "$ref": "#/$defs/__schema262"
+        },
+        "replaceBaseGame": {
+          "$ref": "#/$defs/__schema263"
         }
       },
       "required": [
@@ -1063,19 +1063,19 @@
           "maxItems": 1000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema264"
+            "$ref": "#/$defs/__schema265"
           }
         },
         "readOnlySources": {
           "default": "refuse",
           "description": "override copies game or dependency files that need the change into the mod.",
-          "$ref": "#/$defs/__schema269"
+          "$ref": "#/$defs/__schema270"
         },
         "pathPrefixes": {
           "maxItems": 32,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema270"
+            "$ref": "#/$defs/__schema271"
           }
         }
       },
@@ -1110,7 +1110,7 @@
           "maxItems": 3,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema271"
+            "$ref": "#/$defs/__schema272"
           }
         },
         "stateIds": {
@@ -1131,13 +1131,13 @@
           "maxItems": 10000,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/__schema272"
+            "$ref": "#/$defs/__schema273"
           }
         },
         "mode": {
           "default": "missing",
           "description": "missing adds only absent positions; replace rewrites them for the selection.",
-          "$ref": "#/$defs/__schema273"
+          "$ref": "#/$defs/__schema274"
         }
       },
       "required": [
@@ -1169,7 +1169,7 @@
         "mode": {
           "default": "connect",
           "description": "connect adds a supply node to each selected state without one and links unconnected nodes by railway; replace rebuilds the whole network.",
-          "$ref": "#/$defs/__schema274"
+          "$ref": "#/$defs/__schema275"
         },
         "railwayLevel": {
           "default": 1,
@@ -1200,22 +1200,22 @@
           "$ref": "#/$defs/__schema1"
         },
         "kind": {
-          "$ref": "#/$defs/__schema275"
-        },
-        "entity": {
           "$ref": "#/$defs/__schema276"
         },
-        "fromId": {
+        "entity": {
           "$ref": "#/$defs/__schema277"
         },
-        "toId": {
+        "fromId": {
           "$ref": "#/$defs/__schema278"
         },
-        "collision": {
+        "toId": {
           "$ref": "#/$defs/__schema279"
         },
-        "renameLocalisation": {
+        "collision": {
           "$ref": "#/$defs/__schema280"
+        },
+        "renameLocalisation": {
+          "$ref": "#/$defs/__schema281"
         }
       },
       "required": [
@@ -1468,7 +1468,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -1549,7 +1549,7 @@
               "minLength": 1
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -1591,7 +1591,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -1672,7 +1672,7 @@
               "maximum": 9007199254740991
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -1714,7 +1714,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -1787,7 +1787,7 @@
               "type": "string"
             },
             "occurrence": {
-              "$ref": "#/$defs/__schema281"
+              "$ref": "#/$defs/__schema282"
             }
           },
           "required": [
@@ -5718,25 +5718,29 @@
           "description": "Sea province area in pixels near a coast and on the open sea. Defaults follow seaProvincePixels (0.5 and 2.4 times, scaled so the mean stays seaProvincePixels).",
           "$ref": "#/$defs/__schema254"
         },
+        "lakeArea": {
+          "description": "Lake province area in pixels; default 6000. A lake no larger than this stays one province.",
+          "$ref": "#/$defs/__schema255"
+        },
         "provincesPerState": {
           "description": "[smallest, largest] land provinces per state; the preferred size is the geometric mean.",
-          "$ref": "#/$defs/__schema255"
+          "$ref": "#/$defs/__schema256"
         },
         "regionSize": {
           "description": "[smallest, largest] land provinces per strategic region.",
-          "$ref": "#/$defs/__schema256"
+          "$ref": "#/$defs/__schema257"
         },
         "barrierStrength": {
           "description": "How strongly borders are pulled onto natural lines, 0 to 60; default 20.",
-          "$ref": "#/$defs/__schema257"
+          "$ref": "#/$defs/__schema258"
         },
         "minProvincePixels": {
           "description": "No province is planned smaller than this; default 40. The engine floor is 8.",
-          "$ref": "#/$defs/__schema258"
+          "$ref": "#/$defs/__schema259"
         },
         "narrowStraitPx": {
           "description": "A sea channel at most this wide gets two sea provinces across it; default 24.",
-          "$ref": "#/$defs/__schema259"
+          "$ref": "#/$defs/__schema260"
         }
       },
       "additionalProperties": false
@@ -5781,22 +5785,9 @@
       "additionalProperties": false
     },
     "__schema255": {
-      "type": "array",
-      "prefixItems": [
-        {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 64
-        },
-        {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 64
-        }
-      ],
-      "items": false,
-      "minItems": 2,
-      "maxItems": 2
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 200000
     },
     "__schema256": {
       "type": "array",
@@ -5804,6 +5795,24 @@
         {
           "type": "integer",
           "minimum": 1,
+          "maximum": 64
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "__schema257": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 1,
           "maximum": 400
         },
         {
@@ -5816,37 +5825,37 @@
       "minItems": 2,
       "maxItems": 2
     },
-    "__schema257": {
+    "__schema258": {
       "type": "number",
       "minimum": 0,
       "maximum": 60
     },
-    "__schema258": {
+    "__schema259": {
       "type": "integer",
       "minimum": 20,
       "maximum": 2000
     },
-    "__schema259": {
+    "__schema260": {
       "type": "integer",
       "minimum": 4,
       "maximum": 64
     },
-    "__schema260": {
+    "__schema261": {
       "description": "Measure how well the new world’s province, state, region and country borders follow rivers, slopes and shores. enforce blocks the write below the targets and needs the feature-aware partition; omitted measures nothing.",
       "$ref": "#/$defs/__schema27"
     },
-    "__schema261": {
+    "__schema262": {
       "$ref": "#/$defs/__schema28"
     },
-    "__schema262": {
+    "__schema263": {
       "default": true,
       "description": "Add replace_path for the base game states, countries, units, strategic regions, supply areas and bookmarks to descriptor.mod.",
-      "$ref": "#/$defs/__schema263"
-    },
-    "__schema263": {
-      "type": "boolean"
+      "$ref": "#/$defs/__schema264"
     },
     "__schema264": {
+      "type": "boolean"
+    },
+    "__schema265": {
       "type": "object",
       "properties": {
         "from": {
@@ -5857,13 +5866,13 @@
         "to": {
           "anyOf": [
             {
-              "$ref": "#/$defs/__schema265"
-            },
-            {
               "$ref": "#/$defs/__schema266"
             },
             {
-              "$ref": "#/$defs/__schema268"
+              "$ref": "#/$defs/__schema267"
+            },
+            {
+              "$ref": "#/$defs/__schema269"
             }
           ],
           "description": "One ID replaces; several IDs copy the referencing assignment once per ID; null removes it."
@@ -5875,40 +5884,40 @@
       ],
       "additionalProperties": false
     },
-    "__schema265": {
+    "__schema266": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema266": {
+    "__schema267": {
       "minItems": 1,
       "maxItems": 16,
       "type": "array",
       "items": {
-        "$ref": "#/$defs/__schema267"
+        "$ref": "#/$defs/__schema268"
       }
     },
-    "__schema267": {
+    "__schema268": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema268": {
+    "__schema269": {
       "type": "null"
     },
-    "__schema269": {
+    "__schema270": {
       "type": "string",
       "enum": [
         "refuse",
         "override"
       ]
     },
-    "__schema270": {
+    "__schema271": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "__schema271": {
+    "__schema272": {
       "type": "string",
       "enum": [
         "buildings",
@@ -5916,30 +5925,30 @@
         "weather"
       ]
     },
-    "__schema272": {
+    "__schema273": {
       "type": "integer",
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
-    "__schema273": {
+    "__schema274": {
       "type": "string",
       "enum": [
         "missing",
         "replace"
       ]
     },
-    "__schema274": {
+    "__schema275": {
       "type": "string",
       "enum": [
         "connect",
         "replace"
       ]
     },
-    "__schema275": {
+    "__schema276": {
       "type": "string",
       "const": "renumber_map_entity"
     },
-    "__schema276": {
+    "__schema277": {
       "type": "string",
       "enum": [
         "province",
@@ -5947,17 +5956,17 @@
         "strategic-region"
       ]
     },
-    "__schema277": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 9007199254740991
-    },
     "__schema278": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
     },
     "__schema279": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema280": {
       "default": "swap",
       "type": "string",
       "enum": [
@@ -5965,11 +5974,11 @@
         "reject"
       ]
     },
-    "__schema280": {
+    "__schema281": {
       "default": true,
       "type": "boolean"
     },
-    "__schema281": {
+    "__schema282": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991

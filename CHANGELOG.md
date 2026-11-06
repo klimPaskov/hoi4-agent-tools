@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Size lake provinces: `create_world.partitionTuning.lakeArea` (default 6,000 pixels, capped at the largest province the map allows) sets the area of a lake province, so a drawn lake no larger than it stays one province.
 - Raise the relief toward a reference picture's painted mountains, hills and volcanoes (`create_world.relief.painted`, ADR 0079). The classes are blurred over `falloffPx` (default 24) before the rivers are routed, so slopes stay natural and the model's rivers flow around the drawn ranges. Painted mountains get permanent snow by latitude. `MAP_RELIEF_SYNTHESIZED` now reports the base game's relief beside the world's.
 - Make land impassable (ADR 0079): paint it with the palette kind `impassable_mountain` or mark a model region `impassable: true`.
   - Its provinces become impassable `enclave` states linked to the nearest passable state, and it rises to the highest ground.
