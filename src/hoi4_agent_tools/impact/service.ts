@@ -177,10 +177,10 @@ export class ImpactAnalyzer {
     result.code = complete ? 'IMPACT_ANALYZED' : 'IMPACT_ANALYZED_PARTIAL';
     result.artifacts = [publicArtifactLink(artifact)];
     result.proposedFiles = overlay?.changes.map(({ path }) => path).slice(0, 64) ?? [];
-    setInlineFilesScanned(
-      result,
-      before.files.map(({ displayPath }) => displayPath),
-    );
+    // The seed files and the files of the consumers, not the first files of the workspace (#66).
+    setInlineFilesScanned(result, [
+      ...new Set([...(query.changedFiles ?? []), ...suiteGraph.affectedFiles]),
+    ]);
     result.validation = {
       passed: complete,
       checks: [
