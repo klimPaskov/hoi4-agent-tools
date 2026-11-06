@@ -4,6 +4,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { glob } from 'glob';
+import { VERIFIED_GAME_RAW_VERSION } from '../../src/hoi4_agent_tools/probability/model.js';
 import { documentedEffects, renderNativeEffects } from '../generate-native-effects.js';
 
 /**
@@ -41,6 +42,38 @@ export interface GameUpdate {
   nativeEffects?: { added: string[]; removed: string[]; proposed: string };
   wikiStatus?: string;
   recheck: string[];
+  /** Hand-kept game data checked against a build other than the installed one, on every run. */
+  stalePins: StalePin[];
+}
+
+export interface StalePin {
+  data: string;
+  pinned: string;
+  installed: string;
+}
+
+/** The builds the hand-kept data was last checked against (#70). */
+export async function pinnedBuilds(): Promise<Array<{ data: string; pinned: string }>> {
+  const header = /from the HOI4 (\S+) effects/u.exec(await readFile(NATIVE_EFFECTS, 'utf8'));
+  return [
+    {
+      data: 'Probability adapters (VERIFIED_GAME_* in src/hoi4_agent_tools/probability/model.ts)',
+      pinned: VERIFIED_GAME_RAW_VERSION,
+    },
+    {
+      data: 'Native-effects fallback list (src/hoi4_agent_tools/focus/native-effects.ts)',
+      pinned: header?.[1] ?? 'unknown',
+    },
+  ];
+}
+
+export async function stalePins(
+  installed: string,
+  pins?: Array<{ data: string; pinned: string }>,
+): Promise<StalePin[]> {
+  return (pins ?? (await pinnedBuilds()))
+    .filter(({ pinned }) => pinned !== installed)
+    .map((pin) => ({ ...pin, installed }));
 }
 
 function sections(markdown: string): Record<string, string> {
@@ -165,7 +198,11 @@ export async function watchGame(gameRoot: string, dataRoot: string): Promise<Gam
     previous = undefined;
   }
   await mkdir(dataRoot, { recursive: true });
-  const empty = { files: { added: [], removed: [], changed: [] }, headings: [] };
+  const empty = {
+    files: { added: [], removed: [], changed: [] },
+    headings: [],
+    stalePins: await stalePins(build.rawVersion),
+  };
   if (previous === undefined) {
     await writeFile(recordFile, `${JSON.stringify(build)}\n`);
     return { status: 'recorded', build, ...empty, recheck: [] };
@@ -211,6 +248,7 @@ export async function watchGame(gameRoot: string, dataRoot: string): Promise<Gam
     build,
     previous: { rawVersion: previous.rawVersion, version: previous.version },
     ...diff,
+    stalePins: empty.stalePins,
     nativeEffects,
     ...(wiki === undefined ? {} : { wikiStatus: wiki }),
     recheck,
@@ -224,11 +262,25 @@ export async function watchGame(gameRoot: string, dataRoot: string): Promise<Gam
   return update;
 }
 
+function stalePinsMarkdown(pins: readonly StalePin[]): string {
+  if (pins.length === 0) return '';
+  return [
+    '',
+    '### Checked against another build',
+    '',
+    ...pins.map(
+      ({ data, pinned, installed }) =>
+        `- ${data}: checked against ${pinned}, installed ${installed}. Re-verify and move the pin in a PR.`,
+    ),
+    '',
+  ].join('\n');
+}
+
 export function gameUpdateMarkdown(update: GameUpdate): string {
   if (update.status === 'recorded')
-    return `## Game build\n\nRecorded ${update.build.version || update.build.rawVersion} as the watched build.\n`;
+    return `## Game build\n\nRecorded ${update.build.version || update.build.rawVersion} as the watched build.\n${stalePinsMarkdown(update.stalePins)}`;
   if (update.status === 'unchanged')
-    return `## Game build\n\n${update.build.version || update.build.rawVersion}, unchanged since the last run.\n`;
+    return `## Game build\n\n${update.build.version || update.build.rawVersion}, unchanged since the last run.\n${stalePinsMarkdown(update.stalePins)}`;
   const lines = [
     '## Game build changed',
     '',
@@ -255,6 +307,7 @@ export function gameUpdateMarkdown(update: GameUpdate): string {
     '### To re-check',
     '',
     ...update.recheck.map((item) => `- ${item}`),
+    stalePinsMarkdown(update.stalePins),
     ...(update.wikiStatus === undefined
       ? []
       : ['', '### Kit wiki status', '', '```text', update.wikiStatus.slice(0, 6000), '```']),

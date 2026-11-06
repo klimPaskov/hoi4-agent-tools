@@ -28,6 +28,7 @@ import type {
   ProbabilitySimulationRequest,
   ProbabilitySweepRequest,
 } from './service.js';
+import { gameVersionDiagnostics } from './service.js';
 
 export interface ProbabilityOperationContext {
   workspaceId: string;
@@ -438,6 +439,11 @@ export async function inspectProbabilities(
       : inspected.discovery !== undefined
         ? 'PROBABILITY_SOURCE_DISCOVERED'
         : 'PROBABILITY_ADAPTERS_LISTED';
+  if (surface !== undefined)
+    result.diagnostics = [
+      ...gameVersionDiagnostics(surface.gameVersionVerification),
+      ...result.diagnostics,
+    ];
   result.artifacts = inspected.artifacts;
   setInlineFilesScanned(result, inspected.filesScanned);
   return result;

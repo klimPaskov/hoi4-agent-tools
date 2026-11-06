@@ -962,6 +962,28 @@ function diagnosticsFor(
   return diagnostics;
 }
 
+/** Reports an installed game the adapters were not checked against (#70). */
+export function gameVersionDiagnostics(verification: GameVersionVerification): Diagnostic[] {
+  if (verification.status !== 'workspace_observed') return [];
+  return [
+    {
+      code: 'PROBABILITY_GAME_BUILD_UNVERIFIED',
+      severity: 'warning',
+      category: 'configuration',
+      message: `The installed game is ${verification.observedVersion ?? verification.observedRawVersion ?? 'unknown'}, but the weighting rules were checked against ${verification.adapterTarget}. The documented rules are applied unchanged, so recheck results that depend on rules the new build may have changed.`,
+      details: {
+        adapterTarget: verification.adapterTarget,
+        ...(verification.observedRawVersion === undefined
+          ? {}
+          : { observedRawVersion: verification.observedRawVersion }),
+        ...(verification.observedChecksum === undefined
+          ? {}
+          : { observedChecksum: verification.observedChecksum }),
+      },
+    },
+  ];
+}
+
 function deduplicateUnresolved(values: readonly ProbabilityUnresolved[]): ProbabilityUnresolved[] {
   const output = new Map<string, ProbabilityUnresolved>();
   for (const value of values) {
@@ -1362,6 +1384,7 @@ export class ProbabilityAnalyzer {
             : { diagnosticThresholds: extra.diagnosticThresholds }),
           ...(extra.unresolved === undefined ? {} : { unresolved: extra.unresolved }),
         }),
+        ...gameVersionDiagnostics(metadata.gameVersionVerification),
         ...(extra.diagnostics ?? []),
       ],
       unresolved,

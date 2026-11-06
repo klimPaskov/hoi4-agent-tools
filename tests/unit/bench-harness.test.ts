@@ -5,7 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { checkAssertion, matchingItems, resolvePath } from '../../scripts/bench/assertions.js';
 import { compareRun, isSlower, markdownReport, toBaseline } from '../../scripts/bench/compare.js';
 import { contentHash } from '../../scripts/bench/corpus.js';
-import { gameUpdateMarkdown, watchGame } from '../../scripts/bench/game-watch.js';
+import {
+  gameUpdateMarkdown,
+  pinnedBuilds,
+  stalePins,
+  watchGame,
+} from '../../scripts/bench/game-watch.js';
+import { VERIFIED_GAME_RAW_VERSION } from '../../src/hoi4_agent_tools/probability/model.js';
 import { documentedEffects, renderNativeEffects } from '../../scripts/generate-native-effects.js';
 import { loadCases, loadCorpora, sweepFiles, type RunResult } from '../../scripts/bench/runner.js';
 import { assertionSchema, caseSchema, type Assertion } from '../../scripts/bench/schema.js';
@@ -287,10 +293,29 @@ describe('game-update watcher', () => {
       expect(update.nativeEffects?.added).toEqual(['new_effect']);
       expect(update.nativeEffects?.proposed.startsWith(data)).toBe(true);
       expect(gameUpdateMarkdown(update)).toContain('Game build changed');
-      expect((await watchGame(gameRoot, data)).status).toBe('unchanged');
+      // The hand-kept data was checked against another build, so every run flags it (#70).
+      expect(update.stalePins.map(({ installed }) => installed)).toEqual(['1.0.1', '1.0.1']);
+      expect(gameUpdateMarkdown(update)).toContain('### Checked against another build');
+      const unchanged = await watchGame(gameRoot, data);
+      expect(unchanged.status).toBe('unchanged');
+      expect(gameUpdateMarkdown(unchanged)).toContain('installed 1.0.1');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('flags only hand-kept data pinned to a build other than the installed one', async () => {
+    const pins = [
+      { data: 'adapters', pinned: '1.19.4.1' },
+      { data: 'effects', pinned: '1.19.2.0' },
+    ];
+    expect(await stalePins('1.19.4.1', pins)).toEqual([
+      { data: 'effects', pinned: '1.19.2.0', installed: '1.19.4.1' },
+    ]);
+    // The repository's own pins agree with each other.
+    const own = await pinnedBuilds();
+    expect(new Set(own.map(({ pinned }) => pinned)).size).toBe(1);
+    expect(own[0]?.pinned).toBe(VERIFIED_GAME_RAW_VERSION);
   });
 
   it('generates the native-effects list from the documentation headings', () => {
