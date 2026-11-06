@@ -139,6 +139,17 @@ describe('MCP province geometry artifact', () => {
     expect(oversizedSelector.isError).toBe(true);
     expect(JSON.stringify(oversizedSelector.content)).toContain('32');
 
+    // A selection of ids the map does not define at all is not-found, in both paths (#59).
+    for (const lookupOnly of [false, true]) {
+      const unknown = await client.callTool({
+        name: 'hoi4.map_inspect',
+        arguments: { workspaceId: 'map-geometry', stateIds: [99_999], lookupOnly },
+      });
+      expect(unknown.isError).toBe(true);
+      expect(JSON.stringify(unknown.content)).toContain('MAP_ENTITY_ID_NOT_FOUND');
+      expect(JSON.stringify(unknown.content)).toContain('99999');
+    }
+
     const inspected = resultOf(
       await client.callTool({ name: 'hoi4.map_inspect', arguments: inspectArguments }),
     );

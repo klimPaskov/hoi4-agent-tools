@@ -11,7 +11,52 @@ import { PACKAGE_VERSION } from '../version.js';
 import type { DecisionInspectRequest } from '../schemas/analysis.js';
 import { inspectDecisionAi } from './ai.js';
 import { compareDecisionScenarios, inspectDecisionScenario } from './comparison.js';
-import { decisionSourceInventory, decisionTargetCatalog } from './source-inventory.js';
+import {
+  decisionSourceInventory,
+  decisionTargetCatalog,
+  type DecisionSourceInventory,
+} from './source-inventory.js';
+
+/**
+ * An inventory narrowed to one category (its decisions) or one decision (#59). Any other id is
+ * not-found with close names, never a whole-workspace inventory.
+ */
+function scopedInventory(
+  inventory: DecisionSourceInventory,
+  id: string,
+  complete: boolean,
+): DecisionSourceInventory {
+  const ids = new Set([id]);
+  const isCategory = inventory.categories.some((category) => category.id === id);
+  const decisions = inventory.decisions.filter((source) =>
+    isCategory ? source.category === id : source.id === id,
+  );
+  if (!isCategory && decisions.length === 0) {
+    const suggestions = nearestNames(
+      id,
+      new Set([
+        ...inventory.categories.map((category) => category.id),
+        ...inventory.decisions.map((source) => source.id),
+      ]),
+    );
+    throw new ServiceError(
+      'DECISION_NOT_FOUND',
+      `No decision or decision category ${id.slice(0, 256)} is defined${complete ? '' : ' in the scanned files (the scan is incomplete)'}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+      { id: id.slice(0, 256), suggestions, scanComplete: complete },
+    );
+  }
+  for (const source of decisions) {
+    ids.add(source.category);
+    ids.add(source.id);
+  }
+  return {
+    ...inventory,
+    decisions,
+    categories: inventory.categories.filter((category) => ids.has(category.id)),
+    overrides: inventory.overrides.filter((override) => ids.has(override.id)),
+    unresolvedDefinitions: inventory.unresolvedDefinitions.filter((entry) => ids.has(entry.id)),
+  };
+}
 
 export interface DecisionServiceInput extends DecisionInspectRequest {
   principal?: string;
@@ -46,7 +91,11 @@ export class DecisionAnalyzer {
       );
     if (input.mode !== 'compare' && input.proposedSources !== undefined)
       throw new ServiceError('DECISION_PROPOSAL_MODE', 'Proposed sources require compare mode');
-    const inventory = decisionSourceInventory(before);
+    const fullInventory = decisionSourceInventory(before);
+    const inventory =
+      input.mode === 'inventory' && input.id !== undefined
+        ? scopedInventory(fullInventory, input.id, before.complete)
+        : fullInventory;
     if (
       input.mode === 'inspect' &&
       input.id !== undefined &&
@@ -206,6 +255,13 @@ export class DecisionAnalyzer {
       categories: inventory.categories.length,
       overrides: inventory.overrides.length,
       scenarios: input.mode === 'inventory' ? 0 : input.scenarios.length,
+      // A scoped inventory answers inline: the decisions of that category or the one decision.
+      ...(input.mode === 'inventory' && input.id !== undefined
+        ? {
+            decisionIds: inventory.decisions.slice(0, 64).map(({ id }) => id),
+            decisionIdsTruncated: inventory.decisions.length > 64,
+          }
+        : {}),
       unresolvedDefinitions: inventory.unresolvedDefinitions.length,
       ...(inventory.unresolvedDefinitions.length === 0
         ? {}

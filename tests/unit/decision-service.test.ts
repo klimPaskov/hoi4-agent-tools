@@ -104,6 +104,27 @@ describe('authorized decision analysis service', () => {
       decisionInspectRequestSchema.parse({ workspaceId: 'fixture' }),
     );
     expect(inventory.data).toMatchObject({ mode: 'inventory', decisions: 1, categories: 1 });
+    // An id narrows the inventory to that category or decision, and an unknown id is not-found (#59).
+    for (const id of ['policy', 'fund'])
+      expect(
+        (
+          await analyzer.inspect(
+            decisionInspectRequestSchema.parse({ workspaceId: 'fixture', mode: 'inventory', id }),
+          )
+        ).data,
+      ).toMatchObject({ decisions: 1, categories: 1, decisionIds: ['fund'] });
+    await expect(
+      analyzer.inspect(
+        decisionInspectRequestSchema.parse({
+          workspaceId: 'fixture',
+          mode: 'inventory',
+          id: 'polcy',
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'DECISION_NOT_FOUND',
+      details: { suggestions: expect.arrayContaining(['policy']) },
+    });
     const scenario = {
       id: 'approved_actor',
       actor: 'AAA',
