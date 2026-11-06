@@ -179,6 +179,19 @@ export const corpusFileSchema = z
   .strict();
 
 /** What a stored baseline keeps of each case: no timings, which differ between machines. */
+export const machineSchema = z
+  .object({
+    platform: z.string(),
+    cpu: z.string(),
+    cores: z.number().int().min(1),
+    memoryGb: z.number().int().min(0),
+    node: z.string(),
+    /** SHA-256 of the hoi4-engine binary HOI4_ENGINE names, when one is set. */
+    engineSha256: z.string().optional(),
+  })
+  .strict();
+export type Machine = z.infer<typeof machineSchema>;
+
 export const baselineSchema = z
   .object({
     suite: z.string(),
@@ -196,6 +209,8 @@ export const baselineSchema = z
     corpora: z.record(z.string(), z.string()).default({}),
     /** Warm p95 per case in the local run; absent from the committed CI baseline. */
     latency: z.record(z.string(), z.number()).optional(),
+    /** The machine the local run measured latency on. */
+    machine: machineSchema.optional(),
   })
   .strict();
 export type Baseline = z.infer<typeof baselineSchema>;

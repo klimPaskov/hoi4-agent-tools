@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import os from 'node:os';
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -23,6 +25,7 @@ import {
   type BenchCase,
   type CallCase,
   type Corpus,
+  type Machine,
   type Surface,
   type SweepCase,
 } from './schema.js';
@@ -59,6 +62,7 @@ export interface RunResult {
   platform: string;
   node: string;
   toolsCommit?: string;
+  machine: Machine;
   corpora: CorpusPin[];
   cases: CaseResult[];
 }
@@ -326,6 +330,30 @@ async function runSweep(
   };
 }
 
+/** Latency depends on the machine, so every run names it and the engine binary it used. */
+export async function describeMachine(): Promise<Machine> {
+  const cpus = os.cpus();
+  const engine = process.env.HOI4_ENGINE;
+  let engineSha256: string | undefined;
+  if (engine !== undefined && engine !== '') {
+    try {
+      engineSha256 = createHash('sha256')
+        .update(await readFile(engine))
+        .digest('hex');
+    } catch {
+      engineSha256 = undefined;
+    }
+  }
+  return {
+    platform: `${process.platform}-${process.arch}`,
+    cpu: cpus[0]?.model.trim() ?? 'unknown',
+    cores: Math.max(1, cpus.length),
+    memoryGb: Math.round(os.totalmem() / 1024 ** 3),
+    node: process.version,
+    ...(engineSha256 === undefined ? {} : { engineSha256 }),
+  };
+}
+
 async function gitHead(): Promise<string | undefined> {
   try {
     const { stdout } = await run('git', [
@@ -482,6 +510,7 @@ export async function runSuite(options: RunOptions): Promise<RunResult> {
     platform: `${process.platform}-${process.arch}`,
     node: process.version,
     ...(toolsCommit === undefined ? {} : { toolsCommit }),
+    machine: await describeMachine(),
     corpora: pins,
     cases: results,
   };
