@@ -542,6 +542,8 @@ const fileCheckPatterns = [
   // Definitions that identifier arguments name.
   'common/ideas/**/*.txt',
   'common/technologies/**/*.txt',
+  // Advisors' idea tokens are ideas.
+  'common/characters/**/*.txt',
 ] as const;
 
 /** Index kinds whose ids identifier arguments name. */

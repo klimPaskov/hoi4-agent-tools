@@ -205,30 +205,31 @@ describe('documentation-backed script checks', () => {
         .map(({ status, message, suggestions }) => ({ status, message, suggestions })),
     ).toEqual([
       {
-        status: 'error',
+        status: 'warning',
         message: 'add_timed_idea names idea GER_mefo_bill_1, which no loaded file defines',
         suggestions: ['GER_mefo_bills_1'],
       },
       {
-        status: 'error',
+        status: 'warning',
         message: 'add_ideas names idea no_idea, which no loaded file defines',
         suggestions: [],
       },
       {
-        status: 'error',
+        status: 'warning',
         message: 'country_event names event news.2, which no loaded file defines',
         suggestions: ['news.1'],
       },
     ]);
-    // Real ids pass, computed values are not read, and a partial index cannot rule an id out.
+    // Real ids pass in any case, as the game finds them; computed values are not read, and a
+    // partial index cannot rule an id out.
     expect(
       (
         await check(
-          'add_timed_idea = { idea = GER_mefo_bills_1 days = 10 } add_ideas = $idea$ country_event = news.1',
+          'add_timed_idea = { idea = GER_mefo_bills_1 days = 10 } add_ideas = $idea$ country_event = news.1 add_ideas = ger_MEFO_bills_1 country_event = NEWS.1',
           {},
           identifiers(true),
         )
-      ).findings.filter(({ status }) => status === 'error'),
+      ).findings.filter(({ code }) => code === 'SCRIPT_ARGUMENT_UNKNOWN_ID'),
     ).toEqual([]);
     const partial = await check('add_ideas = no_idea', {}, identifiers(false));
     expect(partial.findings[0]).toMatchObject({

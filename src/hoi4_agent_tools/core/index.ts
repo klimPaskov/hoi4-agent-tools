@@ -748,6 +748,22 @@ export class SymbolIndex {
     for (const assignment of assignments(block)) {
       const key = assignment.key.value;
       if (assignment.value.type !== 'block') {
+        // An advisor's `idea_token` is the idea that `add_ideas` and `has_idea` name.
+        if (
+          key === 'idea_token' &&
+          sourcePath.startsWith('common/characters/') &&
+          ancestors.at(-1) === 'advisor'
+        ) {
+          this.addSymbol({
+            kind: 'idea',
+            id: assignment.value.value,
+            path: file.displayPath,
+            rootKind: file.rootKind,
+            loadOrder: file.loadOrder,
+            location: nodeLocation(document, assignment, assignment.value.value),
+            metadata: { advisor: true },
+          });
+        }
         if (
           sourcePath.startsWith('common/script_constants/') &&
           key !== 'schema' &&
@@ -1077,6 +1093,21 @@ export class SymbolIndex {
             path: file.displayPath,
             location: nodeLocation(document, icon, id),
           });
+      } else if (
+        (key === 'shared_focus' || key === 'joint_focus') &&
+        id !== undefined &&
+        ancestors.length === 0
+      ) {
+        // Shared and joint focuses sit outside any tree; trees add them with `shared_focus = <id>`.
+        this.addSymbol({
+          kind: 'focus',
+          id,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          location: nodeLocation(document, assignment, id),
+          metadata: { shared: key },
+        });
       } else if (key === 'focus' && id !== undefined && ancestors.at(-1) === 'focus_tree') {
         this.addSymbol({
           kind: 'focus',

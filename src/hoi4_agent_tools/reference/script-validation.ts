@@ -409,6 +409,8 @@ export async function validateScript(
       message: diagnostic.message.slice(0, 500),
       suggestions: [],
     });
+  /** Identifier sets in lower case, built once per kind. */
+  const foldedIds = new Map<IdentifierKind, Set<string>>();
   /** Reports identifier arguments of a native command that name nothing the workspace defines. */
   const checkIdentifiers = (entry: AssignmentNode, kind: Kind, scope: string): void => {
     const rule = identifierArguments[entry.key.value];
@@ -422,14 +424,19 @@ export async function validateScript(
           values.push({ node: entry, value: child.value, target: rule.value });
         else if (child.type === 'assignment' && child.value.type === 'scalar') {
           const target = rule.fields?.[child.key.value];
-          if (target !== undefined)
-            values.push({ node: child, value: child.value.value, target });
+          if (target !== undefined) values.push({ node: child, value: child.value.value, target });
         }
       }
     for (const { node, value, target } of values) {
       if (dynamicValue.test(value)) continue;
       const known = identifiers.ids.get(target);
       if (known === undefined || known.has(value)) continue;
+      // The game finds these ids without case: vanilla fires `NSB_news.2` for `nsb_news.2`, and
+      // Kaiserreich adds `spr_carlism1` for `SPR_carlism1`.
+      let lower = foldedIds.get(target);
+      if (lower === undefined)
+        foldedIds.set(target, (lower = new Set([...known].map((id) => id.toLowerCase()))));
+      if (lower.has(value.toLowerCase())) continue;
       const suggestions =
         value.length > 128
           ? []
@@ -445,7 +452,8 @@ export async function validateScript(
               .map(({ candidate }) => candidate);
       report(node, kind, scope, {
         code: 'SCRIPT_ARGUMENT_UNKNOWN_ID',
-        status: identifiers.complete ? 'error' : 'unresolved',
+        // The game loads the file and the command does nothing, as vanilla's own dangling ids show.
+        status: identifiers.complete ? 'warning' : 'unresolved',
         message: `${entry.key.value} names ${target} ${value.slice(0, 256)}, which ${identifiers.complete ? 'no loaded file defines' : 'the indexed files do not define (the index is incomplete)'}`,
         suggestions,
       });

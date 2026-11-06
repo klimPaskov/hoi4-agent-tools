@@ -544,6 +544,58 @@
           "includes": "SWE_centre_range"
         }
       ]
+    },
+    {
+      "id": "vanilla.validation.unknown-idea-argument",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "problem": 12,
+      "title": "A misspelt idea in add_timed_idea is reported with the close name",
+      "evidence": "common/ideas/GER.txt:1313 defines GER_mefo_bills_1; nothing defines GER_mefo_bill_1, so add_timed_idea adds nothing.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "add_timed_idea = { idea = GER_mefo_bill_1 days = 30 }",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "expect": [
+        {
+          "path": "data.parametersChecked",
+          "equals": true
+        },
+        {
+          "path": "data.findings[*].code",
+          "includes": "SCRIPT_ARGUMENT_UNKNOWN_ID"
+        },
+        {
+          "path": "data.findings[*].suggestions[*]",
+          "includes": "GER_mefo_bills_1"
+        }
+      ]
+    },
+    {
+      "id": "vanilla.validation.dangling-event-is-a-warning",
+      "surface": "validation",
+      "corpus": "vanilla",
+      "problem": 12,
+      "title": "A news event no file defines is a warning, as in vanilla files the game loads",
+      "evidence": "common/decisions/formable_nation_decisions.txt:519 fires news_event EST_events.3, which no events file of 1.19.4.1 defines (events/NSB_Estonia.txt has EST_events.1, .2, .101, .102 and .201 but no .3). The file loads, and the command fires nothing.",
+      "tool": "hoi4.script_validate",
+      "arguments": {
+        "source": "news_event = { id = EST_events.3 hours = 6 }",
+        "kind": "effect",
+        "scope": "country"
+      },
+      "expect": [
+        {
+          "path": "data.findings[*].message",
+          "includes": "news_event names event EST_events.3, which no loaded file defines"
+        },
+        {
+          "path": "data.findings[*].status",
+          "excludes": "error"
+        }
+      ]
     }
   ]
 }
