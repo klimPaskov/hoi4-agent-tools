@@ -110,6 +110,10 @@ try {
   const gameRoot = values['watch-game'] ? await findGameRoot() : undefined;
   if (gameRoot !== undefined) {
     gameUpdate = await watchGame(gameRoot, dataRoot);
+    for (const pin of gameUpdate.stalePins)
+      process.stderr.write(
+        `game-update watcher: ${pin.data} was checked against ${pin.pinned}, installed ${pin.installed}\n`,
+      );
     const previous = gameUpdate.previous?.rawVersion;
     if (gameUpdate.status === 'changed' && previous !== undefined) {
       const kept = await readBaseline(baselinePath);

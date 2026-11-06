@@ -8,6 +8,7 @@
   - Its provinces become impassable `enclave` states linked to the nearest passable state, and it rises to the highest ground.
   - Cities and capitals on it are refused (`MAP_FEATURE_IN_IMPASSABLE`).
   - `MAP_REALM_CUT_OFF` and `MAP_REALM_ENCLOSED` warn when impassable land or borders cut a realm apart or box it in.
+- Check the hand-kept game data against the installed build (#70). The probability adapters were re-checked on 1.19.4.1: five of the six documentation files they rest on are byte-identical to 1.19.2.0, and the two AI strategy sections they use say the same, so the target moves to `Operation Postern 1.19.4.1 (f584)` and the adapter version to `hoi4-1.19.4.1.v1`. A result on another build now carries the warning `PROBABILITY_GAME_BUILD_UNVERIFIED` instead of only recording `workspace_observed` in its metadata. The nightly game-update watcher lists the adapters or the native-effects list under "Checked against another build" on every run while their pin differs from the installed build, not only on the night the build changes.
 
 ## 4.9.0 - 2026-11-05
 

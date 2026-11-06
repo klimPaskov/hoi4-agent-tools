@@ -1,6 +1,19 @@
 # Probability adapter evidence
 
-The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.2.0 (checksum d245)**. Adapter behavior is versioned as `hoi4-1.19.2.v1`; results always include that adapter version and game build.
+The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.4.1 (checksum f584)**. Adapter behavior is versioned as `hoi4-1.19.4.1.v1`. Results always include that adapter version and game build. When the installed build differs, results carry the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`, and the nightly game-update watcher lists the adapters under "Checked against another build" on every run until the pin moves.
+
+## Re-check for 1.19.4.1 (2026-11-06)
+
+The adapters were first reviewed on 1.19.2.0 (`hoi4-1.19.2.v1`, sections below). For 1.19.4.1 every reviewed file was hashed again on the installed game:
+
+- **Unchanged:** `common/decisions/_documentation.md`, `common/doctrines/_documentation.md`, `common/script_constants/documentation.md`, `documentation/script_concept_documentation.md` and `documentation/effects_documentation.md` are byte-identical to the hashes below.
+- **Changed:** `common/ai_strategy/_documentation.md` is now `cd19fa144b47345a01632f38c5fb4a5cff7beece962f6640ca74fb83de3dc715`. Its `research_tech` section still forces research for any positive value. Its `research_weight_factor` section still describes a percentage factor on the technology's `ai_will_do`. Both are what `ai_strategy_factor` implements.
+- **Examples:** `events/Yugoslavia.txt:49`, `common/national_focus/austria.txt:122` and `common/doctrines/grand_doctrines/land_grand_doctrines.txt:14` changed but keep their construct at the same line. `events/BBA_Switzerland.txt` has its `random` at line 1205 (was 1197). `common/ai_strategy/ENG.txt` has its `research_weight_factor` strategy at line 3202 (was 3206). The other examples are byte-identical.
+- **Installed build:** `launcher-settings.json` reads `Operation Postern v1.19.4.1.99a5 (f584)`, raw version `1.19.4.1`.
+
+No adapter rule changed, so only the version pin moved.
+
+## Review on 1.19.2.0
 
 This review used the installed game's documentation, vanilla source examples, and an offline Paradox wiki snapshot. Paths below are relative to a Hearts of Iron IV installation or to the offline snapshot. SHA-256 values identify the exact files reviewed on 2026-07-22.
 
@@ -50,7 +63,7 @@ The installed vanilla inventory contained 71 event files with MTTH, 101 with `ai
 
 ## Unsupported constructs
 
-When a game root is configured, adapter execution verifies `launcher-settings.json` against the supported raw version and checksum and fails closed on a missing, unreadable, or different build. Without a configured game root, results identify the adapter target without claiming that an installed build was verified.
+When a game root is configured, adapter execution reads `launcher-settings.json` and compares it with the supported raw version and checksum. A matching build is `workspace_verified`. A different build is still analyzed with the documented rules, recorded as `workspace_observed` and reported with the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`. A missing or unreadable file is `version_unknown`. Without a configured game root, results identify the adapter target without claiming that an installed build was verified.
 
 The analyzer reports, but does not guess or execute:
 
