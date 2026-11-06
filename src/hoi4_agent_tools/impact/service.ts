@@ -7,6 +7,7 @@ import { inspectImpactGraph, type ImpactQuery } from '../core/impact-graph.js';
 import { setInlineFilesScanned } from '../core/operation-result.js';
 import { emptyServiceResult, ServiceError } from '../core/result.js';
 import { buildProposedSourceOverlay } from '../core/source-overlay.js';
+import { nearestNames } from '../reference/suggestions.js';
 import { PACKAGE_VERSION } from '../version.js';
 import type { ImpactInspectRequest } from '../schemas/analysis.js';
 import { inspectImpactScenarioSuites } from './scenario-suites.js';
@@ -49,6 +50,36 @@ export class ImpactAnalyzer {
           'Changed file is not in the authorized source inventory or proposed overlay',
           { file },
         );
+    // A symbol that nothing defines or names would answer an empty graph; say so instead (#59).
+    const indexes = [before.index, ...(overlay === undefined ? [] : [overlay.snapshot.index])];
+    const unknown = input.symbols.filter(
+      ({ kind, id }) =>
+        !indexes.some(
+          (index) =>
+            index.find(kind, id) !== undefined ||
+            index.references.some((reference) => reference.toKind === kind && reference.to === id),
+        ),
+    );
+    if (unknown.length > 0) {
+      const symbols = unknown.map(({ kind, id }) => ({
+        kind,
+        id: id.slice(0, 256),
+        suggestions: nearestNames(
+          id,
+          new Set(before.index.findAll(kind).map((symbol) => symbol.id)),
+        ),
+      }));
+      throw new ServiceError(
+        'IMPACT_SYMBOL_NOT_FOUND',
+        `Nothing defines or uses ${symbols
+          .map(
+            ({ kind, id, suggestions }) =>
+              `${kind} ${id}${suggestions.length === 0 ? '' : ` (did you mean ${suggestions.join(', ')}?)`}`,
+          )
+          .join('; ')}${before.complete ? '' : ' in the scanned files (the scan is incomplete)'}`,
+        { symbols, scanComplete: before.complete },
+      );
+    }
     const query: ImpactQuery = {
       symbols: input.symbols,
       changedFiles:
