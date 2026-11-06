@@ -68,6 +68,7 @@ describe('MCP discovery', () => {
       'hoi4.idea_inspect',
       'hoi4.system_inspect',
       'hoi4.unit_inspect',
+      'hoi4.asset_inspect',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.impact_inspect',
@@ -121,6 +122,7 @@ describe('MCP discovery', () => {
       'hoi4.idea_inspect',
       'hoi4.system_inspect',
       'hoi4.unit_inspect',
+      'hoi4.asset_inspect',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,

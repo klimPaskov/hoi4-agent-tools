@@ -26,8 +26,10 @@ import { modIndex } from './mod-index.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
 import { inspectIdeas } from '../ideas/inspect.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
-import { inspectSystem, inspectUnits } from '../system/inspect.js';
+import { inspectAssets, inspectSystem, inspectUnits } from '../system/inspect.js';
 import {
+  assetInspectDataSchema,
+  assetInspectRequestSchema,
   systemInspectDataSchema,
   systemInspectRequestSchema,
   unitInspectDataSchema,
@@ -89,7 +91,15 @@ const schemas = {
   'hoi4.idea_inspect': ideaInspectRequestSchema,
   'hoi4.system_inspect': systemInspectRequestSchema,
   'hoi4.unit_inspect': unitInspectRequestSchema,
+  'hoi4.asset_inspect': assetInspectRequestSchema,
 } as const;
+/** Asset findings players would not notice: uneven frames, sprites the game fills itself, hidden pictures and flags one pixel off. */
+const ASSET_INFORMATION = new Set([
+  'ASSET_FRAMES_MISMATCH',
+  'ASSET_TEXTURE_NONE',
+  'ASSET_TEXTURE_EMPTY',
+  'ASSET_FLAG_SIZE_CLOSE',
+]);
 export type ReferenceToolName = keyof typeof schemas;
 export function isReferenceTool(name: string): name is ReferenceToolName {
   return Object.hasOwn(schemas, name);
@@ -169,25 +179,31 @@ export class ReferenceToolService {
                           systemInspectRequestSchema.parse(parsed),
                           signal,
                         )
-                      : name === 'hoi4.unit_inspect'
-                        ? await inspectUnits(
+                      : name === 'hoi4.asset_inspect'
+                        ? await inspectAssets(
                             workspace,
-                            unitInspectRequestSchema.parse(parsed),
+                            assetInspectRequestSchema.parse(parsed),
                             signal,
                           )
-                        : name === 'hoi4.localisation_inspect'
-                          ? await inspectLocalisation(
+                        : name === 'hoi4.unit_inspect'
+                          ? await inspectUnits(
                               workspace,
-                              localisationInspectRequestSchema.parse(parsed),
+                              unitInspectRequestSchema.parse(parsed),
                               signal,
                             )
-                          : await sourceLookup(
-                              this.engine,
-                              workspaceId,
-                              sourceLookupRequestSchema.parse(parsed),
-                              context.principal,
-                              signal,
-                            );
+                          : name === 'hoi4.localisation_inspect'
+                            ? await inspectLocalisation(
+                                workspace,
+                                localisationInspectRequestSchema.parse(parsed),
+                                signal,
+                              )
+                            : await sourceLookup(
+                                this.engine,
+                                workspaceId,
+                                sourceLookupRequestSchema.parse(parsed),
+                                context.principal,
+                                signal,
+                              );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
@@ -290,6 +306,30 @@ export class ReferenceToolService {
         checks: [
           {
             id: 'unit-checks',
+            passed: warnings === 0,
+            message:
+              warnings === 0
+                ? 'No problems players would see'
+                : `${warnings} problems players would see`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.asset_inspect') {
+      const inspected = assetInspectDataSchema.parse(data);
+      result.code = inspected.audit === undefined ? 'ASSET_INSPECTED' : 'ASSET_AUDITED';
+      const warnings =
+        inspected.audit === undefined
+          ? (inspected.inspection?.problems ?? []).filter(({ severity }) => severity === 'warning')
+              .length
+          : Object.entries(inspected.audit.counts)
+              .filter(([code]) => !ASSET_INFORMATION.has(code))
+              .reduce((sum, [, count]) => sum + count, 0);
+      result.validation = {
+        passed: warnings === 0,
+        checks: [
+          {
+            id: 'asset-checks',
             passed: warnings === 0,
             message:
               warnings === 0

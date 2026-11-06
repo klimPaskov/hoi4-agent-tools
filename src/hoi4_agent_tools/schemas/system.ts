@@ -147,3 +147,36 @@ export const unitInspectDataSchema = z
     durationMs: z.number().int().min(0),
   })
   .strict();
+
+/** The kinds `hoi4.asset_inspect` reads, answered by `hoi4-engine assets`. */
+export const assetKinds = ['sprite', 'sound', 'flag'] as const;
+
+/** `hoi4.asset_inspect`, answered by `hoi4-engine assets`. */
+export const assetInspectRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    /** sprite: a sprite name. sound: a sound, sound effect, category or music name. flag: TAG or TAG_ideology. */
+    kind: z.enum(assetKinds),
+    /** The asset to inspect. Leave it out with audit. */
+    id: z.string().min(1).max(256).optional(),
+    /** Check every asset of this kind the mod defines instead of one. */
+    audit: z.boolean().default(false),
+    /** One: mentions listed. Audit: examples kept per problem code. */
+    limit: z.number().int().min(1).max(50).default(5),
+  })
+  .strict()
+  .refine((input) => input.audit || input.id !== undefined, {
+    message: 'pass an id, or audit: true',
+    path: ['id'],
+  });
+
+export const assetEngineInspectionSchema = engineInspectionShape(assetKinds);
+export const assetEngineAuditSchema = engineAuditShape(assetKinds);
+
+export const assetInspectDataSchema = z
+  .object({
+    inspection: assetEngineInspectionSchema.optional(),
+    audit: assetEngineAuditSchema.optional(),
+    durationMs: z.number().int().min(0),
+  })
+  .strict();
