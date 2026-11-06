@@ -188,9 +188,10 @@ describe('MCP error privacy', () => {
       diagnostics: [
         { code: 'MCP_RESPONSE_TRUNCATED', details: { maxBytes: MAX_TOOL_RESULT_BYTES } },
       ],
-      blockers: [],
       data: {},
     });
+    // An ok result has no blockers, and an empty list is left out.
+    expect(bounded.structuredContent).not.toHaveProperty('blockers');
     expect(Buffer.byteLength(JSON.stringify(bounded), 'utf8')).toBeLessThanOrEqual(
       MAX_TOOL_RESULT_BYTES,
     );

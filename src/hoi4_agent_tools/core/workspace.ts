@@ -279,20 +279,29 @@ function workspaceAliases(workspace: ResolvedWorkspace): Set<string> {
 }
 
 const WORKSPACE_CONTEXT_FIX =
-  'Pass workspaceId with one of the listed IDs or the mod folder name, start the client in the mod folder, or set defaultWorkspace in the server configuration';
+  'Pass workspaceId with a mod folder name from modFolders, start the client in the mod folder, or set defaultWorkspace in the server configuration';
 const WORKSPACE_CANDIDATE_LIMIT = 32;
 
-/** The mods a caller could name, bounded and without host paths. */
+/**
+ * The mods a caller could name, bounded and without host paths: their folder names, which
+ * `workspaceId` accepts, and one line that says what to pass.
+ */
 function workspaceCandidates(workspaces: readonly ResolvedWorkspace[]): {
-  workspaceIds: string[];
-  workspaceNames: string[];
+  modFolders: string[];
   workspaceCount: number;
+  fix: string;
 } {
-  const listed = workspaces.slice(0, WORKSPACE_CANDIDATE_LIMIT);
+  const modFolders = workspaces
+    .slice(0, WORKSPACE_CANDIDATE_LIMIT)
+    .map(({ modRoot }) => path.basename(modRoot));
+  const example = modFolders[0];
   return {
-    workspaceIds: listed.map(({ id }) => id),
-    workspaceNames: listed.map(({ name }) => name),
+    modFolders,
     workspaceCount: workspaces.length,
+    fix:
+      example === undefined
+        ? 'Add a mod folder to modRoots in the server configuration'
+        : `Pass "workspaceId":${JSON.stringify(example)} (or another folder in modFolders)`,
   };
 }
 
@@ -519,6 +528,7 @@ export class WorkspaceResolver {
       throw new ServiceError(
         'WORKSPACE_CONTEXT_NOT_FOUND',
         'No writable mod workspace is configured for the MCP server',
+        workspaceCandidates(workspaces),
       );
     }
 
@@ -629,10 +639,13 @@ export class WorkspaceResolver {
     if (this.#byId.has(workspaceId)) return workspaceId;
 
     const alias = requestedWorkspaceAlias(workspaceId);
-    const matches = this.list(principal).filter(
-      (workspace) =>
-        workspace.registration.kind === 'mod' && workspaceAliases(workspace).has(alias),
-    );
+    // A folder name as the file manager shows it ("My Mod") names the same mod as its slug.
+    const slug = workspaceAliasSlug(alias);
+    const matches = this.list(principal).filter((workspace) => {
+      if (workspace.registration.kind !== 'mod') return false;
+      const aliases = workspaceAliases(workspace);
+      return aliases.has(alias) || (slug !== '' && aliases.has(slug));
+    });
     if (matches.length === 1) return matches[0]!.id;
     if (matches.length > 1) {
       throw new ServiceError(

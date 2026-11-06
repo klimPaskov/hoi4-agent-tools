@@ -8,9 +8,9 @@ import {
   referenceReadRequestSchema,
   referenceSearchRequestSchema,
   sourceLookupRequestSchema,
-  referenceContextDataSchema,
+  referenceContextToolDataSchema,
   referenceReadDataSchema,
-  referenceSearchDataSchema,
+  referenceSearchToolDataSchema,
   sourceLookupDataSchema,
 } from '../../schemas/reference.js';
 import type { ToolDefinition } from '../server/task-tool-definition.js';
@@ -51,7 +51,7 @@ export const referenceTools = [
     description:
       'Find the right modding rule in the offline wiki and installed game docs using ordinary words or script names. Each hit includes its file, lines, revision and answering line. Example: {"query":"add_timed_idea"}. Returns 6 hits by default (up to 12); read one with hoi4.reference_read using its id and revision.',
     inputSchema: referenceSearchRequestSchema,
-    outputSchema: strictOperationResultSchema(referenceSearchDataSchema),
+    outputSchema: strictOperationResultSchema(referenceSearchToolDataSchema),
     annotations: readOnly,
   },
   {
@@ -69,7 +69,7 @@ export const referenceTools = [
     description:
       'Find documentation for the content you are building: events, decisions, ideas, focuses, technology, GUI, maps, localisation or AI. Example: {"surface":"event","question":"fire an event after a delay"}. Returns up to 16 short sections; read more with hoi4.reference_read.',
     inputSchema: referenceContextRequestSchema,
-    outputSchema: strictOperationResultSchema(referenceContextDataSchema),
+    outputSchema: strictOperationResultSchema(referenceContextToolDataSchema),
     annotations: readOnly,
   },
   {

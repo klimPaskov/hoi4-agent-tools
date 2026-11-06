@@ -177,15 +177,16 @@ describe('MCP coding-agent coexistence', () => {
     });
     const result = inspected.structuredContent as {
       status: string;
-      changedFiles: string[];
-      filesScanned: string[];
+      changedFiles?: string[];
+      filesScanned?: string[];
     };
     expect(result.status).toBe('ok');
-    expect(result.changedFiles).toEqual([]);
+    // A result leaves out a list that is empty.
+    expect(result.changedFiles).toBeUndefined();
     // Domain work may scan in an isolated worker, beyond this process's scanner spy.
     // The returned source inventory is the observable proof that the explicit call scanned it.
     expect(
-      result.filesScanned.some((source) =>
+      (result.filesScanned ?? []).some((source) =>
         source.replaceAll('\\', '/').endsWith('interface/coexistence.gui'),
       ),
     ).toBe(true);

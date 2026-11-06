@@ -162,11 +162,9 @@ describe('MCP client roots outside every mod', () => {
         expect.objectContaining({
           code: 'WORKSPACE_CONTEXT_NOT_FOUND',
           details: expect.objectContaining({
-            workspaceIds: [
-              expect.stringMatching(/^mod_ireland_total_overhaul_/u),
-              expect.stringMatching(/^mod_slop_redux_/u),
-            ],
+            modFolders: ['ireland_total_overhaul', 'slop_redux'],
             workspaceCount: 2,
+            fix: 'Pass "workspaceId":"ireland_total_overhaul" (or another folder in modFolders)',
           }),
         }),
       ],
