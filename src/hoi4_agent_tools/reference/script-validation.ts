@@ -34,6 +34,49 @@ const MAX_FILE_COMMANDS = 50_000;
 const UNKNOWN_SCOPE = 'unknown';
 
 /** A scanned mod file checked in file mode, with the mod's scripted helper names. */
+/** Kinds of definitions an identifier argument can name. */
+export type IdentifierKind = 'idea' | 'event' | 'decision' | 'focus' | 'technology';
+
+/** Definitions of the workspace and its layers, for identifier arguments. */
+export interface IdentifierContext {
+  ids: ReadonlyMap<IdentifierKind, ReadonlySet<string>>;
+  /** Every source file was indexed, so an id missing from `ids` is not defined. */
+  complete: boolean;
+}
+
+/**
+ * Commands whose arguments name a definition: the bare value (`add_ideas = X`, also a list
+ * `add_ideas = { X Y }`) or named fields of the argument block. From the effects and triggers
+ * documentation of 1.19.4.1.
+ */
+const identifierArguments: Readonly<
+  Record<string, { value?: IdentifierKind; fields?: Readonly<Record<string, IdentifierKind>> }>
+> = {
+  add_ideas: { value: 'idea' },
+  remove_ideas: { value: 'idea' },
+  has_idea: { value: 'idea' },
+  add_timed_idea: { fields: { idea: 'idea' } },
+  modify_timed_idea: { fields: { idea: 'idea' } },
+  activate_decision: { value: 'decision' },
+  activate_targeted_decision: { fields: { decision: 'decision' } },
+  has_completed_focus: { value: 'focus' },
+  complete_national_focus: { value: 'focus' },
+  uncomplete_national_focus: { value: 'focus' },
+  has_tech: { value: 'technology' },
+  country_event: { value: 'event', fields: { id: 'event' } },
+  news_event: { value: 'event', fields: { id: 'event' } },
+  state_event: { value: 'event', fields: { id: 'event' } },
+  unit_leader_event: { value: 'event', fields: { id: 'event' } },
+  operative_leader_event: { value: 'event', fields: { id: 'event' } },
+};
+
+export const identifierArgumentCommands: ReadonlySet<string> = new Set(
+  Object.keys(identifierArguments),
+);
+
+/** Values that are computed or substituted, so their target cannot be read from source. */
+const dynamicValue = /[[\]$@:]|^(?:yes|no)$/u;
+
 export interface ScriptFileContext {
   path: string;
   relativePath: string;
@@ -256,6 +299,7 @@ export async function validateScript(
   input: Input,
   signal?: AbortSignal,
   file?: ScriptFileContext,
+  identifiers?: IdentifierContext,
 ): Promise<Output> {
   if (file === undefined && Buffer.byteLength(input.source ?? '', 'utf8') > 64_000)
     throw new ServiceError('SCRIPT_SOURCE_TOO_LARGE', 'Snippet exceeds 64000 UTF-8 bytes');
@@ -365,6 +409,56 @@ export async function validateScript(
       message: diagnostic.message.slice(0, 500),
       suggestions: [],
     });
+  /** Identifier sets in lower case, built once per kind. */
+  const foldedIds = new Map<IdentifierKind, Set<string>>();
+  /** Reports identifier arguments of a native command that name nothing the workspace defines. */
+  const checkIdentifiers = (entry: AssignmentNode, kind: Kind, scope: string): void => {
+    const rule = identifierArguments[entry.key.value];
+    if (rule === undefined || identifiers === undefined) return;
+    const values: Array<{ node: AssignmentNode; value: string; target: IdentifierKind }> = [];
+    if (entry.value.type === 'scalar' && rule.value !== undefined)
+      values.push({ node: entry, value: entry.value.value, target: rule.value });
+    else if (entry.value.type === 'block')
+      for (const child of entry.value.entries) {
+        if (child.type === 'scalar' && rule.value !== undefined)
+          values.push({ node: entry, value: child.value, target: rule.value });
+        else if (child.type === 'assignment' && child.value.type === 'scalar') {
+          const target = rule.fields?.[child.key.value];
+          if (target !== undefined) values.push({ node: child, value: child.value.value, target });
+        }
+      }
+    for (const { node, value, target } of values) {
+      if (dynamicValue.test(value)) continue;
+      const known = identifiers.ids.get(target);
+      if (known === undefined || known.has(value)) continue;
+      // The game finds these ids without case: vanilla fires `NSB_news.2` for `nsb_news.2`, and
+      // Kaiserreich adds `spr_carlism1` for `SPR_carlism1`.
+      let lower = foldedIds.get(target);
+      if (lower === undefined)
+        foldedIds.set(target, (lower = new Set([...known].map((id) => id.toLowerCase()))));
+      if (lower.has(value.toLowerCase())) continue;
+      const suggestions =
+        value.length > 128
+          ? []
+          : [...known]
+              .filter((candidate) => Math.abs(candidate.length - value.length) <= 3)
+              .filter(() => suggestionBudget-- > 0)
+              .map((candidate) => ({ candidate, distance: editDistance(value, candidate) }))
+              .filter(({ distance }) => distance <= 3)
+              .sort(
+                (a, b) => a.distance - b.distance || a.candidate.localeCompare(b.candidate, 'en'),
+              )
+              .slice(0, 3)
+              .map(({ candidate }) => candidate);
+      report(node, kind, scope, {
+        code: 'SCRIPT_ARGUMENT_UNKNOWN_ID',
+        // The game loads the file and the command does nothing, as vanilla's own dangling ids show.
+        status: identifiers.complete ? 'warning' : 'unresolved',
+        message: `${entry.key.value} names ${target} ${value.slice(0, 256)}, which ${identifiers.complete ? 'no loaded file defines' : 'the indexed files do not define (the index is incomplete)'}`,
+        suggestions,
+      });
+    }
+  };
   const walk = (block: BlockNode, kind: Kind, scope: string, previous?: string): void => {
     for (const entry of block.entries) {
       signal?.throwIfAborted();
@@ -544,6 +638,7 @@ export async function validateScript(
               ? `Supported scopes: ${signature.scopes.join(', ')}`
               : 'Command kind and declared scope match the selected documentation',
         });
+        checkIdentifiers(entry, kind, scope);
       }
       const iterator =
         /^(?:every|random|any|all)_(?:(?:owned|controlled|neighbor)_)?(state|country)$/u.exec(name);
@@ -684,8 +779,9 @@ export async function validateScript(
       ...(playerTextChecked ? (['player_text'] as const) : []),
       ...(eventPopups === undefined ? [] : (['event_popups'] as const)),
       ...(knownMistakes === undefined ? [] : (['known_mistakes'] as const)),
+      ...(identifiers === undefined ? [] : (['identifier_arguments'] as const)),
     ],
-    parametersChecked: false,
+    parametersChecked: identifiers !== undefined,
     documentation: {
       source: input.documentation,
       revision: hashCanonical([...sources].sort()),
