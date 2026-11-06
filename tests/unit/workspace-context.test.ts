@@ -37,8 +37,6 @@ describe('implicit workspace resolution outside every mod', () => {
   it('names the candidate workspaces and the fixes when client roots match no mod', async () => {
     const { outside, configuration } = await mods();
     const resolver = await WorkspaceResolver.create(configuration);
-    const ids = resolver.list().map(({ id }) => id);
-
     const failure = await resolver
       .resolveClientWorkspaceId([outside])
       .then(() => undefined)
@@ -47,11 +45,19 @@ describe('implicit workspace resolution outside every mod', () => {
     if (failure === undefined) return;
     expect(failure).toMatchObject({
       code: 'WORKSPACE_CONTEXT_NOT_FOUND',
-      details: { workspaceIds: ids, workspaceNames: ['alpha', 'beta'], workspaceCount: 2 },
+      // Folder names an agent can pass back, and one line that says how; no opaque ids.
+      details: {
+        modFolders: ['alpha', 'beta'],
+        workspaceCount: 2,
+        fix: 'Pass "workspaceId":"alpha" (or another folder in modFolders)',
+      },
     });
+    expect(failure.details).not.toHaveProperty('workspaceIds');
     expect(failure.message).toContain('Pass workspaceId');
     expect(failure.message).toContain('defaultWorkspace');
     expect(JSON.stringify(failure.details)).not.toContain(outside);
+    // The folder name it lists resolves, in any letter case.
+    expect(resolver.resolveWorkspaceId('ALPHA')).toBe(resolver.get('alpha').id);
   });
 
   it('uses the configured default workspace for client roots and the working directory', async () => {
@@ -135,7 +141,7 @@ describe('implicit workspace resolution outside every mod', () => {
     );
     await expect(resolver.resolveClientWorkspaceId([outside], 'none')).rejects.toMatchObject({
       code: 'WORKSPACE_CONTEXT_NOT_FOUND',
-      details: { workspaceIds: [], workspaceCount: 0 },
+      details: { modFolders: [], workspaceCount: 0 },
     });
   });
 });

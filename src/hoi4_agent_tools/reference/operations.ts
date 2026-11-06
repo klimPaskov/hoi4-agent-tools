@@ -143,7 +143,7 @@ export class ReferenceToolService {
     const workspace = this.engine.resolver.get(workspaceId, context.principal);
     const data =
       name === 'hoi4.reference_search'
-        ? await this.references.search(
+        ? await this.references.searchHits(
             workspace,
             referenceSearchRequestSchema.parse(parsed),
             signal,
@@ -151,7 +151,7 @@ export class ReferenceToolService {
         : name === 'hoi4.reference_read'
           ? await this.references.read(workspace, referenceReadRequestSchema.parse(parsed), signal)
           : name === 'hoi4.reference_context'
-            ? await this.references.context(
+            ? await this.references.contextHits(
                 workspace,
                 referenceContextRequestSchema.parse(parsed),
                 signal,
@@ -449,7 +449,7 @@ export class ReferenceToolService {
       )
         result.diagnostics.pop();
     }
-    return toolResult(result);
+    return toolResult(result, { compact: true });
   }
 
   readonly #eventPopups = new Map<

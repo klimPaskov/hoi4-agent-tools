@@ -66,23 +66,73 @@ const compactPublicOperationResultSchema = z
     status: z.enum(['ok', 'blocked', 'error']),
     code: z.string(),
     workspaceId: z.string(),
-    filesScanned: z.array(z.unknown()),
-    proposedFiles: z.array(z.unknown()),
-    changedFiles: z.array(z.unknown()),
-    diagnostics: z.array(z.unknown()).max(MAX_INLINE_DIAGNOSTICS),
-    artifacts: z.array(z.unknown()).max(MAX_INLINE_ARTIFACT_LINKS),
+    filesScanned: z.array(z.unknown()).optional(),
+    proposedFiles: z.array(z.unknown()).optional(),
+    changedFiles: z.array(z.unknown()).optional(),
+    diagnostics: z.array(z.unknown()).max(MAX_INLINE_DIAGNOSTICS).optional(),
+    artifacts: z.array(z.unknown()).max(MAX_INLINE_ARTIFACT_LINKS).optional(),
     validation: z.unknown(),
-    blockers: z.array(z.unknown()),
+    blockers: z.array(z.unknown()).optional(),
     data: z.object({}).catchall(z.unknown()),
   })
   .strict();
+
+/**
+ * Collections a compact tool result leaves out when they are empty. The reference tools answer
+ * most often, so their answers do not repeat six empty lists; an absent list is empty.
+ */
+const OMITTED_WHEN_EMPTY = [
+  'filesScanned',
+  'proposedFiles',
+  'changedFiles',
+  'diagnostics',
+  'artifacts',
+  'blockers',
+] as const;
+
+/** The published envelope: the same fields, with empty collections and empty checks optional. */
+const publicOperationResultBaseSchema = operationResultBaseSchema
+  .partial({
+    filesScanned: true,
+    proposedFiles: true,
+    changedFiles: true,
+    diagnostics: true,
+    artifacts: true,
+    blockers: true,
+  })
+  .extend({ validation: validationSummarySchema.partial({ checks: true }) })
+  .strict();
+
+/** Drop the empty collections and empty validation checks from a structured result. */
+export function withoutEmptyCollections(
+  structured: Record<string, unknown>,
+): Record<string, unknown> {
+  const omitted = new Set<string>(OMITTED_WHEN_EMPTY);
+  const result: Record<string, unknown> = Object.fromEntries(
+    Object.entries(structured).filter(
+      ([key, value]) => !(omitted.has(key) && Array.isArray(value) && value.length === 0),
+    ),
+  );
+  const validation = result.validation;
+  if (
+    validation !== null &&
+    typeof validation === 'object' &&
+    'checks' in validation &&
+    Array.isArray(validation.checks) &&
+    validation.checks.length === 0
+  ) {
+    const { checks: _checks, ...rest } = validation as Record<string, unknown>;
+    result.validation = rest;
+  }
+  return result;
+}
 
 /**
  * Advertise one compact operation envelope while retaining exact per-tool runtime validation.
  * The generic operation-result schema remains available for stored envelopes.
  */
 export function strictOperationResultSchema(successDataSchema: z.ZodType) {
-  const exactSchema = operationResultBaseSchema
+  const exactSchema = publicOperationResultBaseSchema
     .extend({ data: z.union([emptyToolDataSchema, successDataSchema]) })
     .strict();
   return compactPublicOperationResultSchema.superRefine((value, context) => {
@@ -480,8 +530,13 @@ function compactDescriptions(unfiltered: ServiceResult<unknown>): ServiceResult<
   };
 }
 
-function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): ToolResultOutput {
-  const structuredContent = operationResultSchema.parse(selected) as Record<string, unknown>;
+function buildToolResult(
+  selected: ServiceResult<unknown>,
+  imageCount = 0,
+  compact = false,
+): ToolResultOutput {
+  const parsed = operationResultSchema.parse(selected);
+  const structuredContent = compact ? withoutEmptyCollections(parsed) : parsed;
   const shown = selected.artifacts
     .map((artifact, order) => ({ artifact, order }))
     .sort(
@@ -540,7 +595,11 @@ function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): Tool
 
 export function toolResult(
   result: ServiceResult<unknown>,
-  options: { images?: readonly ToolResultImage[] } = {},
+  options: {
+    images?: readonly ToolResultImage[];
+    /** Leave out empty collections; the reference tools answer this way (maintainer decision R-4). */
+    compact?: boolean;
+  } = {},
 ): ToolResultOutput {
   let imageCharacters = 0;
   const images = (options.images ?? []).filter((image) => {
@@ -554,10 +613,10 @@ export function toolResult(
     : MAX_TOOL_RESULT_BYTES + 1;
   const selected =
     estimatedBytes > MAX_TOOL_RESULT_BYTES ? boundedResult(compact, estimatedBytes) : compact;
-  let output = buildToolResult(selected, images.length);
+  let output = buildToolResult(selected, images.length, options.compact);
   const wireBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (wireBytes > MAX_TOOL_RESULT_BYTES) {
-    output = buildToolResult(boundedResult(compact, wireBytes), images.length);
+    output = buildToolResult(boundedResult(compact, wireBytes), images.length, options.compact);
   }
   const finalBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (finalBytes > MAX_TOOL_RESULT_BYTES) {
