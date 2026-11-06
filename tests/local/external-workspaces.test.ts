@@ -516,9 +516,9 @@ local('local installed-game and external-mod integration', () => {
         path: 'common/doctrines/grand_doctrines/land_grand_doctrines.txt',
         line: 14,
       },
-      { adapter: 'direct_random', path: 'events/BBA_Switzerland.txt', line: 1197 },
+      { adapter: 'direct_random', path: 'events/BBA_Switzerland.txt', line: 1205 },
       { adapter: 'random_list', path: 'events/AAT_Sweden.txt', line: 1760 },
-      { adapter: 'ai_strategy_factor', path: 'common/ai_strategy/ENG.txt', line: 3206 },
+      { adapter: 'ai_strategy_factor', path: 'common/ai_strategy/ENG.txt', line: 3202 },
     ];
 
     for (const example of examples) {
@@ -539,11 +539,11 @@ local('local installed-game and external-mod integration', () => {
         `${example.adapter}: ${example.path}`,
       ).toBeGreaterThan(0);
       expect(inspected.surface?.sourceHash).toMatch(/^[a-f0-9]{64}$/u);
-      expect(inspected.surface?.adapter.gameVersion).toContain('1.19.2.0');
+      expect(inspected.surface?.adapter.gameVersion).toContain('1.19.4.1');
       expect(inspected.surface?.gameVersionVerification).toMatchObject({
         status: 'workspace_verified',
-        observedRawVersion: '1.19.2.0',
-        observedChecksum: 'd245',
+        observedRawVersion: '1.19.4.1',
+        observedChecksum: 'f584',
       });
     }
   }, 600_000);

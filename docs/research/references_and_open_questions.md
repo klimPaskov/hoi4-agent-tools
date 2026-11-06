@@ -1,6 +1,6 @@
 # References and Open Questions
 
-Status: completed for adapter version `hoi4-1.19.2.v1`. The resolved selection, timing, version, evidence, and unsupported boundaries are recorded in [probability-adapter-evidence.md](probability-adapter-evidence.md) and enforced by adapter metadata and tests. Items below remain the re-verification checklist for a future adapter or HOI4 version; they are not open release blockers for 2.3.0.
+Status: completed for adapter version `hoi4-1.19.2.v1` and re-verified as `hoi4-1.19.4.1.v1`. The resolved selection, timing, version, evidence, and unsupported boundaries are recorded in [probability-adapter-evidence.md](probability-adapter-evidence.md) and enforced by adapter metadata and tests. Items below remain the re-verification checklist for a future adapter or HOI4 version; they are not open release blockers for 2.3.0.
 
 ## Required local research
 
