@@ -3,6 +3,10 @@ import { runEngineCommand } from '../core/engine-client.js';
 import { ServiceError } from '../core/result.js';
 import type { ResolvedWorkspace } from '../core/workspace.js';
 import {
+  assetEngineAuditSchema,
+  assetEngineInspectionSchema,
+  type assetInspectDataSchema,
+  type assetInspectRequestSchema,
   systemEngineAuditSchema,
   systemEngineInspectionSchema,
   unitEngineAuditSchema,
@@ -29,7 +33,7 @@ interface Request {
  * `ENGINE_UNAVAILABLE`, with no TypeScript fallback.
  */
 async function inspectDefinitions<I extends z.ZodType, A extends z.ZodType>(
-  command: 'system' | 'units',
+  command: 'system' | 'units' | 'assets',
   schemas: { inspection: I; audit: A },
   notFound: string,
   workspace: ResolvedWorkspace,
@@ -99,6 +103,22 @@ export async function inspectUnits(
     'units',
     { inspection: unitEngineInspectionSchema, audit: unitEngineAuditSchema },
     'UNIT_DEFINITION_NOT_FOUND',
+    workspace,
+    input,
+    signal,
+  );
+}
+
+/** `hoi4.asset_inspect` on the shared Rust engine (`hoi4-engine assets`). */
+export async function inspectAssets(
+  workspace: ResolvedWorkspace,
+  input: z.infer<typeof assetInspectRequestSchema>,
+  signal?: AbortSignal,
+): Promise<z.infer<typeof assetInspectDataSchema>> {
+  return inspectDefinitions(
+    'assets',
+    { inspection: assetEngineInspectionSchema, audit: assetEngineAuditSchema },
+    'ASSET_NOT_FOUND',
     workspace,
     input,
     signal,

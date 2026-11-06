@@ -24,6 +24,7 @@ export const SURFACES = [
   'idea',
   'system',
   'unit',
+  'asset',
   'impact',
   'render',
   'rewrite',
