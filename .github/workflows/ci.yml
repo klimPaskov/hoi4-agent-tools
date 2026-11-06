@@ -38,6 +38,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
+      # Tools on the shared Rust engine (hoi4.mod_index and the inspect tools) need a
+      # hoi4-engine binary; tests/helpers/engine-binary.ts finds this build, and the real-engine
+      # tests that skip without one run too. A release build keeps those tests fast.
+      - name: Build hoi4-engine for the tests
+        working-directory: engine
+        run: |
+          rustup toolchain install
+          cargo build --release --locked -p hoi4-engine-cli
       - run: npm run check
       # Coverage runs the whole suite a second time (about 40 minutes), so only main measures it.
       - if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.node == 24

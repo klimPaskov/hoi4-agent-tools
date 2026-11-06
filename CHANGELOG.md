@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Run `hoi4.mod_index` on the shared Rust engine (`hoi4-engine mod-index`, ADR 0080; M-8 step 1). The engine's new shared symbol index (`symbol_index`) reproduces the TypeScript index's kinds, definition rules and `overridden` rule, so the answers do not change: on vanilla 1.19.4.2, Chaos Redux, ZIN, Ireland Total Overhaul, Atlantis, Kaiserreich and Old World Blues, for the mod layer and every layer, each (kind, id, overridden) record, file count, completeness flag, folder total and namespace matches the TypeScript scan, and so do 203 `next_id` answers (`scripts/mod-index-parity.ts`). A first overview of Chaos Redux takes 5 s instead of 23 s, and a repeated one 1 s instead of 5 s. Without a usable engine the tool answers `ENGINE_UNAVAILABLE`; nothing is counted in TypeScript instead. `hoi4-engine symbol-index` prints every record of the index. The tests now need a cargo build of the engine, which CI and the release workflow build first. The benchmark gains warm `mod_index` cases for every corpus and an every-layer case for the game.
 - Record the 2026-11-01 head-to-head with cpntodd/HOI4-MCP in `docs/research/hoi4-mcp-head-to-head-2026-11-01.md` (part of #111, M-7). The record says that it predates the accuracy fixes and that its seeded `owner = ROOT` control was wrong ground truth, because `owner` is not a trigger.
 
 ## 4.10.0 - 2026-11-06

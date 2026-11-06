@@ -55,3 +55,7 @@ The reusable workflow `engine-binaries.yml` builds the release binary on each pl
 The client runs a bundled binary only when its SHA-256 matches the manifest, hashing each binary once per process, and reports `binary_checksum_mismatch` otherwise. `HOI4_ENGINE` is the user's own binary and is not checked.
 
 The container image keeps the Git build context, so its provenance is unchanged; the bundle arrives as the named build context `engine-bin`, and each architecture copies only its own binary and runs it once during the build. A plain `docker build` has an empty `engine-bin` stage and builds without the engine.
+
+## Amendment (2026-11-06): the first route moves
+
+Step 3 starts with `hoi4.mod_index`, which now runs on `hoi4-engine mod-index` with no TypeScript fallback (ADR 0080). Its existing tests pass unchanged against a cargo build, which CI and the release workflow now build before the tests. The engine's `symbol_index` module reproduces the TypeScript index's kinds and rules, including the scanner's `replace_path` reading noted above, so the moved route answers as before.

@@ -168,6 +168,8 @@ The result gives `nextId` after the highest used number, and `firstGapId` when a
 { "mode": "next_id", "kind": "event", "namespace": "my_mod" }
 ```
 
+Both modes run on the shared Rust engine (`hoi4-engine mod-index`). Without a usable engine binary the call answers `ENGINE_UNAVAILABLE`; nothing is counted in TypeScript instead.
+
 ## Example
 
 ```json
