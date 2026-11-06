@@ -13,8 +13,8 @@
       "passed": true
     },
     "synthetic.event.scan-file-selector": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.event.trace-downstream": {
       "inline": true,
