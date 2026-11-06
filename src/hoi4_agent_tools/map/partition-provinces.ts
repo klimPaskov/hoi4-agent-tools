@@ -636,7 +636,7 @@ function splitAcrossLines(
       const from = -2 - piece[p]!;
       piece[p] = piece[from]!;
       labels[p] = labels[from]!;
-      sizes[piece[p]!]!++;
+      sizes[piece[p]]!++;
     }
     let head = 0;
     while (head < tail) {
