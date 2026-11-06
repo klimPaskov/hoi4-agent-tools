@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Generate the tool tables and example calls in `docs/tools.md` from `tools/list` (#109, M-5). `npm run docs:tools` rewrites them, and `tests/integration/tool-docs.test.ts` fails when the page drifts from the tool definitions, when two tools share a name, when a tool has no section, or when a description has no example call. The first run added the missing `hoi4.asset_inspect` row, updated four example calls that no longer matched their descriptions, and dropped three second calls that no description carries.
 - More answers come inline, with less unrelated noise (part of #66). `package_check` names every item that is not present in `data.notPresent` (category, id, status, reason and path, up to 32), so the answer needs no report. `filesScanned` of `package_check`, of a `decision_inspect` inspection or comparison, and of `impact_inspect` now lists the files that hold the checked items, the decision or the symbol and its consumers, instead of the first twelve files of the workspace. The tools list budget in the discovery test moves from 80 to 84 KiB, as in #104 and #105.
 - Record the 2026-11-01 head-to-head with cpntodd/HOI4-MCP in `docs/research/hoi4-mcp-head-to-head-2026-11-01.md` (part of #111, M-7). The record says that it predates the accuracy fixes and that its seeded `owner = ROOT` control was wrong ground truth, because `owner` is not a trigger.
 
