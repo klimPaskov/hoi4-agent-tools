@@ -19,6 +19,7 @@ export const ALL_TOOLS = [
   'hoi4.localisation_inspect',
   'hoi4.idea_inspect',
   'hoi4.system_inspect',
+  'hoi4.unit_inspect',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -127,6 +128,12 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
       tool: 'hoi4.system_inspect',
       label: 'audit the on_actions',
       args: { kind: 'on_actions', audit: true },
+      tolerate: ['ENGINE_UNAVAILABLE'],
+    },
+    {
+      tool: 'hoi4.unit_inspect',
+      label: 'audit the equipment variants',
+      args: { kind: 'variant', audit: true },
       tolerate: ['ENGINE_UNAVAILABLE'],
     },
     {
@@ -335,6 +342,7 @@ export function wrongFieldCalls(workspaceId: string): WrongFieldCall[] {
     wrong('hoi4.localisation_inspect', 'lang', { mode: 'coverage', lang: 'german' }),
     wrong('hoi4.idea_inspect', 'idea', { idea: 'my_idea' }),
     wrong('hoi4.system_inspect', 'system', { system: 'mio', id: 'my_organization' }),
+    wrong('hoi4.unit_inspect', 'oob', { oob: 'GER_1936' }),
     wrong('hoi4.event_inspect', 'event_id', { mode: 'trace', event_id: 'my_mod.1' }),
     wrong('hoi4.event_render', 'event_id', { view: 'overview', event_id: 'my_mod.1' }),
     wrong('hoi4.focus_inspect', 'tree', { tree: 'my_focus_tree' }),
