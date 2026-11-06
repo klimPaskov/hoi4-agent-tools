@@ -492,6 +492,50 @@ function boundedEvidence<T>(
   };
 }
 
+/** The not-found for a selector no scanned node matches, with close names where there are any. */
+function selectorNotFound(graph: EventGraphSnapshot, selector: EventSelector): ServiceError {
+  const close = (value: string, names: Iterable<string | undefined>): string[] =>
+    nearestNames(value, new Set([...names].filter((name): name is string => name !== undefined)));
+  const hint = (suggestions: readonly string[]): string =>
+    suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`;
+  switch (selector.kind) {
+    case 'event': {
+      const suggestions = close(
+        selector.eventId,
+        graph.nodes.map(({ eventId }) => eventId),
+      );
+      return new ServiceError(
+        'EVENT_NOT_FOUND',
+        `No scanned file defines or fires event ${selector.eventId.slice(0, 256)}${hint(suggestions)}`,
+        { eventId: selector.eventId.slice(0, 256), suggestions },
+      );
+    }
+    case 'namespace': {
+      const suggestions = close(
+        selector.namespace,
+        graph.nodes.map(({ namespace }) => namespace),
+      );
+      return new ServiceError(
+        'EVENT_NAMESPACE_NOT_FOUND',
+        `No scanned event belongs to the namespace ${selector.namespace.slice(0, 256)}${hint(suggestions)}`,
+        { namespace: selector.namespace.slice(0, 256), suggestions },
+      );
+    }
+    case 'node':
+      return new ServiceError(
+        'EVENT_NODE_NOT_FOUND',
+        `No node ${selector.nodeId.slice(0, 256)} is in the event graph`,
+        { nodeId: selector.nodeId.slice(0, 256) },
+      );
+    default:
+      return new ServiceError(
+        'EVENT_SOURCE_NOT_FOUND',
+        'No event, option or entry point of the event graph is in the selected source',
+        { selector: selector.kind },
+      );
+  }
+}
+
 function boundedUnresolved(
   graph: EventGraphSnapshot,
   selectedNodeIds?: ReadonlySet<string>,
@@ -1247,17 +1291,47 @@ export class EventChainViewer {
       ...(input.impactSubject === undefined ? {} : { impactSubject: input.impactSubject }),
       refresh: input.refresh ?? input.mode === 'scan',
     };
+    // A selector or state subject that matches nothing is not-found, never an empty answer (#59).
+    if (
+      input.selector !== undefined &&
+      input.mode !== 'impact' &&
+      selectEventNodes(graph, input.selector).length === 0
+    )
+      throw selectorNotFound(graph, input.selector);
+    if (
+      input.mode === 'state_flow' &&
+      input.stateSubject !== undefined &&
+      !graph.stateAccesses.some(
+        ({ kind, name }) => kind === input.stateSubject!.kind && name === input.stateSubject!.name,
+      )
+    ) {
+      const { kind, name } = input.stateSubject;
+      const suggestions = nearestNames(
+        name,
+        new Set(graph.stateAccesses.filter((access) => access.kind === kind).map((a) => a.name)),
+      );
+      throw new ServiceError(
+        'EVENT_STATE_NOT_FOUND',
+        `No scanned file sets, checks or clears the ${kind.replaceAll('_', ' ')} ${name.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+        { kind, name: name.slice(0, 256), suggestions },
+      );
+    }
     let report: unknown;
     let summary: Record<string, JsonValue> | undefined;
     switch (input.mode) {
       case 'scan':
         report = eventScanReport(graph);
-        summary = summarizeEventIssues(graph.issues);
+        // A selector narrows the findings to its events, as lint does (#59).
+        summary = summarizeEventIssues(
+          input.selector === undefined
+            ? graph.issues
+            : lintEventGraph(graph, input.selector, input.signal),
+        );
         break;
       case 'roots':
         {
           const unresolved = boundedUnresolved(graph);
-          const roots = discoverEventRoots(graph, input.signal);
+          const roots = discoverEventRoots(graph, input.signal, input.selector);
           summary = summarizeEventRoots(roots);
           report = {
             graphRevision: graph.revision,
@@ -1273,21 +1347,6 @@ export class EventChainViewer {
       case 'trace':
         if (input.selector === undefined)
           throw new ServiceError('EVENT_SELECTOR_REQUIRED', 'Trace requires a selector');
-        if (
-          input.selector.kind === 'event' &&
-          selectEventNodes(graph, input.selector).length === 0
-        ) {
-          // An event no file defines or fires is not-found, never an empty trace.
-          const suggestions = nearestNames(
-            input.selector.eventId,
-            new Set(graph.nodes.flatMap(({ eventId }) => (eventId === undefined ? [] : [eventId]))),
-          );
-          throw new ServiceError(
-            'EVENT_NOT_FOUND',
-            `No scanned file defines or fires event ${input.selector.eventId.slice(0, 256)}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
-            { eventId: input.selector.eventId.slice(0, 256), suggestions },
-          );
-        }
         {
           const trace = traceSelectedEvents(
             graph,
@@ -1342,15 +1401,49 @@ export class EventChainViewer {
       case 'state_flow':
         {
           const unresolved = boundedUnresolved(graph);
+          const subject = input.stateSubject;
           const stateIssues = lintEventGraph(graph, input.selector, input.signal).filter(
-            ({ code }) => /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE|WRITER)/u.test(code),
+            ({ code, details }) =>
+              /(?:STATE|FLAG|VARIABLE|ARRAY|TARGET|SCOPE|WRITER)/u.test(code) &&
+              // A subject narrows the issues as well as the flow. Analysis limits stay, because
+              // they make the flow partial.
+              (subject === undefined ||
+                (typeof details.name === 'string'
+                  ? details.name === subject.name &&
+                    (details.stateKind === undefined || details.stateKind === subject.kind)
+                  : code.endsWith('_LIMIT'))),
           );
-          summary = summarizeEventIssues(stateIssues);
+          const flow = inspectEventStateFlow(
+            graph,
+            input.selector,
+            input.stateSubject,
+            input.signal,
+          );
+          const where = (accesses: readonly EventStateAccess[]): string[] =>
+            accesses.slice(0, 8).map(({ location }) => `${location.path}:${location.start.line}`);
+          summary = {
+            ...summarizeEventIssues(stateIssues),
+            // The subject's own flow answers inline; the report holds every access.
+            ...(subject === undefined
+              ? {}
+              : {
+                  flow: {
+                    subject: `${subject.kind}:${subject.name}`,
+                    producers: flow.producers.length,
+                    consumers: flow.consumers.length,
+                    clears: flow.clears.length,
+                    links: flow.links.length,
+                    unproducedReads: flow.unproducedReads.length,
+                    producedAt: where(flow.producers),
+                    readAt: where(flow.consumers),
+                  },
+                }),
+          };
           const issues = boundedEvidence(stateIssues);
           report = {
             graphRevision: graph.revision,
             sourceHashes: graph.sourceHashes,
-            flow: inspectEventStateFlow(graph, input.selector, input.stateSubject, input.signal),
+            flow,
             issues: issues.values,
             unresolved: unresolved.values,
             ...(issues.inventory === undefined ? {} : { issueInventory: issues.inventory }),

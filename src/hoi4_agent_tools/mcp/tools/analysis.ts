@@ -54,6 +54,8 @@ const decisionOutputSchema = strictOperationResultSchema(
       overrides: nonNegativeIntegerSchema,
       scenarios: nonNegativeIntegerSchema,
       unresolvedDefinitions: nonNegativeIntegerSchema,
+      decisionIds: z.array(z.string()).max(64).optional(),
+      decisionIdsTruncated: z.boolean().optional(),
       unresolvedSample: z
         .array(z.object({ id: z.string(), path: z.string(), reason: z.string() }).strict())
         .max(8)
@@ -186,7 +188,7 @@ export const analysisTaskTools = [
     name: 'hoi4.decision_inspect',
     title: 'Inspect decisions and missions',
     description:
-      'Explain why a decision or mission is hidden, unavailable or unaffordable. Inspect conditions, costs and lifecycle for declared actors and targets, or compare proposed source. Example: {"mode":"inspect","id":"my_decision","scenarios":[{"id":"base","actor":"GER","state":{}}]}. Returns each scenario outcome inline; full evidence is linked.',
+      'Explain why a decision or mission is hidden, unavailable or unaffordable. Inspect conditions, costs and lifecycle for declared actors and targets, or compare proposed source. Example: {"mode":"inspect","id":"my_decision","scenarios":[{"id":"base","actor":"GER","state":{}}]}. Inventory mode with an id lists only that category\'s decisions, or that one decision. Returns each scenario outcome inline; full evidence is linked.',
     inputSchema: decisionInspectRequestSchema,
     outputSchema: decisionOutputSchema,
     annotations: readOnlyAnalysisTool,
