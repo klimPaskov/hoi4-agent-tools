@@ -68,9 +68,14 @@ export const scriptValidateDataSchema = z
         'player_text',
         'event_popups',
         'known_mistakes',
+        'identifier_arguments',
       ]),
     ),
-    parametersChecked: z.literal(false),
+    /**
+     * Identifier arguments (ideas, events, decisions, focuses, technologies) were checked against
+     * the workspace's definitions. Other argument values are not checked.
+     */
+    parametersChecked: z.boolean(),
     documentation: z
       .object({
         source: z.enum(['game_doc', 'script_doc']),
