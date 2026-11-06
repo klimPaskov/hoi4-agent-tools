@@ -44,7 +44,7 @@ One tool with a `kind` for each newer system: `on_actions`, `mio`, `balance_of_p
 ### 4. `hoi4.unit_inspect` and `hoi4.asset_inspect`
 
 - **Units:** division templates, order of battle files and equipment variants. It checks that their sub-units, equipment and modules exist and that history files load the order of battle they name. Shipped as `hoi4-engine units` on the system inspector's machinery. The template grid comes from the `MAX_DIVISION_` defines, because Old World Blues changes it. Equipment that a `duplicate_archetypes` copy derives counts as defined.
-- **Assets:** every `spriteType` and its file, with the DDS or TGA format and size checked through the engine's image header reader. Frame counts must match the texture, flag sheets need their sizes, and sound files must exist. The sprite check is shared with hoi4-imagegen-mcp.
+- **Assets:** every `spriteType` and its file, with the DDS or TGA format and size checked through the engine's image header reader. Frame counts must match the texture, flag sheets need their sizes, and sound files must exist. The sprite check is shared with hoi4-imagegen-mcp. Shipped as `hoi4-engine assets` with the kinds `sprite`, `sound` and `flag`. Uneven frames, sprites without a texture, empty texture files and flags one pixel off are information, because vanilla and Kaiserreich ship them and they look right in game.
 
 ## Delivery
 

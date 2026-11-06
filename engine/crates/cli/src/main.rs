@@ -34,6 +34,7 @@ USAGE:
     hoi4-engine ideas [--request FILE]
     hoi4-engine system [--request FILE]
     hoi4-engine units [--request FILE]
+    hoi4-engine assets [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
@@ -669,6 +670,7 @@ fn main() -> ExitCode {
         Some("ideas") => cmd_json_request(&args, "ideas", hoi4_engine::ideas::respond_json),
         Some("system") => cmd_json_request(&args, "system", hoi4_engine::system::respond_json),
         Some("units") => cmd_json_request(&args, "units", hoi4_engine::system::respond_units_json),
+        Some("assets") => cmd_json_request(&args, "assets", hoi4_engine::assets::respond_json),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),

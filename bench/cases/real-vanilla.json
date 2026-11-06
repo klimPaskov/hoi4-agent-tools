@@ -646,6 +646,71 @@
       ]
     },
     {
+      "id": "vanilla.asset.sprite-texture-header",
+      "surface": "asset",
+      "corpus": "vanilla",
+      "title": "A sprite comes back with its texture size and format, and no problem",
+      "evidence": "interface/ideas.gfx:25 defines GFX_idea_generic_agrarian_society with texturefile gfx/interface/ideas/idea_generic_agrarian_society.dds, a DDS texture in the game layer.",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "sprite",
+        "id": "GFX_idea_generic_agrarian_society"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.references[*].known",
+          "excludes": false
+        },
+        {
+          "path": "data.inspection.fields[*].name",
+          "includes": "texture"
+        },
+        {
+          "path": "data.inspection.problems",
+          "equals": []
+        }
+      ]
+    },
+    {
+      "id": "vanilla.asset.sound-file-saved-under-another-name",
+      "surface": "asset",
+      "corpus": "vanilla",
+      "title": "A sound whose audio file is missing is reported",
+      "evidence": "sound/building_destroyed.asset:142 names audiofiles/building_large_fall_slow_01.wav, but the game ships sound/audiofiles/building_large_fall_slow_01_01.wav instead (1.19.4.1).",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "sound",
+        "id": "building_large_fall_slow_01"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "includes": "ASSET_FILE_MISSING"
+        }
+      ]
+    },
+    {
+      "id": "vanilla.asset.flag-wrong-size",
+      "surface": "asset",
+      "corpus": "vanilla",
+      "title": "A flag drawn at the wrong size is reported",
+      "evidence": "gfx/flags/SPB_kingdom_neutrality.tga is 82x55 and gfx/flags/medium/SPB_kingdom_neutrality.tga is 41x28, against 82x52 and 41x26 (1.19.4.1).",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "flag",
+        "id": "SPB_kingdom_neutrality"
+      },
+      "budgetMs": 60000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].message",
+          "includes": "`gfx/flags/SPB_kingdom_neutrality.tga` is 82x55, but the game draws large flags at 82x52, so it is stretched"
+        }
+      ]
+    },
+    {
       "id": "vanilla.validation.unknown-idea-argument",
       "surface": "validation",
       "corpus": "vanilla",

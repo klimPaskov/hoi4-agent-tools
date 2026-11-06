@@ -727,6 +727,67 @@
           "excludes": "warning"
         }
       ]
+    },
+    {
+      "id": "kaiserreich.asset.png-named-dds-reads",
+      "surface": "asset",
+      "corpus": "kaiserreich",
+      "title": "A PNG file named .dds is read by its content, as the game reads it",
+      "evidence": "Kaiserreich gfx/loadingscreens/kr_sack_of_darulaman.dds is a PNG file; GFX_frontend_bg in interface/frontendmainviewbg.gfx:2 uses it and the game shows it.",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "sprite",
+        "id": "GFX_frontend_bg"
+      },
+      "budgetMs": 30000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "excludes": "ASSET_TEXTURE_UNREADABLE"
+        },
+        {
+          "path": "data.inspection.fields[*].text",
+          "includes": "gfx/loadingscreens/kr_sack_of_darulaman.dds (Kaiserreich): png PNG rgb 8 bit 1920x1440"
+        }
+      ]
+    },
+    {
+      "id": "kaiserreich.asset.flags-one-pixel-off-are-information",
+      "surface": "asset",
+      "corpus": "kaiserreich",
+      "title": "Small flags one pixel wider than the game draws are information",
+      "evidence": "Hand-checked sweep (2026-11-06): all 984 small flags of Kaiserreich 1.7 are 11x7 against the game's 10x7, and they look right in game.",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "flag",
+        "audit": true
+      },
+      "budgetMs": 120000,
+      "expect": [
+        {
+          "path": "data.audit.problems[*].severity",
+          "excludes": "warning"
+        }
+      ]
+    },
+    {
+      "id": "owb.asset.missing-event-picture",
+      "surface": "asset",
+      "corpus": "owb",
+      "title": "A sprite whose texture path is wrong is reported",
+      "evidence": "Old World Blues interface/TON_events.gfx:2 names gfx/interface/event_pictures/farming_tutorial.dds, but the file is at gfx/event_pictures/farming_tutorial.dds.",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "sprite",
+        "id": "GFX_event_TON_farming_tutorial"
+      },
+      "budgetMs": 60000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "includes": "ASSET_TEXTURE_MISSING"
+        }
+      ]
     }
   ]
 }

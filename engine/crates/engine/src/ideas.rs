@@ -86,7 +86,7 @@ pub struct Problem {
     pub line: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Field {
     pub name: String,
