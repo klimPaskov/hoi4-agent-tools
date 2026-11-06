@@ -34,6 +34,7 @@ A test fails when this page differs from `tools/list`, so edit the tool descript
 | `hoi4.system_inspect`       | Read one definition of a newer system, or audit every one the mod makes: on_actions hooks, MIOs and policies, balance of power, special projects, operations and raids. Returns its parts, each reference with whether it exists, pictures, names in every language and problems.                                                                          | —      |
 | `hoi4.unit_inspect`         | Read one order of battle (history/units), sub-unit, equipment or module, or equipment variant, or audit every one the mod makes. Checks template grids, divisions, fleets, air wings, equipment slots and modules, and each name they use.                                                                                                                 | —      |
 | `hoi4.asset_inspect`        | Read one sprite (texture size, format and frames), sound, sound effect or music track (audio file, sounds it plays), or flag (all three sizes), or audit every one the mod defines. Flags BC7 textures, missing files and wrong flag sizes.                                                                                                                | —      |
+| `hoi4.skill`                | List the modding skills installed in the mod, or load one by name, at the kit version HOI4 Mod Setup pinned, with its hash. A file edited since Setup installed it is refused unless acceptLocalEdits.                                                                                                                                                     | —      |
 
 ## Focus trees
 
@@ -103,6 +104,8 @@ A test fails when this page differs from `tools/list`, so edit the tool descript
 The server offers one MCP prompt, `hoi4.probability_analysis`.
 It takes an `objective` and an optional `sourceHint` and returns a plan for one source-linked AI-weight, MTTH, random or declared-pool analysis; it does not run the analysis itself.
 
+The skills `hoi4.skill` serves are also resources, `hoi4-agent://workspace/{workspaceId}/skill/{name}`; see [Read the mod's skills](reference.md#read-the-mods-skills).
+
 Large results are returned as links to the resource template `hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}`.
 Clients can read a byte range with `?offset=<bytes>&length=<bytes>`.
 
@@ -138,6 +141,7 @@ The CI stdio smoke suite sends each of these shapes to a real server process.
 | `hoi4.system_inspect`       | `{"kind":"mio","id":"my_organization"}` or `{"kind":"on_actions","audit":true}`                                                                                                                                                         |
 | `hoi4.unit_inspect`         | `{"kind":"oob","id":"GER_1936"}` or `{"kind":"variant","audit":true}`                                                                                                                                                                   |
 | `hoi4.asset_inspect`        | `{"kind":"sprite","id":"GFX_my_icon"}` or `{"kind":"flag","audit":true}`                                                                                                                                                                |
+| `hoi4.skill`                | `{"name":"hoi4-events"}`                                                                                                                                                                                                                |
 | `hoi4.focus_inspect`        | `{"treeId":"my_focus_tree"}`                                                                                                                                                                                                            |
 | `hoi4.focus_render`         | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}`                                                                                                                                                         |
 | `hoi4.focus_rewrite`        | `{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}`                                                                                                                                  |

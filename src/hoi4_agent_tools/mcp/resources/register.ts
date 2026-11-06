@@ -2,6 +2,11 @@ import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/serv
 import { artifactResourceDefinition, readArtifactResource } from '../../core/artifact-resource.js';
 import type { CoreEngine } from '../../core/engine.js';
 import { readServerStatus, serverStatusResource } from '../../core/server-status-resource.js';
+import {
+  listSkillResources,
+  readSkillResource,
+  skillResourceDefinition,
+} from '../../reference/skill-resource.js';
 import type { ServerContext } from '../server/base-tools.js';
 
 /** SDK-v1 registration only; ownership and byte-range behavior live in the shared core. */
@@ -16,6 +21,17 @@ export function registerMcpResources(
     new ResourceTemplate(uriTemplate, { list: undefined }),
     metadata,
     (uri, _variables, extra) => readArtifactResource(engine, uri.href, context, extra.signal),
+  );
+  const { name: skillName, uriTemplate: skillTemplate, ...skillMetadata } = skillResourceDefinition;
+  server.registerResource(
+    skillName,
+    new ResourceTemplate(skillTemplate, {
+      list: async (extra) => ({
+        resources: await listSkillResources(engine, context, extra.signal),
+      }),
+    }),
+    skillMetadata,
+    (uri, _variables, extra) => readSkillResource(engine, uri.href, context, extra.signal),
   );
   // Process details are offered to the local client only, never to authenticated remote ones.
   if (context.principal !== undefined) return;

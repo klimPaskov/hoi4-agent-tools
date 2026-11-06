@@ -37,6 +37,7 @@ const expectedToolNames = [
   'hoi4.system_inspect',
   'hoi4.unit_inspect',
   'hoi4.asset_inspect',
+  'hoi4.skill',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.impact_inspect',
@@ -390,6 +391,7 @@ describe('clean npm-pack installation', () => {
     expect(qualified.resourceUris).toEqual([]);
     expect(qualified.resourceTemplateUris).toEqual([
       'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}',
+      'hoi4-agent://workspace/{workspaceId}/skill/{name}',
     ]);
     expect(qualified.resourceMimeType).toBe('application/json');
     expect(qualified.boundedArtifactBytes).toBe(64);
