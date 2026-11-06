@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Generate the tool tables and example calls in `docs/tools.md` from `tools/list` (#109, M-5). `npm run docs:tools` rewrites them, and `tests/integration/tool-docs.test.ts` fails when the page drifts from the tool definitions, when two tools share a name, when a tool has no section, or when a description has no example call. The first run added the missing `hoi4.asset_inspect` row, updated four example calls that no longer matched their descriptions, and dropped three second calls that no description carries.
 - Check the hand-kept game data against the installed build (#70). The probability adapters were re-checked on 1.19.4.1: five of the six documentation files they rest on are byte-identical to 1.19.2.0, and the two AI strategy sections they use say the same, so the target moves to `Operation Postern 1.19.4.1 (f584)` and the adapter version to `hoi4-1.19.4.1.v1`. A result on another build now carries the warning `PROBABILITY_GAME_BUILD_UNVERIFIED` instead of only recording `workspace_observed` in its metadata. The nightly game-update watcher lists the adapters or the native-effects list under "Checked against another build" on every run while their pin differs from the installed build, not only on the night the build changes.
 
 ## 4.9.0 - 2026-11-05
