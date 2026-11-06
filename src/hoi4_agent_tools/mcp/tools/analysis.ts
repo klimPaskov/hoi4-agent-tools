@@ -211,7 +211,7 @@ export const analysisTaskTools = [
     name: 'hoi4.mechanic_test',
     title: 'Test scripted effects',
     description:
-      'Test what an effect, event option, decision or focus reward does to a declared state. Run steps and check assertions; unsupported effects stay unresolved. See docs/mechanics.md. Example: {"test":{"id":"t","scenario":{"schemaVersion":"1.0","id":"t","state":{"treasury":10}},"steps":[...],"assertions":[...]}}.',
+      'Test what an effect, option, decision or focus reward does to a declared state (docs/mechanics.md). Example: {"test":{"id":"t","scenario":{"schemaVersion":"1.0","id":"t","state":{}},"steps":[{"kind":"effect","source":{"kind":"scripted_effect","id":"e"}}],"assertions":[{"id":"a","kind":"conservation","paths":[{"key":"x"},{"key":"y"}]}]}}.',
     inputSchema: mechanicInputSchema,
     outputSchema: mechanicOutputSchema,
     annotations: readOnlyAnalysisTool,

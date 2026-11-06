@@ -121,6 +121,17 @@ describe('error log and mod index tools', () => {
       modEntries: 2,
       changedSinceLog: 1,
     });
+    // The mod changed after the log, so the log cannot vouch for the current source (#65).
+    expect(
+      (result as unknown as { validation: { checks: Array<{ id: string; passed: boolean }> } })
+        .validation.checks,
+    ).toContainEqual(
+      expect.objectContaining({
+        id: 'error-log-age',
+        passed: false,
+        message: expect.stringContaining('mod:events/broken.txt'),
+      }),
+    );
     // Mod-located entries come first, game-located ones last.
     expect(data.entries.map(({ category, source }) => [category, source?.layer])).toEqual([
       ['syntax', 'mod'],

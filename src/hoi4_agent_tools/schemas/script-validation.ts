@@ -109,6 +109,8 @@ export const scriptValidateDataSchema = z
     unresolvedCount: z.number().int().min(0),
     truncated: z.boolean(),
     argumentBlocksUnchecked: z.number().int().min(0),
+    /** What made the result partial when `valid` is null, one plain sentence each. */
+    partialReasons: z.array(z.string().max(600)).max(5).optional(),
     file: z
       .object({
         path: z.string().max(4096),
