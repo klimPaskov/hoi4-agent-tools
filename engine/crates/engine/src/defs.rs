@@ -193,6 +193,8 @@ pub fn script_definitions(doc: &Document, path: &str, file: usize) -> Vec<Defini
         inside(doc, root, "sub_units", Kind::SubUnit, file, &mut out);
     } else if under("common/units/equipment/") {
         inside(doc, root, "equipments", Kind::Equipment, file, &mut out);
+        // Copies of an archetype (`small_plane_cas_airframe`); their derived children are not here.
+        inside(doc, root, "duplicate_archetypes", Kind::Equipment, file, &mut out);
     } else if under("common/buildings/") {
         inside(doc, root, "buildings", Kind::Building, file, &mut out);
     } else if path == "common/combat_tactics.txt" {

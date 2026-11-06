@@ -670,6 +670,63 @@
           "excludes": "warning"
         }
       ]
+    },
+    {
+      "id": "owb.unit.grid-from-defines",
+      "surface": "unit",
+      "corpus": "owb",
+      "title": "The template grid follows the mod's MAX_DIVISION_ defines",
+      "evidence": "Old World Blues common/defines/01_defines.lua:445-449 sets the support grid to 5 columns of 1 row, so history/units/ACH_alamo_defenders.txt:16-19 places support companies at x = 1 to 4, y = 0 correctly.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "oob",
+        "id": "ACH_alamo_defenders"
+      },
+      "budgetMs": 30000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "excludes": "UNIT_TEMPLATE_SLOT_INVALID"
+        }
+      ]
+    },
+    {
+      "id": "owb.unit.regiment-below-the-grid",
+      "surface": "unit",
+      "corpus": "owb",
+      "title": "A regiment below the mod's three-row grid is reported",
+      "evidence": "Old World Blues sets MAX_DIVISION_BRIGADE_HEIGHT = 3 (common/defines/01_defines.lua:446), and history/units/LAC_bigcohort.txt:9 places infantry at y = 3.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "oob",
+        "id": "LAC_bigcohort"
+      },
+      "budgetMs": 30000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].message",
+          "includes": "`infantry` sits at x = 0, y = 3, outside the regiments grid (x 0 to 4, y 0 to 2, from the `MAX_DIVISION_` defines)"
+        }
+      ]
+    },
+    {
+      "id": "kaiserreich.unit.variant-audit-clean",
+      "surface": "unit",
+      "corpus": "kaiserreich",
+      "title": "Kaiserreich variants name only equipment, modules and upgrades that load",
+      "evidence": "Hand-checked sweep (2026-11-06) of the 1415 create_equipment_variant blocks of Kaiserreich 1.7.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "variant",
+        "audit": true
+      },
+      "budgetMs": 60000,
+      "expect": [
+        {
+          "path": "data.audit.problems[*].severity",
+          "excludes": "warning"
+        }
+      ]
     }
   ]
 }
