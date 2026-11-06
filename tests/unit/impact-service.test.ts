@@ -92,6 +92,38 @@ describe('authorized impact analysis service', () => {
     });
   });
 
+  it('answers not-found for a symbol nothing defines or uses, with close names (#59)', async () => {
+    const { analyzer } = await fixture();
+    await expect(
+      analyzer.inspect(
+        impactInspectRequestSchema.parse({
+          workspaceId: 'fixture',
+          symbols: [
+            { kind: 'idea', id: 'rationing' },
+            { kind: 'idea', id: 'rationng' },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'IMPACT_SYMBOL_NOT_FOUND',
+      details: { symbols: [{ kind: 'idea', id: 'rationng', suggestions: ['rationing'] }] },
+    });
+    // A symbol only proposed source defines is known.
+    const proposed = await analyzer.inspect(
+      impactInspectRequestSchema.parse({
+        workspaceId: 'fixture',
+        symbols: [{ kind: 'idea', id: 'austerity' }],
+        proposedSources: [
+          {
+            relativePath: 'common/ideas/needs.txt',
+            content: 'ideas = { country = { rationing = {} austerity = {} } }',
+          },
+        ],
+      }),
+    );
+    expect(proposed.status).toBe('ok');
+  });
+
   it('links declared scenario cases affected by a source symbol without executing them', async () => {
     const { engine, analyzer } = await fixture();
     const workspace = engine.resolver.get('fixture');

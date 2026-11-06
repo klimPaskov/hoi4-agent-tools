@@ -231,11 +231,41 @@ export function selectEventNodes(
 export function discoverEventRoots(
   graph: EventGraphSnapshot,
   signal?: AbortSignal,
+  selector?: EventSelector,
 ): EventRootDiscovery {
+  const roots = allEventRoots(graph, signal);
+  if (selector === undefined) return roots;
+  // A selector keeps the roots among its nodes, the entry points that start them and the
+  // cycles through them (#59).
+  const selected = new Set(selectEventNodes(graph, selector, signal).map(({ id }) => id));
+  const startsSelected = new Set(
+    eventFlowEdges(graph, false)
+      .filter(({ to }) => selected.has(to))
+      .map(({ from }) => from),
+  );
+  const ids = new Set(
+    graph.nodes
+      .filter(({ id, kind }) => kind === 'event' && selected.has(id))
+      .flatMap(({ eventId }) => (eventId === undefined ? [] : [eventId])),
+  );
+  return {
+    entryPoints: roots.entryPoints.filter(({ id }) => selected.has(id) || startsSelected.has(id)),
+    automaticEvents: roots.automaticEvents.filter(({ id }) => selected.has(id)),
+    knownRootEventIds: roots.knownRootEventIds.filter((id) => ids.has(id)),
+    callerlessTriggeredEvents: roots.callerlessTriggeredEvents.filter(({ id }) => selected.has(id)),
+    stronglyConnectedComponents: roots.stronglyConnectedComponents.filter(({ nodeIds }) =>
+      nodeIds.some((id) => selected.has(id)),
+    ),
+  };
+}
+
+function allEventRoots(graph: EventGraphSnapshot, signal?: AbortSignal): EventRootDiscovery {
   signal?.throwIfAborted();
   const edges = eventFlowEdges(graph, false);
   const incoming = new Map<string, number>();
-  for (const [index, edge] of edges.entries()) {
+  // An event a scripted effect fires has a caller. Roots do not project helpers, so count the
+  // direct edges too, helper edges included.
+  for (const [index, edge] of [...edges, ...eventFlowEdges(graph, true)].entries()) {
     if ((index & 255) === 0) signal?.throwIfAborted();
     incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1);
   }

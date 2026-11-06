@@ -157,6 +157,19 @@ const eventInspectSummarySchema = z
       })
       .strict()
       .optional(),
+    flow: z
+      .object({
+        subject: z.string().max(1024),
+        producers: nonNegativeIntegerSchema,
+        consumers: nonNegativeIntegerSchema,
+        clears: nonNegativeIntegerSchema,
+        links: nonNegativeIntegerSchema,
+        unproducedReads: nonNegativeIntegerSchema,
+        producedAt: z.array(z.string().max(1100)).max(8),
+        readAt: z.array(z.string().max(1100)).max(8),
+      })
+      .strict()
+      .optional(),
     entryPoints: nonNegativeIntegerSchema.optional(),
     entryKinds: countMapSchema.optional(),
     automaticEvents: nonNegativeIntegerSchema.optional(),

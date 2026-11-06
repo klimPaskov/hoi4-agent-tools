@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 81_920;
+const toolsListByteBudget = 86_016;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
