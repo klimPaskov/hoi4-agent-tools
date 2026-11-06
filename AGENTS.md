@@ -33,3 +33,4 @@ HOI4 Agent Tools is a public Model Context Protocol server for coding agents tha
 - Public tool schema changes require compatibility review and semantic versioning.
 - Document unsupported constructs precisely; do not hide them behind guessed behavior.
 - Release only from a clean, tested commit through the repository workflows.
+- Merge pull requests and push without asking the maintainer once the required checks pass (maintainer decision D-23, 2026-11-06). Never force push, never reset or clean in a way that loses work, and never delete a branch with unmerged work.

@@ -38,7 +38,9 @@ npm run bench -- --update-baseline              # accept this run as the baselin
 
 The game, mod and Workshop folders are found in the default Steam libraries and the game's user folder. `HOI4_GAME_ROOT`, `HOI4_MOD_ROOT`, `HOI4_USER_ROOT` and `HOI4_STEAM_ROOT` override them. A corpus that is not installed is reported as unavailable, not as a failure.
 
-The synthetic suite writes to `.tmp/bench/`. The real suite keeps its results, reports and baseline on this machine only, in `HOI4_BENCH_DIR` or else `%LOCALAPPDATA%\hoi4-agent-tools\bench` (Windows), `~/Library/Application Support/hoi4-agent-tools/bench` (macOS) or `~/.local/share/hoi4-agent-tools/bench` (Linux).
+Each run names the machine it ran on (CPU, cores, memory, Node) and the SHA-256 of the `hoi4-engine` binary `HOI4_ENGINE` names. The local baseline keeps the machine with its latency, and the report says when a run is compared with a baseline from other hardware.
+
+The synthetic suite writes to `.tmp/bench/`. The real suite keeps its results, reports and baseline on this machine only, in `HOI4_BENCH_DIR` or else `%LOCALAPPDATA%\hoi4-agent-tools\bench` (Windows), `~/Library/Application Support/hoi4-agent-tools/bench` (macOS) or `~/.local/share/hoi4-agent-tools/bench` (Linux). Each run writes `runs/<time>/results.json` and `report.md` there, `latest-report.md` holds the last report, and every accepted real baseline is also kept as `baseline-history/<time>.json`.
 
 The one-time head-to-head with cpntodd/HOI4-MCP (decision M-7) has its own driver in `scripts/bench/hoi4-mcp/` and its result in [docs/research/hoi4-mcp-head-to-head-2026-11-01.md](../docs/research/hoi4-mcp-head-to-head-2026-11-01.md). That result predates the accuracy fixes.
 
@@ -47,14 +49,23 @@ The one-time head-to-head with cpntodd/HOI4-MCP (decision M-7) has its own drive
 - **CI:** `tests/integration/bench-synthetic.test.ts` runs the synthetic suite on Linux, Windows and macOS. It fails when a case that passed in `baselines/synthetic.json` fails, an inline answer moves into an artifact, or a sweep finds more false positives. It also fails when a case newly passes but the baseline was not updated, so a fix cannot silently regress later. Latency is not gated in CI, because CI machines vary.
 - **Nightly:** `scripts/bench/nightly.sh` runs the real suite on a dedicated worktree at `origin/main`. It accepts the run as the new baseline only when nothing regressed. It also flags a warm p95 above 1.5 times the baseline and at least 50 ms slower. When a corpus changed since the baseline, for example after a Workshop update, a game patch or new mod commits, cases that moved on it are listed for a look instead of failing the run.
 
-Register the nightly run once per machine. On Windows (Task Scheduler, 03:00):
+Register the nightly run once per machine. It starts at 03:17, off the hour when other scheduled jobs start. The benchmark worktree builds its own `hoi4-engine` in its `engine/target` unless `CARGO_TARGET_DIR` is set, so it never replaces a build another worktree is testing. On Windows (Task Scheduler), from Git Bash:
 
 ```sh
 git worktree add --detach ../hoi4-agent-tools-wt-bench origin/main
-schtasks /Create /TN "hoi4-agent-tools nightly benchmark" /SC DAILY /ST 03:00 /TR "\"C:\Program Files\Git\bin\sh.exe\" -lc 'C:/Users/<you>/Documents/Projects/hoi4-agent-tools-wt-bench/scripts/bench/nightly.sh'"
+MSYS_NO_PATHCONV=1 schtasks /Create /TN "hoi4-agent-tools nightly benchmark" /SC DAILY /ST 03:17 /TR "\"C:\Program Files\Git\bin\sh.exe\" -lc 'C:/Users/<you>/Documents/Projects/hoi4-agent-tools-wt-bench/scripts/bench/nightly.sh >> C:/Users/<you>/AppData/Local/hoi4-agent-tools/bench/nightly.log 2>&1'"
 ```
 
-On macOS, add a `launchd` agent whose `ProgramArguments` are `/bin/sh` and the path to `nightly.sh`, with `StartCalendarInterval` set to hour 3.
+Check it with `schtasks /Query /TN "hoi4-agent-tools nightly benchmark" /V /FO LIST`, start it once by hand with `schtasks /Run /TN "hoi4-agent-tools nightly benchmark"`, and remove it with:
+
+```sh
+MSYS_NO_PATHCONV=1 schtasks /Delete /TN "hoi4-agent-tools nightly benchmark" /F
+git worktree remove ../hoi4-agent-tools-wt-bench
+```
+
+The benchmark data folder stays until you delete it.
+
+On macOS, add a `launchd` agent in `~/Library/LaunchAgents` whose `ProgramArguments` are `/bin/sh` and the path to `nightly.sh`, with `StartCalendarInterval` set to hour 3 and minute 17. Remove it with `launchctl bootout gui/$(id -u) <plist>` and by deleting the plist.
 
 ## Writing a case
 

@@ -15,6 +15,8 @@ export interface Comparison {
   improvements: string[];
   newCases: string[];
   changedCorpora: string[];
+  /** Set when the baseline was measured on other hardware, so latency is not like for like. */
+  machineChanged?: string;
 }
 
 /** A warm p95 counts as slower above 1.5 times the baseline and at least 50 ms more. */
@@ -44,7 +46,7 @@ export function toBaseline(run: RunResult, withLatency: boolean): Baseline {
         .filter(({ identity }) => identity !== 'unavailable')
         .map(({ id, identity }) => [id, identity]),
     ),
-    ...(withLatency ? { latency } : {}),
+    ...(withLatency ? { latency, machine: run.machine } : {}),
   };
 }
 
@@ -57,6 +59,14 @@ export function compareRun(run: RunResult, baseline: Baseline | undefined): Comp
     changedCorpora: [],
   };
   if (baseline === undefined) return comparison;
+  const before = baseline.machine;
+  if (
+    before !== undefined &&
+    (before.cpu !== run.machine.cpu ||
+      before.cores !== run.machine.cores ||
+      before.memoryGb !== run.machine.memoryGb)
+  )
+    comparison.machineChanged = `${before.cpu}, ${before.cores} cores, ${before.memoryGb} GB`;
   const changed = new Set<string>();
   for (const pin of run.corpora) {
     const before = baseline.corpora[pin.id];
@@ -137,6 +147,8 @@ export function markdownReport(run: RunResult, comparison: Comparison): string {
     '',
     `Run ${run.startedAt} on ${run.platform}, Node ${run.node}${run.toolsCommit === undefined ? '' : `, hoi4-agent-tools ${run.toolsCommit.slice(0, 12)}`}, ${Math.round(run.durationMs / 1000)} s.`,
     '',
+    `Machine: ${run.machine.cpu}, ${run.machine.cores} cores, ${run.machine.memoryGb} GB${run.machine.engineSha256 === undefined ? '' : `, hoi4-engine sha256 ${run.machine.engineSha256.slice(0, 16)}`}.`,
+    '',
     '## Corpora',
     '',
     '| Corpus | Version | Git commit | Workshop manifest | Content hash | Files |',
@@ -156,6 +168,11 @@ export function markdownReport(run: RunResult, comparison: Comparison): string {
     '',
     `- Regressions: ${comparison.regressions.length}`,
     ...comparison.regressions.map((line) => `  - ${line}`),
+    ...(comparison.machineChanged === undefined
+      ? []
+      : [
+          `- The baseline was measured on other hardware (${comparison.machineChanged}), so latency differences are not like for like.`,
+        ]),
     `- Improvements: ${comparison.improvements.length}`,
     ...comparison.improvements.map((line) => `  - ${line}`),
     ...(comparison.changedCorpora.length === 0
