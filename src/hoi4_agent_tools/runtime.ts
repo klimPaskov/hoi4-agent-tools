@@ -11,6 +11,7 @@ import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
 import { CONFIG_VERSION } from './version.js';
 import { sweepTemporaryDirectories } from './core/temporary-directories.js';
+import { DEFAULT_PROFILES, PROFILES_ENV, parseProfilesEnv } from './mcp/server/tool-profiles.js';
 
 export function defaultConfigurationPath(): string {
   const configRoot =
@@ -275,6 +276,12 @@ export async function createEngine(configPath = configurationPath()): Promise<Co
     if (!useAutomaticConfiguration) throw error;
     configuration = await automaticConfiguration();
   }
+  // The command-line servers list the core tools unless the client or the file asks for more.
+  configuration = {
+    ...configuration,
+    profiles: parseProfilesEnv(process.env[PROFILES_ENV]) ??
+      configuration.profiles ?? [...DEFAULT_PROFILES],
+  };
   const resolver = await WorkspaceResolver.create(configuration);
   await sweepTemporaryDirectories(tmpdir(), {
     protectedRoots: [

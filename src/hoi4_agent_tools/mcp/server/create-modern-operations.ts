@@ -32,6 +32,7 @@ import { SERVER_INSTRUCTIONS } from './instructions.js';
 import { jobProgressReporter, modernProgressReporter, withProgressHeartbeat } from './progress.js';
 import { taskToolCatalog } from './task-tool-catalog.js';
 import type { ToolDefinition } from './task-tool-definition.js';
+import { isListed, profileInstructions, resolveProfiles } from './tool-profiles.js';
 
 const rootsResponseSchema = z
   .object({
@@ -88,7 +89,9 @@ export function createModernOperationServer(
         prompts: {},
         extensions: { [TASKS_EXTENSION]: {} },
       },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions:
+        SERVER_INSTRUCTIONS +
+        (profileInstructions(resolveProfiles(engine.resolver.config().profiles)) ?? ''),
     },
   );
   // Warm job workers outlive single calls, not the client session that used them.
@@ -99,26 +102,29 @@ export function createModernOperationServer(
   };
   registerModernResources(server, engine, context);
   registerModernPrompts(server);
+  const profiles = resolveProfiles(engine.resolver.config().profiles);
   server.setRequestHandler('tools/list', () =>
     ListToolsResultSchema.parse({
-      tools: definitions.map(({ name, inputSchema, outputSchema, ...metadata }) =>
-        slimListedTool({
-          ...metadata,
-          name,
-          inputSchema: {
-            ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
-            type: 'object' as const,
-          },
-          ...(outputSchema === undefined
-            ? {}
-            : {
-                outputSchema: {
-                  ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
-                  type: 'object' as const,
-                },
-              }),
-        }),
-      ),
+      tools: definitions
+        .filter(({ name }) => isListed(name, profiles))
+        .map(({ name, inputSchema, outputSchema, ...metadata }) =>
+          slimListedTool({
+            ...metadata,
+            name,
+            inputSchema: {
+              ...z.toJSONSchema(inputSchema, { target: 'draft-7', io: 'input' }),
+              type: 'object' as const,
+            },
+            ...(outputSchema === undefined
+              ? {}
+              : {
+                  outputSchema: {
+                    ...z.toJSONSchema(outputSchema, { target: 'draft-7', io: 'input' }),
+                    type: 'object' as const,
+                  },
+                }),
+          }),
+        ),
     }),
   );
   server.setRequestHandler('tools/call', async (request, extra) => {
