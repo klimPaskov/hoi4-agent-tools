@@ -40,6 +40,8 @@ The game, mod and Workshop folders are found in the default Steam libraries and 
 
 The synthetic suite writes to `.tmp/bench/`. The real suite keeps its results, reports and baseline on this machine only, in `HOI4_BENCH_DIR` or else `%LOCALAPPDATA%\hoi4-agent-tools\bench` (Windows), `~/Library/Application Support/hoi4-agent-tools/bench` (macOS) or `~/.local/share/hoi4-agent-tools/bench` (Linux).
 
+The one-time head-to-head with cpntodd/HOI4-MCP (decision M-7) has its own driver in `scripts/bench/hoi4-mcp/` and its result in [docs/research/hoi4-mcp-head-to-head-2026-11-01.md](../docs/research/hoi4-mcp-head-to-head-2026-11-01.md). That result predates the accuracy fixes.
+
 ## Gates
 
 - **CI:** `tests/integration/bench-synthetic.test.ts` runs the synthetic suite on Linux, Windows and macOS. It fails when a case that passed in `baselines/synthetic.json` fails, an inline answer moves into an artifact, or a sweep finds more false positives. It also fails when a case newly passes but the baseline was not updated, so a fix cannot silently regress later. Latency is not gated in CI, because CI machines vary.

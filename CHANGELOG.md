@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Record the 2026-11-01 head-to-head with cpntodd/HOI4-MCP in `docs/research/hoi4-mcp-head-to-head-2026-11-01.md` (part of #111, M-7). The record says that it predates the accuracy fixes and that its seeded `owner = ROOT` control was wrong ground truth, because `owner` is not a trigger.
+
 ## 4.10.0 - 2026-11-06
 
 - Size lake provinces: `create_world.partitionTuning.lakeArea` (default 6,000 pixels, capped at the largest province the map allows) sets the area of a lake province, so a drawn lake no larger than it stays one province.
