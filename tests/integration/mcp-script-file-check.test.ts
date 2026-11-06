@@ -233,6 +233,26 @@ describe('script_validate file mode', () => {
     ]);
   });
 
+  it('names why a scripted helper file is only partly checked (#65)', async () => {
+    const mcp = await client();
+    const result = await mcp.callTool({
+      name: 'hoi4.script_validate',
+      arguments: { workspaceId: 'fixture', path: 'common/scripted_effects/helpers.txt' },
+    });
+    expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
+    const structured = result.structuredContent as {
+      code: string;
+      data: { valid: boolean | null; unresolvedCount: number; partialReasons?: string[] };
+    };
+    // Before, this was SCRIPT_CHECK_PARTIAL with unresolvedCount 0 and no reason.
+    expect(structured.code).toBe('SCRIPT_CHECK_PARTIAL');
+    expect(structured.data.unresolvedCount).toBe(0);
+    expect(structured.data.partialReasons).toEqual([
+      expect.stringMatching(/^1 block runs in a scope this file does not fix .*line 1\)/u),
+    ]);
+    expect(JSON.stringify(result.content)).toContain('Script checks are partial: 1 block runs');
+  });
+
   it('checks a unit leader event in its owner country', async () => {
     const mcp = await client();
     const result = await mcp.callTool({

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { z } from 'zod/v4';
@@ -185,6 +185,41 @@ function classify(module: string, message: string): Category {
 function knownMistakeOf(message: string): { knownMistake?: { id: string; fix: string } } {
   const rule = knownMistakeForLogMessage(message);
   return rule === undefined ? {} : { knownMistake: { id: rule.id, fix: rule.fix } };
+}
+
+const MOD_SOURCE_FILE = /\.(?:txt|yml|gui|gfx|lua|asset|csv)$/iu;
+const MOD_CHANGE_FILE_LIMIT = 100_000;
+
+/**
+ * The mod's script, localisation and interface files changed after the log was written, so the
+ * log describes an older mod. Image and sound files do not change what the log reports on.
+ */
+export async function modChangedAfter(
+  modRoot: string,
+  logModified: number,
+  signal?: AbortSignal,
+): Promise<{ files: number; newestAt: string; examples: string[] } | undefined> {
+  const entries = await readdir(modRoot, { recursive: true, withFileTypes: true }).catch(() => []);
+  const changed: Array<{ file: string; modified: number }> = [];
+  let checked = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || !MOD_SOURCE_FILE.test(entry.name)) continue;
+    const file = path.join(entry.parentPath, entry.name);
+    const relative = path.relative(modRoot, file).replaceAll('\\', '/');
+    if (relative.startsWith('.git/') || relative.includes('/.git/')) continue;
+    if (++checked > MOD_CHANGE_FILE_LIMIT) break;
+    if ((checked & 255) === 0) signal?.throwIfAborted();
+    const info = await stat(file).catch(() => undefined);
+    if (info !== undefined && info.mtimeMs > logModified)
+      changed.push({ file: relative, modified: info.mtimeMs });
+  }
+  if (changed.length === 0) return undefined;
+  changed.sort((left, right) => right.modified - left.modified);
+  return {
+    files: changed.length,
+    newestAt: new Date(changed[0]!.modified).toISOString(),
+    examples: changed.slice(0, 5).map(({ file }) => `mod:${file}`),
+  };
 }
 
 /** The user-data folder that holds `logs/`, in order of preference. */

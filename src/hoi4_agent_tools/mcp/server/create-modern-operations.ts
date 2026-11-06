@@ -133,7 +133,12 @@ export function createModernOperationServer(
       const workspaceId = (request.params.arguments as { workspaceId?: unknown } | undefined)
         ?.workspaceId;
       return CallToolResultSchema.parse({
-        ...invalidArgumentsResult(definition.name, input.error, workspaceId),
+        ...invalidArgumentsResult(
+          definition.name,
+          input.error,
+          workspaceId,
+          definition.inputSchema,
+        ),
         resultType: 'complete',
         ttlMs: 0,
         cacheScope: 'private',

@@ -97,8 +97,8 @@
       "passed": true
     },
     "synthetic.validation.complete-file": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.validation.supported-effect": {
       "inline": true,
