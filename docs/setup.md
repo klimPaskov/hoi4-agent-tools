@@ -36,6 +36,18 @@ The [client examples](../examples/clients) show the same entries without your pa
 
 Open the mod as your agent's workspace.
 
+### Choose tool profiles
+
+Every tool the server lists costs the agent context on every turn, so a session lists the `core` profile unless it asks for more:
+
+| Profile    | Tools                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`     | Documentation search and reading, source lookup, script validation and the invented-command guard, the error log and its explanations, the mod health check, the mod index, localisation and kit skills |
+| `map`      | The world map builder (`map_inspect`, `map_rewrite`) and the job controls                                                                                                                               |
+| `advanced` | Focus, GUI, event, technology, decision and probability editors, renders and analyses, the other inspect tools, compatibility checks and the job controls                                               |
+
+Set `HOI4_AGENT_TOOLS_PROFILES` in the client's server entry to list more, for example `"env": { "HOI4_AGENT_TOOLS_PROFILES": "core,map" }`, or `all` for every tool. The `profiles` key of the configuration file does the same for every client. A tool outside the listed profiles still answers when a call names it.
+
 ### How the server picks your mod
 
 Every tool takes an optional `workspaceId`; the default, `"current"`, means the mod that contains the client's workspace root or, when the client sends no roots, the server's working directory.

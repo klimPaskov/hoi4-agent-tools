@@ -85,6 +85,8 @@ The server gives your agent previews, documentation, script analysis and editing
 The agent combines them with its file editor to build events and decisions, repair scripts and adjust AI weights.
 The [tool reference](docs/tools.md) lists exact names, arguments and results for integrations.
 
+A session lists the core tools by default: documentation search, source lookup, script validation, the error log, the mod health check and localisation. They fit in about 8,000 tokens of the agent's context. Set `HOI4_AGENT_TOOLS_PROFILES` to `core,map`, `core,advanced` or `all` in the client's server entry for the world map tools or the focus, GUI, event, technology and probability editors ([tool profiles](docs/setup.md#choose-tool-profiles)).
+
 ## FAQ
 
 **Where do edits go?** Changes are written to your mod folder; use Git to review or undo them.
