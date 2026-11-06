@@ -49,7 +49,7 @@ Selectors use one of these forms:
 { "kind": "manifest", "manifest": { "eventIds": ["namespace.1", "namespace.2"] } }
 ```
 
-`trace` uses `selector`; `explain_path` uses `from` and `to`; and `state_flow` may add a `stateSubject` object with `kind` and `name`. Allowed state kinds are `country_flag`, `global_flag`, `state_flag`, `variable`, `global_variable`, `array`, `event_target`, `global_event_target`, and `saved_scope`.
+`trace` uses `selector`; `explain_path` uses `from` and `to`; and `state_flow` may add a `stateSubject` object with `kind` and `name`. Allowed state kinds are `country_flag`, `global_flag`, `state_flag`, `variable`, `global_variable`, `array`, `event_target`, `global_event_target`, and `saved_scope`. A subject narrows the findings as well as the flow, and `data.summary.flow` gives its producers and readers inline. `scan`, `roots`, `lint` and `state_flow` apply a `selector` too. A selector that matches nothing answers `EVENT_NOT_FOUND`, `EVENT_NAMESPACE_NOT_FOUND`, `EVENT_NODE_NOT_FOUND` or `EVENT_SOURCE_NOT_FOUND` with close names, and a subject nothing uses answers `EVENT_STATE_NOT_FOUND`.
 
 `impact` requires an `impactSubject` object with `kind` and `name`. Allowed impact kinds are `event`, `helper`, `flag`, `variable`, `array`, `event_target`, and `saved_scope`. Set `refresh: true` after source changes when a prior graph may be cached.
 

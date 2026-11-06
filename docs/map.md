@@ -170,7 +170,7 @@ Not synthesised yet: biomes, climate, fertility, tree and colour-map classes fro
 
 The linked JSON catalog contains every active province definition, state, and strategic region with resolved names, alternate localisation values, source paths and lines, raster bounds and centers, memberships, neighbors, victory points, resources, buildings, ports, supply nodes, railways, normal and special adjacencies, building positions, unit positions, weather positions, and entity locators. Large catalog and render data remain in MCP resources instead of filling the agent prompt.
 
-Use `query` for a compact name or ID result list and `coordinates` for exact pixel or map-coordinate lookup. Use `provinceIds`, `stateIds`, and `regionIds` for focused records. Up to 32 selected provinces can also produce exact geometry as maximal `[y, startX, endXExclusive]` row runs.
+Use `query` for a compact name or ID result list and `coordinates` for exact pixel or map-coordinate lookup. Use `provinceIds`, `stateIds`, and `regionIds` for focused records. Up to 32 selected provinces can also produce exact geometry as maximal `[y, startX, endXExclusive]` row runs. When none of the requested ids exists, the call answers `MAP_ENTITY_ID_NOT_FOUND` with the highest id of each kind, before any validation or render. A selection with some known ids reports the unknown ones.
 
 Set `lookupOnly: true` for coordinate, query, and selected-ID lookups without full validation, the complete catalog artifact, overview rendering, or province geometry export. The lookup artifact contains only the requested matches and source revision. Use full inspection for allocation previews or province row runs.
 
