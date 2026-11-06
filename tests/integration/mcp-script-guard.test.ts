@@ -11,10 +11,10 @@ import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js'
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
 
 const close: Array<() => Promise<void>> = [];
-const savedEngine = process.env[ENGINE_BINARY_ENV];
+const savedEngine = process.env.HOI4_ENGINE;
 afterEach(async () => {
-  if (savedEngine === undefined) delete process.env[ENGINE_BINARY_ENV];
-  else process.env[ENGINE_BINARY_ENV] = savedEngine;
+  if (savedEngine === undefined) delete process.env.HOI4_ENGINE;
+  else process.env.HOI4_ENGINE = savedEngine;
   for (const action of close.splice(0).reverse()) await action();
 });
 
