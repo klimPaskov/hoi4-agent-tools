@@ -38,6 +38,12 @@ import {
   scriptValidateRequestSchema,
 } from '../../schemas/script-validation.js';
 import { skillDataSchema, skillRequestSchema } from '../../schemas/skill.js';
+import {
+  explainErrorDataSchema,
+  explainErrorRequestSchema,
+  modHealthDataSchema,
+  modHealthRequestSchema,
+} from '../../schemas/modder-tools.js';
 
 const readOnly = {
   readOnlyHint: true,
@@ -98,6 +104,24 @@ export const referenceTools = [
       'Find errors from the last game launch and group them by category, with source files, lines and fix hints. Show which files changed since the log and which errors appeared after a relaunch; mod entries come first. Example: {"scope":"mod","category":"effect"}. Returns at most 20 entries (limit 50) with fix hints and which entries are new since the previous launch.',
     inputSchema: errorLogRequestSchema,
     outputSchema: strictOperationResultSchema(errorLogDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.explain_error',
+    title: 'Explain error.log lines',
+    description:
+      'Explain error.log lines: the rule each one breaks, its file and line with the lines around it, and the fix, from a reviewed catalogue of the game\'s messages. Says whether the game documents the command a line names, and the closest documented names. Example: {"line":"Invalid trigger \'stability\' in events/my_events.txt line : 12"}. Returns up to 20 explanations (10 lines).',
+    inputSchema: explainErrorRequestSchema,
+    outputSchema: strictOperationResultSchema(explainErrorDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.mod_health',
+    title: 'Check a whole mod',
+    description:
+      'Check a whole mod in one call: the last error.log, the engine check (unknown effects, triggers and modifiers, duplicate ids, broken overrides), script validation, and the localisation and asset audits. Returns the 10 problems that matter most, each counted with 2 examples, its fix and the tool to use next, and which audits ran. Example: {"limit":5} or {"checks":["error_log","engine_check"]}. Takes up to a minute on a large mod.',
+    inputSchema: modHealthRequestSchema,
+    outputSchema: strictOperationResultSchema(modHealthDataSchema),
     annotations: readOnly,
   },
   {

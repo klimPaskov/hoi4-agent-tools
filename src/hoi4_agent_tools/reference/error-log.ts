@@ -28,11 +28,15 @@ const quotedFilePattern = new RegExp(
   `(?:in |)file:?\\s*"([^"]+\\.(?:${SOURCE_EXTENSIONS}))"`,
   'giu',
 );
+const CONTENT_FOLDERS =
+  'common|events|history|interface|gfx|localisation|localisation_synced|map|music|sound|portraits|tutorial';
 const barePathPattern = new RegExp(
-  `((?:[A-Za-z]:)?[\\w .\\-/\\\\]*?(?:common|events|history|interface|gfx|localisation|localisation_synced|map|music|sound|portraits|tutorial)[/\\\\][^\\s"',;:]+?\\.(?:${SOURCE_EXTENSIONS}))\\b`,
+  `((?:[A-Za-z]:)?[\\w .\\-/\\\\]*?(?:${CONTENT_FOLDERS})[/\\\\][^\\s"',;:]+?\\.(?:${SOURCE_EXTENSIONS}))\\b`,
   'gu',
 );
-const linePattern = /(?:near\s+)?line:?\s*(\d{1,7})/giu;
+/** `near line: 12`, `line : 12` and `line: 12`; `file.txt:12:` is read by `fileLinePattern`. */
+const linePattern = /(?:near\s+)?line\s*:?\s*(\d{1,7})/giu;
+const fileLinePattern = new RegExp(`\\.(?:${SOURCE_EXTENSIONS}):(\\d{1,7})\\b`, 'iu');
 
 /** Rules in order; the first that matches classifies an entry. */
 const categoryRules: ReadonlyArray<readonly [Category, RegExp]> = [
@@ -67,7 +71,7 @@ const moduleCategories: ReadonlyArray<readonly [RegExp, Category]> = [
 ];
 
 /** What to do about each kind of entry; names the tool that narrows it down. */
-const categoryHints: Readonly<Record<Category, string>> = {
+export const categoryHints: Readonly<Record<Category, string>> = {
   syntax:
     'Check braces, quotes and assignments near the named line; hoi4.script_validate with the file path pinpoints it.',
   duplicate:
@@ -174,7 +178,7 @@ async function compareWithPreviousLaunch(
   return { ...(next.previous === undefined ? {} : { previous: next.previous }), current };
 }
 
-function classify(module: string, message: string): Category {
+export function classifyLogMessage(module: string, message: string): Category {
   for (const [category, pattern] of categoryRules)
     if (category !== 'missing_reference' && pattern.test(message)) return category;
   for (const [pattern, category] of moduleCategories) if (pattern.test(module)) return category;
@@ -287,7 +291,7 @@ interface Located {
 }
 
 /** The last source file a message names, relative to its source root, and its line. */
-function locate(message: string, roots: readonly string[]): Located | undefined {
+export function locateLogSource(message: string, roots: readonly string[]): Located | undefined {
   const files = [
     ...[...message.matchAll(quotedFilePattern)].map((match) => match[1]!),
     ...[...message.matchAll(barePathPattern)].map((match) => match[1]!.trim()),
@@ -305,8 +309,17 @@ function locate(message: string, roots: readonly string[]): Located | undefined 
   // Paths under any mod folder are made relative to that mod.
   const modMatch = /\/mod\/[^/]+\/(.+)$/u.exec(normalized);
   if (modMatch !== null && path.isAbsolute(raw)) normalized = modMatch[1]!;
+  // A bare path can pick up the words before it ("... in events/a.txt"): start at its folder.
+  if (!path.isAbsolute(normalized)) {
+    const folder = new RegExp(`(?:^|[\\s/])((?:${CONTENT_FOLDERS})/)`, 'u').exec(normalized);
+    if (folder !== null && folder.index > 0)
+      normalized = normalized.slice(folder.index + folder[0].length - folder[1]!.length);
+  }
   const lines = [...message.matchAll(linePattern)].map((match) => Number(match[1]));
-  return { relativePath: normalized, ...(lines.length === 0 ? {} : { line: lines.at(-1)! }) };
+  // `common/x.txt:12: message` gives the line right after the file name.
+  const fileLine = fileLinePattern.exec(message.slice(message.lastIndexOf(raw)));
+  const line = lines.at(-1) ?? (fileLine === null ? undefined : Number(fileLine[1]));
+  return { relativePath: normalized, ...(line === undefined ? {} : { line }) };
 }
 
 async function layerOf(
@@ -314,6 +327,18 @@ async function layerOf(
   relativePath: string,
   logModified: number,
 ): Promise<{ layer: NonNullable<Entry['source']>['layer']; changedSinceLog: boolean }> {
+  const found = await sourceLayerOf(workspace, relativePath);
+  return {
+    layer: found.layer,
+    changedSinceLog: found.modified !== undefined && found.modified > logModified,
+  };
+}
+
+/** The first layer, in override order, that has the file, with its root folder. */
+export async function sourceLayerOf(
+  workspace: Pick<ResolvedWorkspace, 'modRoot' | 'dependencyRoots' | 'gameRoot'>,
+  relativePath: string,
+): Promise<{ layer: NonNullable<Entry['source']>['layer']; root?: string; modified?: number }> {
   const layers: Array<[NonNullable<Entry['source']>['layer'], string]> = [
     ['mod', workspace.modRoot],
     ...workspace.dependencyRoots.map((root): [NonNullable<Entry['source']>['layer'], string] => [
@@ -328,9 +353,9 @@ async function layerOf(
     const candidate = path.resolve(root, relativePath);
     if (!candidate.startsWith(path.resolve(root) + path.sep)) continue;
     const info = await stat(candidate).catch(() => undefined);
-    if (info?.isFile() === true) return { layer, changedSinceLog: info.mtimeMs > logModified };
+    if (info?.isFile() === true) return { layer, root, modified: info.mtimeMs };
   }
-  return { layer: 'unknown', changedSinceLog: false };
+  return { layer: 'unknown' };
 }
 
 export async function readErrorLog(
@@ -377,7 +402,7 @@ export async function readErrorLog(
       existing.count += 1;
       continue;
     }
-    const located = locate(message, roots);
+    const located = locateLogSource(message, roots);
     const source =
       located === undefined
         ? undefined
@@ -387,7 +412,7 @@ export async function readErrorLog(
             ...(await layerOf(workspace, located.relativePath, found.modified)),
           };
     grouped.set(key, {
-      category: classify(item.module, message),
+      category: classifyLogMessage(item.module, message),
       module: item.module.slice(0, 128),
       message,
       count: 1,

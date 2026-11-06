@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "reviewed": "2026-11-06",
+  "explanations": [
+    {
+      "id": "invalid_trigger",
+      "category": "trigger",
+      "pattern": "^Invalid trigger '(?<name>[^']+)' in (?<file>\\S+\\.\\w+) line ?: ?(?<line>\\d+)",
+      "rule": "A trigger block (limit, trigger, allowed, available, visible and the like) accepts only triggers the game documents, scripted triggers that a loaded file defines, and scope changes.",
+      "fix": "Check `{name}` against the game's trigger documentation: correct the name, use the trigger that tests the value, or move an effect out of the trigger block.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_effect",
+      "category": "effect",
+      "pattern": "^Invalid effect '(?<name>[^']+)' in (?<file>\\S+\\.\\w+) line ?: ?(?<line>\\d+)",
+      "rule": "An effect block (immediate, option, completion_reward, effect and the like) accepts only effects the game documents, scripted effects that a loaded file defines, and scope changes.",
+      "fix": "Check `{name}` against the game's effect documentation: correct the name, or define the scripted effect it was meant to call.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unknown_effect_type",
+      "category": "effect",
+      "pattern": "Unknown effect-type: (?<name>[^,\\s]+), near line: (?<line>\\d+)",
+      "rule": "The parser met `{name}` where it expects an effect, and no documented effect or loaded scripted effect has that name.",
+      "fix": "Correct `{name}` to a documented effect, or define the scripted effect in common/scripted_effects/.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unknown_trigger_type",
+      "category": "trigger",
+      "pattern": "Unknown trigger-type: (?<name>[^,\\s]+), near line: (?<line>\\d+)",
+      "rule": "The parser met `{name}` where it expects a trigger, and no documented trigger, loaded scripted trigger or scope change has that name.",
+      "fix": "Correct `{name}` to a documented trigger, or define the scripted trigger in common/scripted_triggers/. A country tag works here only if the tag exists and the block accepts a scope change.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unexpected_token",
+      "category": "syntax",
+      "pattern": "Unexpected token: (?<name>[^,\\s]+), near line: (?<line>\\d+)",
+      "rule": "Each block accepts a fixed set of keys. A key the parser does not expect is usually misspelled, placed in the wrong block, or left outside its block by a missing or extra brace.",
+      "fix": "Check that `{name}` belongs in this block, and that the braces before it are balanced. hoi4.script_validate on the file points at an unbalanced brace.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unexpected_token_in_file",
+      "category": "syntax",
+      "pattern": "unexpected token in file: \"(?<file>[^\"]+)\" near line: (?<line>\\d+)",
+      "rule": "The game could not read the file from this point on. A missing or extra brace, a missing `=` or an unclosed quote above the named line causes this, and what follows the problem is lost.",
+      "fix": "Find the unbalanced brace or quote above line {line}. hoi4.script_validate on the file reports where parsing breaks.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "init_post_read_failed",
+      "category": "other",
+      "pattern": "InitPostRead failed in file: \"(?<file>[^\"]+)\" in object\\(s\\) between line\\(s\\): (?<line>\\d+) and (?<end>\\d+)",
+      "rule": "An object in the file failed to load because of an earlier error, which the log names on the line before this one.",
+      "fix": "Fix the error the log reports just before this line for the same file and lines {line} to {end}; this line goes away with it.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "missing_modifier_localisation",
+      "category": "localisation",
+      "pattern": "^No localisation for (?<key>[A-Za-z0-9_.\\-]+)",
+      "rule": "A modifier, or another key the interface shows, has no text in the current language.",
+      "fix": "Add `{key}` to a UTF-8 file with a byte order mark under localisation/<language>/, or correct the name that produces the key.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_sub_unit_modifier",
+      "category": "missing_reference",
+      "pattern": "^Invalid sub unit/category in modifier: (?<name>\\S+)",
+      "rule": "A sub-unit or unit-category modifier names a sub-unit or category that no loaded file defines.",
+      "fix": "Correct the sub-unit or category name in `{name}`, or define it under common/units/.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "scripted_advisor_with_effects",
+      "category": "other",
+      "pattern": "^(?<file>\\S+\\.txt):(?<line>\\d+): advisor role created via script cannot contain any effects or triggers",
+      "rule": "An advisor role that a script effect creates cannot carry effects or triggers (such as on_add, on_remove or allowed). Only an advisor role defined in common/characters/ can.",
+      "fix": "Define the character and its advisor role in common/characters/ and recruit it from the script, or remove the effects and triggers from the role the script creates.",
+      "evidence": "Message text in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "missing_ship_entity",
+      "category": "graphics",
+      "pattern": "^Missing ship entity \"(?<name>[^\"]+)\"",
+      "rule": "A ship's model is looked up by an entity name, and no loaded .asset file defines `{name}`.",
+      "fix": "Define the entity `{name}` in a gfx/entities/*.asset file, or correct the model name the equipment or variant uses.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "missing_attachment_entity",
+      "category": "graphics",
+      "pattern": "^Failed to find entity \"(?<name>[^\"]+)\" for attachment",
+      "rule": "A model attaches another entity by name, and no loaded .asset file defines `{name}`.",
+      "fix": "Define the entity `{name}` in a gfx/entities/*.asset file, or correct the attachment's name.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "missing_texticon",
+      "category": "graphics",
+      "pattern": "^Couldnt find texticon: (?<name>[^|\\s]+)",
+      "rule": "Text writes an icon with `£{name}`, which the game draws from the sprite `GFX_{name}`, and no loaded .gfx file defines that sprite.",
+      "fix": "Define `GFX_{name}` in an interface/*.gfx file, or correct the icon name after `£` in the localisation.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "tag_not_in_tag_list",
+      "category": "missing_reference",
+      "pattern": "^(?<tag>[A-Z][A-Z0-9]{2}) - is not in the tag list",
+      "rule": "Script names the country tag `{tag}`, which common/country_tags/ does not define for this game.",
+      "fix": "Define `{tag}` in a common/country_tags/ file, or correct the tag.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_country_tag",
+      "category": "missing_reference",
+      "pattern": "^Invalid Country Tag - (?<tag>.+)$",
+      "rule": "The game expected a country tag and read `{tag}`. A value that is not a tag here (such as `{` or `color`) means a block above it is malformed.",
+      "fix": "If `{tag}` is a tag, define it in common/country_tags/. Otherwise check the braces and keys just before it.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "refers_to_unknown_tag",
+      "category": "missing_reference",
+      "pattern": "refers to the unknown tag: (?<tag>[^,\\s]+)",
+      "rule": "Script names the country tag `{tag}`, which common/country_tags/ does not define.",
+      "fix": "Define `{tag}` in common/country_tags/, or correct it. A tag made at run time needs a saved scope or a variable instead of the bare tag.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "faction_default_rule_replaced",
+      "category": "duplicate",
+      "pattern": "^Default rule '(?<name>[^']+)' replaces '(?<other>[^']+)' that has previously been set as default for '(?<group>[^']+)' in '(?<owner>[^']+)'",
+      "rule": "`{owner}` sets two default rules of the faction rule group `{group}`, and the later one, `{name}`, replaces `{other}`. A group has one default rule.",
+      "fix": "List one rule of the group `{group}` in the `default_rules` of `{owner}`: keep `{name}` or `{other}`, not both.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28); rule groups and default_rules in common/factions/_documentation.md"
+    },
+    {
+      "id": "province_in_two_rules",
+      "category": "map",
+      "pattern": "^Province (?:for icon )?is invalid or added twice to the (?:same or )?different rules: (?<province>\\d+)",
+      "rule": "Province {province} is listed in more than one map rule of the same kind, or does not exist.",
+      "fix": "List province {province} in one rule only, and check that it exists in map/definition.csv.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "navy_in_landlocked_province",
+      "category": "map",
+      "pattern": "^Trying to move navy to land province with no port: (?<province>\\d+)",
+      "rule": "A fleet's location must be a sea province or a province with a naval base. Province {province} is land without a port.",
+      "fix": "Set the fleet's `location` to a province with a naval base, or build one there in the state's history.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_scope",
+      "category": "scope",
+      "pattern": "^(?<file>\\S+\\.txt):(?<line>\\d+): (?<name>\\S+): Invalid Scope, supported: (?<scopes>.+)$",
+      "rule": "`{name}` runs in a scope it does not support. It supports: {scopes}.",
+      "fix": "Wrap `{name}` in a scope change to a supported scope, or move it to a block that runs in one. hoi4.script_validate on the file shows the scope at each line.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_scope_state",
+      "category": "scope",
+      "pattern": "^(?<file>\\S+\\.txt):(?<line>\\d+): (?<name>\\S+) -- invalid scope (?<scope>\\w+)",
+      "rule": "`{name}` ran in a {scope} scope, which it does not support.",
+      "fix": "Change the scope before `{name}`, or use the {scope}-scope variant of the command. hoi4.script_validate on the file shows the scope at each line.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unknown_special_project",
+      "category": "missing_reference",
+      "pattern": "^sp:(?<name>\\S+) does not match any Special Project in database",
+      "rule": "Script names the special project `{name}`, which no file under common/special_projects/ defines.",
+      "fix": "Define `{name}` under common/special_projects/, or correct the name after `sp:`.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "variable_without_var_prefix",
+      "category": "missing_reference",
+      "pattern": "invalid database object for effect/trigger:\\s+file: (?<file>\\S+) line: (?<line>\\d+) (?<name>\\S+)\\. use var:",
+      "rule": "`{name}` is not a database object (such as a state, country or character). A variable used where the game expects one needs the `var:` prefix.",
+      "fix": "Write `var:{name}` if `{name}` is a variable; otherwise correct the name.",
+      "evidence": "Message text in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "invalid_compare_token",
+      "category": "trigger",
+      "pattern": "^Not a valid compare token in trigger '(?<token>[^']+)' from (?<file>\\S+\\.\\w+) line ?: ?(?<line>\\d+)",
+      "rule": "This trigger compares a value and does not accept `{token}` as its comparison.",
+      "fix": "Use the comparison the trigger documents, usually `>` or `<` for a number.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "unknown_variable",
+      "category": "missing_reference",
+      "pattern": "Unknow variable '(?<name>[^']+)' in this scope",
+      "rule": "The variable `{name}` has no value in the scope that reads it at this point.",
+      "fix": "Set `{name}` in this scope before it is read, read it from the scope that holds it, or give the read a default.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "collection_needs_name",
+      "category": "syntax",
+      "pattern": "Collection (?<name>\\S+) must define a name",
+      "rule": "A collection input with operators is an inner block: `input = { input = {name} operators = { ... } }`. Written flat, the game reads `{name}` as a named collection without a name, and `operators` as an unknown trigger.",
+      "fix": "Move `input = {name}` and its `operators` into an inner `input = { ... }` block, as the game's script_collection_input documentation shows.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28); documentation/script_collection_input.md, game scope"
+    },
+    {
+      "id": "raid_requirements_invalid",
+      "category": "missing_reference",
+      "pattern": "^(?<file>\\S+\\.txt):(?<line>\\d+): Missing or invalid requirements for raid type '(?<name>[^']+)'",
+      "rule": "The raid `{name}` lacks a valid requirements block, or the block names something that is not defined.",
+      "fix": "Check the raid's requirements against the game's raid documentation, with hoi4.system_inspect kind raid.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "loc_key_collisions",
+      "category": "duplicate",
+      "pattern": "The game has loc key collisions",
+      "rule": "Two localisation files define the same key in one language; one of them wins and the other text is lost.",
+      "fix": "Run hoi4.localisation_inspect with mode audit to list the duplicated keys, then keep one definition of each, or move the override to localisation/<language>/replace/.",
+      "evidence": "Message text in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "division_template_unreadable",
+      "category": "other",
+      "pattern": "Error reading division template \\((?<name>[^)]*)\\)",
+      "rule": "The division template `{name}` could not be read, usually because it names a sub-unit that does not exist or breaks the designer's grid.",
+      "fix": "Check the template with hoi4.unit_inspect kind oob, which lists unknown sub-units and grid problems.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "sub_unit_missing_for_terrain",
+      "category": "missing_reference",
+      "pattern": "^sub unit not found for terrain (?<terrain>[^:]+): (?<name>\\S+)",
+      "rule": "A terrain's unit modifiers name the sub-unit `{name}`, which no loaded file defines.",
+      "fix": "Define `{name}` under common/units/, or remove it from the terrain's unit modifiers.",
+      "evidence": "Message shape in the game's error.log, build 99a5ee557 (2026-10-28)"
+    },
+    {
+      "id": "event_triggered_only_base_factor",
+      "category": "other",
+      "pattern": "Event is triggered only, but does not have a 1 base-factor",
+      "rule": "`mean_time_to_happen` only works for an event that fires by itself, and an event with `is_triggered_only = yes` never does.",
+      "fix": "Remove `mean_time_to_happen`, or remove `is_triggered_only` if the event is meant to fire by itself.",
+      "evidence": "HOI4 wiki, Event modding > Common mistakes > Unintuitive logged errors"
+    },
+    {
+      "id": "event_triggers_every_day",
+      "category": "other",
+      "pattern": "Event is set to trigger every day",
+      "rule": "An event that fires by itself, can fire more than once and has a mean time to happen of one day or less (one day when omitted) may fire every day once its trigger is true.",
+      "fix": "Add `is_triggered_only = yes` and fire it from an effect or on_action, add `fire_only_once = yes`, or set the mean time to happen to 2 days or more.",
+      "evidence": "HOI4 wiki, Event modding > Common mistakes > Unintuitive logged errors"
+    }
+  ]
+}

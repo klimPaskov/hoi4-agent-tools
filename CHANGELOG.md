@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `hoi4.explain_error` and `hoi4.mod_health` (maintainer decision R-5). `explain_error` takes up to 10 `error.log` lines and explains each message in them: the rule it breaks, the fix, the source file and line with the lines around it, and the next call. The rules and fixes come from a reviewed catalogue of 32 message shapes the game's own log writes (`error-explanations.json`), each with its evidence, then the reviewed known mistakes, then the message's category. For a command it names, it says whether the installed documentation lists it as an effect, trigger or modifier, whether a loaded file defines it as a scripted helper, and the closest documented names, with a value's `has_` trigger first (`stability` gives `has_stability`, `clear_country_flag` gives `clr_country_flag`). A line from the game's own files says so. `mod_health` runs the error log, the engine's whole-mod check (`hoi4-engine check`), script validation, and the localisation, sprite and flag audits, and returns the 10 problems that matter most, each counted with two examples, its fix and the tool to call next. Script validation checks the files the other audits named first, within 30 seconds. An audit that cannot run is reported with the reason, and the verdict is then `incomplete`, never `healthy`. On Ireland Total Overhaul with game 1.19.4.2 it took 40 s. `error_log` now reads the line of `line : 12` and `file.txt:12:` messages, and no longer takes the words before a bare path as part of it.
+
 ## 4.11.1 - 2026-11-07
 
 - Close impassable walls in generated maps, and keep pass saddles and point river mouths that a 4.10.0 `create_world` lost.

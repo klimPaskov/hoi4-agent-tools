@@ -149,6 +149,36 @@ Filter with `scope` (`all`, `mod` for entries in the mod's own files, or `unloca
 The tool reads the log the game wrote at its last launch; it never starts the game.
 Run `hoi4.script_validate` with `path` on the reported file to check the same body before the next launch.
 
+## Explain an error.log line
+
+`hoi4.explain_error` takes one `line`, or up to 10 `lines`, as the game writes them or as `hoi4.error_log` returns them.
+A parser error that wraps several messages (`Error: "... near line: 11 ... near line: 12" in file: "..."`) gives one explanation per message, each at its own line.
+Each explanation carries:
+
+- `rule`: what the game requires, and `fix`: what to change. Both come from a reviewed catalogue (`error-explanations.json`) of the messages the game's own log writes, each with its evidence: the log of a named game build or the game's documentation. `matched` says where they came from: `catalogue`, a reviewed `known_mistake`, or only the message's `category`.
+- `source`: the file, the line and its layer (`mod`, `dependency`, `game`), with up to 5 lines around it. A line from the game's own files says so in `note`: it appears without the mod too.
+- `subject`, the command, key or tag the message names, with `documentedAs` (whether the installed documentation lists it as an effect, trigger or modifier), `definedBy` (a scripted effect or trigger that a loaded file defines) and up to 3 `suggestions`. A value read as a trigger suggests its `has_` trigger first, such as `has_stability` for `stability`.
+- `next`: the call that narrows it down, `hoi4.script_validate` on a mod file.
+
+```json
+{ "line": "Invalid trigger 'stability' in events/my_events.txt line : 12" }
+```
+
+## Check a whole mod
+
+`hoi4.mod_health` runs the existing audits in one call and returns the 10 problems that matter most (`limit` lowers it):
+
+- `error_log`: the mod's own entries of the last launch's `error.log`. A log from a launch without the mod is ignored, and a log older than the mod's files counts for less.
+- `engine_check`: the engine's whole-mod check: unknown effects, triggers and modifiers, duplicate ids, event namespace collisions, broken and dropping overrides and missing localisation keys.
+- `script`: `hoi4.script_validate` on the mod's script files, those the other audits named first and the newest after them, within 30 seconds.
+- `localisation` and `assets`: the localisation audit and the sprite and flag audits.
+
+Findings of one kind form one problem with its count, two examples, its fix and the tool to call next. Two audits that report the same kind, such as a missing localisation key, count once. Problems rank by severity, then by how much they hurt a player (the game failing to read a file first), then by count. `checks` says which audits ran, which ran partly and why, and which could not run (the engine audits need `hoi4-engine`). `verdict` is `healthy` only when every audit ran and found nothing, and `incomplete` when nothing was found but an audit could not run. Choose audits with `checks`. A large mod takes up to a minute.
+
+```json
+{ "limit": 5 }
+```
+
 ## Index the mod and pick free IDs
 
 `hoi4.mod_index` with `mode: "overview"` summarizes the mod without reading every file:

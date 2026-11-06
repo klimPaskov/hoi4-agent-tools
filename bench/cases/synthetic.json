@@ -674,6 +674,68 @@
           "equals": 14
         }
       ]
+    },
+    {
+      "id": "synthetic.explain_error.wrapped-token",
+      "surface": "error_log",
+      "corpus": "synthetic",
+      "title": "A wrapped parser error is explained as an unexpected token at the inner message's line in the mod file",
+      "evidence": "tests/helpers/smoke-fixture.ts writes this line to error.log. The inner message names line 12; the outer \"near line: 14\" is the end of the read. events/synthetic_alpha_01.txt is a mod file.",
+      "tool": "hoi4.explain_error",
+      "arguments": {
+        "line": "[09:15:02][persistent.cpp:48]: Error: \"Unexpected token: }, near line: 12\" in file: \"events/synthetic_alpha_01.txt\" near line: 14"
+      },
+      "expect": [
+        {
+          "path": "data.explanations[0].id",
+          "equals": "unexpected_token"
+        },
+        {
+          "path": "data.explanations[0].source.relativePath",
+          "equals": "events/synthetic_alpha_01.txt"
+        },
+        {
+          "path": "data.explanations[0].source.line",
+          "equals": 12
+        },
+        {
+          "path": "data.explanations[0].source.layer",
+          "equals": "mod"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 4096
+        }
+      ]
+    },
+    {
+      "id": "synthetic.mod_health.log-first",
+      "surface": "error_log",
+      "corpus": "synthetic",
+      "title": "The game's own syntax error in a mod file is the top problem of the mod's health",
+      "evidence": "tests/helpers/smoke-fixture.ts writes an error.log whose first line is a parser error in the mod's events/synthetic_alpha_01.txt; the game reporting that it cannot read a file outranks every other finding.",
+      "tool": "hoi4.mod_health",
+      "arguments": {
+        "checks": ["error_log", "script"]
+      },
+      "expect": [
+        {
+          "path": "data.problems[0].check",
+          "equals": "error_log"
+        },
+        {
+          "path": "data.problems[0].examples[0].path",
+          "equals": "events/synthetic_alpha_01.txt"
+        },
+        {
+          "path": "data.checks[*].check",
+          "includes": "script"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 8192
+        }
+      ]
     }
   ]
 }
