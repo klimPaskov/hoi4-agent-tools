@@ -28,6 +28,8 @@ import {
 } from './script-validation.js';
 import { modChangedAfter, readErrorLog } from './error-log.js';
 import { modIndex } from './mod-index.js';
+import { listSkills, loadSkill } from './skills.js';
+import { skillDataSchema, skillRequestSchema } from '../schemas/skill.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
 import { inspectIdeas } from '../ideas/inspect.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
@@ -97,6 +99,7 @@ const schemas = {
   'hoi4.system_inspect': systemInspectRequestSchema,
   'hoi4.unit_inspect': unitInspectRequestSchema,
   'hoi4.asset_inspect': assetInspectRequestSchema,
+  'hoi4.skill': skillRequestSchema,
 } as const;
 /** Asset findings players would not notice: uneven frames, sprites the game fills itself, hidden pictures and flags one pixel off. */
 const ASSET_INFORMATION = new Set([
@@ -196,19 +199,21 @@ export class ReferenceToolService {
                               unitInspectRequestSchema.parse(parsed),
                               signal,
                             )
-                          : name === 'hoi4.localisation_inspect'
-                            ? await inspectLocalisation(
-                                workspace,
-                                localisationInspectRequestSchema.parse(parsed),
-                                signal,
-                              )
-                            : await sourceLookup(
-                                this.engine,
-                                workspaceId,
-                                sourceLookupRequestSchema.parse(parsed),
-                                context.principal,
-                                signal,
-                              );
+                          : name === 'hoi4.skill'
+                            ? await this.skill(workspace, skillRequestSchema.parse(parsed), signal)
+                            : name === 'hoi4.localisation_inspect'
+                              ? await inspectLocalisation(
+                                  workspace,
+                                  localisationInspectRequestSchema.parse(parsed),
+                                  signal,
+                                )
+                              : await sourceLookup(
+                                  this.engine,
+                                  workspaceId,
+                                  sourceLookupRequestSchema.parse(parsed),
+                                  context.principal,
+                                  signal,
+                                );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
@@ -249,6 +254,26 @@ export class ReferenceToolService {
               log.modEntries === 0
                 ? 'The last game launch logged no errors located in this mod'
                 : `The last game launch logged ${log.modEntries} distinct errors located in this mod`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.skill') {
+      const served = skillDataSchema.parse(data);
+      result.code = served.skill === undefined ? 'SKILLS_LISTED' : 'SKILL_LOADED';
+      // A skill that differs from the kit version the mod pins is not the shared text.
+      result.validation = {
+        passed: served.drifted === 0,
+        checks: [
+          {
+            id: 'skill-pinned',
+            passed: served.drifted === 0,
+            message:
+              served.kit === null
+                ? 'The mod has no HOI4 Mod Setup lock, so the skills are served unpinned'
+                : served.drifted === 0
+                  ? `Every served file matches kit revision ${served.kit.revision}`
+                  : `${served.drifted} skills differ from kit revision ${served.kit.revision}`,
           },
         ],
       };
@@ -436,6 +461,16 @@ export class ReferenceToolService {
   readonly #playerText = new Map<string, { key: string; context: PlayerTextContext }>();
 
   /** File mode reads the scanned file and the mod's scripted helper names from one scan. */
+  private async skill(
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof skillRequestSchema>,
+    signal?: AbortSignal,
+  ) {
+    return request.name === undefined
+      ? listSkills(workspace, signal)
+      : loadSkill(workspace, { ...request, name: request.name }, signal);
+  }
+
   private async validateScript(
     workspaceId: string,
     workspace: ResolvedWorkspace,

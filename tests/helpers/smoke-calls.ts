@@ -21,6 +21,7 @@ export const ALL_TOOLS = [
   'hoi4.system_inspect',
   'hoi4.unit_inspect',
   'hoi4.asset_inspect',
+  'hoi4.skill',
   'hoi4.focus_inspect',
   'hoi4.focus_render',
   'hoi4.focus_rewrite',
@@ -143,6 +144,7 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
       args: { kind: 'flag', audit: true },
       tolerate: ['ENGINE_UNAVAILABLE'],
     },
+    { tool: 'hoi4.skill', label: 'list the skills', args: {} },
     {
       tool: 'hoi4.mod_index',
       label: 'next free event ID in a namespace',
@@ -351,6 +353,7 @@ export function wrongFieldCalls(workspaceId: string): WrongFieldCall[] {
     wrong('hoi4.system_inspect', 'system', { system: 'mio', id: 'my_organization' }),
     wrong('hoi4.unit_inspect', 'oob', { oob: 'GER_1936' }),
     wrong('hoi4.asset_inspect', 'sprite', { sprite: 'GFX_my_icon' }),
+    wrong('hoi4.skill', 'skill', { skill: 'hoi4-events' }),
     wrong('hoi4.event_inspect', 'event_id', { mode: 'trace', event_id: 'my_mod.1' }),
     wrong('hoi4.event_render', 'event_id', { view: 'overview', event_id: 'my_mod.1' }),
     wrong('hoi4.focus_inspect', 'tree', { tree: 'my_focus_tree' }),

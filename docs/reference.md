@@ -168,6 +168,32 @@ The result gives `nextId` after the highest used number, and `firstGapId` when a
 { "mode": "next_id", "kind": "event", "namespace": "my_mod" }
 ```
 
+## Read the mod's skills
+
+`hoi4.skill` serves the modding skills HOI4 Mod Setup installed in the mod, so every client reads the same text.
+Without `name` it lists them, with the description from each `SKILL.md`, the number of files, and a state.
+With `name` it loads that skill's `SKILL.md`, or another file of the skill named in `file`, such as `references/events.md`.
+
+The served text is the kit version the mod pins.
+Setup's lock, `.hoi4-mod-setup/install.lock.json`, records the kit repository, revision, release and manifest hash, and the SHA-256 of every installed file.
+Each result returns the kit identity, the file's `sha256` and the `pinnedSha256` from the lock, and its state:
+
+- `pinned`: the installed bytes match the lock.
+- `edited`: the bytes differ. Loading the file fails with `SKILL_TEXT_DRIFTED` unless `acceptLocalEdits` is true, and the result's validation fails either way. Rerun HOI4 Mod Setup to restore the pinned text.
+- `missing`: the lock names a file the mod no longer has (`SKILL_FILE_MISSING`).
+- `unpinned`: the mod has no Setup lock, so its installed skills are served with their hashes but no kit version can be checked. `kit` is `null`.
+
+Setup installs a copy for each client. The `.agents/skills` copy is served when it exists, otherwise the `.claude/skills` copy.
+Only files named in the lock are served, and a file that resolves outside the mod is refused.
+A call returns at most 20,000 bytes of text, cut after a line break. Continue from `nextOffset` until it is `null`.
+
+The same `SKILL.md` text is the MCP resource `hoi4-agent://workspace/{workspaceId}/skill/{name}`, listed for the client's mod as `hoi4-agent://workspace/current/skill/<name>`.
+Its `_meta` carries `sha256`, `state`, `kitRevision` and `kitRelease`, and an edited file is refused there too.
+
+```json
+{ "name": "hoi4-events" }
+```
+
 ## Example
 
 ```json

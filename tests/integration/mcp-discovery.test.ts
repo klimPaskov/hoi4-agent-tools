@@ -69,6 +69,7 @@ describe('MCP discovery', () => {
       'hoi4.system_inspect',
       'hoi4.unit_inspect',
       'hoi4.asset_inspect',
+      'hoi4.skill',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.impact_inspect',
@@ -123,6 +124,7 @@ describe('MCP discovery', () => {
       'hoi4.system_inspect',
       'hoi4.unit_inspect',
       'hoi4.asset_inspect',
+      'hoi4.skill',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
@@ -200,6 +202,7 @@ describe('MCP discovery', () => {
     const resourceTemplates = (await client.listResourceTemplates()).resourceTemplates;
     expect(resourceTemplates.map(({ uriTemplate }) => uriTemplate)).toEqual([
       'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}',
+      'hoi4-agent://workspace/{workspaceId}/skill/{name}',
     ]);
     expect(resourceTemplates[0]).toMatchObject({
       description: expect.stringContaining('byte offset'),

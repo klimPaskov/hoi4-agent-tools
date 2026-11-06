@@ -25,6 +25,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}',
   'hoi4.unit_inspect': '{"kind":"oob","id":"GER_1936"} or {"kind":"variant","audit":true}',
   'hoi4.asset_inspect': '{"kind":"sprite","id":"GFX_my_icon"} or {"kind":"flag","audit":true}',
+  'hoi4.skill': '{} to list or {"name":"hoi4-events"}',
   'hoi4.event_inspect':
     '{"mode":"lint","selector":"chaosx.nr14"} or {"mode":"trace","selector":"chaosx.nr14.1","direction":"downstream"}',
   'hoi4.event_render': '{"view":"overview","selector":"chaosx.nr14"}',

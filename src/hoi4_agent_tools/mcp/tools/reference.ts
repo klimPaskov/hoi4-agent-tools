@@ -37,6 +37,7 @@ import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../../schemas/script-validation.js';
+import { skillDataSchema, skillRequestSchema } from '../../schemas/skill.js';
 
 const readOnly = {
   readOnlyHint: true,
@@ -151,6 +152,15 @@ export const referenceTools = [
       'Read one sprite (texture size, format and frames), sound, sound effect or music track (audio file, sounds it plays), or flag (all three sizes), or audit every one the mod defines. Flags BC7 textures, missing files and wrong flag sizes. Example: {"kind":"sprite","id":"GFX_my_icon"} or {"kind":"flag","audit":true}.',
     inputSchema: assetInspectRequestSchema,
     outputSchema: strictOperationResultSchema(assetInspectDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.skill',
+    title: "Read the mod's modding skills",
+    description:
+      'List the modding skills installed in the mod, or load one by name, at the kit version HOI4 Mod Setup pinned, with its hash. A file edited since Setup installed it is refused unless acceptLocalEdits. Example: {"name":"hoi4-events"}. Returns up to 20,000 bytes of text; continue from nextOffset.',
+    inputSchema: skillRequestSchema,
+    outputSchema: strictOperationResultSchema(skillDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];
