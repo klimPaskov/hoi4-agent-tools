@@ -43,6 +43,8 @@ import {
   explainErrorRequestSchema,
   modHealthDataSchema,
   modHealthRequestSchema,
+  scriptGuardDataSchema,
+  scriptGuardRequestSchema,
 } from '../../schemas/modder-tools.js';
 
 const readOnly = {
@@ -122,6 +124,15 @@ export const referenceTools = [
       'Check a whole mod in one call: the last error.log, the engine check (unknown effects, triggers and modifiers, duplicate ids, broken overrides), script validation, and the localisation and asset audits. Returns the 10 problems that matter most, each counted with 2 examples, its fix and the tool to use next, and which audits ran. Example: {"limit":5} or {"checks":["error_log","engine_check"]}. Takes up to a minute on a large mod.',
     inputSchema: modHealthRequestSchema,
     outputSchema: strictOperationResultSchema(modHealthDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.script_guard',
+    title: 'Find invented commands in new script',
+    description:
+      'Check the files you wrote for invented commands: every effect, trigger and modifier that the installed game documentation does not list and no loaded file defines, with its file, line and the closest real name. Checks the named paths, or the mod script files changed in the last 120 minutes. Needs hoi4-engine. Example: {"paths":["events/my_events.txt"]}. Returns up to 40 names.',
+    inputSchema: scriptGuardRequestSchema,
+    outputSchema: strictOperationResultSchema(scriptGuardDataSchema),
     annotations: readOnly,
   },
   {

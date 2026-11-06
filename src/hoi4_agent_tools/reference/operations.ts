@@ -37,7 +37,10 @@ import {
   explainErrorRequestSchema,
   modHealthDataSchema,
   modHealthRequestSchema,
+  scriptGuardDataSchema,
+  scriptGuardRequestSchema,
 } from '../schemas/modder-tools.js';
+import { guardedFiles, inventedNames, type InventedName } from './script-guard.js';
 import { rankProblems, type CheckRun, type HealthCheck, type HealthFinding } from './mod-health.js';
 import { modIndex } from './mod-index.js';
 import { listSkills, loadSkill } from './skills.js';
@@ -107,6 +110,7 @@ const schemas = {
   'hoi4.error_log': errorLogRequestSchema,
   'hoi4.explain_error': explainErrorRequestSchema,
   'hoi4.mod_health': modHealthRequestSchema,
+  'hoi4.script_guard': scriptGuardRequestSchema,
   'hoi4.mod_index': modIndexRequestSchema,
   'hoi4.localisation_inspect': localisationInspectRequestSchema,
   'hoi4.idea_inspect': ideaInspectRequestSchema,
@@ -177,48 +181,50 @@ export class ReferenceToolService {
                   this.engine.resolver.config().gameUserRoot,
                   signal,
                 )
-              : name === 'hoi4.mod_health'
-                ? await this.modHealth(
+              : name === 'hoi4.script_guard'
+                ? await this.scriptGuard(
                     workspaceId,
                     workspace,
-                    modHealthRequestSchema.parse(parsed),
+                    scriptGuardRequestSchema.parse(parsed),
                     context.principal,
                     signal,
                   )
-                : name === 'hoi4.explain_error'
-                  ? await this.explainError(
+                : name === 'hoi4.mod_health'
+                  ? await this.modHealth(
                       workspaceId,
                       workspace,
-                      explainErrorRequestSchema.parse(parsed),
+                      modHealthRequestSchema.parse(parsed),
                       context.principal,
                       signal,
                     )
-                  : name === 'hoi4.mod_index'
-                    ? await modIndex(
-                        this.engine,
+                  : name === 'hoi4.explain_error'
+                    ? await this.explainError(
                         workspaceId,
-                        modIndexRequestSchema.parse(parsed),
+                        workspace,
+                        explainErrorRequestSchema.parse(parsed),
                         context.principal,
                         signal,
                       )
-                    : name === 'hoi4.script_validate'
-                      ? await this.validateScript(
+                    : name === 'hoi4.mod_index'
+                      ? await modIndex(
+                          this.engine,
                           workspaceId,
-                          workspace,
-                          scriptValidateRequestSchema.parse(parsed),
+                          modIndexRequestSchema.parse(parsed),
                           context.principal,
                           signal,
                         )
-                      : name === 'hoi4.idea_inspect'
-                        ? await inspectIdeas(
+                      : name === 'hoi4.script_validate'
+                        ? await this.validateScript(
+                            workspaceId,
                             workspace,
-                            ideaInspectRequestSchema.parse(parsed),
+                            scriptValidateRequestSchema.parse(parsed),
+                            context.principal,
                             signal,
                           )
-                        : name === 'hoi4.system_inspect'
-                          ? await inspectSystem(
+                        : name === 'hoi4.idea_inspect'
+                          ? await inspectIdeas(
                               workspace,
-                              systemInspectRequestSchema.parse(parsed),
+                              ideaInspectRequestSchema.parse(parsed),
                               signal,
                             )
                           : name === 'hoi4.skill'
@@ -237,6 +243,24 @@ export class ReferenceToolService {
                                   signal,
                                 );
     const result = emptyServiceResult(workspaceId, data);
+    if (name === 'hoi4.script_guard') {
+      const guard = scriptGuardDataSchema.parse(data);
+      result.code = 'SCRIPT_GUARD_CHECKED';
+      const invented = guard.counts.effect + guard.counts.trigger + guard.counts.modifier;
+      result.validation = {
+        passed: guard.verdict === 'clean',
+        checks: [
+          {
+            id: 'script-guard',
+            passed: guard.verdict === 'clean',
+            message:
+              guard.verdict === 'clean'
+                ? `Every effect, trigger and modifier in ${guard.filesChecked} files is documented or defined`
+                : `${invented} names in ${guard.filesChecked} files are neither documented nor defined`,
+          },
+        ],
+      };
+    }
     if (name === 'hoi4.mod_health') {
       const health = modHealthDataSchema.parse(data);
       result.code = 'MOD_HEALTH_CHECKED';
@@ -667,6 +691,65 @@ export class ReferenceToolService {
     };
   }
 
+  /**
+   * `hoi4.script_guard`: the engine's whole-mod check narrowed to the files an agent wrote, and
+   * script validation of the first of them for the names the engine does not read as commands.
+   */
+  private async scriptGuard(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof scriptGuardRequestSchema>,
+    principal?: string,
+    signal?: AbortSignal,
+  ) {
+    const { files, candidates } = await guardedFiles(
+      workspace.modRoot,
+      request,
+      Date.now(),
+      signal,
+    );
+    if (files.length === 0)
+      throw new ServiceError(
+        'SCRIPT_GUARD_NO_FILES',
+        `No script file of the mod changed in the last ${request.sinceMinutes} minutes; pass paths to name the files to check`,
+      );
+    const report = await runEngineCheck(
+      {
+        mod: workspace.modRoot,
+        ...(workspace.gameRoot === undefined ? {} : { game: workspace.gameRoot }),
+        dependencies: workspace.dependencyRoots,
+        includeDlc: workspace.dlcLayers.length > 0,
+      },
+      signal === undefined ? {} : { signal },
+    );
+    const unresolved: InventedName[] = [];
+    for (const file of files.filter((candidate) => SCRIPT_FILE.test(candidate)).slice(0, 50)) {
+      signal?.throwIfAborted();
+      const validated = await this.validateScript(
+        workspaceId,
+        workspace,
+        scriptValidateRequestSchema.parse({ path: file, limit: 32 }),
+        principal,
+        signal,
+      );
+      for (const finding of validated.findings)
+        if (
+          finding.code === 'SCRIPT_COMMAND_UNRESOLVED' &&
+          finding.command !== '' &&
+          (finding.kind === 'effect' || finding.kind === 'trigger')
+        )
+          unresolved.push({
+            name: finding.command,
+            kind: finding.kind,
+            path: file,
+            line: finding.line,
+            ...(finding.suggestions[0] === undefined ? {} : { suggestion: finding.suggestions[0] }),
+            message: `\`${finding.command}\` is neither a documented ${finding.kind} nor a scripted ${finding.kind} defined in any loaded file`,
+          });
+    }
+    return inventedNames(report, files, candidates, unresolved);
+  }
+
   /** Explanations know the documented commands and the scripted helpers the loaded files define. */
   private async explainError(
     workspaceId: string,
@@ -955,6 +1038,9 @@ const HEALTH_SCRIPT_PATTERNS = [
   'common/scripted_triggers/**/*.txt',
 ];
 const HEALTH_SCRIPT_BUDGET_MS = 30_000;
+/** The families script validation reads, for the guard's second pass. */
+const SCRIPT_FILE =
+  /^(?:events|common\/(?:decisions|national_focus|on_actions|scripted_effects|scripted_triggers))\//u;
 const HEALTH_SCRIPT_MAX_FILES = 400;
 
 /** The engine's whole-mod check: findings in the mod's own layer. */

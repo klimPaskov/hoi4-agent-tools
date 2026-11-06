@@ -164,6 +164,14 @@ Each explanation carries:
 { "line": "Invalid trigger 'stability' in events/my_events.txt line : 12" }
 ```
 
+## Find invented commands in new script
+
+`hoi4.script_guard` checks the files an agent wrote: every effect, trigger and modifier in them that the installed game's documentation does not list and no loaded file defines as a scripted effect, scripted trigger or modifier. Each invented name comes with its kind, file, line, the definition it is in and the closest real name. Pass `paths` (up to 50 mod files), or leave them out to check the mod's script files changed in the last `sinceMinutes` (120 by default). File times choose the files, so no Git command runs in the mod. The engine's whole-mod check (`hoi4-engine check`) judges every `name = value` command, and `hoi4.script_validate` adds the names it cannot resolve, such as a trigger compared with `>`. Without the engine the tool answers `ENGINE_UNAVAILABLE`.
+
+```json
+{ "paths": ["events/my_events.txt"] }
+```
+
 ## Check a whole mod
 
 `hoi4.mod_health` runs the existing audits in one call and returns the 10 problems that matter most (`limit` lowers it):

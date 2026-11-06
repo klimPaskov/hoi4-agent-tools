@@ -17,6 +17,7 @@ export const ALL_TOOLS = [
   'hoi4.error_log',
   'hoi4.explain_error',
   'hoi4.mod_health',
+  'hoi4.script_guard',
   'hoi4.mod_index',
   'hoi4.localisation_inspect',
   'hoi4.idea_inspect',
@@ -113,6 +114,13 @@ export function readOnlyCalls(subjects: SmokeSubjects): SmokeCall[] {
       label: 'group the last game error log',
       args: { limit: 5 },
       tolerate: ['ERROR_LOG_NOT_FOUND'],
+    },
+    {
+      tool: 'hoi4.script_guard',
+      label: 'look for invented commands in an event file',
+      args: { paths: [subjects.eventFile] },
+      // CI builds no Rust engine; the tool then says so instead of answering.
+      tolerate: ['ENGINE_UNAVAILABLE'],
     },
     {
       tool: 'hoi4.mod_health',
@@ -361,6 +369,7 @@ export function wrongFieldCalls(workspaceId: string): WrongFieldCall[] {
     wrong('hoi4.error_log', 'severity', { severity: 'error' }),
     wrong('hoi4.explain_error', 'message', { message: 'Invalid trigger' }),
     wrong('hoi4.mod_health', 'audits', { audits: ['error_log'] }),
+    wrong('hoi4.script_guard', 'files', { files: ['events/a.txt'] }),
     wrong('hoi4.mod_index', 'mod', { mode: 'overview', mod: 'my_mod' }),
     wrong('hoi4.localisation_inspect', 'lang', { mode: 'coverage', lang: 'german' }),
     wrong('hoi4.idea_inspect', 'idea', { idea: 'my_idea' }),

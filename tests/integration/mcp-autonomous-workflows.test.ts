@@ -145,6 +145,7 @@ describe('autonomous MCP rewrite workflows', () => {
       'hoi4.error_log',
       'hoi4.explain_error',
       'hoi4.mod_health',
+      'hoi4.script_guard',
       'hoi4.mod_index',
       'hoi4.localisation_inspect',
       'hoi4.idea_inspect',

@@ -18,6 +18,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.script_validate':
     '{"path":"events/my_events.txt"} or {"source":"add_political_power = 10","kind":"effect","scope":"country"}',
   'hoi4.error_log': '{"scope":"mod","category":"effect"}',
+  'hoi4.script_guard': '{"paths":["events/my_events.txt"]} or {"sinceMinutes":30}',
   'hoi4.mod_health': '{"limit":5} or {"checks":["error_log","engine_check"]}',
   'hoi4.explain_error': `{"line":"Invalid trigger 'stability' in events/my_events.txt line : 12"}`,
   'hoi4.mod_index': '{"mode":"overview"} or {"mode":"next_id","kind":"event","namespace":"my_mod"}',

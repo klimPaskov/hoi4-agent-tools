@@ -171,3 +171,43 @@ export const modHealthDataSchema = z
     checksRun: count,
   })
   .strict();
+
+export const scriptGuardRequestSchema = z
+  .object({
+    workspaceId: workspaceIdSchema,
+    /** Mod files to check, such as events/my_events.txt. */
+    paths: z.array(z.string().trim().min(1).max(1024)).min(1).max(50).optional(),
+    /** Without paths: the mod's script files changed in the last this many minutes. */
+    sinceMinutes: z.number().int().min(1).max(10_080).default(120),
+  })
+  .strict();
+
+export const scriptGuardDataSchema = z
+  .object({
+    /** `clean`: every name in the checked files is documented or defined. */
+    verdict: z.enum(['clean', 'invented']),
+    filesChecked: count,
+    /** Changed files beyond the 200 newest. */
+    filesOmitted: count,
+    counts: z.object({ effect: count, trigger: count, modifier: count }).strict(),
+    files: z.array(z.object({ path: z.string().max(1024), invented: count }).strict()).max(50),
+    invented: z
+      .array(
+        z
+          .object({
+            name: z.string().max(256),
+            kind: z.enum(['effect', 'trigger', 'modifier']),
+            path: z.string().max(1024),
+            line,
+            /** The definition it is in, such as `event:my.1`. */
+            context: z.string().max(256).optional(),
+            /** The closest documented or defined name. */
+            suggestion: z.string().max(256).optional(),
+            message: z.string().max(300),
+          })
+          .strict(),
+      )
+      .max(40),
+    inventedOmitted: count,
+  })
+  .strict();
