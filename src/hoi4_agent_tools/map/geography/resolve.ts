@@ -790,6 +790,13 @@ export function resolveGeography(
         `The terrain shares of region ${input.id} add up to ${shareSum.toFixed(2)}, above 1`,
         { featureId: input.id, sum: shareSum },
       );
+    if (input.impassable === true && area === undefined)
+      sink(
+        'MAP_GEOGRAPHY_IMPASSABLE_WITHOUT_AREA',
+        'error',
+        `Region ${input.id} is impassable but has no polygons to say where`,
+        { featureId: input.id },
+      );
     const perState = input.density?.provincesPerState;
     if (perState !== undefined && !(perState[0] <= perState[1] && perState[1] <= perState[2]))
       sink(
@@ -806,6 +813,7 @@ export function resolveGeography(
       ...(Object.keys(terrain).length === 0 ? {} : { terrain }),
       ...(perState === undefined ? {} : { provincesPerState: perState }),
       ...opt('provinceAreaPx', input.density?.provinceAreaPx),
+      ...(input.impassable === true && area !== undefined ? { impassable: true as const } : {}),
     });
   }
 

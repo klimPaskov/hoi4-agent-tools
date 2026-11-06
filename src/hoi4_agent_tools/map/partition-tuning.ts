@@ -10,6 +10,8 @@ export interface PartitionTuning {
   landArea?: { fertile?: number; hills?: number; mountain?: number; waste?: number };
   /** Sea province area in pixels near a coast and on the open sea. */
   seaArea?: { coastal?: number; open?: number };
+  /** Lake province area in pixels; a lake no larger than this stays one province. */
+  lakeArea?: number;
   /** `[smallest, largest]` land provinces in a state; the preferred size is their geometric mean. */
   provincesPerState?: readonly [number, number];
   /** `[smallest, largest]` land provinces in a strategic region. */
@@ -124,6 +126,7 @@ export function resolvePartitionTuning(
   const sea = tuning?.seaArea;
   for (const [name, value] of Object.entries(sea ?? {}))
     checkPixels(`seaArea.${name}`, value, minProvincePixels);
+  checkPixels('lakeArea', tuning?.lakeArea, minProvincePixels);
   const coastal = clamp(sea?.coastal ?? base.seaProvincePixels * PARTITION_DEFAULTS.seaCoastal);
   const open = clamp(sea?.open ?? base.seaProvincePixels * PARTITION_DEFAULTS.seaOpen);
   if (coastal > open)
@@ -177,7 +180,7 @@ export function resolvePartitionTuning(
   return {
     landArea: { fertile, plains: clamp(Math.sqrt(fertile * hills)), hills, mountain, waste },
     seaArea: { coastal, open },
-    lakeArea: clamp(PARTITION_DEFAULTS.lake),
+    lakeArea: clamp(tuning?.lakeArea ?? PARTITION_DEFAULTS.lake),
     states: group(perState, base.provincesPerState, 0.5, 1.6),
     regions: group(regionSize, base.landProvincesPerRegion, 0.6, 1.5),
     seaRegions: group(undefined, base.seaProvincesPerRegion, 0.5, 1.6),

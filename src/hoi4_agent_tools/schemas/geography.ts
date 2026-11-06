@@ -164,6 +164,11 @@ const regionSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Land inside the region's polygons that no army may enter (ZR-28): its provinces form
+     * impassable states, and the relief raises it to the highest ground.
+     */
+    impassable: z.boolean().optional(),
   })
   .strict();
 
