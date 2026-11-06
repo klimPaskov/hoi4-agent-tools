@@ -11,12 +11,20 @@
  * - a cell keeps the model's height where that is higher, and every other cell keeps the model's
  *   broad elevation untouched;
  * - impassable land (ZR-28) rises toward `impassablePeak`, the highest ground of the map;
+ * - a declared pass keeps the saddle the macro relief carved for it: the raise is capped there
+ *   as the carving capped the model's own heights, so a painted range never fills its pass;
  * - painted mountains and volcanoes get permanent snow above a height that falls from the
  *   equator toward the poles, and weight the full-resolution detail as model ranges do.
  */
 import { LAND } from './grid.js';
 import { fractal2, ridged2, smoothstep } from './math.js';
-import { HEIGHT_CEILING, PEAK_BASE, PEAK_SPAN } from './macro-relief.js';
+import {
+  cappedAtPass,
+  HEIGHT_CEILING,
+  PEAK_BASE,
+  PEAK_SPAN,
+  type PassCaps,
+} from './macro-relief.js';
 
 /** Reference terrain codes the stage reads (`REFERENCE_TERRAIN` of the reference interpretation). */
 export const PAINTED_MOUNTAIN = 3;
@@ -61,6 +69,8 @@ export interface PaintedReliefTarget {
   heights: Float32Array;
   footprint: Float32Array;
   snowLine: Uint8Array;
+  /** The pass saddles of the macro relief, which a raise may not fill. */
+  passCap?: PassCaps | undefined;
   scale: number;
 }
 
@@ -164,10 +174,11 @@ export function applyPaintedRelief(
           PEAK_BASE + lift(input.settings.impassablePeak) * i * (0.8 + 0.2 * ridges),
         ),
       );
-      if (goal > target.heights[cell]!) {
-        target.heights[cell] = goal;
+      const raised = cappedAtPass(target.passCap, cell, goal);
+      if (raised > target.heights[cell]!) {
+        target.heights[cell] = raised;
         raisedCells += 1;
-        if (goal > highest) highest = goal;
+        if (raised > highest) highest = raised;
       }
       const weight = Math.max(m, 0.6 * h, v, i);
       if (weight > target.footprint[cell]!) target.footprint[cell] = weight;

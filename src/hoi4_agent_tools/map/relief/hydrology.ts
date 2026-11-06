@@ -825,6 +825,14 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
         } else {
           const target = landCellAt(macro, mouth.x, mouth.y, 8);
           if (target < 0) unreachable('its mouth lies far from any land');
+          if (target !== current && occupant[target] === ownId) {
+            // The course already runs through the mouth's cell, which happens when the last via
+            // point lies within a cell of the mouth: the river ends there instead of looking for
+            // a way back into its own bed, which the router never enters.
+            const at = cells.lastIndexOf(target);
+            for (const cell of cells.splice(at + 1)) occupant[cell] = 0;
+            current = target;
+          }
           final =
             target === current
               ? { cells: [current], joined: -1 }
