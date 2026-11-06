@@ -21,7 +21,7 @@ import {
   scriptValidateRequestSchema,
 } from '../schemas/script-validation.js';
 import { validateScript } from './script-validation.js';
-import { readErrorLog } from './error-log.js';
+import { modChangedAfter, readErrorLog } from './error-log.js';
 import { modIndex } from './mod-index.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
 import { inspectIdeas } from '../ideas/inspect.js';
@@ -210,8 +210,14 @@ export class ReferenceToolService {
       result.code = 'ERROR_LOG_READ';
       // A log from a launch without the mod says nothing about the mod.
       const otherLaunch = log.launch?.modLoaded === false;
+      // A log older than the mod's files describes an older mod (#65).
+      const stale = await modChangedAfter(
+        workspace.modRoot,
+        Date.parse(log.log.modifiedAt),
+        signal,
+      );
       result.validation = {
-        passed: log.modEntries === 0 && !otherLaunch,
+        passed: log.modEntries === 0 && !otherLaunch && stale === undefined,
         checks: [
           ...(otherLaunch
             ? [
@@ -222,6 +228,15 @@ export class ReferenceToolService {
                 },
               ]
             : []),
+          ...(stale === undefined
+            ? []
+            : [
+                {
+                  id: 'error-log-age',
+                  passed: false,
+                  message: `The log was written at ${log.log.modifiedAt}, before ${stale.files} of the mod's files changed (the newest at ${stale.newestAt}, ${stale.examples[0] ?? ''}), so it does not show errors in the current source; relaunch the game to check them`,
+                },
+              ]),
           {
             id: 'error-log-mod-entries',
             passed: log.modEntries === 0,
@@ -378,7 +393,7 @@ export class ReferenceToolService {
                 ? 'Syntax, native command kinds and declared scopes match the selected documentation'
                 : checked.valid === false
                   ? 'Script checks found an error'
-                  : 'Script checks have unresolved coverage',
+                  : `Script checks are partial: ${(checked.partialReasons ?? ['coverage is unresolved']).join('; ')}`,
           },
         ],
       };

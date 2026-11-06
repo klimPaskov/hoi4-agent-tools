@@ -667,6 +667,39 @@ export async function validateScript(
     inventory.skipped > 0 ||
     (file === undefined ? catalogs[input.kind!].size === 0 : plan.roots.length === 0) ||
     unknownScopeRoots > 0;
+  // A partial result names what is partial (#65), so `null` is never a bare "not sure".
+  const unknownScopeLines = plan.roots
+    .filter(({ scope }) => scope === UNKNOWN_SCOPE)
+    .slice(0, 8)
+    .map(
+      ({ block }) =>
+        locationFor(documentPath, document.lineIndex, block.start, block.end).start.line,
+    );
+  const partialReasons = [
+    ...(unresolvedCount > 0
+      ? [
+          `${unresolvedCount === 1 ? '1 command' : `${unresolvedCount} commands`} could not be resolved (see findings with status unresolved)`,
+        ]
+      : []),
+    ...(truncated ? [`only the first ${commandLimit} commands were checked`] : []),
+    ...(inventory.skipped > 0
+      ? [
+          `${inventory.skipped === 1 ? '1 documentation source' : `${inventory.skipped} documentation sources`} could not be read`,
+        ]
+      : []),
+    ...((file === undefined ? catalogs[input.kind!].size === 0 : plan.roots.length === 0)
+      ? [
+          file === undefined
+            ? `the documentation lists no ${input.kind} commands`
+            : `no effect or trigger block of a known file family was found in ${file.path}`,
+        ]
+      : []),
+    ...(unknownScopeRoots > 0
+      ? [
+          `${unknownScopeRoots === 1 ? '1 block runs' : `${unknownScopeRoots} blocks run`} in a scope this file does not fix (a scripted helper or on_action, at line${unknownScopeLines.length === 1 ? '' : 's'} ${unknownScopeLines.join(', ')}${unknownScopeRoots > unknownScopeLines.length ? ' and more' : ''}), so scope rules were not applied there`,
+        ]
+      : []),
+  ];
   const order = { error: 0, unresolved: 1, warning: 2, supported: 3 };
   findings.sort(
     (a, b) =>
@@ -700,6 +733,7 @@ export async function validateScript(
     unresolvedCount,
     truncated,
     argumentBlocksUnchecked,
+    ...(partialReasons.length === 0 ? {} : { partialReasons }),
     ...(file === undefined
       ? {}
       : {

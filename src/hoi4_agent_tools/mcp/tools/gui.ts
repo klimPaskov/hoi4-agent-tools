@@ -115,7 +115,7 @@ export const guiTaskTools = [
     name: 'hoi4.gui_rewrite',
     title: 'Create or edit a window',
     description:
-      'Create or edit a window using complete source, structured helpers or exact patches. Include related text files with additionalFiles; binary art must already be in the mod. Example: {"mode":"helpers","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"helper":{...}}. Returns the changed files.',
+      'Create or edit a window from complete source, structured helpers or exact patches. Add related text files in additionalFiles; binary art must already be in the mod. Example: {"mode":"helpers","relativePath":"interface/my_window.gui","windowName":"my_window","scenario":{"id":"normal"},"helper":{"root":{"id":"w","kind":"column","name":"my_window"}}}.',
     inputSchema: guiRewriteRequestSchema,
     outputSchema: guiPlanOutputSchema,
     annotations: {
