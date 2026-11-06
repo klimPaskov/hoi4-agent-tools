@@ -552,7 +552,7 @@ export class ReferenceToolService {
       },
       ...(await this.wikiHint(data)),
     );
-    return toolResult(result);
+    return toolResult(result, { compact: true });
   }
 
   /** Name the fix when no wiki was read and no docs pack is installed. */
