@@ -203,6 +203,53 @@ function mapArtifactSourceEvidence(files: readonly { displayPath: string; sha256
   return { complete, bounded: boundedSourceHashEvidence(complete) };
 }
 
+/**
+ * A selection whose ids the map defines none of is not-found before any work, never an ok result
+ * with empty records and a whole-map artifact (#59). A selection with some known ids goes on and
+ * reports the unknown ones (unknownProvinceIds, and a null state or region record).
+ */
+function assertKnownMapEntities(
+  snapshot: Awaited<ReturnType<AgentNudger['scan']>>,
+  input: Pick<MapInspectToolRequest, 'provinceIds' | 'stateIds' | 'regionIds'>,
+): void {
+  const index = snapshot.index;
+  const unknown = {
+    stateIds: [...new Set(input.stateIds)].filter((id) => !index.statesById.has(id)),
+    provinceIds: [...new Set(input.provinceIds)].filter((id) => !index.definitionsById.has(id)),
+    regionIds: [...new Set(input.regionIds)].filter((id) => !index.regionsById.has(id)),
+  };
+  const requested =
+    new Set(input.stateIds).size + new Set(input.provinceIds).size + new Set(input.regionIds).size;
+  const unknownCount =
+    unknown.stateIds.length + unknown.provinceIds.length + unknown.regionIds.length;
+  if (requested === 0 || unknownCount < requested) return;
+  const highest = (ids: Iterable<number>): number => {
+    let value = 0;
+    for (const id of ids) if (id > value) value = id;
+    return value;
+  };
+  const parts = [
+    ['state', unknown.stateIds, highest(index.statesById.keys())],
+    ['province', unknown.provinceIds, highest(index.definitionsById.keys())],
+    ['strategic region', unknown.regionIds, highest(index.regionsById.keys())],
+  ] as const;
+  const missing = parts.filter(([, ids]) => ids.length > 0);
+  throw new ServiceError(
+    'MAP_ENTITY_ID_NOT_FOUND',
+    `The map defines no ${missing
+      .map(
+        ([kind, ids, highest]) =>
+          `${kind} ${ids.slice(0, 16).join(', ')}${ids.length > 16 ? ' and more' : ''} (the highest ${kind} id is ${highest})`,
+      )
+      .join('; no ')}`,
+    {
+      stateIds: unknown.stateIds.slice(0, 64),
+      provinceIds: unknown.provinceIds.slice(0, 64),
+      regionIds: unknown.regionIds.slice(0, 64),
+    },
+  );
+}
+
 function selectedMapEntities(
   snapshot: Awaited<ReturnType<AgentNudger['scan']>>,
   provinceIds: readonly number[],
@@ -808,6 +855,7 @@ export async function inspectMap(
         'Use full map inspection for identifier allocation previews',
       );
     const snapshot = await nudger.scan(context.workspaceId, context.principal, context.signal);
+    assertKnownMapEntities(snapshot, input);
     const catalog = input.query === undefined ? undefined : buildMapCatalog(snapshot.index);
     const queryMatches =
       catalog === undefined ? [] : searchMapCatalog(catalog, input.query!, input.queryLimit);
@@ -886,6 +934,12 @@ export async function inspectMap(
     await context.progress(3, 3, 'Map lookup complete');
     return result;
   }
+  // Check the ids on the cached scan before the full validation.
+  if (input.stateIds.length + input.provinceIds.length + input.regionIds.length > 0)
+    assertKnownMapEntities(
+      await nudger.scan(context.workspaceId, context.principal, context.signal),
+      input,
+    );
   const { snapshot, validation, scriptReferences } = await nudger.validate(
     context.workspaceId,
     context.principal,

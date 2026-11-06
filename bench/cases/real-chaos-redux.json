@@ -546,6 +546,234 @@
           "excludes": "warning"
         }
       ]
+    },
+    {
+      "id": "chaos_redux.event.state-flow-subject",
+      "surface": "event",
+      "title": "state_flow with a stateSubject lists only that flag",
+      "evidence": "Chaos Redux events set independence_wave_package_incident_a_resolved in 130 places. Before the fix the inline findings listed unrelated targets such as death_trigger_actor.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "state_flow",
+        "stateSubject": {
+          "kind": "country_flag",
+          "name": "independence_wave_package_incident_a_resolved"
+        }
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "data.summary.flow.subject",
+          "equals": "country_flag:independence_wave_package_incident_a_resolved"
+        },
+        {
+          "path": "data.summary.flow.producers",
+          "atLeast": 1
+        },
+        {
+          "path": "data.summary.findings[*].subject",
+          "excludes": "death_trigger_actor"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.event.state-flow-unknown-subject",
+      "surface": "event",
+      "title": "state_flow for a flag nothing uses is an explicit not-found",
+      "evidence": "No Chaos Redux or vanilla file sets or checks chaosx_no_such_flag.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "state_flow",
+        "stateSubject": {
+          "kind": "country_flag",
+          "name": "chaosx_no_such_flag"
+        }
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "EVENT_STATE_NOT_FOUND"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_flag"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.event.roots-namespace",
+      "surface": "event",
+      "title": "roots with a namespace selector lists only that namespace",
+      "evidence": "Chaos Redux numbers its namespaces chaosx.nr1 to chaosx.nr12; chaosx.nr10.20 is one of its events. Before the fix roots answered for the whole workspace.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "roots",
+        "selector": {
+          "kind": "namespace",
+          "namespace": "chaosx.nr10"
+        }
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 16384
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.event.roots-unknown-namespace",
+      "surface": "event",
+      "title": "roots for a namespace nothing declares is an explicit not-found",
+      "evidence": "No file declares add_namespace = chaosx_no_such_namespace.",
+      "tool": "hoi4.event_inspect",
+      "arguments": {
+        "mode": "roots",
+        "selector": {
+          "kind": "namespace",
+          "namespace": "chaosx_no_such_namespace"
+        }
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "EVENT_NAMESPACE_NOT_FOUND"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.decision.inventory-category",
+      "surface": "decision",
+      "title": "A decision inventory with a category id lists only that category",
+      "evidence": "common/decisions/002_zombie_outbreak_decisions.txt puts find_cure_tier_0 to find_cure_tier_2 in chaosx_zzz_cure_category, which two decision files open. The whole inventory has hundreds of categories.",
+      "tool": "hoi4.decision_inspect",
+      "arguments": {
+        "mode": "inventory",
+        "id": "chaosx_zzz_cure_category"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "data.categories",
+          "atMost": 2
+        },
+        {
+          "path": "data.decisionIds[*]",
+          "includes": "find_cure_tier_0"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.decision.inventory-unknown-id",
+      "surface": "decision",
+      "title": "A decision inventory for an unknown category is an explicit not-found",
+      "evidence": "No file defines chaosx_no_such_category.",
+      "tool": "hoi4.decision_inspect",
+      "arguments": {
+        "mode": "inventory",
+        "id": "chaosx_no_such_category"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "DECISION_NOT_FOUND"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_category"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.impact.unknown-symbol",
+      "surface": "impact",
+      "title": "impact_inspect for a symbol nothing defines is an explicit not-found",
+      "evidence": "No file defines the scripted effect chaosx_no_such_effect.",
+      "tool": "hoi4.impact_inspect",
+      "arguments": {
+        "symbols": [
+          {
+            "kind": "scripted_effect",
+            "id": "chaosx_no_such_effect"
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "IMPACT_SYMBOL_NOT_FOUND"
+        },
+        {
+          "path": "$text",
+          "includes": "chaosx_no_such_effect"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
+    },
+    {
+      "id": "chaos_redux.map.unknown-state",
+      "surface": "map",
+      "title": "A state id nothing defines is an explicit not-found",
+      "evidence": "Chaos Redux and vanilla define fewer than 1,500 states, so 99999 does not exist.",
+      "tool": "hoi4.map_inspect",
+      "arguments": {
+        "stateIds": [99999],
+        "lookupOnly": true
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "MAP_ENTITY_ID_NOT_FOUND"
+        },
+        {
+          "path": "$text",
+          "includes": "99999"
+        }
+      ],
+      "corpus": "chaos_redux",
+      "problem": 3
     }
   ]
 }

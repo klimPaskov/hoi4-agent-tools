@@ -31,7 +31,7 @@ Each entry is an object with `relativePath` and `content`, and a request takes b
 
 Impact and decision proposals name the text field `content`.
 Event and technology proposals for `hoi4.event_inspect` and `hoi4.tech_inspect` with `mode: compare` name the same field `source` and also accept an optional `expectedSourceHash`.
-When `changedFiles` is omitted, each proposed file seeds all its active definitions alongside any selected symbols.
+When `changedFiles` is omitted, each proposed file seeds all its active definitions alongside any selected symbols. A symbol that nothing defines or uses, in the source or the proposal, answers `IMPACT_SYMBOL_NOT_FOUND` with close names.
 The report compares the original and proposed consumer graph, including added and removed consumers and affected files.
 Moving a source location within one file does not count an unchanged reference as a new or removed consumer.
 `expectedRevision` prevents analysis against a source revision different from the one the caller reviewed.
@@ -97,7 +97,7 @@ Inspect one decision under declared actor and target state:
 ```
 
 `ROOT` is the actor country and `FROM` is the declared target country or state.
-The inventory lists active decisions, category fragments, overridden source definitions, and each decision's explicit targets, target arrays, state filters, and target trigger declarations.
+The inventory lists active decisions, category fragments, overridden source definitions, and each decision's explicit targets, target arrays, state filters, and target trigger declarations. With an `id`, it lists only that category's decisions, or that one decision, and returns their ids inline in `data.decisionIds`. Any other id answers `DECISION_NOT_FOUND` with close names.
 Category and decision `allowed`, `visible`, and `available` results remain separate; mission visibility is reported as ignored where documented.
 Target selection covers explicit lists and arrays plus supported state ownership, control, and continent filters.
 When a target, flag, variable, or helper input is unknown, the corresponding gate remains unresolved.

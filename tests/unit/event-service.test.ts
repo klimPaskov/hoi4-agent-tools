@@ -121,6 +121,61 @@ describe('Event Chain Viewer service', () => {
     expect(JSON.parse(focused.render.json).filters.compactLayout).toBe(true);
   });
 
+  it('applies namespace selectors and state subjects, and answers not-found for unknown ones (#59)', async () => {
+    const { engine, sourcePath } = await fixture();
+    await writeFile(
+      sourcePath,
+      `add_namespace = alpha
+add_namespace = beta
+country_event = { id = alpha.1 is_triggered_only = yes option = { name = alpha.1.a set_country_flag = alpha_done } }
+country_event = { id = beta.1 is_triggered_only = yes option = { name = beta.1.a } trigger = { has_country_flag = beta_gate } }
+`,
+    );
+    const viewer = new EventChainViewer(engine);
+    const roots = await viewer.inspect({
+      workspaceId: 'event-service',
+      mode: 'roots',
+      selector: { kind: 'namespace', namespace: 'alpha' },
+      refresh: true,
+    });
+    expect(JSON.stringify(roots.report)).toContain('alpha.1');
+    expect(JSON.stringify(roots.report)).not.toContain('beta.1');
+    await expect(
+      viewer.inspect({
+        workspaceId: 'event-service',
+        mode: 'roots',
+        selector: { kind: 'namespace', namespace: 'alpah' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'EVENT_NAMESPACE_NOT_FOUND',
+      details: { suggestions: expect.arrayContaining(['alpha']) },
+    });
+    // A scan narrows its findings to the selection: beta's gate has no writer, alpha has none.
+    const scanned = await viewer.inspect({
+      workspaceId: 'event-service',
+      mode: 'scan',
+      selector: { kind: 'namespace', namespace: 'alpha' },
+    });
+    expect(JSON.stringify(scanned.summary)).not.toContain('beta_gate');
+    // The subject narrows the issues too: beta_gate has no writer, but alpha_done is asked for.
+    const flow = await viewer.inspect({
+      workspaceId: 'event-service',
+      mode: 'state_flow',
+      stateSubject: { kind: 'country_flag', name: 'alpha_done' },
+    });
+    expect(JSON.stringify(flow.report)).not.toContain('beta_gate');
+    await expect(
+      viewer.inspect({
+        workspaceId: 'event-service',
+        mode: 'state_flow',
+        stateSubject: { kind: 'country_flag', name: 'alpha_dnoe' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'EVENT_STATE_NOT_FOUND',
+      details: { suggestions: expect.arrayContaining(['alpha_done']) },
+    });
+  });
+
   it('traces through scripted effects defined and called outside events and on_actions', async () => {
     const { engine, sourcePath } = await fixture();
     const mod = path.dirname(path.dirname(sourcePath));
@@ -196,7 +251,22 @@ chain_entry_effect = { country_event = { id = chain.9 } }
       selector: { kind: 'event', eventId: 'chain.9' },
       refresh: true,
     });
-    expect(JSON.stringify(roots.report)).not.toMatch(/callerless[^}]*chain\.9/u);
+    // A scripted effect fires chain.9, so it has a caller. The selector keeps only chain.9.
+    const discovered = (
+      roots.report as { roots: { callerlessTriggeredEvents: Array<{ eventId?: string }> } }
+    ).roots;
+    expect(discovered.callerlessTriggeredEvents.map(({ eventId }) => eventId)).toEqual([]);
+    const all = (
+      (
+        await new EventChainViewer(engine).inspect({
+          workspaceId: 'event-service',
+          mode: 'roots',
+        })
+      ).report as { roots: { callerlessTriggeredEvents: Array<{ eventId?: string }> } }
+    ).roots.callerlessTriggeredEvents.map(({ eventId }) => eventId);
+    expect(all).toContain('chain.1');
+    expect(all).not.toContain('chain.2');
+    expect(all).not.toContain('chain.9');
   });
 
   it('keeps dotted namespaces distinct in source selection', async () => {
