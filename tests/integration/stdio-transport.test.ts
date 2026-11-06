@@ -477,7 +477,7 @@ describe('local stdio transport', () => {
       });
       child.stdin.write(request(2, 'tools/list'));
       const names = listedToolNames(await waitForMessage(child, 2, lines));
-      expect(names).toHaveLength(35);
+      expect(names).toHaveLength(36);
       expect(names).toContain('chaosx.focus_country_assets');
       expect(names).toContain('chaosx.visual_revision');
       child.stdin.write(
