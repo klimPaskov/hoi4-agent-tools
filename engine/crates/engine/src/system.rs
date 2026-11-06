@@ -26,7 +26,9 @@ use crate::ideas::{self, Audit, AuditProblem, Field, KeyTexts, Loaded, Place, Pr
 use crate::index::Kind;
 use crate::localisation::{self, Mention};
 use crate::vocab::Vocabulary;
-use crate::workspace::{Hidden, LayerKind, WorkspaceOptions};
+use crate::workspace::{Hidden, LayerKind, Workspace, WorkspaceOptions};
+
+mod units;
 
 const DEFAULT_LIMIT: usize = 10;
 const MAX_LIMIT: usize = 100;
@@ -69,6 +71,11 @@ pub enum System {
     SpecialProject,
     Operation,
     Raid,
+    // The kinds of `hoi4-engine units` and `hoi4.unit_inspect`.
+    Oob,
+    SubUnit,
+    Equipment,
+    Variant,
 }
 
 impl System {
@@ -80,33 +87,49 @@ impl System {
             System::SpecialProject => "special_project",
             System::Operation => "operation",
             System::Raid => "raid",
+            System::Oob => "oob",
+            System::SubUnit => "sub_unit",
+            System::Equipment => "equipment",
+            System::Variant => "variant",
         }
+    }
+
+    /// The kind belongs to `hoi4-engine units` rather than `hoi4-engine system`.
+    pub fn is_unit(self) -> bool {
+        matches!(self, System::Oob | System::SubUnit | System::Equipment | System::Variant)
     }
 
     /// Where each kind of definition lives, most specific folder first.
     fn sources(self) -> &'static [Source] {
         match self {
-            System::OnActions => &[Source { folder: "common/on_actions/", container: Some("on_actions"), what: "on_action", bare: false }],
+            System::OnActions => &[Source { folder: "common/on_actions/", container: Some("on_actions"), what: "on_action", bare: false, ..NESTED }],
             System::Mio => &[
-                Source { folder: "common/military_industrial_organization/organizations/", container: None, what: "organization", bare: false },
-                Source { folder: "common/military_industrial_organization/policies/", container: None, what: "policy", bare: false },
+                Source { folder: "common/military_industrial_organization/organizations/", container: None, what: "organization", bare: false, ..NESTED },
+                Source { folder: "common/military_industrial_organization/policies/", container: None, what: "policy", bare: false, ..NESTED },
             ],
-            System::BalanceOfPower => &[Source { folder: "common/bop/", container: None, what: "balance_of_power", bare: false }],
+            System::BalanceOfPower => &[Source { folder: "common/bop/", container: None, what: "balance_of_power", bare: false, ..NESTED }],
             System::SpecialProject => &[
-                Source { folder: "common/special_projects/projects/", container: None, what: "project", bare: false },
-                Source { folder: "common/special_projects/prototype_rewards/", container: None, what: "prototype_reward", bare: false },
-                Source { folder: "common/special_projects/specialization/", container: None, what: "specialization", bare: false },
-                Source { folder: "common/special_projects/project_tags/", container: Some("project_tags"), what: "project_tag", bare: true },
+                Source { folder: "common/special_projects/projects/", container: None, what: "project", bare: false, ..NESTED },
+                Source { folder: "common/special_projects/prototype_rewards/", container: None, what: "prototype_reward", bare: false, ..NESTED },
+                Source { folder: "common/special_projects/specialization/", container: None, what: "specialization", bare: false, ..NESTED },
+                Source { folder: "common/special_projects/project_tags/", container: Some("project_tags"), what: "project_tag", bare: true, ..NESTED },
             ],
             System::Operation => &[
-                Source { folder: "common/operations/", container: None, what: "operation", bare: false },
-                Source { folder: "common/operation_phases/", container: None, what: "phase", bare: false },
-                Source { folder: "common/operation_tokens/", container: None, what: "token", bare: false },
+                Source { folder: "common/operations/", container: None, what: "operation", bare: false, ..NESTED },
+                Source { folder: "common/operation_phases/", container: None, what: "phase", bare: false, ..NESTED },
+                Source { folder: "common/operation_tokens/", container: None, what: "token", bare: false, ..NESTED },
             ],
             System::Raid => &[
-                Source { folder: "common/raids/categories/", container: Some("categories"), what: "raid_category", bare: false },
-                Source { folder: "common/raids/", container: Some("types"), what: "raid", bare: false },
+                Source { folder: "common/raids/categories/", container: Some("categories"), what: "raid_category", bare: false, ..NESTED },
+                Source { folder: "common/raids/", container: Some("types"), what: "raid", bare: false, ..NESTED },
             ],
+            System::Oob => &[Source { folder: "history/units/", what: "oob", flat: true, whole_file: true, ..NESTED }],
+            System::SubUnit => &[Source { folder: "common/units/", container: Some("sub_units"), what: "sub_unit", flat: true, ..NESTED }],
+            System::Equipment => &[
+                Source { folder: "common/units/equipment/modules/", container: Some("equipment_modules"), what: "module", flat: true, ..NESTED },
+                Source { folder: "common/units/equipment/", container: Some("equipments"), what: "equipment", flat: true, ..NESTED },
+            ],
+            System::Variant => VARIANT_SOURCES,
         }
     }
 
@@ -114,6 +137,7 @@ impl System {
     fn referenced(self) -> &'static [&'static str] {
         match self {
             System::OnActions => &["events/"],
+            System::Oob => &["history/states/"],
             _ => &[],
         }
     }
@@ -127,14 +151,30 @@ struct Source {
     what: &'static str,
     /// The container lists bare names rather than blocks.
     bare: bool,
+    /// Only files directly in the folder, not in its subfolders.
+    flat: bool,
+    /// The file is the definition, named by its file name: an order of battle.
+    whole_file: bool,
+    /// Definitions are blocks with this key anywhere in the file, named by their `name` field:
+    /// `create_equipment_variant`.
+    named: Option<&'static str>,
 }
+
+const NESTED: Source = Source { folder: "", container: None, what: "", bare: false, flat: false, whole_file: false, named: None };
+
+/// Variants are created by an effect, in country history, orders of battle and any effect block.
+const VARIANT_SOURCES: &[Source] = &[
+    Source { folder: "history/", what: "variant", named: Some("create_equipment_variant"), ..NESTED },
+    Source { folder: "events/", what: "variant", named: Some("create_equipment_variant"), ..NESTED },
+    Source { folder: "common/", what: "variant", named: Some("create_equipment_variant"), ..NESTED },
+];
 
 fn source_of(system: System, relative: &str) -> Option<&'static Source> {
     let lower = relative.to_ascii_lowercase();
     if !lower.ends_with(".txt") {
         return None;
     }
-    system.sources().iter().find(|s| lower.starts_with(s.folder))
+    system.sources().iter().find(|s| lower.starts_with(s.folder) && !(s.flat && lower[s.folder.len()..].contains('/')))
 }
 
 #[derive(Serialize)]
@@ -199,18 +239,47 @@ fn problem(code: &'static str, message: String, line: u32) -> Problem {
     Problem { code, severity: severity(code), message, line }
 }
 
+/// `hoi4-engine system`: the newer game systems.
 pub fn respond_json(text: &str) -> (String, u8) {
+    respond_group(text, false)
+}
+
+/// `hoi4-engine units`: orders of battle, sub-units, equipment (with modules) and variants.
+pub fn respond_units_json(text: &str) -> (String, u8) {
+    respond_group(text, true)
+}
+
+fn respond_group(text: &str, units: bool) -> (String, u8) {
+    let prefix = if units { "UNIT" } else { "SYSTEM" };
     let request: Request = match serde_json::from_str(text) {
         Ok(r) => r,
-        Err(e) => return (error("SYSTEM_INVALID_REQUEST", &e.to_string()), 2),
+        Err(e) => return (error(&format!("{prefix}_INVALID_REQUEST"), &e.to_string()), 2),
     };
+    if request.kind.is_unit() != units {
+        let command = if units { "system" } else { "units" };
+        return (error(&format!("{prefix}_INVALID_REQUEST"), &format!("`{}` is a kind of `hoi4-engine {command}`", request.kind.label())), 2);
+    }
     if request.audit {
-        return (serde_json::to_string(&audit(&request)).unwrap_or_else(|e| error("SYSTEM_INTERNAL", &e.to_string())), 0);
+        return (serde_json::to_string(&audit(&request)).unwrap_or_else(|e| error(&format!("{prefix}_INTERNAL"), &e.to_string())), 0);
     }
     if request.id.is_empty() || request.id.len() > 256 {
-        return (error("SYSTEM_ID_REQUIRED", "pass an id of 1 to 256 characters, or audit"), 2);
+        return (error(&format!("{prefix}_ID_REQUIRED"), "pass an id of 1 to 256 characters, or audit"), 2);
     }
-    (serde_json::to_string(&respond(&request)).unwrap_or_else(|e| error("SYSTEM_INTERNAL", &e.to_string())), 0)
+    (serde_json::to_string(&respond(&request)).unwrap_or_else(|e| error(&format!("{prefix}_INTERNAL"), &e.to_string())), 0)
+}
+
+/// The unit kinds report the shared codes under their own prefix.
+fn renamed(system: System, code: &'static str) -> &'static str {
+    if !system.is_unit() {
+        return code;
+    }
+    match code {
+        "SYSTEM_REFERENCE_UNKNOWN" => "UNIT_REFERENCE_UNKNOWN",
+        "SYSTEM_NAME_MISSING" => "UNIT_NAME_MISSING",
+        "SYSTEM_PICTURE_MISSING" => "UNIT_PICTURE_MISSING",
+        "SYSTEM_DUPLICATE_TOKEN" => "UNIT_DUPLICATE",
+        other => other,
+    }
 }
 
 fn error(code: &str, message: &str) -> String {
@@ -241,6 +310,8 @@ struct State {
     /// Hooks the game documents, with `_TAG` hooks as prefixes.
     hooks: HashSet<String>,
     hook_prefixes: Vec<String>,
+    /// The division designer's grid: regiment columns and rows, support columns and rows.
+    grid: [i64; 4],
 }
 
 fn load(request: &Request) -> State {
@@ -255,44 +326,68 @@ fn load(request: &Request) -> State {
     let vocab = loaded.workspace.game_root().map(Vocabulary::from_game).unwrap_or_default();
     let workspace = &loaded.workspace;
     let files: Vec<usize> = workspace.loaded_files().filter(|(_, f)| source_of(system, &f.relative).is_some()).map(|(i, _)| i).collect();
-    let docs: Vec<(usize, Document)> =
-        files.par_iter().filter_map(|&file| fs::read(&workspace.files[file].absolute).ok().map(|b| (file, Document::parse(b)))).collect();
+    let docs = parse_files(workspace, &files, system.sources().iter().find_map(|s| s.named));
     let mut defs = Vec::new();
     let mut names: HashMap<&'static str, HashSet<String>> = HashMap::new();
     for (index, (file, doc)) in docs.iter().enumerate() {
-        let Some(source) = source_of(system, &workspace.files[*file].relative) else { continue };
-        for (id, line) in definitions_in(doc, source) {
+        let relative = &workspace.files[*file].relative;
+        let Some(source) = source_of(system, relative) else { continue };
+        for (id, line) in definitions_in(doc, source, relative) {
             names.entry(source.what).or_default().insert(id.to_ascii_lowercase());
             defs.push(Def { what: source.what, id, doc: index, file: *file, line });
         }
     }
     defs.sort_by_key(|d| (workspace.files[d.file].layer, d.file, d.line));
-    let read_ids = |folder: &str, container: &str| -> HashSet<String> {
-        let files: Vec<usize> = workspace
-            .loaded_files()
-            .filter(|(_, f)| {
-                let p = f.relative.to_ascii_lowercase();
-                p.starts_with(folder) && p.ends_with(".txt")
-            })
-            .map(|(i, _)| i)
-            .collect();
-        files
-            .par_iter()
-            .flat_map_iter(|&file| {
-                let doc = fs::read(&workspace.files[file].absolute).map(Document::parse).ok();
-                let mut out = Vec::new();
-                if let Some(doc) = doc {
-                    for entry in doc.root.entries().filter(|e| doc.key(e) == container) {
-                        out.extend(entry.value.as_block().into_iter().flat_map(|b| b.entries()).map(|e| doc.key(e).to_ascii_lowercase()));
-                    }
-                }
-                out
-            })
-            .collect()
+    let modules = if matches!(system, System::SpecialProject | System::Equipment | System::Variant) {
+        read_ids(workspace, "common/units/equipment/modules/", "equipment_modules")
+    } else {
+        HashSet::new()
     };
-    let modules = if system == System::SpecialProject { read_ids("common/units/equipment/modules/", "equipment_modules") } else { HashSet::new() };
+    for (what, set) in units::extra_names(system, workspace, &docs) {
+        names.entry(what).or_default().extend(set);
+    }
     let (hooks, hook_prefixes) = if system == System::OnActions { known_hooks(&loaded) } else { (HashSet::new(), Vec::new()) };
-    State { loaded, vocab, system, docs, defs, names, modules, hooks, hook_prefixes }
+    let grid = if system == System::Oob { units::grid(workspace) } else { units::DEFAULT_GRID };
+    State { loaded, vocab, system, docs, defs, names, modules, hooks, hook_prefixes, grid }
+}
+
+/// Parses the files; with `needle`, only those whose text contains it.
+fn parse_files(workspace: &Workspace, files: &[usize], needle: Option<&str>) -> Vec<(usize, Document)> {
+    files
+        .par_iter()
+        .filter_map(|&file| {
+            let bytes = fs::read(&workspace.files[file].absolute).ok()?;
+            if needle.is_some_and(|n| memchr::memmem::find(&bytes, n.as_bytes()).is_none()) {
+                return None;
+            }
+            Some((file, Document::parse(bytes)))
+        })
+        .collect()
+}
+
+/// The keys of the `container` blocks of every file under `folder`, lower case.
+fn read_ids(workspace: &Workspace, folder: &str, container: &str) -> HashSet<String> {
+    let files: Vec<usize> = workspace
+        .loaded_files()
+        .filter(|(_, f)| {
+            let p = f.relative.to_ascii_lowercase();
+            p.starts_with(folder) && p.ends_with(".txt")
+        })
+        .map(|(i, _)| i)
+        .collect();
+    files
+        .par_iter()
+        .flat_map_iter(|&file| {
+            let doc = fs::read(&workspace.files[file].absolute).map(Document::parse).ok();
+            let mut out = Vec::new();
+            if let Some(doc) = doc {
+                for entry in doc.root.entries().filter(|e| doc.key(e) == container) {
+                    out.extend(entry.value.as_block().into_iter().flat_map(|b| b.entries()).map(|e| doc.key(e).to_ascii_lowercase()));
+                }
+            }
+            out
+        })
+        .collect()
 }
 
 /// Hooks the game runs. The documentation (`common/on_actions/_documentation.md`) lags the game,
@@ -323,7 +418,7 @@ fn known_hooks(loaded: &Loaded) -> (HashSet<String>, Vec<String>) {
         .collect();
     let used: Vec<String> = files
         .par_iter()
-        .flat_map_iter(|&i| fs::read(&workspace.files[i].absolute).map(|b| definitions_in(&Document::parse(b), source)).unwrap_or_default())
+        .flat_map_iter(|&i| fs::read(&workspace.files[i].absolute).map(|b| definitions_in(&Document::parse(b), source, "")).unwrap_or_default())
         .map(|(hook, _)| hook)
         .collect();
     hooks.extend(used);
@@ -348,9 +443,21 @@ fn binary_hooks(bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
-fn definitions_in(doc: &Document, source: &Source) -> Vec<(String, u32)> {
+fn definitions_in(doc: &Document, source: &Source, relative: &str) -> Vec<(String, u32)> {
     let mut out = Vec::new();
     let line = |offset| ideas::line_at(doc, offset);
+    if source.whole_file {
+        let name = relative.rsplit('/').next().unwrap_or(relative);
+        return vec![(name[..name.len() - ".txt".len()].to_owned(), 1)];
+    }
+    if let Some(key) = source.named {
+        let mut found = Vec::new();
+        named_blocks(doc, &doc.root, key, &mut found);
+        return found
+            .into_iter()
+            .filter_map(|e| e.value.as_block().and_then(|b| scalar(doc, b, "name")).map(|(name, _)| (name, line(doc.token(e.key).start))))
+            .collect();
+    }
     for entry in doc.root.entries() {
         let key = doc.key(entry);
         match source.container {
@@ -363,7 +470,8 @@ fn definitions_in(doc: &Document, source: &Source) -> Vec<(String, u32)> {
                         }
                     }
                 } else {
-                    for inner in block.entries().filter(|e| e.value.as_block().is_some()) {
+                    // `limit` is the condition of a whole `equipment_modules` or `equipments` block.
+                    for inner in block.entries().filter(|e| e.value.as_block().is_some() && doc.key(e) != "limit") {
                         out.push((doc.key(inner).into_owned(), line(doc.token(inner.key).start)));
                     }
                 }
@@ -378,9 +486,28 @@ fn definitions_in(doc: &Document, source: &Source) -> Vec<(String, u32)> {
 /// The entry of one definition, found again in its document.
 fn entry_of<'d>(doc: &'d Document, source: &Source, id: &str, line: u32) -> Option<&'d Entry> {
     let at = |e: &Entry| ideas::line_at(doc, doc.token(e.key).start) == line && doc.key(e) == id;
+    if let Some(key) = source.named {
+        let mut found = Vec::new();
+        named_blocks(doc, &doc.root, key, &mut found);
+        return found.into_iter().find(|e| {
+            ideas::line_at(doc, doc.token(e.key).start) == line && e.value.as_block().and_then(|b| scalar(doc, b, "name")).is_some_and(|(n, _)| n == id)
+        });
+    }
     match source.container {
         Some(container) => doc.root.entries().filter(|e| doc.key(e) == container).filter_map(|e| e.value.as_block()).flat_map(|b| b.entries()).find(|e| at(e)),
         None => doc.root.entries().find(|e| at(e)),
+    }
+}
+
+/// Every block with this key, at any depth.
+fn named_blocks<'d>(doc: &'d Document, block: &'d Block, key: &str, out: &mut Vec<&'d Entry>) {
+    for entry in block.entries() {
+        let Some(inner) = entry.value.as_block() else { continue };
+        if doc.key(entry) == key {
+            out.push(entry);
+        } else {
+            named_blocks(doc, inner, key, out);
+        }
     }
 }
 
@@ -439,10 +566,13 @@ impl Checker<'_> {
         let index = &state.loaded.index;
         match target {
             "event" => index.contains_folded(Kind::Event, value),
-            "equipment" => index.contains(Kind::Equipment, value),
+            "equipment" => index.contains_folded(Kind::Equipment, value) || state.names.get("derived_equipment").is_some_and(|n| n.contains(&lower)),
             "sub_unit" => index.contains(Kind::SubUnit, value),
             "building" => index.contains(Kind::Building, value),
             "equipment_module" => state.modules.contains(&lower),
+            "state" => index.contains(Kind::State, value),
+            "resource" => index.contains(Kind::Resource, value),
+            "unit_category" => state.loaded.unit_categories.contains(&lower),
             _ => state.names.get(target).is_some_and(|n| n.contains(&lower)),
         }
     }
@@ -612,6 +742,10 @@ impl Checker<'_> {
                 }
             }
             "raid_category" => Self::text(out, &format!("raid_category_{id}"), line),
+            "sub_unit" => self.sub_unit(doc, id, block, line, out),
+            "equipment" => self.equipment(doc, id, block, line, out),
+            "module" => self.module(doc, id, block, line, out),
+            "variant" => self.variant(doc, block, out),
             _ => {}
         }
     }
@@ -905,6 +1039,10 @@ fn check_def(state: &State, def: &Def) -> Found {
         Checker::text(&mut out, &def.id, def.line);
         return out;
     }
+    if source.whole_file {
+        checker.oob(doc, &def.id, &mut out);
+        return out;
+    }
     if let Some(entry) = entry_of(doc, source, &def.id, def.line) {
         checker.check(doc, def.what, &def.id, entry, &mut out);
     }
@@ -1013,6 +1151,9 @@ pub fn respond(request: &Request) -> Response {
     let (mentions, truncated) = localisation::mentions(workspace, id, limit);
     response.mentions = mentions;
     response.mentions_truncated = truncated;
+    for p in &mut response.problems {
+        p.code = renamed(state.system, p.code);
+    }
     response
 }
 
@@ -1030,7 +1171,7 @@ fn dropped_hooks(state: &State) -> Vec<(String, usize, Problem)> {
         }
         let Ok(bytes) = fs::read(&workspace.files[file].absolute) else { continue };
         let doc = Document::parse(bytes);
-        let hooks: BTreeSet<String> = definitions_in(&doc, &state.system.sources()[0]).into_iter().map(|(h, _)| h).collect();
+        let hooks: BTreeSet<String> = definitions_in(&doc, &state.system.sources()[0], "").into_iter().map(|(h, _)| h).collect();
         for hook in hooks.into_iter().filter(|h| !loaded.contains(h)) {
             let layer = &workspace.layers[workspace.files[file].layer].name;
             out.push((
@@ -1058,11 +1199,12 @@ pub fn audit(request: &Request) -> Audit {
     let mut counts = BTreeMap::new();
     let mut problems = Vec::new();
     let mut push = |p: Problem, id: &str, file: usize| {
-        let count = counts.entry(p.code).or_insert(0);
+        let code = renamed(state.system, p.code);
+        let count = counts.entry(code).or_insert(0);
         *count += 1;
         if *count <= limit {
             problems.push(AuditProblem {
-                code: p.code,
+                code,
                 severity: p.severity,
                 id: id.to_owned(),
                 path: workspace.files[file].relative.clone(),
@@ -1091,6 +1233,11 @@ pub fn audit(request: &Request) -> Audit {
     if state.system == System::OnActions {
         for (hook, file, p) in dropped_hooks(&state) {
             push(p, &hook, file);
+        }
+    }
+    if state.system == System::Oob {
+        for (name, file, p) in units::missing_oobs(&state) {
+            push(p, &name, file);
         }
     }
     let truncated = counts.values().any(|&c| c > limit);

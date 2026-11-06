@@ -23,6 +23,7 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.idea_inspect': '{"kind":"idea","id":"my_idea"} or {"kind":"character","audit":true}',
   'hoi4.system_inspect':
     '{"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}',
+  'hoi4.unit_inspect': '{"kind":"oob","id":"GER_1936"} or {"kind":"variant","audit":true}',
   'hoi4.event_inspect':
     '{"mode":"lint","selector":"chaosx.nr14"} or {"mode":"trace","selector":"chaosx.nr14.1","direction":"downstream"}',
   'hoi4.event_render': '{"view":"overview","selector":"chaosx.nr14"}',
