@@ -277,6 +277,20 @@ describe('partition tuning', () => {
     expect(tuning.narrowStraitPx).toBe(16);
   });
 
+  it('takes the lake province area, capped at the largest province the map allows', () => {
+    expect(resolvePartitionTuning(undefined, base).lakeArea).toBe(
+      Math.min(PARTITION_DEFAULTS.lake, 73 ** 2),
+    );
+    expect(resolvePartitionTuning({ lakeArea: 3_000 }, base).lakeArea).toBe(3_000);
+    expect(resolvePartitionTuning({ lakeArea: 14_000 }, base).lakeArea).toBe(73 ** 2);
+    const wide = { ...base, width: 5_632, height: 2_048 };
+    expect(resolvePartitionTuning({ lakeArea: 14_000 }, wide).lakeArea).toBe(14_000);
+    expectCode(
+      () => resolvePartitionTuning({ lakeArea: 50, minProvincePixels: 60 }, base),
+      'MAP_PARTITION_AREA_BANDS_CONTRADICTORY',
+    );
+  });
+
   it('refuses contradictory size bands, a map too small for the minimum, and bad strengths', () => {
     expectCode(
       () => resolvePartitionTuning({ landArea: { fertile: 900, hills: 300 } }, base),

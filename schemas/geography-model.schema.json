@@ -387,6 +387,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "impassable": {
+          "type": "boolean"
         }
       },
       "required": [

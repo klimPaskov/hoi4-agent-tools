@@ -140,6 +140,8 @@ export interface ResolvedRegion extends FeatureBase<'region'> {
   /** Typical `[smallest, usual, largest]` provinces per state and province size in pixels. */
   readonly provincesPerState?: readonly [number, number, number];
   readonly provinceAreaPx?: number;
+  /** Land in the area is impassable (ZR-28). */
+  readonly impassable?: true;
 }
 
 export interface ResolvedRange extends FeatureBase<'range'> {
