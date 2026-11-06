@@ -23,6 +23,8 @@ import {
   systemInspectRequestSchema,
   unitInspectDataSchema,
   unitInspectRequestSchema,
+  assetInspectDataSchema,
+  assetInspectRequestSchema,
 } from '../../schemas/system.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../../schemas/ideas.js';
 import {
@@ -140,6 +142,15 @@ export const referenceTools = [
       'Read one order of battle (history/units), sub-unit, equipment or module, or equipment variant, or audit every one the mod makes. Checks template grids, divisions, fleets, air wings, equipment slots and modules, and each name they use. Example: {"kind":"oob","id":"GER_1936"} or {"kind":"variant","audit":true}.',
     inputSchema: unitInspectRequestSchema,
     outputSchema: strictOperationResultSchema(unitInspectDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.asset_inspect',
+    title: 'Check sprites, sounds and flags',
+    description:
+      'Read one sprite (texture size, format and frames), sound, sound effect or music track (audio file, sounds it plays), or flag (all three sizes), or audit every one the mod defines. Flags BC7 textures, missing files and wrong flag sizes. Example: {"kind":"sprite","id":"GFX_my_icon"} or {"kind":"flag","audit":true}.',
+    inputSchema: assetInspectRequestSchema,
+    outputSchema: strictOperationResultSchema(assetInspectDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];
