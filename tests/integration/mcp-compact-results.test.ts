@@ -59,8 +59,8 @@ async function referenceFixture() {
 }
 
 describe('compact tool results', () => {
-  it('leaves empty collections and empty checks out of the structured result', () => {
-    const output = toolResult(emptyServiceResult('fixture', { answer: 1 }));
+  it('leaves empty collections and empty checks out of a compact result', () => {
+    const output = toolResult(emptyServiceResult('fixture', { answer: 1 }), { compact: true });
     expect(output.structuredContent).toEqual({
       status: 'ok',
       code: 'OK',
@@ -83,6 +83,18 @@ describe('compact tool results', () => {
         validation: { passed: true, checks: [] },
       }).success,
     ).toBe(true);
+  });
+
+  it('keeps the full envelope unless a tool asks for the compact one', () => {
+    const output = toolResult(emptyServiceResult('fixture', {}));
+    expect(output.structuredContent).toMatchObject({
+      filesScanned: [],
+      changedFiles: [],
+      diagnostics: [],
+      artifacts: [],
+      blockers: [],
+      validation: { passed: true, checks: [] },
+    });
   });
 
   it('keeps every collection that has entries', () => {
@@ -122,6 +134,9 @@ describe('compact tool results', () => {
       }
     ).data;
     expect(data.results.length).toBeGreaterThanOrEqual(2);
+    // A reference tool's answer leaves its empty lists out.
+    expect(search.structuredContent).not.toHaveProperty('changedFiles');
+    expect(search.structuredContent).not.toHaveProperty('blockers');
     for (const hit of data.results) {
       expect(hit.id).toMatch(/^[a-f0-9]{16}$/u);
       expect(hit.revision).toMatch(/^[a-f0-9]{12}$/u);

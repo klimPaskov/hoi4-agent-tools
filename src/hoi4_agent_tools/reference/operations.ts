@@ -424,7 +424,7 @@ export class ReferenceToolService {
       )
         result.diagnostics.pop();
     }
-    return toolResult(result);
+    return toolResult(result, { compact: true });
   }
 
   readonly #eventPopups = new Map<

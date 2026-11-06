@@ -78,8 +78,8 @@ const compactPublicOperationResultSchema = z
   .strict();
 
 /**
- * Collections a tool result leaves out when they are empty. Every session reads these
- * envelopes, so a read-only answer does not repeat six empty lists; an absent list is empty.
+ * Collections a compact tool result leaves out when they are empty. The reference tools answer
+ * most often, so their answers do not repeat six empty lists; an absent list is empty.
  */
 const OMITTED_WHEN_EMPTY = [
   'filesScanned',
@@ -530,8 +530,13 @@ function compactDescriptions(unfiltered: ServiceResult<unknown>): ServiceResult<
   };
 }
 
-function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): ToolResultOutput {
-  const structuredContent = withoutEmptyCollections(operationResultSchema.parse(selected));
+function buildToolResult(
+  selected: ServiceResult<unknown>,
+  imageCount = 0,
+  compact = false,
+): ToolResultOutput {
+  const parsed = operationResultSchema.parse(selected);
+  const structuredContent = compact ? withoutEmptyCollections(parsed) : parsed;
   const shown = selected.artifacts
     .map((artifact, order) => ({ artifact, order }))
     .sort(
@@ -590,7 +595,11 @@ function buildToolResult(selected: ServiceResult<unknown>, imageCount = 0): Tool
 
 export function toolResult(
   result: ServiceResult<unknown>,
-  options: { images?: readonly ToolResultImage[] } = {},
+  options: {
+    images?: readonly ToolResultImage[];
+    /** Leave out empty collections; the reference tools answer this way (maintainer decision R-4). */
+    compact?: boolean;
+  } = {},
 ): ToolResultOutput {
   let imageCharacters = 0;
   const images = (options.images ?? []).filter((image) => {
@@ -604,10 +613,10 @@ export function toolResult(
     : MAX_TOOL_RESULT_BYTES + 1;
   const selected =
     estimatedBytes > MAX_TOOL_RESULT_BYTES ? boundedResult(compact, estimatedBytes) : compact;
-  let output = buildToolResult(selected, images.length);
+  let output = buildToolResult(selected, images.length, options.compact);
   const wireBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (wireBytes > MAX_TOOL_RESULT_BYTES) {
-    output = buildToolResult(boundedResult(compact, wireBytes), images.length);
+    output = buildToolResult(boundedResult(compact, wireBytes), images.length, options.compact);
   }
   const finalBytes = Buffer.byteLength(canonicalJson(output), 'utf8');
   if (finalBytes > MAX_TOOL_RESULT_BYTES) {
