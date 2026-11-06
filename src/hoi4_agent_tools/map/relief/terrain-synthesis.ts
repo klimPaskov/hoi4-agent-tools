@@ -36,6 +36,7 @@ import {
   synthesizeMacroRelief,
   type ReliefSettings,
 } from './macro-relief.js';
+import { applyPaintedRelief, type PaintedReliefInput } from './painted-relief.js';
 import { rasterizeRivers } from './river-raster.js';
 
 export interface TerrainSynthesisInput {
@@ -55,6 +56,8 @@ export interface TerrainSynthesisInput {
    * pixel at the centre of the macro cell.
    */
   adjustHeight?: ((x: number, y: number, height: number) => number) | undefined;
+  /** Painted classes that raise the macro relief before the hydrology (ZR-27). */
+  painted?: PaintedReliefInput | undefined;
   signal?: AbortSignal | undefined;
   /** Called when a stage starts, for progress heartbeats and timing. */
   onStage?: ((stage: string) => void) | undefined;
@@ -206,6 +209,8 @@ export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
     relief,
     signal: input.signal,
   });
+  // The same painted relief as the full synthesis, so the rivers checked are the rivers written.
+  if (input.painted !== undefined) applyPaintedRelief(macro, input.painted);
   const adjust = input.adjustHeight;
   if (adjust !== undefined)
     for (let y = 0; y < macro.height; y += 1)
@@ -262,6 +267,15 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     relief,
     signal: input.signal,
   });
+  if (input.painted !== undefined) {
+    const summary = applyPaintedRelief(macro, input.painted);
+    notes.push({
+      code: 'MAP_RELIEF_PAINTED',
+      severity: 'info',
+      message: `Raised ${summary.raisedCells} half-resolution cells toward the painted mountains, hills and volcanoes (highest ${summary.highest}) before routing the rivers`,
+      details: { ...summary, settings: input.painted.settings },
+    });
+  }
   const adjust = input.adjustHeight;
   if (adjust !== undefined)
     for (let y = 0; y < macro.height; y += 1)

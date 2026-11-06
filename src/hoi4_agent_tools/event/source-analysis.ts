@@ -251,6 +251,13 @@ function isLiteralCountryTag(value: string): boolean {
   return /^[A-Z][A-Z0-9]{2}$/u.test(value);
 }
 
+const FOCUS_BLOCKS = new Set(['focus', 'shared_focus', 'joint_focus']);
+const FOCUS_REWARD_BLOCKS = [
+  'completion_reward',
+  'completion_reward_joint_originator',
+  'completion_reward_joint_member',
+];
+
 const EFFECT_WRAPPER_BLOCKS = new Set([
   ...CONTROL_BLOCKS,
   'effect',
@@ -953,7 +960,9 @@ class FragmentAnalyzer {
 
   private analyzeFocuses(): void {
     this.visitAssignments(this.document.root, (assignment, ancestors) => {
-      if (assignment.key.value !== 'focus' || assignment.value.type !== 'block') return;
+      // Shared and joint focuses run their rewards like tree focuses (vanilla's Saadabad branch
+      // saves SSB_leader in a joint_focus).
+      if (!FOCUS_BLOCKS.has(assignment.key.value) || assignment.value.type !== 'block') return;
       const id = firstScalar(assignment.value, 'id')?.value;
       if (id === undefined) return;
       const ownerId = this.entryNode('focus', id, assignment, 'country');
@@ -975,25 +984,24 @@ class FragmentAnalyzer {
           });
         });
       }
-      const rewardOccurrences = new Map<string, number>();
-      childBlocks(assignment.value, 'completion_reward').forEach((block) =>
-        this.walk(block, {
-          ownerId,
-          sourceScope: 'country',
-          phase: 'entry',
-          conditions: [],
-          helperStack: [],
-          semanticPath: [
-            ...ancestors,
-            id,
-            semanticOccurrenceSegment(
-              'completion_reward',
-              semanticSourceEntry(block),
-              rewardOccurrences,
-            ),
-          ],
-        }),
-      );
+      // A joint focus rewards its originator and its members in blocks of their own.
+      for (const key of FOCUS_REWARD_BLOCKS) {
+        const rewardOccurrences = new Map<string, number>();
+        childBlocks(assignment.value, key).forEach((block) =>
+          this.walk(block, {
+            ownerId,
+            sourceScope: 'country',
+            phase: 'entry',
+            conditions: [],
+            helperStack: [],
+            semanticPath: [
+              ...ancestors,
+              id,
+              semanticOccurrenceSegment(key, semanticSourceEntry(block), rewardOccurrences),
+            ],
+          }),
+        );
+      }
     });
   }
 
@@ -1700,8 +1708,13 @@ class FragmentAnalyzer {
     }
     const rule = STATE_RULES[assignment.key.value];
     if (rule === undefined) {
-      const raw = valueText(this.document, assignment.value);
-      for (const match of raw.matchAll(/\b(event_target|global_event_target):([A-Za-z0-9_-]+)/gu)) {
+      // The whole value: valueText is cut for display and would cut a name at its end.
+      const raw = this.document.text.slice(assignment.value.start, assignment.value.end);
+      // A name that runs on into `[...]` or `$...$` is built at run time (meta_effect, scripted
+      // parameters); its literal prefix is not the target's name.
+      for (const match of raw.matchAll(
+        /\b(event_target|global_event_target):([A-Za-z0-9_-]+)(?![A-Za-z0-9_[$-])/gu,
+      )) {
         this.addState(
           context,
           match[1] === 'global_event_target' ? 'global_event_target' : 'event_target',
@@ -1742,6 +1755,11 @@ class FragmentAnalyzer {
     this.addState(context, kind, name, access, assignment, semanticPath, isDynamic(name), {
       ...(rule.storage === undefined ? {} : { storage: rule.storage }),
       ...(rule.temporary === true ? { temporary: true } : {}),
+      // has_event_target tests whether the target exists; it never reads an unset one.
+      ...(assignment.key.value === 'has_event_target' ||
+      assignment.key.value === 'has_global_event_target'
+        ? { presence: true }
+        : {}),
     });
   }
 

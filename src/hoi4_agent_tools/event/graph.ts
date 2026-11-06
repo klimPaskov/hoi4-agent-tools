@@ -1412,6 +1412,21 @@ function stateLifecycleIssues(
     }
   }
 
+  // has_event_target checks per owner: a read in the same owner that ends after the check starts
+  // is guarded. That includes the read recorded for an enclosing `if` or `limit` block.
+  const presenceChecks = new Map<string, EventStateAccess[]>();
+  for (const access of graph.stateAccesses) {
+    if (access.metadata.presence !== true) continue;
+    const key = `${access.ownerId}\u0000${stateKey(access)}`;
+    presenceChecks.set(key, [...(presenceChecks.get(key) ?? []), access]);
+  }
+  const guarded = (access: EventStateAccess): boolean =>
+    (presenceChecks.get(`${access.ownerId}\u0000${stateKey(access)}`) ?? []).some(
+      (check) =>
+        check.location.path === access.location.path &&
+        check.location.start.offset < access.location.end.offset,
+    );
+
   for (const access of graph.stateAccesses) {
     if (access.access !== 'read' && access.access !== 'read_write') continue;
     if (
@@ -1422,10 +1437,12 @@ function stateLifecycleIssues(
       continue;
     const owner = semanticOwnerId(access.ownerId, nodes, parent);
     if (
-      access.kind === 'event_target' ||
-      access.kind === 'global_event_target' ||
-      access.kind === 'saved_scope'
+      (access.kind === 'event_target' ||
+        access.kind === 'global_event_target' ||
+        access.kind === 'saved_scope') &&
+      access.metadata.presence !== true
     ) {
+      if (guarded(access)) continue;
       addIssue(graph.issues, {
         code: 'EVENT_TARGET_READ_BEFORE_SAVE',
         classification: 'probable_defect',

@@ -28,6 +28,7 @@ import {
   type WorldPartitionSpec,
 } from './world-partition.js';
 import { adjacencyRowText, adjacencyRulesText, type CrossingPlan } from './gameplay/crossings.js';
+import { realmReachNotes } from './gameplay/reachability.js';
 import { convertInlandSeas } from './gameplay/inland-sea.js';
 import { planEconomy, type EconomyPlan } from './gameplay/economy.js';
 import { prepareGameplay, type GameplayBase } from './gameplay/prepare.js';
@@ -57,7 +58,8 @@ import {
   type EdgeSpec,
 } from './world-edge.js';
 import { landDistanceField, lakeHeight, normalizeLakes, waterColourLevel } from './water.js';
-import type { ResolvedGeography } from './geography/index.js';
+import { DEFAULT_PAINTED_RELIEF, type PaintedReliefSettings } from './relief/painted-relief.js';
+import { rowStrips, scanAreaStrip, type ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import {
   checkTerrainRivers,
@@ -160,6 +162,8 @@ export interface WorldSpec {
    */
   geography?: ResolvedGeography;
   relief?: Partial<ReliefSettings>;
+  /** Raise the relief toward the reference picture's painted classes (ZR-27); needs both inputs. */
+  paintedRelief?: PaintedReliefSettings;
   /** Share of land pixels the river network covers (geography worlds); default 2%. */
   riverDensity?: number;
   /** Largest number of unnamed river systems (geography worlds); absent keeps every system. */
@@ -506,6 +510,9 @@ function geographySurface(
   return { kind, elevation: new Float32Array(total), moisture };
 }
 
+/** Land relief of the base game 1.19.4.1 (`reliefStatistics` over its land provinces). */
+export const VANILLA_RELIEF = { median: 107, p99: 213, maximum: 239, meanStep: 2.69 } as const;
+
 function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeography): WorldNote {
   const { relief, riverStatistics } = terrain;
   return {
@@ -515,6 +522,8 @@ function terrainSummaryNote(terrain: SynthesizedTerrain, geography: ResolvedGeog
     details: {
       modelHash: geography.hash,
       relief,
+      // The base game 1.19.4.1 over its land provinces, for comparison.
+      vanilla: VANILLA_RELIEF,
       rivers: riverStatistics,
       // The first of the named rivers only: the response budget is shared with everything else the
       // world reports, and a river that did not complete is always listed.
@@ -749,7 +758,7 @@ interface StateDraft {
   navalBases: Map<number, number>;
   /** Land fort levels by province, from the passes of the model. */
   forts: Map<number, number>;
-  /** A state of the `wall` edge: `impassable = yes`, linked to `link` for its ownership. */
+  /** A state of the `wall` edge or impassable land: `impassable = yes`, linked to `link`. */
   impassable?: boolean;
   link?: number;
 }
@@ -790,14 +799,36 @@ function realmPins(
   return pins.map(({ pixel }) => pixel);
 }
 
+/** The union of painted impassable land and the model's impassable regions, or undefined. */
+function impassableLand(
+  painted: Uint8Array | undefined,
+  geography: ResolvedGeography | undefined,
+  width: number,
+  height: number,
+): Uint8Array | undefined {
+  const regions = (geography?.regions ?? []).filter(
+    (region) => region.impassable === true && region.area !== undefined,
+  );
+  if (regions.length === 0) return painted;
+  const mask = painted === undefined ? new Uint8Array(width * height) : new Uint8Array(painted);
+  const grid = { width, height };
+  for (const strip of rowStrips(grid))
+    for (const region of regions)
+      scanAreaStrip(region.area!, grid, strip, (y, x0, x1) =>
+        mask.fill(1, y * width + x0, y * width + x1),
+      );
+  return mask;
+}
+
 /**
- * Make the states of a `wall` edge what the base game's impassable states are: `impassable = yes`,
+ * Make the states of a `wall` edge and of impassable land (ZR-28) what the base game's impassable
+ * states are: `impassable = yes`,
  * linked by `force_link_ownership_to` to the nearest passable state and owned as it is, `enclave`
  * where the category exists, and without infrastructure, buildings, resources, victory points,
  * ports or forts. Nearest counts province steps over land and water, since a wall often stands
  * in what was sea; ties go to the passable state met through most borders, then the lowest id.
  */
-function finishWallStates(
+function finishImpassableStates(
   states: StateDraft[],
   neighbors: readonly ReadonlySet<number>[],
   context: WorldContext,
@@ -894,6 +925,13 @@ export function generateWorld(
       'Reference raster dimensions do not match the world',
     );
   const geography = spec.geography;
+  if (spec.paintedRelief !== undefined && (reference === undefined || geography === undefined))
+    throw new ServiceError(
+      'MAP_RELIEF_PAINTED_INPUTS',
+      'relief.painted raises the relief from the classes of a reference picture onto a geography model; give both reference and geography',
+      { reference: reference !== undefined, geography: geography !== undefined },
+    );
+
   if (
     geography !== undefined &&
     (geography.frame.width !== width || geography.frame.height !== height)
@@ -919,6 +957,28 @@ export function generateWorld(
   const notes: WorldNote[] = [];
   const edge: EdgeSpec = spec.edge ?? { mode: 'none', bandPx: 0, polarPx: 0, rimPx: 0 };
   let wallMask: Uint8Array | undefined;
+  // Land no army may enter: painted `impassable_mountain` of the reference picture and the
+  // impassable regions of the geography model (ZR-28).
+  const impassableMask = impassableLand(reference?.impassable, geography, width, height);
+  // Impassable land is the highest ground even without relief.painted: then only it is raised.
+  const painted =
+    geography === undefined
+      ? undefined
+      : spec.paintedRelief !== undefined && reference !== undefined
+        ? {
+            classes: reference.terrain,
+            impassable: impassableMask,
+            settings: spec.paintedRelief,
+            seed: spec.seed,
+          }
+        : impassableMask !== undefined
+          ? {
+              classes: new Uint8Array(width * height),
+              impassable: impassableMask,
+              settings: DEFAULT_PAINTED_RELIEF,
+              seed: spec.seed,
+            }
+          : undefined;
   if (edge.mode !== 'none') {
     assertFeaturesOutsideBand(
       edge,
@@ -987,6 +1047,7 @@ export function generateWorld(
         adjustHeight: hasRimRange(edge)
           ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
           : undefined,
+        painted,
         signal: options.signal,
       });
       for (const note of checked) {
@@ -1050,6 +1111,7 @@ export function generateWorld(
           adjustHeight: hasRimRange(edge)
             ? (x, _y, value) => rimHeight(value, rimStrength(edge, width, x))
             : undefined,
+          painted,
           signal: options.signal,
         });
   if (synthesized !== undefined) {
@@ -1214,14 +1276,32 @@ export function generateWorld(
   const landIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === LAND);
   const seaIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === SEA);
   const lakeIds = [...Array(count).keys()].filter((id) => provinces.kind[id] === LAKE);
-  // A land province with most of its pixels in the wall belongs to the wall's impassable states.
-  const wallProvinces = new Set<number>();
-  if (wallMask !== undefined) {
-    const inWall = new Uint32Array(count);
-    for (let pixel = 0; pixel < wallMask.length; pixel += 1)
-      if (wallMask[pixel] === 1) inWall[provinces.pixel[pixel]!]! += 1;
-    for (const id of landIds) if (inWall[id]! * 2 > provinces.size[id]!) wallProvinces.add(id);
-  }
+  // A land province with most of its pixels in the wall, or in land painted impassable (ZR-28),
+  // belongs to impassable states.
+  const majorityIn = (mask: Uint8Array | undefined): Set<number> => {
+    const found = new Set<number>();
+    if (mask === undefined) return found;
+    const inside = new Uint32Array(count);
+    for (let pixel = 0; pixel < mask.length; pixel += 1)
+      if (mask[pixel] === 1) inside[provinces.pixel[pixel]!]! += 1;
+    for (const id of landIds) if (inside[id]! * 2 > provinces.size[id]!) found.add(id);
+    return found;
+  };
+  const wallProvinces = majorityIn(wallMask);
+  const impassableProvinces = new Set([...wallProvinces, ...majorityIn(impassableMask)]);
+  const offendingCities = (spec.referenceCities ?? []).filter(({ x, y }) => {
+    const pixel = Math.floor(y) * width + Math.floor(x);
+    return impassableMask?.[pixel] === 1;
+  });
+  if (offendingCities.length > 0)
+    throw new ServiceError(
+      'MAP_FEATURE_IN_IMPASSABLE',
+      `${offendingCities.length} city or cities stand on impassable land: ${offendingCities
+        .slice(0, 5)
+        .map(({ name, x, y }) => `${name} (${Math.round(x)}, ${Math.round(y)})`)
+        .join('; ')}. Move them or repaint the land.`,
+      { cities: offendingCities.slice(0, 20) },
+    );
   if (landIds.length < spec.countries.length)
     throw new ServiceError(
       'MAP_WORLD_LAND_TOO_SMALL',
@@ -1483,7 +1563,7 @@ export function generateWorld(
   });
   const capitals: number[] = [];
   const largest = landIds
-    .filter((id) => !wallProvinces.has(id))
+    .filter((id) => !impassableProvinces.has(id))
     .sort((left, right) => provinces.size[right]! - provinces.size[left]! || left - right);
   const realmRules =
     spec.realms === undefined
@@ -1497,17 +1577,23 @@ export function generateWorld(
         });
   if (realmRules !== undefined) {
     const walled = realmRules.capitals.flatMap((id, index) =>
-      wallProvinces.has(id) ? [{ tag: spec.countries[index]?.tag, ...center(id) }] : [],
+      impassableProvinces.has(id)
+        ? [{ tag: spec.countries[index]?.tag, wall: wallProvinces.has(id), ...center(id) }]
+        : [],
     );
-    if (walled.length > 0)
+    if (walled.length > 0) {
+      const atSeam = walled.some(({ wall }) => wall);
       throw new ServiceError(
-        'MAP_EDGE_FEATURE_IN_BAND',
-        `${walled.length} capital(s) stand in the impassable wall at the seam: ${walled
+        atSeam ? 'MAP_EDGE_FEATURE_IN_BAND' : 'MAP_FEATURE_IN_IMPASSABLE',
+        `${walled.length} capital(s) stand on impassable land${atSeam ? ' (the wall at the seam)' : ''}: ${walled
           .slice(0, 5)
           .map(({ tag, x, y }) => `${tag ?? '?'} (${Math.round(x)}, ${Math.round(y)})`)
-          .join('; ')}. Move them inland or narrow edge.rimPx.`,
+          .join(
+            '; ',
+          )}. Move them${atSeam ? ' inland or narrow edge.rimPx' : ' onto passable land'}.`,
         { mode: edge.mode, rimPx: edge.rimPx, capitals: walled.slice(0, 20) },
       );
+    }
     capitals.push(...realmRules.capitals);
   }
   while (capitals.length < countryCount) {
@@ -1537,7 +1623,7 @@ export function generateWorld(
     let best = -1;
     let bestDistance = -1;
     for (const id of landIds) {
-      if (capitals.includes(id) || wallProvinces.has(id)) continue;
+      if (capitals.includes(id) || impassableProvinces.has(id)) continue;
       const c = center(id);
       const distance = Math.min(
         ...capitals.map((other) => Math.hypot(center(other).x - c.x, center(other).y - c.y)),
@@ -1661,7 +1747,7 @@ export function generateWorld(
   // States: within each region and country, clusters of about provincesPerState.
   const groups = new Map<string, number[]>();
   for (const id of landIds) {
-    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}${wallProvinces.has(id) ? ':wall' : ''}`;
+    const key = `${regionOf.get(id)}:${owner.get(id) ?? -1}${impassableProvinces.has(id) ? ':impassable' : ''}`;
     const list = groups.get(key) ?? [];
     list.push(id);
     groups.set(key, list);
@@ -1704,7 +1790,7 @@ export function generateWorld(
         victoryPoints: new Map(),
         navalBases: new Map(),
         forts: new Map(),
-        ...(key.endsWith(':wall') ? { impassable: true } : {}),
+        ...(key.endsWith(':impassable') ? { impassable: true } : {}),
       };
       states.push(draft);
       for (const id of sorted) stateOf.set(id, draft);
@@ -1891,7 +1977,7 @@ export function generateWorld(
         if (stateOf.get(id)!.navalBases.has(id)) hasPort = true;
         if (
           coastal(id) &&
-          !wallProvinces.has(id) &&
+          !impassableProvinces.has(id) &&
           (bestCoast === undefined || provinces.size[id]! > provinces.size[bestCoast]!)
         )
           bestCoast = id;
@@ -1908,7 +1994,7 @@ export function generateWorld(
       if (!hasPort && bestCoast !== undefined) stateOf.get(bestCoast)!.navalBases.set(bestCoast, 1);
     }
   }
-  if (wallProvinces.size > 0) finishWallStates(states, provinces.neighbors, context);
+  if (impassableProvinces.size > 0) finishImpassableStates(states, provinces.neighbors, context);
   // Province IDs: 1-based in reading order of the province's first pixel; 0 is the null row.
   const provinceId = (index: number) => index + 1;
   // Unique colours, never black.
@@ -1995,6 +2081,27 @@ export function generateWorld(
       details: { rows: rimRows.length },
     });
   const crossingRows = (gameplay?.crossings.rows ?? []).map(adjacencyRowText);
+  // Impassable land and rows must not cut a realm apart or box it in by accident (ZR-28).
+  if (impassableProvinces.size > 0 || (gameplay?.crossings.blocked.length ?? 0) > 0)
+    for (const note of realmReachNotes({
+      kind: provinces.kind,
+      neighbors: provinces.neighbors,
+      impassable: impassableProvinces,
+      blocked: [
+        ...(gameplay?.crossings.blocked ?? []),
+        ...rimRows.map((row) => {
+          const [from, to] = row.split(';').map(Number) as [number, number];
+          return [from - 1, to - 1] as const;
+        }),
+      ],
+      crossings: (gameplay?.crossings.rows ?? [])
+        .filter(({ type }) => type === 'sea')
+        .map(({ from, to }) => [from - 1, to - 1] as const),
+      owner,
+      capitals,
+      tags: spec.countries.map(({ tag }) => tag),
+    }))
+      notes.push(note);
   add(
     `${map}/adjacencies.csv`,
     text(
