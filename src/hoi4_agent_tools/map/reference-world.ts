@@ -21,7 +21,13 @@ export const REFERENCE_TERRAIN = {
 const TERRAIN_ELEVATION = [0.045, 0.055, 0.035, 0.44, 0.045, 0.35, 0.18, 0.025, 0.06] as const;
 const TERRAIN_MOISTURE = [0.45, 0.8, 0.06, 0.35, 0.25, 0.05, 0.4, 0.96, 0.92] as const;
 export type ReferenceTerrain = keyof typeof REFERENCE_TERRAIN;
-export type ReferenceSemantic = 'sea' | 'land' | 'lake' | ReferenceTerrain;
+/**
+ * `impassable_mountain` is mountain land that no army may enter (ZR-28): it reads as mountain for
+ * the terrain, colour, snow and relief, and is also marked in the raster's `impassable` mask.
+ */
+export type ReferenceSemantic = 'sea' | 'land' | 'lake' | 'impassable_mountain' | ReferenceTerrain;
+/** Internal class code of `impassable_mountain`, after the terrain codes. */
+const IMPASSABLE_CODE = 3 + Object.keys(REFERENCE_TERRAIN).length;
 export interface ReferencePoint {
   x: number;
   y: number;
@@ -85,6 +91,8 @@ export interface ReferenceWorldRaster {
   /** 0 water; inferred land countries are numbered from 1. */
   country: Uint16Array;
   inferredCountries: { id: number; name: string; color: RgbColor }[];
+  /** 1 where the picture paints `impassable_mountain`; absent when it paints none. */
+  impassable?: Uint8Array;
   diagnostics: string[];
 }
 
@@ -94,6 +102,7 @@ const semanticSchema = z.enum([
   'sea',
   'land',
   'lake',
+  'impassable_mountain',
   'plains',
   'forest',
   'desert',
@@ -233,7 +242,9 @@ function semanticCode(kind: ReferenceSemantic): number {
       ? 2
       : kind === 'land'
         ? 3
-        : REFERENCE_TERRAIN[kind] + 3;
+        : kind === 'impassable_mountain'
+          ? IMPASSABLE_CODE
+          : REFERENCE_TERRAIN[kind] + 3;
 }
 
 function pixelColor(data: Buffer, pixel: number): RgbColor {
@@ -620,9 +631,15 @@ export async function extractReferenceWorld(
   }
   const kind = new Uint8Array(codes.length);
   const terrain = new Uint8Array(codes.length);
+  let impassable: Uint8Array | undefined;
   for (let pixel = 0; pixel < codes.length; pixel += 1) {
-    kind[pixel] = codes[pixel]! < 3 ? codes[pixel]! : 1;
-    terrain[pixel] = codes[pixel]! < 3 ? 0 : codes[pixel]! - 3;
+    const code = codes[pixel]!;
+    kind[pixel] = code < 3 ? code : 1;
+    if (code === IMPASSABLE_CODE) {
+      terrain[pixel] = REFERENCE_TERRAIN.mountain;
+      impassable ??= new Uint8Array(codes.length);
+      impassable[pixel] = 1;
+    } else terrain[pixel] = code < 3 ? 0 : code - 3;
   }
   const riverPoints = (options.riverAnnotations ?? []).reduce(
     (total, path) => total + path.length,
@@ -672,6 +689,7 @@ export async function extractReferenceWorld(
     rivers,
     country: new Uint16Array(kind.length),
     inferredCountries: [],
+    ...(impassable === undefined ? {} : { impassable }),
     diagnostics,
   };
   if (!exact) inferCountries(result, resized, mode);
