@@ -106,6 +106,20 @@ const packageOutputSchema = strictOperationResultSchema(
       absent: nonNegativeIntegerSchema,
       shadowed: nonNegativeIntegerSchema,
       unresolved: nonNegativeIntegerSchema,
+      notPresent: z
+        .array(
+          z
+            .object({
+              category: z.string().max(64),
+              id: z.string().max(1024),
+              status: z.enum(['absent', 'shadowed', 'unresolved']),
+              reason: z.string().max(256).optional(),
+              path: z.string().max(1024).optional(),
+            })
+            .strict(),
+        )
+        .max(32),
+      notPresentTruncated: z.boolean(),
     })
     .strict(),
 );

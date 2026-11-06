@@ -82,6 +82,11 @@ describe('decision analysis on a later game version', () => {
     );
 
     expect(inspected.code).toBe('DECISION_ANALYZED');
+    // An inspection lists the decision's own file only (#66).
+    expect(inspected.filesScanned.every((file) => file.endsWith('decisions/policy.txt'))).toBe(
+      true,
+    );
+    expect(inspected.filesScanned.length).toBeGreaterThan(0);
     expect(inspected.data).toMatchObject({
       complete: true,
       outcomes: [{ scenarioId: 'approved', found: true, available: 'true' }],
