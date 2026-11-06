@@ -544,6 +544,106 @@
           "includes": "SWE_centre_range"
         }
       ]
+    },
+    {
+      "id": "vanilla.unit.oob-two-regiments-in-one-slot",
+      "surface": "unit",
+      "corpus": "vanilla",
+      "title": "A template with two regiments in one designer slot is reported",
+      "evidence": "history/units/CZE_1936.txt:43-44: the template \"Jezdecká brigáda\" places two cavalry regiments at x = 0, y = 2 (vanilla 1.19.4.1).",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "oob",
+        "id": "CZE_1936"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.problems[*].code",
+          "includes": "UNIT_TEMPLATE_SLOT_INVALID"
+        },
+        {
+          "path": "data.inspection.problems[*].message",
+          "includes": "`cavalry` and `cavalry` both sit at x = 0, y = 2 in regiments"
+        }
+      ]
+    },
+    {
+      "id": "vanilla.unit.duplicated-archetype-is-equipment",
+      "surface": "unit",
+      "corpus": "vanilla",
+      "title": "Equipment a duplicate_archetypes copy derives counts as defined",
+      "evidence": "common/units/equipment/x_plane_airframes.txt:8 copies small_plane_airframe as small_plane_cas_airframe, so small_plane_airframe_0 gives small_plane_cas_airframe_0, which history/units/ARG_1936_air_bba.txt:12 uses.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "oob",
+        "id": "ARG_1936_air_bba"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.references[*].value",
+          "includes": "small_plane_cas_airframe_0"
+        },
+        {
+          "path": "data.inspection.references[*].known",
+          "excludes": false
+        }
+      ]
+    },
+    {
+      "id": "vanilla.unit.variant-from-country-history",
+      "surface": "unit",
+      "corpus": "vanilla",
+      "title": "A variant is found by its name in country history, every time it is created",
+      "evidence": "history/countries/GER - Germany.txt creates the variant \"Königsberg\" twice: at line 1069 as light_cruiser_1 (without Man the Guns) and at line 1304 as ship_hull_cruiser_1 with modules. The answer checks the last one.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "variant",
+        "id": "Königsberg"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.definitions[*].line",
+          "includes": 1304
+        },
+        {
+          "path": "data.inspection.definitions[*].line",
+          "includes": 1069
+        },
+        {
+          "path": "data.inspection.references[*].value",
+          "includes": "ship_hull_cruiser_1"
+        },
+        {
+          "path": "data.inspection.problems",
+          "equals": []
+        }
+      ]
+    },
+    {
+      "id": "vanilla.unit.equipment-slots-clean",
+      "surface": "unit",
+      "corpus": "vanilla",
+      "title": "A ship hull with fixed and copied module slots has no problem",
+      "evidence": "common/units/equipment/ship_hull_light.txt: ship_hull_light lists module_slots with allowed_module_categories that modules in common/units/equipment/modules name as their category.",
+      "tool": "hoi4.unit_inspect",
+      "arguments": {
+        "kind": "equipment",
+        "id": "ship_hull_light"
+      },
+      "budgetMs": 15000,
+      "expect": [
+        {
+          "path": "data.inspection.parts[*].id",
+          "includes": "fixed_ship_battery_slot"
+        },
+        {
+          "path": "data.inspection.problems",
+          "equals": []
+        }
+      ]
     }
   ]
 }
