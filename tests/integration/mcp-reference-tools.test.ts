@@ -129,7 +129,7 @@ describe('MCP local reference tools', () => {
       name: 'hoi4.script_validate',
       arguments: {
         workspaceId: 'fixture',
-        source: 'country_event = example.1',
+        source: 'country_event = reference.1',
         kind: 'effect',
         scope: 'state',
       },

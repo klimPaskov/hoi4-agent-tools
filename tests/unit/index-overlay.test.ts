@@ -57,6 +57,23 @@ describe('load-order scanner and shared index', () => {
     }
   });
 
+  it('indexes shared and joint focuses and advisor idea tokens as the ids scripts name', () => {
+    const index = SymbolIndex.build([
+      scannedSourceFile(
+        'common/national_focus/shared.txt',
+        'shared_focus = { id = SHARED_alpha x = 0 y = 0 }\njoint_focus = { id = JOINT_beta x = 1 y = 0 }\nfocus_tree = { id = tree shared_focus = SHARED_alpha }\n',
+      ),
+      scannedSourceFile(
+        'common/characters/advisors.txt',
+        'characters = { GER_person = { advisor = { slot = political_advisor idea_token = GER_person_advisor } } }\n',
+      ),
+    ]);
+    const ids = (kind: string) =>
+      index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id);
+    expect(ids('focus')).toEqual(['SHARED_alpha', 'JOINT_beta']);
+    expect(ids('idea')).toEqual(['GER_person_advisor']);
+  });
+
   it('indexes the definition database selected by default.map', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-selected-definitions-'));
     const game = path.join(root, 'game');
