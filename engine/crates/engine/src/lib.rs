@@ -7,6 +7,7 @@
 //! Chaos Redux call the `hoi4-engine` command-line interface.
 
 pub mod analysis;
+pub mod assets;
 pub mod baseline;
 pub mod context;
 pub mod defs;

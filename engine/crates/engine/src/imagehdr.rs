@@ -43,6 +43,14 @@ pub fn read_header(path: &Path) -> Result<TextureHeader, String> {
     let mut file = File::open(path).map_err(|e| format!("cannot open: {e}"))?;
     let mut buf = Vec::with_capacity(160);
     file.by_ref().take(160).read_to_end(&mut buf).map_err(|e| format!("cannot read: {e}"))?;
+    // The game reads a texture by its content: Kaiserreich and Old World Blues ship PNG files
+    // named `.dds`, and both load. TGA has no signature, so it goes by the extension.
+    if buf.starts_with(b"DDS ") {
+        return parse_dds(&buf);
+    }
+    if buf.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return parse_png(&buf);
+    }
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     match ext.as_str() {
         "dds" => parse_dds(&buf),

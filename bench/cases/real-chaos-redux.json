@@ -527,6 +527,25 @@
           "equals": "UNIT_DEFINITION_NOT_FOUND"
         }
       ]
+    },
+    {
+      "id": "chaos_redux.asset.sound-audit-clean",
+      "surface": "asset",
+      "corpus": "chaos_redux",
+      "title": "Chaos Redux sounds name only audio files and sounds that load",
+      "evidence": "Hand-checked sweep (2026-11-06) of the 1209 sound, sound effect and music definitions Chaos Redux makes.",
+      "tool": "hoi4.asset_inspect",
+      "arguments": {
+        "kind": "sound",
+        "audit": true
+      },
+      "budgetMs": 120000,
+      "expect": [
+        {
+          "path": "data.audit.problems[*].severity",
+          "excludes": "warning"
+        }
+      ]
     }
   ]
 }
