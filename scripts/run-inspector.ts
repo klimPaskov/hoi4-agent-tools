@@ -32,6 +32,7 @@ const publicToolNames = [
   'hoi4.system_inspect',
   'hoi4.unit_inspect',
   'hoi4.asset_inspect',
+  'hoi4.skill',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.impact_inspect',
@@ -48,6 +49,7 @@ const publicToolNames = [
 ] as const;
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
+const skillResourceTemplate = 'hoi4-agent://workspace/{workspaceId}/skill/{name}';
 
 interface InspectorPackageManifest {
   bin?: string | Record<string, string>;
@@ -307,7 +309,7 @@ try {
     templates.resourceTemplates?.flatMap(({ uriTemplate }) =>
       uriTemplate === undefined ? [] : [uriTemplate],
     ) ?? [];
-  if (!exactNames(templateUris, [artifactResourceTemplate])) {
+  if (!exactNames(templateUris, [artifactResourceTemplate, skillResourceTemplate])) {
     throw new Error(`Inspector returned the wrong resource templates: ${templateUris.join(', ')}`);
   }
 

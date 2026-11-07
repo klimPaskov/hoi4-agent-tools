@@ -8,9 +8,9 @@ import {
   referenceReadRequestSchema,
   referenceSearchRequestSchema,
   sourceLookupRequestSchema,
-  referenceContextDataSchema,
+  referenceContextToolDataSchema,
   referenceReadDataSchema,
-  referenceSearchDataSchema,
+  referenceSearchToolDataSchema,
   sourceLookupDataSchema,
 } from '../../schemas/reference.js';
 import type { ToolDefinition } from '../server/task-tool-definition.js';
@@ -37,6 +37,7 @@ import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
 } from '../../schemas/script-validation.js';
+import { skillDataSchema, skillRequestSchema } from '../../schemas/skill.js';
 
 const readOnly = {
   readOnlyHint: true,
@@ -51,7 +52,7 @@ export const referenceTools = [
     description:
       'Find the right modding rule in the offline wiki and installed game docs using ordinary words or script names. Each hit includes its file, lines, revision and answering line. Example: {"query":"add_timed_idea"}. Returns 6 hits by default (up to 12); read one with hoi4.reference_read using its id and revision.',
     inputSchema: referenceSearchRequestSchema,
-    outputSchema: strictOperationResultSchema(referenceSearchDataSchema),
+    outputSchema: strictOperationResultSchema(referenceSearchToolDataSchema),
     annotations: readOnly,
   },
   {
@@ -69,7 +70,7 @@ export const referenceTools = [
     description:
       'Find documentation for the content you are building: events, decisions, ideas, focuses, technology, GUI, maps, localisation or AI. Example: {"surface":"event","question":"fire an event after a delay"}. Returns up to 16 short sections; read more with hoi4.reference_read.',
     inputSchema: referenceContextRequestSchema,
-    outputSchema: strictOperationResultSchema(referenceContextDataSchema),
+    outputSchema: strictOperationResultSchema(referenceContextToolDataSchema),
     annotations: readOnly,
   },
   {
@@ -151,6 +152,15 @@ export const referenceTools = [
       'Read one sprite (texture size, format and frames), sound, sound effect or music track (audio file, sounds it plays), or flag (all three sizes), or audit every one the mod defines. Flags BC7 textures, missing files and wrong flag sizes. Example: {"kind":"sprite","id":"GFX_my_icon"} or {"kind":"flag","audit":true}.',
     inputSchema: assetInspectRequestSchema,
     outputSchema: strictOperationResultSchema(assetInspectDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.skill',
+    title: "Read the mod's modding skills",
+    description:
+      'List the modding skills installed in the mod, or load one by name, at the kit version HOI4 Mod Setup pinned, with its hash. A file edited since Setup installed it is refused unless acceptLocalEdits. Example: {"name":"hoi4-events"}. Returns up to 20,000 bytes of text; continue from nextOffset.',
+    inputSchema: skillRequestSchema,
+    outputSchema: strictOperationResultSchema(skillDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

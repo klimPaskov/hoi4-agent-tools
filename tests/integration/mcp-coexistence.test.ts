@@ -35,17 +35,27 @@ async function treeSnapshot(root: string, current = root): Promise<Record<string
   return Object.fromEntries(files.sort(([left], [right]) => left.localeCompare(right, 'en-US')));
 }
 
-async function typescriptSource(current: string): Promise<string> {
+async function typescriptSource(
+  current: string,
+  skip: ReadonlySet<string> = new Set(),
+): Promise<string> {
   const entries = await readdir(current, { withFileTypes: true });
   const chunks: string[] = [];
   for (const entry of entries) {
     const absolute = path.join(current, entry.name);
-    if (entry.isDirectory()) chunks.push(await typescriptSource(absolute));
-    else if (entry.isFile() && entry.name.endsWith('.ts'))
+    if (entry.isDirectory()) chunks.push(await typescriptSource(absolute, skip));
+    else if (entry.isFile() && entry.name.endsWith('.ts') && !skip.has(absolute))
       chunks.push(await readFile(absolute, 'utf8'));
   }
   return chunks.join('\n');
 }
+
+/** hoi4.skill serves the skills Setup installed (decision M-1); only these modules name them. */
+const SKILL_SERVING_SOURCES = [
+  'src/hoi4_agent_tools/reference/skills.ts',
+  'src/hoi4_agent_tools/reference/skill-resource.ts',
+  'src/hoi4_agent_tools/schemas/skill.ts',
+];
 
 describe('MCP coding-agent coexistence', () => {
   it('advertises bounded guidance without task ownership or host-specific coupling', async () => {
@@ -97,7 +107,10 @@ describe('MCP coding-agent coexistence', () => {
     expect(prompts[0]?.description ?? '').not.toMatch(ownershipClaim);
     expect(prompts[0]?.description ?? '').not.toMatch(/AGENTS\.md|SKILL\.md|subagents?/iu);
 
-    const runtimeSource = await typescriptSource(path.join(repositoryRoot, 'src'));
+    const runtimeSource = await typescriptSource(
+      path.join(repositoryRoot, 'src'),
+      new Set(SKILL_SERVING_SOURCES.map((file) => path.join(repositoryRoot, ...file.split('/')))),
+    );
     expect(runtimeSource).not.toMatch(/chaos[_ -]?redux/iu);
     expect(runtimeSource).not.toContain('SKILL.md');
     expect(runtimeSource).not.toMatch(/(?:^|[\\/])\.agents(?:[\\/]|$)/u);

@@ -17,7 +17,7 @@ Markdown headings and recognizable standalone names in generated `.log` files fo
 
 - `hoi4.reference_context`: request one surface: `general`, `event`, `decision`, `idea`, `focus`, `technology`, `gui`, `map`, `localisation`, or `ai`. The default limit is 16 citations and the maximum is 24. It reserves citations for available installed documentation and offline wiki sources before adding further question matches. Supply `question` to select the best matching section within each required source. At a limit of two or more, both source kinds are represented when available; a one-result limit prioritizes installed documentation. `omittedSources` names required sources excluded by the result limit, while `missing` names sources absent from the configured roots. Increase the limit or search an omitted source directly before treating the bundle as sufficient. Citations are pointers and excerpts; read the pertinent sections before changing code.
 - `hoi4.reference_search`: search with plain words or exact script tokens. Ranking weighs headings above body text and rare words above common ones, and it matches identifiers both whole and by their words, so "check if a state is controlled by a country" can find `is_controlled_by`. A query that names an identifier only matches sections containing it, an exact heading ranks first, and installed documentation precedes the wiki when they rank equally. Each result's `matchLine` is the cited line that best matches the query; pass it as `startLine` to `hoi4.reference_read` to land on the answer inside a long section. When several sources document the same name, the first copy keeps its place and later copies follow other distinct answers. The default limit is six results and the maximum is twelve. Filter `sources` to `game_doc`, `wiki`, or `script_doc` when appropriate. Only selected authorities are scanned; `coverage.included = false` means that an authority was excluded from this query, not that it is missing.
-- `hoi4.reference_read`: provide a search/context result's `id` and `revision`. Optionally pass its `source` for a focused authority read; resident citations provide this hint automatically. Read 40 lines by default, set `maxLines` up to 80, and at most 8,000 UTF-8 bytes, with JSON escaping also bounded. Continue with the returned `nextLine`, `nextColumn` as `startColumn`, and the same revision. Long source lines continue without losing characters. A changed source returns `REFERENCE_REVISION_STALE`.
+- `hoi4.reference_read`: provide a search/context result's `id` and `revision`. A hit carries a 16-character id and a 12-character revision, the leading characters of the section's and file's SHA-256, and `reference_read` also accepts the full 64-character forms. A hit's `path` is the file under its source's folder, such as `event_modding.md` for `wiki` or `documentation/effects_documentation.md` for `game_doc`. Optionally pass its `source` for a focused authority read; resident citations provide this hint automatically. Read 40 lines by default, set `maxLines` up to 80, and at most 8,000 UTF-8 bytes, with JSON escaping also bounded. Continue with the returned `nextLine`, `nextColumn` as `startColumn`, and the same revision. Long source lines continue without losing characters. A changed source returns `REFERENCE_REVISION_STALE`.
 - `hoi4.source_lookup`: find exact definitions and indexed usages in the installed game and configured mod source. The response includes load order, override status, up to three source blocks bounded to 2,000 bytes each, a scan revision, and explicit reference counts and truncation. Follow `nextLine` and `nextColumn` as `fromLine` and `fromColumn`, with `expectedRevision`, to read more of the active definition.
 - When `hoi4.source_lookup` finds no definition, `suggestions` lists up to five indexed identifiers within three edits of the requested symbol, nearest first, which catches typos and near-miss names.
 - `hoi4.source_lookup` with `path` and `line` instead of `symbol` locates a source position, such as a diagnostic or a changed line in a diff. `path` may be a result path such as `mod:events/example.txt`, a path relative to a source root, or an absolute path inside one. The result names the file's layer and whether a later layer shadows it, the indexed definitions that contain the line, innermost first, and the chain of enclosing assignments with zero-based occurrences for repeated keys. Its `keyPath` starts inside the innermost definition: pass that definition's `id` as `symbol`, its `kind`, and the `keyPath` to read or list that exact block. Without `column`, the first non-blank character of the line is used. A file with parse errors returns its definitions but no structural chain. Only the requested file's folder is scanned, in every layer.
@@ -166,6 +166,32 @@ The result gives `nextId` after the highest used number, and `firstGapId` when a
 
 ```json
 { "mode": "next_id", "kind": "event", "namespace": "my_mod" }
+```
+
+## Read the mod's skills
+
+`hoi4.skill` serves the modding skills HOI4 Mod Setup installed in the mod, so every client reads the same text.
+Without `name` it lists them, with the description from each `SKILL.md`, the number of files, and a state.
+With `name` it loads that skill's `SKILL.md`, or another file of the skill named in `file`, such as `references/events.md`.
+
+The served text is the kit version the mod pins.
+Setup's lock, `.hoi4-mod-setup/install.lock.json`, records the kit repository, revision, release and manifest hash, and the SHA-256 of every installed file.
+Each result returns the kit identity, the file's `sha256` and the `pinnedSha256` from the lock, and its state:
+
+- `pinned`: the installed bytes match the lock.
+- `edited`: the bytes differ. Loading the file fails with `SKILL_TEXT_DRIFTED` unless `acceptLocalEdits` is true, and the result's validation fails either way. Rerun HOI4 Mod Setup to restore the pinned text.
+- `missing`: the lock names a file the mod no longer has (`SKILL_FILE_MISSING`).
+- `unpinned`: the mod has no Setup lock, so its installed skills are served with their hashes but no kit version can be checked. `kit` is `null`.
+
+Setup installs a copy for each client. The `.agents/skills` copy is served when it exists, otherwise the `.claude/skills` copy.
+Only files named in the lock are served, and a file that resolves outside the mod is refused.
+A call returns at most 20,000 bytes of text, cut after a line break. Continue from `nextOffset` until it is `null`.
+
+The same `SKILL.md` text is the MCP resource `hoi4-agent://workspace/{workspaceId}/skill/{name}`, listed for the client's mod as `hoi4-agent://workspace/current/skill/<name>`.
+Its `_meta` carries `sha256`, `state`, `kitRevision` and `kitRelease`, and an edited file is refused there too.
+
+```json
+{ "name": "hoi4-events" }
 ```
 
 ## Example

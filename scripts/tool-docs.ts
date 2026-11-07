@@ -36,6 +36,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
       'hoi4.system_inspect',
       'hoi4.unit_inspect',
       'hoi4.asset_inspect',
+      'hoi4.skill',
     ],
   },
   {
