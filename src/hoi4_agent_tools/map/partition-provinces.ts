@@ -1,7 +1,12 @@
 import { ServiceError } from '../core/result.js';
 import { assembleWorldProvinces, assertProvinceMaskFeasible } from './world-provinces.js';
 import type { WorldProvinces } from './world-provinces.js';
-import { assertPartitionFields, PARTITION_KIND, PARTITION_TERRAIN } from './partition-fields.js';
+import {
+  assertPartitionFields,
+  PARTITION_KIND,
+  PARTITION_TERRAIN,
+  WALL_SIDE,
+} from './partition-fields.js';
 import type { PartitionFields } from './partition-fields.js';
 import type { ResolvedPartitionTuning } from './partition-tuning.js';
 import { PARTITION_PROVINCE_ERROR } from './partition-tuning.js';
@@ -554,34 +559,105 @@ function splitAcrossLines(
     }
     sizes.push(tail);
   }
-  // Line pixels join the smallest-numbered neighbouring piece of the same province.
-  for (let pass = 0; pass < 8; pass++) {
-    let changed = false;
-    for (let p = 0; p < total; p++) {
-      if (piece[p] !== -1 || kind[p] !== LAND) continue;
-      const x = p % width;
-      let best = -1;
-      for (const q of [
-        x > 0 ? p - 1 : p + width - 1,
-        x + 1 < width ? p + 1 : p - width + 1,
-        p >= width ? p - width : -1,
-        p + width < total ? p + width : -1,
-      ])
-        if (
-          q >= 0 &&
-          piece[q]! >= 0 &&
-          labels[q] === labels[p] &&
-          (best === -1 || piece[q]! < best)
-        )
-          best = piece[q]!;
-      if (best >= 0) {
-        piece[p] = best;
-        sizes[best]!++;
-        changed = true;
+  // A wall's barrier band can be many pixels wide. Its pixels go to the nearest piece on their
+  // own side of the wall line, whatever its province (a pixel on the line to either side), so the
+  // province border runs on the line, where the crossings look for it, never at the far edge of
+  // the band or along a strip that one piece pushed down the band.
+  const side = fields.wallSide;
+  const inWall = (p: number): boolean => side !== undefined && side[p] !== WALL_SIDE.none;
+  const joins = (p: number, q: number): boolean => {
+    const sp = side![p]!;
+    const sq = side![q]!;
+    return sp === WALL_SIDE.none || sq === WALL_SIDE.none || sp === sq || sp === WALL_SIDE.line;
+  };
+  const straddles = (p: number, q: number): boolean => {
+    if (side === undefined) return false;
+    const sp = side[p]!;
+    const sq = side[q]!;
+    return sp !== WALL_SIDE.none && sq !== WALL_SIDE.none && sp !== sq;
+  };
+  const neighboursOf = (p: number): number[] => {
+    const x = p % width;
+    return [
+      x > 0 ? p - 1 : p + width - 1,
+      x + 1 < width ? p + 1 : p - width + 1,
+      p >= width ? p - width : -1,
+      p + width < total ? p + width : -1,
+    ];
+  };
+  // Other line pixels (rivers, and walls without a side field) join the smallest-numbered
+  // neighbouring piece of the same province.
+  const joinLines = (): boolean => {
+    let any = false;
+    for (let pass = 0; pass < 8; pass++) {
+      let changed = false;
+      for (let p = 0; p < total; p++) {
+        if (piece[p] !== -1 || kind[p] !== LAND || inWall(p)) continue;
+        let best = -1;
+        for (const q of neighboursOf(p))
+          if (
+            q >= 0 &&
+            piece[q]! >= 0 &&
+            labels[q] === labels[p] &&
+            (best === -1 || piece[q]! < best)
+          )
+            best = piece[q]!;
+        if (best >= 0) {
+          piece[p] = best;
+          sizes[best]!++;
+          changed = true;
+        }
       }
+      if (!changed) break;
+      any = true;
     }
-    if (!changed) break;
-  }
+    return any;
+  };
+  // Wall pixels: a breadth-first fill from the pieces, which takes the province of the piece.
+  const fillWalls = (): boolean => {
+    if (side === undefined) return false;
+    let tail = 0;
+    for (let p = 0; p < total; p++) {
+      if (piece[p] !== -1 || kind[p] !== LAND || !inWall(p)) continue;
+      let best = -1;
+      let from = -1;
+      for (const q of neighboursOf(p))
+        if (q >= 0 && piece[q]! >= 0 && joins(p, q) && (best === -1 || piece[q]! < best)) {
+          best = piece[q]!;
+          from = q;
+        }
+      if (best < 0) continue;
+      queue[tail++] = p;
+      piece[p] = -2 - from;
+    }
+    // Assigned after the scan, so the first ring does not depend on the scan order.
+    for (let index = 0; index < tail; index++) {
+      const p = queue[index]!;
+      const from = -2 - piece[p]!;
+      piece[p] = piece[from]!;
+      labels[p] = labels[from]!;
+      sizes[piece[p]]!++;
+    }
+    let head = 0;
+    while (head < tail) {
+      const p = queue[head++]!;
+      for (const q of neighboursOf(p))
+        if (q >= 0 && piece[q] === -1 && kind[q] === LAND && inWall(q) && joins(q, p)) {
+          piece[q] = piece[p]!;
+          labels[q] = labels[p]!;
+          sizes[piece[p]!]!++;
+          queue[tail++] = q;
+        }
+    }
+    return tail > 0;
+  };
+  if (side === undefined) joinLines();
+  else
+    for (let round = 0; round < 8; round++) {
+      const lines = joinLines();
+      const walls = fillWalls();
+      if (!lines && !walls) break;
+    }
   for (let p = 0; p < total; p++)
     if (piece[p] === -1 && kind[p] === LAND) {
       piece[p] = sizes.length;
@@ -602,6 +678,8 @@ function splitAcrossLines(
     const x = p % width;
     for (const q of [x + 1 < width ? p + 1 : -1, p + width < total ? p + width : -1]) {
       if (q < 0 || kind[q] !== LAND || labels[q] !== labels[p] || piece[q] === piece[p]) continue;
+      // A small piece never joins a piece across a wall line.
+      if (straddles(p, q)) continue;
       const a = piece[p]!;
       const b = piece[q]!;
       if (sizes[a]! < minPixels && (best[a] === -1 || sizes[b]! > sizes[best[a]!]!)) best[a] = b;
@@ -864,6 +942,7 @@ export function partitionProvinces(input: FeaturePartitionInput): FeaturePartiti
       kind,
       ...(usesRegions ? { group: fields.regionId } : {}),
       line: lines,
+      ...(fields.wallSide === undefined ? {} : { wallSide: fields.wallSide }),
     },
     labels,
   );

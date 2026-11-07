@@ -29,6 +29,43 @@ export interface ProvinceGeometryInput {
    * neighbour on their own side can take them.
    */
   line?: Uint8Array;
+  /**
+   * Optional side of the nearest wall line per pixel (`WALL_SIDE` of the partition fields: 0
+   * none, 1 and 2 the two sides, 3 on the line). Slivers and four-province corners are repaired
+   * across a wall only when nothing else can repair them, so a wall's provinces stay on their
+   * own side.
+   */
+  wallSide?: Uint8Array;
+}
+
+/** True when two pixels lie on different sides of a wall line (or one on it). */
+function acrossWall(input: ProvinceGeometryInput, p: number, q: number): boolean {
+  const side = input.wallSide;
+  if (side === undefined) return false;
+  const a = side[p]!;
+  const b = side[q]!;
+  return a !== 0 && b !== 0 && a !== b;
+}
+
+interface RepairStage {
+  sameGroup: boolean;
+  avoidLine: boolean;
+  avoidWall: boolean;
+}
+
+/** Repair stages, strictest first; with a wall side field every stage but a last fallback keeps to its side. */
+function repairStages(input: ProvinceGeometryInput): RepairStage[] {
+  const stages: Array<{ sameGroup: boolean; avoidLine: boolean }> = [];
+  if (input.group !== undefined && input.line !== undefined)
+    stages.push({ sameGroup: true, avoidLine: true });
+  if (input.line !== undefined) stages.push({ sameGroup: false, avoidLine: true });
+  if (input.group !== undefined) stages.push({ sameGroup: true, avoidLine: false });
+  stages.push({ sameGroup: false, avoidLine: false });
+  if (input.wallSide === undefined) return stages.map((stage) => ({ ...stage, avoidWall: false }));
+  return [
+    ...stages.map((stage) => ({ ...stage, avoidWall: true })),
+    { sameGroup: false, avoidLine: false, avoidWall: false },
+  ];
 }
 
 export interface WorldProvinces {
@@ -338,13 +375,7 @@ function absorbSlivers(input: ProvinceGeometryInput, parts: Parts): void {
   // repeated because a previously isolated fragment may become mergeable afterwards. With groups
   // or lines, the first stages merge inside a group and not across a line, and the last stage
   // takes what is left.
-  const stages: Array<{ sameGroup: boolean; avoidLine: boolean }> = [];
-  if (input.group !== undefined && input.line !== undefined)
-    stages.push({ sameGroup: true, avoidLine: true });
-  if (input.line !== undefined) stages.push({ sameGroup: false, avoidLine: true });
-  if (input.group !== undefined) stages.push({ sameGroup: true, avoidLine: false });
-  stages.push({ sameGroup: false, avoidLine: false });
-  for (const { sameGroup, avoidLine } of stages) {
+  for (const { sameGroup, avoidLine, avoidWall } of repairStages(input)) {
     for (let pass = 0; pass < 4; pass++) {
       let changed = false;
       for (let p = 0; p < parts.pixel.length; p++) {
@@ -353,6 +384,7 @@ function absorbSlivers(input: ProvinceGeometryInput, parts: Parts): void {
         for (const q of adjacent) {
           if (q >= parts.pixel.length) continue;
           if (avoidLine && (input.line![p] !== 0 || input.line![q] !== 0)) continue;
+          if (avoidWall && acrossWall(input, p, q)) continue;
           const a = root(parts, parts.pixel[p]!);
           const b = root(parts, parts.pixel[q]!);
           if (a === b || (parts.size[a]! >= 20 && parts.size[b]! >= 20)) continue;
@@ -412,7 +444,7 @@ function rebalanceSlivers(input: ProvinceGeometryInput, parts: Parts): void {
       for (const p of cells) {
         const x = p % width;
         for (const q of [x > 0 ? p - 1 : -1, x + 1 < width ? p + 1 : -1, p - width, p + width]) {
-          if (q < 0 || q >= kind.length || kind[q] !== kind[p]) continue;
+          if (q < 0 || q >= kind.length || kind[q] !== kind[p] || acrossWall(input, p, q)) continue;
           const donor = root(parts, parts.pixel[q]!);
           if (donor === id || parts.size[donor]! <= 20 || !removable(parts, q, width, height))
             continue;
@@ -443,12 +475,7 @@ function rebalanceSlivers(input: ProvinceGeometryInput, parts: Parts): void {
 
 function repairCrossings(input: ProvinceGeometryInput, parts: Parts): void {
   const { width, height, kind } = input;
-  const repairStages: Array<{ sameGroup: boolean; avoidLine: boolean }> = [];
-  if (input.group !== undefined && input.line !== undefined)
-    repairStages.push({ sameGroup: true, avoidLine: true });
-  if (input.line !== undefined) repairStages.push({ sameGroup: false, avoidLine: true });
-  if (input.group !== undefined) repairStages.push({ sameGroup: true, avoidLine: false });
-  repairStages.push({ sameGroup: false, avoidLine: false });
+  const stages = repairStages(input);
   for (let pass = 0; pass < 12; pass++) {
     let changed = false;
     for (let y = 0; y + 1 < height; y++) {
@@ -467,10 +494,11 @@ function repairCrossings(input: ProvinceGeometryInput, parts: Parts): void {
         let repaired = false;
         // Whole-cell unions cannot introduce crossings or disconnected provinces. With groups or
         // lines, the repairs inside one group and not across a line come first.
-        for (const { sameGroup, avoidLine } of repairStages) {
+        for (const { sameGroup, avoidLine, avoidWall } of stages) {
           for (const [i, j] of edges) {
             if (avoidLine && (input.line![corners[i]!] !== 0 || input.line![corners[j]!] !== 0))
               continue;
+            if (avoidWall && acrossWall(input, corners[i]!, corners[j]!)) continue;
             if (merge(parts, ids[i]!, ids[j]!, width, height, sameGroup)) {
               repaired = true;
               break;
@@ -484,6 +512,7 @@ function repairCrossings(input: ProvinceGeometryInput, parts: Parts): void {
             const p = corners[i!]!;
             const q = corners[j!]!;
             if (avoidLine && (input.line![p] !== 0 || input.line![q] !== 0)) continue;
+            if (avoidWall && acrossWall(input, p, q)) continue;
             if (kind[p] !== kind[q] || !removable(parts, p, width, height)) continue;
             if (
               sameGroup &&

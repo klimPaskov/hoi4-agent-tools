@@ -114,8 +114,27 @@ export interface MacroRelief {
   readonly crest: Uint8Array;
   /** 1 where an impassable range stands, 2 for a fort line; pass gaps are clear. */
   readonly barrier: Uint8Array;
+  /**
+   * The saddles carved for declared passes, for stages that raise the relief later: the level a
+   * cell is capped at (`Infinity` outside every pass corridor) and the weight of the cap (1 in
+   * the corridor, falling across its soft edge). Absent when the model declares no pass.
+   */
+  readonly passCap?: PassCaps | undefined;
   readonly ranges: readonly RangeTable[];
   readonly scale: number;
+}
+
+/** Per-cell pass caps of `MacroRelief.passCap`. */
+export interface PassCaps {
+  readonly level: Float32Array;
+  readonly weight: Float32Array;
+}
+
+/** Lower `height` toward a pass cap: unchanged outside a corridor or where it is already lower. */
+export function cappedAtPass(caps: PassCaps | undefined, cell: number, height: number): number {
+  if (caps === undefined) return height;
+  const level = caps.level[cell]!;
+  return level < height ? height + (level - height) * caps.weight[cell]! : height;
 }
 
 export interface MacroReliefInput {
@@ -674,7 +693,8 @@ function carvePassSaddles(
   kind: Uint8Array,
   mw: number,
   mh: number,
-): void {
+): PassCaps | undefined {
+  let caps: PassCaps | undefined;
   const aspect = mh / mw;
   // The line of every range in cell units, one point per table entry, with its footprint.
   const lines = new Map<string, { x: Float64Array; y: Float64Array; reach: number }>();
@@ -759,10 +779,19 @@ function carvePassSaddles(
             nearestDistance <= corridor ? 1 : 1 - smoothstep((nearestDistance - corridor) / edge);
           if (cap < heights[cell]!)
             heights[cell] = heights[cell]! + (cap - heights[cell]!) * weight;
+          // Kept for the stages that raise the relief afterwards (painted relief), so they
+          // cannot fill the saddle back up to the crest.
+          caps ??= {
+            level: new Float32Array(mw * mh).fill(Infinity),
+            weight: new Float32Array(mw * mh),
+          };
+          if (cap < caps.level[cell]!) caps.level[cell] = cap;
+          if (weight > caps.weight[cell]!) caps.weight[cell] = weight;
         }
     }
   }
   void aspect;
+  return caps;
 }
 
 /** Build the macro relief of the model. */
@@ -806,7 +835,7 @@ export function synthesizeMacroRelief(input: MacroReliefInput): MacroRelief {
     heights[index] = Math.min(HEIGHT_CEILING, heights[index]! + targets.delta[index]!);
     footprint[index] = Math.max(footprint[index]!, targets.footprint[index]!);
   }
-  carvePassSaddles(geography, ranges, heights, kind, mw, mh);
+  const passCap = carvePassSaddles(geography, ranges, heights, kind, mw, mh);
   return {
     width: mw,
     height: mh,
@@ -817,6 +846,7 @@ export function synthesizeMacroRelief(input: MacroReliefInput): MacroRelief {
     snowLine: targets.snow,
     crest: targets.crest,
     barrier: targets.barrier,
+    ...(passCap === undefined ? {} : { passCap }),
     ranges,
     scale,
   };

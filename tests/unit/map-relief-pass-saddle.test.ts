@@ -4,6 +4,10 @@ import {
   rasterizeGeographyKind,
   synthesizeTerrain,
 } from '../../src/hoi4_agent_tools/map/relief/index.js';
+import {
+  DEFAULT_PAINTED_RELIEF,
+  PAINTED_MOUNTAIN,
+} from '../../src/hoi4_agent_tools/map/relief/painted-relief.js';
 import { checkTerrainRivers } from '../../src/hoi4_agent_tools/map/relief/terrain-synthesis.js';
 import {
   geographyModelSchema,
@@ -54,13 +58,38 @@ function resolve(input: GeographyModelInput) {
   return resolution.geography;
 }
 
-function synthesize(input: GeographyModelInput) {
+/** A reference picture's classes with the whole range, pass included, painted as mountain. */
+function paintedRange(): Uint8Array {
+  const classes = new Uint8Array(WIDTH * HEIGHT);
+  for (let y = Math.floor(0.915 * HEIGHT); y < Math.ceil(0.955 * HEIGHT); y += 1)
+    for (let x = Math.floor(0.57 * WIDTH); x < Math.ceil(0.636 * WIDTH); x += 1)
+      classes[y * WIDTH + x] = PAINTED_MOUNTAIN;
+  return classes;
+}
+
+function synthesize(input: GeographyModelInput, painted = false) {
   const geography = resolve(input);
   const kind = rasterizeGeographyKind(geography, { width: WIDTH, height: HEIGHT, seed: 3 });
   return {
     geography,
     kind,
-    terrain: synthesizeTerrain({ geography, width: WIDTH, height: HEIGHT, seed: 3, kind }),
+    terrain: synthesizeTerrain({
+      geography,
+      width: WIDTH,
+      height: HEIGHT,
+      seed: 3,
+      kind,
+      ...(painted
+        ? {
+            painted: {
+              classes: paintedRange(),
+              impassable: paintedRange().map((code) => (code === 0 ? 0 : 1)),
+              settings: DEFAULT_PAINTED_RELIEF,
+              seed: 3,
+            },
+          }
+        : {}),
+    }),
   };
 }
 
@@ -75,6 +104,36 @@ describe('declared passes are saddles whatever else stands there', () => {
     const after = at(0.619, 0.9308);
     // A margin of several height units, not a tie.
     expect(centre).toBeLessThan(Math.min(before, after) - 4);
+  });
+
+  it('keeps the saddle when relief.painted raises a painted range over the pass', () => {
+    const { terrain } = synthesize(model({ volcanoes: [] }), true);
+    const codes = terrain.notes.map(({ code }) => code);
+    expect(codes).toContain('MAP_RELIEF_PAINTED');
+    expect(codes).not.toContain('MAP_PASS_NOT_LOWER');
+    const at = (x: number, y: number): number =>
+      terrain.heights[Math.round(y * HEIGHT) * WIDTH + Math.round(x * WIDTH)]!;
+    const centre = at(0.6029, 0.93366);
+    expect(centre).toBeLessThan(Math.min(at(0.588, 0.938), at(0.619, 0.9308)) - 4);
+  });
+
+  it('checks the painted pass in the river preview too', () => {
+    const geography = resolve(model({ volcanoes: [] }));
+    const kind = rasterizeGeographyKind(geography, { width: WIDTH, height: HEIGHT, seed: 3 });
+    const notes = checkTerrainRivers({
+      geography,
+      width: WIDTH,
+      height: HEIGHT,
+      seed: 3,
+      kind,
+      painted: {
+        classes: paintedRange(),
+        impassable: paintedRange().map((code) => (code === 0 ? 0 : 1)),
+        settings: DEFAULT_PAINTED_RELIEF,
+        seed: 3,
+      },
+    });
+    expect(notes.map(({ code }) => code)).not.toContain('MAP_PASS_NOT_LOWER');
   });
 
   it('checks the pass in the river preview, without building the full relief', () => {

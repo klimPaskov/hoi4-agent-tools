@@ -1,11 +1,20 @@
 import { ServiceError } from '../core/result.js';
 import {
+  clearBandStrip,
+  createBandStrip,
   forEachPolylinePixel,
+  rasterizeBandStrip,
   rowStrips,
   scanAreaStrip,
   type ResolvedGeography,
+  type ResolvedRange,
 } from './geography/index.js';
-import { PARTITION_KIND, type PartitionFields, type PartitionRegion } from './partition-fields.js';
+import {
+  PARTITION_KIND,
+  WALL_SIDE,
+  type PartitionFields,
+  type PartitionRegion,
+} from './partition-fields.js';
 import {
   BARRIER_CREST,
   BARRIER_FORT_LINE,
@@ -83,8 +92,10 @@ export function partitionFieldsFromGeography(
       });
   }
   const whole = { y0: 0, y1: height };
-  for (const range of geography.ranges) {
-    if (range.profile !== 'wall' && range.barrier !== 'impassable') continue;
+  const walls = geography.ranges.filter(
+    (range) => range.profile === 'wall' || range.barrier === 'impassable',
+  );
+  for (const range of walls) {
     forEachPolylinePixel(range.path, grid, whole, (x, y) => {
       for (let dy = -WALL_HALF_WIDTH; dy <= WALL_HALF_WIDTH; dy++)
         for (let dx = -WALL_HALF_WIDTH; dx <= WALL_HALF_WIDTH; dx++) {
@@ -95,7 +106,61 @@ export function partitionFieldsFromGeography(
         }
     });
   }
-  return { ...fields, regionId, barrier, regions: table };
+  const wallSide =
+    walls.length === 0 ? undefined : wallSideField(walls, grid, options.stripRows ?? 256);
+  return {
+    ...fields,
+    regionId,
+    barrier,
+    ...(wallSide === undefined ? {} : { wallSide }),
+    regions: table,
+  };
+}
+
+/**
+ * Reach of a wall's side field in pixels: past the barrier band the synthesis draws for it (the
+ * range footprint, displaced a little by the crest wander), so every band pixel has a side.
+ */
+function wallReachPx(range: ResolvedRange, width: number): number {
+  let halfWidthPx = 0;
+  for (const half of range.path.halfWidth) halfWidthPx = Math.max(halfWidthPx, half * width);
+  return Math.min(WALL_REACH_LIMIT_PX, Math.ceil(3 * halfWidthPx) + 8);
+}
+
+const WALL_REACH_LIMIT_PX = 128;
+
+/**
+ * The side of the nearest wall line for every pixel within its reach (`WALL_SIDE`). Beyond the
+ * ends of an open line there is no side, so provinces may join around the end of a wall.
+ */
+function wallSideField(
+  walls: readonly ResolvedRange[],
+  grid: { width: number; height: number },
+  stripRows: number,
+): Uint8Array {
+  const { width } = grid;
+  const side = new Uint8Array(width * grid.height);
+  const nearest = new Float32Array(width * grid.height).fill(Infinity);
+  for (const strip of rowStrips(grid, stripRows)) {
+    const band = createBandStrip(grid, strip);
+    for (const range of walls) {
+      clearBandStrip(band);
+      rasterizeBandStrip(range.path, grid, strip, wallReachPx(range, width), band);
+      const open = !range.path.closed;
+      for (let cell = 0; cell < band.distance.length; cell++) {
+        const distance = band.distance[cell]!;
+        if (distance === Infinity) continue;
+        const t = band.t[cell]!;
+        if (open && (t <= 0 || t >= 1)) continue;
+        const p = strip.y0 * width + cell;
+        if (distance >= nearest[p]!) continue;
+        nearest[p] = distance;
+        const s = band.side[cell]!;
+        side[p] = s === 0 ? WALL_SIDE.line : s < 0 ? WALL_SIDE.left : WALL_SIDE.right;
+      }
+    }
+  }
+  return side;
 }
 
 /** Strength each model-drawn line of the terrain synthesis gives the partition's barrier plane. */
