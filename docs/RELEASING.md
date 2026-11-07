@@ -86,7 +86,8 @@ The local cut-over installs a packed 4.0.0 build and pins its tarball integrity 
    The stdio smoke suite in that run calls every exposed tool once against the installed game and once against the mod, then repeats one deliberately wrong call per tool.
    Run `npx vitest run tests/integration/mcp-stdio-smoke.test.ts` for the same check against the project's own fixtures and a generated world.
 
-5. Review `docs/tools.md` against `tools/list`: every tool needs its purpose, an example call and its result-size note.
+5. The tool tables and example calls in `docs/tools.md` are generated from `tools/list` by `npm run docs:tools`, and `tests/integration/tool-docs.test.ts` fails on drift, duplicate names and undocumented tools.
+   Review the hand-written prose around them, such as result sizes and the task counts under Longer operations.
    `tests/integration/mcp-discovery.test.ts` enforces the size budgets of the listing.
 
 ## The tag

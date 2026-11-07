@@ -6,6 +6,7 @@ import type { FetchLike, Transport } from '@modelcontextprotocol/sdk/shared/tran
 const protocolVersion = '2025-11-25';
 const artifactResourceTemplate =
   'hoi4-agent://workspace/{workspaceId}/artifact/{sha256}/{provenanceHash}/{name}';
+const skillResourceTemplate = 'hoi4-agent://workspace/{workspaceId}/skill/{name}';
 const publicToolNames = [
   'hoi4.focus_inspect',
   'hoi4.focus_render',
@@ -27,6 +28,7 @@ const publicToolNames = [
   'hoi4.system_inspect',
   'hoi4.unit_inspect',
   'hoi4.asset_inspect',
+  'hoi4.skill',
   'hoi4.event_inspect',
   'hoi4.event_render',
   'hoi4.impact_inspect',
@@ -341,7 +343,7 @@ export async function qualifyInstalledHttpBinary(
     );
     requireExactNames(
       resourceTemplateUris,
-      [artifactResourceTemplate],
+      [artifactResourceTemplate, skillResourceTemplate],
       'Installed HTTP resource templates',
     );
 

@@ -27,8 +27,10 @@ export const referenceSearchRequestSchema = z
 export const referenceReadRequestSchema = z
   .object({
     workspaceId: workspaceIdSchema,
-    id: z.string().regex(/^[a-f0-9]{64}$/u),
-    revision: z.string().regex(/^[a-f0-9]{64}$/u),
+    /** A hit's short id, or the full SHA-256 section id. */
+    id: z.string().regex(/^[a-f0-9]{16,64}$/u),
+    /** A hit's short revision, or the full SHA-256 file revision. */
+    revision: z.string().regex(/^[a-f0-9]{12,64}$/u),
     source: referenceSourceSchema.optional(),
     startLine: z.number().int().min(1).optional(),
     startColumn: z.number().int().min(1).optional(),
@@ -162,6 +164,35 @@ export const referenceSearchDataSchema = z
     skipped: count,
   })
   .strict();
+/** Characters of a section id and a file revision that a search or context hit carries. */
+export const REFERENCE_HIT_ID_LENGTH = 16;
+export const REFERENCE_HIT_REVISION_LENGTH = 12;
+
+/**
+ * One search or context hit as a tool returns it. Every session reads many hits, so a hit names
+ * its file under its source's folder instead of an absolute path, carries short id and revision
+ * prefixes that `hoi4.reference_read` accepts, and leaves out the source's authority line.
+ */
+export const referenceHitSchema = z
+  .object({
+    id: z.string().regex(/^[a-f0-9]{16}$/u),
+    revision: z.string().regex(/^[a-f0-9]{12}$/u),
+    source: referenceSourceSchema,
+    heading: z.string().max(512),
+    /** The page, when it is not the heading itself. */
+    title: z.string().max(512).optional(),
+    /** The file under its source's folder, such as `effects.md`. */
+    path: z.string().max(1024),
+    startLine: line,
+    endLine: line,
+    excerpt: z.string().max(300),
+    matchLine: line.optional(),
+  })
+  .strict();
+export const referenceSearchToolDataSchema = referenceSearchDataSchema
+  .extend({ results: z.array(referenceHitSchema.extend({ score: z.number() })).max(12) })
+  .strict();
+
 export const referenceReadDataSchema = referenceSectionSchema
   .extend({
     sectionStartLine: line,
@@ -198,6 +229,9 @@ export const referenceContextDataSchema = z
       )
       .max(16),
   })
+  .strict();
+export const referenceContextToolDataSchema = referenceContextDataSchema
+  .extend({ sections: z.array(referenceHitSchema).max(24) })
   .strict();
 export const sourceLookupDataSchema = z
   .object({

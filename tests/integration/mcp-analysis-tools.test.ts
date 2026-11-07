@@ -77,6 +77,8 @@ describe('public analysis tools', () => {
       structuredContent: {
         code: 'IMPACT_ANALYZED',
         data: { directConsumers: 1, mode: 'inspect' },
+        // The symbol's and its consumer's files, not the first files of the workspace (#66).
+        filesScanned: ['mod:common/decisions/policy.txt', 'mod:common/ideas/policy.txt'],
       },
     });
     const created = await client.request(
@@ -148,7 +150,29 @@ describe('public analysis tools', () => {
     expect(packageResult).toMatchObject({
       structuredContent: {
         code: 'PACKAGE_CHECK_PASSED',
-        data: { complete: true, present: 2 },
+        data: { complete: true, present: 2, notPresent: [], notPresentTruncated: false },
+        // The files that hold the checked items, not the first files of the workspace (#66).
+        filesScanned: ['mod:common/decisions/policy.txt', 'mod:common/ideas/policy.txt'],
+      },
+    });
+    // A missing item is named inline, so the answer needs no report (#66).
+    const missingResult = await client.callTool({
+      name: 'hoi4.package_check',
+      arguments: {
+        workspaceId: 'test',
+        manifest: {
+          ...manifest,
+          definitions: [...manifest.definitions, { kind: 'idea', id: 'austerity' }],
+        },
+      },
+    });
+    expect(missingResult).toMatchObject({
+      structuredContent: {
+        code: 'PACKAGE_CHECK_INCOMPLETE',
+        data: {
+          absent: 1,
+          notPresent: [{ category: 'definition', id: 'idea:austerity', status: 'absent' }],
+        },
       },
     });
     const suite = await client.callTool({

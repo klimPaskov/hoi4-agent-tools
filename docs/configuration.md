@@ -68,13 +68,13 @@ For `"current"`, the server asks the MCP client for its workspace roots when the
 - It selects the one mod workspace that contains a client root or lies inside one.
 - More than one match fails with `WORKSPACE_CONTEXT_AMBIGUOUS`.
 - With no match, for example a session started in another repository, it selects the `defaultWorkspace` when it is set, or the only mod workspace when there is one.
-- Otherwise the call fails with `WORKSPACE_CONTEXT_NOT_FOUND`, and the error lists up to 32 workspace IDs and names (`workspaceIds`, `workspaceNames`, `workspaceCount`) with the three fixes.
+- Otherwise the call fails with `WORKSPACE_CONTEXT_NOT_FOUND`. The error lists up to 32 mod folder names (`modFolders`) and their count (`workspaceCount`), and `fix` says in one line what to pass, for example `Pass "workspaceId":"my_mod"`.
 
 When the client does not supply roots, the server uses its own working directory:
 
 - It selects the one mod workspace that contains the working directory.
 - If the working directory is in no mod, it selects the `defaultWorkspace` when it is set, or the only mod workspace when there is one.
-- Otherwise the call fails with `WORKSPACE_CONTEXT_REQUIRED`, and the error lists the available workspace IDs and names.
+- Otherwise the call fails with `WORKSPACE_CONTEXT_REQUIRED`, with the same `modFolders` and `fix`.
 - With no mod workspace at all, the call fails with `WORKSPACE_CONTEXT_NOT_FOUND`.
 
 When a tool reads a named source file with `"current"` (the `relativePath` of the focus tools, the `path` of `hoi4.script_validate`) and the selected mod lacks that file, or no mod could be selected, the server uses the one mod that has it, and fails with `WORKSPACE_SOURCE_AMBIGUOUS` if several do.
@@ -82,7 +82,7 @@ When a tool reads a named source file with `"current"` (the `relativePath` of th
 To choose a mod explicitly, pass its workspace ID.
 A configured workspace keeps the `id` you gave it.
 A mod found under `modRoots` gets an ID of the form `mod_<folder name>_<12 hex characters>`.
-For a mod workspace, the server also accepts a short form: the mod's folder name or workspace name in lower case with other characters replaced by `_`, optionally prefixed with `auto_` or `mod_`.
+For a mod workspace, the server also accepts a short form: the mod's folder name or workspace name, in any letter case and with spaces, optionally prefixed with `auto_` or `mod_`.
 A `mod_<folder name>_<hash>` ID whose hash no longer matches resolves by its folder name in the same way.
 A short form that matches several mods fails with `WORKSPACE_CONTEXT_AMBIGUOUS`, and an unknown ID fails with `WORKSPACE_NOT_REGISTERED`.
 Over HTTP, a principal sees only the workspaces granted to it, and any other ID fails with `WORKSPACE_INACCESSIBLE`.

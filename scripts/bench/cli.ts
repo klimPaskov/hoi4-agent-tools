@@ -167,13 +167,18 @@ ${gameUpdateMarkdown(gameUpdate)}`
             ...(next.latency === undefined
               ? {}
               : { latency: { ...baseline.latency, ...next.latency } }),
+            ...(next.machine === undefined ? {} : { machine: next.machine }),
           };
+    const text = `${JSON.stringify(JSON.parse(canonicalJson(merged)), null, 2)}\n`;
     await mkdir(path.dirname(baselinePath), { recursive: true });
-    await writeFile(
-      baselinePath,
-      `${JSON.stringify(JSON.parse(canonicalJson(merged)), null, 2)}\n`,
-    );
+    await writeFile(baselinePath, text);
     process.stderr.write(`Baseline written to ${baselinePath}\n`);
+    // The real suite keeps every accepted baseline, so a later run can be compared with any of them.
+    if (suite === 'real' && values.baseline === undefined) {
+      const history = path.join(dataRoot, 'baseline-history');
+      await mkdir(history, { recursive: true });
+      await writeFile(path.join(history, `${stamp}.json`), text);
+    }
   }
   process.stdout.write(report);
   process.stderr.write(`Results in ${out}\n`);
