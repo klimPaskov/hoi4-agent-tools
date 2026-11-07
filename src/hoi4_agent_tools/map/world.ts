@@ -140,6 +140,11 @@ export interface WorldSpec {
   /** When present the workspace owns the countries; `countries` lists them in the same order. */
   realms?: WorldRealms;
   continentNames?: readonly string[];
+  /**
+   * `keep` (default) also lists the continents of the active `continent.txt`; `drop` writes only
+   * the generated continents and reports the dropped keys in `droppedContinents`.
+   */
+  inheritedContinents?: 'keep' | 'drop';
   startDate: string;
   rivers: number;
   /** Resolved reference data is internal; callers provide a guarded workspace image path. */
@@ -254,6 +259,8 @@ export interface GeneratedWorld {
   };
   /** Workspace-owned countries and the states nobody owns (ADR 0069). */
   realms?: { countries: WorldRealmSummary[]; unownedStates: number[] };
+  /** Keys of the active `continent.txt` left out with `inheritedContinents: 'drop'`, sorted. */
+  droppedContinents?: string[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1382,18 +1389,50 @@ export function generateWorld(
       terrain.set(id, referenceTerrainNames[selected]!);
     }
   }
+  // Impassable land (the `wall` at the seam, painted or regional impassable land) joins no
+  // landmasses or strategic regions: no army crosses it, and the wall's two halves meet only
+  // across the seam. Its connected pieces, never joined across the seam, follow the passable
+  // land they border. A world without passable land keeps the plain land connectivity.
+  const separateImpassable =
+    impassableProvinces.size > 0 && landIds.some((id) => !impassableProvinces.has(id));
+  const acrossSeam = (left: number, right: number) =>
+    Math.abs(
+      provinces.sumX[left]! / provinces.size[left]! -
+        provinces.sumX[right]! / provinces.size[right]!,
+    ) >
+    width / 2;
+  const impassableComponents: number[][] = [];
+  if (separateImpassable) {
+    const seen = new Set<number>();
+    for (const start of landIds) {
+      if (!impassableProvinces.has(start) || seen.has(start)) continue;
+      const component = [start];
+      seen.add(start);
+      // The array iterator also visits the provinces pushed while it runs.
+      for (const current of component) {
+        for (const next of provinces.neighbors[current]!)
+          if (impassableProvinces.has(next) && !seen.has(next) && !acrossSeam(current, next)) {
+            seen.add(next);
+            component.push(next);
+          }
+      }
+      impassableComponents.push(component);
+    }
+  }
+  const joinsLand = (id: number) =>
+    provinces.kind[id] === LAND && !(separateImpassable && impassableProvinces.has(id));
   // Continents: the largest land masses, with islands joining the nearest one.
   const landParts = new Map<number, number>();
   {
     let part = 0;
     for (const start of landIds) {
-      if (landParts.has(start)) continue;
+      if (landParts.has(start) || !joinsLand(start)) continue;
       const queue = [start];
       landParts.set(start, part);
       while (queue.length > 0) {
         const current = queue.pop()!;
         for (const next of provinces.neighbors[current]!)
-          if (provinces.kind[next] === LAND && !landParts.has(next)) {
+          if (joinsLand(next) && !landParts.has(next)) {
             landParts.set(next, part);
             queue.push(next);
           }
@@ -1438,6 +1477,44 @@ export function generateWorld(
         best = position;
     continentOfPart.set(part, best + 1);
   }
+  // Each impassable piece takes the landmass of its largest passable neighbour, or, when it
+  // borders only water (as the wall usually does), the landmass of the nearest passable province.
+  for (const component of impassableComponents) {
+    let chosen = -1;
+    for (const id of component)
+      for (const next of provinces.neighbors[id]!) {
+        const part = landParts.get(next);
+        if (part === undefined || impassableProvinces.has(next) || acrossSeam(id, next)) continue;
+        if (
+          chosen < 0 ||
+          partSizes.get(part)! > partSizes.get(chosen)! ||
+          (partSizes.get(part) === partSizes.get(chosen) && part < chosen)
+        )
+          chosen = part;
+      }
+    if (chosen < 0) {
+      let sx = 0;
+      let sy = 0;
+      let n = 0;
+      for (const id of component) {
+        sx += provinces.sumX[id]!;
+        sy += provinces.sumY[id]!;
+        n += provinces.size[id]!;
+      }
+      let nearest = Number.POSITIVE_INFINITY;
+      for (const id of landIds) {
+        if (impassableProvinces.has(id)) continue;
+        const c = center(id);
+        const distance = Math.hypot(c.x - sx / n, c.y - sy / n);
+        if (distance < nearest) {
+          nearest = distance;
+          chosen = landParts.get(id)!;
+        }
+      }
+    }
+    for (const id of component) landParts.set(id, chosen);
+  }
+  const generatedContinentKeys = majorParts.map((_, index) => `world_continent_${index + 1}`);
   const continentNames = majorParts.map(
     (_, index) =>
       spec.continentNames?.[index] ?? `Continent ${String.fromCharCode(65 + (index % 26))}`,
@@ -1719,10 +1796,50 @@ export function generateWorld(
     }
   // Strategic regions: land regions over the land graph, sea regions over the sea graph.
   const graph = (id: number) => provinces.neighbors[id]!;
+  // Impassable land is clustered apart from passable land, so no region bridges two landmasses
+  // over it or spans the seam over the wall.
+  const passableLandIds = separateImpassable
+    ? landIds.filter((id) => !impassableProvinces.has(id))
+    : landIds;
   const landRegion =
     featurePartition === undefined
-      ? growClusters(landIds, graph, spec.landProvincesPerRegion, random)
-      : clusterRegions(featurePartition, landIds, 'land');
+      ? growClusters(passableLandIds, graph, spec.landProvincesPerRegion, random)
+      : clusterRegions(featurePartition, passableLandIds, 'land');
+  if (separateImpassable) {
+    const regionTarget = featurePartition?.tuning.regions.target ?? spec.landProvincesPerRegion;
+    let nextRegion = Math.max(-1, ...landRegion.values()) + 1;
+    for (const component of impassableComponents) {
+      // A piece no larger than a region joins the passable region it borders most; a larger
+      // piece, or one that borders only water, forms regions of its own.
+      const contacts = new Map<number, number>();
+      for (const id of component)
+        for (const next of provinces.neighbors[id]!) {
+          const region = landRegion.get(next);
+          if (region === undefined || impassableProvinces.has(next) || acrossSeam(id, next))
+            continue;
+          contacts.set(region, (contacts.get(region) ?? 0) + 1);
+        }
+      if (contacts.size > 0 && component.length <= regionTarget) {
+        const [joined] = [...contacts].sort(
+          (left, right) => right[1] - left[1] || left[0] - right[0],
+        )[0]!;
+        for (const id of component) landRegion.set(id, joined);
+        continue;
+      }
+      const clusters = growClusters(
+        component,
+        (id) => [...provinces.neighbors[id]!].filter((next) => !acrossSeam(id, next)),
+        regionTarget,
+        random,
+      );
+      let largest = -1;
+      for (const [id, cluster] of clusters) {
+        landRegion.set(id, nextRegion + cluster);
+        largest = Math.max(largest, cluster);
+      }
+      nextRegion += largest + 1;
+    }
+  }
   const seaRegion =
     featurePartition === undefined
       ? growClusters(seaIds, graph, spec.seaProvincesPerRegion, random)
@@ -2062,7 +2179,7 @@ export function generateWorld(
   add(
     `${map}/continent.txt`,
     text(
-      `continents = {\n${[...new Set([...continentNames.map((_, index) => `world_continent_${index + 1}`), ...(context.continentKeys ?? [])])].map((key) => `\t${key}`).join('\n')}\n}\n`,
+      `continents = {\n${[...new Set([...generatedContinentKeys, ...(spec.inheritedContinents === 'drop' ? [] : (context.continentKeys ?? []))])].map((key) => `\t${key}`).join('\n')}\n}\n`,
     ),
   );
   const rimRows = hasRimRange(edge)
@@ -2897,5 +3014,12 @@ export function generateWorld(
       rivers: riverCount,
     },
     ...(spec.realms === undefined ? {} : { realms: realmSummary() }),
+    ...(spec.inheritedContinents === 'drop'
+      ? {
+          droppedContinents: (context.continentKeys ?? []).filter(
+            (key) => !generatedContinentKeys.includes(key),
+          ),
+        }
+      : {}),
   };
 }

@@ -46,7 +46,12 @@ import {
   type UnitPositionRecord,
   type WeatherPositionRecord,
 } from './model.js';
-import { planReferenceRemap, ReferenceRemapError } from './references.js';
+import {
+  collectContinentReferences,
+  droppedContinentDiagnostics,
+  planReferenceRemap,
+  ReferenceRemapError,
+} from './references.js';
 import { generateWorld, type GeneratedWorld, type WorldCountry } from './world.js';
 import type { ColourClass } from './colormap.js';
 import { resolveEdge } from './world-edge.js';
@@ -515,6 +520,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   geographyPath?: string;
   synthesisCheck?: boolean;
   continentNames?: string[];
+  /** `keep` (default) also lists the active continent.txt's continents; `drop` leaves them out. */
+  inheritedContinents?: 'keep' | 'drop';
   startDate?: string;
   rivers?: number | { density: number };
   relief?: WorldReliefInput;
@@ -5775,6 +5782,7 @@ function applyCreateWorld(
       ...(operation.continentNames === undefined
         ? {}
         : { continentNames: operation.continentNames }),
+      ...(operation.inheritedContinents === 'drop' ? { inheritedContinents: 'drop' } : {}),
       startDate: operation.startDate ?? '1936.1.1',
       rivers:
         typeof operation.rivers === 'number' ? operation.rivers : reference === undefined ? 8 : 80,
@@ -5885,6 +5893,12 @@ function applyCreateWorld(
       'text/plain',
     );
   const generated = currentIndex(base, changes);
+  // Scripts that stay active after the write and still name a continent the world dropped.
+  const droppedContinents = world.droppedContinents ?? [];
+  const continentReferences = collectContinentReferences(
+    generated.activeFiles.all,
+    new Set(droppedContinents),
+  );
   for (const file of planMapPositions(generated, { mode: 'replace' }))
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
   const positioned = currentIndex(base, changes);
@@ -5963,6 +5977,28 @@ function applyCreateWorld(
           },
         ]),
     ...worldTagDiagnostics(operation.id, tagCatalog, world, workspaceCountries !== undefined),
+    ...(operation.inheritedContinents === 'drop'
+      ? [
+          {
+            code: 'MAP_CONTINENTS_DROPPED',
+            severity: 'info' as const,
+            category: 'map' as const,
+            operationId: operation.id,
+            message:
+              droppedContinents.length === 0
+                ? 'continent.txt lists only the generated continents; the active sources declared no other'
+                : `continent.txt lists only the generated continents and leaves out ${droppedContinents.length} inherited one(s); ${continentReferences.length} active script reference(s) still name them`,
+            details: {
+              dropped: droppedContinents,
+              references: continentReferences.length,
+            },
+          },
+          ...droppedContinentDiagnostics(continentReferences).map((diagnostic) => ({
+            ...diagnostic,
+            operationId: operation.id,
+          })),
+        ]
+      : []),
     ...worldRealmDiagnostics(operation.id, world),
     ...(outputs.released.length === 0
       ? []
