@@ -75,8 +75,18 @@ export interface PartitionFields {
    * none, up to 255 for a line that no province may straddle.
    */
   readonly barrier: Uint8Array;
+  /**
+   * Side of the nearest wall line (a range with profile `wall` or barrier `impassable`) within
+   * its reach: `WALL_SIDE` values. Where a wall's barrier band is wider than its line, the split
+   * along it gives each band pixel to a province on its own side, so the province border runs on
+   * the line itself and the crossings can block it.
+   */
+  readonly wallSide?: Uint8Array;
   readonly regions?: readonly PartitionRegion[];
 }
+
+/** Values of `PartitionFields.wallSide`. */
+export const WALL_SIDE = { none: 0, left: 1, right: 2, line: 3 } as const;
 
 const MAP_PIXEL_LIMIT = 13_238_272;
 
@@ -113,6 +123,18 @@ export function assertPartitionFields(fields: PartitionFields): void {
         length: plane.length,
         expected: total,
       });
+  }
+  if (fields.wallSide !== undefined) {
+    if (!(fields.wallSide instanceof Uint8Array) || fields.wallSide.length !== total)
+      invalid('Partition field wallSide must be a Uint8Array matching the map dimensions', {
+        field: 'wallSide',
+      });
+    for (let p = 0; p < total; p++)
+      if (fields.wallSide[p]! > WALL_SIDE.line)
+        invalid('Partition wallSide contains a value other than 0 to 3', {
+          pixel: p,
+          value: fields.wallSide[p],
+        });
   }
   for (let p = 0; p < total; p++)
     if (fields.kind[p]! > 2)

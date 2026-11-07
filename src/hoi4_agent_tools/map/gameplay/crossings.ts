@@ -792,11 +792,69 @@ function scanRange(range: ResolvedRange, input: CrossingInput): RangeScan {
   return { range, hits, passes };
 }
 
-/** A pair is a wall crossing when enough of its border lies across the range's line. */
+/**
+ * A pair is a wall crossing when enough of its border lies across the range's line. One pixel
+ * is enough: two provinces that touch across the line at a single corner of their borders are
+ * as open to an army as a long border.
+ */
 function isWallPair(hit: PairHit, stat: BorderStat | undefined): boolean {
-  if (hit.wall < 2) return false;
+  if (hit.wall < 1) return false;
   const total = stat?.count ?? hit.wall;
   return hit.wall >= 0.2 * total;
+}
+
+/**
+ * The province of the first pixel strictly on one side of a line through (`cx`, `cy`) with the
+ * given tangent, walking out along the normal in half-pixel steps up to three pixels; -1 when
+ * the walk leaves the map. `side` 1 is the right of travel as drawn on screen, -1 the left.
+ */
+function besideLine(
+  pixel: Int32Array,
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+  tx: number,
+  ty: number,
+  side: 1 | -1,
+): number {
+  for (let step = 1; step <= 6; step += 1) {
+    const k = side * step * 0.5;
+    const x = Math.floor(cx - ty * k);
+    const y = Math.floor(cy + tx * k);
+    if (x < 0 || y < 0 || x >= width || y >= height) return -1;
+    const cross = tx * (y + 0.5 - cy) - ty * (x + 0.5 - cx);
+    if (cross * side > 0.25 || step === 6) return pixel[y * width + x]!;
+  }
+  return -1;
+}
+
+/**
+ * True when province `own`, which lies on both sides of the line here, continues into land on
+ * the given side: walking out along the normal up to six pixels meets land (its own or another
+ * province's) at least three pixels out, not water first.
+ */
+function reachesOn(
+  pixel: Int32Array,
+  kind: readonly number[],
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+  tx: number,
+  ty: number,
+  side: 1 | -1,
+  own: number,
+): boolean {
+  for (let step = 1; step <= 6; step += 1) {
+    const x = Math.floor(cx - ty * side * step);
+    const y = Math.floor(cy + tx * side * step);
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+    const province = pixel[y * width + x]!;
+    if (kind[province] !== LAND) return false;
+    if (province !== own || step >= 3) return true;
+  }
+  return true;
 }
 
 /** Border pixel pairs inside a pass window that free a pair: any border through the gate is the gate. */
@@ -1064,26 +1122,47 @@ export function planCrossings(input: CrossingInput): CrossingPlan {
       if (insidePass) continue;
       const cx = sample.x * width;
       const cy = sample.y * height;
-      const ax = Math.round(cx - sample.tangentY * 3);
-      const ay = Math.round(cy + sample.tangentX * 3);
-      const bx = Math.round(cx + sample.tangentY * 3);
-      const by = Math.round(cy - sample.tangentX * 3);
-      if (
-        ax < 0 ||
-        ay < 0 ||
-        bx < 0 ||
-        by < 0 ||
-        ax >= width ||
-        bx >= width ||
-        ay >= height ||
-        by >= height
-      )
-        continue;
-      const a = view.pixel[ay * width + ax]!;
-      const b = view.pixel[by * width + bx]!;
+      // The provinces that meet at the line here: the nearest pixel on each side of it, up to
+      // three pixels out along the normal. Probing further out could step over a narrow
+      // province between them and report two provinces that do not touch.
+      const a = besideLine(view.pixel, width, height, cx, cy, sample.tangentX, sample.tangentY, 1);
+      const b = besideLine(view.pixel, width, height, cx, cy, sample.tangentX, sample.tangentY, -1);
+      if (a < 0 || b < 0) continue;
       if (input.kind[a] !== LAND || input.kind[b] !== LAND) continue;
       // A pair of provinces freed at a gate is a whole border; all of it counts as the gate.
       if (a !== b && gatePairs.has(pairKey(a, b, view.count))) continue;
+      // One province on both sides is a way across only where it reaches on into the land of
+      // both sides; a sliver of the line that ends at water on one side leads nowhere.
+      if (
+        a === b &&
+        !(
+          reachesOn(
+            view.pixel,
+            input.kind,
+            width,
+            height,
+            cx,
+            cy,
+            sample.tangentX,
+            sample.tangentY,
+            1,
+            a,
+          ) &&
+          reachesOn(
+            view.pixel,
+            input.kind,
+            width,
+            height,
+            cx,
+            cy,
+            sample.tangentX,
+            sample.tangentY,
+            -1,
+            a,
+          )
+        )
+      )
+        continue;
       samples += 1;
       if (a === b || !blockedSet.has(pairKey(a, b, view.count))) {
         open += 1;

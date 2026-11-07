@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Close impassable walls in generated maps, and keep pass saddles and point river mouths that a 4.10.0 `create_world` lost.
+  - Walls leaked: the synthesis marks a wall's whole footprint as a barrier band, often 10 to 60 pixels wide, and the partition put the province border wherever its fronts met in the band or at the band's edge, not on the range path. The crossings only block borders that cross the path, so most pairs got no `impassable` row. The partition now records the side of each wall (`wallSide`), gives every band pixel to the nearest province on its own side, and keeps the sliver and corner repairs of the province assembly from merging across it. A border that touches across the path at a single pixel now gets a row, and `MAP_RANGE_NOT_CLOSED` samples the provinces that meet at the path. On a 5,120 x 2,560 world with a closed ring wall and a long massif wall the open samples went from 49 of 79 and 186 of 193 to none for either wall.
+  - `relief.painted` no longer fills a declared pass: its raise is capped in the pass corridor at the saddle the macro relief carved, so a painted or impassable range over a pass no longer raises `MAP_PASS_NOT_LOWER`.
+  - A river whose course already runs through the cell of its point mouth (its last `via` within a half-resolution cell of the mouth) now ends there instead of failing with `MAP_RIVER_UNREACHABLE_MOUTH`.
+
 ## 4.11.0 - 2026-11-07
 
 - Add `hoi4.skill` and the skill resources (#108, M-1). The tool lists the skills HOI4 Mod Setup installed in the mod or loads one by name, and the same `SKILL.md` text is the resource `hoi4-agent://workspace/{workspaceId}/skill/{name}`. Both serve the kit version the mod's Setup lock pins, with the kit revision and each file's SHA-256. A file edited since Setup installed it is refused with `SKILL_TEXT_DRIFTED` unless the caller accepts local edits, and a mod without a lock gets its installed skills marked unpinned.
