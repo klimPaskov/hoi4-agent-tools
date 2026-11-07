@@ -2,9 +2,16 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/configuration.js';
+import type { ScannedFile } from '../../src/hoi4_agent_tools/core/scanner.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { BmpImage, createBmp } from '../../src/hoi4_agent_tools/map/bmp.js';
+import { MapWorkspaceIndex } from '../../src/hoi4_agent_tools/map/model.js';
+import {
+  planMapOperations,
+  type CreateWorldOperation,
+} from '../../src/hoi4_agent_tools/map/operations.js';
 import { REFERENCE_TERRAIN } from '../../src/hoi4_agent_tools/map/reference-world.js';
 import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
 import { resolveEdge } from '../../src/hoi4_agent_tools/map/world-edge.js';
@@ -345,5 +352,96 @@ describe('scripts that name a dropped continent', () => {
       [],
     );
     expect(preview.filesScanned).not.toContain('game:common/scripted_triggers/probe_triggers.txt');
+  });
+});
+
+describe('countries of a wall world', () => {
+  const tags = Buffer.from('AAA = "countries/AAA.txt"\nBBB = "countries/BBB.txt"\n');
+  const tagFile: ScannedFile = {
+    relativePath: 'common/country_tags/00_realms.txt',
+    absolutePath: '/synthetic/common/country_tags/00_realms.txt',
+    displayPath: 'mod:common/country_tags/00_realms.txt',
+    rootKind: 'mod',
+    loadOrder: 1,
+    modifiedMs: 0,
+    size: tags.length,
+    bytes: tags,
+    sha256: sha256Bytes(tags),
+  };
+  const box = (left: number, top: number, right: number, bottom: number) => [
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom },
+  ];
+  // Two landmasses, each running into the wall at its own edge of the map.
+  const world = (
+    countries: NonNullable<CreateWorldOperation['countries']>,
+  ): CreateWorldOperation => ({
+    id: 'world',
+    kind: 'create_world',
+    width: 512,
+    height: 256,
+    seed: 3,
+    rivers: 0,
+    landPolygons: [box(4, 72, 200, 184), box(312, 72, 508, 184)],
+    provincesPerState: 4,
+    edge: { mode: 'wall' },
+    countries,
+  });
+  const plan = (operation: CreateWorldOperation) => {
+    const result = planMapOperations(MapWorkspaceIndex.build([tagFile]), [operation]);
+    expect(result.blockers).toEqual([]);
+    return result;
+  };
+  const ownersOf = (result: ReturnType<typeof plan>, x0: number, x1: number) => {
+    const index = result.finalIndex;
+    const raster = index.raster!;
+    const owners = new Set<string>();
+    for (let y = 88; y <= 168; y += 8)
+      for (let x = x0; x <= x1; x += 8) {
+        const province = raster.provinceIds[y * raster.width + x]!;
+        owners.add(index.stateForProvince(province)[0]?.owner ?? '-');
+      }
+    return owners;
+  };
+
+  it('keeps a realm seeded on the east edge off the land at the west edge', () => {
+    const result = plan(
+      world({
+        source: 'workspace',
+        realms: [{ tag: 'AAA', capital: { x: 440, y: 128 } }],
+        islands: 'unowned',
+      }),
+    );
+    expect(ownersOf(result, 336, 480)).toEqual(new Set(['AAA']));
+    // The west landmass is reached only over the wall across the seam, so nobody grows into it.
+    expect(ownersOf(result, 64, 192)).toEqual(new Set(['-']));
+  });
+
+  it('grows each realm on its own side and gives the wall to the realm beside it', () => {
+    const result = plan(
+      world({
+        source: 'workspace',
+        realms: [
+          { tag: 'AAA', capital: { x: 440, y: 128 }, weight: 20 },
+          { tag: 'BBB', capital: { x: 120, y: 128 } },
+        ],
+      }),
+    );
+    expect(ownersOf(result, 336, 480)).toEqual(new Set(['AAA']));
+    expect(ownersOf(result, 64, 192)).toEqual(new Set(['BBB']));
+    const index = result.finalIndex;
+    const walls = index.states.filter((state) =>
+      Buffer.from(state.file.bytes).toString().includes('\timpassable = yes'),
+    );
+    expect(walls.length).toBeGreaterThan(0);
+    for (const state of walls) {
+      const link = /force_link_ownership_to = (\d+)/u.exec(
+        Buffer.from(state.file.bytes).toString(),
+      );
+      expect(link).not.toBeNull();
+      expect(state.owner).toBe(index.statesById.get(Number(link![1]))!.owner);
+    }
   });
 });

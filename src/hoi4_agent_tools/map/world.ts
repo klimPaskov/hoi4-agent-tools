@@ -1421,6 +1421,9 @@ export function generateWorld(
   }
   const joinsLand = (id: number) =>
     provinces.kind[id] === LAND && !(separateImpassable && impassableProvinces.has(id));
+  const passableLandIds = separateImpassable
+    ? landIds.filter((id) => !impassableProvinces.has(id))
+    : landIds;
   // Continents: the largest land masses, with islands joining the nearest one.
   const landParts = new Map<number, number>();
   {
@@ -1714,7 +1717,11 @@ export function generateWorld(
   }
   const shares = spec.countries.map((country) => Math.max(0.05, country.share ?? 1));
   const owned = new Array<number>(countryCount).fill(0);
+  // Countries grow over passable land only, so none crosses impassable land or the wall from one
+  // edge to the other. Impassable provinces stay unowned here; their states take the owner of the
+  // passable state they link to (finishImpassableStates).
   for (const [id, country] of realmRules?.forced ?? referenceOwners) {
+    if (!joinsLand(id)) continue;
     owner.set(id, country);
     owned[country]! += provinces.size[id]!;
   }
@@ -1726,7 +1733,7 @@ export function generateWorld(
     owner.set(capital, index);
     if (realmRules !== undefined)
       return [...owner]
-        .filter(([, country]) => country === index)
+        .filter(([id, country]) => country === index && joinsLand(id))
         .flatMap(([id]) => [...provinces.neighbors[id]!]);
     return [...provinces.neighbors[capital]!];
   });
@@ -1736,7 +1743,7 @@ export function generateWorld(
   if (featurePartition !== undefined && referenceOwners.size === 0 && realmRules === undefined) {
     const atoms = buildTerritoryAtoms(
       territoryGraphFromPartition(featurePartition.graph, provinces.sumX, provinces.sumY),
-      landIds.map((id) => [id]),
+      passableLandIds.map((id) => [id]),
     );
     const grown = growTerritory(
       atoms,
@@ -1747,7 +1754,7 @@ export function generateWorld(
       })),
       { seed: spec.seed },
     );
-    for (const [atom, id] of landIds.entries())
+    for (const [atom, id] of passableLandIds.entries())
       if (grown.owner[atom]! >= 0) owner.set(id, grown.owner[atom]!);
     grownByTerritory = true;
   }
@@ -1755,7 +1762,7 @@ export function generateWorld(
     let chosen = -1;
     for (let index = 0; index < countryCount; index += 1) {
       frontiers[index] = frontiers[index]!.filter(
-        (id) => provinces.kind[id] === LAND && !owner.has(id) && !blockedFor(index, id),
+        (id) => joinsLand(id) && !owner.has(id) && !blockedFor(index, id),
       );
       if (frontiers[index]!.length === 0) continue;
       if (chosen < 0 || owned[index]! / shares[index]! < owned[chosen]! / shares[chosen]!)
@@ -1772,7 +1779,7 @@ export function generateWorld(
   // Land no workspace country reached follows the island rule; the rest of the land is unowned.
   if (realmRules !== undefined)
     assignUnreachedRealmLand({
-      landIds,
+      landIds: passableLandIds,
       owner,
       unowned: unownedLand,
       capitals,
@@ -1782,7 +1789,7 @@ export function generateWorld(
       center,
     });
   // Islands no country reached go to the nearest capital's country.
-  for (const id of landIds)
+  for (const id of passableLandIds)
     if (!owner.has(id) && !unownedLand.has(id)) {
       const c = center(id);
       let best = 0;
@@ -1798,9 +1805,6 @@ export function generateWorld(
   const graph = (id: number) => provinces.neighbors[id]!;
   // Impassable land is clustered apart from passable land, so no region bridges two landmasses
   // over it or spans the seam over the wall.
-  const passableLandIds = separateImpassable
-    ? landIds.filter((id) => !impassableProvinces.has(id))
-    : landIds;
   const landRegion =
     featurePartition === undefined
       ? growClusters(passableLandIds, graph, spec.landProvincesPerRegion, random)
