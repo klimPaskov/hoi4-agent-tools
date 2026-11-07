@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.11.1 - 2026-11-07
+
 - Close impassable walls in generated maps, and keep pass saddles and point river mouths that a 4.10.0 `create_world` lost.
   - Walls leaked: the synthesis marks a wall's whole footprint as a barrier band, often 10 to 60 pixels wide, and the partition put the province border wherever its fronts met in the band or at the band's edge, not on the range path. The crossings only block borders that cross the path, so most pairs got no `impassable` row. The partition now records the side of each wall (`wallSide`), gives every band pixel to the nearest province on its own side, and keeps the sliver and corner repairs of the province assembly from merging across it. A border that touches across the path at a single pixel now gets a row, and `MAP_RANGE_NOT_CLOSED` samples the provinces that meet at the path. On a 5,120 x 2,560 world with a closed ring wall and a long massif wall the open samples went from 49 of 79 and 186 of 193 to none for either wall.
   - `relief.painted` no longer fills a declared pass: its raise is capped in the pass corridor at the saddle the macro relief carved, so a painted or impassable range over a pass no longer raises `MAP_PASS_NOT_LOWER`.
