@@ -205,3 +205,39 @@ fn sprites_reports_json_and_honours_fail_on() {
     let bad = engine(&["sprites", "--game", &game, "--allowlist", "does-not-exist.json"]);
     assert_eq!(bad.status.code(), Some(2));
 }
+
+#[test]
+fn mod_index_and_symbol_index_read_a_request_and_refuse_with_two() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli-mod-index");
+    let _ = fs::remove_dir_all(&work);
+    fs::create_dir_all(work.join("mod/events")).unwrap();
+    fs::write(work.join("mod/events/a.txt"), "country_event = { id = e.1 }\ncountry_event = { id = e.3 }\n").unwrap();
+    let request = work.join("request.json");
+    let body = serde_json::json!({
+        "schema": "hoi4-mod-index-request/1",
+        "roots": [{ "kind": "mod", "path": work.join("mod"), "loadOrder": 1 }],
+        "patterns": ["events/**/*.txt"],
+    });
+    fs::write(&request, body.to_string()).unwrap();
+    let out = engine(&["mod-index", "--request", &path(&request)]);
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    let overview: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(overview["namespaces"][0]["namespace"], "e");
+    assert_eq!(overview["kinds"], serde_json::json!([{ "kind": "event", "count": 2 }]));
+    let out = engine(&["symbol-index", "--request", &path(&request)]);
+    assert_eq!(out.status.code(), Some(0));
+    let index: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(index["schema"], "hoi4-symbol-index/1");
+    assert_eq!(
+        index["symbols"][1],
+        serde_json::json!({ "kind": "event", "id": "e.3", "path": "mod:events/a.txt", "rootKind": "mod", "loadOrder": 1, "line": 2, "overridden": false, "sourceShadowed": false })
+    );
+    let mut next = body.clone();
+    next["mode"] = "next_id".into();
+    fs::write(&request, next.to_string()).unwrap();
+    let out = engine(&["mod-index", "--request", &path(&request)]);
+    assert_eq!(out.status.code(), Some(2));
+    let refused: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(refused["status"], "invalid");
+    assert_eq!(refused["error"]["code"], "MOD_INDEX_PREFIX_REQUIRED");
+}

@@ -94,7 +94,8 @@ function englishLocalisationPatterns(roots: readonly string[]): string[] {
   return [...under(roots, 'english/**/*.{yml,yaml}'), ...under(roots, '*.{yml,yaml}')];
 }
 
-function defaultPatterns(workspace: ReturnType<WorkspaceResolver['get']>): string[] {
+/** The glob patterns of the shared scan, relative to each root. `hoi4.mod_index` passes them to the engine. */
+export function defaultPatterns(workspace: ReturnType<WorkspaceResolver['get']>): string[] {
   const roots = workspace.registration.roots;
   return [
     ...new Set([
