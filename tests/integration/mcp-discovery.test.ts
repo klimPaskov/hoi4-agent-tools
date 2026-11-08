@@ -15,7 +15,7 @@ import {
 import type { ServerContext } from '../../src/hoi4_agent_tools/mcp/server/base-tools.js';
 
 const close: Array<() => Promise<void>> = [];
-const toolsListByteBudget = 86_016;
+const toolsListByteBudget = 92_160;
 const singleToolByteBudget = 8_192;
 const toolInputSchemaByteBudget = 6_144;
 const toolOutputSchemaByteBudget = 2_048;
@@ -57,12 +57,16 @@ describe('MCP discovery', () => {
       'hoi4.gui_rewrite',
       'hoi4.map_inspect',
       'hoi4.map_rewrite',
+      'hoi4.localisation_write',
       'hoi4.reference_search',
       'hoi4.reference_read',
       'hoi4.reference_context',
       'hoi4.source_lookup',
       'hoi4.script_validate',
       'hoi4.error_log',
+      'hoi4.explain_error',
+      'hoi4.mod_health',
+      'hoi4.script_guard',
       'hoi4.mod_index',
       'hoi4.localisation_inspect',
       'hoi4.idea_inspect',
@@ -70,6 +74,7 @@ describe('MCP discovery', () => {
       'hoi4.unit_inspect',
       'hoi4.asset_inspect',
       'hoi4.skill',
+      'hoi4.compat_check',
       'hoi4.event_inspect',
       'hoi4.event_render',
       'hoi4.impact_inspect',
@@ -118,6 +123,9 @@ describe('MCP discovery', () => {
       'hoi4.source_lookup',
       'hoi4.script_validate',
       'hoi4.error_log',
+      'hoi4.explain_error',
+      'hoi4.mod_health',
+      'hoi4.script_guard',
       'hoi4.mod_index',
       'hoi4.localisation_inspect',
       'hoi4.idea_inspect',
@@ -125,6 +133,7 @@ describe('MCP discovery', () => {
       'hoi4.unit_inspect',
       'hoi4.asset_inspect',
       'hoi4.skill',
+      'hoi4.compat_check',
     ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: true,
@@ -133,7 +142,12 @@ describe('MCP discovery', () => {
         openWorldHint: false,
       });
     }
-    for (const name of ['hoi4.focus_rewrite', 'hoi4.gui_rewrite', 'hoi4.map_rewrite']) {
+    for (const name of [
+      'hoi4.focus_rewrite',
+      'hoi4.gui_rewrite',
+      'hoi4.map_rewrite',
+      'hoi4.localisation_write',
+    ]) {
       expect(tools.tools.find((tool) => tool.name === name)?.annotations, name).toMatchObject({
         readOnlyHint: false,
         destructiveHint: true,

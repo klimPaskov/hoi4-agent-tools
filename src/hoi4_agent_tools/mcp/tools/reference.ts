@@ -26,6 +26,7 @@ import {
   assetInspectDataSchema,
   assetInspectRequestSchema,
 } from '../../schemas/system.js';
+import { compatCheckDataSchema, compatCheckRequestSchema } from '../../schemas/compat.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../../schemas/ideas.js';
 import {
   errorLogDataSchema,
@@ -38,6 +39,14 @@ import {
   scriptValidateRequestSchema,
 } from '../../schemas/script-validation.js';
 import { skillDataSchema, skillRequestSchema } from '../../schemas/skill.js';
+import {
+  explainErrorDataSchema,
+  explainErrorRequestSchema,
+  modHealthDataSchema,
+  modHealthRequestSchema,
+  scriptGuardDataSchema,
+  scriptGuardRequestSchema,
+} from '../../schemas/modder-tools.js';
 
 const readOnly = {
   readOnlyHint: true,
@@ -101,6 +110,33 @@ export const referenceTools = [
     annotations: readOnly,
   },
   {
+    name: 'hoi4.explain_error',
+    title: 'Explain error.log lines',
+    description:
+      'Explain error.log lines: the rule each one breaks, its file and line with the lines around it, and the fix, from a reviewed catalogue of the game\'s messages. Says whether the game documents the command a line names, and the closest documented names. Example: {"line":"Invalid trigger \'stability\' in events/my_events.txt line : 12"}. Returns up to 20 explanations (10 lines).',
+    inputSchema: explainErrorRequestSchema,
+    outputSchema: strictOperationResultSchema(explainErrorDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.mod_health',
+    title: 'Check a whole mod',
+    description:
+      'Check a whole mod in one call: the last error.log, the engine check (unknown effects, triggers and modifiers, duplicate ids, broken overrides), script validation, and the localisation and asset audits. Returns the 10 problems that matter most, each counted with 2 examples, its fix and the tool to use next, and which audits ran. Example: {"limit":5} or {"checks":["error_log","engine_check"]}. Takes up to a minute on a large mod.',
+    inputSchema: modHealthRequestSchema,
+    outputSchema: strictOperationResultSchema(modHealthDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.script_guard',
+    title: 'Find invented commands in new script',
+    description:
+      'Check the files you wrote for invented commands: every effect, trigger and modifier that the installed game documentation does not list and no loaded file defines, with its file, line and the closest real name. Checks the named paths, or the mod script files changed in the last 120 minutes. Needs hoi4-engine. Example: {"paths":["events/my_events.txt"]}. Returns up to 40 names.',
+    inputSchema: scriptGuardRequestSchema,
+    outputSchema: strictOperationResultSchema(scriptGuardDataSchema),
+    annotations: readOnly,
+  },
+  {
     name: 'hoi4.mod_index',
     title: 'Explore mod content and find free IDs',
     description:
@@ -161,6 +197,15 @@ export const referenceTools = [
       'List the modding skills installed in the mod, or load one by name, at the kit version HOI4 Mod Setup pinned, with its hash. A file edited since Setup installed it is refused unless acceptLocalEdits. Example: {"name":"hoi4-events"}. Returns up to 20,000 bytes of text; continue from nextOffset.',
     inputSchema: skillRequestSchema,
     outputSchema: strictOperationResultSchema(skillDataSchema),
+    annotations: readOnly,
+  },
+  {
+    name: 'hoi4.compat_check',
+    title: 'Check a mod against another mod or a game patch',
+    description:
+      'mod: compare this mod with another in both load orders: files at the same path and who wins, duplicate ids, definitions and hooks dropped, replace_path losses, and which order loses less. patch: store the vanilla files the mod overrides and list those a game update changed. Example: {"mode":"mod","other":"my_other_mod"} or {"mode":"patch"}',
+    inputSchema: compatCheckRequestSchema,
+    outputSchema: strictOperationResultSchema(compatCheckDataSchema),
     annotations: readOnly,
   },
 ] as const satisfies readonly ToolDefinition[];

@@ -18,8 +18,12 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
   'hoi4.script_validate':
     '{"path":"events/my_events.txt"} or {"source":"add_political_power = 10","kind":"effect","scope":"country"}',
   'hoi4.error_log': '{"scope":"mod","category":"effect"}',
+  'hoi4.script_guard': '{"paths":["events/my_events.txt"]} or {"sinceMinutes":30}',
+  'hoi4.mod_health': '{"limit":5} or {"checks":["error_log","engine_check"]}',
+  'hoi4.explain_error': `{"line":"Invalid trigger 'stability' in events/my_events.txt line : 12"}`,
   'hoi4.mod_index': '{"mode":"overview"} or {"mode":"next_id","kind":"event","namespace":"my_mod"}',
   'hoi4.localisation_inspect': '{"mode":"key","key":"my_event.1.t"} or {"mode":"audit"}',
+  'hoi4.compat_check': '{"mode":"mod","other":"my_other_mod"} or {"mode":"patch"}',
   'hoi4.idea_inspect': '{"kind":"idea","id":"my_idea"} or {"kind":"character","audit":true}',
   'hoi4.system_inspect':
     '{"kind":"mio","id":"my_organization"} or {"kind":"on_actions","audit":true}',
@@ -34,6 +38,8 @@ export const ARGUMENT_EXAMPLES: Readonly<Record<string, string>> = {
     '{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree"}',
   'hoi4.focus_rewrite':
     '{"relativePath":"common/national_focus/my_tree.txt","treeId":"my_focus_tree","layoutMode":"compact"}',
+  'hoi4.localisation_write':
+    '{"mode":"add","entries":[{"key":"my_focus","text":"My focus"}]} or {"mode":"fix","apply":true}',
   'hoi4.gui_inspect': '{"windowName":"my_window"}',
   'hoi4.gui_render': '{"windowName":"my_window","scenario":{"id":"normal"}}',
   'hoi4.gui_rewrite':

@@ -2,6 +2,7 @@ import { analysisTaskTools } from '../tools/analysis.js';
 import { eventTaskTools } from '../tools/event.js';
 import { focusTaskTools } from '../tools/focus.js';
 import { guiTaskTools } from '../tools/gui.js';
+import { localisationTaskTools } from '../tools/localisation-write.js';
 import { mapTaskTools } from '../tools/map.js';
 import { probabilityTaskTools } from '../tools/probability.js';
 import { technologyTaskTools } from '../tools/technology.js';
@@ -11,6 +12,7 @@ export const taskToolCatalog: readonly TaskToolDefinition[] = [
   ...focusTaskTools,
   ...guiTaskTools,
   ...mapTaskTools,
+  ...localisationTaskTools,
   ...eventTaskTools,
   ...analysisTaskTools,
   ...technologyTaskTools,

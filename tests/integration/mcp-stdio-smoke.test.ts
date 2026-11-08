@@ -166,6 +166,28 @@ describe('stdio smoke: synthetic fixture', () => {
     ).toContain('smoke_window');
   }, 900_000);
 
+  it('adds a localisation key to a temporary copy', async () => {
+    const added = await server.call('hoi4.localisation_write', 'add a key and write it', {
+      workspaceId: 'rewrite_gui',
+      mode: 'add',
+      apply: true,
+      entries: [{ key: 'smoke_localisation_key', text: 'Smoke' }],
+    });
+    const problems = successProblems(added);
+    ledger.record(added, 'rewrite', problems);
+    expect(problems).toEqual([]);
+    expect(added.structured.code).toBe('LOCALISATION_CHANGES_APPLIED');
+    expect(
+      (added.structured.data.files as Array<{ path: string }>).map(({ path }) => path),
+    ).toEqual(['localisation/english/synthetic_acceptance_l_english.yml']);
+    expect(
+      await readFile(
+        path.join(rewriteGuiMod, 'localisation', 'english', 'synthetic_acceptance_l_english.yml'),
+        'utf8',
+      ),
+    ).toContain('smoke_localisation_key: "Smoke"');
+  }, 300_000);
+
   it('creates, reshapes and repairs a generated world', async () => {
     const rows = await runWorldFlow(server, path.join(temporary, 'world-mod'), 'world');
     for (const { result, kind, problems } of rows) ledger.record(result, kind, problems);
