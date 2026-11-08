@@ -30,6 +30,10 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
       'hoi4.source_lookup',
       'hoi4.script_validate',
       'hoi4.error_log',
+      'hoi4.explain_error',
+      'hoi4.mod_health',
+      'hoi4.script_guard',
+      'hoi4.compat_check',
       'hoi4.mod_index',
       'hoi4.localisation_inspect',
       'hoi4.idea_inspect',
@@ -39,6 +43,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
       'hoi4.skill',
     ],
   },
+  { heading: 'Localisation', tools: ['hoi4.localisation_write'] },
   {
     heading: 'Focus trees',
     tools: ['hoi4.focus_inspect', 'hoi4.focus_render', 'hoi4.focus_rewrite'],

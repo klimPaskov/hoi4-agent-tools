@@ -795,6 +795,48 @@
       ],
       "corpus": "chaos_redux",
       "problem": 3
+    },
+    {
+      "id": "chaos_redux.script_guard.known-good-events",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "Two event files the game loads without unknown-command errors have no invented names",
+      "evidence": "events/000_chaosx_events.txt and events/001_communism_spread.txt load in game 1.19.4.2; a guard run on 2026-11-06 with the engine reported verdict clean for both. A name the guard reports in them would be a false positive.",
+      "tool": "hoi4.script_guard",
+      "arguments": {
+        "paths": ["events/000_chaosx_events.txt", "events/001_communism_spread.txt"]
+      },
+      "expect": [
+        {
+          "path": "data.verdict",
+          "equals": "clean"
+        },
+        {
+          "path": "data.filesChecked",
+          "equals": 2
+        }
+      ]
+    },
+    {
+      "id": "chaos_redux.mod_health.engine-audits-run",
+      "surface": "validation",
+      "corpus": "chaos_redux",
+      "title": "The whole-mod check of the health audit runs on a large mod and the answer stays inline",
+      "evidence": "Chaos Redux is the largest maintainer mod; the engine check, localisation audit and script validation each run on it, and ten ranked problems fit the 32 KiB reply.",
+      "tool": "hoi4.mod_health",
+      "arguments": {
+        "checks": ["engine_check", "localisation", "script"]
+      },
+      "expect": [
+        {
+          "path": "data.checks[*].status",
+          "excludes": "unavailable"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 16384
+        }
+      ]
     }
   ]
 }

@@ -5,6 +5,7 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from '../../version.js';
 import type { ServerContext } from './base-tools.js';
 import { registerFocusTools } from '../tools/focus.js';
 import { registerGuiTools } from '../tools/gui.js';
+import { registerLocalisationWriteTools } from '../tools/localisation-write.js';
 import { registerMapTools } from '../tools/map.js';
 import { registerReferenceTools } from '../tools/reference.js';
 import { registerEventTools } from '../tools/event.js';
@@ -73,6 +74,7 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
   registerFocusTools(server, engine, serverContext);
   registerGuiTools(server, engine, serverContext);
   registerMapTools(server, engine, serverContext);
+  registerLocalisationWriteTools(server, engine, serverContext);
   registerReferenceTools(server, engine, serverContext);
   registerEventTools(server);
   registerAnalysisTools(server);

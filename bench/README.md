@@ -13,7 +13,7 @@ Each case in `cases/` is one tool call on one corpus, with the answer a correct 
 
 A **sweep** runs one call per file over a sample of known-good files and counts the false positives, such as validation errors on vanilla script that the game loads. A file with a real error that the game also reports is excluded, with the reason in the case's `evidence`.
 
-The report groups the cases by surface: lookup, source lookup, index, validation, error log, events, decisions, technology, focus, GUI, map, probability, impact, renders and rewrites.
+The report groups the cases by surface: lookup, source lookup, index, validation, error log, events, decisions, technology, focus, GUI, map, probability, compatibility, impact, renders and rewrites.
 
 ## Corpora
 
