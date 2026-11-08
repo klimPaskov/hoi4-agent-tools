@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import { hashCanonical } from '../core/canonical.js';
@@ -510,7 +511,12 @@ export class ReferenceToolService {
    * (gameRoot) and the docs pack, read as one workspace that has no mod files.
    */
   private async documentationTarget(): Promise<ReferenceTarget | undefined> {
-    const gameRoot = this.engine.resolver.config().gameRoot;
+    const configuredGameRoot = this.engine.resolver.config().gameRoot;
+    // The canonical path, as every registered workspace has: the roots are compared by it.
+    const gameRoot =
+      configuredGameRoot === undefined
+        ? undefined
+        : await realpath(configuredGameRoot).catch(() => configuredGameRoot);
     const wiki = await this.references.docsPackWiki();
     if (gameRoot === undefined && wiki === undefined) return undefined;
     return {
