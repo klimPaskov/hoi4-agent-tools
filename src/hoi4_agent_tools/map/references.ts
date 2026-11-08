@@ -667,3 +667,114 @@ export function mapScriptConsistency(index: MapConsistencyIndex): {
   }
   return { diagnostics, references: references.length, missing };
 }
+
+/**
+ * Folders whose scripts may name a continent: triggers and effects anywhere in `common`, events
+ * and country history, the AI areas, and the portrait pools.
+ */
+export const CONTINENT_REFERENCE_SCRIPT_PATTERNS = [
+  'common/**/*.txt',
+  'events/**/*.txt',
+  'history/countries/**/*.txt',
+  'portraits/**/*.txt',
+] as const;
+
+const CONTINENT_SCRIPT_FILE = /^(?:common|events|history\/countries|portraits)\/.+\.txt$/iu;
+
+/**
+ * How a script names a continent: `is_on_continent = europe`, `continent = europe` (the state
+ * set of `any_state_in` and its effects), an AI area's `continents = { europe }`, or a portrait
+ * pool's `continent = { name = europe }`.
+ */
+export type ContinentReferenceKind = 'is_on_continent' | 'continent' | 'ai_area' | 'portrait';
+
+export interface ContinentScriptReference {
+  continent: string;
+  kind: ContinentReferenceKind;
+  file: ScannedFile;
+  document: SourceDocument;
+  node: ScalarNode;
+}
+
+/** Every place an active script names one of `keys` as a continent, in load order. */
+export function collectContinentReferences(
+  files: readonly ScannedFile[],
+  keys: ReadonlySet<string>,
+): ContinentScriptReference[] {
+  const references: ContinentScriptReference[] = [];
+  if (keys.size === 0) return references;
+  const active = files
+    .filter(
+      (file) =>
+        file.shadowedBy === undefined &&
+        CONTINENT_SCRIPT_FILE.test(file.relativePath.replaceAll('\\', '/')),
+    )
+    .sort(
+      (left, right) =>
+        left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
+    );
+  for (const file of active) {
+    // A cheap byte check skips the many files that name no continent key at all.
+    const text = file.bytes.toString('latin1');
+    if (![...keys].some((key) => text.includes(key))) continue;
+    const document = parseClausewitz(file.bytes, file.displayPath);
+    const folder = file.relativePath.replaceAll('\\', '/').toLowerCase();
+    const aiAreas = folder.startsWith('common/ai_areas/');
+    const portraits = folder.startsWith('portraits/');
+    const add = (node: ScalarNode, kind: ContinentReferenceKind) => {
+      if (keys.has(node.value))
+        references.push({ continent: node.value, kind, file, document, node });
+    };
+    const visit = (entry: SourceEntry): void => {
+      if (entry.type === 'block') {
+        for (const child of entry.entries) visit(child);
+        return;
+      }
+      if (entry.type !== 'assignment') return;
+      const key = entry.key.value;
+      if (entry.value.type === 'scalar') {
+        if (key === 'is_on_continent') add(entry.value, 'is_on_continent');
+        else if (key === 'continent') add(entry.value, 'continent');
+        return;
+      }
+      if (aiAreas && key === 'continents')
+        for (const item of entry.value.entries) if (item.type === 'scalar') add(item, 'ai_area');
+      if (portraits && key === 'continent')
+        for (const child of entry.value.entries)
+          if (
+            child.type === 'assignment' &&
+            child.key.value === 'name' &&
+            child.value.type === 'scalar'
+          )
+            add(child.value, 'portrait');
+      for (const child of entry.value.entries) visit(child);
+    };
+    visit(document.root);
+  }
+  return references;
+}
+
+const CONTINENT_REFERENCE_FORMS: Record<ContinentReferenceKind, string> = {
+  is_on_continent: 'is_on_continent',
+  continent: 'continent',
+  ai_area: "an AI area's continents",
+  portrait: "a portrait pool's continent",
+};
+
+/** One warning for each script reference to a continent the new `continent.txt` leaves out. */
+export function droppedContinentDiagnostics(
+  references: readonly ContinentScriptReference[],
+): Diagnostic[] {
+  return references.map((reference) => ({
+    code: 'MAP_CONTINENT_DROPPED_REFERENCED',
+    severity: 'warning',
+    category: 'map',
+    message: `${reference.file.relativePath} names the dropped continent ${reference.continent} (${CONTINENT_REFERENCE_FORMS[reference.kind]}); the new continent.txt no longer declares it`,
+    location: nodeLocation(reference.document, reference.node),
+    details: {
+      continent: reference.continent,
+      kind: reference.kind,
+      layer: reference.file.rootKind,
+    },
+  }));
+}
