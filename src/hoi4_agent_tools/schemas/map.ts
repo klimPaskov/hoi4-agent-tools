@@ -1212,6 +1212,12 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
           'Countries the world generates and writes (an array), or { source: "workspace", realms } for countries the workspace already declares: the world then places them from their capital, seeds, claims and exclusions and writes no country, flag, unit, country history, country name or bookmark file.',
         ),
       continentNames: z.array(worldName).max(12).optional(),
+      inheritedContinents: z
+        .enum(['keep', 'drop'])
+        .optional()
+        .describe(
+          'keep (the default) also lists the continents of the active continent.txt after the generated ones; drop writes only the generated continents and warns about every active script that still names a dropped one (MAP_CONTINENT_DROPPED_REFERENCED).',
+        ),
       startDate: z
         .string()
         .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)
