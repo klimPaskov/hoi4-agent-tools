@@ -227,21 +227,43 @@ export class ReferenceToolService {
                               ideaInspectRequestSchema.parse(parsed),
                               signal,
                             )
-                          : name === 'hoi4.skill'
-                            ? await this.skill(workspace, skillRequestSchema.parse(parsed), signal)
-                            : name === 'hoi4.localisation_inspect'
-                              ? await inspectLocalisation(
+                          : name === 'hoi4.system_inspect'
+                            ? await inspectSystem(
+                                workspace,
+                                systemInspectRequestSchema.parse(parsed),
+                                signal,
+                              )
+                            : name === 'hoi4.asset_inspect'
+                              ? await inspectAssets(
                                   workspace,
-                                  localisationInspectRequestSchema.parse(parsed),
+                                  assetInspectRequestSchema.parse(parsed),
                                   signal,
                                 )
-                              : await sourceLookup(
-                                  this.engine,
-                                  workspaceId,
-                                  sourceLookupRequestSchema.parse(parsed),
-                                  context.principal,
-                                  signal,
-                                );
+                              : name === 'hoi4.unit_inspect'
+                                ? await inspectUnits(
+                                    workspace,
+                                    unitInspectRequestSchema.parse(parsed),
+                                    signal,
+                                  )
+                                : name === 'hoi4.skill'
+                                  ? await this.skill(
+                                      workspace,
+                                      skillRequestSchema.parse(parsed),
+                                      signal,
+                                    )
+                                  : name === 'hoi4.localisation_inspect'
+                                    ? await inspectLocalisation(
+                                        workspace,
+                                        localisationInspectRequestSchema.parse(parsed),
+                                        signal,
+                                      )
+                                    : await sourceLookup(
+                                        this.engine,
+                                        workspaceId,
+                                        sourceLookupRequestSchema.parse(parsed),
+                                        context.principal,
+                                        signal,
+                                      );
     const result = emptyServiceResult(workspaceId, data);
     if (name === 'hoi4.script_guard') {
       const guard = scriptGuardDataSchema.parse(data);
