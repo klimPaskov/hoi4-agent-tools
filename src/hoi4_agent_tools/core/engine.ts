@@ -160,6 +160,7 @@ export class CoreEngine {
   readonly #scanGenerations = new Map<string, number>();
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
   readonly #activeScanAdmissions = new Set<ScanAdmissionRequest>();
+  #recovery: Promise<void> | undefined;
 
   public constructor(
     public readonly resolver: WorkspaceResolver,
@@ -218,7 +219,23 @@ export class CoreEngine {
       );
   }
 
-  async initialize(): Promise<void> {
+  /**
+   * Recover interrupted internal rewrites in every workspace. A stdio server starts this in the
+   * background and answers the client handshake meanwhile; it holds workspace requests until
+   * {@link recovered} settles.
+   */
+  initialize(): Promise<void> {
+    const recovery = this.#recoverWorkspaces();
+    this.#recovery = recovery;
+    return recovery;
+  }
+
+  /** Settles when the latest {@link initialize} has finished, at once when none was started. */
+  recovered(): Promise<void> {
+    return this.#recovery ?? Promise.resolve();
+  }
+
+  async #recoverWorkspaces(): Promise<void> {
     for (const workspace of this.resolver.list()) {
       // Recovery repairs an interrupted internal rewrite before the workspace is exposed. A
       // journal that cannot be recovered blocks rewrites of its own workspace, not the server.

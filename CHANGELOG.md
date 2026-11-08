@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Answer the stdio handshake before startup recovery. The server checked every retained rewrite journal before it answered `initialize`, and each applied `create_world` leaves a journal of about 7 MB, so a mod with eight map writes took 4 to 5 seconds to connect (7.5 seconds with five clients starting at once, 8.7 seconds cold) and clients that allow 30 seconds gave up under load. The stdio server now answers `initialize`, `ping`, `server/discover`, `tools/list`, `prompts/list` and `logging/setLevel` at once, recovers in the background, and holds every other request, in arrival order, until recovery ends, so no call reads or writes a workspace before its interrupted rewrite is recovered. Measured on a configuration with six mods and 28 MB of map journals, the handshake takes 1.1 to 1.2 seconds (1.8 to 1.9 seconds for five at once); the first tool call waits for the rest. More than 128 held requests, or a failed recovery, closes the connection without answering them. The HTTP server still recovers before it listens.
+
 ## 4.11.1 - 2026-11-07
 
 - Close impassable walls in generated maps, and keep pass saddles and point river mouths that a 4.10.0 `create_world` lost.
