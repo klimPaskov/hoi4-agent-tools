@@ -164,4 +164,152 @@ describe('in-process negotiated stdio', () => {
       output.end();
     }
   }, 60_000);
+
+  function blockRecovery(engine: CoreEngine) {
+    let release: () => void = () => undefined;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const recovered: string[] = [];
+    engine.transactions.recover = async (workspaceId: string) => {
+      await blocker;
+      recovered.push(workspaceId);
+      return [];
+    };
+    void engine.initialize();
+    return { release, recovered };
+  }
+
+  const legacyInitialize = {
+    protocolVersion: '2025-11-25',
+    capabilities: {},
+    clientInfo: { name: 'in-process-recovery', version: '1' },
+  };
+
+  function heldCall(id: number): string {
+    return `${JSON.stringify({
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: { name: 'hoi4.focus_inspect', arguments: { workspaceId: 'fixture' } },
+    })}\n`;
+  }
+
+  it('answers the handshake during startup recovery and holds tool calls until it ends', async () => {
+    const engine = await fixture();
+    const { release, recovered } = blockRecovery(engine);
+    // Record whether any request resolved the workspace before its recovery ended.
+    const resolvedBeforeRecovery: string[] = [];
+    const get = engine.resolver.get.bind(engine.resolver);
+    engine.resolver.get = (id, principal) => {
+      if (recovered.length === 0) resolvedBeforeRecovery.push(id);
+      return get(id, principal);
+    };
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const errors: Error[] = [];
+    const failures: unknown[] = [];
+    const request = wire(input, output);
+    const transport = await serveNegotiatedStdio(engine, {
+      stdin: input,
+      stdout: output,
+      onerror: (error) => errors.push(error),
+      onFailure: (error) => failures.push(error),
+    });
+    try {
+      expect(await request(1, 'initialize', legacyInitialize)).toMatchObject({
+        result: { serverInfo: { version: PACKAGE_VERSION } },
+      });
+      input.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+      expect(await request(2, 'ping')).toMatchObject({ result: {} });
+      const tools = await request(3, 'tools/list');
+      expect((tools.result as { tools: unknown[] }).tools).toHaveLength(34);
+      let answered = false;
+      const call = request(4, 'tools/call', {
+        name: 'hoi4.focus_inspect',
+        arguments: { workspaceId: 'fixture', treeId: 'negotiated' },
+      }).then((response) => {
+        answered = true;
+        return response;
+      });
+      // A ping sent after a held call keeps its place behind it.
+      const laterPing = request(5, 'ping');
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(answered).toBe(false);
+      expect(recovered).toEqual([]);
+      expect(resolvedBeforeRecovery).toEqual([]);
+      release();
+      expect(await call).toMatchObject({ result: { structuredContent: { status: 'ok' } } });
+      expect(await laterPing).toMatchObject({ result: {} });
+      expect(recovered).toEqual(['fixture']);
+      expect(resolvedBeforeRecovery).toEqual([]);
+      expect(errors).toEqual([]);
+      expect(failures).toEqual([]);
+    } finally {
+      release();
+      await transport.close();
+      input.end();
+      output.end();
+    }
+  }, 60_000);
+
+  it('closes the connection when requests held during recovery exceed the bound', async () => {
+    const engine = await fixture();
+    const { release } = blockRecovery(engine);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const errors: Error[] = [];
+    const written: string[] = [];
+    output.on('data', (chunk: Buffer) => written.push(chunk.toString('utf8')));
+    const transport = await serveNegotiatedStdio(engine, {
+      stdin: input,
+      stdout: output,
+      onerror: (error) => errors.push(error),
+      onFailure: () => undefined,
+    });
+    try {
+      for (let id = 1; id <= 129; id += 1) input.write(heldCall(id));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(errors.map(({ message }) => message)).toContain(
+        'Requests held during startup recovery exceeded their bounded limit',
+      );
+      release();
+      await engine.recovered();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      // The closed connection answers none of the held requests.
+      expect(written.join('')).toBe('');
+    } finally {
+      release();
+      await transport.close();
+      input.end();
+      output.end();
+    }
+  }, 60_000);
+
+  it('answers no held request when startup recovery fails', async () => {
+    const engine = await fixture();
+    const failure = new Error('recovery could not run');
+    engine.recovered = () => Promise.reject(failure);
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const failures: unknown[] = [];
+    const written: string[] = [];
+    output.on('data', (chunk: Buffer) => written.push(chunk.toString('utf8')));
+    const transport = await serveNegotiatedStdio(engine, {
+      stdin: input,
+      stdout: output,
+      onerror: () => undefined,
+      onFailure: (error) => failures.push(error),
+    });
+    try {
+      input.write(heldCall(1));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(failures).toEqual([failure]);
+      expect(written.join('')).toBe('');
+    } finally {
+      await transport.close();
+      input.end();
+      output.end();
+    }
+  }, 60_000);
 });

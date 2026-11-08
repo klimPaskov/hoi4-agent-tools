@@ -25,7 +25,8 @@ function idleExitMinutes(configured: number): number {
 }
 
 async function main(): Promise<void> {
-  const engine = await createEngine();
+  // The handshake must not wait for journal recovery; the transport holds workspace requests.
+  const engine = await createEngine(undefined, { recovery: 'background' });
   const chaosxTools =
     process.env.HOI4_AGENT_TOOLS_CHAOSX === '1'
       ? await import('../hoi4_agent_tools/mcp/tools/chaosx.js')
