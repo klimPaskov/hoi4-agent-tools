@@ -17,6 +17,8 @@ npm run build
 npm run inspector
 ```
 
+Tools on the shared Rust engine (`hoi4.mod_index`, `hoi4.localisation_inspect`, `hoi4.idea_inspect`, `hoi4.system_inspect`, `hoi4.unit_inspect`, `hoi4.asset_inspect`) need a `hoi4-engine` binary in the tests. Build it once with `cargo build -p hoi4-engine-cli` in `engine/`; the test setup uses that build (in `CARGO_TARGET_DIR` or `engine/target`) unless `HOI4_ENGINE` names another binary.
+
 Keep changes focused and include tests for behavior changes. CI fixtures must be synthetic and project-owned; never commit installed-game or third-party-mod content. Public tool or schema changes require compatibility review and a versioned release.
 
 Vitest tracks temporary fixtures created with `mkdtemp` and removes them after each test or suite teardown, with process-exit cleanup as a fallback. Fixture writes and truncations reserve a 256 MiB aggregate disk budget. Test oversized inputs with a small injected limit or mocked metadata; do not allocate gigabyte fixtures. Startup recovery preserves live owners, locks and dated benchmark evidence; see [temporary fixture ownership](adr/0048-temporary-fixture-lifetimes.md).
