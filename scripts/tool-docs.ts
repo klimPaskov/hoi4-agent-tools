@@ -64,7 +64,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
   { heading: 'Background jobs', tools: ['hoi4.job_inspect', 'hoi4.job_cancel'] },
 ];
 
-/** The tools/list a default server answers: no ChaosX tools, one empty workspace. */
+/** The tools/list a default server answers: no plugin tools, one empty workspace. */
 export async function listDefaultTools(): Promise<Tool[]> {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-tool-docs-'));
   try {

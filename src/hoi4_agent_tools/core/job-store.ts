@@ -44,7 +44,7 @@ const ownerSchema = z
   .strict();
 const requestSchema = z
   .object({
-    toolName: z.string().regex(/^(?:hoi4|chaosx)\.[a-z_]+$/u),
+    toolName: z.string().regex(/^hoi4\.[a-z_]+$/u),
     arguments: z.record(z.string(), z.json()),
     mutation: z.boolean(),
     requestKey: z.string().min(1).max(256).optional(),
