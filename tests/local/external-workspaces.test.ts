@@ -539,11 +539,11 @@ local('local installed-game and external-mod integration', () => {
         `${example.adapter}: ${example.path}`,
       ).toBeGreaterThan(0);
       expect(inspected.surface?.sourceHash).toMatch(/^[a-f0-9]{64}$/u);
-      expect(inspected.surface?.adapter.gameVersion).toContain('1.19.4.1');
+      expect(inspected.surface?.adapter.gameVersion).toContain('1.19.4.2');
       expect(inspected.surface?.gameVersionVerification).toMatchObject({
         status: 'workspace_verified',
-        observedRawVersion: '1.19.4.1',
-        observedChecksum: 'f584',
+        observedRawVersion: '1.19.4.2',
+        observedChecksum: '0bdb',
       });
     }
   }, 600_000);
