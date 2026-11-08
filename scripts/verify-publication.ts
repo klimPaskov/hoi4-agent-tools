@@ -660,7 +660,6 @@ async function verifyRegistryPublication(): Promise<void> {
 }
 
 async function verify(): Promise<void> {
-  await verifyGitHubTag();
   if (scope === 'npm') {
     await verifyNpmPublication(await releaseArtifactFiles());
     return;
@@ -677,6 +676,9 @@ async function verify(): Promise<void> {
   await verifyRegistryPublication();
 }
 
+// The tag does not change while a publication propagates: check it once, before the retries, so
+// waiting for npm never spends the GitHub API limit and a refused lookup is reported as itself.
+await verifyGitHubTag();
 let lastError: unknown;
 for (let attempt = 1; attempt <= attempts; attempt += 1) {
   try {
