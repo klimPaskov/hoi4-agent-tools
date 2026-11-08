@@ -1,3 +1,5 @@
+import { realpath, stat } from 'node:fs/promises';
+import path from 'node:path';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import { hashCanonical } from '../core/canonical.js';
 import { parseClausewitz } from '../core/source/index.js';
@@ -7,8 +9,7 @@ import {
   type OperationContext,
 } from '../core/operation-context.js';
 import { emptyServiceResult, ServiceError } from '../core/result.js';
-import { stat } from 'node:fs/promises';
-import path from 'node:path';
+import type { Diagnostic } from '../core/diagnostics.js';
 import { globFiles } from '../core/file-glob.js';
 import { checkedLayerName, runEngineCheck } from '../core/engine-check.js';
 import { toolResult } from '../core/operation-result.js';
@@ -18,7 +19,7 @@ import {
   referenceSearchRequestSchema,
   sourceLookupRequestSchema,
 } from '../schemas/reference.js';
-import { ReferenceService } from './service.js';
+import { ReferenceService, type ReferenceTarget } from './service.js';
 import { sourceLookup } from './source-lookup.js';
 import {
   scriptValidateDataSchema,
@@ -136,6 +137,19 @@ const ASSET_INFORMATION = new Set([
   'ASSET_FLAG_SIZE_CLOSE',
 ]);
 export type ReferenceToolName = keyof typeof schemas;
+type DocumentationToolName =
+  'hoi4.reference_search' | 'hoi4.reference_read' | 'hoi4.reference_context';
+function isDocumentationTool(name: ReferenceToolName): name is DocumentationToolName {
+  return (
+    name === 'hoi4.reference_search' ||
+    name === 'hoi4.reference_read' ||
+    name === 'hoi4.reference_context'
+  );
+}
+/** The workspace id of an answer from the documentation alone, and a request for one. */
+export const DOCS_WORKSPACE_ID = 'docs';
+const FETCH_DOCS_FIX =
+  'Run `hoi4-agent-tools-setup --fetch-docs` once to install the HOI4 wiki pages for documentation search';
 export function isReferenceTool(name: string): name is ReferenceToolName {
   return Object.hasOwn(schemas, name);
 }
@@ -146,7 +160,9 @@ const sharedReferences = new WeakMap<CoreEngine, ReferenceService>();
 export class ReferenceToolService {
   private readonly references: ReferenceService;
   constructor(private readonly engine: CoreEngine) {
-    const cached = sharedReferences.get(engine) ?? new ReferenceService();
+    const cached =
+      sharedReferences.get(engine) ??
+      new ReferenceService({ docsRoot: engine.resolver.config().docsRoot });
     sharedReferences.set(engine, cached);
     this.references = cached;
   }
@@ -159,14 +175,41 @@ export class ReferenceToolService {
   ): Promise<ReturnType<typeof toolResult>> {
     requireOperationScope(context, 'hoi4:read');
     const parsed = schemas[name].parse(input);
+    if (isDocumentationTool(name) && parsed.workspaceId === DOCS_WORKSPACE_ID) {
+      const target = await this.documentationTarget();
+      if (target === undefined)
+        throw new ServiceError(
+          'REFERENCE_DOCUMENTATION_UNAVAILABLE',
+          `Documentation without a mod needs the game folder (gameRoot) or the docs pack. ${FETCH_DOCS_FIX}`,
+        );
+      return this.documentationOnly(name, parsed, target, signal);
+    }
     // A validated file names its mod when the client's roots and working directory do not.
-    const workspaceId = await resolveOperationWorkspaceForSource(
-      this.engine,
-      context,
-      parsed.workspaceId,
-      name === 'hoi4.script_validate' ? scriptValidateRequestSchema.parse(parsed).path : undefined,
-      signal,
-    );
+    let workspaceId: string;
+    try {
+      workspaceId = await resolveOperationWorkspaceForSource(
+        this.engine,
+        context,
+        parsed.workspaceId,
+        name === 'hoi4.script_validate'
+          ? scriptValidateRequestSchema.parse(parsed).path
+          : undefined,
+        signal,
+      );
+    } catch (error) {
+      // Documentation does not need a mod: with none selected it comes from the game and the pack.
+      if (
+        !isDocumentationTool(name) ||
+        parsed.workspaceId !== 'current' ||
+        !(error instanceof ServiceError) ||
+        !['WORKSPACE_CONTEXT_NOT_FOUND', 'WORKSPACE_CONTEXT_REQUIRED'].includes(error.code)
+      )
+        throw error;
+      const target = await this.documentationTarget();
+      if (target === undefined)
+        throw new ServiceError(error.code, `${error.message}. ${FETCH_DOCS_FIX}`, error.details);
+      return this.documentationOnly(name, parsed, target, signal);
+    }
     const workspace = this.engine.resolver.get(workspaceId, context.principal);
     const data =
       name === 'hoi4.reference_search'
@@ -281,6 +324,7 @@ export class ReferenceToolService {
                                           signal,
                                         );
     const result = emptyServiceResult(workspaceId, data);
+    if (isDocumentationTool(name)) result.diagnostics.push(...(await this.wikiHint(data)));
     if (name === 'hoi4.script_guard') {
       const guard = scriptGuardDataSchema.parse(data);
       result.code = 'SCRIPT_GUARD_CHECKED';
@@ -577,6 +621,83 @@ export class ReferenceToolService {
 
   /** The latest player-text context of each workspace, keyed by its source files' hashes. */
   readonly #playerText = new Map<string, { key: string; context: PlayerTextContext }>();
+
+  /**
+   * The documentation alone, for a call with no mod: the installed game's documentation
+   * (gameRoot) and the docs pack, read as one workspace that has no mod files.
+   */
+  private async documentationTarget(): Promise<ReferenceTarget | undefined> {
+    const configuredGameRoot = this.engine.resolver.config().gameRoot;
+    // The canonical path, as every registered workspace has: the roots are compared by it.
+    const gameRoot =
+      configuredGameRoot === undefined
+        ? undefined
+        : await realpath(configuredGameRoot).catch(() => configuredGameRoot);
+    const wiki = await this.references.docsPackWiki();
+    if (gameRoot === undefined && wiki === undefined) return undefined;
+    return {
+      modRoot: gameRoot ?? path.dirname(wiki!),
+      ...(gameRoot === undefined ? {} : { gameRoot }),
+      ...(wiki === undefined ? {} : { wikiRoot: wiki }),
+      registration: { kind: 'mod' },
+    };
+  }
+
+  private async documentationOnly(
+    name: DocumentationToolName,
+    parsed: unknown,
+    target: ReferenceTarget,
+    signal?: AbortSignal,
+  ): Promise<ReturnType<typeof toolResult>> {
+    const data =
+      name === 'hoi4.reference_search'
+        ? await this.references.searchHits(
+            target,
+            referenceSearchRequestSchema.parse(parsed),
+            signal,
+          )
+        : name === 'hoi4.reference_read'
+          ? await this.references.read(target, referenceReadRequestSchema.parse(parsed), signal)
+          : await this.references.contextHits(
+              target,
+              referenceContextRequestSchema.parse(parsed),
+              signal,
+            );
+    const result = emptyServiceResult(DOCS_WORKSPACE_ID, data);
+    result.diagnostics.push(
+      {
+        code: 'REFERENCE_DOCUMENTATION_ONLY',
+        severity: 'info',
+        category: 'configuration',
+        message:
+          'No mod is selected, so this answer comes from the game documentation and the docs pack only',
+      },
+      ...(await this.wikiHint(data)),
+    );
+    return toolResult(result, { compact: true });
+  }
+
+  /** Name the fix when no wiki was read and no docs pack is installed. */
+  private async wikiHint(data: unknown): Promise<Diagnostic[]> {
+    const coverage = (data as { coverage?: { wiki?: { unavailable: boolean; included: boolean } } })
+      .coverage?.wiki;
+    if (
+      coverage === undefined ||
+      !coverage.unavailable ||
+      !coverage.included ||
+      !this.references.docsPackConfigured ||
+      (await this.references.docsPackWiki()) !== undefined
+    )
+      return [];
+    return [
+      {
+        code: 'REFERENCE_WIKI_UNAVAILABLE',
+        severity: 'info',
+        category: 'configuration',
+        message: `No HOI4 wiki pages were found. ${FETCH_DOCS_FIX}`,
+      },
+    ];
+  }
 
   /**
    * `hoi4.mod_health`: the error log, the engine's whole-mod check and the localisation and

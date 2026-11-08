@@ -83,10 +83,18 @@ Entries that are not plain relative folders, such as `../outside` or wildcard pa
 
 ## Add local reference material
 
-Place the kit's HOI4 wiki in `hoi4_wiki/` inside the mod. A mod the kit has not updated yet keeps working with the older `paradox_wiki/` name; when both exist, `hoi4_wiki/` wins.
+Documentation search works with no mod open once the HOI4 wiki pages are installed. Run this once:
+
+```bash
+hoi4-agent-tools-setup --fetch-docs
+```
+
+It downloads the docs pack: the modding kit's HOI4 wiki pages at the kit commit this version pins (about 3.6 MB), with their licence and sources, checked against pinned SHA-256 hashes. It installs them in `docsRoot` (the user's data folder by default) and replaces an older pack. Run it again after an update of `hoi4-agent-tools`. With no mod selected, the reference tools then answer from the game documentation (`gameRoot`) and the pack. A mod without its own wiki copy reads the pack too.
+
+A mod that has the kit's wiki in `hoi4_wiki/` reads its own copy instead. A mod the kit has not updated yet keeps working with the older `paradox_wiki/` name; when both exist, `hoi4_wiki/` wins.
 An optional generated documentation dump can go in `script_docs/`.
 For a configured workspace, `wikiRoot` and `scriptDocsRoot` can point to other absolute directories.
-The server reads these local files; it does not download the wiki.
+The server itself never downloads anything; only `--fetch-docs` does.
 See [Local references](reference.md) for source selection and missing-source reports.
 
 ## Common problems
@@ -109,7 +117,7 @@ hoi4-agent-tools-setup --diagnose
 ```
 
 `--discover` prints the mod and game folders the server can detect, without writing anything.
-`--diagnose` checks the configured paths and their permissions, the Node.js version and the image library, and accepts `--config PATH`.
+`--diagnose` checks the configured paths and their permissions, the Node.js version, the image library and whether the docs pack is installed, and accepts `--config PATH`.
 `--help` lists every option.
 
 For remote or shared deployments, use the [HTTP guide](http.md).

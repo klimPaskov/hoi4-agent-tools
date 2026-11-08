@@ -11,6 +11,7 @@ import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
 import { CONFIG_VERSION } from './version.js';
 import { sweepTemporaryDirectories } from './core/temporary-directories.js';
+import { defaultDocsRoot } from './reference/docs-pack.js';
 
 export function defaultConfigurationPath(): string {
   const configRoot =
@@ -288,6 +289,9 @@ export async function createEngine(
     if (!useAutomaticConfiguration) throw error;
     configuration = await automaticConfiguration();
   }
+  // The command-line servers read a fetched docs pack from the user's data folder by default.
+  if (configuration.docsRoot === undefined)
+    configuration = { ...configuration, docsRoot: defaultDocsRoot() };
   const resolver = await WorkspaceResolver.create(configuration);
   await sweepTemporaryDirectories(tmpdir(), {
     protectedRoots: [
