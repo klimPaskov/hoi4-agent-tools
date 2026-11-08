@@ -550,7 +550,11 @@ export class ReferenceService {
 
   /** The wiki folder of the installed docs pack this package version pins, if there is one. */
   async docsPackWiki(): Promise<string | undefined> {
-    return installedDocsPackWiki(this.#docsRoot);
+    const wiki = await installedDocsPackWiki(this.#docsRoot);
+    if (wiki === undefined) return undefined;
+    // The canonical path: a data folder named by its 8.3 short form (a Windows user name can
+    // be shortened) must not look like a root that resolves outside itself.
+    return realpath(wiki).catch(() => wiki);
   }
 
   /** Whether a docs pack location is configured, so a missing pack can be named as the fix. */
