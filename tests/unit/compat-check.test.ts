@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -34,7 +34,9 @@ afterEach(async () => {
 });
 
 async function scratch(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'hoi4-compat-'));
+  // The canonical path: a CI runner's temporary folder can be named by its 8.3 short form, which
+  // the containment checks (they compare canonical paths) would take for a different folder.
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'hoi4-compat-')));
   cleanup.push(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
   return root;
 }
