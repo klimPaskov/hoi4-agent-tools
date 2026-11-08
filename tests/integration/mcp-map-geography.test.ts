@@ -593,6 +593,74 @@ describe('geography model through hoi4.map_rewrite', () => {
     expect(await sourceInventory(modRoot)).toEqual(before);
   }, 180_000);
 
+  it('reports rivers, realm points and a capital on impassable land in one check', async () => {
+    // On 6 November a map write needed six attempts, one blocked problem each; the check finds
+    // every problem it can without a partition in one call.
+    const { client, modRoot } = await fixture();
+    await mkdir(path.join(modRoot, 'common', 'country_tags'), { recursive: true });
+    await writeFile(
+      path.join(modRoot, 'common', 'country_tags', '00_realms.txt'),
+      'AAA = "countries/AAA.txt"\nBBB = "countries/BBB.txt"\n',
+    );
+    const before = await sourceInventory(modRoot);
+    const geography = {
+      ...isolatedGeography(),
+      regions: [
+        {
+          id: 'east_massif',
+          polygons: [
+            [
+              [0.7, 0.3],
+              [0.8, 0.3],
+              [0.8, 0.5],
+              [0.7, 0.5],
+            ],
+          ],
+          impassable: true,
+        },
+      ],
+    };
+    const result = await client.callTool({
+      name: 'hoi4.map_rewrite',
+      arguments: {
+        workspaceId: 'test',
+        preview: true,
+        operations: [
+          create({
+            geography,
+            width: 1024,
+            height: 512,
+            synthesisCheck: true,
+            countries: {
+              source: 'workspace',
+              realms: [
+                // In the sea, beside the western land.
+                { tag: 'AAA', capital: { x: 60, y: 256 } },
+                // On the impassable massif of the eastern land.
+                { tag: 'BBB', capital: { x: 768, y: 205 } },
+              ],
+            },
+          }),
+        ],
+      },
+    });
+    const content = result.structuredContent as unknown as PublicResult & {
+      data: { synthesisCheck: { passed: boolean; unreachableRivers: number } };
+    };
+    expect(content).toMatchObject({ status: 'blocked', code: 'MAP_SYNTHESIS_CHECK_BLOCKED' });
+    expect(content.data.synthesisCheck).toMatchObject({ passed: false, unreachableRivers: 2 });
+    expect(content.blockers.map(({ code }) => code).sort()).toEqual([
+      'MAP_FEATURE_IN_IMPASSABLE',
+      'MAP_RIVER_UNREACHABLE_MOUTH',
+      'MAP_WORLD_REALM_POINT_WATER',
+    ]);
+    const walled = content.blockers.find(({ code }) => code === 'MAP_FEATURE_IN_IMPASSABLE') as
+      { details?: Record<string, unknown> } | undefined;
+    expect(walled?.details).toMatchObject({ capitals: [{ tag: 'BBB' }] });
+    expect(content.diagnostics.map(({ code }) => code)).not.toContain('MAP_SYNTHESIS_CHECK_READY');
+    expect(await sourceInventory(modRoot)).toEqual(before);
+  }, 180_000);
+
   it('writes a world whose bitmaps together exceed the scan limit', async () => {
     // The check after the write reads the changed text files, not the bitmaps and textures: a
     // large world (150 MB of binary files) must not fail it on the default limit.

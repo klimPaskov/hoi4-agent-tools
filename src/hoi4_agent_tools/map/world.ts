@@ -230,7 +230,8 @@ export interface WorldFile {
 /** A diagnostic raised while generating; the planner reports it with its code. */
 export interface WorldNote {
   code: string;
-  severity: 'warning' | 'info';
+  /** `error` only in a synthesis check, which reports every blocking problem together. */
+  severity: 'error' | 'warning' | 'info';
   message: string;
   details?: Record<string, unknown>;
 }
@@ -1038,10 +1039,55 @@ export function generateWorld(
           height,
           land: (pixel) => surface.kind[pixel] === LAND,
         });
-  if (pointProblems.length > 0 && options.riverCheck !== true)
-    throw realmPointsError(pointProblems);
+  // Cities and capitals on impassable land are known from the impassable mask alone, so they are
+  // found before the synthesis, not after the partition.
+  const onImpassable = ({ x, y }: { x: number; y: number }): boolean => {
+    const px = Math.floor(x);
+    const py = Math.floor(y);
+    return (
+      px >= 0 && py >= 0 && px < width && py < height && impassableMask?.[py * width + px] === 1
+    );
+  };
+  const offendingCities = (spec.referenceCities ?? []).filter(onImpassable);
+  const cityError =
+    offendingCities.length === 0
+      ? undefined
+      : new ServiceError(
+          'MAP_FEATURE_IN_IMPASSABLE',
+          `${offendingCities.length} city or cities stand on impassable land: ${offendingCities
+            .slice(0, 5)
+            .map(({ name, x, y }) => `${name} (${Math.round(x)}, ${Math.round(y)})`)
+            .join('; ')}. Move them or repaint the land.`,
+          { cities: offendingCities.slice(0, 20) },
+        );
+  if (options.riverCheck !== true) {
+    if (pointProblems.length > 0) throw realmPointsError(pointProblems);
+    if (cityError !== undefined) throw cityError;
+  }
   if (options.riverCheck === true && geography !== undefined) {
-    let failure: ServiceError | undefined;
+    // The check reports every blocking problem it can find without a partition in one answer:
+    // realm points, cities and capitals on impassable land, unreachable rivers and filled passes.
+    const blocking: ServiceError[] = [];
+    if (pointProblems.length > 0) blocking.push(realmPointsError(pointProblems));
+    if (cityError !== undefined) blocking.push(cityError);
+    const walledCapitals = (spec.realms?.list ?? []).filter(({ capital }) => onImpassable(capital));
+    if (walledCapitals.length > 0)
+      blocking.push(
+        new ServiceError(
+          'MAP_FEATURE_IN_IMPASSABLE',
+          `${walledCapitals.length} capital(s) stand on impassable land: ${walledCapitals
+            .slice(0, 5)
+            .map(
+              ({ tag, capital }) => `${tag} (${Math.round(capital.x)}, ${Math.round(capital.y)})`,
+            )
+            .join('; ')}. Move them onto passable land.`,
+          {
+            capitals: walledCapitals
+              .slice(0, 20)
+              .map(({ tag, capital }) => ({ tag, x: capital.x, y: capital.y })),
+          },
+        ),
+      );
     try {
       const checked = checkTerrainRivers({
         geography,
@@ -1057,35 +1103,24 @@ export function generateWorld(
         painted,
         signal: options.signal,
       });
-      for (const note of checked) {
-        if (note.severity === 'error')
-          throw new ServiceError(note.code, note.message, note.details);
+      for (const note of checked)
         notes.push({
           code: note.code,
           severity: note.severity,
           message: note.message,
           ...(note.details === undefined ? {} : { details: note.details }),
         });
-      }
     } catch (error) {
       if (!(error instanceof ServiceError)) throw error;
-      failure = error;
+      blocking.push(error);
     }
-    // The preview reports the realm points and the synthesis together.
-    if (pointProblems.length > 0) {
-      const pointError = realmPointsError(pointProblems);
-      throw failure === undefined
-        ? pointError
-        : new ServiceError(
-            pointError.code,
-            `${pointError.message}. The relief synthesis also failed: ${failure.message}`,
-            {
-              ...pointError.details,
-              synthesis: { code: failure.code, message: failure.message, details: failure.details },
-            },
-          );
-    }
-    if (failure !== undefined) throw failure;
+    for (const error of blocking)
+      notes.push({
+        code: error.code,
+        severity: 'error',
+        message: error.message,
+        details: error.details,
+      });
     return {
       files: [],
       warnings: [],
@@ -1296,19 +1331,6 @@ export function generateWorld(
   };
   const wallProvinces = majorityIn(wallMask);
   const impassableProvinces = new Set([...wallProvinces, ...majorityIn(impassableMask)]);
-  const offendingCities = (spec.referenceCities ?? []).filter(({ x, y }) => {
-    const pixel = Math.floor(y) * width + Math.floor(x);
-    return impassableMask?.[pixel] === 1;
-  });
-  if (offendingCities.length > 0)
-    throw new ServiceError(
-      'MAP_FEATURE_IN_IMPASSABLE',
-      `${offendingCities.length} city or cities stand on impassable land: ${offendingCities
-        .slice(0, 5)
-        .map(({ name, x, y }) => `${name} (${Math.round(x)}, ${Math.round(y)})`)
-        .join('; ')}. Move them or repaint the land.`,
-      { cities: offendingCities.slice(0, 20) },
-    );
   if (landIds.length < spec.countries.length)
     throw new ServiceError(
       'MAP_WORLD_LAND_TOO_SMALL',
