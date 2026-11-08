@@ -1,11 +1,11 @@
 import type { Readable, Writable } from 'node:stream';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import type { Transport as ModernTransport } from '@modelcontextprotocol/server';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CoreEngine } from '../../core/engine.js';
-import type { createChaosxToolOperations } from '../tools/chaosx.js';
+import type { PluginToolFactory } from '../plugins.js';
+import { progressReporter } from '../server/progress.js';
 import { createMcpServer } from '../server/create.js';
 import { createModernOperationServer } from '../server/create-modern-operations.js';
 import { BoundedStdioServerTransport, STDIO_MAX_FRAME_BYTES } from './bounded-stdio.js';
@@ -99,8 +99,8 @@ class PinnedStdioTransport implements Transport {
 export interface NegotiatedStdioOptions {
   stdin?: Readable;
   stdout?: Writable;
-  createModernPrivateTools?: typeof createChaosxToolOperations;
-  registerLegacy?: (server: McpServer) => void;
+  /** The tools of the configured plugins (M-14); the server lists them beside its own. */
+  plugins?: PluginToolFactory;
   onerror: (error: Error) => void;
   onFailure: (error: unknown) => void;
   /** Observes every message in both directions, for example to track client activity. */
@@ -147,9 +147,7 @@ export async function serveNegotiatedStdio(
                 engine,
                 {},
                 undefined,
-                options.createModernPrivateTools === undefined
-                  ? {}
-                  : { createPrivateTools: options.createModernPrivateTools },
+                options.plugins === undefined ? {} : { createPrivateTools: options.plugins },
               ),
             {
               transport: pinned as unknown as ModernTransport,
@@ -159,7 +157,13 @@ export async function serveNegotiatedStdio(
           );
         } else {
           const server = createMcpServer(engine, {});
-          options.registerLegacy?.(server);
+          if (options.plugins !== undefined)
+            for (const tool of options.plugins(engine, {})) {
+              const { name, ...definition } = tool.definition;
+              server.registerTool(name, definition, (input, extra) =>
+                tool.call(input, progressReporter(extra)),
+              );
+            }
           server.server.onerror = reportError;
           void server.connect(new FinalProtocolTransport(pinned)).catch((error: unknown) => {
             options.onFailure(error);
