@@ -5848,13 +5848,17 @@ function applyCreateWorld(
         message: note.message,
         ...(note.details === undefined ? {} : { details: note.details }),
       })),
-      {
-        code: 'MAP_SYNTHESIS_CHECK_READY',
-        severity: 'info',
-        category: 'map',
-        operationId: operation.id,
-        message: `Every river of the model reaches its mouth over the synthesised relief of a ${world.summary.width}x${world.summary.height} map; nothing was written`,
-      },
+      ...(world.notes.some(({ severity }) => severity === 'error')
+        ? []
+        : ([
+            {
+              code: 'MAP_SYNTHESIS_CHECK_READY',
+              severity: 'info',
+              category: 'map',
+              operationId: operation.id,
+              message: `Every river of the model reaches its mouth over the synthesised relief of a ${world.summary.width}x${world.summary.height} map; nothing was written`,
+            },
+          ] satisfies Diagnostic[])),
     ];
   const roots =
     operation.replaceBaseGame === false

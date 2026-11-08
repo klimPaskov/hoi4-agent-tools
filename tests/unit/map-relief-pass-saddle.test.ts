@@ -136,6 +136,32 @@ describe('declared passes are saddles whatever else stands there', () => {
     expect(notes.map(({ code }) => code)).not.toContain('MAP_PASS_NOT_LOWER');
   });
 
+  it('keeps checking passes after a river fails in the river preview, but a write still stops', () => {
+    // A brook on an island whose mouth is a river on the mainland cannot reach it.
+    const geography = resolve(
+      model({
+        lands: [
+          { id: 'land', polygons: [square(0.5, 0.82, 0.72, 0.99)] },
+          { id: 'isle', polygons: [square(0.1, 0.1, 0.2, 0.2)] },
+        ],
+        rivers: [
+          { id: 'main', source: [0.66, 0.97], mouth: { sea: 'sea' }, size: 2 },
+          { id: 'stranded', source: [0.15, 0.15], mouth: { river: 'main' }, size: 1 },
+        ],
+      }),
+    );
+    const kind = rasterizeGeographyKind(geography, { width: WIDTH, height: HEIGHT, seed: 3 });
+    const notes = checkTerrainRivers({ geography, width: WIDTH, height: HEIGHT, seed: 3, kind });
+    const unreachable = notes.find(({ code }) => code === 'MAP_RIVER_UNREACHABLE_MOUTH');
+    expect(unreachable).toMatchObject({
+      severity: 'error',
+      details: { rivers: [expect.objectContaining({ riverId: 'stranded' })] },
+    });
+    expect(() =>
+      synthesizeTerrain({ geography, width: WIDTH, height: HEIGHT, seed: 3, kind }),
+    ).toThrowError(expect.objectContaining({ code: 'MAP_RIVER_UNREACHABLE_MOUTH' }));
+  });
+
   it('checks the pass in the river preview, without building the full relief', () => {
     const geography = resolve(model());
     const kind = rasterizeGeographyKind(geography, { width: WIDTH, height: HEIGHT, seed: 3 });
