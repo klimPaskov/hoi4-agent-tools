@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SCAN_MAX_BYTES,
   DEFAULT_SCAN_MAX_FILE_BYTES,
@@ -19,6 +19,7 @@ import {
   defaultConfigurationPath,
 } from '../../src/hoi4_agent_tools/runtime.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
+import { TransactionManager } from '../../src/hoi4_agent_tools/core/transactions.js';
 
 const temporaryRoots: string[] = [];
 const originalConfigPath = process.env.HOI4_AGENT_CONFIG;
@@ -446,5 +447,66 @@ describe('configuration loading and path selection', () => {
 
     delete process.env.HOI4_AGENT_CONFIG;
     expect(configurationPath([])).toBe(defaultConfigurationPath());
+  });
+
+  async function blockedRecovery() {
+    const root = await mkdtemp(path.join(tmpdir(), 'hoi4-startup-recovery-'));
+    temporaryRoots.push(root);
+    const modRoot = path.join(root, 'mod');
+    await mkdir(path.join(modRoot, 'common'), { recursive: true });
+    const filePath = await configurationFile({
+      version: 1,
+      serverStateRoot: path.join(root, 'state'),
+      workspaces: [{ id: 'fixture', name: 'Fixture', root: modRoot }],
+    });
+    let release: () => void = () => undefined;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const recover = vi
+      .spyOn(TransactionManager.prototype, 'recover')
+      .mockImplementation(async () => {
+        await blocker;
+        return [];
+      });
+    return { filePath, recover, release };
+  }
+
+  it('returns before journal recovery finishes when recovery runs in the background', async () => {
+    const { filePath, recover, release } = await blockedRecovery();
+    try {
+      const engine = await createEngine(filePath, { recovery: 'background' });
+      expect(recover).toHaveBeenCalledWith('fixture');
+      let recovered = false;
+      void engine.recovered().then(() => {
+        recovered = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(recovered).toBe(false);
+      release();
+      await engine.recovered();
+      expect(recovered).toBe(true);
+    } finally {
+      recover.mockRestore();
+    }
+  });
+
+  it('still waits for journal recovery by default', async () => {
+    const { filePath, recover, release } = await blockedRecovery();
+    try {
+      let created = false;
+      const creation = createEngine(filePath).then((engine) => {
+        created = true;
+        return engine;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(recover).toHaveBeenCalledWith('fixture');
+      expect(created).toBe(false);
+      release();
+      await creation;
+      expect(created).toBe(true);
+    } finally {
+      recover.mockRestore();
+    }
   });
 });

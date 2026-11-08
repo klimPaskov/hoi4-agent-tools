@@ -78,7 +78,6 @@ export async function launchSmokeServer(
   for (const [key, value] of Object.entries(process.env))
     if (value !== undefined) environment[key] = value;
   environment.HOI4_AGENT_CONFIG = configPath;
-  delete environment.HOI4_AGENT_TOOLS_CHAOSX;
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: packagedEntry === undefined ? [tsxCli, stdioEntry] : [packagedEntry],

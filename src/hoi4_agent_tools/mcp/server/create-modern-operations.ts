@@ -26,7 +26,7 @@ import { registerModernPrompts } from '../prompts/register-modern.js';
 import { jobControlTools } from '../tools/job.js';
 import { referenceTools } from '../tools/reference.js';
 import { isReferenceTool, ReferenceToolService } from '../../reference/operations.js';
-import type { createChaosxToolOperations } from '../tools/chaosx.js';
+import type { PluginToolFactory } from '../plugins.js';
 import { ModernTaskAdapter, TASKS_EXTENSION } from './modern-tasks.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
 import { jobProgressReporter, modernProgressReporter, withProgressHeartbeat } from './progress.js';
@@ -54,15 +54,15 @@ function clientCapabilities(envelope: unknown) {
 
 /**
  * Modern operation/task factory, shared by the connection and HTTP serving entries.
- * The stdio entry explicitly opts into the two private ChaosX tools when configured.
- * HTTP remains mod-independent and never enables that private extension.
+ * The stdio entry adds the tools of the plugins its configuration lists (M-14).
+ * HTTP remains mod-independent and never loads a plugin.
  */
 export function createModernOperationServer(
   engine: CoreEngine,
   context: OperationContext = {},
   tasks = new OperationTaskService(engine),
   options: {
-    createPrivateTools?: typeof createChaosxToolOperations;
+    createPrivateTools?: PluginToolFactory;
   } = {},
 ): ModernTaskRoutingServer {
   const adapter = new ModernTaskAdapter(tasks);
@@ -77,7 +77,7 @@ export function createModernOperationServer(
     ...jobControlTools,
     ...(privateOperations === undefined
       ? []
-      : [privateOperations.visual.definition, privateOperations.country.definition]),
+      : privateOperations.map(({ definition }) => definition)),
   ];
   const server = new ModernTaskRoutingServer(
     { name: PACKAGE_NAME, version: PACKAGE_VERSION },
@@ -203,28 +203,10 @@ export function createModernOperationServer(
           operationContext === context || options.createPrivateTools === undefined
             ? privateOperations
             : options.createPrivateTools(engine, operationContext);
-        const progress = modernProgressReporter(extra);
-        if (definition.name === operations.visual.definition.name) {
-          const result = await operations.visual.call(
-            operations.visual.definition.inputSchema.parse(arguments_),
-            progress,
-          );
-          if (result.isError !== true)
-            operations.visual.definition.outputSchema.parse(result.structuredContent);
-          return CallToolResultSchema.parse({
-            ...result,
-            resultType: 'complete',
-            ttlMs: 0,
-            cacheScope: 'private',
-          });
-        }
-        if (definition.name === operations.country.definition.name) {
-          const result = await operations.country.call(
-            operations.country.definition.inputSchema.parse(arguments_),
-            progress,
-          );
-          if (result.isError !== true)
-            operations.country.definition.outputSchema.parse(result.structuredContent);
+        const tool = operations.find((candidate) => candidate.definition.name === definition.name);
+        if (tool !== undefined) {
+          const result = await tool.call(input.data, modernProgressReporter(extra));
+          if (result.isError !== true) definition.outputSchema?.parse(result.structuredContent);
           return CallToolResultSchema.parse({
             ...result,
             resultType: 'complete',

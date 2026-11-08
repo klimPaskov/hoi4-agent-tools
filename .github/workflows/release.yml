@@ -301,8 +301,11 @@ jobs:
       - name: Cryptographically verify npm integrity, OIDC identity, and Sigstore inclusion
         run: npm run publication:verify
         env:
+          # Authenticated GitHub API calls; an anonymous runner shares a 60-per-hour limit.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLICATION_VERIFY_SCOPE: npm
-          PUBLICATION_VERIFY_ATTEMPTS: 60
+          # npm can hold a new version for processing for many minutes before serving it.
+          PUBLICATION_VERIFY_ATTEMPTS: 240
           PUBLICATION_VERIFY_DELAY_MS: 5000
 
   publish_image:
@@ -490,6 +493,7 @@ jobs:
       - name: Verify anonymous digest, SBOM and provenance subjects, and source SHA
         run: npm run publication:verify
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLICATION_VERIFY_SCOPE: ghcr
           PUBLICATION_VERIFY_ATTEMPTS: 12
           PUBLICATION_VERIFY_DELAY_MS: 5000

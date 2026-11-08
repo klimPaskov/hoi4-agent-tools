@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -141,8 +141,12 @@ async function waitForExit(child: ChildProcessWithoutNullStreams): Promise<numbe
   });
 }
 
-async function overflowConfig(prefix: string): Promise<string> {
-  const temporary = await mkdtemp(path.join(tmpdir(), prefix));
+async function overflowConfig(
+  prefix: string,
+  plugins?: (temporary: string) => Promise<string[]>,
+): Promise<string> {
+  // The canonical path, so a plugin listed under it never reads as passing through a link.
+  const temporary = await realpath(await mkdtemp(path.join(tmpdir(), prefix)));
   const workspace = path.join(temporary, 'mod');
   await mkdir(workspace);
   const config = path.join(temporary, 'config.json');
@@ -152,9 +156,42 @@ async function overflowConfig(prefix: string): Promise<string> {
       version: 1,
       serverStateRoot: path.join(temporary, 'server-state'),
       workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
+      ...(plugins === undefined ? {} : { plugins: await plugins(temporary) }),
     })}\n`,
   );
   return config;
+}
+
+/** A synthetic plugin with one tool, written as a .mjs file in the test's own folder. */
+async function writeEchoPlugin(folder: string, toolName = 'acme.echo'): Promise<string> {
+  const file = path.join(folder, 'acme-plugin.mjs');
+  await writeFile(
+    file,
+    `export default async function createPlugin(host) {
+  const { z } = await host.dependency('zod');
+  const { emptyServiceResult } = await host.importServerModule('core/result.js');
+  const { toolResult } = await host.importServerModule('core/operation-result.js');
+  const input = z.object({ word: z.string().max(64) }).strict();
+  return () => [
+    {
+      definition: {
+        name: ${JSON.stringify(toolName)},
+        title: 'Echo a word',
+        description: 'Synthetic test plugin tool.',
+        inputSchema: input,
+        annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      },
+      call: async (value) => {
+        const result = emptyServiceResult('fixture', { echoed: value.word, serverVersion: host.serverVersion });
+        result.code = 'ACME_ECHOED';
+        return toolResult(result);
+      },
+    },
+  ];
+}
+`,
+  );
+  return file;
 }
 
 describe('local stdio transport', () => {
@@ -405,8 +442,7 @@ describe('local stdio transport', () => {
     );
     const listed = await waitForMessage(child, 2, stdoutLines);
     expect(listed).toMatchObject({ jsonrpc: '2.0', result: { tools: expect.any(Array) } });
-    expect(listedToolNames(listed)).not.toContain('chaosx.focus_country_assets');
-    expect(listedToolNames(listed)).not.toContain('chaosx.visual_revision');
+    expect(listedToolNames(listed).filter((name) => !name.startsWith('hoi4.'))).toEqual([]);
     child.stdin.write(
       `${JSON.stringify({
         jsonrpc: '2.0',
@@ -426,9 +462,11 @@ describe('local stdio transport', () => {
     await stop(child);
   }, 60_000);
 
-  it('exposes optional ChaosX tools only when the process flag is enabled', async () => {
-    const config = await overflowConfig('hoi4-agent-stdio-chaosx-');
-    const child = launch(config, { HOI4_AGENT_TOOLS_CHAOSX: '1' });
+  it('lists the tools of a configured plugin on the legacy era, and runs them', async () => {
+    const config = await overflowConfig('hoi4-agent-stdio-plugin-', async (folder) => [
+      await writeEchoPlugin(folder),
+    ]);
+    const child = launch(config);
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
     const stdoutLines: string[] = [];
@@ -440,7 +478,7 @@ describe('local stdio transport', () => {
         params: {
           protocolVersion: '2025-11-25',
           capabilities: {},
-          clientInfo: { name: 'chaosx-stdio-test', version: '1.0.0' },
+          clientInfo: { name: 'plugin-stdio-test', version: '1.0.0' },
         },
       })}\n`,
     );
@@ -451,50 +489,123 @@ describe('local stdio transport', () => {
     child.stdin.write(
       `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`,
     );
-
-    const tools = listedToolNames(await waitForMessage(child, 2, stdoutLines));
-    expect(tools).toContain('chaosx.focus_country_assets');
-    expect(tools).toContain('chaosx.visual_revision');
+    expect(listedToolNames(await waitForMessage(child, 2, stdoutLines))).toContain('acme.echo');
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'acme.echo', arguments: { word: 'hello' } },
+      })}\n`,
+    );
+    expect(await waitForMessage(child, 3, stdoutLines)).toMatchObject({
+      result: {
+        structuredContent: { status: 'ok', code: 'ACME_ECHOED', data: { echoed: 'hello' } },
+      },
+    });
     await stop(child);
     expect(stderr).not.toContain('"event":"startup_failed"');
   }, 30_000);
 
-  it('exposes and executes optional ChaosX tools on the modern stdio era only when enabled', async () => {
-    const config = await overflowConfig('hoi4-agent-stdio-modern-chaosx-');
-    const child = launch(config, { HOI4_AGENT_TOOLS_CHAOSX: '1' });
+  it('lists and runs the tools of a configured plugin on the modern stdio era', async () => {
+    const config = await overflowConfig('hoi4-agent-stdio-modern-plugin-', async (folder) => [
+      await writeEchoPlugin(folder),
+    ]);
+    const child = launch(config);
     const lines: string[] = [];
     const meta = {
       'io.modelcontextprotocol/protocolVersion': '2026-07-28',
-      'io.modelcontextprotocol/clientInfo': { name: 'chaosx-modern-test', version: '1' },
+      'io.modelcontextprotocol/clientInfo': { name: 'plugin-modern-test', version: '1' },
       'io.modelcontextprotocol/clientCapabilities': {},
     };
     const request = (id: number, method: string, params: Record<string, unknown> = {}) =>
       `${JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, _meta: meta } })}\n`;
     try {
       child.stdin.write(request(1, 'server/discover'));
-      expect(await waitForMessage(child, 1, lines)).toMatchObject({
-        result: { supportedVersions: ['2026-07-28'] },
-      });
+      await waitForMessage(child, 1, lines);
       child.stdin.write(request(2, 'tools/list'));
-      const names = listedToolNames(await waitForMessage(child, 2, lines));
-      expect(names).toHaveLength(36);
-      expect(names).toContain('chaosx.focus_country_assets');
-      expect(names).toContain('chaosx.visual_revision');
+      expect(listedToolNames(await waitForMessage(child, 2, lines))).toContain('acme.echo');
       child.stdin.write(
-        request(3, 'tools/call', {
-          name: 'chaosx.focus_country_assets',
-          arguments: { workspaceId: 'fixture', countryTags: ['AAA'] },
-        }),
+        request(3, 'tools/call', { name: 'acme.echo', arguments: { word: 'modern' } }),
       );
       expect(await waitForMessage(child, 3, lines)).toMatchObject({
         result: {
           resultType: 'complete',
-          structuredContent: { status: 'ok', code: 'CHAOSX_COUNTRY_ASSETS_RENDERED' },
+          structuredContent: { status: 'ok', code: 'ACME_ECHOED', data: { echoed: 'modern' } },
         },
       });
+      child.stdin.write(request(4, 'tools/call', { name: 'acme.echo', arguments: { word: 3 } }));
+      expect(await waitForMessage(child, 4, lines)).toMatchObject({ result: { isError: true } });
     } finally {
       await stop(child);
     }
+  }, 60_000);
+
+  it('skips a listed plugin that does not exist and refuses one that is not a plain module', async () => {
+    const missing = await overflowConfig('hoi4-agent-stdio-plugin-missing-', async (folder) => [
+      path.join(folder, 'absent-plugin.mjs'),
+    ]);
+    const child = launch(missing);
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+    const lines: string[] = [];
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'plugin-missing-test', version: '1.0.0' },
+        },
+      })}\n`,
+    );
+    await waitForMessage(child, 1, lines);
+    await stop(child);
+    expect(stderr).toContain('"event":"plugin_skipped"');
+    expect(stderr).not.toContain('startup_failed');
+
+    // A path with a wrong extension never loads, and the server says why at startup.
+    const wrong = await overflowConfig('hoi4-agent-stdio-plugin-wrong-', async (folder) => {
+      const file = path.join(folder, 'plugin.txt');
+      await writeFile(file, 'export default () => () => [];\n');
+      return [file];
+    });
+    const refused = launch(wrong);
+    let refusedStderr = '';
+    refused.stderr.on('data', (chunk: Buffer) => (refusedStderr += chunk.toString('utf8')));
+    expect(await new Promise<number | null>((resolve) => refused.once('exit', resolve))).toBe(1);
+    expect(refusedStderr).toContain('PLUGIN_PATH_INVALID');
+  }, 60_000);
+
+  it('refuses a plugin tool that takes a reserved name', async () => {
+    const config = await overflowConfig('hoi4-agent-stdio-plugin-reserved-', async (folder) => [
+      await writeEchoPlugin(folder, 'hoi4.echo'),
+    ]);
+    const child = launch(config);
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'plugin-reserved-test', version: '1.0.0' },
+        },
+      })}\n`,
+    );
+    const lines: string[] = [];
+    // The legacy server builds the plugin tools at its first message; the name check throws there.
+    await Promise.race([
+      waitForMessage(child, 1, lines).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 15_000)),
+    ]);
+    await stop(child);
+    expect(stderr).toContain('must be named');
   }, 60_000);
 
   it('writes startup failures only to stderr', async () => {

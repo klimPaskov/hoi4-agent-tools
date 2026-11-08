@@ -262,7 +262,20 @@ async function configurationExists(configPath: string): Promise<boolean> {
   }
 }
 
-export async function createEngine(configPath = configurationPath()): Promise<CoreEngine> {
+export interface CreateEngineOptions {
+  /**
+   * `wait` (default) returns once interrupted rewrites in every workspace are recovered.
+   * `background` returns before that: recovery reads every retained journal, which takes seconds
+   * once a workspace holds large map writes, and a stdio client gives up on a slow handshake.
+   * The caller must hold workspace requests until `engine.recovered()` settles.
+   */
+  recovery?: 'wait' | 'background';
+}
+
+export async function createEngine(
+  configPath = configurationPath(),
+  options: CreateEngineOptions = {},
+): Promise<CoreEngine> {
   let configuration: ServerConfiguration;
   try {
     configuration = await loadConfiguration(configPath);
@@ -293,6 +306,8 @@ export async function createEngine(configPath = configurationPath()): Promise<Co
     ],
   }).catch(() => undefined);
   const engine = new CoreEngine(resolver);
-  await engine.initialize();
+  // A failed background recovery is the caller's to report through `engine.recovered()`.
+  if (options.recovery === 'background') engine.initialize().catch(() => undefined);
+  else await engine.initialize();
   return engine;
 }

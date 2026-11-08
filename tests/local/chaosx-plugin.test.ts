@@ -10,7 +10,33 @@ import { serverConfigurationSchema } from '../../src/hoi4_agent_tools/core/confi
 import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createMcpServer } from '../../src/hoi4_agent_tools/mcp/server/create.js';
-import { registerChaosxTools } from '../../src/hoi4_agent_tools/mcp/tools/chaosx.js';
+import { loadPlugins } from '../../src/hoi4_agent_tools/mcp/plugins.js';
+import { progressReporter } from '../../src/hoi4_agent_tools/mcp/server/progress.js';
+import { PACKAGE_VERSION } from '../../src/hoi4_agent_tools/version.js';
+
+/**
+ * The ChaosX tools live in a private plugin (decision M-14). This test loads that plugin through
+ * the server configuration's `plugins` key and runs both tools, so it needs a checkout of the
+ * private repository: set CHAOSX_PLUGIN_PATH to its built chaosx-plugin.mjs. Without it the suite
+ * is skipped.
+ */
+const pluginPath = process.env.CHAOSX_PLUGIN_PATH;
+
+/** Register the plugin the configuration lists on a server, as the stdio entry does. */
+async function registerChaosxTools(
+  server: ReturnType<typeof createMcpServer>,
+  engine: CoreEngine,
+  context: object,
+): Promise<void> {
+  const factory = await loadPlugins(engine.resolver.config().plugins, PACKAGE_VERSION);
+  if (factory === undefined) throw new Error('The configuration lists no plugin');
+  for (const tool of factory(engine, context)) {
+    const { name, ...definition } = tool.definition;
+    server.registerTool(name, definition, (input, extra) =>
+      tool.call(input, progressReporter(extra)),
+    );
+  }
+}
 
 const cleanup: Array<() => Promise<void>> = [];
 
@@ -24,8 +50,8 @@ afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((callback) => callback()));
 });
 
-describe('ChaosX-only country assets MCP integration', () => {
-  it('is gated from normal servers and returns flag and leader PNGs for ChaosX', async () => {
+describe.skipIf(pluginPath === undefined)('ChaosX plugin MCP integration', () => {
+  it('returns flag and leader PNGs for ChaosX', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'hoi4-chaosx-country-assets-'));
     const mod = path.join(temporary, 'mod');
     const artifactRoot = path.join(temporary, 'artifacts');
@@ -63,6 +89,7 @@ describe('ChaosX-only country assets MCP integration', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      plugins: [pluginPath!],
       serverStateRoot: path.join(temporary, 'server-state'),
       storageRoots: [artifactRoot, cacheRoot],
       workspaces: [
@@ -93,7 +120,7 @@ describe('ChaosX-only country assets MCP integration', () => {
     await ordinaryServer.close();
 
     const server = createMcpServer(engine);
-    registerChaosxTools(server, engine, {});
+    await registerChaosxTools(server, engine, {});
     const client = new Client({ name: 'chaosx-integration-test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport as unknown as Transport);
@@ -169,6 +196,7 @@ describe('ChaosX-only country assets MCP integration', () => {
 
     const configuration = serverConfigurationSchema.parse({
       version: 1,
+      plugins: [pluginPath!],
       serverStateRoot: path.join(temporary, 'server-state'),
       storageRoots: [artifactRoot, cacheRoot],
       workspaces: [
@@ -184,7 +212,7 @@ describe('ChaosX-only country assets MCP integration', () => {
     const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
     await engine.initialize();
     const server = createMcpServer(engine);
-    registerChaosxTools(server, engine, {});
+    await registerChaosxTools(server, engine, {});
     const client = new Client({ name: 'chaosx-gui-revision-test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport as unknown as Transport);

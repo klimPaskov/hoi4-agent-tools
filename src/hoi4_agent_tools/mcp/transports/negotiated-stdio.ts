@@ -1,17 +1,32 @@
 import type { Readable, Writable } from 'node:stream';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import type { Transport as ModernTransport } from '@modelcontextprotocol/server';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CoreEngine } from '../../core/engine.js';
-import type { createChaosxToolOperations } from '../tools/chaosx.js';
+import type { PluginToolFactory } from '../plugins.js';
+import { progressReporter } from '../server/progress.js';
 import { createMcpServer } from '../server/create.js';
 import { createModernOperationServer } from '../server/create-modern-operations.js';
 import { BoundedStdioServerTransport, STDIO_MAX_FRAME_BYTES } from './bounded-stdio.js';
 import { FinalProtocolTransport } from './protocol-gate.js';
 
 const MAX_QUEUED_MESSAGES = 128;
+
+/**
+ * Requests that only describe the server. They are answered while startup recovery still runs;
+ * every other message waits for it, in arrival order, so no request reads or writes a workspace
+ * whose interrupted rewrite is not yet recovered.
+ */
+const ANSWERED_BEFORE_RECOVERY: ReadonlySet<string> = new Set([
+  'initialize',
+  'notifications/initialized',
+  'ping',
+  'server/discover',
+  'tools/list',
+  'prompts/list',
+  'logging/setLevel',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -84,8 +99,8 @@ class PinnedStdioTransport implements Transport {
 export interface NegotiatedStdioOptions {
   stdin?: Readable;
   stdout?: Writable;
-  createModernPrivateTools?: typeof createChaosxToolOperations;
-  registerLegacy?: (server: McpServer) => void;
+  /** The tools of the configured plugins (M-14); the server lists them beside its own. */
+  plugins?: PluginToolFactory;
   onerror: (error: Error) => void;
   onFailure: (error: unknown) => void;
   /** Observes every message in both directions, for example to track client activity. */
@@ -121,8 +136,7 @@ export async function serveNegotiatedStdio(
     reportError(error);
     pinned?.onerror(error);
   };
-  physical.onmessage = (message) => {
-    observer?.received(message);
+  const deliver = (message: JSONRPCMessage): void => {
     if (pinned === undefined) {
       pinned = new PinnedStdioTransport(physical, reportError);
       try {
@@ -133,9 +147,7 @@ export async function serveNegotiatedStdio(
                 engine,
                 {},
                 undefined,
-                options.createModernPrivateTools === undefined
-                  ? {}
-                  : { createPrivateTools: options.createModernPrivateTools },
+                options.plugins === undefined ? {} : { createPrivateTools: options.plugins },
               ),
             {
               transport: pinned as unknown as ModernTransport,
@@ -145,7 +157,13 @@ export async function serveNegotiatedStdio(
           );
         } else {
           const server = createMcpServer(engine, {});
-          options.registerLegacy?.(server);
+          if (options.plugins !== undefined)
+            for (const tool of options.plugins(engine, {})) {
+              const { name, ...definition } = tool.definition;
+              server.registerTool(name, definition, (input, extra) =>
+                tool.call(input, progressReporter(extra)),
+              );
+            }
           server.server.onerror = reportError;
           void server.connect(new FinalProtocolTransport(pinned)).catch((error: unknown) => {
             options.onFailure(error);
@@ -159,6 +177,49 @@ export async function serveNegotiatedStdio(
       }
     }
     pinned.receive(message);
+  };
+  // Startup recovery: `held` until it ends, then `open`; `closed` drops every later message.
+  let recovery: 'held' | 'open' | 'closed' = 'held';
+  let heldBytes = 0;
+  const held: JSONRPCMessage[] = [];
+  const closeHeld = (): void => {
+    recovery = 'closed';
+    held.length = 0;
+    heldBytes = 0;
+    void physical.close();
+  };
+  engine.recovered().then(
+    () => {
+      if (recovery === 'closed') return;
+      recovery = 'open';
+      heldBytes = 0;
+      for (const message of held.splice(0)) deliver(message);
+    },
+    (error: unknown) => {
+      if (recovery === 'closed') return;
+      options.onFailure(error);
+      closeHeld();
+    },
+  );
+  physical.onmessage = (message) => {
+    observer?.received(message);
+    if (recovery === 'closed') return;
+    if (
+      recovery === 'open' ||
+      (held.length === 0 &&
+        (!('method' in message) || ANSWERED_BEFORE_RECOVERY.has(message.method)))
+    ) {
+      deliver(message);
+      return;
+    }
+    const bytes = Buffer.byteLength(JSON.stringify(message)) + 1;
+    if (held.length >= MAX_QUEUED_MESSAGES || bytes > STDIO_MAX_FRAME_BYTES - heldBytes) {
+      reportError(new Error('Requests held during startup recovery exceeded their bounded limit'));
+      closeHeld();
+      return;
+    }
+    held.push(message);
+    heldBytes += bytes;
   };
   await physical.start();
   return physical;
