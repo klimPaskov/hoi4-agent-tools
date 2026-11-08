@@ -48,6 +48,7 @@ Both native and ordinary calls use that same receipt, while a conflicting retry 
 
 The server binds an applied rewrite to its authenticated transaction journal before source replacement starts.
 If execution stops after a commit, recovery reads that journal and reconstructs the domain result without planning or applying the rewrite again.
+At startup the server checks every retained journal and recovers interrupted ones before any call reads or writes a workspace. A stdio server answers `initialize`, `ping`, `server/discover`, `tools/list`, `prompts/list` and `logging/setLevel` meanwhile and holds other requests, in arrival order, until the check ends; more than 128 held requests, or a failed check, closes the connection. The HTTP server finishes the check before it listens.
 Blocked and unchanged plans do not bind a transaction because they never mutate source.
 
 ## Cancellation and recovery
