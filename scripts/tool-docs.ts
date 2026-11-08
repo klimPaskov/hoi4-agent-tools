@@ -42,6 +42,7 @@ export const TOOL_GROUPS: ReadonlyArray<{ heading: string; tools: readonly strin
       'hoi4.skill',
     ],
   },
+  { heading: 'Localisation', tools: ['hoi4.localisation_write'] },
   {
     heading: 'Focus trees',
     tools: ['hoi4.focus_inspect', 'hoi4.focus_render', 'hoi4.focus_rewrite'],
