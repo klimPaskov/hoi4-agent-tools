@@ -11,6 +11,7 @@ import { ServerRegistry } from '../hoi4_agent_tools/core/server-registry.js';
 import { StdioLifetime } from '../hoi4_agent_tools/mcp/transports/stdio-lifetime.js';
 import { loadPlugins } from '../hoi4_agent_tools/mcp/plugins.js';
 import { PACKAGE_VERSION } from '../hoi4_agent_tools/version.js';
+import { DEFAULT_PROFILES } from '../hoi4_agent_tools/mcp/server/tool-profiles.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
 
 /**
@@ -29,7 +30,10 @@ function idleExitMinutes(configured: number): number {
 
 async function main(): Promise<void> {
   // The handshake must not wait for journal recovery; the transport holds workspace requests.
-  const engine = await createEngine(undefined, { recovery: 'background' });
+  const engine = await createEngine(undefined, {
+    recovery: 'background',
+    defaultProfiles: DEFAULT_PROFILES,
+  });
   // Plugins load only from the paths the server configuration lists (M-14).
   const plugins = await loadPlugins(
     engine.resolver.config().plugins,

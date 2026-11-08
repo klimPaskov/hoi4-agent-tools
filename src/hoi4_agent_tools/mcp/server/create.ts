@@ -18,6 +18,7 @@ import { installRequestLifecycle } from './request-lifecycle.js';
 import { PersistentJobTaskStore } from './job-task-store.js';
 import { SERVER_INSTRUCTIONS } from './instructions.js';
 import { releaseIdleWorkers } from '../../core/operation-tasks.js';
+import { profileInstructions, resolveProfiles } from './tool-profiles.js';
 
 export { SERVER_INSTRUCTIONS } from './instructions.js';
 
@@ -35,7 +36,9 @@ export function createMcpServer(engine: CoreEngine, context: ServerContext = {})
         logging: {},
         tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
       },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions:
+        SERVER_INSTRUCTIONS +
+        (profileInstructions(resolveProfiles(engine.resolver.config().profiles)) ?? ''),
       taskStore,
     },
   );
