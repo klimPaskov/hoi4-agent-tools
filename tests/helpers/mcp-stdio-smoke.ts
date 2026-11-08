@@ -78,6 +78,8 @@ export async function launchSmokeServer(
   for (const [key, value] of Object.entries(process.env))
     if (value !== undefined) environment[key] = value;
   environment.HOI4_AGENT_CONFIG = configPath;
+  // The smoke checks call every tool, so they list every profile; the default is core only.
+  environment.HOI4_AGENT_TOOLS_PROFILES = 'all';
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: packagedEntry === undefined ? [tsxCli, stdioEntry] : [packagedEntry],

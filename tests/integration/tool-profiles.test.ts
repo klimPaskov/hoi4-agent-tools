@@ -93,6 +93,11 @@ describe('tool profiles', () => {
     expect((await connected(['all'])).getInstructions()).not.toContain(PROFILES_ENV);
   });
 
+  it('lists a plugin tool in every profile, because the configuration that loads it chose it', () => {
+    expect([...profilesOf('acme.echo')].sort()).toEqual(['advanced', 'core', 'map']);
+    expect(profilesOf('hoi4.focus_render')).toEqual(['advanced']);
+  });
+
   it('reads the profiles a client registration asks for, and refuses unknown names', () => {
     expect(parseProfilesEnv(undefined)).toBeUndefined();
     expect(parseProfilesEnv(' core, Map ')).toEqual(['core', 'map']);

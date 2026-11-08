@@ -20,7 +20,13 @@ function launch(
 ): ChildProcessWithoutNullStreams {
   return spawn(process.execPath, [tsxCli, stdioEntry], {
     cwd: projectRoot,
-    env: { ...process.env, HOI4_AGENT_CONFIG: config, ...extraEnvironment },
+    // These tests count every tool, so they ask for every profile; the default is core only.
+    env: {
+      ...process.env,
+      HOI4_AGENT_CONFIG: config,
+      HOI4_AGENT_TOOLS_PROFILES: 'all',
+      ...extraEnvironment,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });

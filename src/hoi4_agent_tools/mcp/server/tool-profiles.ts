@@ -40,6 +40,9 @@ const jobTools = new Set(['hoi4.job_inspect', 'hoi4.job_cancel']);
 
 /** The profiles a tool belongs to. */
 export function profilesOf(name: string): readonly ToolProfile[] {
+  // A plugin tool (ADR 0081) is listed by every session: the configuration that loads the plugin
+  // is the choice, so a profile never hides it.
+  if (!name.startsWith('hoi4.')) return TOOL_PROFILES;
   if (coreTools.has(name)) return ['core'];
   if (mapTools.has(name)) return ['map'];
   if (jobTools.has(name)) return ['map', 'advanced'];
