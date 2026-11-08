@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -53,6 +53,9 @@ async function connect() {
     "[12:00:01][no_game_date]: Invalid trigger 'stability' in events/health.txt line : 5\n",
   );
   await writeFile(path.join(user, 'logs', 'system.log'), '[12:00:00][x]: Active Mod: Health mod\n');
+  // The log must be newer than every mod file, whatever the clock resolution of the disk.
+  const later = new Date(Date.now() + 60_000);
+  await utimes(path.join(user, 'logs', 'error.log'), later, later);
   const resolver = await WorkspaceResolver.create(
     serverConfigurationSchema.parse({
       version: 1,
