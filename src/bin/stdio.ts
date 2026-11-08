@@ -28,15 +28,15 @@ function idleExitMinutes(configured: number): number {
 }
 
 async function main(): Promise<void> {
-  const engine = await createEngine();
+  // The handshake must not wait for journal recovery; the transport holds workspace requests.
+  const engine = await createEngine(undefined, { recovery: 'background' });
   // Plugins load only from the paths the server configuration lists (M-14).
   const plugins = await loadPlugins(
     engine.resolver.config().plugins,
     PACKAGE_VERSION,
     (file, reason) =>
       process.stderr.write(
-        `${canonicalJson({ level: 'warn', event: 'plugin_skipped', plugin: path.basename(file), reason })}
-`,
+        `${canonicalJson({ level: 'warn', event: 'plugin_skipped', plugin: path.basename(file), reason })}\n`,
       ),
   );
   const onerror = (error: Error): void => {
