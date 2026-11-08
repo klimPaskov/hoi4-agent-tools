@@ -32,9 +32,10 @@ The automatic configuration works like this:
 | Storage                | Default location                                                                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `serverStateRoot`      | `$XDG_STATE_HOME/hoi4-agent-tools/state`, else `%LOCALAPPDATA%\hoi4-agent-tools\state`, else `~/.local/state/hoi4-agent-tools/state`               |
+| `docsRoot`             | `$XDG_DATA_HOME/hoi4-agent-tools/docs`, else `%LOCALAPPDATA%\hoi4-agent-tools\docs`, else `~/.local/share/hoi4-agent-tools/docs`                   |
 | `workspaceStorageRoot` | `$XDG_DATA_HOME/hoi4-agent-tools/workspaces`, else `%LOCALAPPDATA%\hoi4-agent-tools\workspaces`, else `~/.local/share/hoi4-agent-tools/workspaces` |
 
-`hoi4-agent-tools-setup --init` writes these same two locations into the file it creates.
+`hoi4-agent-tools-setup --init` writes the first two locations into the file it creates. The command-line servers use the `docsRoot` default when the file names none, and read the docs pack that `hoi4-agent-tools-setup --fetch-docs` installs there.
 A hand-written file has no storage defaults: set `serverStateRoot` yourself, and leave out `workspaceStorageRoot` only if generated files may live inside each mod.
 
 What each location holds:

@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "repository": "klimPaskov/Agentic-HOI4-Modding",
+  "commit": "4fc9fe4d7661574657c85ee0431ee51c4cb24420",
+  "folder": "hoi4_wiki",
+  "license": "HOI4 wiki text under CC BY-SA 3.0; kit text under the same terms. Sources and attribution: LICENSE.txt and SOURCES.json in the pack.",
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "sha256": "75d813f7981af94e3d81595ea7df8a2edf7a1c0ad49963a7665d707a5aca6912",
+      "bytes": 2695
+    },
+    {
+      "path": "SOURCES.json",
+      "sha256": "ae3434c463b93de06fadb42b9ad28a1a814104ec835289adebd527f7c290093d",
+      "bytes": 18632
+    },
+    {
+      "path": "achievement_modding.md",
+      "sha256": "68d90f53d0b5c199f73c62cf079915d732433d028799d6392bc19955043a148d",
+      "bytes": 12262
+    },
+    {
+      "path": "ai_focuses.md",
+      "sha256": "43ba060db0942295e7181ada0e8ea5bb725a366553174dcda518e6579758bbe8",
+      "bytes": 8484
+    },
+    {
+      "path": "ai_modding.md",
+      "sha256": "05aaa690a6b28735b560763591c2c06b9135db9f1418a8f5cea77f45c2aa95a0",
+      "bytes": 107207
+    },
+    {
+      "path": "autonomy_state_modding.md",
+      "sha256": "971aa27714204bf4c25520822592ab787caf982ffb6bc4882b0a3bdfb0b4f802",
+      "bytes": 25683
+    },
+    {
+      "path": "balance_of_power_modding.md",
+      "sha256": "64feaed300fe3e418012979e473b4f1a313c8d8c2f6baea7dbc569ffe0fa6f26",
+      "bytes": 28601
+    },
+    {
+      "path": "bookmark_modding.md",
+      "sha256": "b80e0172d6814656e897217243c92d967b64573457b383786030d7c27f3955e2",
+      "bytes": 31958
+    },
+    {
+      "path": "building_modding.md",
+      "sha256": "617336f99037330f8fff5982bdeecffd6985f3fdeffd74db03de371bab443d1d",
+      "bytes": 41994
+    },
+    {
+      "path": "character_modding.md",
+      "sha256": "b3da410bdd6a6267a50391143aac11829fa6c797418079d88c8d0aee3c249272",
+      "bytes": 84847
+    },
+    {
+      "path": "collection_modding.md",
+      "sha256": "1ac9efb48dbf51c0134d90378e91e382173bd17265e5f8fd5eaf237b0a762d88",
+      "bytes": 25763
+    },
+    {
+      "path": "console_commands.md",
+      "sha256": "b1f9f5192043026cf04b043034f8d5fc9fa20e2afe9a188c0634088e0b412f8d",
+      "bytes": 72189
+    },
+    {
+      "path": "cosmetic_tag_modding.md",
+      "sha256": "695d1f0bc642af2cf4965af4f24c4bb0d0d099402f69d5d8278014056a99a87f",
+      "bytes": 14657
+    },
+    {
+      "path": "country_creation.md",
+      "sha256": "641b9d6e385a13d0a56cf53ddfc5b530a690c212aefaec192074af5f559ea00c",
+      "bytes": 67934
+    },
+    {
+      "path": "data_structures.md",
+      "sha256": "4aba022459430e43b52a171a2003f663eab2aac4cccb74f522bb8a125b1cef8e",
+      "bytes": 170312
+    },
+    {
+      "path": "decision_modding.md",
+      "sha256": "7467befc292260b7ac9651cd7fac992f2e1a93213f57ff57f72c56a3b0f4b0f0",
+      "bytes": 48092
+    },
+    {
+      "path": "defines.md",
+      "sha256": "1b10b493c5cb21206a3c49428cbcba07ae2b96cbe46c6b7081053913a1dcc5c7",
+      "bytes": 443227
+    },
+    {
+      "path": "defines_additions.md",
+      "sha256": "fe2d3ce5d77a3791c6292794b369f47ef1cc515e68657ae807cd1efecac0d371",
+      "bytes": 99261
+    },
+    {
+      "path": "division_modding.md",
+      "sha256": "8921d1234159c098fd40946b5eefbcdf1ea0dcbaac599f67c58823da288110d1",
+      "bytes": 35549
+    },
+    {
+      "path": "doctrine_modding.md",
+      "sha256": "48e885cb63518905dab9a9f5a39958e19c8e1b14b83b7bab796b53e3fac67aba",
+      "bytes": 31669
+    },
+    {
+      "path": "effects.md",
+      "sha256": "e24934c914a8a18977ae9d452bd6c2f94a4c5d7691d88bf97a0577fa1bb465a6",
+      "bytes": 324045
+    },
+    {
+      "path": "entity_modding.md",
+      "sha256": "621a72f5aa49ce0349f70e6f5c56b50557d458de3d576738810c4960eba65f6f",
+      "bytes": 13160
+    },
+    {
+      "path": "equipment_modding.md",
+      "sha256": "893c440282d93f03b07803105aa614352bfd3e3a75dec2a516d518bc2706ebdd",
+      "bytes": 31677
+    },
+    {
+      "path": "event_modding.md",
+      "sha256": "22c91d5b6a517672fa4afad1150047a3b06c99269b0b042c70f7cf2b42855baf",
+      "bytes": 57635
+    },
+    {
+      "path": "faction_modding.md",
+      "sha256": "1b65e5eba3ccde6b7c01cdd6af0e94ca70c6899d28d62b4c0d4e98ec9fb39aeb",
+      "bytes": 48236
+    },
+    {
+      "path": "font_modding.md",
+      "sha256": "0b9a848d6da78248ce042d2141df2c6d89b2884aa015f685e9eab3f5178d3504",
+      "bytes": 15737
+    },
+    {
+      "path": "game_rule_modding.md",
+      "sha256": "b45788ee3f832ccf51c767f726feb6bfae50035560e3650d151a20aa93460906",
+      "bytes": 12035
+    },
+    {
+      "path": "graphical_asset_modding.md",
+      "sha256": "130c39f5899e87583df1c22fd8a66ea0790d0bedae7c2f4c21e78b37ef776ec9",
+      "bytes": 24599
+    },
+    {
+      "path": "idea_modding.md",
+      "sha256": "0e59af57b62e6d4deb01c677751ef3dd4a1eb6161ab6543d6376d8a172ed0841",
+      "bytes": 45082
+    },
+    {
+      "path": "ideology_modding.md",
+      "sha256": "cf1221ed9408dfba595fca6cd10a91b10834624361a0fc08bfa328b0369f1fc1",
+      "bytes": 25332
+    },
+    {
+      "path": "intelligence_agency_modding.md",
+      "sha256": "51cf170f9fc2234ba58a389b6d0f0b5356b17c2b6b8deb8b03c0c213a1e6e241",
+      "bytes": 18007
+    },
+    {
+      "path": "intelligence_operation_modding.md",
+      "sha256": "4743574623289175365d5b9beba53e011354b0278b38e8569e2132064b00cb4e",
+      "bytes": 28971
+    },
+    {
+      "path": "interface_modding.md",
+      "sha256": "0985d0a21be7d77ec62708f287ec26a41759e91a16653d2e29e87c29f1aaf0c5",
+      "bytes": 41626
+    },
+    {
+      "path": "list_of_modifiers.md",
+      "sha256": "a3dd3191ee1f6b7e5fb57f05033b2d044e46c236cfb57ac59b4f95224e95ed40",
+      "bytes": 94018
+    },
+    {
+      "path": "localisation.md",
+      "sha256": "04aef4d1598a5b679475eef85bfe09db894d586f9bb215f17b76eab7b674bda2",
+      "bytes": 77993
+    },
+    {
+      "path": "map_modding.md",
+      "sha256": "8bf48bcbf21800323f3c41e36f8026dbbb6a9752d63c9cf2844571271c30d95e",
+      "bytes": 94866
+    },
+    {
+      "path": "map_mode_modding.md",
+      "sha256": "73b0e045833bc38a08bc58a26ed3de763a5d8b8ede93e7f1e7611e4e58a0c441",
+      "bytes": 10496
+    },
+    {
+      "path": "military_industrial_organization_modding.md",
+      "sha256": "ab39f894aca8727bdbd89b6c5b17d49363cb3522c7d68ebf483598f3fdfc071e",
+      "bytes": 54276
+    },
+    {
+      "path": "mod_structure.md",
+      "sha256": "c753d2ce3cef4782121c525eed56748a203502dd07f3c59d689ddfe699592b6d",
+      "bytes": 26953
+    },
+    {
+      "path": "modding.md",
+      "sha256": "3eb086d081f2bfb2ef8037106de30a3bcbc6ed36e82c960576327c9223b34073",
+      "bytes": 86882
+    },
+    {
+      "path": "modifiers.md",
+      "sha256": "72d88d203368f97b929ec4538e3dc892685b315e82e1b0afe6f4be2db44d5593",
+      "bytes": 174630
+    },
+    {
+      "path": "mods.md",
+      "sha256": "b56b57f74138b4f3bcc1f89677d40bfb789cf5241669efc11e7c3a3485296960",
+      "bytes": 2511
+    },
+    {
+      "path": "music_modding.md",
+      "sha256": "6fd0f6cc16eb1521cb59af2bc62f3f436455a1a48c2bc87fb11c1e9db55dee2e",
+      "bytes": 9785
+    },
+    {
+      "path": "namelist_modding.md",
+      "sha256": "8f053d08185d08d59d86e937653a68400a9a8a6495b7be9e9d4aac72454fa3b6",
+      "bytes": 12191
+    },
+    {
+      "path": "national_focus_modding.md",
+      "sha256": "196264a13b00eaf229a7a6fada641146bdbe5a5f0d372557ae4ef61f5aae9543",
+      "bytes": 99638
+    },
+    {
+      "path": "nudger.md",
+      "sha256": "449149b6dc661c1c6a2ec467936a4ba7371d344f1ce6894aeeff25d8204695f4",
+      "bytes": 32335
+    },
+    {
+      "path": "occupation_and_resistance_modding.md",
+      "sha256": "bd87613848bafa90493390ad0330767f91792e63f0661f481deaeb7e0482f7e9",
+      "bytes": 27505
+    },
+    {
+      "path": "on_actions.md",
+      "sha256": "8a7021ccd9a973cfaf28e33563ff8537fbe8d29b8611f64320ac7bc18d50981b",
+      "bytes": 46410
+    },
+    {
+      "path": "particle_modding.md",
+      "sha256": "4e308e246530dd5ae07fb5d7849a80a160b5881a30dfe04a7e94357e697c4114",
+      "bytes": 11094
+    },
+    {
+      "path": "peace_conference_modding.md",
+      "sha256": "7be4e277e8889bae2dbb99848ef94af59cd465d2589d3d6f823bce448b1afd1d",
+      "bytes": 36824
+    },
+    {
+      "path": "portrait_modding.md",
+      "sha256": "e7993be4f18416af37385247bf4c08e8817e3855df0dc89a1d61251a4544a1a7",
+      "bytes": 7185
+    },
+    {
+      "path": "posteffect_modding.md",
+      "sha256": "e428e96290403fd2e9776eca9e86071da07af44d0040b4d31c70a6f577f8c3a1",
+      "bytes": 8414
+    },
+    {
+      "path": "raid_modding.md",
+      "sha256": "bf93430fc2af038497efac896f35013ebf4d683ce39c841a088059e2fe2bfd4c",
+      "bytes": 42453
+    },
+    {
+      "path": "resources_modding.md",
+      "sha256": "8a7bb4676e6ef7c453ebb7e368bf839beb7b359ab41ca0bed9d98ce34614fbba",
+      "bytes": 9028
+    },
+    {
+      "path": "scopes.md",
+      "sha256": "6fb5c23ae3ea2d6ef2b273d9fa74b6fc91d56126dc1423c371b4ca11b6556903",
+      "bytes": 80243
+    },
+    {
+      "path": "script_constant_modding.md",
+      "sha256": "cafa1532f431db65ac690e1e6e4f321430f7a49dfc800d412668a9fdbf0b6dee",
+      "bytes": 16308
+    },
+    {
+      "path": "scripted_gui_modding.md",
+      "sha256": "856c86be1e0ab3b0bd34a93edabd6e11dca9525e455e7c76ee3f374eeada9ab5",
+      "bytes": 38038
+    },
+    {
+      "path": "sound_modding.md",
+      "sha256": "b284342c474eeb343feffc97bd046ee21fac6d754fbe4125c4c5919ec32b7747",
+      "bytes": 11179
+    },
+    {
+      "path": "special_project_modding.md",
+      "sha256": "18cf155a65bd5a6a7ca9bf18c63f44a8e50df10ffe4c470decdf57653c757575",
+      "bytes": 52432
+    },
+    {
+      "path": "state_modding.md",
+      "sha256": "38bf8af7600716e94d8cf723cff5b2b059e7d179e29b4f90df453258b0e755ce",
+      "bytes": 35530
+    },
+    {
+      "path": "strategic_region_modding.md",
+      "sha256": "7bb15767557046f110d976be3d14d4f01861ec58d2d7031d68bab9a09e8d8d2b",
+      "bytes": 8771
+    },
+    {
+      "path": "supply_areas_modding.md",
+      "sha256": "74375d9208fa47983dc7ee183aaab3b418a07f942daa1e76cd9a7e8fe9f1e3bd",
+      "bytes": 5169
+    },
+    {
+      "path": "technology_modding.md",
+      "sha256": "da0719dbe76a15c87a514633f8c80fe39041f0a317ae5cfc9a0cdf0c0d7bbf74",
+      "bytes": 66668
+    },
+    {
+      "path": "triggers.md",
+      "sha256": "7d6088eca325c9f7ce0db25b01452976ed4cce4f70f563a4b5f33cf8df7ccd33",
+      "bytes": 221524
+    },
+    {
+      "path": "troubleshooting.md",
+      "sha256": "65615ab07d88dc9763c61dc6368049745dec2cb0bb04fae606b4d839ce72ca87",
+      "bytes": 40167
+    },
+    {
+      "path": "unit_modding.md",
+      "sha256": "197eb9adc03cd0b360fda4dd82161450381f2f4e6cc28d092b1c34076fc2e039",
+      "bytes": 29091
+    }
+  ]
+}

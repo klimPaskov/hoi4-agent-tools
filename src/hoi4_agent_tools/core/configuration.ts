@@ -220,6 +220,12 @@ export const serverConfigurationSchema = z
     gameRoot: z.string().min(1).optional(),
     /** The game's user-data folder holding logs/ and mod/; derived from the mod folder when unset. */
     gameUserRoot: z.string().min(1).optional(),
+    /**
+     * Where `hoi4-agent-tools-setup --fetch-docs` installs the docs pack, the HOI4 wiki pages the
+     * reference tools read with no mod open and in a mod without its own copy. The command-line
+     * servers default it to the user's data folder; unset elsewhere, no pack is read.
+     */
+    docsRoot: z.string().min(1).optional(),
     workspaceStorageRoot: z.string().min(1).optional(),
     /**
      * The tool profiles a session lists (maintainer decision R-4): `core`, `map`, `advanced` or

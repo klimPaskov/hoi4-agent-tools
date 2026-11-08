@@ -16,6 +16,7 @@ import {
   parseProfilesEnv,
   type ProfileSelection,
 } from './mcp/server/tool-profiles.js';
+import { defaultDocsRoot } from './reference/docs-pack.js';
 
 export function defaultConfigurationPath(): string {
   const configRoot =
@@ -305,6 +306,9 @@ export async function createEngine(
     configuration.profiles ??
     options.defaultProfiles;
   if (profiles !== undefined) configuration = { ...configuration, profiles: [...profiles] };
+  // The command-line servers read a fetched docs pack from the user's data folder by default.
+  if (configuration.docsRoot === undefined)
+    configuration = { ...configuration, docsRoot: defaultDocsRoot() };
   const resolver = await WorkspaceResolver.create(configuration);
   await sweepTemporaryDirectories(tmpdir(), {
     protectedRoots: [

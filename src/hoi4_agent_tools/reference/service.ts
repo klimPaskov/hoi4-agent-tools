@@ -32,6 +32,7 @@ import { activeKnownMistakes } from './known-mistakes.js';
 import { readBoundedJsonLines } from './lines.js';
 import { commandTexts, readGameText, type GameText } from './game-text.js';
 import { RankingIndex, sectionTerms, textTerms, type SectionTerms } from './ranking.js';
+import { installedDocsPackWiki } from './docs-pack.js';
 
 type SourceKind = z.infer<typeof referenceSourceSchema>;
 type SearchInput = z.infer<typeof referenceSearchRequestSchema>;
@@ -145,6 +146,8 @@ interface SourceRoot {
   root: string;
   patterns: string[];
   authority: string;
+  /** The folder the root must stay inside; the workspace's own folder unless named here. */
+  authorityRoot?: string;
 }
 
 interface ReferenceInventory {
@@ -343,18 +346,53 @@ function sectionize(
 const WIKI_FOLDER = 'hoi4_wiki';
 const LEGACY_WIKI_FOLDER = 'paradox_wiki';
 
-/** `hoi4_wiki/` when the mod has it, otherwise the older `paradox_wiki/` of a mod the kit has not updated. */
-function defaultWikiRoot(modRoot: string): string {
-  const current = path.join(modRoot, WIKI_FOLDER);
+/**
+ * What the reference tools read from a workspace: its folders, not its write access. A mod
+ * workspace is one; so is the documentation alone when no mod is open.
+ */
+export type ReferenceTarget = Pick<
+  ResolvedWorkspace,
+  'modRoot' | 'gameRoot' | 'wikiRoot' | 'scriptDocsRoot'
+> & { registration: Pick<ResolvedWorkspace['registration'], 'kind'> };
+
+function isDirectory(candidate: string): boolean {
   try {
-    if (statSync(current).isDirectory()) return current;
+    return statSync(candidate).isDirectory();
   } catch {
-    // Not there: fall back to the legacy name, which is reported unavailable when absent too.
+    return false;
   }
-  return path.join(modRoot, LEGACY_WIKI_FOLDER);
 }
 
-function sourceRoots(workspace: ResolvedWorkspace): SourceRoot[] {
+/** `hoi4_wiki/` when the mod has it, otherwise the older `paradox_wiki/` of a mod the kit has not updated. */
+function modWikiRoot(modRoot: string): string | undefined {
+  return [WIKI_FOLDER, LEGACY_WIKI_FOLDER]
+    .map((folder) => path.join(modRoot, folder))
+    .find(isDirectory);
+}
+
+/**
+ * The wiki a workspace reads: a configured folder, the mod's own copy, or else the docs pack.
+ * Without any of them it is the legacy folder name, which is reported unavailable.
+ */
+function wikiRoot(workspace: ReferenceTarget, docsPackWiki: string | undefined): SourceRoot {
+  const own = workspace.wikiRoot ?? modWikiRoot(workspace.modRoot);
+  if (own === undefined && docsPackWiki !== undefined)
+    return {
+      kind: 'wiki',
+      root: docsPackWiki,
+      patterns: ['**/*.md'],
+      authority: 'HOI4 wiki (docs pack)',
+      authorityRoot: docsPackWiki,
+    };
+  return {
+    kind: 'wiki',
+    root: own ?? path.join(workspace.modRoot, LEGACY_WIKI_FOLDER),
+    patterns: ['**/*.md'],
+    authority: 'HOI4 wiki (kit)',
+  };
+}
+
+function sourceRoots(workspace: ReferenceTarget, docsPackWiki?: string): SourceRoot[] {
   const gameRoot =
     workspace.gameRoot ?? (workspace.registration.kind === 'game' ? workspace.modRoot : undefined);
   return [
@@ -368,12 +406,7 @@ function sourceRoots(workspace: ResolvedWorkspace): SourceRoot[] {
             authority: 'Installed game documentation',
           },
         ]),
-    {
-      kind: 'wiki',
-      root: workspace.wikiRoot ?? defaultWikiRoot(workspace.modRoot),
-      patterns: ['**/*.md'],
-      authority: 'HOI4 wiki (kit)',
-    },
+    wikiRoot(workspace, docsPackWiki),
     {
       kind: 'script_doc',
       root: workspace.scriptDocsRoot ?? path.join(workspace.modRoot, 'script_docs'),
@@ -508,6 +541,26 @@ export class ReferenceService {
   readonly #cache = new Map<string, CachedFile>();
   readonly #indexes = new Map<string, RankingIndex>();
   #cacheBytes = 0;
+  readonly #docsRoot: string | undefined;
+
+  /** `docsRoot`: where a fetched docs pack lives; without it no pack is read. */
+  constructor(options: { docsRoot?: string | undefined } = {}) {
+    this.#docsRoot = options.docsRoot;
+  }
+
+  /** The wiki folder of the installed docs pack this package version pins, if there is one. */
+  async docsPackWiki(): Promise<string | undefined> {
+    const wiki = await installedDocsPackWiki(this.#docsRoot);
+    if (wiki === undefined) return undefined;
+    // The canonical path: a data folder named by its 8.3 short form (a Windows user name can
+    // be shortened) must not look like a root that resolves outside itself.
+    return realpath(wiki).catch(() => wiki);
+  }
+
+  /** Whether a docs pack location is configured, so a missing pack can be named as the fix. */
+  get docsPackConfigured(): boolean {
+    return this.#docsRoot !== undefined;
+  }
 
   private retain(key: string, value: CachedFile): void {
     this.#cacheBytes -= this.#cache.get(key)?.bytes ?? 0;
@@ -523,7 +576,7 @@ export class ReferenceService {
   }
 
   async inventory(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     signal?: AbortSignal,
     sources?: readonly SourceKind[],
   ): Promise<ReferenceInventory> {
@@ -550,7 +603,7 @@ export class ReferenceService {
     };
     let skipped = 0;
     let bytes = 0;
-    for (const root of sourceRoots(workspace)) {
+    for (const root of sourceRoots(workspace, await this.docsPackWiki())) {
       if (sources !== undefined && !sources.includes(root.kind)) continue;
       signal?.throwIfAborted();
       let canonicalRoot: string;
@@ -561,11 +614,12 @@ export class ReferenceService {
         continue;
       }
       const configuredAuthorityRoot =
-        root.kind === 'game_doc'
+        root.authorityRoot ??
+        (root.kind === 'game_doc'
           ? root.root
           : root.kind === 'wiki'
             ? (workspace.wikiRoot ?? workspace.modRoot)
-            : (workspace.scriptDocsRoot ?? workspace.modRoot);
+            : (workspace.scriptDocsRoot ?? workspace.modRoot));
       if (!isWithin(configuredAuthorityRoot, canonicalRoot)) {
         throw new ServiceError(
           'REFERENCE_ROOT_ESCAPE',
@@ -689,7 +743,7 @@ export class ReferenceService {
   }
 
   async search(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: SearchInput,
     signal?: AbortSignal,
   ): Promise<ReferenceSearchResult> {
@@ -698,7 +752,7 @@ export class ReferenceService {
 
   /** {@link search} with compact hits, as `hoi4.reference_search` returns them. */
   async searchHits(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: SearchInput,
     signal?: AbortSignal,
   ): Promise<ReferenceSearchHits> {
@@ -706,7 +760,7 @@ export class ReferenceService {
   }
 
   private async searchAs<Hit extends object>(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: SearchInput,
     signal: AbortSignal | undefined,
     present: (section: IndexedSection) => Hit,
@@ -832,7 +886,7 @@ export class ReferenceService {
   }
 
   async read(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: ReadInput,
     signal?: AbortSignal,
   ): Promise<ReferenceReadResult> {
@@ -889,7 +943,7 @@ export class ReferenceService {
   }
 
   async context(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: ContextInput,
     signal?: AbortSignal,
   ): Promise<ReferenceContextResult> {
@@ -898,7 +952,7 @@ export class ReferenceService {
 
   /** {@link context} with compact hits, as `hoi4.reference_context` returns them. */
   async contextHits(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: ContextInput,
     signal?: AbortSignal,
   ): Promise<ReferenceContextHits> {
@@ -906,7 +960,7 @@ export class ReferenceService {
   }
 
   private async contextAs<Hit extends object>(
-    workspace: ResolvedWorkspace,
+    workspace: ReferenceTarget,
     input: ContextInput,
     signal: AbortSignal | undefined,
     present: (section: IndexedSection) => Hit,
@@ -1006,7 +1060,7 @@ export class ReferenceService {
     };
   }
 
-  private async gameText(workspace: ResolvedWorkspace): Promise<GameText> {
+  private async gameText(workspace: ReferenceTarget): Promise<GameText> {
     const gameRoot =
       workspace.gameRoot ??
       (workspace.registration.kind === 'game' ? workspace.modRoot : undefined);
