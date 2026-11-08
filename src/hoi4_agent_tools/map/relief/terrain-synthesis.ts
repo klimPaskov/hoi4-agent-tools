@@ -228,6 +228,7 @@ export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
     rainfall: input.rainfall,
     landPixels,
     signal: input.signal,
+    collectUnreachable: true,
   });
   const notes: ReliefNote[] = [...hydrology.notes];
   // The pass test of the write, on the macro grid: a declared pass must be a saddle lower than

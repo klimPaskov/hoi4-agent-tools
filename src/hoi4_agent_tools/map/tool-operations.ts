@@ -749,8 +749,14 @@ async function previewSynthesisCheck(
       },
     ],
   };
+  // Every blocking problem the check found is listed, not only the first (one fix round, not six).
   result.blockers = [
     ...checked.plan.blockers.map(({ code, message, details }) => ({
+      code,
+      message,
+      ...(details === undefined ? {} : { details }),
+    })),
+    ...blocked.map(({ code, message, details }) => ({
       code,
       message,
       ...(details === undefined ? {} : { details }),

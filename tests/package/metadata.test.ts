@@ -829,6 +829,21 @@ describe('offline package and Registry metadata', () => {
       'utf8',
     );
     expect(releaseWorkflow).toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+    // Every verification step authenticates its GitHub API calls (4.11.1 failed on an anonymous 403).
+    const verifySteps = releaseWorkflow.split('run: npm run publication:verify').slice(1);
+    expect(verifySteps.length).toBeGreaterThanOrEqual(3);
+    for (const step of verifySteps)
+      expect(step.slice(0, step.indexOf('PUBLICATION_VERIFY_SCOPE'))).toContain(
+        'GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}',
+      );
+    // The tag is checked once before the retry loop, not on every attempt.
+    const verifyFunction = verifier.slice(
+      verifier.indexOf('async function verify(): Promise<void> {'),
+      verifier.indexOf('let lastError: unknown;'),
+    );
+    expect(verifyFunction).toMatch(/\}\n\n\/\/ The tag does not change/u);
+    expect(verifyFunction.split('// The tag does not change')[0]).not.toContain('verifyGitHubTag');
+    expect(verifier).toMatch(/await verifyGitHubTag\(\);\nlet lastError: unknown;/u);
   });
 
   it('pins the current audited major of every automation action', async () => {
