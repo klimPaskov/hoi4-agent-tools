@@ -25,11 +25,14 @@ const TOKEN_CEILING = 8_000;
 const BYTES_PER_TOKEN = 3.5;
 
 const close: Array<() => Promise<void>> = [];
-afterEach(async () => Promise.all(close.splice(0).map((callback) => callback())));
+afterEach(async () => {
+  // Newest first and one at a time: the client and server stop before their folder is removed.
+  for (const callback of close.splice(0).reverse()) await callback();
+});
 
 async function connected(profiles?: Array<'core' | 'map' | 'advanced' | 'all'>) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-profiles-'));
-  close.push(() => rm(root, { recursive: true, force: true }));
+  close.push(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   await mkdir(path.join(root, 'test'));
   const config = serverConfigurationSchema.parse({
     version: 1,
