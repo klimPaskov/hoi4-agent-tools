@@ -104,6 +104,12 @@ jobs:
             '[.manifests[] | select(.platform.os == "linux") | "\(.platform.os)/\(.platform.architecture)"] | unique | sort | join(",")' \
             <<<"$MANIFEST")"
           test "$RUNTIME_PLATFORMS" = 'linux/amd64,linux/arm64'
+      # Tools on the shared Rust engine need a hoi4-engine binary in the tests.
+      - name: Build hoi4-engine for the tests
+        working-directory: engine
+        run: |
+          rustup toolchain install
+          cargo build --release --locked -p hoi4-engine-cli
       - run: npm run check
       - run: npm run test:coverage
       - run: npm run inspector

@@ -35,6 +35,8 @@ USAGE:
     hoi4-engine system [--request FILE]
     hoi4-engine units [--request FILE]
     hoi4-engine assets [--request FILE]
+    hoi4-engine mod-index [--request FILE]
+    hoi4-engine symbol-index [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
@@ -55,7 +57,12 @@ textures and focus sprites without a `_shine` companion. It traces the mod (or t
 
 The `texture` command decodes DDS and TGA files (folders are searched) and reports each format,
 size and decoded-pixel hash, or why a file cannot be decoded; it exits 1 when one cannot.
-With --output it writes one decoded texture as PNG. `serve` runs the resident engine that the
+With --output it writes one decoded texture as PNG.
+
+`mod-index` answers the MCP tool hoi4.mod_index (definition counts by kind, folder totals, event
+namespaces, or the next free numbered id) and `symbol-index` prints every definition of the
+shared symbol index; both read the roots, glob patterns and scan limits of a JSON request
+(`hoi4-mod-index-request/1`). `serve` runs the resident engine that the
 MCP server talks to over stdin and stdout (see crates/cli/src/serve.rs for the frames).
 
 A check reports `pass`, `incomplete` (something could not be checked: no game, unknown names,
@@ -671,6 +678,8 @@ fn main() -> ExitCode {
         Some("system") => cmd_json_request(&args, "system", hoi4_engine::system::respond_json),
         Some("units") => cmd_json_request(&args, "units", hoi4_engine::system::respond_units_json),
         Some("assets") => cmd_json_request(&args, "assets", hoi4_engine::assets::respond_json),
+        Some("mod-index") => cmd_json_request(&args, "mod-index", hoi4_engine::mod_index::respond_json),
+        Some("symbol-index") => cmd_json_request(&args, "symbol-index", hoi4_engine::mod_index::respond_symbols_json),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),

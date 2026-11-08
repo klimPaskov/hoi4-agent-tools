@@ -207,3 +207,60 @@ export const modIndexDataSchema = z
       .optional(),
   })
   .strict();
+
+/** `hoi4-engine mod-index` (`hoi4-mod-index/1`): what the shared Rust engine answers. */
+export const modIndexEngineResponseSchema = z
+  .object({
+    schema: z.literal('hoi4-mod-index/1'),
+    status: z.literal('ok'),
+    complete: z.boolean(),
+    skippedSourceCount: z.number().int().min(0),
+    skippedSources: z
+      .array(
+        z
+          .object({
+            path: z.string(),
+            reasonCodes: z.array(z.string()),
+            possibleSymbolKinds: z.array(z.string()),
+          })
+          .strict(),
+      )
+      .max(100),
+    files: z.number().int().min(0).optional(),
+    kinds: z
+      .array(z.object({ kind: z.string(), count: z.number().int().min(0) }).strict())
+      .optional(),
+    folders: z
+      .array(
+        z
+          .object({
+            folder: z.string(),
+            files: z.number().int().min(0),
+            bytes: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .optional(),
+    namespaces: z
+      .array(
+        z
+          .object({
+            namespace: z.string(),
+            events: z.number().int().min(0),
+            lowest: z.number().int().min(0),
+            highest: z.number().int().min(0),
+            files: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .optional(),
+    next: z
+      .object({
+        used: z.number().int().min(0),
+        highest: z.number().int().min(0).optional(),
+        firstGap: z.number().int().min(1).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();

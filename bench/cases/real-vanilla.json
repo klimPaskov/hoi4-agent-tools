@@ -2,6 +2,49 @@
   "about": "Cases on the installed game (1.19.4.1). Vanilla script loads in the game, so a validation error on a vanilla file is a false positive unless the game's own error.log reports the same line; such files are excluded with the reason.",
   "cases": [
     {
+      "id": "vanilla.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "vanilla",
+      "problem": 13,
+      "title": "The first overview of every layer of the installed game answers within 2 seconds",
+      "evidence": "Target from the plan (problem 13). The benchmark workspace of the game is an empty mod, so only layer all reads the game.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview",
+        "layer": "all"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "vanilla.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "vanilla",
+      "problem": 13,
+      "title": "A repeated overview of every layer of the installed game answers within half a second",
+      "evidence": "Same as vanilla.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview",
+        "layer": "all"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
       "id": "vanilla.source_lookup.cold-event",
       "surface": "source_lookup",
       "corpus": "vanilla",
