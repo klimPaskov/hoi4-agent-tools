@@ -227,6 +227,16 @@ export const serverConfigurationSchema = z
      */
     docsRoot: z.string().min(1).optional(),
     workspaceStorageRoot: z.string().min(1).optional(),
+    /**
+     * The tool profiles a session lists (maintainer decision R-4): `core`, `map`, `advanced` or
+     * `all`. The stdio server lists `core` when this is unset; the HTTP server and a server
+     * built in code list every tool. `HOI4_AGENT_TOOLS_PROFILES` overrides it for one client registration.
+     */
+    profiles: z
+      .array(z.enum(['core', 'map', 'advanced', 'all']))
+      .min(1)
+      .max(4)
+      .optional(),
     storageRoots: z.array(z.string().min(1)).max(WORKSPACE_MAX_SOURCE_ROOTS).default([]),
     workspaces: z.array(workspaceRegistrationSchema).max(WORKSPACE_MAX_REGISTRATIONS).default([]),
     /**
