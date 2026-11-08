@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -145,7 +145,8 @@ async function overflowConfig(
   prefix: string,
   plugins?: (temporary: string) => Promise<string[]>,
 ): Promise<string> {
-  const temporary = await mkdtemp(path.join(tmpdir(), prefix));
+  // The canonical path, so a plugin listed under it never reads as passing through a link.
+  const temporary = await realpath(await mkdtemp(path.join(tmpdir(), prefix)));
   const workspace = path.join(temporary, 'mod');
   await mkdir(workspace);
   const config = path.join(temporary, 'config.json');

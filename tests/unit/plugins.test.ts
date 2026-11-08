@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,7 +12,8 @@ afterEach(async () => {
 });
 
 async function folder(): Promise<string> {
-  const made = await mkdtemp(path.join(tmpdir(), 'hoi4-plugins-'));
+  // The canonical path: a plugin path with a short 8.3 name would read as passing through a link.
+  const made = await realpath(await mkdtemp(path.join(tmpdir(), 'hoi4-plugins-')));
   cleanup.push(made);
   return made;
 }

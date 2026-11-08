@@ -112,7 +112,10 @@ export async function loadPlugins(
     if (!info.isFile() || info.isSymbolicLink())
       throw new PluginError('PLUGIN_PATH_INVALID', 'A plugin is a plain file, not a link');
     if (!sameFile(await realpath(file), file))
-      throw new PluginError('PLUGIN_PATH_INVALID', 'A plugin path passes through a link');
+      throw new PluginError(
+        'PLUGIN_PATH_INVALID',
+        'A plugin path passes through a link or a short 8.3 name; list its full canonical path',
+      );
     const loaded = (await import(pathToFileURL(file).href)) as { default?: unknown };
     if (typeof loaded.default !== 'function')
       throw new PluginError('PLUGIN_INVALID', 'A plugin exports a factory function as default');
