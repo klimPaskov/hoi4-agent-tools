@@ -436,7 +436,8 @@ describe('clean npm-pack installation', () => {
     );
     const child = spawn(process.execPath, [fixture.binEntries['hoi4-agent-tools']], {
       cwd: fixture.consumerRoot,
-      env: isolatedEnvironment({ HOI4_AGENT_CONFIG: configPath }),
+      // The default stdio server lists the core profile; this check expects the full instructions.
+      env: isolatedEnvironment({ HOI4_AGENT_CONFIG: configPath, HOI4_AGENT_TOOLS_PROFILES: 'all' }),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

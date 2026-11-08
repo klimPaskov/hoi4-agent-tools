@@ -11,7 +11,11 @@ import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
 import { CONFIG_VERSION } from './version.js';
 import { sweepTemporaryDirectories } from './core/temporary-directories.js';
-import { DEFAULT_PROFILES, PROFILES_ENV, parseProfilesEnv } from './mcp/server/tool-profiles.js';
+import {
+  PROFILES_ENV,
+  parseProfilesEnv,
+  type ProfileSelection,
+} from './mcp/server/tool-profiles.js';
 
 export function defaultConfigurationPath(): string {
   const configRoot =
@@ -270,6 +274,12 @@ export interface CreateEngineOptions {
    * The caller must hold workspace requests until `engine.recovered()` settles.
    */
   recovery?: 'wait' | 'background';
+  /**
+   * The tool profiles to list when neither the client (`HOI4_AGENT_TOOLS_PROFILES`) nor the
+   * configuration chooses. The stdio entry passes `core`; without it every tool is listed, as the
+   * HTTP server does.
+   */
+  defaultProfiles?: readonly ProfileSelection[];
 }
 
 export async function createEngine(
@@ -289,12 +299,12 @@ export async function createEngine(
     if (!useAutomaticConfiguration) throw error;
     configuration = await automaticConfiguration();
   }
-  // The command-line servers list the core tools unless the client or the file asks for more.
-  configuration = {
-    ...configuration,
-    profiles: parseProfilesEnv(process.env[PROFILES_ENV]) ??
-      configuration.profiles ?? [...DEFAULT_PROFILES],
-  };
+  // The stdio server lists the core tools unless the client or the file asks for more.
+  const profiles =
+    parseProfilesEnv(process.env[PROFILES_ENV]) ??
+    configuration.profiles ??
+    options.defaultProfiles;
+  if (profiles !== undefined) configuration = { ...configuration, profiles: [...profiles] };
   const resolver = await WorkspaceResolver.create(configuration);
   await sweepTemporaryDirectories(tmpdir(), {
     protectedRoots: [

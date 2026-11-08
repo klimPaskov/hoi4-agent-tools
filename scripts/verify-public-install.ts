@@ -186,7 +186,8 @@ try {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(process.execPath, [entry], {
       cwd: temporary,
-      env: { ...process.env, HOI4_AGENT_CONFIG: configuration },
+      // The check lists every tool, so it asks for every profile; the default is core only.
+      env: { ...process.env, HOI4_AGENT_CONFIG: configuration, HOI4_AGENT_TOOLS_PROFILES: 'all' },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
