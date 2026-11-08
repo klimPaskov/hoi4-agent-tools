@@ -4,10 +4,10 @@ import type { BlockNode, SourceDocument } from '../core/source/index.js';
 import type { RationalJson } from './rational.js';
 
 export const PROBABILITY_SCHEMA_VERSION = 1 as const;
-export const PROBABILITY_ADAPTER_VERSION = 'hoi4-1.19.4.1.v1' as const;
-export const VERIFIED_GAME_VERSION = 'Operation Postern 1.19.4.1 (f584)' as const;
-export const VERIFIED_GAME_RAW_VERSION = '1.19.4.1' as const;
-export const VERIFIED_GAME_CHECKSUM = 'f584' as const;
+export const PROBABILITY_ADAPTER_VERSION = 'hoi4-1.19.4.2.v1' as const;
+export const VERIFIED_GAME_VERSION = 'Operation Postern 1.19.4.2 (0bdb)' as const;
+export const VERIFIED_GAME_RAW_VERSION = '1.19.4.2' as const;
+export const VERIFIED_GAME_CHECKSUM = '0bdb' as const;
 
 export type ProbabilityAdapterId =
   | 'event_mean_time_to_happen'

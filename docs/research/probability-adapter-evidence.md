@@ -1,6 +1,16 @@
 # Probability adapter evidence
 
-The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.4.1 (checksum f584)**. Adapter behavior is versioned as `hoi4-1.19.4.1.v1`. Results always include that adapter version and game build. When the installed build differs, results carry the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`, and the nightly game-update watcher lists the adapters under "Checked against another build" on every run until the pin moves.
+The AI and MTTH Scenario Analyzer targets Hearts of Iron IV **Operation Postern 1.19.4.2 (checksum 0bdb)**. Adapter behavior is versioned as `hoi4-1.19.4.2.v1`. Results always include that adapter version and game build. When the installed build differs, results carry the warning `PROBABILITY_GAME_BUILD_UNVERIFIED`, and the nightly game-update watcher lists the adapters under "Checked against another build" on every run until the pin moves.
+
+## Re-check for 1.19.4.2 (2026-11-08)
+
+Every reviewed file was hashed again on the installed game 1.19.4.2:
+
+- **Unchanged:** all six reviewed documentation files are byte-identical to the 1.19.4.1 review: `common/decisions/_documentation.md`, `common/doctrines/_documentation.md`, `common/script_constants/documentation.md`, `documentation/script_concept_documentation.md`, `documentation/effects_documentation.md` and `common/ai_strategy/_documentation.md` (`cd19fa14…c715`).
+- **Examples:** each vanilla example below keeps its construct at the line given for 1.19.4.1: `events/Yugoslavia.txt:49`, `events/AAT_Generic_Events.txt:44`, `common/decisions/_generic_decisions.txt:56`, `common/national_focus/austria.txt:122`, `common/technologies/industry.txt:30`, `common/doctrines/grand_doctrines/land_grand_doctrines.txt:14`, `events/AAT_Sweden.txt:1760`, `events/BBA_Switzerland.txt:1205` and the `research_weight_factor` strategy at `common/ai_strategy/ENG.txt:3202`.
+- **Installed build:** `launcher-settings.json` reads `Operation Postern v1.19.4.2.2da5 (0bdb)`, raw version `1.19.4.2`.
+
+No adapter rule changed, so only the version pin moved.
 
 ## Re-check for 1.19.4.1 (2026-11-06)
 
