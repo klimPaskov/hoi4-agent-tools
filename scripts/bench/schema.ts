@@ -25,6 +25,7 @@ export const SURFACES = [
   'system',
   'unit',
   'asset',
+  'compat',
   'impact',
   'render',
   'rewrite',

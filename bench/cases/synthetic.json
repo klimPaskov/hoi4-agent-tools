@@ -674,6 +674,137 @@
           "equals": 14
         }
       ]
+    },
+    {
+      "id": "synthetic.explain_error.wrapped-token",
+      "surface": "error_log",
+      "corpus": "synthetic",
+      "title": "A wrapped parser error is explained as an unexpected token at the inner message's line in the mod file",
+      "evidence": "tests/helpers/smoke-fixture.ts writes this line to error.log. The inner message names line 12; the outer \"near line: 14\" is the end of the read. events/synthetic_alpha_01.txt is a mod file.",
+      "tool": "hoi4.explain_error",
+      "arguments": {
+        "line": "[09:15:02][persistent.cpp:48]: Error: \"Unexpected token: }, near line: 12\" in file: \"events/synthetic_alpha_01.txt\" near line: 14"
+      },
+      "expect": [
+        {
+          "path": "data.explanations[0].id",
+          "equals": "unexpected_token"
+        },
+        {
+          "path": "data.explanations[0].source.relativePath",
+          "equals": "events/synthetic_alpha_01.txt"
+        },
+        {
+          "path": "data.explanations[0].source.line",
+          "equals": 12
+        },
+        {
+          "path": "data.explanations[0].source.layer",
+          "equals": "mod"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 4096
+        }
+      ]
+    },
+    {
+      "id": "synthetic.mod_health.log-first",
+      "surface": "error_log",
+      "corpus": "synthetic",
+      "title": "The game's own syntax error in a mod file is the top problem of the mod's health",
+      "evidence": "tests/helpers/smoke-fixture.ts writes an error.log whose first line is a parser error in the mod's events/synthetic_alpha_01.txt; the game reporting that it cannot read a file outranks every other finding.",
+      "tool": "hoi4.mod_health",
+      "arguments": {
+        "checks": ["error_log", "script"]
+      },
+      "expect": [
+        {
+          "path": "data.problems[0].check",
+          "equals": "error_log"
+        },
+        {
+          "path": "data.problems[0].examples[0].path",
+          "equals": "events/synthetic_alpha_01.txt"
+        },
+        {
+          "path": "data.checks[*].check",
+          "includes": "script"
+        },
+        {
+          "path": "$bytes",
+          "atMost": 8192
+        }
+      ]
+    },
+    {
+      "id": "synthetic.rewrite.localisation-write-preview",
+      "surface": "rewrite",
+      "corpus": "synthetic",
+      "title": "A new localisation key previews as one appended line in the English file with the most keys, in that file's indent, and nothing is written",
+      "evidence": "fixtures/technology/workspace/localisation/english/synthetic_technology_l_english.yml holds the most English keys, starts with a BOM and l_english:, and indents its keys by nothing. bench_write_probe is defined nowhere. apply is false, so the call writes nothing.",
+      "tool": "hoi4.localisation_write",
+      "arguments": {
+        "mode": "add",
+        "entries": [
+          {
+            "key": "bench_write_probe",
+            "text": "Probe"
+          }
+        ]
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "ok"
+        },
+        {
+          "path": "code",
+          "equals": "LOCALISATION_PREVIEW"
+        },
+        {
+          "path": "data.applied",
+          "equals": false
+        },
+        {
+          "path": "data.counts.filesChanged",
+          "equals": 1
+        },
+        {
+          "path": "data.files[0].path",
+          "equals": "localisation/english/synthetic_technology_l_english.yml"
+        },
+        {
+          "path": "data.files[0].diff",
+          "includes": "+bench_write_probe: \"Probe\""
+        }
+      ]
+    },
+    {
+      "id": "synthetic.compat.unknown-other-mod",
+      "surface": "compat",
+      "corpus": "synthetic",
+      "title": "A compatibility check against a mod that is not registered is an explicit not-found, without running the engine",
+      "evidence": "No workspace named synthetic_no_such_mod exists; the check resolves the other mod before it reads any file. The engine-backed modes need the Rust engine, which CI does not build.",
+      "tool": "hoi4.compat_check",
+      "arguments": {
+        "mode": "mod",
+        "other": "synthetic_no_such_mod"
+      },
+      "expect": [
+        {
+          "path": "status",
+          "equals": "error"
+        },
+        {
+          "path": "code",
+          "equals": "WORKSPACE_NOT_REGISTERED"
+        },
+        {
+          "path": "$text",
+          "includes": "synthetic_no_such_mod"
+        }
+      ]
     }
   ]
 }

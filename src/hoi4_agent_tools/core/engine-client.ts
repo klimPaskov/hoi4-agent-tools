@@ -41,6 +41,8 @@ export interface EngineRunOptions {
   timeoutMs?: number;
   maxOutputBytes?: number;
   signal?: AbortSignal;
+  /** Command-line arguments after the subcommand, for commands that take them (`check`). */
+  args?: readonly string[];
 }
 
 export type EngineResult<Response> =
@@ -334,7 +336,7 @@ export async function runEngineCommand<Response>(
   const timeoutMs = options.timeoutMs ?? ENGINE_DEFAULT_TIMEOUT_MS;
   const outcome = await runProcess(
     binary.path,
-    [subcommand],
+    [subcommand, ...(options.args ?? [])],
     JSON.stringify(request),
     options.env ?? process.env,
     timeoutMs,

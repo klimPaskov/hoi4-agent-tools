@@ -1,4 +1,4 @@
-import { realpath } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { CoreEngine, ScanSnapshot } from '../core/engine.js';
 import { hashCanonical } from '../core/canonical.js';
@@ -10,6 +10,8 @@ import {
 } from '../core/operation-context.js';
 import { emptyServiceResult, ServiceError } from '../core/result.js';
 import type { Diagnostic } from '../core/diagnostics.js';
+import { globFiles } from '../core/file-glob.js';
+import { checkedLayerName, runEngineCheck } from '../core/engine-check.js';
 import { toolResult } from '../core/operation-result.js';
 import {
   referenceContextRequestSchema,
@@ -29,11 +31,30 @@ import {
   type IdentifierContext,
   type IdentifierKind,
 } from './script-validation.js';
-import { modChangedAfter, readErrorLog } from './error-log.js';
+import { categoryHints, errorLogPattern, modChangedAfter, readErrorLog } from './error-log.js';
+import { errorExplanations, explainErrors } from './error-explain.js';
+import { documentedNames } from './documented-commands.js';
+import {
+  explainErrorRequestSchema,
+  modHealthDataSchema,
+  modHealthRequestSchema,
+  scriptGuardDataSchema,
+  scriptGuardRequestSchema,
+} from '../schemas/modder-tools.js';
+import { guardedFiles, inventedNames, type InventedName } from './script-guard.js';
+import { rankProblems, type CheckRun, type HealthCheck, type HealthFinding } from './mod-health.js';
 import { modIndex } from './mod-index.js';
 import { listSkills, loadSkill } from './skills.js';
 import { skillDataSchema, skillRequestSchema } from '../schemas/skill.js';
 import { inspectLocalisation } from '../localisation/inspect.js';
+import { checkModCompatibility } from './compat.js';
+import { checkPatchCompatibility } from './compat-patch.js';
+import {
+  compatCheckDataSchema,
+  compatCheckRequestSchema,
+  type CompatCheckData,
+  type CompatCheckRequest,
+} from '../schemas/compat.js';
 import { inspectIdeas } from '../ideas/inspect.js';
 import { ideaInspectDataSchema, ideaInspectRequestSchema } from '../schemas/ideas.js';
 import { inspectAssets, inspectSystem, inspectUnits } from '../system/inspect.js';
@@ -96,8 +117,12 @@ const schemas = {
   'hoi4.source_lookup': sourceLookupRequestSchema,
   'hoi4.script_validate': scriptValidateRequestSchema,
   'hoi4.error_log': errorLogRequestSchema,
+  'hoi4.explain_error': explainErrorRequestSchema,
+  'hoi4.mod_health': modHealthRequestSchema,
+  'hoi4.script_guard': scriptGuardRequestSchema,
   'hoi4.mod_index': modIndexRequestSchema,
   'hoi4.localisation_inspect': localisationInspectRequestSchema,
+  'hoi4.compat_check': compatCheckRequestSchema,
   'hoi4.idea_inspect': ideaInspectRequestSchema,
   'hoi4.system_inspect': systemInspectRequestSchema,
   'hoi4.unit_inspect': unitInspectRequestSchema,
@@ -208,59 +233,135 @@ export class ReferenceToolService {
                   this.engine.resolver.config().gameUserRoot,
                   signal,
                 )
-              : name === 'hoi4.mod_index'
-                ? await modIndex(
-                    this.engine,
+              : name === 'hoi4.script_guard'
+                ? await this.scriptGuard(
                     workspaceId,
-                    modIndexRequestSchema.parse(parsed),
+                    workspace,
+                    scriptGuardRequestSchema.parse(parsed),
                     context.principal,
                     signal,
                   )
-                : name === 'hoi4.script_validate'
-                  ? await this.validateScript(
+                : name === 'hoi4.mod_health'
+                  ? await this.modHealth(
                       workspaceId,
                       workspace,
-                      scriptValidateRequestSchema.parse(parsed),
+                      modHealthRequestSchema.parse(parsed),
                       context.principal,
                       signal,
                     )
-                  : name === 'hoi4.idea_inspect'
-                    ? await inspectIdeas(workspace, ideaInspectRequestSchema.parse(parsed), signal)
-                    : name === 'hoi4.system_inspect'
-                      ? await inspectSystem(
-                          workspace,
-                          systemInspectRequestSchema.parse(parsed),
+                  : name === 'hoi4.explain_error'
+                    ? await this.explainError(
+                        workspaceId,
+                        workspace,
+                        explainErrorRequestSchema.parse(parsed),
+                        context.principal,
+                        signal,
+                      )
+                    : name === 'hoi4.mod_index'
+                      ? await modIndex(
+                          this.engine,
+                          workspaceId,
+                          modIndexRequestSchema.parse(parsed),
+                          context.principal,
                           signal,
                         )
-                      : name === 'hoi4.asset_inspect'
-                        ? await inspectAssets(
+                      : name === 'hoi4.script_validate'
+                        ? await this.validateScript(
+                            workspaceId,
                             workspace,
-                            assetInspectRequestSchema.parse(parsed),
+                            scriptValidateRequestSchema.parse(parsed),
+                            context.principal,
                             signal,
                           )
-                        : name === 'hoi4.unit_inspect'
-                          ? await inspectUnits(
+                        : name === 'hoi4.idea_inspect'
+                          ? await inspectIdeas(
                               workspace,
-                              unitInspectRequestSchema.parse(parsed),
+                              ideaInspectRequestSchema.parse(parsed),
                               signal,
                             )
-                          : name === 'hoi4.skill'
-                            ? await this.skill(workspace, skillRequestSchema.parse(parsed), signal)
-                            : name === 'hoi4.localisation_inspect'
-                              ? await inspectLocalisation(
+                          : name === 'hoi4.system_inspect'
+                            ? await inspectSystem(
+                                workspace,
+                                systemInspectRequestSchema.parse(parsed),
+                                signal,
+                              )
+                            : name === 'hoi4.asset_inspect'
+                              ? await inspectAssets(
                                   workspace,
-                                  localisationInspectRequestSchema.parse(parsed),
+                                  assetInspectRequestSchema.parse(parsed),
                                   signal,
                                 )
-                              : await sourceLookup(
-                                  this.engine,
-                                  workspaceId,
-                                  sourceLookupRequestSchema.parse(parsed),
-                                  context.principal,
-                                  signal,
-                                );
+                              : name === 'hoi4.unit_inspect'
+                                ? await inspectUnits(
+                                    workspace,
+                                    unitInspectRequestSchema.parse(parsed),
+                                    signal,
+                                  )
+                                : name === 'hoi4.compat_check'
+                                  ? await this.checkCompat(
+                                      workspace,
+                                      compatCheckRequestSchema.parse(parsed),
+                                      context.principal,
+                                      signal,
+                                    )
+                                  : name === 'hoi4.skill'
+                                    ? await this.skill(
+                                        workspace,
+                                        skillRequestSchema.parse(parsed),
+                                        signal,
+                                      )
+                                    : name === 'hoi4.localisation_inspect'
+                                      ? await inspectLocalisation(
+                                          workspace,
+                                          localisationInspectRequestSchema.parse(parsed),
+                                          signal,
+                                        )
+                                      : await sourceLookup(
+                                          this.engine,
+                                          workspaceId,
+                                          sourceLookupRequestSchema.parse(parsed),
+                                          context.principal,
+                                          signal,
+                                        );
     const result = emptyServiceResult(workspaceId, data);
     if (isDocumentationTool(name)) result.diagnostics.push(...(await this.wikiHint(data)));
+    if (name === 'hoi4.script_guard') {
+      const guard = scriptGuardDataSchema.parse(data);
+      result.code = 'SCRIPT_GUARD_CHECKED';
+      const invented = guard.counts.effect + guard.counts.trigger + guard.counts.modifier;
+      result.validation = {
+        passed: guard.verdict === 'clean',
+        checks: [
+          {
+            id: 'script-guard',
+            passed: guard.verdict === 'clean',
+            message:
+              guard.verdict === 'clean'
+                ? `Every effect, trigger and modifier in ${guard.filesChecked} files is documented or defined`
+                : `${invented} names in ${guard.filesChecked} files are neither documented nor defined`,
+          },
+        ],
+      };
+    }
+    if (name === 'hoi4.mod_health') {
+      const health = modHealthDataSchema.parse(data);
+      result.code = 'MOD_HEALTH_CHECKED';
+      result.validation = {
+        passed: health.verdict === 'healthy',
+        checks: [
+          {
+            id: 'mod-health',
+            passed: health.verdict === 'healthy',
+            message:
+              health.verdict === 'healthy'
+                ? 'Every audit ran and found no problem'
+                : health.verdict === 'incomplete'
+                  ? 'No problem found, but an audit could not run'
+                  : `${health.totals.problems} kinds of problem, ${health.totals.findings} findings`,
+          },
+        ],
+      };
+    }
     if (name === 'hoi4.error_log') {
       const log = errorLogDataSchema.parse(data);
       result.code = 'ERROR_LOG_READ';
@@ -430,6 +531,21 @@ export class ReferenceToolService {
         ],
       };
     }
+    if (name === 'hoi4.compat_check') {
+      const checked = compatCheckDataSchema.parse(data);
+      result.code = checked.mode === 'mod' ? 'COMPAT_MOD_CHECKED' : 'COMPAT_PATCH_CHECKED';
+      if (checked.mode === 'mod')
+        result.validation = {
+          passed: checked.verdict === 'no_conflicts',
+          checks: [
+            {
+              id: 'mod-compatibility',
+              passed: checked.verdict === 'no_conflicts',
+              message: checked.summary,
+            },
+          ],
+        };
+    }
     if (name === 'hoi4.localisation_inspect') {
       const inspected = localisationInspectDataSchema.parse(data);
       result.code = 'LOCALISATION_INSPECTED';
@@ -583,6 +699,256 @@ export class ReferenceToolService {
     ];
   }
 
+  /**
+   * `hoi4.mod_health`: the error log, the engine's whole-mod check and the localisation and
+   * asset audits run side by side; script validation then checks the files they named first,
+   * and the newest after them, within a time budget.
+   */
+  private async modHealth(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof modHealthRequestSchema>,
+    principal?: string,
+    signal?: AbortSignal,
+  ) {
+    const wanted = new Set<HealthCheck>(
+      request.checks ?? ['error_log', 'engine_check', 'script', 'localisation', 'assets'],
+    );
+    const timed = async (
+      check: HealthCheck,
+      run: () => Promise<Omit<CheckRun, 'check' | 'ms'>>,
+    ): Promise<CheckRun> => {
+      if (!wanted.has(check)) return { check, status: 'skipped', ms: 0, findings: [] };
+      const started = performance.now();
+      try {
+        return { check, ...(await run()), ms: performance.now() - started };
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') throw error;
+        const code = error instanceof ServiceError ? error.code : 'INTERNAL_ERROR';
+        return {
+          check,
+          status: 'unavailable',
+          ms: performance.now() - started,
+          findings: [],
+          note: `${code}: ${(error as Error).message}`,
+        };
+      }
+    };
+    const [errorLog, engineCheck, localisation, assets] = await Promise.all([
+      timed('error_log', () => this.healthErrorLog(workspace, signal)),
+      timed('engine_check', () => healthEngineCheck(workspace, signal)),
+      timed('localisation', () => healthLocalisation(workspace, signal)),
+      timed('assets', () => healthAssets(workspace, signal)),
+    ]);
+    // The files the other audits name are validated first.
+    const named = new Set(
+      [...errorLog.findings, ...engineCheck.findings].flatMap(({ path: file }) =>
+        file === undefined ? [] : [file],
+      ),
+    );
+    const script = await timed('script', () =>
+      this.healthScript(workspaceId, workspace, named, principal, signal),
+    );
+    return rankProblems([errorLog, engineCheck, script, localisation, assets], request.limit);
+  }
+
+  /** The mod's own entries of the last launch's error.log, grouped by what they report. */
+  private async healthErrorLog(
+    workspace: ResolvedWorkspace,
+    signal?: AbortSignal,
+  ): Promise<Omit<CheckRun, 'check' | 'ms'>> {
+    const log = await readErrorLog(
+      workspace,
+      errorLogRequestSchema.parse({ scope: 'mod', limit: 50 }),
+      this.engine.resolver.config().gameUserRoot,
+      signal,
+    );
+    if (log.launch?.modLoaded === false)
+      return {
+        status: 'partial',
+        findings: [],
+        note: 'The last game launch did not load this mod, so its error.log says nothing about it',
+      };
+    const stale = await modChangedAfter(workspace.modRoot, Date.parse(log.log.modifiedAt), signal);
+    const findings: HealthFinding[] = log.entries
+      .filter((entry) => entry.source?.layer === 'mod')
+      .map((entry) => {
+        const matched = errorExplanations.find((explanation) =>
+          explanation.regex.test(entry.message),
+        );
+        return {
+          code: `LOG_${(matched?.id ?? entry.category).toUpperCase()}`,
+          severity: 'error' as const,
+          message: entry.message,
+          ...(entry.source === undefined ? {} : { path: entry.source.relativePath }),
+          ...(entry.source?.line === undefined ? {} : { line: entry.source.line }),
+        };
+      });
+    return {
+      status: stale === undefined ? 'ran' : 'partial',
+      findings,
+      ...(stale === undefined
+        ? {}
+        : {
+            note: `${stale.files} mod files changed after the log was written; relaunch the game for a current log`,
+          }),
+      describe: (_code, examples) => {
+        const first = examples[0]!.message;
+        const category = log.entries.find((entry) => entry.message === first)?.category ?? 'other';
+        return {
+          title: `The game reports: ${errorLogPattern(first)}`,
+          fix: `${categoryHints[category]} hoi4.explain_error explains each line.`,
+          weight: (category === 'syntax' ? 100 : 90) - (stale === undefined ? 0 : 30),
+          next: { tool: 'hoi4.explain_error', arguments: { line: first.slice(0, 1000) } },
+        };
+      },
+    };
+  }
+
+  /** Validate the mod's script files: the ones other audits named, then the newest. */
+  private async healthScript(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    named: ReadonlySet<string>,
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<Omit<CheckRun, 'check' | 'ms'>> {
+    const files = await globFiles(HEALTH_SCRIPT_PATTERNS, {
+      cwd: workspace.modRoot,
+      caseSensitive: false,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const modified = new Map<string, number>();
+    for (const file of files)
+      modified.set(
+        file,
+        (await stat(path.join(workspace.modRoot, file)).catch(() => undefined))?.mtimeMs ?? 0,
+      );
+    const ordered = [...files].sort(
+      (left, right) =>
+        Number(named.has(right)) - Number(named.has(left)) ||
+        modified.get(right)! - modified.get(left)! ||
+        (left < right ? -1 : 1),
+    );
+    const deadline = performance.now() + HEALTH_SCRIPT_BUDGET_MS;
+    const findings: HealthFinding[] = [];
+    let checked = 0;
+    for (const file of ordered.slice(0, HEALTH_SCRIPT_MAX_FILES)) {
+      if (performance.now() > deadline) break;
+      signal?.throwIfAborted();
+      const validated = await this.validateScript(
+        workspaceId,
+        workspace,
+        scriptValidateRequestSchema.parse({ path: file, limit: 32 }),
+        principal,
+        signal,
+      );
+      checked += 1;
+      for (const finding of validated.findings)
+        if (finding.status === 'error' || finding.status === 'warning')
+          findings.push({
+            code: finding.code,
+            severity: finding.status,
+            message: finding.message,
+            path: file,
+            line: finding.line,
+          });
+    }
+    return {
+      status: checked === files.length ? 'ran' : 'partial',
+      findings,
+      ...(checked === files.length
+        ? {}
+        : {
+            note: `Checked ${checked} of ${files.length} script files within the time budget: files other audits named first, then the newest`,
+          }),
+    };
+  }
+
+  /**
+   * `hoi4.script_guard`: the engine's whole-mod check narrowed to the files an agent wrote, and
+   * script validation of the first of them for the names the engine does not read as commands.
+   */
+  private async scriptGuard(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof scriptGuardRequestSchema>,
+    principal?: string,
+    signal?: AbortSignal,
+  ) {
+    const { files, candidates } = await guardedFiles(
+      workspace.modRoot,
+      request,
+      Date.now(),
+      signal,
+    );
+    if (files.length === 0)
+      throw new ServiceError(
+        'SCRIPT_GUARD_NO_FILES',
+        `No script file of the mod changed in the last ${request.sinceMinutes} minutes; pass paths to name the files to check`,
+      );
+    const report = await runEngineCheck(
+      {
+        mod: workspace.modRoot,
+        ...(workspace.gameRoot === undefined ? {} : { game: workspace.gameRoot }),
+        dependencies: workspace.dependencyRoots,
+        includeDlc: workspace.dlcLayers.length > 0,
+      },
+      signal === undefined ? {} : { signal },
+    );
+    const unresolved: InventedName[] = [];
+    for (const file of files.filter((candidate) => SCRIPT_FILE.test(candidate)).slice(0, 50)) {
+      signal?.throwIfAborted();
+      const validated = await this.validateScript(
+        workspaceId,
+        workspace,
+        scriptValidateRequestSchema.parse({ path: file, limit: 32 }),
+        principal,
+        signal,
+      );
+      for (const finding of validated.findings)
+        if (
+          finding.code === 'SCRIPT_COMMAND_UNRESOLVED' &&
+          finding.command !== '' &&
+          (finding.kind === 'effect' || finding.kind === 'trigger')
+        )
+          unresolved.push({
+            name: finding.command,
+            kind: finding.kind,
+            path: file,
+            line: finding.line,
+            ...(finding.suggestions[0] === undefined ? {} : { suggestion: finding.suggestions[0] }),
+            message: `\`${finding.command}\` is neither a documented ${finding.kind} nor a scripted ${finding.kind} defined in any loaded file`,
+          });
+    }
+    return inventedNames(report, files, candidates, unresolved);
+  }
+
+  /** Explanations know the documented commands and the scripted helpers the loaded files define. */
+  private async explainError(
+    workspaceId: string,
+    workspace: ResolvedWorkspace,
+    request: z.infer<typeof explainErrorRequestSchema>,
+    principal?: string,
+    signal?: AbortSignal,
+  ) {
+    const snapshot = await this.engine.scan(
+      workspaceId,
+      { patterns: ['common/scripted_effects/**/*.txt', 'common/scripted_triggers/**/*.txt'] },
+      principal,
+      signal,
+    );
+    const helpers = (kind: string) =>
+      new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
+    const documented = await documentedNames(this.references, workspace, signal);
+    return explainErrors(request, {
+      workspace,
+      ...(documented === undefined ? {} : { documented }),
+      helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
+      ...(signal === undefined ? {} : { signal }),
+    });
+  }
+
   /** File mode reads the scanned file and the mod's scripted helper names from one scan. */
   private async skill(
     workspace: ResolvedWorkspace,
@@ -592,6 +958,17 @@ export class ReferenceToolService {
     return request.name === undefined
       ? listSkills(workspace, signal)
       : loadSkill(workspace, { ...request, name: request.name }, signal);
+  }
+
+  private async checkCompat(
+    workspace: ResolvedWorkspace,
+    input: CompatCheckRequest,
+    principal: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<CompatCheckData> {
+    return input.mode === 'mod'
+      ? checkModCompatibility(this.engine, workspace, input, principal, signal)
+      : checkPatchCompatibility(workspace, input, signal);
   }
 
   private async validateScript(
@@ -834,4 +1211,111 @@ function playerTextFamily(relativePath: string): boolean {
     file.startsWith('common/national_focus/') ||
     (file.startsWith('common/decisions/') && !file.startsWith('common/decisions/categories/'))
   );
+}
+
+/** The script families file validation checks, in the mod's own folder. */
+const HEALTH_SCRIPT_PATTERNS = [
+  'events/**/*.txt',
+  'common/decisions/**/*.txt',
+  'common/national_focus/**/*.txt',
+  'common/on_actions/**/*.txt',
+  'common/scripted_effects/**/*.txt',
+  'common/scripted_triggers/**/*.txt',
+];
+const HEALTH_SCRIPT_BUDGET_MS = 30_000;
+/** The families script validation reads, for the guard's second pass. */
+const SCRIPT_FILE =
+  /^(?:events|common\/(?:decisions|national_focus|on_actions|scripted_effects|scripted_triggers))\//u;
+const HEALTH_SCRIPT_MAX_FILES = 400;
+
+/** The engine's whole-mod check: findings in the mod's own layer. */
+async function healthEngineCheck(
+  workspace: ResolvedWorkspace,
+  signal?: AbortSignal,
+): Promise<Omit<CheckRun, 'check' | 'ms'>> {
+  const report = await runEngineCheck(
+    {
+      mod: workspace.modRoot,
+      ...(workspace.gameRoot === undefined ? {} : { game: workspace.gameRoot }),
+      dependencies: workspace.dependencyRoots,
+      includeDlc: workspace.dlcLayers.length > 0,
+    },
+    signal === undefined ? {} : { signal },
+  );
+  const layer = checkedLayerName(report);
+  return {
+    status: 'ran',
+    findings: report.findings
+      .filter((finding) => finding.layer === layer && finding.severity !== 'info')
+      .map((finding) => ({
+        code: finding.code,
+        severity: finding.severity === 'error' ? ('error' as const) : ('warning' as const),
+        message: finding.message,
+        path: finding.path,
+        line: finding.line,
+      })),
+  };
+}
+
+/** The engine's localisation audit; information is not a problem players see. */
+async function healthLocalisation(
+  workspace: ResolvedWorkspace,
+  signal?: AbortSignal,
+): Promise<Omit<CheckRun, 'check' | 'ms'>> {
+  const inspected = await inspectLocalisation(
+    workspace,
+    localisationInspectRequestSchema.parse({ mode: 'audit', limit: 2 }),
+    signal,
+  );
+  const problems = (inspected.audit?.problems ?? []).filter(
+    ({ severity }) => severity === 'warning',
+  );
+  const codes = new Set(problems.map(({ code }) => code));
+  return {
+    status: 'ran',
+    findings: problems.map(({ code, message, path: file, line }) => ({
+      code,
+      severity: 'warning' as const,
+      message,
+      path: file,
+      line,
+    })),
+    counts: Object.fromEntries(
+      Object.entries(inspected.audit?.counts ?? {}).filter(([code]) => codes.has(code)),
+    ),
+  };
+}
+
+/** The engine's sprite and flag audits, without what players would not notice. */
+async function healthAssets(
+  workspace: ResolvedWorkspace,
+  signal?: AbortSignal,
+): Promise<Omit<CheckRun, 'check' | 'ms'>> {
+  const findings: HealthFinding[] = [];
+  const counts: Record<string, number> = {};
+  for (const kind of ['sprite', 'flag'] as const) {
+    const inspected = await inspectAssets(
+      workspace,
+      assetInspectRequestSchema.parse({ kind, audit: true, limit: 2 }),
+      signal,
+    );
+    for (const problem of inspected.audit?.problems ?? []) {
+      if (problem.severity !== 'warning' || ASSET_INFORMATION.has(problem.code)) continue;
+      findings.push({
+        code: problem.code,
+        severity: 'warning',
+        message: problem.message,
+        path: problem.path,
+        line: problem.line,
+      });
+    }
+    for (const [code, count] of Object.entries(inspected.audit?.counts ?? {}))
+      if (!ASSET_INFORMATION.has(code)) counts[code] = (counts[code] ?? 0) + count;
+  }
+  const codes = new Set(findings.map(({ code }) => code));
+  return {
+    status: 'ran',
+    findings,
+    counts: Object.fromEntries(Object.entries(counts).filter(([code]) => codes.has(code))),
+  };
 }

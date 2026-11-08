@@ -1,5 +1,9 @@
 {
   "cases": {
+    "synthetic.compat.unknown-other-mod": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.decision.inventory": {
       "inline": false,
       "passed": false
@@ -25,6 +29,10 @@
       "passed": true
     },
     "synthetic.event.upstream-through-helper": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.explain_error.wrapped-token": {
       "inline": true,
       "passed": true
     },
@@ -56,6 +64,10 @@
       "inline": true,
       "passed": true
     },
+    "synthetic.mod_health.log-first": {
+      "inline": true,
+      "passed": true
+    },
     "synthetic.mod_index.cold-overview": {
       "inline": true,
       "passed": true
@@ -69,6 +81,10 @@
       "passed": true
     },
     "synthetic.render.focus": {
+      "inline": true,
+      "passed": true
+    },
+    "synthetic.rewrite.localisation-write-preview": {
       "inline": true,
       "passed": true
     },
