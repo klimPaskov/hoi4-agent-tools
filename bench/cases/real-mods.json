@@ -2,6 +2,47 @@
   "about": "Cold-path timings and known-good validation sweeps on the other benchmark mods (decision M-6), and the Chaos Redux sweeps. Workshop mods are read where Steam installed them.",
   "cases": [
     {
+      "id": "atlantis.mod_index.cold-overview",
+      "surface": "mod_index",
+      "corpus": "atlantis",
+      "problem": 13,
+      "title": "The first overview of Atlantis: The Seventh Ring answers within 2 seconds",
+      "evidence": "Target from the plan for workspaces of Chaos Redux size; recorded here to show how the cold path scales.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "cold",
+      "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "atlantis.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "atlantis",
+      "problem": 13,
+      "title": "A repeated overview of Atlantis: The Seventh Ring answers within half a second",
+      "evidence": "Same as atlantis.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
       "id": "zin.mod_index.cold-overview",
       "surface": "mod_index",
       "corpus": "zin",
@@ -14,6 +55,27 @@
       },
       "timing": "cold",
       "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "zin.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "zin",
+      "problem": 13,
+      "title": "A repeated overview of ZIN answers within half a second",
+      "evidence": "Same as zin.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
       "expect": [
         {
           "path": "data.complete",
@@ -130,6 +192,27 @@
       ]
     },
     {
+      "id": "ito.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "ito",
+      "problem": 13,
+      "title": "A repeated overview of Ireland Total Overhaul answers within half a second",
+      "evidence": "Same as ito.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
       "id": "ito.validation.known-good-events",
       "kind": "sweep",
       "surface": "validation",
@@ -238,6 +321,27 @@
       ]
     },
     {
+      "id": "kaiserreich.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "kaiserreich",
+      "problem": 13,
+      "title": "A repeated overview of Kaiserreich 1.7 answers within half a second",
+      "evidence": "Same as kaiserreich.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
       "id": "kaiserreich.validation.known-good-events",
       "kind": "sweep",
       "surface": "validation",
@@ -338,6 +442,27 @@
       },
       "timing": "cold",
       "budgetMs": 2000,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
+      "id": "owb.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "owb",
+      "problem": 13,
+      "title": "A repeated overview of Old World Blues 5.1.12 answers within half a second",
+      "evidence": "Same as owb.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
       "expect": [
         {
           "path": "data.complete",

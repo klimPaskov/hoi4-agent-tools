@@ -83,3 +83,4 @@ Implementation rationale for contributors. For using the server, start with the 
 73. [A resident engine process](0077-resident-engine.md)
 74. [Command phrasings and verb direction in reference ranking](0078-command-phrases-and-verb-direction-in-reference-ranking.md)
 75. [Painted relief and impassable land](0079-painted-relief-and-impassable-land.md)
+76. [`hoi4.mod_index` on the shared engine, and the shared symbol index](0080-mod-index-on-the-shared-engine.md)

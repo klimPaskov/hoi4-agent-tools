@@ -22,6 +22,27 @@
       ]
     },
     {
+      "id": "chaos_redux.mod_index.warm-overview",
+      "surface": "mod_index",
+      "corpus": "chaos_redux",
+      "problem": 13,
+      "title": "A repeated overview of Chaos Redux answers within half a second",
+      "evidence": "Same as chaos_redux.mod_index.cold-overview; a repeated call reads no more than the first.",
+      "tool": "hoi4.mod_index",
+      "arguments": {
+        "mode": "overview"
+      },
+      "timing": "warm",
+      "repeat": 5,
+      "budgetMs": 500,
+      "expect": [
+        {
+          "path": "data.complete",
+          "equals": true
+        }
+      ]
+    },
+    {
       "id": "chaos_redux.source_lookup.cold-first",
       "surface": "source_lookup",
       "corpus": "chaos_redux",
