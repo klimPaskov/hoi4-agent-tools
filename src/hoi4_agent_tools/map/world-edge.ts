@@ -455,40 +455,6 @@ export function edgeWaterDarkness(
   return Math.max(side, pole);
 }
 
-export interface RimAdjacencyInput {
-  /** Province index (zero-based) of each pixel. */
-  provincePixels: ArrayLike<number>;
-  /** Province kind per index: 0 sea, 1 land, 2 lake. */
-  provinceKinds: ArrayLike<number>;
-  width: number;
-  height: number;
-}
-
-/**
- * Impassable rows for every pair of distinct land provinces that meet across the seam (`rim` and
- * `wall`), in
- * `adjacencies.csv` order (rows are sorted by the lower then the higher province ID).
- */
-export function rimAdjacencyRows(input: RimAdjacencyInput): string[] {
-  const { provincePixels, provinceKinds, width, height } = input;
-  const pairs = new Set<string>();
-  for (let y = 0; y < height; y += 1) {
-    const left = provincePixels[y * width]!;
-    const right = provincePixels[y * width + width - 1]!;
-    if (left === right || provinceKinds[left] !== LAND || provinceKinds[right] !== LAND) continue;
-    const low = Math.min(left, right) + 1;
-    const high = Math.max(left, right) + 1;
-    pairs.add(`${low};${high}`);
-  }
-  return [...pairs]
-    .sort((a, b) => {
-      const [al, ah] = a.split(';').map(Number) as [number, number];
-      const [bl, bh] = b.split(';').map(Number) as [number, number];
-      return al - bl || ah - bh;
-    })
-    .map((pair) => `${pair};impassable;-1;-1;-1;-1;-1;;World rim`);
-}
-
 /** Heights and positions of the base map's frame meshes, scaled to the world size. */
 export function frameBorderPositions(
   width: number,
