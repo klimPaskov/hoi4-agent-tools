@@ -33,6 +33,12 @@ export interface HydrologyInput {
   /** Number of land pixels at full resolution. */
   landPixels: number;
   signal?: AbortSignal | undefined;
+  /**
+   * Report rivers that cannot reach their mouths as one `MAP_RIVER_UNREACHABLE_MOUTH` error note
+   * and carry on with the rest, instead of throwing. Only the synthesis check sets it, so it can
+   * report later problems of the same model together; a write still stops at the first failure.
+   */
+  collectUnreachable?: boolean | undefined;
 }
 
 export type RiverMouthKind = 'sea' | 'lake' | 'edge' | 'river';
@@ -65,7 +71,8 @@ export interface MacroRiver {
 
 export interface HydrologyNote {
   code: string;
-  severity: 'warning' | 'info';
+  /** `error` only with `collectUnreachable`. */
+  severity: 'error' | 'warning' | 'info';
   message: string;
   details?: Record<string, unknown>;
 }
@@ -472,6 +479,7 @@ interface NamedContext {
   notes: HydrologyNote[];
   seed: number;
   signal?: AbortSignal | undefined;
+  collectUnreachable?: boolean | undefined;
 }
 
 /** The macro cell holding a frame point, moved to the nearest land cell within `radius`. */
@@ -934,10 +942,14 @@ function routeNamedRivers(context: NamedContext): NamedRoute[] {
       }
     }
   }
-  void notes;
   if (failures.length > 0) {
     const first = failures[0]!;
-    fail(
+    const report = context.collectUnreachable
+      ? (code: string, message: string, details: Record<string, unknown>): void => {
+          notes.push({ code, severity: 'error', message, details });
+        }
+      : fail;
+    report(
       'MAP_RIVER_UNREACHABLE_MOUTH',
       failures.length === 1
         ? `River ${first.riverId} cannot reach its mouth: ${first.reason}`
@@ -1540,6 +1552,7 @@ export function synthesizeHydrology(input: HydrologyInput): HydrologyResult {
     notes,
     seed,
     signal: input.signal,
+    collectUnreachable: input.collectUnreachable,
   });
 
   // Burn the channels into the heights and flood again with the channels as outlets, so every
