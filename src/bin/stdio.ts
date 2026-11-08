@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import path from 'node:path';
 import { canonicalJson } from '../hoi4_agent_tools/core/canonical.js';
 import {
   StdioFrameLimitError,
@@ -8,6 +9,8 @@ import {
 import { serveNegotiatedStdio } from '../hoi4_agent_tools/mcp/transports/negotiated-stdio.js';
 import { ServerRegistry } from '../hoi4_agent_tools/core/server-registry.js';
 import { StdioLifetime } from '../hoi4_agent_tools/mcp/transports/stdio-lifetime.js';
+import { loadPlugins } from '../hoi4_agent_tools/mcp/plugins.js';
+import { PACKAGE_VERSION } from '../hoi4_agent_tools/version.js';
 import { createEngine } from '../hoi4_agent_tools/runtime.js';
 
 /**
@@ -27,10 +30,15 @@ function idleExitMinutes(configured: number): number {
 async function main(): Promise<void> {
   // The handshake must not wait for journal recovery; the transport holds workspace requests.
   const engine = await createEngine(undefined, { recovery: 'background' });
-  const chaosxTools =
-    process.env.HOI4_AGENT_TOOLS_CHAOSX === '1'
-      ? await import('../hoi4_agent_tools/mcp/tools/chaosx.js')
-      : undefined;
+  // Plugins load only from the paths the server configuration lists (M-14).
+  const plugins = await loadPlugins(
+    engine.resolver.config().plugins,
+    PACKAGE_VERSION,
+    (file, reason) =>
+      process.stderr.write(
+        `${canonicalJson({ level: 'warn', event: 'plugin_skipped', plugin: path.basename(file), reason })}\n`,
+      ),
+  );
   const onerror = (error: Error): void => {
     const fatalInputError =
       error instanceof StdioFrameLimitError || error instanceof StdioInvalidUtf8Error;
@@ -76,13 +84,7 @@ async function main(): Promise<void> {
         })}\n`,
       );
     },
-    ...(chaosxTools === undefined
-      ? {}
-      : {
-          createModernPrivateTools: chaosxTools.createChaosxToolOperations,
-          registerLegacy: (server: Parameters<typeof chaosxTools.registerChaosxTools>[0]) =>
-            chaosxTools.registerChaosxTools(server, engine, {}),
-        }),
+    ...(plugins === undefined ? {} : { plugins }),
   });
   closeTransport = () => transport.close();
   lifetime.start();

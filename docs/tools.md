@@ -207,7 +207,6 @@ Other clients receive the ordinary synchronous result.
 Use `hoi4.job_inspect` to inspect an authorized job or retrieve its result, and `hoi4.job_cancel` to request cancellation.
 See [Background jobs](jobs.md) for request keys, cancellation and recovery.
 
-## Optional ChaosX tools
+## Plugins
 
-On the stdio server (`hoi4-agent-tools`), setting `HOI4_AGENT_TOOLS_CHAOSX=1` exposes `chaosx.focus_country_assets` and `chaosx.visual_revision`.
-These workflow-specific tools are absent from the default list, and the HTTP server never exposes them.
+A private extension can add tools to the stdio server (`hoi4-agent-tools`). List its module (`.mjs` or `.js`, absolute path) in the configuration key `plugins`; the server loads plugins only from those paths, never from a mod folder or the environment, and the HTTP server never loads them. A plugin tool is named `<plugin>.<tool>` and never starts with `hoi4.`, which this package reserves. A plugin exports a default function that receives a host (`importServerModule` to borrow the server's own modules, `dependency` for the shared `zod` and `sharp`) and returns a factory of tools; each tool has the same definition as a built-in one (name, title, description, input and optional output schema, annotations) and a `call` function. A plugin file that does not exist is skipped with a warning on stderr; a file that is a link, is not a `.mjs` or `.js` file, or exports no factory stops the server at startup.
