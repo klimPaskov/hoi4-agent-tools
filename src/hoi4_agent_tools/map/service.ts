@@ -1,4 +1,8 @@
-import { MAP_REFERENCE_SCRIPT_PATTERNS, mapScriptConsistency } from './references.js';
+import {
+  CONTINENT_REFERENCE_SCRIPT_PATTERNS,
+  MAP_REFERENCE_SCRIPT_PATTERNS,
+  mapScriptConsistency,
+} from './references.js';
 import path from 'node:path';
 import { escapeFileGlob } from '../core/file-glob.js';
 import {
@@ -916,6 +920,7 @@ export class AgentNudger {
     includeWorldContext = false,
     includeAppearance = false,
     includeBorderInputs = false,
+    includeContinentReferences = false,
   ): Promise<MapScanSnapshot> {
     signal?.throwIfAborted();
     const workspace = this.resolver.get(workspaceId, principal);
@@ -1022,8 +1027,17 @@ export class AgentNudger {
           signal,
         )
       : undefined;
+    // Scripts that may name a continent, read when a new world drops the inherited continents.
+    const continentSnapshot = includeContinentReferences
+      ? await this.engine.scan(
+          workspaceId,
+          { patterns: [...CONTINENT_REFERENCE_SCRIPT_PATTERNS] },
+          principal,
+          signal,
+        )
+      : undefined;
     signal?.throwIfAborted();
-    const files = [
+    const collected = [
       ...contentSnapshot.files,
       ...locatorSnapshot.files,
       ...(externalScriptSnapshot?.files ?? []),
@@ -1043,6 +1057,11 @@ export class AgentNudger {
             (existing) => existing.displayPath === file.displayPath,
           ),
       ),
+    ];
+    const collectedPaths = new Set(collected.map(({ displayPath }) => displayPath));
+    const files = [
+      ...collected,
+      ...(continentSnapshot?.files ?? []).filter((file) => !collectedPaths.has(file.displayPath)),
     ].sort(
       (left, right) =>
         left.loadOrder - right.loadOrder || compareCodeUnits(left.displayPath, right.displayPath),
@@ -1128,6 +1147,10 @@ export class AgentNudger {
       operations.some(
         (operation) =>
           operation.kind === 'assign_territory' || operation.kind === 'repartition_states',
+      ),
+      operations.some(
+        (operation) =>
+          operation.kind === 'create_world' && operation.inheritedContinents === 'drop',
       ),
     );
     const referenceWorlds = new Map<string, PreparedReferenceWorld>();
