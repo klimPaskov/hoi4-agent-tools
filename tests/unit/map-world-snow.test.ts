@@ -1,9 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveGeography } from '../../src/hoi4_agent_tools/map/geography/index.js';
 import {
+  DEFAULT_PAINTED_RELIEF,
+  PAINTED_MOUNTAIN,
+} from '../../src/hoi4_agent_tools/map/relief/painted-relief.js';
+import {
   generateWorld,
   VANILLA_PERMANENT_SNOW,
   type GeneratedWorld,
+  type PermanentSnowInput,
   type WorldNote,
   type WorldSpec,
 } from '../../src/hoi4_agent_tools/map/world.js';
@@ -235,5 +240,113 @@ describe('the permanent-snow estimate of the synthesis check', () => {
     const note = checked.notes.find(({ code }) => code === 'MAP_PERMANENT_SNOW_ESTIMATE')!;
     expect(note.severity).toBe('warning');
     expect(note.message).toMatch(/^Estimated from the half-resolution relief/u);
+  });
+});
+
+describe('permanent snow on painted relief', () => {
+  // Drawn snow in the north and a painted range nearer the middle, in a geography world.
+  const width = 1024;
+  const height = 512;
+  const range = (x: number, y: number) => x >= 480 && x < 720 && y >= 90 && y < 250;
+  const raster = syntheticRaster(width, height, {
+    at: (x, y) => (x > 120 && x < 900 && y > 40 && y < 440 ? 1 : 0),
+    terrain: (x, y) => (range(x, y) ? PAINTED_MOUNTAIN : y < 130 ? 4 : 0),
+  });
+  const model = reliefGeography();
+  delete model.rivers;
+  delete model.lakes;
+  const geography = resolveGeography(model, {
+    frame: { width, height },
+    hasReference: true,
+  }).geography;
+  const spec = (permanentSnow?: PermanentSnowInput): WorldSpec => ({
+    width,
+    height,
+    seed: 7,
+    landCoverage: 0.4,
+    continents: 1,
+    landProvincePixels: 3_000,
+    seaProvincePixels: 12_000,
+    provincesPerState: 6,
+    landProvincesPerRegion: 30,
+    seaProvincesPerRegion: 10,
+    rivers: 0,
+    startDate: '1936.1.1',
+    countries: [{ tag: 'AAA', name: 'Alpha' }],
+    geography,
+    referenceSurface: raster,
+    paintedRelief: DEFAULT_PAINTED_RELIEF,
+    ...(permanentSnow === undefined ? {} : { permanentSnow }),
+  });
+  interface Sources {
+    rangeSnowLines: number;
+    paintedSnowLines: number;
+    drawnSnow: number;
+  }
+  const share = (world: GeneratedWorld, code = 'MAP_PERMANENT_SNOW_SHARE') => {
+    const note = world.notes.find((found) => found.code === code)!;
+    return {
+      note,
+      details: note.details as {
+        permanentPixels: number;
+        bySource: Sources;
+        permanentSnow: Record<string, unknown>;
+      },
+    };
+  };
+
+  it('counts the painted snow line apart and lowers it with paintedHeight', () => {
+    // ZIN, 9 November 2026: with 0.97/230, 15.37% of the land was permanent snow and only about
+    // 69,000 of its 804,575 pixels were drawn snow; permanentSnow had no setting for the rest.
+    const thresholds = { iceCapLatitude: 0.97, peakHeight: 230 };
+    const before = share(generateWorld(spec(thresholds), plainContext));
+    const sources = before.details.bySource;
+    expect(sources.paintedSnowLines).toBeGreaterThan(sources.drawnSnow);
+    expect(sources.rangeSnowLines + sources.paintedSnowLines + sources.drawnSnow).toBe(
+      before.details.permanentPixels,
+    );
+    const off = share(generateWorld(spec({ ...thresholds, paintedHeight: 256 }), plainContext));
+    expect(off.details.bySource.paintedSnowLines).toBe(0);
+    expect(off.details.bySource.rangeSnowLines).toBe(sources.rangeSnowLines);
+    expect(off.details.permanentSnow).toEqual({ ...thresholds, paintedHeight: 256 });
+    const raised = share(generateWorld(spec({ ...thresholds, paintedHeight: 200 }), plainContext));
+    expect(raised.details.bySource.paintedSnowLines).toBeLessThan(sources.paintedSnowLines);
+    expect(raised.details.bySource.paintedSnowLines).toBeGreaterThan(0);
+  });
+
+  it('names paintedHeight when the painted snow line puts most of the snow', () => {
+    const { note } = share(
+      generateWorld(spec({ iceCapLatitude: 1, peakHeight: 256 }), plainContext),
+    );
+    expect(note.severity).toBe('warning');
+    expect(note.message).toContain('raise permanentSnow.paintedHeight');
+  });
+
+  it('estimates each source in the synthesis check', () => {
+    const thresholds = { iceCapLatitude: 0.97, peakHeight: 230, paintedHeight: 200 };
+    const written = share(generateWorld(spec(thresholds), plainContext)).details;
+    const estimate = share(
+      generateWorld(spec(thresholds), plainContext, { riverCheck: true }),
+      'MAP_PERMANENT_SNOW_ESTIMATE',
+    ).details;
+    for (const source of ['rangeSnowLines', 'paintedSnowLines', 'drawnSnow'] as const)
+      expect(
+        Math.abs(estimate.bySource[source] - written.bySource[source]),
+        source,
+      ).toBeLessThanOrEqual(Math.max(200, 0.1 * written.bySource[source]));
+  });
+
+  it('accepts paintedHeight from 96 to 256', () => {
+    const parse = (paintedHeight: unknown) =>
+      mapOperationSchema.safeParse({
+        kind: 'create_world',
+        id: 'w',
+        permanentSnow: { paintedHeight },
+      }).success;
+    expect(parse(96)).toBe(true);
+    expect(parse(256)).toBe(true);
+    expect(parse(95)).toBe(false);
+    expect(parse(257)).toBe(false);
+    expect(parse(200.5)).toBe(false);
   });
 });

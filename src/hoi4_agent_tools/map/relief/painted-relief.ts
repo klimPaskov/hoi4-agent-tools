@@ -58,6 +58,11 @@ export interface PaintedReliefInput {
   impassable?: Uint8Array | undefined;
   settings: PaintedReliefSettings;
   seed: number;
+  /**
+   * The lowest height the painted snow line may take (`create_world.permanentSnow.paintedHeight`);
+   * 255 or more puts no painted snow line. Without it the line follows `paintedSnowHeight`.
+   */
+  snowFloor?: number | undefined;
 }
 
 /** The macro arrays the stage changes in place. */
@@ -183,8 +188,8 @@ export function applyPaintedRelief(
       const weight = Math.max(m, 0.6 * h, v, i);
       if (weight > target.footprint[cell]!) target.footprint[cell] = weight;
       if (Math.max(m, v, i) > 0.25) {
-        const snow = paintedSnowHeight(y, mh);
-        if (snow < target.snowLine[cell]!) target.snowLine[cell] = snow;
+        const snow = Math.max(paintedSnowHeight(y, mh), input.snowFloor ?? 0);
+        if (snow < 255 && snow < target.snowLine[cell]!) target.snowLine[cell] = snow;
       }
     }
   return { raisedCells, highest: Math.round(highest) };

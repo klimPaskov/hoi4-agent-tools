@@ -524,10 +524,12 @@ function geographySurface(
 const REFERENCE_SNOW = 4;
 /**
  * Where land drawn as snow keeps permanent snow: nearer a pole than `iceCapLatitude` (0 in the
- * middle row, 1 at the top and bottom edge) or at `peakHeight` and above. `snowlines` keeps it only
- * above the snow lines of ranges and painted mountains.
+ * middle row, 1 at the top and bottom edge) or at `peakHeight` and above. `paintedHeight` is the
+ * lowest the snow line of painted mountains, volcanoes and impassable land may go (256 puts none).
+ * `snowlines` keeps it only above the snow lines of ranges and painted mountains.
  */
-export type PermanentSnowInput = 'snowlines' | { iceCapLatitude?: number; peakHeight?: number };
+export type PermanentSnowInput =
+  'snowlines' | { iceCapLatitude?: number; peakHeight?: number; paintedHeight?: number };
 /** The base game keeps flat permanent snow in the tenth of rows nearest each pole. */
 const ICE_CAP_LATITUDE = 0.8;
 /** Drawn snow at or above this height stays permanent, as the base game's snowy high ground. */
@@ -536,12 +538,42 @@ const PEAK_SNOW_HEIGHT = 150;
 function permanentSnowRule(input: PermanentSnowInput | undefined): {
   iceCapLatitude: number;
   peakHeight: number;
+  paintedHeight?: number;
 } {
   // A latitude above 1 and a height above 255 are never reached.
   if (input === 'snowlines') return { iceCapLatitude: 2, peakHeight: 256 };
   return {
     iceCapLatitude: input?.iceCapLatitude ?? ICE_CAP_LATITUDE,
     peakHeight: input?.peakHeight ?? PEAK_SNOW_HEIGHT,
+    ...(input?.paintedHeight === undefined ? {} : { paintedHeight: input.paintedHeight }),
+  };
+}
+
+/** Permanent-snow pixels of a world by what put them there, with its land and drawn snow. */
+interface PermanentSnowCount {
+  permanent: number;
+  /** Above a range's snow line. */
+  rangeSnowLines: number;
+  /** Above the snow line of painted mountains, volcanoes and impassable land only. */
+  paintedSnowLines: number;
+  /** Drawn snow on an ice cap or at `peakHeight` and up, below every snow line. */
+  drawnSnow: number;
+  painted: number;
+  seasonal: number;
+  land: number;
+  edge: number;
+}
+
+function emptySnowCount(): PermanentSnowCount {
+  return {
+    permanent: 0,
+    rangeSnowLines: 0,
+    paintedSnowLines: 0,
+    drawnSnow: 0,
+    painted: 0,
+    seasonal: 0,
+    land: 0,
+    edge: 0,
   };
 }
 /** Strategic regions drawn mostly as snow take the weather of at least this latitude. */
@@ -561,7 +593,7 @@ function pixelLatitude(y: number, height: number): number {
 }
 
 function permanentSnowNote(
-  count: { permanent: number; painted: number; seasonal: number; land: number; edge: number },
+  count: PermanentSnowCount,
   input: PermanentSnowInput | undefined,
   estimate = false,
 ): WorldNote {
@@ -570,6 +602,20 @@ function permanentSnowNote(
   const ratio = share / VANILLA_PERMANENT_SNOW.share;
   const high = ratio > PERMANENT_SNOW_WARNING_FACTOR;
   const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
+  // The hint names what put most of the snow there, since each source has its own setting.
+  const largest = (
+    [
+      ['paintedSnowLines', count.paintedSnowLines],
+      ['rangeSnowLines', count.rangeSnowLines],
+      ['drawnSnow', count.drawnSnow],
+    ] as const
+  ).reduce((best, next) => (next[1] > best[1] ? next : best));
+  const hint =
+    largest[0] === 'paintedSnowLines'
+      ? `${largest[1]} of them lie above the snow line of painted mountains, volcanoes and impassable land: raise permanentSnow.paintedHeight (256 puts none)`
+      : largest[0] === 'rangeSnowLines'
+        ? `${largest[1]} of them lie above the snow lines of the model's ranges: raise or remove their snowline`
+        : 'raise permanentSnow.iceCapLatitude or peakHeight, or set permanentSnow to "snowlines"';
   return {
     code: estimate ? 'MAP_PERMANENT_SNOW_ESTIMATE' : 'MAP_PERMANENT_SNOW_SHARE',
     severity: high ? 'warning' : 'info',
@@ -581,15 +627,19 @@ function permanentSnowNote(
       (count.painted > 0
         ? `; ${count.seasonal} of ${count.painted} drawn snow pixels are ordinary land with seasonal snow`
         : '') +
-      (high
-        ? '. The game draws permanent snow as bright ice: raise permanentSnow.iceCapLatitude or peakHeight, or set permanentSnow to "snowlines"'
-        : ''),
+      (high ? `. The game draws permanent snow as bright ice; ${hint}` : ''),
     details: {
       permanentPixels: count.permanent,
       landPixels: count.land,
       share: Number(share.toFixed(5)),
       vanilla: VANILLA_PERMANENT_SNOW,
       ratio: Number(ratio.toFixed(2)),
+      // What put each permanent pixel there, in this order of precedence.
+      bySource: {
+        rangeSnowLines: count.rangeSnowLines,
+        paintedSnowLines: count.paintedSnowLines,
+        drawnSnow: count.drawnSnow,
+      },
       drawnSnowPixels: count.painted,
       seasonalSnowPixels: count.seasonal,
       // The snow range or wall at a `rim` or `wall` seam, counted apart from the land.
@@ -597,7 +647,11 @@ function permanentSnowNote(
       permanentSnow:
         input === 'snowlines'
           ? 'snowlines'
-          : { iceCapLatitude: rule.iceCapLatitude, peakHeight: rule.peakHeight },
+          : {
+              iceCapLatitude: rule.iceCapLatitude,
+              peakHeight: rule.peakHeight,
+              ...(rule.paintedHeight === undefined ? {} : { paintedHeight: rule.paintedHeight }),
+            },
       // The write adds full-resolution detail to these heights, so its share differs a little.
       ...(estimate ? { estimate: true, grid: 'half-resolution' } : {}),
     },
@@ -607,7 +661,7 @@ function permanentSnowNote(
 /**
  * The permanent-snow count of the write, estimated on the half-resolution relief of the river
  * check: the same rule as the terrain writer (snow lines, then drawn snow on ice caps and peaks),
- * with each pixel taking the height and snow line of its half-resolution cell.
+ * with each pixel taking the height and snow lines of its half-resolution cell.
  */
 function estimatePermanentSnow(input: {
   width: number;
@@ -618,10 +672,10 @@ function estimatePermanentSnow(input: {
   relief: CheckedRelief;
   permanentSnow: PermanentSnowInput | undefined;
   signal?: AbortSignal | undefined;
-}): { permanent: number; painted: number; seasonal: number; land: number; edge: number } {
+}): PermanentSnowCount {
   const { width, height, kind, relief } = input;
   const rule = permanentSnowRule(input.permanentSnow);
-  const count = { permanent: 0, painted: 0, seasonal: 0, land: 0, edge: 0 };
+  const count = emptySnowCount();
   for (let y = 0; y < height; y += 1) {
     if (y % 64 === 0) input.signal?.throwIfAborted();
     const iceCap = pixelLatitude(y, height) >= rule.iceCapLatitude;
@@ -637,13 +691,25 @@ function estimatePermanentSnow(input: {
       const cell = row + Math.min(relief.width - 1, x >> 1);
       const value = Math.round(relief.heights[cell]!);
       const line = relief.snowLine[cell]!;
+      const range = relief.rangeSnowLine[cell]!;
       const drawn = input.drawnSnow(pixel);
-      const snowy =
-        (line < 255 && value >= line) || (drawn && (iceCap || value >= rule.peakHeight));
-      if (snowy) count.permanent += 1;
+      const source =
+        range < 255 && value >= range
+          ? 'range'
+          : line < 255 && value >= line
+            ? 'painted'
+            : drawn && (iceCap || value >= rule.peakHeight)
+              ? 'drawn'
+              : undefined;
+      if (source !== undefined) {
+        count.permanent += 1;
+        if (source === 'range') count.rangeSnowLines += 1;
+        else if (source === 'painted') count.paintedSnowLines += 1;
+        else count.drawnSnow += 1;
+      }
       if (drawn) {
         count.painted += 1;
-        if (!snowy) count.seasonal += 1;
+        if (source === undefined) count.seasonal += 1;
       }
     }
   }
@@ -1101,6 +1167,8 @@ export function generateWorld(
   // impassable regions of the geography model (ZR-28).
   const impassableMask = impassableLand(reference?.impassable, geography, width, height);
   // Impassable land is the highest ground even without relief.painted: then only it is raised.
+  // permanentSnow.paintedHeight keeps the painted snow line at or above its height.
+  const snowFloor = permanentSnowRule(spec.permanentSnow).paintedHeight;
   const painted =
     geography === undefined
       ? undefined
@@ -1110,6 +1178,7 @@ export function generateWorld(
             impassable: impassableMask,
             settings: spec.paintedRelief,
             seed: spec.seed,
+            snowFloor,
           }
         : impassableMask !== undefined
           ? {
@@ -1117,6 +1186,7 @@ export function generateWorld(
               impassable: impassableMask,
               settings: DEFAULT_PAINTED_RELIEF,
               seed: spec.seed,
+              snowFloor,
             }
           : undefined;
   if (edge.mode !== 'none') {
@@ -2518,7 +2588,7 @@ export function generateWorld(
     heights[pixel]! >= snowRule.peakHeight
       ? 16
       : 19;
-  const snowCount = { permanent: 0, painted: 0, seasonal: 0, land: 0, edge: 0 };
+  const snowCount = emptySnowCount();
   // A wall takes the look of the land it meets, row by row on each side.
   const wallLook =
     wallMask === undefined
@@ -2573,7 +2643,12 @@ export function generateWorld(
       if (walled !== undefined || rimmed) snowCount.edge += 1;
       else {
         snowCount.land += 1;
-        if (snowy) snowCount.permanent += 1;
+        if (snowy) {
+          snowCount.permanent += 1;
+          if (synthesized?.snow[pixel] !== 1) snowCount.drawnSnow += 1;
+          else if (synthesized.paintedSnow[pixel] === 1) snowCount.paintedSnowLines += 1;
+          else snowCount.rangeSnowLines += 1;
+        }
         if (paintedSnow(pixel)) {
           snowCount.painted += 1;
           if (!snowy) snowCount.seasonal += 1;
