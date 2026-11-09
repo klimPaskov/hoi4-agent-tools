@@ -9,7 +9,7 @@ import {
 } from './partition-fields.js';
 import type { PartitionFields } from './partition-fields.js';
 import type { ResolvedPartitionTuning } from './partition-tuning.js';
-import { PARTITION_PROVINCE_ERROR } from './partition-tuning.js';
+import { areaRowFactor, PARTITION_PROVINCE_ERROR } from './partition-tuning.js';
 import { hash32, placeSeeds, STEP_UNIT, unit32, weightedWatershed } from './partition-watershed.js';
 
 /**
@@ -441,7 +441,11 @@ function planAreas(
       : area > t.maxProvincePixels
         ? t.maxProvincePixels
         : area;
-  const land = (pixel: number): number => clampArea(landRaw(pixel) * landScale);
+  // areaByRow applies after the scale to the base area, so rows with factor 1 keep their sizes.
+  const rowFactor = new Float64Array(height);
+  for (let y = 0; y < height; y += 1) rowFactor[y] = areaRowFactor(t.areaByRow, y, height);
+  const land = (pixel: number): number =>
+    clampArea(landRaw(pixel) * landScale * rowFactor[Math.floor(pixel / width)]!);
   const sea = (pixel: number): number =>
     kind[pixel] === LAKE ? t.lakeArea : clampArea(seaRaw(pixel) * seaScale);
   let minLand = Infinity;

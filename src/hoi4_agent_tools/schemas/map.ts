@@ -505,6 +505,14 @@ export const worldPartitionTuningSchema = z
       .max(64)
       .optional()
       .describe('A sea channel at most this wide gets two sea provinces across it; default 24.'),
+    areaByRow: z
+      .array(z.tuple([z.number().min(0).max(1), z.number().min(0.25).max(8)]))
+      .min(1)
+      .max(32)
+      .optional()
+      .describe(
+        '[row, factor] points, row 0 the top edge and 1 the bottom, in increasing row order: the land province area at a row is multiplied by the factor, linearly between points and held beyond the ends, after the plan is scaled to the base area. States keep their province counts, so they grow by the same factor. MAP_PARTITION_AREA_BY_ROW reports the mean province area per band.',
+      ),
   })
   .strict();
 export type WorldPartitionTuningInput = z.infer<typeof worldPartitionTuningSchema>;
