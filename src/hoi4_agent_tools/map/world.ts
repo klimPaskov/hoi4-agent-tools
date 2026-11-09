@@ -48,7 +48,6 @@ import {
   edgeWaterDarkness,
   hasRimRange,
   RIM_COLOUR_FACTOR,
-  rimAdjacencyRows,
   rimHeight,
   rimStrength,
   WALL_TERRAIN_KINDS,
@@ -1330,6 +1329,15 @@ export function generateWorld(
     return found;
   };
   const wallProvinces = majorityIn(wallMask);
+  // `rim` and `wall` close the seam with impassable land, never with adjacency rows: the engine
+  // does not wrap adjacencies and draws a row between the two edges as a line across the whole
+  // map. Every land province on the first or last column is therefore impassable.
+  if (hasRimRange(edge))
+    for (let y = 0; y < height; y += 1)
+      for (const pixel of [y * width, y * width + width - 1]) {
+        const id = provinces.pixel[pixel]!;
+        if (provinces.kind[id] === LAND) wallProvinces.add(id);
+      }
   const impassableProvinces = new Set([...wallProvinces, ...majorityIn(impassableMask)]);
   if (landIds.length < spec.countries.length)
     throw new ServiceError(
@@ -2208,21 +2216,6 @@ export function generateWorld(
       `continents = {\n${[...new Set([...generatedContinentKeys, ...(spec.inheritedContinents === 'drop' ? [] : (context.continentKeys ?? []))])].map((key) => `\t${key}`).join('\n')}\n}\n`,
     ),
   );
-  const rimRows = hasRimRange(edge)
-    ? rimAdjacencyRows({
-        provincePixels: provinces.pixel,
-        provinceKinds: provinces.kind,
-        width,
-        height,
-      })
-    : [];
-  if (rimRows.length > 0)
-    notes.push({
-      code: 'MAP_EDGE_RIM_ADJACENCIES',
-      severity: 'info',
-      message: `The ${edge.mode} edge policy wrote ${rimRows.length} impassable adjacency row(s) for provinces that meet across the seam`,
-      details: { rows: rimRows.length },
-    });
   const crossingRows = (gameplay?.crossings.rows ?? []).map(adjacencyRowText);
   // Impassable land and rows must not cut a realm apart or box it in by accident (ZR-28).
   if (impassableProvinces.size > 0 || (gameplay?.crossings.blocked.length ?? 0) > 0)
@@ -2230,13 +2223,7 @@ export function generateWorld(
       kind: provinces.kind,
       neighbors: provinces.neighbors,
       impassable: impassableProvinces,
-      blocked: [
-        ...(gameplay?.crossings.blocked ?? []),
-        ...rimRows.map((row) => {
-          const [from, to] = row.split(';').map(Number) as [number, number];
-          return [from - 1, to - 1] as const;
-        }),
-      ],
+      blocked: [...(gameplay?.crossings.blocked ?? [])],
       crossings: (gameplay?.crossings.rows ?? [])
         .filter(({ type }) => type === 'sea')
         .map(({ from, to }) => [from - 1, to - 1] as const),
@@ -2248,7 +2235,7 @@ export function generateWorld(
   add(
     `${map}/adjacencies.csv`,
     text(
-      `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n${[...crossingRows, ...rimRows].map((row) => `${row}\r\n`).join('')}-1;-1;;-1;-1;-1;-1;-1;-1\r\n`,
+      `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\r\n${crossingRows.map((row) => `${row}\r\n`).join('')}-1;-1;;-1;-1;-1;-1;-1;-1\r\n`,
     ),
   );
   add(

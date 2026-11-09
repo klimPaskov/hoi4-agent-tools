@@ -248,6 +248,12 @@ export interface ProvinceRaster {
   height: number;
   provinceIds: Int32Array;
   adjacency: ReadonlyMap<number, ReadonlySet<number>>;
+  /**
+   * Pairs (`low:high`) that touch only where the map wraps, between the first and last column.
+   * `adjacency` counts them as neighbours; the engine draws a row between them as a line across
+   * the whole map.
+   */
+  seamOnlyPairs?: ReadonlySet<string>;
   geometry: ReadonlyMap<number, ProvinceGeometry>;
   unknownColors: readonly UnknownMapColor[];
   unknownColorCount: number;
@@ -1441,14 +1447,38 @@ export function buildProvinceRaster(
     }
   }
   const adjacency = new Map<number, Set<number>>();
+  const seamPairs = new Set<string>();
   for (let y = 0; y < bitmap.height; y += 1) {
     for (let x = 0; x < bitmap.width; x += 1) {
       const current = provinceIds[y * bitmap.width + x] ?? -1;
       const rightX = x === bitmap.width - 1 ? 0 : x + 1;
-      addNeighbor(adjacency, current, provinceIds[y * bitmap.width + rightX] ?? -1);
+      const right = provinceIds[y * bitmap.width + rightX] ?? -1;
+      if (rightX === 0 && current >= 0 && right >= 0 && current !== right)
+        seamPairs.add(`${Math.min(current, right)}:${Math.max(current, right)}`);
+      addNeighbor(adjacency, current, right);
       if (y + 1 < bitmap.height)
         addNeighbor(adjacency, current, provinceIds[(y + 1) * bitmap.width + x] ?? -1);
     }
+  }
+  // A seam pair that also touches inside the map is an ordinary neighbour.
+  const seamOnlyPairs = new Set<string>();
+  if (seamPairs.size > 0) {
+    const inside = new Set<string>();
+    for (let y = 0; y < bitmap.height; y += 1)
+      for (let x = 0; x < bitmap.width; x += 1) {
+        const current = provinceIds[y * bitmap.width + x] ?? -1;
+        if (current < 0) continue;
+        const neighbours = [
+          x + 1 < bitmap.width ? (provinceIds[y * bitmap.width + x + 1] ?? -1) : -1,
+          y + 1 < bitmap.height ? (provinceIds[(y + 1) * bitmap.width + x] ?? -1) : -1,
+        ];
+        for (const other of neighbours) {
+          if (other < 0 || other === current) continue;
+          const key = `${Math.min(current, other)}:${Math.max(current, other)}`;
+          if (seamPairs.has(key)) inside.add(key);
+        }
+      }
+    for (const key of seamPairs) if (!inside.has(key)) seamOnlyPairs.add(key);
   }
   const geometry = new Map<number, ProvinceGeometry>();
   for (const [id, value] of accumulators) {
@@ -1484,6 +1514,7 @@ export function buildProvinceRaster(
     height: bitmap.height,
     provinceIds,
     adjacency,
+    seamOnlyPairs,
     geometry,
     unknownColors: [...unknown.values()].sort((left, right) =>
       compareCodeUnits(rgbKey(left.color), rgbKey(right.color)),
