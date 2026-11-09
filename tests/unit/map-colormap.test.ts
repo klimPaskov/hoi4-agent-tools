@@ -195,7 +195,19 @@ describe('the colour map profiles in a generated world', () => {
   });
 
   it('gives permanent-snow terrain its own tint instead of the plains tint', () => {
-    const files = filesOf(calibrated);
+    // Drawn snow is permanent only on the ice caps, the tenth of rows nearest each pole.
+    const capped = syntheticRaster(width, height, {
+      at: (x, y) => (x > 40 && x < 470 && y > 2 && y < 226 ? 1 : 0),
+      terrain: (x, y) =>
+        y < 24 ? 4 : [0, 1, 2, 3, 4, 6, 7, 8][(Math.floor(x / 60) + Math.floor(y / 70)) % 8]!,
+    });
+    for (let pixel = 0; pixel < capped.moisture.length; pixel += 1) capped.moisture[pixel] = 0.7;
+    const files = filesOf(
+      generateWorld(
+        worldSpec(capped, { colormapProfile: 'calibrated', look: 'vanilla-temperate' }),
+        vanillaTerrain,
+      ),
+    );
     const terrain = readTerrainIndices(files);
     const colours = readDds32(files.get('map/terrain/colormap_rgb_cityemissivemask_a.dds')!);
     let snow = 0;

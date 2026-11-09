@@ -52,7 +52,12 @@ import {
   planReferenceRemap,
   ReferenceRemapError,
 } from './references.js';
-import { generateWorld, type GeneratedWorld, type WorldCountry } from './world.js';
+import {
+  generateWorld,
+  type GeneratedWorld,
+  type PermanentSnowInput,
+  type WorldCountry,
+} from './world.js';
 import type { ColourClass } from './colormap.js';
 import { resolveEdge } from './world-edge.js';
 import { DEFAULT_AUTO_STRAIT_GAP_PX } from './gameplay/crossings.js';
@@ -522,6 +527,8 @@ export interface CreateWorldOperation extends MapOperationBase {
   continentNames?: string[];
   /** `keep` (default) also lists the active continent.txt's continents; `drop` leaves them out. */
   inheritedContinents?: 'keep' | 'drop';
+  /** Where drawn snow stays permanent: ice caps and high ground (defaults 0.8 and 150) or snow lines only. */
+  permanentSnow?: PermanentSnowInput;
   startDate?: string;
   rivers?: number | { density: number };
   relief?: WorldReliefInput;
@@ -5783,6 +5790,7 @@ function applyCreateWorld(
         ? {}
         : { continentNames: operation.continentNames }),
       ...(operation.inheritedContinents === 'drop' ? { inheritedContinents: 'drop' } : {}),
+      ...(operation.permanentSnow === undefined ? {} : { permanentSnow: operation.permanentSnow }),
       startDate: operation.startDate ?? '1936.1.1',
       rivers:
         typeof operation.rivers === 'number' ? operation.rivers : reference === undefined ? 8 : 80,
