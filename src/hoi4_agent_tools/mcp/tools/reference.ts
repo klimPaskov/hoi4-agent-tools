@@ -95,7 +95,7 @@ export const referenceTools = [
     name: 'hoi4.script_validate',
     title: 'Check HOI4 script commands and scopes',
     description:
-      'Find broken syntax, commands and scopes in an effect, trigger or mod file using the installed docs. Unknown helpers and native argument blocks stay unresolved. Example: {"source":"add_political_power = 10","kind":"effect","scope":"country"} or {"path":"events/a.txt"}. Returns up to 12 findings.',
+      'Find broken syntax, commands and scopes in an effect, trigger or mod file using the installed docs. Unknown helpers and native argument blocks stay unresolved. Example: {"source":"add_political_power = 10","kind":"effect","scope":"country"} or {"path":"events/a.txt"}. {"closure":true} instead counts whether the references of the whole mod resolve, per kind. Returns up to 12 findings.',
     inputSchema: scriptValidateRequestSchema,
     outputSchema: strictOperationResultSchema(scriptValidateDataSchema),
     annotations: readOnly,

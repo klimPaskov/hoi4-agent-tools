@@ -19,7 +19,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::symbol_index::{BuildError, Limits, Patterns, Root, SymbolIndex, SymbolKind};
+use crate::symbol_index::{BuildError, Limits, Patterns, References, Root, SymbolIndex, SymbolKind, semantic};
 
 pub const REQUEST_SCHEMA: &str = "hoi4-source-lookup-request/1";
 pub const RESPONSE_SCHEMA: &str = "hoi4-source-lookup/1";
@@ -50,6 +50,12 @@ pub struct Request {
     /// Definitions returned at most (the total is always counted).
     #[serde(default = "one")]
     pub max_definitions: usize,
+    /// Also find the references to the symbol (the definition walk's and the semantic scan's).
+    #[serde(default)]
+    pub include_references: bool,
+    /// References returned at most (the total is always counted).
+    #[serde(default)]
+    pub max_references: usize,
 }
 
 fn one() -> usize {
@@ -97,6 +103,25 @@ pub struct Response<'a> {
     pub definitions: Vec<Definition<'a>>,
     /// When nothing defines the symbol: indexed ids within three edits, nearest distances first.
     pub suggestion_candidates: Vec<Candidate>,
+    /// With `includeReferences`: the first `maxReferences` references to the symbol, in the order
+    /// the TypeScript route listed them (index references, then the semantic ones).
+    pub references: Vec<ReferenceAnswer>,
+    /// How many distinct references the scan found for the symbol.
+    pub reference_count: usize,
+    /// False when the semantic scan skipped a source or reached a ceiling.
+    pub semantic_complete: bool,
+    /// Dynamic or unnamed targets the semantic scan could not resolve, in the whole scan.
+    pub unresolved_reference_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceAnswer {
+    pub kind: String,
+    pub from: String,
+    pub to_kind: SymbolKind,
+    pub path: String,
+    pub line: u32,
 }
 
 /// A refused request, with the code the MCP tool reports.
@@ -281,6 +306,7 @@ pub fn answer<'a>(index: &'a SymbolIndex, request: &Request, kind: Option<Symbol
     } else {
         Vec::new()
     };
+    let found = if request.include_references { references(index, request, kind)? } else { FoundReferences::default() };
     Ok(Response {
         schema: RESPONSE_SCHEMA,
         status: "ok",
@@ -291,7 +317,46 @@ pub fn answer<'a>(index: &'a SymbolIndex, request: &Request, kind: Option<Symbol
         kind_count: kinds.len(),
         definitions,
         suggestion_candidates,
+        references: found.listed,
+        reference_count: found.count,
+        semantic_complete: found.semantic_complete,
+        unresolved_reference_count: found.unresolved,
     })
+}
+
+#[derive(Default)]
+struct FoundReferences {
+    listed: Vec<ReferenceAnswer>,
+    count: usize,
+    semantic_complete: bool,
+    unresolved: usize,
+}
+
+/// The references to the symbol: the definition walk's, then the semantic scan's sorted ones; those
+/// of another target kind are left out, and two at the same place with the same edge are one.
+fn references(index: &SymbolIndex, request: &Request, kind: Option<SymbolKind>) -> Result<FoundReferences, Refusal> {
+    let semantic = semantic::scan(index, References::To(&request.symbol))?;
+    let mut seen: HashSet<(u32, u32, SymbolKind, String)> = HashSet::new();
+    let mut found = FoundReferences { semantic_complete: semantic.complete, unresolved: semantic.unresolved_count, ..FoundReferences::default() };
+    for (file, reference) in index.references.iter().chain(semantic.references.iter()) {
+        if !kind.is_none_or(|k| reference.to_kind == k) {
+            continue;
+        }
+        if !seen.insert((*file, reference.offset, reference.to_kind, reference.kind.to_string())) {
+            continue;
+        }
+        found.count += 1;
+        if found.listed.len() < request.max_references {
+            found.listed.push(ReferenceAnswer {
+                kind: reference.kind.to_string(),
+                from: reference.from.clone(),
+                to_kind: reference.to_kind,
+                path: index.files[*file as usize].display.clone(),
+                line: reference.line,
+            });
+        }
+    }
+    Ok(found)
 }
 
 fn invalid(refusal: &Refusal) -> String {
@@ -305,7 +370,8 @@ pub fn respond_json(text: &str) -> (String, u8) {
             None => None,
             Some(name) => Some(SymbolKind::parse(name).ok_or_else(|| refuse("SOURCE_LOOKUP_INVALID_REQUEST", format!("unknown symbol kind {name}")))?),
         };
-        let index = SymbolIndex::build(request.roots.clone(), &patterns, request.limits)?;
+        let want = if request.include_references { References::To(&request.symbol) } else { References::None };
+        let index = SymbolIndex::build_for(request.roots.clone(), &patterns, request.limits, want)?;
         answer(&index, &request, kind).and_then(|response| serde_json::to_string(&response).map_err(|e| refuse("SOURCE_LOOKUP_INTERNAL", e.to_string())))
     });
     match result {

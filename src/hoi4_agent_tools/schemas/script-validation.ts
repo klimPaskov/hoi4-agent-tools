@@ -31,14 +31,35 @@ export const scriptValidateRequestSchema = z
       .max(16)
       .default([]),
     limit: z.number().int().min(1).max(32).default(12),
+    /**
+     * Whole-mod closure: count the references of the mod's own sources that resolve, do not
+     * resolve, or cannot be decided, per target kind, and give a verdict (`incomplete` whenever
+     * anything is unknown). Replaces `source` and `path`.
+     */
+    closure: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if ((value.source === undefined) === (value.path === undefined))
+    const modes = [
+      value.source !== undefined,
+      value.path !== undefined,
+      value.closure === true,
+    ].filter(Boolean).length;
+    if (modes !== 1)
       context.addIssue({
         code: 'custom',
         path: ['source'],
-        message: 'Provide either source with kind and scope, or a mod file path',
+        message:
+          'Provide either source with kind and scope, a mod file path, or closure: true for the whole mod',
+      });
+    if (
+      value.closure === true &&
+      (value.kind !== undefined || value.scope !== undefined || value.bindings.length > 0)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['closure'],
+        message: 'A closure check covers the whole mod and takes no kind, scope or bindings',
       });
     if (value.source !== undefined && value.scope === undefined)
       context.addIssue({
@@ -69,6 +90,7 @@ export const scriptValidateDataSchema = z
         'event_popups',
         'known_mistakes',
         'identifier_arguments',
+        'closure',
       ]),
     ),
     /**
@@ -76,6 +98,7 @@ export const scriptValidateDataSchema = z
      * the workspace's definitions. Other argument values are not checked.
      */
     parametersChecked: z.boolean(),
+    /** Absent for a closure check, which reads no documentation. */
     documentation: z
       .object({
         source: z.enum(['game_doc', 'script_doc']),
@@ -84,7 +107,8 @@ export const scriptValidateDataSchema = z
         triggerCount: z.number().int().min(0),
         skippedSources: z.number().int().min(0),
       })
-      .strict(),
+      .strict()
+      .optional(),
     findings: z
       .array(
         z
@@ -111,6 +135,41 @@ export const scriptValidateDataSchema = z
     argumentBlocksUnchecked: z.number().int().min(0),
     /** What made the result partial when `valid` is null, one plain sentence each. */
     partialReasons: z.array(z.string().max(600)).max(5).optional(),
+    /** The whole-mod closure (`closure: true`). */
+    closure: z
+      .object({
+        verdict: z.enum(['closed', 'unresolved', 'incomplete']),
+        /** The scan revision, as `hoi4.source_lookup` reports it. */
+        revision: z.string().regex(/^[a-f0-9]{64}$/u),
+        /** False when a source was skipped, so a definition may be missing. */
+        complete: z.boolean(),
+        /** False when the semantic scan skipped a source or reached a ceiling. */
+        semanticComplete: z.boolean(),
+        skippedSourceCount: z.number().int().min(0),
+        /** Mod-owned sources whose references were counted. */
+        sources: z.number().int().min(0),
+        totals: z
+          .object({
+            resolved: z.number().int().min(0),
+            unresolved: z.number().int().min(0),
+            unknown: z.number().int().min(0),
+          })
+          .strict(),
+        kinds: z
+          .array(
+            z
+              .object({
+                kind: z.string().max(64),
+                resolved: z.number().int().min(0),
+                unresolved: z.number().int().min(0),
+                unknown: z.number().int().min(0),
+              })
+              .strict(),
+          )
+          .max(64),
+      })
+      .strict()
+      .optional(),
     file: z
       .object({
         path: z.string().max(4096),

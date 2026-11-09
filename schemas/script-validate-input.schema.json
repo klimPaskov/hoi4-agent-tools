@@ -26,6 +26,9 @@
     },
     "limit": {
       "$ref": "#/$defs/__schema9"
+    },
+    "closure": {
+      "$ref": "#/$defs/__schema10"
     }
   },
   "additionalProperties": false,
@@ -111,6 +114,9 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 32
+    },
+    "__schema10": {
+      "type": "boolean"
     }
   }
 }
