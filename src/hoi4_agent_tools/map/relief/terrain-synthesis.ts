@@ -82,8 +82,10 @@ export interface SynthesizedTerrain {
   readonly riverOrder: Uint8Array;
   /** Land in 0..1 and water in -1..0, in the scale the province generator expects. */
   readonly elevation: Float32Array;
-  /** 1 where a range's snow line puts permanent snow. */
+  /** 1 where a range's or painted mountain's snow line puts permanent snow. */
   readonly snow: Uint8Array;
+  /** 1 where only the snow line of painted relief puts it (a subset of `snow`). */
+  readonly paintedSnow: Uint8Array;
   readonly fields: TerrainFields;
   readonly rivers: readonly RiverReportEntry[];
   /** Pixel paths from source to mouth, in the order of `rivers`, for stages that need river topology. */
@@ -205,8 +207,10 @@ export interface CheckedRelief {
   readonly height: number;
   /** Land heights on the heightmap scale, before the full-resolution detail and quantising. */
   readonly heights: Float32Array;
-  /** The height from which a range's snow line puts permanent snow, 255 for none. */
+  /** The height from which a range's or painted snow line puts permanent snow, 255 for none. */
   readonly snowLine: Uint8Array;
+  /** The same for the ranges alone, before painted relief lowered it. */
+  readonly rangeSnowLine: Uint8Array;
 }
 
 /** `checkTerrainRivers`, also returning the half-resolution relief for estimates of the write. */
@@ -227,6 +231,7 @@ export function checkTerrainRiversWithRelief(input: TerrainSynthesisInput): {
     relief,
     signal: input.signal,
   });
+  const rangeSnowLine = macro.snowLine.slice();
   // The same painted relief as the full synthesis, so the rivers checked are the rivers written.
   if (input.painted !== undefined) applyPaintedRelief(macro, input.painted);
   const adjust = input.adjustHeight;
@@ -270,6 +275,7 @@ export function checkTerrainRiversWithRelief(input: TerrainSynthesisInput): {
       height: macro.height,
       heights: hydrology.heights,
       snowLine: macro.snowLine,
+      rangeSnowLine,
     },
   };
 }
@@ -294,6 +300,7 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     relief,
     signal: input.signal,
   });
+  const rangeSnowLine = macro.snowLine.slice();
   if (input.painted !== undefined) {
     const summary = applyPaintedRelief(macro, input.painted);
     notes.push({
@@ -354,6 +361,7 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
   const heights = new Uint8Array(total);
   const elevation = new Float32Array(total);
   const snow = new Uint8Array(total);
+  const paintedSnow = new Uint8Array(total);
   for (let y = 0; y < height; y += 1) {
     if (y % 64 === 0) input.signal?.throwIfAborted();
     for (let x = 0; x < width; x += 1) {
@@ -365,8 +373,13 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
         const quantised = Math.round(value);
         heights[index] = quantised;
         elevation[index] = Math.min(1, Math.max(0, (quantised - LAND_FLOOR) / 110));
-        const line = macro.snowLine[(y >> 1) * macro.width + (x >> 1)]!;
-        if (line < 255 && quantised >= line) snow[index] = 1;
+        const cell = (y >> 1) * macro.width + (x >> 1);
+        const line = macro.snowLine[cell]!;
+        if (line < 255 && quantised >= line) {
+          snow[index] = 1;
+          const range = rangeSnowLine[cell]!;
+          if (range === 255 || quantised < range) paintedSnow[index] = 1;
+        }
       } else {
         const water = lakeHeight(landDistance[index]!);
         floats[index] = water;
@@ -493,6 +506,7 @@ export function synthesizeTerrain(input: TerrainSynthesisInput): SynthesizedTerr
     riverOrder: raster.order,
     elevation,
     snow,
+    paintedSnow,
     fields,
     rivers: entries,
     riverPaths: paths,

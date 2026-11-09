@@ -110,6 +110,27 @@ describe('painted relief on the macro grid', () => {
     expect(paintedSnowHeight(50, 100)).toBe(232);
   });
 
+  it('keeps the snow line at or above snowFloor, and puts none from 255', () => {
+    const line = (snowFloor?: number) => {
+      const relief = target();
+      applyPaintedRelief(relief, {
+        classes: painted(PAINTED_MOUNTAIN, 0, 0, 320, 240),
+        settings,
+        seed: 3,
+        snowFloor,
+      });
+      return relief.snowLine;
+    };
+    const polar = 2 * MW + 80;
+    const equator = 60 * MW + 80;
+    expect(line()[polar]).toBe(paintedSnowHeight(2, MH));
+    // The floor lifts the polar line and leaves the higher equatorial line alone.
+    expect(line(200)[polar]).toBe(200);
+    expect(line(200)[equator]).toBe(paintedSnowHeight(60, MH));
+    expect(Math.min(...line(256))).toBe(255);
+    expect(Math.min(...line(255))).toBe(255);
+  });
+
   it('resolves the option with defaults', () => {
     expect(resolvePaintedRelief(true)).toEqual(DEFAULT_PAINTED_RELIEF);
     expect(resolvePaintedRelief({ falloffPx: 40 })).toEqual({

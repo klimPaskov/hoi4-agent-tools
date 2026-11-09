@@ -1225,12 +1225,13 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
             .object({
               iceCapLatitude: z.number().min(0).max(1).optional(),
               peakHeight: z.number().int().min(96).max(256).optional(),
+              paintedHeight: z.number().int().min(96).max(256).optional(),
             })
             .strict(),
         ])
         .optional()
         .describe(
-          'Where land drawn as snow in the reference keeps permanent snow; other drawn snow is ordinary land with seasonal snow. iceCapLatitude (default 0.8; 0 is the middle row, 1 the top and bottom edge, 1 turns ice caps off) and peakHeight (heightmap value, default 150; 256 turns it off). snowlines keeps permanent snow only above the snow lines of ranges and painted mountains. MAP_PERMANENT_SNOW_SHARE reports the result against the base game; a synthesisCheck preview estimates it as MAP_PERMANENT_SNOW_ESTIMATE.',
+          'Where land drawn as snow in the reference keeps permanent snow; other drawn snow is ordinary land with seasonal snow. iceCapLatitude (default 0.8; 0 is the middle row, 1 the top and bottom edge, 1 turns ice caps off) and peakHeight (heightmap value, default 150; 256 turns it off). paintedHeight (heightmap value, no default) is the lowest the snow line of painted mountains, volcanoes and impassable land may go; without it that line runs from 232 at the equator to 140 at the poles, and 256 puts none. snowlines keeps permanent snow only above the snow lines of ranges and painted mountains. MAP_PERMANENT_SNOW_SHARE reports the result against the base game, by source; a synthesisCheck preview estimates it as MAP_PERMANENT_SNOW_ESTIMATE.',
         ),
       startDate: z
         .string()
