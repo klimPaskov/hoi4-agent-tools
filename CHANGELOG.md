@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.16.0 - 2026-11-09
+
+- Keep the world output record (`.hoi4-agent-world.json`) current with the tool's own map edits. `update_states`, `move_state_provinces` and every other map operation rewrote recorded state, strategic-region and map files without recording their new hashes, so the next `create_world` refused them as hand edits (`MANAGED_OUTPUT_EDITED`). This happened in a later call and also later in the `create_world` call itself, because the record was planned at the end of `create_world`. ZIN had 191 such files on 9 November: 184 state files and 7 strategic regions. Every map rewrite now records the new hash of each recorded file it writes, and drops each one it deletes, in the same transaction (`MAP_WORLD_OUTPUTS_REFRESHED`). A recorded file edited by hand before the call keeps its old hash and is named in a warning, so it stays protected. The new `record_world_outputs` operation takes the current bytes of every recorded file as the world's own. It is for mods whose record is already stale: it writes only the record, drops files that are gone, and reports the counts (`MAP_WORLD_OUTPUTS_RECORDED`).
+
 ## 4.15.0 - 2026-11-09
 
 - Add `create_world.permanentSnow.paintedHeight`. Painted mountains, volcanoes and impassable land put permanent snow above a snow line of their own (232 at the equator to 140 at the poles), which `permanentSnow` did not reach: a ZIN write on 9 November with `iceCapLatitude` 0.97 and `peakHeight` 230 still had 15.37% of its land permanent (804,575 pixels, 20 times the base game's share), of which only about 69,000 were drawn snow. `paintedHeight` (a heightmap value) keeps that line at or above its height, and 256 removes it. `MAP_PERMANENT_SNOW_SHARE` and `MAP_PERMANENT_SNOW_ESTIMATE` gain `bySource`, the permanent pixels above range snow lines, above painted snow lines and on drawn snow, and their warning names the setting of the largest source. Requests without `paintedHeight` write the same files as before.

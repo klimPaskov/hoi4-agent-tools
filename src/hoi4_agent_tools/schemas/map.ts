@@ -1349,6 +1349,16 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
   z
     .object({
       ...operationBase,
+      kind: z
+        .literal('record_world_outputs')
+        .describe(
+          'Adopt the current bytes of every output the world inventory (.hoi4-agent-world.json) records, so the next create_world overwrites them instead of refusing them as edited (MANAGED_OUTPUT_EDITED). Recorded files that are gone are dropped. Reports MAP_WORLD_OUTPUTS_RECORDED.',
+        ),
+    })
+    .strict(),
+  z
+    .object({
+      ...operationBase,
       kind: z.literal('rebuild_supply'),
       stateIds: z.array(stateId).max(10_000).optional(),
       mode: z

@@ -1163,6 +1163,27 @@
         },
         "kind": {
           "type": "string",
+          "const": "record_world_outputs",
+          "description": "Adopt the current bytes of every output the world inventory (.hoi4-agent-world.json) records, so the next create_world overwrites them instead of refusing them as edited (MANAGED_OUTPUT_EDITED). Recorded files that are gone are dropped. Reports MAP_WORLD_OUTPUTS_RECORDED."
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "summary": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "kind": {
+          "type": "string",
           "const": "rebuild_supply"
         },
         "stateIds": {
