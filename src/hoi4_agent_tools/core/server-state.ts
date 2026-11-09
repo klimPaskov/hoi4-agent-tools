@@ -86,6 +86,64 @@ async function assertNoLinkComponents(absolutePath: string): Promise<void> {
   }
 }
 
+/** Ownership facts about one symbolic link and the directory that holds it. */
+export interface SystemLinkFacts {
+  linkUid: number;
+  parentUid: number;
+  parentMode: number;
+}
+
+/**
+ * A link only the superuser can create or change: owned by root, in a root-owned directory that
+ * neither group nor others can write. macOS ships `/var`, `/tmp` and `/etc` as such links into
+ * `/private`, so `$TMPDIR` (`/var/folders/...`) always has one. Windows has no such rule.
+ */
+export function isTrustedSystemLink(facts: SystemLinkFacts, platform = process.platform): boolean {
+  return (
+    platform !== 'win32' &&
+    facts.linkUid === 0 &&
+    facts.parentUid === 0 &&
+    (facts.parentMode & 0o022) === 0
+  );
+}
+
+/**
+ * Replace the leading components that pass through trusted system links with their real paths,
+ * so a state root such as `/var/folders/.../state` becomes `/private/var/folders/.../state`. A
+ * link anyone else could change stays in the path and is refused by `assertNoLinkComponents`.
+ */
+async function resolveTrustedSystemLinks(absolutePath: string): Promise<string> {
+  const parsed = path.parse(absolutePath);
+  const segments = absolutePath.slice(parsed.root.length).split(path.sep).filter(Boolean);
+  let cursor = parsed.root;
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidate = path.join(cursor, segments[index]!);
+    let metadata;
+    try {
+      metadata = await lstat(candidate);
+    } catch (error) {
+      if (isNotFound(error)) return path.join(candidate, ...segments.slice(index + 1));
+      throw error;
+    }
+    if (!metadata.isSymbolicLink()) {
+      cursor = candidate;
+      continue;
+    }
+    const parent = await lstat(cursor);
+    if (
+      !isTrustedSystemLink({
+        linkUid: metadata.uid,
+        parentUid: parent.uid,
+        parentMode: parent.mode,
+      })
+    ) {
+      return absolutePath;
+    }
+    cursor = path.normalize(await realpath(candidate));
+  }
+  return cursor;
+}
+
 async function assertPrivateFile(filePath: string, expectedBytes: number): Promise<void> {
   let metadata;
   try {
@@ -142,10 +200,11 @@ export class ServerState {
   ) {}
 
   static async create(requestedRoot: string): Promise<ServerState> {
-    const absoluteRoot = path.normalize(requestedRoot);
-    if (!path.isAbsolute(absoluteRoot)) {
+    const normalizedRoot = path.normalize(requestedRoot);
+    if (!path.isAbsolute(normalizedRoot)) {
       throw stateError('SERVER_STATE_ROOT_INVALID', 'Server state root must be absolute');
     }
+    const absoluteRoot = await resolveTrustedSystemLinks(normalizedRoot);
     await assertNoLinkComponents(absoluteRoot);
     await mkdir(absoluteRoot, { recursive: true, mode: 0o700 });
     await assertNoLinkComponents(absoluteRoot);
