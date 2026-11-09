@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `create_world.permanentSnow.paintedHeight`. Painted mountains, volcanoes and impassable land put permanent snow above a snow line of their own (232 at the equator to 140 at the poles), which `permanentSnow` did not reach: a ZIN write on 9 November with `iceCapLatitude` 0.97 and `peakHeight` 230 still had 15.37% of its land permanent (804,575 pixels, 20 times the base game's share), of which only about 69,000 were drawn snow. `paintedHeight` (a heightmap value) keeps that line at or above its height, and 256 removes it. `MAP_PERMANENT_SNOW_SHARE` and `MAP_PERMANENT_SNOW_ESTIMATE` gain `bySource`, the permanent pixels above range snow lines, above painted snow lines and on drawn snow, and their warning names the setting of the largest source. Requests without `paintedHeight` write the same files as before.
 - `create_world.synthesisCheck` estimates the permanent-snow share of the write. `MAP_PERMANENT_SNOW_SHARE` came only from the terrain writer, so ZIN could try `permanentSnow` thresholds only through 28-minute writes. The check now applies the writer's rule (snow lines, then drawn snow on ice caps and at `peakHeight` and up) to the half-resolution relief it already builds, and reports `MAP_PERMANENT_SNOW_ESTIMATE` with the same details plus `estimate: true`, also under `synthesisCheck.permanentSnow` per operation. On a 1,024 by 512 test world the estimate was within 1% of the written share. The note is a warning above four times the base game's share, as at the write; a warning does not block the check.
 
 ## 4.14.0 - 2026-11-09
