@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Accept a server state root under the macOS temporary folder. macOS ships `/var`, `/tmp` and `/etc` as links into `/private`, so a state root such as `$TMPDIR/state` (`/var/folders/...`) always passed through a link and startup stopped with `SERVER_STATE_UNSAFE`. A link that only the superuser can change (owned by root, in a root-owned directory that group and others cannot write) is now resolved to its real path first. Any other link in the path is still refused, and Windows is unchanged. The test helper resolves `TMPDIR` before the suite runs, which is why macOS CI never saw this.
+
 ## 4.15.0 - 2026-11-09
 
 - Add `create_world.permanentSnow.paintedHeight`. Painted mountains, volcanoes and impassable land put permanent snow above a snow line of their own (232 at the equator to 140 at the poles), which `permanentSnow` did not reach: a ZIN write on 9 November with `iceCapLatitude` 0.97 and `peakHeight` 230 still had 15.37% of its land permanent (804,575 pixels, 20 times the base game's share), of which only about 69,000 were drawn snow. `paintedHeight` (a heightmap value) keeps that line at or above its height, and 256 removes it. `MAP_PERMANENT_SNOW_SHARE` and `MAP_PERMANENT_SNOW_ESTIMATE` gain `bySource`, the permanent pixels above range snow lines, above painted snow lines and on drawn snow, and their warning names the setting of the largest source. Requests without `paintedHeight` write the same files as before.
