@@ -117,6 +117,8 @@ async function runInspector(
     `HOI4_AGENT_CONFIG=${config}`,
     '-e',
     'HOI4_AGENT_TOOLS_PROFILES=all',
+    // The inspector gives the server only the variables named with -e.
+    ...Object.entries(engineEnvironment).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     '--connect-timeout',
     '60000',
     '--format',
