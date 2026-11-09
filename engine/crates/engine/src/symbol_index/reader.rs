@@ -186,12 +186,18 @@ struct Token {
 pub struct Scalar<'a> {
     pub value: Cow<'a, str>,
     pub line: u32,
+    /// Byte offset of the token in the decoded text: the TypeScript node's `start`, which tells two
+    /// nodes of one line apart.
+    pub start: u32,
     pub quoted: bool,
 }
 
 #[derive(Debug, Default)]
 pub struct Block<'a> {
     pub entries: Vec<Entry<'a>>,
+    /// Byte offset and 1-based line of the opening brace (of the file's start for the root).
+    pub start: u32,
+    pub start_line: u32,
     /// 1-based line of the closing brace; of the last token when the block is never closed; 0 for a
     /// block cut off by the nesting ceiling.
     pub end_line: u32,
@@ -450,12 +456,12 @@ impl<'a> Parser<'_, 'a> {
     }
 
     fn scalar(&self, token: &Token) -> Scalar<'a> {
-        Scalar { value: scalar_value(self.text, token), line: token.line, quoted: token.kind == TokenKind::String }
+        Scalar { value: scalar_value(self.text, token), line: token.line, start: token.start, quoted: token.kind == TokenKind::String }
     }
 
-    fn block(&mut self, open: bool, depth: usize) -> Block<'a> {
+    fn block(&mut self, open: bool, depth: usize, at: (u32, u32)) -> Block<'a> {
         if open && depth > SOURCE_MAX_NESTING {
-            return self.over_limit_block();
+            return self.over_limit_block(at);
         }
         let mut entries = Vec::new();
         let mut closed = false;
@@ -479,10 +485,10 @@ impl<'a> Parser<'_, 'a> {
             self.diagnostics.note();
             end_line = self.tokens.last().map_or(0, |token| token.line);
         }
-        Block { entries, end_line }
+        Block { entries, start: at.0, start_line: at.1, end_line }
     }
 
-    fn over_limit_block(&mut self) -> Block<'a> {
+    fn over_limit_block(&mut self, at: (u32, u32)) -> Block<'a> {
         self.diagnostics.limit(Limit::Nesting);
         let mut nesting = 1usize;
         let mut closed = false;
@@ -502,13 +508,13 @@ impl<'a> Parser<'_, 'a> {
         if !closed {
             self.diagnostics.note();
         }
-        Block::default()
+        Block { start: at.0, start_line: at.1, ..Block::default() }
     }
 
     fn entry(&mut self, depth: usize) -> Option<Entry<'a>> {
         let token = self.next()?;
         if token.kind == TokenKind::LeftBrace {
-            return Some(Entry::Block(self.block(true, depth + 1)));
+            return Some(Entry::Block(self.block(true, depth + 1, (token.start, token.line))));
         }
         if !matches!(token.kind, TokenKind::Atom | TokenKind::String | TokenKind::Invalid) {
             self.diagnostics.note();
@@ -524,13 +530,14 @@ impl<'a> Parser<'_, 'a> {
             return Some(Entry::Scalar(key));
         };
         let value = match value_token.kind {
-            TokenKind::LeftBrace => Value::Block(self.block(true, depth + 1)),
+            TokenKind::LeftBrace => Value::Block(self.block(true, depth + 1, (value_token.start, value_token.line))),
             TokenKind::Atom | TokenKind::String | TokenKind::Invalid => Value::Scalar(self.scalar(&value_token)),
             TokenKind::Operator | TokenKind::RightBrace => {
                 self.diagnostics.note();
                 Value::Scalar(Scalar {
                     value: Cow::Borrowed(&self.text[value_token.start as usize..value_token.end as usize]),
                     line: value_token.line,
+                    start: value_token.start,
                     quoted: false,
                 })
             }
@@ -556,7 +563,7 @@ pub fn parse_clausewitz(text: &str, byte_len: usize, lossy: bool) -> Document<'_
     }
     let tokens = lex(text, &mut diagnostics);
     let mut parser = Parser { tokens: &tokens, text, index: 0, diagnostics: &mut diagnostics };
-    let root = parser.block(false, 0);
+    let root = parser.block(false, 0, (0, 1));
     Document { root, diagnostics }
 }
 

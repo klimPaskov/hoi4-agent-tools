@@ -241,6 +241,60 @@ export const sourceLookupEngineResponseSchema = z
     suggestionCandidates: z
       .array(z.object({ id: z.string(), distance: z.number().int().min(0).max(3) }).strict())
       .max(2_000),
+    /** With `includeReferences`: the first `maxReferences` references, in the TypeScript order. */
+    references: z
+      .array(
+        z
+          .object({
+            kind: z.string(),
+            from: z.string(),
+            toKind: z.string(),
+            path: z.string(),
+            line: z.number().int().min(1),
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
+    /** Distinct references to the symbol (of the requested kind), all of them. */
+    referenceCount: z.number().int().min(0).default(0),
+    /** False when the semantic scan skipped a source or reached a ceiling. */
+    semanticComplete: z.boolean().default(true),
+    /** Dynamic targets the semantic scan could not resolve, in the whole scan. */
+    unresolvedReferenceCount: z.number().int().min(0).default(0),
+  })
+  .strict();
+
+/** `hoi4-engine closure` (`hoi4-closure/1`): what the shared Rust engine answers. */
+export const closureEngineResponseSchema = z
+  .object({
+    schema: z.literal('hoi4-closure/1'),
+    status: z.literal('ok'),
+    revision: z.string().regex(/^[0-9a-f]{64}$/u),
+    complete: z.boolean(),
+    skippedSourceCount: z.number().int().min(0),
+    semanticComplete: z.boolean(),
+    verdict: z.enum(['closed', 'unresolved', 'incomplete']),
+    sources: z.number().int().min(0),
+    totals: z
+      .object({
+        resolved: z.number().int().min(0),
+        unresolved: z.number().int().min(0),
+        unknown: z.number().int().min(0),
+      })
+      .strict(),
+    kinds: z
+      .array(
+        z
+          .object({
+            kind: z.string(),
+            resolved: z.number().int().min(0),
+            unresolved: z.number().int().min(0),
+            unknown: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .max(64),
   })
   .strict();
 

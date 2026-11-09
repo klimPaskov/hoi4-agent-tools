@@ -285,7 +285,7 @@ describe('documentation-backed script checks', () => {
     const before = await check('add_power = 1');
     await writeFile(effects, docs([['add_power', 'STATE']]));
     const after = await check('add_power = 1');
-    expect(after.documentation.revision).not.toBe(before.documentation.revision);
+    expect(after.documentation?.revision).not.toBe(before.documentation?.revision);
     expect(after.valid).toBe(false);
     await writeFile(
       effects,

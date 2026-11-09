@@ -38,6 +38,7 @@ USAGE:
     hoi4-engine mod-index [--request FILE]
     hoi4-engine symbol-index [--request FILE]
     hoi4-engine source-lookup [--request FILE]
+    hoi4-engine closure [--request FILE]
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
@@ -64,7 +65,7 @@ With --output it writes one decoded texture as PNG.
 namespaces, or the next free numbered id) and `symbol-index` prints every definition of the
 shared symbol index; both read the roots, glob patterns and scan limits of a JSON request
 (`hoi4-mod-index-request/1`). `source-lookup` answers the MCP tool hoi4.source_lookup (the
-definitions of one symbol, the scan revision and near-miss names) from a `hoi4-source-lookup-request/1`. `serve` runs the resident engine that the
+definitions of one symbol, the scan revision, near-miss names and, on request, the references to it) from a `hoi4-source-lookup-request/1`. `closure` answers the closure option of hoi4.script_validate (resolved, unresolved and unknown references per kind in the mod's own sources) from a `hoi4-closure-request/1`. `serve` runs the resident engine that the
 MCP server talks to over stdin and stdout (see crates/cli/src/serve.rs for the frames).
 
 A check reports `pass`, `incomplete` (something could not be checked: no game, unknown names,
@@ -683,6 +684,7 @@ fn main() -> ExitCode {
         Some("mod-index") => cmd_json_request(&args, "mod-index", hoi4_engine::mod_index::respond_json),
         Some("symbol-index") => cmd_json_request(&args, "symbol-index", hoi4_engine::mod_index::respond_symbols_json),
         Some("source-lookup") => cmd_json_request(&args, "source-lookup", hoi4_engine::source_lookup::respond_json),
+        Some("closure") => cmd_json_request(&args, "closure", hoi4_engine::closure::respond_json),
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),

@@ -21,6 +21,7 @@ import {
 } from '../schemas/reference.js';
 import { ReferenceService, type ReferenceTarget } from './service.js';
 import { sourceLookup } from './source-lookup.js';
+import { checkClosure, closureMessage } from './closure.js';
 import {
   scriptValidateDataSchema,
   scriptValidateRequestSchema,
@@ -578,33 +579,47 @@ export class ReferenceToolService {
         passed: checked.valid === true,
         checks: [
           {
-            id: 'script-command-checks',
+            id: checked.closure === undefined ? 'script-command-checks' : 'mod-closure',
             passed: checked.valid === true,
             message:
-              checked.valid === true
-                ? 'Syntax, native command kinds and declared scopes match the selected documentation'
-                : checked.valid === false
-                  ? 'Script checks found an error'
-                  : `Script checks are partial: ${(checked.partialReasons ?? ['coverage is unresolved']).join('; ')}`,
+              checked.closure !== undefined
+                ? `${closureMessage(checked.closure)}${checked.valid === null ? `; partial: ${(checked.partialReasons ?? ['coverage is unresolved']).join('; ')}` : ''}`
+                : checked.valid === true
+                  ? 'Syntax, native command kinds and declared scopes match the selected documentation'
+                  : checked.valid === false
+                    ? 'Script checks found an error'
+                    : `Script checks are partial: ${(checked.partialReasons ?? ['coverage is unresolved']).join('; ')}`,
           },
         ],
       };
-      result.diagnostics = checked.findings
-        .filter(({ status }) => status !== 'supported')
-        .slice(0, 20)
-        .map((finding) => ({
-          code: finding.code,
-          severity: finding.status === 'error' ? ('error' as const) : ('warning' as const),
-          category: 'validation' as const,
-          message: finding.message,
-          details: {
-            command: finding.command,
-            kind: finding.kind,
-            scope: finding.scope,
-            line: finding.line,
-            column: finding.column,
-          },
+      const closureDiagnostics = (checked.closure?.kinds ?? [])
+        .filter(({ unresolved, unknown }) => unresolved > 0 || unknown > 0)
+        .map(({ kind, resolved, unresolved, unknown }) => ({
+          code: unresolved > 0 ? 'CLOSURE_UNRESOLVED_REFERENCES' : 'CLOSURE_UNKNOWN_REFERENCES',
+          severity: unresolved > 0 ? ('error' as const) : ('warning' as const),
+          category: 'reference' as const,
+          message: `${kind}: ${resolved} resolved, ${unresolved} unresolved, ${unknown} unknown`,
+          details: { kind, resolved, unresolved, unknown },
         }));
+      result.diagnostics = [
+        ...closureDiagnostics,
+        ...checked.findings
+          .filter(({ status }) => status !== 'supported')
+          .slice(0, 20)
+          .map((finding) => ({
+            code: finding.code,
+            severity: finding.status === 'error' ? ('error' as const) : ('warning' as const),
+            category: 'validation' as const,
+            message: finding.message,
+            details: {
+              command: finding.command,
+              kind: finding.kind,
+              scope: finding.scope,
+              line: finding.line,
+              column: finding.column,
+            },
+          })),
+      ].slice(0, 20);
       while (
         Buffer.byteLength(JSON.stringify(result.diagnostics), 'utf8') > 4096 &&
         result.diagnostics.length > 1
@@ -978,6 +993,7 @@ export class ReferenceToolService {
     principal?: string,
     signal?: AbortSignal,
   ) {
+    if (request.closure === true) return checkClosure(this.engine, workspaceId, principal, signal);
     // Every file check of the supported families shares one scan, so checking files across
     // folders reuses one snapshot and its incremental index; other folders add their own.
     const scan = (extra: readonly string[]) =>

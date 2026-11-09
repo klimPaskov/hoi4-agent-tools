@@ -20,6 +20,7 @@
 
 pub mod reader;
 pub mod scan;
+pub mod semantic;
 mod walk;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -30,6 +31,8 @@ use serde::Serialize;
 
 use reader::{Limit, decode, parse_clausewitz, parse_localisation};
 pub use scan::{Limits, Patterns, Root, RootKind, ScanError, ScannedFile, compare_code_units};
+use walk::Collect;
+pub use walk::Reference;
 
 /// `INDEX_RECORD_LIMIT`.
 pub const INDEX_RECORD_LIMIT: usize = 2_000_000;
@@ -137,6 +140,9 @@ pub struct Symbol {
     pub end_line: u32,
     pub overridden: bool,
     pub source_shadowed: bool,
+    /// The definition `SymbolIndex.find` returns for its kind and id: the highest load order whose
+    /// file is not shadowed. At most one per kind and id.
+    pub active: bool,
 }
 
 /// A source the index could not read whole, so a definition it holds may be missing.
@@ -163,18 +169,36 @@ pub struct SymbolIndex {
     pub skipped_sources: Vec<SkippedSource>,
     pub skipped_possible_kinds: BTreeSet<SymbolKind>,
     skipped_paths: HashSet<usize>,
+    /// The references to the lookup's target that the definition walk recorded (see
+    /// [`SymbolIndex::build_for`]), with the index of their file, in indexing order. Shadowed files
+    /// record none.
+    pub references: Vec<(u32, Reference)>,
 }
 
 /// What reading one file produced.
 #[derive(Default)]
 struct FileRecords {
     symbols: Vec<walk::Found>,
+    /// References to the target (when one was asked for) and the number of all references.
+    references: Vec<Reference>,
+    reference_total: usize,
     /// The file was skipped: its partial-limit codes.
     skipped: Option<Vec<String>>,
     /// A map table hit its line or field ceiling; records before it are kept.
     table_blocked: bool,
     /// The definition walk passed the nesting ceiling.
     nesting_blocked: bool,
+}
+
+/// Which references of the definition walk an index keeps.
+#[derive(Clone, Copy, Debug)]
+pub enum References<'a> {
+    /// None.
+    None,
+    /// Those to one symbol.
+    To(&'a str),
+    /// All of those a mod's own, unshadowed files record (the others are counted).
+    OwnFiles,
 }
 
 /// An unreadable file ends the build, as a failed read ended the TypeScript scan.
@@ -516,7 +540,7 @@ enum TableKind {
 }
 
 /// `indexFile`: the records of one file.
-fn index_file(file: &ScannedFile, definition_file: bool) -> Result<FileRecords, BuildError> {
+fn index_file(file: &ScannedFile, definition_file: bool, collect: Collect<'_>) -> Result<FileRecords, BuildError> {
     let mut records = FileRecords::default();
     let lower = file.relative.to_lowercase();
     let is_yml = lower.ends_with(".yml");
@@ -563,9 +587,12 @@ fn index_file(file: &ScannedFile, definition_file: bool) -> Result<FileRecords, 
         records.skipped = Some(codes(&document.diagnostics.partial_limits()));
         return Ok(records);
     }
-    let walked = walk::walk(&document.root, &lower_path(file));
+    let path = lower_path(file);
+    let walked = walk::walk(&document.root, &path, collect);
     records.nesting_blocked = walked.nesting_blocked;
     records.symbols = walked.symbols;
+    records.references = walked.references;
+    records.reference_total = walked.reference_total;
     Ok(records)
 }
 
@@ -576,6 +603,12 @@ fn codes(limits: &[Limit]) -> Vec<String> {
 impl SymbolIndex {
     /// Scans the roots with the patterns and indexes every selected file.
     pub fn build(roots: Vec<Root>, patterns: &Patterns, limits: Limits) -> Result<SymbolIndex, BuildError> {
+        SymbolIndex::build_for(roots, patterns, limits, References::None)
+    }
+
+    /// [`SymbolIndex::build`] that also keeps the references the definition walk records
+    /// (`SymbolIndex.references` of the TypeScript index), under its two-million ceiling.
+    pub fn build_for(roots: Vec<Root>, patterns: &Patterns, limits: Limits, want: References<'_>) -> Result<SymbolIndex, BuildError> {
         let files = scan::scan(&roots, patterns, limits)?;
         let mut index = SymbolIndex { roots, files, complete: true, ..SymbolIndex::default() };
         let (definitions, skipped_defaults) = selected_definition_files(&index.files)?;
@@ -586,7 +619,20 @@ impl SymbolIndex {
         order.sort_by(|&a, &b| {
             index.files[a].load_order.cmp(&index.files[b].load_order).then_with(|| compare_code_units(&index.files[a].display, &index.files[b].display))
         });
-        let results: Vec<Result<FileRecords, BuildError>> = order.par_iter().map(|&i| index_file(&index.files[i], definitions.contains(&i))).collect();
+        let results: Vec<Result<FileRecords, BuildError>> = order
+            .par_iter()
+            .map(|&i| {
+                let file = &index.files[i];
+                let collect = match want {
+                    References::None => Collect::Nothing,
+                    References::To(target) => Collect::Symbol(target),
+                    References::OwnFiles if file.kind.is_workspace_owned() && file.shadowed_by.is_none() => Collect::All,
+                    References::OwnFiles => Collect::Count,
+                };
+                index_file(file, definitions.contains(&i), collect)
+            })
+            .collect();
+        let mut reference_count = 0usize;
         for (&i, result) in order.iter().zip(results) {
             let records = result?;
             if let Some(reasons) = records.skipped {
@@ -603,7 +649,16 @@ impl SymbolIndex {
                     index.skipped_possible_kinds.insert(kind);
                     continue;
                 }
-                index.symbols.push(Symbol { kind, id, file: i as u32, line, end_line, overridden: shadowed, source_shadowed: shadowed });
+                index.symbols.push(Symbol { kind, id, file: i as u32, line, end_line, overridden: shadowed, source_shadowed: shadowed, active: false });
+            }
+            // A shadowed file's references are dropped; the others stop at the ceiling.
+            if !shadowed && records.reference_total > 0 {
+                let room = INDEX_RECORD_LIMIT - reference_count;
+                if records.reference_total > room {
+                    index.complete = false;
+                }
+                reference_count += records.reference_total.min(room);
+                index.references.extend(records.references.into_iter().filter(|r| (r.ordinal as usize) < room).map(|r| (i as u32, r)));
             }
         }
         index.finalize();
@@ -641,6 +696,7 @@ impl SymbolIndex {
             groups.entry((symbol.kind, symbol.id.as_str())).or_default().push(i);
         }
         let mut overridden = vec![false; self.symbols.len()];
+        let mut actives: Vec<usize> = Vec::new();
         for ((kind, _), mut group) in groups {
             group.sort_by(|&a, &b| {
                 let (left, right) = (&self.symbols[a], &self.symbols[b]);
@@ -648,6 +704,7 @@ impl SymbolIndex {
                 rf.load_order.cmp(&lf.load_order).then_with(|| compare_code_units(&lf.display, &rf.display))
             });
             let active = group.iter().copied().find(|&i| !self.symbols[i].source_shadowed);
+            actives.extend(active);
             for &i in &group {
                 let symbol = &self.symbols[i];
                 overridden[i] = match active {
@@ -659,6 +716,9 @@ impl SymbolIndex {
         }
         for (symbol, overridden) in self.symbols.iter_mut().zip(overridden) {
             symbol.overridden = overridden;
+        }
+        for active in actives {
+            self.symbols[active].active = true;
         }
     }
 

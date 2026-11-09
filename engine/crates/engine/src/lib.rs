@@ -9,6 +9,7 @@
 pub mod analysis;
 pub mod assets;
 pub mod baseline;
+pub mod closure;
 pub mod context;
 pub mod defs;
 pub mod delta;

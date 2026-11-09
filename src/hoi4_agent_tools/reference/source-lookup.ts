@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { defaultPatterns, type CoreEngine, type ScanSnapshot } from '../core/engine.js';
+import { defaultPatterns, type CoreEngine } from '../core/engine.js';
 import { runEngineCommand } from '../core/engine-client.js';
 import { ServiceError } from '../core/result.js';
 import { isWithin } from '../core/workspace.js';
@@ -10,17 +10,10 @@ import type { sourceLookupRequestSchema, sourceLookupDataSchema } from '../schem
 import { sourceLookupEngineResponseSchema } from '../schemas/mod-tools.js';
 import { modIndexEngineRequest, SOURCE_ROOT_KINDS } from './mod-index.js';
 import { readBoundedJsonLines } from './lines.js';
-import {
-  IMPACT_SEMANTIC_MAX_REFERENCES,
-  scanImpactSemanticReferences,
-} from '../core/impact-semantic.js';
 import { parseClausewitz, type BlockNode, type SourceDocument } from '../core/source/parser.js';
 import { positionAt } from '../core/source/lexer.js';
 import { navigateSource } from './source-navigation.js';
 import { locatePatterns, locateSource } from './source-locate.js';
-import { nearestNames } from './suggestions.js';
-
-const semanticCache = new WeakMap<ScanSnapshot, ReturnType<typeof scanImpactSemanticReferences>>();
 
 type Input = z.infer<typeof sourceLookupRequestSchema>;
 export type SourceLookupResult = z.infer<typeof sourceLookupDataSchema>;
@@ -163,10 +156,15 @@ function nearestOf(candidates: ReadonlyArray<{ id: string; distance: number }>):
     .map(({ id }) => id);
 }
 
-function notFound(symbol: string, kind: string | undefined, suggestions: string[]): ServiceError {
+function notFound(
+  symbol: string,
+  kind: string | undefined,
+  suggestions: string[],
+  usesToo: boolean,
+): ServiceError {
   return new ServiceError(
     'SYMBOL_NOT_FOUND',
-    `No indexed file defines ${symbol.slice(0, 256)}${kind === undefined ? '' : ` as a ${kind}`}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
+    `No indexed file defines${usesToo ? ' or uses' : ''} ${symbol.slice(0, 256)}${kind === undefined ? '' : ` as a ${kind}`}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
     { symbol: symbol.slice(0, 256), suggestions },
   );
 }
@@ -264,6 +262,9 @@ async function lookupFromEngine(
       symbol,
       ...(input.kind === undefined ? {} : { kind: input.kind }),
       maxDefinitions: navigating ? 1 : input.maxDefinitions,
+      ...(input.includeReferences
+        ? { includeReferences: true, maxReferences: input.maxReferences }
+        : {}),
     },
     sourceLookupEngineResponseSchema,
     { timeoutMs: SOURCE_LOOKUP_TIMEOUT_MS, ...(signal === undefined ? {} : { signal }) },
@@ -286,9 +287,10 @@ async function lookupFromEngine(
       'Nested navigation requires kind when the identifier has multiple symbol kinds',
     );
   const suggestions = nearestOf(response.suggestionCandidates);
-  // A complete index that does not define the symbol answers not-found, never an empty success.
-  if (response.definitionCount === 0 && response.complete)
-    throw notFound(symbol, input.kind, suggestions);
+  // A complete index that neither defines nor uses the symbol answers not-found, never an empty
+  // success.
+  if (response.definitionCount === 0 && response.referenceCount === 0 && response.complete)
+    throw notFound(symbol, input.kind, suggestions, input.includeReferences);
   const definitions = await Promise.all(
     response.definitions.map(async (entry, index) => {
       const bytes = await readScannedFile(
@@ -327,12 +329,23 @@ async function lookupFromEngine(
     definitionsTruncated: response.definitionCount > definitions.length,
     ...(response.definitionCount === 0 ? { suggestions } : {}),
     definitions,
-    references: [],
-    referencesIncluded: false,
-    referenceCount: 0,
-    referencesTruncated: false,
-    referencesComplete: false,
-    unresolvedReferenceCount: 0,
+    references: response.references.map(({ kind, from, toKind, path, line }) => ({
+      kind,
+      from,
+      toKind,
+      path,
+      line,
+    })),
+    referencesIncluded: input.includeReferences,
+    referenceCount: response.referenceCount,
+    referencesTruncated: response.referenceCount > response.references.length,
+    referencesComplete:
+      input.includeReferences &&
+      response.complete &&
+      response.semanticComplete &&
+      response.unresolvedReferenceCount === 0 &&
+      response.referenceCount <= response.references.length,
+    unresolvedReferenceCount: input.includeReferences ? response.unresolvedReferenceCount : 0,
   });
 }
 
@@ -372,159 +385,32 @@ export async function sourceLookup(
         : input.includeReferences || input.kind === undefined
           ? undefined
           : narrowPatterns[input.kind];
-  const locating = input.path !== undefined && input.line !== undefined;
-  if (!locating && input.symbol !== undefined && !input.includeReferences)
+  const { path: sourcePath, line: sourceLine } = input;
+  if (sourcePath === undefined || sourceLine === undefined) {
+    if (input.symbol === undefined)
+      throw new ServiceError('SOURCE_LOOKUP_TARGET_REQUIRED', 'Provide a symbol, or path and line');
     return lookupFromEngine(engine, workspaceId, input, input.symbol, patterns, principal, signal);
+  }
   const snapshot = await engine.scan(
     workspaceId,
     patterns === undefined ? {} : { patterns },
     principal,
     signal,
   );
-  if (input.path !== undefined && input.line !== undefined)
-    return {
-      sourceScope: 'source_location',
-      revision: snapshot.revision,
-      complete: snapshot.complete,
-      skippedSourceCount: snapshot.skippedSourceCount,
-      definitionCount: 0,
-      definitionsTruncated: false,
-      referencesIncluded: false,
-      referenceCount: 0,
-      referencesTruncated: false,
-      referencesComplete: false,
-      unresolvedReferenceCount: 0,
-      location: locateSource(snapshot, input.path, input.line, input.column),
-      definitions: [],
-      references: [],
-    };
-  const symbol = input.symbol;
-  if (symbol === undefined)
-    throw new ServiceError('SOURCE_LOOKUP_TARGET_REQUIRED', 'Provide a symbol, or path and line');
-  if (input.expectedRevision !== undefined && input.expectedRevision !== snapshot.revision) {
-    throw new ServiceError(
-      'SOURCE_REVISION_STALE',
-      'Indexed source changed; look up the symbol again',
-      { currentRevision: snapshot.revision },
-    );
-  }
-  const navigating = input.keyPath !== undefined || input.view === 'structure';
-  const matchedDefinitions = snapshot.index.symbols
-    .filter(
-      (entry) => entry.id === symbol && (input.kind === undefined || entry.kind === input.kind),
-    )
-    .sort(
-      (left, right) =>
-        Number(left.overridden) - Number(right.overridden) || right.loadOrder - left.loadOrder,
-    );
-  if (navigating && new Set(matchedDefinitions.map(({ kind }) => kind)).size > 1)
-    throw new ServiceError(
-      'SOURCE_KIND_AMBIGUOUS',
-      'Nested navigation requires kind when the identifier has multiple symbol kinds',
-    );
-  const definitions = matchedDefinitions
-    .slice(0, navigating ? 1 : input.maxDefinitions)
-    .map((entry, index) => {
-      const source = snapshot.index.files.get(entry.path);
-      return describeDefinition(
-        {
-          kind: entry.kind,
-          id: entry.id,
-          path: entry.path,
-          rootKind: entry.rootKind,
-          loadOrder: entry.loadOrder,
-          overridden: entry.overridden,
-          sourceShadowed: entry.sourceShadowed,
-          startLine: entry.location?.start.line,
-          endLine: entry.location?.end.line,
-          rangeIn: () =>
-            entry.location === undefined
-              ? undefined
-              : { start: entry.location.start.offset, end: entry.location.end.offset },
-        },
-        source === undefined ? undefined : { bytes: source.bytes, displayPath: source.displayPath },
-        index,
-        input,
-        navigating,
-      );
-    });
-  let semantic = input.includeReferences ? semanticCache.get(snapshot) : undefined;
-  if (input.includeReferences && semantic === undefined) {
-    semantic = scanImpactSemanticReferences(snapshot, IMPACT_SEMANTIC_MAX_REFERENCES, {
-      includeOnActions: true,
-    });
-    semanticCache.set(snapshot, semantic);
-  }
-  const referenceIdentities = new Set<string>();
-  const matchedReferences = input.includeReferences
-    ? [...snapshot.index.references, ...(semantic?.references ?? [])]
-        .filter(
-          (entry) =>
-            entry.to === symbol && (input.kind === undefined || entry.toKind === input.kind),
-        )
-        .filter((entry) => {
-          const key = `${entry.path}:${entry.location?.start.offset ?? 0}:${entry.toKind}:${entry.to}:${entry.kind}`;
-          if (referenceIdentities.has(key)) return false;
-          referenceIdentities.add(key);
-          return true;
-        })
-    : [];
-  const references = matchedReferences.slice(0, input.maxReferences).map((entry) => ({
-    kind: entry.kind,
-    from: entry.from,
-    toKind: entry.toKind,
-    path: entry.path,
-    line: entry.location?.start.line ?? null,
-  }));
-  // A complete index that neither defines nor uses the symbol answers not-found, never an
-  // empty success.
-  if (matchedDefinitions.length === 0 && matchedReferences.length === 0 && snapshot.complete) {
-    const suggestions = nearestNames(
-      symbol,
-      new Set(
-        snapshot.index.symbols
-          .filter((entry) => input.kind === undefined || entry.kind === input.kind)
-          .map(({ id }) => id),
-      ),
-    );
-    throw new ServiceError(
-      'SYMBOL_NOT_FOUND',
-      `No indexed file defines${input.includeReferences ? ' or uses' : ''} ${symbol.slice(0, 256)}${input.kind === undefined ? '' : ` as a ${input.kind}`}${suggestions.length === 0 ? '' : `; did you mean ${suggestions.join(', ')}?`}`,
-      { symbol: symbol.slice(0, 256), suggestions },
-    );
-  }
-  return boundResult({
-    sourceScope: scopeOf(input, patterns),
+  return {
+    sourceScope: 'source_location',
     revision: snapshot.revision,
     complete: snapshot.complete,
     skippedSourceCount: snapshot.skippedSourceCount,
-    definitionCount: snapshot.index.symbols.filter(
-      (entry) => entry.id === symbol && (input.kind === undefined || entry.kind === input.kind),
-    ).length,
-    definitionsTruncated: matchedDefinitions.length > definitions.length,
-    ...(matchedDefinitions.length === 0
-      ? {
-          suggestions: nearestNames(
-            symbol,
-            new Set(
-              snapshot.index.symbols
-                .filter((entry) => input.kind === undefined || entry.kind === input.kind)
-                .map(({ id }) => id),
-            ),
-          ),
-        }
-      : {}),
-    definitions,
-    references,
-    referencesIncluded: input.includeReferences,
-    referenceCount: matchedReferences.length,
-    referencesTruncated: matchedReferences.length > references.length,
-    referencesComplete:
-      input.includeReferences &&
-      snapshot.complete &&
-      semantic?.complete === true &&
-      semantic.unresolved.length === 0 &&
-      matchedReferences.length <= references.length,
-    unresolvedReferenceCount: semantic?.unresolved.length ?? 0,
-  });
+    definitionCount: 0,
+    definitionsTruncated: false,
+    referencesIncluded: false,
+    referenceCount: 0,
+    referencesTruncated: false,
+    referencesComplete: false,
+    unresolvedReferenceCount: 0,
+    location: locateSource(snapshot, sourcePath, sourceLine, input.column),
+    definitions: [],
+    references: [],
+  };
 }

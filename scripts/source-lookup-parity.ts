@@ -6,6 +6,10 @@ import process from 'node:process';
 import { parseArgs } from 'node:util';
 import { serverConfigurationSchema } from '../src/hoi4_agent_tools/core/configuration.js';
 import { CoreEngine, defaultPatterns } from '../src/hoi4_agent_tools/core/engine.js';
+import {
+  IMPACT_SEMANTIC_MAX_REFERENCES,
+  scanImpactSemanticReferences,
+} from '../src/hoi4_agent_tools/core/impact-semantic.js';
 import { locateEngineBinary } from '../src/hoi4_agent_tools/core/engine-client.js';
 import { WorkspaceResolver } from '../src/hoi4_agent_tools/core/workspace.js';
 import {
@@ -22,7 +26,8 @@ import { corpusFileSchema } from './bench/schema.js';
  * workspace it runs the TypeScript shared scan (`CoreEngine.scan`, which built the old answer) and
  * `hoi4-engine source-lookup`, for sampled symbols of every kind and a few misses, and diffs the
  * scan revision, completeness, the definitions (kind, file, load order, overridden, lines, order),
- * their count and distinct kinds, and the near-miss names.
+ * their count and distinct kinds, the near-miss names, and the references to sampled targets
+ * (`includeReferences`: the index's references, then the semantic scan's, deduplicated).
  *
  *   npx tsx scripts/source-lookup-parity.ts [--config FILE] [--corpus vanilla,zin] [--out FILE]
  *
@@ -38,6 +43,7 @@ const { values } = parseArgs({
     'per-kind': { type: 'string', default: '1' },
     'max-lookups': { type: 'string', default: '40' },
     'max-samples': { type: 'string', default: '12' },
+    'max-reference-targets': { type: 'string', default: '40' },
   },
 });
 
@@ -51,6 +57,7 @@ function defaultConfigPath(): string {
 const perKind = Number(values['per-kind']);
 const maxLookups = Number(values['max-lookups']);
 const maxSamples = Number(values['max-samples']);
+const maxReferenceTargets = Number(values['max-reference-targets']);
 const serverConfig = JSON.parse(await readFile(values.config ?? defaultConfigPath(), 'utf8')) as {
   gameRoot?: string;
   modRoots?: string[];
@@ -249,6 +256,84 @@ try {
             checked.push({ ...sample, equal, expected, actual });
         }
       }
+      // References: the TypeScript route listed the index's references, then the semantic scan's,
+      // filtered to the target (and kind) and deduplicated by place and edge.
+      const semantic = scanImpactSemanticReferences(snapshot, IMPACT_SEMANTIC_MAX_REFERENCES, {
+        includeOnActions: true,
+      });
+      const every = [...snapshot.index.references, ...semantic.references];
+      const byTarget = new Map<string, { kinds: Set<string>; count: number }>();
+      for (const reference of every) {
+        const entryFor = byTarget.get(reference.to) ?? { kinds: new Set<string>(), count: 0 };
+        entryFor.kinds.add(reference.toKind);
+        entryFor.count += 1;
+        byTarget.set(reference.to, entryFor);
+      }
+      const ranked = [...byTarget.entries()].sort(
+        (left, right) => right[1].count - left[1].count || left[0].localeCompare(right[0], 'en'),
+      );
+      const kindsSeen = new Map<string, string>();
+      for (const [target, { kinds }] of ranked)
+        for (const kindName of kinds) if (!kindsSeen.has(kindName)) kindsSeen.set(kindName, target);
+      const referenceTargets: Array<{ symbol: string; kind: string | undefined }> = [
+        ...ranked.slice(0, 5).map(([symbol]) => ({ symbol, kind: undefined })),
+        ...[...kindsSeen].map(([kind, symbol]) => ({ symbol, kind })),
+        ...ranked
+          .filter((_, index) => index % Math.max(1, Math.floor(ranked.length / 20)) === 0)
+          .slice(0, 20)
+          .map(([symbol]) => ({ symbol, kind: undefined })),
+        { symbol: 'no_such_symbol_here', kind: undefined },
+      ].slice(0, maxReferenceTargets);
+      let referenceMs = 0;
+      const referenceDiffs: Array<Record<string, unknown>> = [];
+      for (const sample of referenceTargets) {
+        const { response, milliseconds } = runEngine({
+          ...base,
+          symbol: sample.symbol,
+          ...(sample.kind === undefined ? {} : { kind: sample.kind }),
+          maxDefinitions: 1,
+          includeReferences: true,
+          maxReferences: 20,
+        });
+        referenceMs += milliseconds;
+        const answer = sourceLookupEngineResponseSchema.parse(response);
+        const identities = new Set<string>();
+        const matched = every
+          .filter(
+            (reference) =>
+              reference.to === sample.symbol &&
+              (sample.kind === undefined || reference.toKind === sample.kind),
+          )
+          .filter((reference) => {
+            const identity = `${reference.path}:${reference.location?.start.offset ?? 0}:${reference.toKind}:${reference.to}:${reference.kind}`;
+            if (identities.has(identity)) return false;
+            identities.add(identity);
+            return true;
+          });
+        const expected = {
+          referenceCount: matched.length,
+          references: matched.slice(0, 20).map((reference) => ({
+            kind: reference.kind,
+            from: reference.from,
+            toKind: reference.toKind,
+            path: reference.path,
+            line: reference.location?.start.line ?? null,
+          })),
+          semanticComplete: semantic.complete,
+          unresolvedReferenceCount: semantic.unresolved.length,
+        };
+        const actual = {
+          referenceCount: answer.referenceCount,
+          references: answer.references,
+          semanticComplete: answer.semanticComplete,
+          unresolvedReferenceCount: answer.unresolvedReferenceCount,
+        };
+        if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+          differs = true;
+          if (referenceDiffs.length < maxSamples)
+            referenceDiffs.push({ ...sample, expected, actual });
+        }
+      }
       const total = new Set([...chosen, ...misses]).size;
       entry[scope.name] = {
         typescriptScanMs: typescriptMs,
@@ -256,9 +341,16 @@ try {
         engineMsPerCall: Math.round(engineMs / Math.max(1, total)),
         sampled: total,
         differing: checked,
+        references: {
+          sampled: referenceTargets.length,
+          engineMsPerCall: Math.round(referenceMs / Math.max(1, referenceTargets.length)),
+          semanticReferences: semantic.references.length,
+          unresolved: semantic.unresolved.length,
+          differing: referenceDiffs,
+        },
       };
       process.stderr.write(
-        `${corpus.id} ${scope.name}: ${total} lookups, ${checked.length} differing; TypeScript scan ${typescriptMs} ms, engine ${Math.round(engineMs / Math.max(1, total))} ms per call\n`,
+        `${corpus.id} ${scope.name}: ${total} lookups, ${checked.length} differing, ${referenceDiffs.length} reference differences; TypeScript scan ${typescriptMs} ms, engine ${Math.round(engineMs / Math.max(1, total))} ms per call\n`,
       );
     }
     engine.releaseScanCaches();
