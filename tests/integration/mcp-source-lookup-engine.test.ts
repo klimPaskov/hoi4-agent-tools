@@ -287,13 +287,11 @@ describe('hoi4.source_lookup without a working engine', () => {
     expect(result.structuredContent).toMatchObject({ code: 'ENGINE_UNAVAILABLE' });
   });
 
-  it('keeps the reference answer on its own path, which needs no engine', async () => {
+  it('needs the engine for the references too', async () => {
     const { call } = await client({ HOI4_ENGINE: '<root>/no-such-engine/hoi4-engine.exe' });
     const result = await call({ symbol: 'e.1', includeReferences: true });
-    expect(result.isError).toBeFalsy();
-    expect(result.structuredContent).toMatchObject({
-      data: { referencesIncluded: true, definitionCount: 1 },
-    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: 'ENGINE_UNAVAILABLE' });
   });
 });
 

@@ -11,9 +11,41 @@ use super::reader::{Block, SOURCE_MAX_NESTING, Value};
 /// A definition: kind, id, first line, last line.
 pub type Found = (K, String, u32, u32);
 
+/// A reference record of the TypeScript index (`ReferenceRecord`) to the symbol a lookup asked
+/// about: what points at it, from which definition, and where.
+#[derive(Clone, Debug)]
+pub struct Reference {
+    pub kind: std::borrow::Cow<'static, str>,
+    pub from: String,
+    pub to_kind: K,
+    pub to: String,
+    /// 1-based line of the node the reference is located at.
+    pub line: u32,
+    /// Start offset of that node, so two references of one line stay apart.
+    pub offset: u32,
+    /// Position among all references of the file, to apply the index's ceiling in file order.
+    pub ordinal: u32,
+}
+
+/// Which references a walk keeps. `Nothing` records none and counts none.
+#[derive(Clone, Copy, Debug)]
+pub enum Collect<'p> {
+    Nothing,
+    /// The references to one symbol.
+    Symbol(&'p str),
+    /// Every reference.
+    All,
+    /// None kept, but all counted.
+    Count,
+}
+
 pub struct Walked {
     pub symbols: Vec<Found>,
     pub nesting_blocked: bool,
+    /// References to the requested target, in the order the TypeScript walk recorded them.
+    pub references: Vec<Reference>,
+    /// Every reference the file recorded, whatever it points at.
+    pub reference_total: usize,
 }
 
 const EVENT_BLOCK_KEYS: &[&str] = &["country_event", "news_event", "state_event", "unit_leader_event", "operative_leader_event"];
@@ -76,6 +108,10 @@ struct Walker<'p> {
     path: &'p str,
     gfx: bool,
     symbols: Vec<Found>,
+    /// Which references to keep; all of them are counted unless this is `Nothing`.
+    collect: Collect<'p>,
+    references: Vec<Reference>,
+    reference_total: usize,
     nesting_blocked: bool,
     /// First and last line of the assignment being visited, so a definition recorded on its first
     /// line spans the whole assignment (`nodeLocation` of the assignment in the TypeScript index).
@@ -90,6 +126,100 @@ impl Walker<'_> {
 
     fn starts(&self, prefix: &str) -> bool {
         self.path.starts_with(prefix)
+    }
+
+    /// `addReference`.
+    fn reference(&mut self, kind: &'static str, from: &str, to_kind: K, to: &str, line: u32, offset: u32) {
+        let keep = match self.collect {
+            Collect::Nothing => return,
+            Collect::Symbol(target) => to == target,
+            Collect::All => true,
+            Collect::Count => false,
+        };
+        let ordinal = self.reference_total as u32;
+        self.reference_total += 1;
+        if keep {
+            self.references.push(Reference {
+                kind: std::borrow::Cow::Borrowed(kind),
+                from: from.to_string(),
+                to_kind,
+                to: to.to_string(),
+                line,
+                offset,
+                ordinal,
+            });
+        }
+    }
+
+    /// The references of a technology block: its path, exclusions, folder, categories, tags,
+    /// unlocks and buildings, in that order.
+    fn technology_references(&mut self, key: &str, child: &Block<'_>) {
+        if matches!(self.collect, Collect::Nothing) {
+            return;
+        }
+        for path_block in child.child_blocks("path") {
+            if let Some(target) = path_block.first_scalar("leads_to_tech") {
+                self.reference("technology_prerequisite", key, K::Technology, &target.value, target.line, target.start);
+            }
+        }
+        for xor in child.child_blocks("xor") {
+            for target in xor.scalars() {
+                self.reference("technology_exclusive", key, K::Technology, &target.value, xor.start_line, xor.start);
+            }
+        }
+        for folder in child.child_blocks("folder") {
+            if let Some(target) = folder.first_scalar("name") {
+                self.reference("technology_folder", key, K::TechnologyFolder, &target.value, target.line, target.start);
+            }
+        }
+        for categories in child.child_blocks("categories") {
+            for target in categories.scalars() {
+                self.reference("technology_category", key, K::TechnologyCategory, &target.value, categories.start_line, categories.start);
+            }
+        }
+        for tags in child.child_blocks("tags") {
+            for target in tags.scalars() {
+                self.reference("technology_tag", key, K::TechnologyTag, &target.value, tags.start_line, tags.start);
+            }
+        }
+        for (field, kind, to_kind) in [
+            ("enable_equipments", "technology_enable_equipments", K::Equipment),
+            ("enable_equipment_modules", "technology_enable_equipment_modules", K::EquipmentModule),
+            ("enable_subunits", "technology_enable_subunits", K::SubUnit),
+        ] {
+            for unlock in child.child_blocks(field) {
+                for target in unlock.scalars() {
+                    self.reference(kind, key, to_kind, &target.value, unlock.start_line, unlock.start);
+                }
+            }
+        }
+        for building in child.child_blocks("enable_building") {
+            if let Some(target) = building.first_scalar("building") {
+                self.reference("technology_enable_building", key, K::Building, &target.value, target.line, target.start);
+            }
+        }
+    }
+
+    /// The references of a focus of a tree: prerequisites, exclusions, relative position and icon.
+    fn focus_references(&mut self, id: &str, child: &Block<'_>) {
+        if matches!(self.collect, Collect::Nothing) {
+            return;
+        }
+        for (field, kind) in [("prerequisite", "focus_prerequisite"), ("mutually_exclusive", "focus_exclusion")] {
+            for block in child.child_blocks(field) {
+                for target in block.assignments().filter(|a| a.key.value == "focus") {
+                    if let Value::Scalar(value) = &target.value {
+                        self.reference(kind, id, K::Focus, &value.value, target.key.line, target.key.start);
+                    }
+                }
+            }
+        }
+        if let Some(relative) = child.first_scalar("relative_position_id") {
+            self.reference("focus_relative_position", id, K::Focus, &relative.value, relative.line, relative.start);
+        }
+        if let Some(icon) = child.first_scalar("icon") {
+            self.reference("focus_icon", id, K::Sprite, &icon.value, icon.line, icon.start);
+        }
     }
 
     fn walk<'b>(&mut self, block: &'b Block<'_>, ancestors: &mut Vec<&'b str>) {
@@ -128,6 +258,7 @@ impl Walker<'_> {
                 self.add(K::ContinuousFocusPalette, id.unwrap_or_default(), line);
             } else if self.starts("common/technologies/") && depth == 1 && parent == Some("technologies") && !key.starts_with('@') {
                 self.add(K::Technology, key, line);
+                self.technology_references(key, child);
             } else if self.starts("common/technology_tags/") && key == "technology_categories" {
                 for category in child.scalars() {
                     self.add(K::TechnologyCategory, &category.value, category.line);
@@ -164,9 +295,16 @@ impl Walker<'_> {
                 self.add(K::Subdoctrine, key, line);
             } else if key == "focus" && id.is_some() && parent == Some("continuous_focus_palette") {
                 self.add(K::ContinuousFocus, id.unwrap_or_default(), line);
+                if let Some(icon) = child.first_scalar("icon") {
+                    self.reference("continuous_focus_icon", id.unwrap_or_default(), K::Sprite, &icon.value, icon.line, icon.start);
+                }
             } else if id.is_some() && (((key == "shared_focus" || key == "joint_focus") && depth == 0) || (key == "focus" && parent == Some("focus_tree"))) {
                 // Shared and joint focuses sit outside any tree; trees add them by id.
                 self.add(K::Focus, id.unwrap_or_default(), line);
+                // Only a focus of a tree names prerequisites; shared and joint ones record none.
+                if key == "focus" {
+                    self.focus_references(id.unwrap_or_default(), child);
+                }
             } else if self.starts("events/") && depth == 0 && EVENT_BLOCK_KEYS.contains(&key) && id.is_some() {
                 self.add(K::Event, id.unwrap_or_default(), line);
             } else if self.starts("common/scripted_effects/") && depth == 0 {
@@ -205,10 +343,23 @@ impl Walker<'_> {
                 && let Some(name) = child.first_scalar("name")
             {
                 self.add(K::GuiElement, &name.value, line);
+                if let Some(sprite) = child.first_scalar("spriteType") {
+                    self.reference("gui_sprite", &name.value, K::Sprite, &sprite.value, sprite.line, sprite.start);
+                }
             } else if parent == Some("scripted_gui") {
                 self.add(K::ScriptedGui, key, line);
+                if let Some(window) = child.first_scalar("window_name") {
+                    self.reference("scripted_gui_window", key, K::GuiElement, &window.value, window.line, window.start);
+                }
             } else if key == "state" && id.is_some() {
                 self.add(K::State, id.unwrap_or_default(), line);
+                if !matches!(self.collect, Collect::Nothing) {
+                    for provinces in child.child_blocks("provinces") {
+                        for province in provinces.scalars() {
+                            self.reference("state_province", id.unwrap_or_default(), K::Province, &province.value, line, assignment.key.start);
+                        }
+                    }
+                }
             } else if (key == "strategic_region" || key == "strategic_region_template") && id.is_some() {
                 self.add(K::StrategicRegion, id.unwrap_or_default(), line);
             }
@@ -220,10 +371,21 @@ impl Walker<'_> {
 }
 
 /// The definitions of one parsed file. `path` is its relative path in lower case.
-pub fn walk(root: &Block<'_>, path: &str) -> Walked {
-    let mut walker = Walker { path, gfx: path.ends_with(".gfx"), symbols: Vec::new(), nesting_blocked: false, current: (0, 0) };
+///
+/// With a `collect` mode other than `Nothing`, references are counted, and kept as it says.
+pub fn walk<'p>(root: &Block<'_>, path: &'p str, collect: Collect<'p>) -> Walked {
+    let mut walker = Walker {
+        path,
+        gfx: path.ends_with(".gfx"),
+        symbols: Vec::new(),
+        collect,
+        references: Vec::new(),
+        reference_total: 0,
+        nesting_blocked: false,
+        current: (0, 0),
+    };
     walker.walk(root, &mut Vec::new());
-    Walked { symbols: walker.symbols, nesting_blocked: walker.nesting_blocked }
+    Walked { symbols: walker.symbols, nesting_blocked: walker.nesting_blocked, references: walker.references, reference_total: walker.reference_total }
 }
 
 #[cfg(test)]
@@ -233,7 +395,7 @@ mod tests {
 
     fn records(path: &str, text: &str) -> Vec<(&'static str, String)> {
         let document = parse_clausewitz(text, text.len(), false);
-        walk(&document.root, path).symbols.into_iter().map(|(k, id, _, _)| (k.as_str(), id)).collect()
+        walk(&document.root, path, Collect::Nothing).symbols.into_iter().map(|(k, id, _, _)| (k.as_str(), id)).collect()
     }
 
     #[test]
@@ -247,7 +409,8 @@ country_event = {
   id = a.3
 ";
         let document = parse_clausewitz(text, text.len(), false);
-        let found: Vec<(String, u32, u32)> = walk(&document.root, "events/x.txt").symbols.into_iter().map(|(_, id, line, end)| (id, line, end)).collect();
+        let found: Vec<(String, u32, u32)> =
+            walk(&document.root, "events/x.txt", Collect::Nothing).symbols.into_iter().map(|(_, id, line, end)| (id, line, end)).collect();
         assert_eq!(found[0], ("a.1".to_string(), 1, 4));
         assert_eq!(found[1], ("a.2".to_string(), 5, 5));
         // An unclosed block ends on the file's last token.
