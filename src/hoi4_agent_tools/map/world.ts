@@ -61,8 +61,9 @@ import { DEFAULT_PAINTED_RELIEF, type PaintedReliefSettings } from './relief/pai
 import { rowStrips, scanAreaStrip, type ResolvedGeography } from './geography/index.js';
 import { overlayGeographyLakes, rasterizeGeographyKind } from './relief/land.js';
 import {
-  checkTerrainRivers,
+  checkTerrainRiversWithRelief,
   synthesizeTerrain,
+  type CheckedRelief,
   type SynthesizedTerrain,
 } from './relief/terrain-synthesis.js';
 import type { ReliefSettings } from './relief/macro-relief.js';
@@ -562,6 +563,7 @@ function pixelLatitude(y: number, height: number): number {
 function permanentSnowNote(
   count: { permanent: number; painted: number; seasonal: number; land: number; edge: number },
   input: PermanentSnowInput | undefined,
+  estimate = false,
 ): WorldNote {
   const rule = permanentSnowRule(input);
   const share = count.permanent / Math.max(1, count.land);
@@ -569,10 +571,12 @@ function permanentSnowNote(
   const high = ratio > PERMANENT_SNOW_WARNING_FACTOR;
   const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
   return {
-    code: 'MAP_PERMANENT_SNOW_SHARE',
+    code: estimate ? 'MAP_PERMANENT_SNOW_ESTIMATE' : 'MAP_PERMANENT_SNOW_SHARE',
     severity: high ? 'warning' : 'info',
     message:
-      `Permanent snow covers ${percent(share)} of the land (${count.permanent} pixels), ` +
+      (estimate
+        ? `Estimated from the half-resolution relief of this check, permanent snow would cover ${percent(share)} of the land (${count.permanent} pixels), `
+        : `Permanent snow covers ${percent(share)} of the land (${count.permanent} pixels), `) +
       `${ratio.toFixed(1)} times the base game's ${percent(VANILLA_PERMANENT_SNOW.share)}` +
       (count.painted > 0
         ? `; ${count.seasonal} of ${count.painted} drawn snow pixels are ordinary land with seasonal snow`
@@ -594,8 +598,56 @@ function permanentSnowNote(
         input === 'snowlines'
           ? 'snowlines'
           : { iceCapLatitude: rule.iceCapLatitude, peakHeight: rule.peakHeight },
+      // The write adds full-resolution detail to these heights, so its share differs a little.
+      ...(estimate ? { estimate: true, grid: 'half-resolution' } : {}),
     },
   };
+}
+
+/**
+ * The permanent-snow count of the write, estimated on the half-resolution relief of the river
+ * check: the same rule as the terrain writer (snow lines, then drawn snow on ice caps and peaks),
+ * with each pixel taking the height and snow line of its half-resolution cell.
+ */
+function estimatePermanentSnow(input: {
+  width: number;
+  height: number;
+  kind: Uint8Array;
+  drawnSnow: (pixel: number) => boolean;
+  edgePixel: (pixel: number) => boolean;
+  relief: CheckedRelief;
+  permanentSnow: PermanentSnowInput | undefined;
+  signal?: AbortSignal | undefined;
+}): { permanent: number; painted: number; seasonal: number; land: number; edge: number } {
+  const { width, height, kind, relief } = input;
+  const rule = permanentSnowRule(input.permanentSnow);
+  const count = { permanent: 0, painted: 0, seasonal: 0, land: 0, edge: 0 };
+  for (let y = 0; y < height; y += 1) {
+    if (y % 64 === 0) input.signal?.throwIfAborted();
+    const iceCap = pixelLatitude(y, height) >= rule.iceCapLatitude;
+    const row = Math.min(relief.height - 1, y >> 1) * relief.width;
+    for (let x = 0; x < width; x += 1) {
+      const pixel = y * width + x;
+      if (kind[pixel] !== LAND) continue;
+      if (input.edgePixel(pixel)) {
+        count.edge += 1;
+        continue;
+      }
+      count.land += 1;
+      const cell = row + Math.min(relief.width - 1, x >> 1);
+      const value = Math.round(relief.heights[cell]!);
+      const line = relief.snowLine[cell]!;
+      const drawn = input.drawnSnow(pixel);
+      const snowy =
+        (line < 255 && value >= line) || (drawn && (iceCap || value >= rule.peakHeight));
+      if (snowy) count.permanent += 1;
+      if (drawn) {
+        count.painted += 1;
+        if (!snowy) count.seasonal += 1;
+      }
+    }
+  }
+  return count;
 }
 
 /** Land relief of the base game 1.19.4.1 (`reliefStatistics` over its land provinces). */
@@ -1169,7 +1221,7 @@ export function generateWorld(
         ),
       );
     try {
-      const checked = checkTerrainRivers({
+      const { notes: checked, relief } = checkTerrainRiversWithRelief({
         geography,
         width,
         height,
@@ -1190,6 +1242,23 @@ export function generateWorld(
           message: note.message,
           ...(note.details === undefined ? {} : { details: note.details }),
         });
+      // The share the write's MAP_PERMANENT_SNOW_SHARE will report, so the permanentSnow
+      // thresholds can be tuned without a write.
+      const snow = estimatePermanentSnow({
+        width,
+        height,
+        kind: surface.kind,
+        drawnSnow: (pixel) => reference?.terrain[pixel] === REFERENCE_SNOW,
+        edgePixel: (pixel) =>
+          wallMask !== undefined
+            ? wallMask[pixel] === 1
+            : rimStrength(edge, width, pixel % width) > 0.35,
+        relief,
+        permanentSnow: spec.permanentSnow,
+        signal: options.signal,
+      });
+      if (snow.permanent > 0 || snow.painted > 0)
+        notes.push(permanentSnowNote(snow, spec.permanentSnow, true));
     } catch (error) {
       if (!(error instanceof ServiceError)) throw error;
       blocking.push(error);

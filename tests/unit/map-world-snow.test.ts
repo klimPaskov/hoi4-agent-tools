@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { resolveGeography } from '../../src/hoi4_agent_tools/map/geography/index.js';
 import {
   generateWorld,
   VANILLA_PERMANENT_SNOW,
@@ -14,6 +15,7 @@ import {
   worldSpec,
 } from '../helpers/map-appearance-world.js';
 import { indexedPixels } from '../helpers/relief-checks.js';
+import { reliefGeography } from '../helpers/relief-fixture.js';
 
 const WIDTH = 256;
 const HEIGHT = 256;
@@ -159,5 +161,77 @@ describe('the permanentSnow option', () => {
     expect(parse({ peakHeight: 95 })).toBe(false);
     expect(parse({ peakHeight: 150.5 })).toBe(false);
     expect(parse({ iceCap: 0.9 })).toBe(false);
+  });
+});
+
+describe('the permanent-snow estimate of the synthesis check', () => {
+  // A geography world with its northern land drawn as snow, so the check has relief to read.
+  const width = 1024;
+  const height = 512;
+  const raster = syntheticRaster(width, height, {
+    at: (x, y) => (x > 120 && x < 900 && y > 40 && y < 440 ? 1 : 0),
+    terrain: (_x, y) => (y < 200 ? 4 : 0),
+  });
+  const model = reliefGeography();
+  delete model.rivers;
+  delete model.lakes;
+  const geography = resolveGeography(model, {
+    frame: { width, height },
+    hasReference: true,
+  }).geography;
+  const spec = (overrides: Partial<WorldSpec>): WorldSpec => ({
+    width,
+    height,
+    seed: 7,
+    landCoverage: 0.4,
+    continents: 1,
+    landProvincePixels: 3_000,
+    seaProvincePixels: 12_000,
+    provincesPerState: 6,
+    landProvincesPerRegion: 30,
+    seaProvincesPerRegion: 10,
+    rivers: 0,
+    startDate: '1936.1.1',
+    countries: [{ tag: 'AAA', name: 'Alpha' }],
+    geography,
+    referenceSurface: raster,
+    ...overrides,
+  });
+  type SnowDetails = {
+    permanentPixels: number;
+    landPixels: number;
+    share: number;
+    drawnSnowPixels: number;
+    estimate?: boolean;
+  };
+  const details = (world: GeneratedWorld, code: string) =>
+    world.notes.find((note) => note.code === code)?.details as SnowDetails | undefined;
+
+  it.each([
+    ['an ice cap', { iceCapLatitude: 0.6 }],
+    ['high ground', { iceCapLatitude: 1, peakHeight: 112 }],
+  ] as const)('estimates the share the write reports for %s', (_name, permanentSnow) => {
+    // ZIN tuned its thresholds by 28-minute writes, 9 November 2026: the preview gave no figure.
+    const checked = generateWorld(spec({ permanentSnow }), plainContext, { riverCheck: true });
+    expect(checked.files).toEqual([]);
+    expect(details(checked, 'MAP_PERMANENT_SNOW_SHARE')).toBeUndefined();
+    const estimate = details(checked, 'MAP_PERMANENT_SNOW_ESTIMATE')!;
+    expect(estimate.estimate).toBe(true);
+    const written = details(generateWorld(spec({ permanentSnow }), plainContext), 'MAP_PERMANENT_SNOW_SHARE')!;
+    expect(written.permanentPixels).toBeGreaterThan(0);
+    expect(estimate.landPixels).toBe(written.landPixels);
+    expect(estimate.drawnSnowPixels).toBe(written.drawnSnowPixels);
+`);
+    // Only the full-resolution detail of the heights separates the two.
+    expect(Math.abs(estimate.share - written.share)).toBeLessThanOrEqual(0.05 * written.share);
+  });
+
+  it('warns in the check when the share is far above the base game', () => {
+    const checked = generateWorld(spec({ permanentSnow: { iceCapLatitude: 0.2 } }), plainContext, {
+      riverCheck: true,
+    });
+    const note = checked.notes.find(({ code }) => code === 'MAP_PERMANENT_SNOW_ESTIMATE')!;
+    expect(note.severity).toBe('warning');
+    expect(note.message).toMatch(/^Estimated from the half-resolution relief/u);
   });
 });
