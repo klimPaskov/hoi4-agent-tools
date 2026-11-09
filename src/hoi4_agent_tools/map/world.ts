@@ -17,7 +17,11 @@ import {
   type WorldPartition,
 } from './partition.js';
 import { repairSeamCorners, smoothDiagonalContacts } from './partition-fields.js';
-import { PARTITION_PROVINCE_ERROR, PARTITION_PROVINCE_WARNING } from './partition-tuning.js';
+import {
+  areaRowFactor,
+  PARTITION_PROVINCE_ERROR,
+  PARTITION_PROVINCE_WARNING,
+} from './partition-tuning.js';
 import { buildTerritoryAtoms, territoryGraphFromPartition } from './territory-graph.js';
 import { growTerritory } from './territory.js';
 import {
@@ -714,6 +718,67 @@ function estimatePermanentSnow(input: {
     }
   }
   return count;
+}
+
+/**
+ * The realised land province areas of `partitionTuning.areaByRow`: for each band between two of
+ * its rows (and the rows beyond its ends), the land provinces whose centre lies there, their mean
+ * area and its ratio to the mean of the band with the smallest factor.
+ */
+function areaByRowNote(
+  provinces: { kind: readonly number[]; size: readonly number[]; sumY: readonly number[] },
+  points: ReadonlyArray<readonly [number, number]>,
+  height: number,
+): WorldNote {
+  const edges = [...new Set([0, ...points.map(([row]) => row), 1])].sort((a, b) => a - b);
+  const bands = edges.slice(0, -1).map((from, index) => ({
+    from,
+    to: edges[index + 1]!,
+    factor: [
+      Number(areaRowFactor(points, from * height - 0.5, height).toFixed(3)),
+      Number(areaRowFactor(points, edges[index + 1]! * height - 0.5, height).toFixed(3)),
+    ] as const,
+    provinces: 0,
+    pixels: 0,
+  }));
+  for (let id = 0; id < provinces.kind.length; id += 1) {
+    if (provinces.kind[id] !== LAND || (provinces.size[id] ?? 0) === 0) continue;
+    const row = provinces.sumY[id]! / provinces.size[id]! / height;
+    const band =
+      bands.find(
+        ({ from, to }, index) => row >= from && (row < to || index === bands.length - 1),
+      ) ?? bands[bands.length - 1]!;
+    band.provinces += 1;
+    band.pixels += provinces.size[id]!;
+  }
+  const filled = bands.filter(({ provinces: count }) => count > 0);
+  const smallest = filled.reduce<(typeof bands)[number] | undefined>(
+    (best, band) =>
+      best === undefined || Math.max(...band.factor) < Math.max(...best.factor) ? band : best,
+    undefined,
+  );
+  const reference = smallest === undefined ? 0 : smallest.pixels / smallest.provinces;
+  const report = bands.map(({ from, to, factor, provinces: count, pixels }) => {
+    const mean = count === 0 ? 0 : pixels / count;
+    return {
+      rows: [from, to] as const,
+      factor,
+      landProvinces: count,
+      meanAreaPx: Math.round(mean),
+      ...(reference > 0 && count > 0 ? { ratio: Number((mean / reference).toFixed(2)) } : {}),
+    };
+  });
+  return {
+    code: 'MAP_PARTITION_AREA_BY_ROW',
+    severity: 'info',
+    message: `Land province area by row: ${report
+      .map(
+        ({ rows, landProvinces, meanAreaPx }) =>
+          `rows ${rows[0]}-${rows[1]}: ${landProvinces} provinces of ${meanAreaPx} px on average`,
+      )
+      .join('; ')}`,
+    details: { areaByRow: points, bands: report },
+  };
 }
 
 /** Land relief of the base game 1.19.4.1 (`reliefStatistics` over its land provinces). */
@@ -1495,6 +1560,8 @@ export function generateWorld(
     );
     provinces = featurePartition.provinces;
     for (const note of featurePartition.notes) notes.push(note);
+    const areaByRow = featurePartition.tuning.areaByRow;
+    if (areaByRow !== undefined) notes.push(areaByRowNote(provinces, areaByRow, height));
   } else
     provinces = generateWorldProvinces({
       width,
