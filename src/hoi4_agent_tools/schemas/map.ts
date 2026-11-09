@@ -1218,6 +1218,20 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .describe(
           'keep (the default) also lists the continents of the active continent.txt after the generated ones; drop writes only the generated continents and warns about every active script that still names a dropped one (MAP_CONTINENT_DROPPED_REFERENCED).',
         ),
+      permanentSnow: z
+        .union([
+          z.literal('snowlines'),
+          z
+            .object({
+              iceCapLatitude: z.number().min(0).max(1).optional(),
+              peakHeight: z.number().int().min(96).max(256).optional(),
+            })
+            .strict(),
+        ])
+        .optional()
+        .describe(
+          'Where land drawn as snow in the reference keeps permanent snow; other drawn snow is ordinary land with seasonal snow. iceCapLatitude (default 0.8; 0 is the middle row, 1 the top and bottom edge, 1 turns ice caps off) and peakHeight (heightmap value, default 150; 256 turns it off). snowlines keeps permanent snow only above the snow lines of ranges and painted mountains. MAP_PERMANENT_SNOW_SHARE reports the result against the base game.',
+        ),
       startDate: z
         .string()
         .regex(/^\d{3,4}\.\d{1,2}\.\d{1,2}$/u)

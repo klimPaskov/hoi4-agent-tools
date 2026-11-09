@@ -144,6 +144,8 @@ export interface WorldSpec {
    * the generated continents and reports the dropped keys in `droppedContinents`.
    */
   inheritedContinents?: 'keep' | 'drop';
+  /** Where land drawn as snow stays permanent snow; the rest is ordinary land with seasonal snow. */
+  permanentSnow?: PermanentSnowInput;
   startDate: string;
   rivers: number;
   /** Resolved reference data is internal; callers provide a guarded workspace image path. */
@@ -519,10 +521,28 @@ function geographySurface(
 
 /** Reference terrain code of drawn snow (`REFERENCE_TERRAIN.snow`). */
 const REFERENCE_SNOW = 4;
-/** Drawn snow nearer a pole than this (0 at the equator, 1 at the map's edge) is an ice cap. */
+/**
+ * Where land drawn as snow keeps permanent snow: nearer a pole than `iceCapLatitude` (0 in the
+ * middle row, 1 at the top and bottom edge) or at `peakHeight` and above. `snowlines` keeps it only
+ * above the snow lines of ranges and painted mountains.
+ */
+export type PermanentSnowInput = 'snowlines' | { iceCapLatitude?: number; peakHeight?: number };
+/** The base game keeps flat permanent snow in the tenth of rows nearest each pole. */
 const ICE_CAP_LATITUDE = 0.8;
 /** Drawn snow at or above this height stays permanent, as the base game's snowy high ground. */
 const PEAK_SNOW_HEIGHT = 150;
+
+function permanentSnowRule(input: PermanentSnowInput | undefined): {
+  iceCapLatitude: number;
+  peakHeight: number;
+} {
+  // A latitude above 1 and a height above 255 are never reached.
+  if (input === 'snowlines') return { iceCapLatitude: 2, peakHeight: 256 };
+  return {
+    iceCapLatitude: input?.iceCapLatitude ?? ICE_CAP_LATITUDE,
+    peakHeight: input?.peakHeight ?? PEAK_SNOW_HEIGHT,
+  };
+}
 /** Strategic regions drawn mostly as snow take the weather of at least this latitude. */
 const SNOW_REGION_LATITUDE = 0.7;
 /**
@@ -539,13 +559,11 @@ function pixelLatitude(y: number, height: number): number {
   return Math.abs((y + 0.5) / height - 0.5) * 2;
 }
 
-function permanentSnowNote(count: {
-  permanent: number;
-  painted: number;
-  seasonal: number;
-  land: number;
-  edge: number;
-}): WorldNote {
+function permanentSnowNote(
+  count: { permanent: number; painted: number; seasonal: number; land: number; edge: number },
+  input: PermanentSnowInput | undefined,
+): WorldNote {
+  const rule = permanentSnowRule(input);
   const share = count.permanent / Math.max(1, count.land);
   const ratio = share / VANILLA_PERMANENT_SNOW.share;
   const high = ratio > PERMANENT_SNOW_WARNING_FACTOR;
@@ -560,7 +578,7 @@ function permanentSnowNote(count: {
         ? `; ${count.seasonal} of ${count.painted} drawn snow pixels are ordinary land with seasonal snow`
         : '') +
       (high
-        ? '. The game draws permanent snow as bright ice: keep it to ice caps and high peaks'
+        ? '. The game draws permanent snow as bright ice: raise permanentSnow.iceCapLatitude or peakHeight, or set permanentSnow to "snowlines"'
         : ''),
     details: {
       permanentPixels: count.permanent,
@@ -572,6 +590,10 @@ function permanentSnowNote(count: {
       seasonalSnowPixels: count.seasonal,
       // The snow range or wall at a `rim` or `wall` seam, counted apart from the land.
       edgePixels: count.edge,
+      permanentSnow:
+        input === 'snowlines'
+          ? 'snowlines'
+          : { iceCapLatitude: rule.iceCapLatitude, peakHeight: rule.peakHeight },
     },
   };
 }
@@ -2404,11 +2426,12 @@ export function generateWorld(
     2;
   // Drawn snow is ordinary land with seasonal snow, as the base game's northern lands are; only
   // ice caps near the poles and high ground keep permanent snow. Snow lines are always permanent.
+  const snowRule = permanentSnowRule(spec.permanentSnow);
   const paintedSnow = (pixel: number): boolean =>
     reference?.terrain[pixel] === REFERENCE_SNOW && surface.kind[pixel] === LAND;
   const iceCapOrPeak = (pixel: number): boolean =>
-    pixelLatitude(Math.floor(pixel / width), height) >= ICE_CAP_LATITUDE ||
-    heights[pixel]! >= PEAK_SNOW_HEIGHT;
+    pixelLatitude(Math.floor(pixel / width), height) >= snowRule.iceCapLatitude ||
+    heights[pixel]! >= snowRule.peakHeight;
   const snowAt = (pixel: number, type: string): boolean =>
     surface.kind[pixel] !== LAND
       ? false
@@ -2421,7 +2444,9 @@ export function generateWorld(
   // The base game draws snowy high ground with its mountain entry (16) and flat ice caps with its
   // plains entry (19), both `perm_snow = yes`.
   const snowIndex = (pixel: number): number =>
-    reference === undefined || synthesized?.snow[pixel] === 1 || heights[pixel]! >= PEAK_SNOW_HEIGHT
+    reference === undefined ||
+    synthesized?.snow[pixel] === 1 ||
+    heights[pixel]! >= snowRule.peakHeight
       ? 16
       : 19;
   const snowCount = { permanent: 0, painted: 0, seasonal: 0, land: 0, edge: 0 };
@@ -2517,7 +2542,8 @@ export function generateWorld(
       colourClasses[pixel] = classCode(colour);
     }
   }
-  if (snowCount.permanent > 0 || snowCount.painted > 0) notes.push(permanentSnowNote(snowCount));
+  if (snowCount.permanent > 0 || snowCount.painted > 0)
+    notes.push(permanentSnowNote(snowCount, spec.permanentSnow));
   add(
     `${map}/terrain.bmp`,
     createBmp({

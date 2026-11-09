@@ -4,7 +4,9 @@ import {
   VANILLA_PERMANENT_SNOW,
   type GeneratedWorld,
   type WorldNote,
+  type WorldSpec,
 } from '../../src/hoi4_agent_tools/map/world.js';
+import { mapOperationSchema } from '../../src/hoi4_agent_tools/schemas/map.js';
 import {
   filesOf,
   plainContext,
@@ -19,12 +21,17 @@ const HEIGHT = 256;
 const PERMANENT = new Set([16, 19]);
 
 /** Land from `top` to `bottom` (rows), drawn as snow where `snow(y)` says so and plains elsewhere. */
-function drawnWorld(top: number, bottom: number, snow: (y: number) => boolean): GeneratedWorld {
+function drawnWorld(
+  top: number,
+  bottom: number,
+  snow: (y: number) => boolean,
+  overrides: Partial<WorldSpec> = {},
+): GeneratedWorld {
   const surface = syntheticRaster(WIDTH, HEIGHT, {
     at: (x, y) => (x >= 26 && x < 230 && y >= top && y < bottom ? 1 : 0),
     terrain: (_x, y) => (snow(y) ? 4 : 0),
   });
-  return generateWorld(worldSpec(surface), plainContext);
+  return generateWorld(worldSpec(surface, overrides), plainContext);
 }
 
 function snowNote(world: GeneratedWorld): WorldNote | undefined {
@@ -108,5 +115,49 @@ describe('drawn snow away from the poles', () => {
     const plains = drawnWorld(90, 166, () => false);
     expect(regionSnow(plains).every((snow) => snow === 0)).toBe(true);
     expect(snowNote(plains)).toBeUndefined();
+  });
+});
+
+describe('the permanentSnow option', () => {
+  const permanent = (world: GeneratedWorld) =>
+    [...indexedPixels(filesOf(world).get('map/terrain.bmp')!)].filter((index) =>
+      PERMANENT.has(index),
+    );
+
+  it('narrows the ice cap to the rows nearest the edge', () => {
+    // ZIN's inhabited north reaches the top rows; a cap at 0.97 keeps only the outer 3% of rows.
+    const world = drawnWorld(4, 180, (y) => y < 110, { permanentSnow: { iceCapLatitude: 0.97 } });
+    expect(permanent(world)).toEqual([]);
+    expect(snowNote(world)!.details).toMatchObject({
+      permanentPixels: 0,
+      permanentSnow: { iceCapLatitude: 0.97, peakHeight: 150 },
+    });
+  });
+
+  it('keeps drawn snow on high ground permanent from peakHeight up', () => {
+    // The synthetic land stands at height 107, so a peak height of 100 keeps all of it.
+    const world = drawnWorld(90, 166, () => true, { permanentSnow: { peakHeight: 100 } });
+    const indices = permanent(world);
+    expect(indices.length).toBe(snowNote(world)!.details!.drawnSnowPixels);
+    expect(new Set(indices)).toEqual(new Set([16]));
+  });
+
+  it('keeps permanent snow off drawn land with snowlines', () => {
+    const world = drawnWorld(4, 180, (y) => y < 110, { permanentSnow: 'snowlines' });
+    expect(permanent(world)).toEqual([]);
+    expect(snowNote(world)!.details).toMatchObject({ permanentSnow: 'snowlines' });
+  });
+
+  it('accepts only the documented forms', () => {
+    const parse = (permanentSnow: unknown) =>
+      mapOperationSchema.safeParse({ kind: 'create_world', id: 'w', permanentSnow }).success;
+    expect(parse('snowlines')).toBe(true);
+    expect(parse({ iceCapLatitude: 0.97, peakHeight: 200 })).toBe(true);
+    expect(parse({})).toBe(true);
+    expect(parse('none')).toBe(false);
+    expect(parse({ iceCapLatitude: 1.5 })).toBe(false);
+    expect(parse({ peakHeight: 95 })).toBe(false);
+    expect(parse({ peakHeight: 150.5 })).toBe(false);
+    expect(parse({ iceCap: 0.9 })).toBe(false);
   });
 });
