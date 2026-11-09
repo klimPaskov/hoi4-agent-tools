@@ -707,6 +707,12 @@ async function previewSynthesisCheck(
   const carved = checked.diagnostics.flatMap(({ code, details }) =>
     code === 'MAP_RIVER_CARVED_CROSSING' && details !== undefined ? [details] : [],
   );
+  // The write's permanent-snow share, estimated on the check's relief, per operation.
+  const permanentSnow = checked.diagnostics.flatMap(({ code, operationId, details }) =>
+    code === 'MAP_PERMANENT_SNOW_ESTIMATE' && details !== undefined
+      ? [{ ...(operationId === undefined ? {} : { operationId }), ...details }]
+      : [],
+  );
   const compactSemantic = compactMapSemanticDiff(EMPTY_SEMANTIC_DIFF);
   const result = emptyServiceResult(context.workspaceId, {
     execution: 'preview' as const,
@@ -723,6 +729,7 @@ async function previewSynthesisCheck(
     geography: checked.geography.slice(0, 16).map(geographySummary),
     synthesisCheck: {
       passed: valid,
+      ...(permanentSnow.length === 0 ? {} : { permanentSnow: permanentSnow.slice(0, 16) }),
       unreachableRivers: rivers.length,
       rivers: rivers.slice(0, 200),
       carvedCrossings: carved.length,
