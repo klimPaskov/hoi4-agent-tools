@@ -230,7 +230,7 @@ fn mod_index_and_symbol_index_read_a_request_and_refuse_with_two() {
     assert_eq!(index["schema"], "hoi4-symbol-index/1");
     assert_eq!(
         index["symbols"][1],
-        serde_json::json!({ "kind": "event", "id": "e.3", "path": "mod:events/a.txt", "rootKind": "mod", "loadOrder": 1, "line": 2, "overridden": false, "sourceShadowed": false })
+        serde_json::json!({ "kind": "event", "id": "e.3", "path": "mod:events/a.txt", "rootKind": "mod", "loadOrder": 1, "line": 2, "endLine": 2, "overridden": false, "sourceShadowed": false })
     );
     let mut next = body.clone();
     next["mode"] = "next_id".into();

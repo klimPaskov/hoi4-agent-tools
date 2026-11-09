@@ -192,6 +192,9 @@ pub struct Scalar<'a> {
 #[derive(Debug, Default)]
 pub struct Block<'a> {
     pub entries: Vec<Entry<'a>>,
+    /// 1-based line of the closing brace; of the last token when the block is never closed; 0 for a
+    /// block cut off by the nesting ceiling.
+    pub end_line: u32,
 }
 
 #[derive(Debug)]
@@ -456,6 +459,7 @@ impl<'a> Parser<'_, 'a> {
         }
         let mut entries = Vec::new();
         let mut closed = false;
+        let mut end_line = 0;
         while let Some(token) = self.peek() {
             if token.kind == TokenKind::RightBrace {
                 self.index += 1;
@@ -464,6 +468,7 @@ impl<'a> Parser<'_, 'a> {
                     continue;
                 }
                 closed = true;
+                end_line = token.line;
                 break;
             }
             if let Some(entry) = self.entry(depth) {
@@ -472,8 +477,9 @@ impl<'a> Parser<'_, 'a> {
         }
         if open && !closed {
             self.diagnostics.note();
+            end_line = self.tokens.last().map_or(0, |token| token.line);
         }
-        Block { entries }
+        Block { entries, end_line }
     }
 
     fn over_limit_block(&mut self) -> Block<'a> {

@@ -132,6 +132,9 @@ pub struct Symbol {
     pub file: u32,
     /// 1-based line of the definition; map-table records name their table line.
     pub line: u32,
+    /// 1-based last line of the definition (its closing brace); equal to `line` for a record of a
+    /// map table, a localisation key or a scalar.
+    pub end_line: u32,
     pub overridden: bool,
     pub source_shadowed: bool,
 }
@@ -165,7 +168,7 @@ pub struct SymbolIndex {
 /// What reading one file produced.
 #[derive(Default)]
 struct FileRecords {
-    symbols: Vec<(SymbolKind, String, u32)>,
+    symbols: Vec<walk::Found>,
     /// The file was skipped: its partial-limit codes.
     skipped: Option<Vec<String>>,
     /// A map table hit its line or field ceiling; records before it are kept.
@@ -474,15 +477,15 @@ fn index_table(bytes: &[u8], kind: TableKind, records: &mut FileRecords) {
                 let parts = split_bounded(row, ';', 8);
                 if parts.len() >= 4 && digits(parts[0]) {
                     let color = format!("{},{},{}", parts[1], parts[2], parts[3]);
-                    records.symbols.push((SymbolKind::Province, parts[0].to_string(), line));
-                    records.symbols.push((SymbolKind::ProvinceColor, color, line));
+                    records.symbols.push((SymbolKind::Province, parts[0].to_string(), line, line));
+                    records.symbols.push((SymbolKind::ProvinceColor, color, line, line));
                 }
             }
             TableKind::Adjacencies => {
                 if line != 1 {
                     let parts = split_bounded(row, ';', 4);
                     if parts.len() >= 3 && digits(parts[0]) && digits(parts[1]) {
-                        records.symbols.push((SymbolKind::Adjacency, format!("{}:{}:{}:{line}", parts[0], parts[1], parts[2]), line));
+                        records.symbols.push((SymbolKind::Adjacency, format!("{}:{}:{}:{line}", parts[0], parts[1], parts[2]), line, line));
                     }
                 }
             }
@@ -497,7 +500,7 @@ fn index_table(bytes: &[u8], kind: TableKind, records: &mut FileRecords) {
                     values.push(field);
                 }
                 if values.len() >= 2 && values.iter().all(|v| digits(v)) {
-                    records.symbols.push((kind, format!("{line}:{}", values.join(":")), line));
+                    records.symbols.push((kind, format!("{line}:{}", values.join(":")), line, line));
                 }
             }
         }
@@ -547,7 +550,7 @@ fn index_file(file: &ScannedFile, definition_file: bool) -> Result<FileRecords, 
             records.skipped = Some(codes(&parsed.diagnostics.partial_limits()));
             return Ok(records);
         }
-        records.symbols = parsed.entries.into_iter().map(|e| (SymbolKind::Localisation, format!("{}:{}", e.language, e.key), e.line)).collect();
+        records.symbols = parsed.entries.into_iter().map(|e| (SymbolKind::Localisation, format!("{}:{}", e.language, e.key), e.line, e.line)).collect();
         return Ok(records);
     }
     // Map position and network tables are not Clausewitz assignment sources.
@@ -594,13 +597,13 @@ impl SymbolIndex {
                 index.complete = false;
             }
             let shadowed = index.files[i].shadowed_by.is_some();
-            for (kind, id, line) in records.symbols {
+            for (kind, id, line, end_line) in records.symbols {
                 if index.symbols.len() >= INDEX_RECORD_LIMIT {
                     index.complete = false;
                     index.skipped_possible_kinds.insert(kind);
                     continue;
                 }
-                index.symbols.push(Symbol { kind, id, file: i as u32, line, overridden: shadowed, source_shadowed: shadowed });
+                index.symbols.push(Symbol { kind, id, file: i as u32, line, end_line, overridden: shadowed, source_shadowed: shadowed });
             }
         }
         index.finalize();
