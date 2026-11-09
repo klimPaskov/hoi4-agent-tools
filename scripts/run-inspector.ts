@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { statSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,24 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-agent-inspector-'));
+/**
+ * The tools on the shared Rust engine (hoi4.source_lookup, hoi4.mod_index) answer only with a
+ * hoi4-engine binary; the spawned server uses HOI4_ENGINE, else this checkout's cargo build.
+ */
+const engineFile = process.platform === 'win32' ? 'hoi4-engine.exe' : 'hoi4-engine';
+const builtEngine = ['release', 'debug']
+  .map((profile) => path.join(root, 'engine', 'target', profile, engineFile))
+  .find((candidate) => {
+    try {
+      return statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
+const engineEnvironment =
+  (process.env.HOI4_ENGINE ?? '') === '' && builtEngine !== undefined
+    ? { HOI4_ENGINE: builtEngine }
+    : {};
 const modRoot = path.join(temporary, 'mods');
 const mod = path.join(modRoot, 'fixture');
 const storage = path.join(temporary, 'storage');
@@ -109,7 +128,12 @@ async function runInspector(
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: root,
-      env: { ...process.env, HOI4_AGENT_CONFIG: config, HOI4_AGENT_TOOLS_PROFILES: 'all' },
+      env: {
+        ...process.env,
+        ...engineEnvironment,
+        HOI4_AGENT_CONFIG: config,
+        HOI4_AGENT_TOOLS_PROFILES: 'all',
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
