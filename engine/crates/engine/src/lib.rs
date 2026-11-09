@@ -23,6 +23,7 @@ pub mod overrides;
 pub mod repair;
 pub mod report;
 pub mod roundtrip;
+pub mod source_lookup;
 pub mod sprite_audit;
 pub mod sprite_trace;
 pub mod sprites;

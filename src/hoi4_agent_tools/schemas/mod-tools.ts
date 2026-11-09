@@ -208,6 +208,42 @@ export const modIndexDataSchema = z
   })
   .strict();
 
+/** `hoi4-engine source-lookup` (`hoi4-source-lookup/1`): what the shared Rust engine answers. */
+export const sourceLookupEngineResponseSchema = z
+  .object({
+    schema: z.literal('hoi4-source-lookup/1'),
+    status: z.literal('ok'),
+    /** The scan revision, the same value `CoreEngine.scan` computes. */
+    revision: z.string().regex(/^[0-9a-f]{64}$/u),
+    complete: z.boolean(),
+    skippedSourceCount: z.number().int().min(0),
+    definitionCount: z.number().int().min(0),
+    kindCount: z.number().int().min(0),
+    definitions: z
+      .array(
+        z
+          .object({
+            kind: z.string(),
+            id: z.string(),
+            path: z.string(),
+            rootKind: z.string(),
+            loadOrder: z.number().int(),
+            overridden: z.boolean(),
+            sourceShadowed: z.boolean(),
+            startLine: z.number().int().min(0),
+            endLine: z.number().int().min(0),
+            absolutePath: z.string().min(1),
+            sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+          })
+          .strict(),
+      )
+      .max(50),
+    suggestionCandidates: z
+      .array(z.object({ id: z.string(), distance: z.number().int().min(0).max(3) }).strict())
+      .max(2_000),
+  })
+  .strict();
+
 /** `hoi4-engine mod-index` (`hoi4-mod-index/1`): what the shared Rust engine answers. */
 export const modIndexEngineResponseSchema = z
   .object({
