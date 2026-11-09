@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `create_world.partitionTuning.areaByRow` (feature-aware partition). The owner asked on 9 November (ZIN decision K116) for larger provinces and states toward the north, and the partition sized provinces by ground alone. `areaByRow` takes `[row, factor]` points (row 0 at the top edge, 1 at the bottom; factors 0.25 to 8), linear between points and held beyond the ends, and multiplies the planned land province area after it is scaled to `landProvincePixels`, so rows with factor 1 keep their sizes. States keep their province counts, so they grow by the same factor. `MAP_PARTITION_AREA_BY_ROW` reports the land provinces and mean area per band. On a 512 by 256 test world `[[0, 3], [0.3, 1.6], [0.45, 1], [1, 1]]` gave 246 pixels on average in rows 0 to 0.3, 153 in rows 0.3 to 0.45 and 116 in the south (117 without the option), and 138 states instead of 171. Requests without `areaByRow` write the same files as before.
 - Accept a server state root under the macOS temporary folder. macOS ships `/var`, `/tmp` and `/etc` as links into `/private`, so a state root such as `$TMPDIR/state` (`/var/folders/...`) always passed through a link and startup stopped with `SERVER_STATE_UNSAFE`. A link that only the superuser can change (owned by root, in a root-owned directory that group and others cannot write) is now resolved to its real path first. Any other link in the path is still refused, and Windows is unchanged. The test helper resolves `TMPDIR` before the suite runs, which is why macOS CI never saw this.
 
 ## 4.15.0 - 2026-11-09

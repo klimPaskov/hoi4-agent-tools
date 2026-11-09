@@ -22,6 +22,12 @@ export interface PartitionTuning {
   minProvincePixels?: number;
   /** A sea channel at most this wide (in pixels) gets two sea provinces across it. */
   narrowStraitPx?: number;
+  /**
+   * `[row, factor]` points, row 0 at the top edge and 1 at the bottom: the typical land province
+   * area at a row is multiplied by the factor, linearly between points and held beyond the ends.
+   * States keep their province counts, so they grow by the same factor.
+   */
+  areaByRow?: ReadonlyArray<readonly [number, number]>;
 }
 
 export interface ResolvedPartitionTuning {
@@ -36,6 +42,8 @@ export interface ResolvedPartitionTuning {
   narrowStraitPx: number;
   /** Largest area any province may be planned at; keeps provinces inside an eighth of the map. */
   maxProvincePixels: number;
+  /** The `areaByRow` points in row order, when given. */
+  areaByRow?: ReadonlyArray<readonly [number, number]>;
   /**
    * When the land (or sea) bands were derived from the request's base area rather than given, the
    * plan is scaled so the mean planned area equals that base area: the request still means "about
@@ -70,6 +78,31 @@ export const PARTITION_DEFAULTS = {
   minProvincePixels: 40,
   narrowStraitPx: 24,
 } as const;
+
+/** The smallest and largest `areaByRow` factor. */
+export const AREA_BY_ROW_FACTOR = [0.25, 8] as const;
+
+/**
+ * The `areaByRow` factor of a pixel row: linear between the points, held beyond the ends, 1
+ * without points.
+ */
+export function areaRowFactor(
+  points: ReadonlyArray<readonly [number, number]> | undefined,
+  y: number,
+  height: number,
+): number {
+  if (points === undefined || points.length === 0) return 1;
+  const row = (y + 0.5) / height;
+  if (row <= points[0]![0]) return points[0]![1];
+  for (let index = 1; index < points.length; index += 1) {
+    const [r1, f1] = points[index]!;
+    if (row <= r1) {
+      const [r0, f0] = points[index - 1]!;
+      return f0 + ((f1 - f0) * (row - r0)) / (r1 - r0);
+    }
+  }
+  return points[points.length - 1]![1];
+}
 
 /** The province count above which the wiki and the text-table limit advise against a map. */
 export const PARTITION_PROVINCE_WARNING = 14_000;
@@ -172,6 +205,27 @@ export function resolvePartitionTuning(
     refuse('MAP_PARTITION_STRENGTH_INVALID', 'partition barrierStrength must be from 0 to 60', {
       barrierStrength: strength,
     });
+  const areaByRow = tuning?.areaByRow;
+  if (areaByRow !== undefined) {
+    const valid =
+      areaByRow.length > 0 &&
+      areaByRow.every(
+        ([row, factor], index) =>
+          Number.isFinite(row) &&
+          row >= 0 &&
+          row <= 1 &&
+          Number.isFinite(factor) &&
+          factor >= AREA_BY_ROW_FACTOR[0] &&
+          factor <= AREA_BY_ROW_FACTOR[1] &&
+          (index === 0 || row > areaByRow[index - 1]![0]),
+      );
+    if (!valid)
+      refuse(
+        'MAP_PARTITION_AREA_BY_ROW_INVALID',
+        `partition areaByRow must be [row, factor] points with rows from 0 to 1 in increasing order and factors from ${AREA_BY_ROW_FACTOR[0]} to ${AREA_BY_ROW_FACTOR[1]}`,
+        { areaByRow },
+      );
+  }
   const strait = tuning?.narrowStraitPx ?? PARTITION_DEFAULTS.narrowStraitPx;
   if (!Number.isInteger(strait) || strait < 4 || strait > 64)
     refuse('MAP_PARTITION_STRENGTH_INVALID', 'partition narrowStraitPx must be from 4 to 64', {
@@ -188,6 +242,9 @@ export function resolvePartitionTuning(
     minProvincePixels,
     narrowStraitPx: strait,
     maxProvincePixels: cellLimit,
+    ...(areaByRow === undefined
+      ? {}
+      : { areaByRow: areaByRow.map(([row, factor]) => [row, factor] as const) }),
     normalizeLand: bands === undefined || Object.keys(bands).length === 0,
     normalizeSea: sea === undefined || Object.keys(sea).length === 0,
     landBase: land,
