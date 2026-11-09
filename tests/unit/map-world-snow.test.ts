@@ -217,11 +217,13 @@ describe('the permanent-snow estimate of the synthesis check', () => {
     expect(details(checked, 'MAP_PERMANENT_SNOW_SHARE')).toBeUndefined();
     const estimate = details(checked, 'MAP_PERMANENT_SNOW_ESTIMATE')!;
     expect(estimate.estimate).toBe(true);
-    const written = details(generateWorld(spec({ permanentSnow }), plainContext), 'MAP_PERMANENT_SNOW_SHARE')!;
+    const written = details(
+      generateWorld(spec({ permanentSnow }), plainContext),
+      'MAP_PERMANENT_SNOW_SHARE',
+    )!;
     expect(written.permanentPixels).toBeGreaterThan(0);
     expect(estimate.landPixels).toBe(written.landPixels);
     expect(estimate.drawnSnowPixels).toBe(written.drawnSnowPixels);
-`);
     // Only the full-resolution detail of the heights separates the two.
     expect(Math.abs(estimate.share - written.share)).toBeLessThanOrEqual(0.05 * written.share);
   });
