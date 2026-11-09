@@ -96,6 +96,8 @@ async function runInspector(
     path.join(root, 'dist', 'bin', 'stdio.js'),
     '-e',
     `HOI4_AGENT_CONFIG=${config}`,
+    '-e',
+    'HOI4_AGENT_TOOLS_PROFILES=all',
     '--connect-timeout',
     '60000',
     '--format',
@@ -107,7 +109,7 @@ async function runInspector(
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: root,
-      env: { ...process.env, HOI4_AGENT_CONFIG: config },
+      env: { ...process.env, HOI4_AGENT_CONFIG: config, HOI4_AGENT_TOOLS_PROFILES: 'all' },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });

@@ -8,8 +8,11 @@
 use super::SymbolKind as K;
 use super::reader::{Block, SOURCE_MAX_NESTING, Value};
 
+/// A definition: kind, id, first line, last line.
+pub type Found = (K, String, u32, u32);
+
 pub struct Walked {
-    pub symbols: Vec<(K, String, u32)>,
+    pub symbols: Vec<Found>,
     pub nesting_blocked: bool,
 }
 
@@ -72,13 +75,17 @@ fn contains_insensitive(haystack: &str, needle: &str) -> bool {
 struct Walker<'p> {
     path: &'p str,
     gfx: bool,
-    symbols: Vec<(K, String, u32)>,
+    symbols: Vec<Found>,
     nesting_blocked: bool,
+    /// First and last line of the assignment being visited, so a definition recorded on its first
+    /// line spans the whole assignment (`nodeLocation` of the assignment in the TypeScript index).
+    current: (u32, u32),
 }
 
 impl Walker<'_> {
     fn add(&mut self, kind: K, id: &str, line: u32) {
-        self.symbols.push((kind, id.to_string(), line));
+        let end = if line == self.current.0 { self.current.1 } else { line };
+        self.symbols.push((kind, id.to_string(), line, end));
     }
 
     fn starts(&self, prefix: &str) -> bool {
@@ -95,6 +102,12 @@ impl Walker<'_> {
         for assignment in block.assignments() {
             let key: &'b str = &assignment.key.value;
             let line = assignment.key.line;
+            let end_line = match &assignment.value {
+                Value::Scalar(value) => value.line,
+                Value::Block(block) if block.end_line > 0 => block.end_line,
+                Value::Block(_) => line,
+            };
+            self.current = (line, end_line.max(line));
             let child = match &assignment.value {
                 Value::Scalar(value) => {
                     if key == "idea_token" && self.starts("common/characters/") && parent == Some("advisor") {
@@ -102,7 +115,7 @@ impl Walker<'_> {
                     }
                     if self.starts("common/script_constants/") && key != "schema" && !ancestors.contains(&"schema") {
                         let id = if ancestors.is_empty() { key.to_string() } else { format!("{}.{key}", ancestors.join(".")) };
-                        self.symbols.push((K::ScriptConstant, id, line));
+                        self.symbols.push((K::ScriptConstant, id, line, end_line.max(line)));
                     }
                     continue;
                 }
@@ -208,7 +221,7 @@ impl Walker<'_> {
 
 /// The definitions of one parsed file. `path` is its relative path in lower case.
 pub fn walk(root: &Block<'_>, path: &str) -> Walked {
-    let mut walker = Walker { path, gfx: path.ends_with(".gfx"), symbols: Vec::new(), nesting_blocked: false };
+    let mut walker = Walker { path, gfx: path.ends_with(".gfx"), symbols: Vec::new(), nesting_blocked: false, current: (0, 0) };
     walker.walk(root, &mut Vec::new());
     Walked { symbols: walker.symbols, nesting_blocked: walker.nesting_blocked }
 }
@@ -220,7 +233,25 @@ mod tests {
 
     fn records(path: &str, text: &str) -> Vec<(&'static str, String)> {
         let document = parse_clausewitz(text, text.len(), false);
-        walk(&document.root, path).symbols.into_iter().map(|(k, id, _)| (k.as_str(), id)).collect()
+        walk(&document.root, path).symbols.into_iter().map(|(k, id, _, _)| (k.as_str(), id)).collect()
+    }
+
+    #[test]
+    fn a_definition_spans_its_assignment() {
+        let text = "country_event = {
+  id = a.1
+  title = x
+}
+country_event = { id = a.2 }
+country_event = {
+  id = a.3
+";
+        let document = parse_clausewitz(text, text.len(), false);
+        let found: Vec<(String, u32, u32)> = walk(&document.root, "events/x.txt").symbols.into_iter().map(|(_, id, line, end)| (id, line, end)).collect();
+        assert_eq!(found[0], ("a.1".to_string(), 1, 4));
+        assert_eq!(found[1], ("a.2".to_string(), 5, 5));
+        // An unclosed block ends on the file's last token.
+        assert_eq!(found[2], ("a.3".to_string(), 6, 7));
     }
 
     #[test]

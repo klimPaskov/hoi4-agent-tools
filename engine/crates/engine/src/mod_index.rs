@@ -119,6 +119,8 @@ pub struct SymbolRecord<'a> {
     #[serde(rename = "loadOrder")]
     pub load_order: i64,
     pub line: u32,
+    #[serde(rename = "endLine")]
+    pub end_line: u32,
     pub overridden: bool,
     #[serde(rename = "sourceShadowed")]
     pub source_shadowed: bool,
@@ -306,6 +308,7 @@ pub fn respond_symbols_json(text: &str) -> (String, u8) {
                 root_kind: file.kind.as_str(),
                 load_order: file.load_order,
                 line: s.line,
+                end_line: s.end_line,
                 overridden: s.overridden,
                 source_shadowed: s.source_shadowed,
             }

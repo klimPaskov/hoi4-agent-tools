@@ -239,6 +239,8 @@ describe('concurrent production MCP workloads', () => {
               setup.configPath,
             ],
             cwd: repository,
+            // The test counts every tool, so it asks for every profile; the default is core only.
+            env: { HOI4_AGENT_TOOLS_PROFILES: 'all' },
             stderr: 'pipe',
           });
           transport.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));

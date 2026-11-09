@@ -235,7 +235,7 @@ export const worldEdgeSchema = z
       .enum(['sea-band', 'rim', 'wall', 'none'])
       .optional()
       .describe(
-        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range with impassable adjacencies across the seam, but sea at the seam stays sailable; wall fills rimPx at the east and west edges with land over the full height, in impassable states, so nothing crosses the seam by land or sea; none keeps the picture and warns about land cut by the wrapping seam.',
+        'sea-band (default when edge is given) clears land from the east and west edges and the poles to open sea; rim ends land at the seam in an impassable snow range whose seam provinces are impassable states, but sea at the seam stays sailable; wall fills rimPx at the east and west edges with land over the full height, in impassable states, so nothing crosses the seam by land or sea; none keeps the picture and warns about land cut by the wrapping seam.',
       ),
     bandPx: z
       .number()
@@ -1217,6 +1217,21 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .optional()
         .describe(
           'keep (the default) also lists the continents of the active continent.txt after the generated ones; drop writes only the generated continents and warns about every active script that still names a dropped one (MAP_CONTINENT_DROPPED_REFERENCED).',
+        ),
+      permanentSnow: z
+        .union([
+          z.literal('snowlines'),
+          z
+            .object({
+              iceCapLatitude: z.number().min(0).max(1).optional(),
+              peakHeight: z.number().int().min(96).max(256).optional(),
+              paintedHeight: z.number().int().min(96).max(256).optional(),
+            })
+            .strict(),
+        ])
+        .optional()
+        .describe(
+          'Where land drawn as snow in the reference keeps permanent snow; other drawn snow is ordinary land with seasonal snow. iceCapLatitude (default 0.8; 0 is the middle row, 1 the top and bottom edge, 1 turns ice caps off) and peakHeight (heightmap value, default 150; 256 turns it off). paintedHeight (heightmap value, no default) is the lowest the snow line of painted mountains, volcanoes and impassable land may go; without it that line runs from 232 at the equator to 140 at the poles, and 256 puts none. snowlines keeps permanent snow only above the snow lines of ranges and painted mountains. MAP_PERMANENT_SNOW_SHARE reports the result against the base game, by source; a synthesisCheck preview estimates it as MAP_PERMANENT_SNOW_ESTIMATE.',
         ),
       startDate: z
         .string()

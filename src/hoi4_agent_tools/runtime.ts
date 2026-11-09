@@ -11,6 +11,11 @@ import { ServiceError } from './core/result.js';
 import { WorkspaceResolver } from './core/workspace.js';
 import { CONFIG_VERSION } from './version.js';
 import { sweepTemporaryDirectories } from './core/temporary-directories.js';
+import {
+  PROFILES_ENV,
+  parseProfilesEnv,
+  type ProfileSelection,
+} from './mcp/server/tool-profiles.js';
 import { defaultDocsRoot } from './reference/docs-pack.js';
 
 export function defaultConfigurationPath(): string {
@@ -270,6 +275,12 @@ export interface CreateEngineOptions {
    * The caller must hold workspace requests until `engine.recovered()` settles.
    */
   recovery?: 'wait' | 'background';
+  /**
+   * The tool profiles to list when neither the client (`HOI4_AGENT_TOOLS_PROFILES`) nor the
+   * configuration chooses. The stdio entry passes `core`; without it every tool is listed, as the
+   * HTTP server does.
+   */
+  defaultProfiles?: readonly ProfileSelection[];
 }
 
 export async function createEngine(
@@ -289,6 +300,12 @@ export async function createEngine(
     if (!useAutomaticConfiguration) throw error;
     configuration = await automaticConfiguration();
   }
+  // The stdio server lists the core tools unless the client or the file asks for more.
+  const profiles =
+    parseProfilesEnv(process.env[PROFILES_ENV]) ??
+    configuration.profiles ??
+    options.defaultProfiles;
+  if (profiles !== undefined) configuration = { ...configuration, profiles: [...profiles] };
   // The command-line servers read a fetched docs pack from the user's data folder by default.
   if (configuration.docsRoot === undefined)
     configuration = { ...configuration, docsRoot: defaultDocsRoot() };

@@ -499,8 +499,11 @@ describe('configuration loading and path selection', () => {
         created = true;
         return engine;
       });
+      // Configuration loading runs first; on a loaded runner it takes longer than any fixed wait.
+      await vi.waitFor(() => expect(recover).toHaveBeenCalledWith('fixture'), {
+        timeout: 10_000,
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(recover).toHaveBeenCalledWith('fixture');
       expect(created).toBe(false);
       release();
       await creation;

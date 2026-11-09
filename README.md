@@ -35,9 +35,7 @@ Make focus trees, events and decisions. Edit maps and generate a new world. Prev
 
 ## What it does
 
-Your agent can build and edit focus trees, events, decisions and maps, and generate a new world.
-
-For a new map, give it a cleaned local reference image and preview the interpreted geography before writing. The [map workflow](docs/map.md#generate-a-world-from-one-image) creates provinces, states, terrain, cities, countries, supply and a provisional starting scenario. Reviewed names and masks refine ambiguous artwork; offline validation is separate from [native campaign acceptance](https://github.com/klimPaskov/hoi4-agent-tools/blob/v4.1.0/docs/evaluations/worldgen_acceptance_2026-10-15.md).
+Your agent can build and edit focus trees, events, decisions and maps, and generate a new world from a reference image ([map guide](docs/map.md)).
 It previews focus trees, technology folders, windows and maps, finds the right rule in the game's documentation, fixes broken script and tunes AI choices.
 You describe what you want; the agent picks the right tools.
 
@@ -84,6 +82,8 @@ See more in the [examples gallery](docs/examples.md).
 The server gives your agent previews, documentation, script analysis and editing tools.
 The agent combines them with its file editor to build events and decisions, repair scripts and adjust AI weights.
 The [tool reference](docs/tools.md) lists exact names, arguments and results for integrations.
+
+A session lists the core tools by default: documentation search, source lookup, script validation, the error log, the mod health check and localisation. They fit in about 8,000 tokens of the agent's context. Set `HOI4_AGENT_TOOLS_PROFILES` to `core,map`, `core,advanced` or `all` in the client's server entry for the world map tools or the focus, GUI, event, technology and probability editors ([tool profiles](docs/setup.md#choose-tool-profiles)).
 
 ## FAQ
 

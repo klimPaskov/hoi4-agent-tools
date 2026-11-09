@@ -85,3 +85,4 @@ Implementation rationale for contributors. For using the server, start with the 
 75. [Painted relief and impassable land](0079-painted-relief-and-impassable-land.md)
 76. [`hoi4.mod_index` on the shared engine, and the shared symbol index](0080-mod-index-on-the-shared-engine.md)
 77. [Plugins from configured paths](0081-plugins-from-configured-paths.md)
+78. [`hoi4.source_lookup` definitions on the shared engine](0082-source-lookup-on-the-shared-engine.md)

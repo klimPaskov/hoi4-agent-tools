@@ -11,6 +11,7 @@ import type { ToolDefinition } from './task-tool-definition.js';
 import { jobProgressReporter, progressReporter, withProgressHeartbeat } from './progress.js';
 import { withTaskRequestSignal } from './task-request-context.js';
 import { slimToolList } from './tool-listing.js';
+import { isListed, resolveProfiles } from './tool-profiles.js';
 
 // Durable task compatibility and cancellation are control traffic. They must
 // remain responsive while every domain-execution slot is occupied.
@@ -34,8 +35,15 @@ export function installRequestLifecycle(server: McpServer, engine: CoreEngine): 
   const owner = {};
   server.server.setRequestHandler = (schema, handler) => {
     register(schema, (request, extra) => {
-      if (request.method === 'tools/list')
-        return Promise.resolve(handler(request, extra)).then(slimToolList);
+      if (request.method === 'tools/list') {
+        const profiles = resolveProfiles(engine.resolver.config().profiles);
+        return Promise.resolve(handler(request, extra)).then((result) => {
+          const slim = slimToolList(result) as { tools?: Array<{ name: string }> };
+          return slim.tools === undefined
+            ? slim
+            : { ...slim, tools: slim.tools.filter(({ name }) => isListed(name, profiles)) };
+        });
+      }
       if (request.method !== 'tools/call') return handler(request, extra);
       const params = (
         request as { params?: { name?: unknown; arguments?: unknown; task?: unknown } }

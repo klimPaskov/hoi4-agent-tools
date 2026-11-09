@@ -9,7 +9,6 @@ import {
   edgeWaterDarkness,
   frameBorderPositions,
   resolveEdge,
-  rimAdjacencyRows,
   rimHeight,
   rimStrength,
   wallRowKinds,
@@ -21,9 +20,11 @@ import {
   readHeights,
   readTerrainIndices,
 } from '../helpers/map-appearance-metrics.js';
+import { validateMap } from '../../src/hoi4_agent_tools/map/validation.js';
 import {
   appearanceDiagnostics,
   filesOf,
+  indexOfFiles,
   plainContext,
   syntheticRaster,
   worldSpec,
@@ -286,11 +287,8 @@ describe('the rim wall', () => {
     expect(value(1)).toBeLessThan(value(60) * 0.7);
   });
 
-  it('writes exactly one impassable row for every pair of land provinces across the seam', () => {
-    const adjacency = files.get('map/adjacencies.csv')!.toString().split('\r\n');
-    const rows = adjacency.filter((line) => line.includes(';impassable;'));
-    expect(rows.length).toBeGreaterThan(0);
-    expect(adjacency.at(-2)).toBe('-1;-1;;-1;-1;-1;-1;-1;-1');
+  /** Land province ids on the first or last column, and every state file's text by province. */
+  function seamLand() {
     const provinces = BmpImage.decode(files.get('map/provinces.bmp')!);
     const ids = new Map<string, number>();
     const types = new Map<number, string>();
@@ -299,40 +297,76 @@ describe('the rim wall', () => {
       ids.set(`${cells[1]},${cells[2]},${cells[3]}`, Number(cells[0]));
       types.set(Number(cells[0]), cells[4]!);
     }
-    const expected = new Set<string>();
-    for (let y = 0; y < height; y += 1) {
-      const a = provinces.rgbAt(0, y);
-      const b = provinces.rgbAt(width - 1, y);
-      const left = ids.get(`${a.r},${a.g},${a.b}`)!;
-      const right = ids.get(`${b.r},${b.g},${b.b}`)!;
-      if (left !== right && types.get(left) === 'land' && types.get(right) === 'land')
-        expected.add(`${Math.min(left, right)};${Math.max(left, right)}`);
+    const seam = new Set<number>();
+    for (let y = 0; y < height; y += 1)
+      for (const x of [0, width - 1]) {
+        const c = provinces.rgbAt(x, y);
+        const id = ids.get(`${c.r},${c.g},${c.b}`)!;
+        if (types.get(id) === 'land') seam.add(id);
+      }
+    return seam;
+  }
+
+  it('closes the seam with impassable states and writes no adjacency row across it', () => {
+    // The engine does not wrap adjacencies: a row between the two edges is drawn as a line across
+    // the whole map (596 such rows on a 5,120-pixel world, seen in the game on 8 November 2026).
+    const adjacency = files.get('map/adjacencies.csv')!.toString();
+    expect(adjacency).not.toContain('World rim');
+    expect(adjacency.split('\r\n').at(-2)).toBe('-1;-1;;-1;-1;-1;-1;-1;-1');
+    const seam = seamLand();
+    expect(seam.size).toBeGreaterThan(0);
+    const states = [...files]
+      .filter(([path]) => path.startsWith('history/states/'))
+      .map(([, content]) => content.toString());
+    for (const id of seam) {
+      const state = states.find((text) =>
+        new RegExp(`provinces\\s*=\\s*\\{[^}]*\\b${id}\\b`, 'u').test(text),
+      );
+      expect(state, `state of seam province ${id}`).toBeDefined();
+      expect(state).toContain('impassable = yes');
+      expect(state).toContain('force_link_ownership_to');
     }
-    expect(new Set(rows.map((row) => row.split(';').slice(0, 2).join(';')))).toEqual(expected);
-    expect(rows.every((row) => row.endsWith(';;World rim') || row.endsWith(';World rim'))).toBe(
-      true,
-    );
-    for (const row of rows)
-      expect(row.split(';').slice(2, 8)).toEqual(['impassable', '-1', '-1', '-1', '-1', '-1']);
+    expect(world.notes.map(({ code }) => code)).not.toContain('MAP_EDGE_RIM_ADJACENCIES');
   });
 
-  it('passes the appearance and adjacency validators with the seam pairs reported as blocked', () => {
+  it('passes the appearance and adjacency validators', () => {
     const diagnostics = appearanceDiagnostics(files, 'rim');
     expect(diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
-    const seam = diagnostics.find(({ code }) => code === 'MAP_SEAM_LAND_ADJACENCY');
-    expect(seam?.details).toMatchObject({ impassable: seam?.details?.pairs });
-    expect(world.notes.map(({ code }) => code)).toContain('MAP_EDGE_RIM_ADJACENCIES');
+    expect(
+      validateMap(indexOfFiles(files), { edgeMode: 'rim' }).diagnostics.map(({ code }) => code),
+    ).not.toContain('MAP_ADJACENCY_ACROSS_SEAM');
   });
 
-  it('builds sorted rows from a tiny province raster', () => {
-    expect(
-      rimAdjacencyRows({
-        provincePixels: [2, 0, 0, 1, 3, 0, 0, 1],
-        provinceKinds: [1, 1, 1, 0],
-        width: 4,
-        height: 2,
-      }),
-    ).toEqual(['2;3;impassable;-1;-1;-1;-1;-1;;World rim']);
+  it('refuses an adjacency row between provinces that touch only across the seam', () => {
+    const provinces = BmpImage.decode(files.get('map/provinces.bmp')!);
+    const ids = new Map<string, number>();
+    for (const line of files.get('map/definition.csv')!.toString().trim().split(/\r?\n/u)) {
+      const cells = line.split(';');
+      ids.set(`${cells[1]},${cells[2]},${cells[3]}`, Number(cells[0]));
+    }
+    const at = (x: number) => {
+      const c = provinces.rgbAt(x, 128);
+      return ids.get(`${c.r},${c.g},${c.b}`)!;
+    };
+    const west = at(0);
+    const east = at(width - 1);
+    expect(west).not.toBe(east);
+    const changed = new Map(files);
+    const text = files.get('map/adjacencies.csv')!.toString();
+    const footer = '-1;-1;;-1;-1;-1;-1;-1;-1\r\n';
+    changed.set(
+      'map/adjacencies.csv',
+      Buffer.from(
+        text.replace(footer, `${west};${east};impassable;-1;-1;-1;-1;-1;;World rim\r\n${footer}`),
+      ),
+    );
+    const found = validateMap(indexOfFiles(changed), { edgeMode: 'rim' }).diagnostics.find(
+      ({ code }) => code === 'MAP_ADJACENCY_ACROSS_SEAM',
+    );
+    expect(found).toMatchObject({
+      severity: 'error',
+      details: { count: 1, rows: [`${west}-${east}`] },
+    });
   });
 
   it('shapes the strength and height curves', () => {
@@ -489,19 +523,22 @@ describe('the wall', () => {
       expect(parseClausewitz(Buffer.from(text), 'state.txt').diagnostics).toEqual([]);
   });
 
-  it('blocks every land pair across the seam and passes the wall validator', () => {
-    const rows = files
-      .get('map/adjacencies.csv')!
-      .toString()
-      .split('\r\n')
-      .filter((line) => line.includes(';impassable;'));
-    const expected = new Set<string>();
-    for (let y = 0; y < height; y += 1) {
-      const left = provinceAt(0, y).id;
-      const right = provinceAt(width - 1, y).id;
-      if (left !== right) expected.add(`${Math.min(left, right)};${Math.max(left, right)}`);
+  it('seals the seam with impassable states, no adjacency row, and passes the wall validator', () => {
+    // A row between the two edges would be drawn by the game as a line across the whole map.
+    expect(files.get('map/adjacencies.csv')!.toString()).not.toContain('World rim');
+    const seam = new Set<number>();
+    for (let y = 0; y < height; y += 1)
+      for (const x of [0, width - 1]) {
+        const province = provinceAt(x, y);
+        if (province.type === 'land') seam.add(province.id);
+      }
+    expect(seam.size).toBeGreaterThan(0);
+    for (const id of seam) {
+      const state = stateFiles.find((text) =>
+        new RegExp(`provinces\\s*=\\s*\\{[^}]*\\b${id}\\b`, 'u').test(text),
+      );
+      expect(state, `state of seam province ${id}`).toContain('\timpassable = yes');
     }
-    expect(new Set(rows.map((row) => row.split(';').slice(0, 2).join(';')))).toEqual(expected);
     const diagnostics = appearanceDiagnostics(files, 'wall');
     expect(diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
     expect(diagnostics.map(({ code }) => code)).not.toContain('MAP_EDGE_LAND_CUT');

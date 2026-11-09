@@ -166,6 +166,13 @@ function* checkRows(index: MapWorkspaceIndex, report: CrossingReport): Steps {
   const impassable = index.adjacencies.filter(({ type }) => type === 'impassable');
   const isolated: string[] = [];
   const nonLand: string[] = [];
+  const seamOnly = raster.seamOnlyPairs ?? new Set<string>();
+  const acrossSeam: string[] = [];
+  for (const row of index.adjacencies) {
+    if (row.from < 0 || row.to < 0) continue;
+    if (seamOnly.has(`${Math.min(row.from, row.to)}:${Math.max(row.from, row.to)}`))
+      acrossSeam.push(`${row.from}-${row.to}`);
+  }
   for (const row of impassable) {
     const from = index.definitionsById.get(row.from);
     const to = index.definitionsById.get(row.to);
@@ -175,6 +182,15 @@ function* checkRows(index: MapWorkspaceIndex, report: CrossingReport): Steps {
     if (from.type !== 'land' || to.type !== 'land') nonLand.push(`${row.from}-${row.to}`);
   }
   yield;
+  // The engine does not wrap adjacencies: it draws a row between provinces that touch only across
+  // the seam as a crossing line through the whole map (seen in the game, 8 November 2026).
+  if (acrossSeam.length > 0)
+    report({
+      code: 'MAP_ADJACENCY_ACROSS_SEAM',
+      severity: 'error',
+      message: `${acrossSeam.length} adjacency row(s) join provinces that touch only across the wrapping seam; the game draws each as a line across the whole map. Close the seam with impassable land instead`,
+      details: { rows: bounded(acrossSeam), count: acrossSeam.length },
+    });
   // The base game has one such row among 93, so a stray row is information and a pattern a warning.
   if (isolated.length > 0)
     report({
