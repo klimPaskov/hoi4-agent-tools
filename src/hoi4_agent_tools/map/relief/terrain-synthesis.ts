@@ -196,6 +196,24 @@ function barrierField(
  * mouth throws as in `synthesizeTerrain`, with every failing river in its details.
  */
 export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
+  return checkTerrainRiversWithRelief(input).notes;
+}
+
+/** The half-resolution relief the river check builds: heights after hydrology and snow lines. */
+export interface CheckedRelief {
+  readonly width: number;
+  readonly height: number;
+  /** Land heights on the heightmap scale, before the full-resolution detail and quantising. */
+  readonly heights: Float32Array;
+  /** The height from which a range's snow line puts permanent snow, 255 for none. */
+  readonly snowLine: Uint8Array;
+}
+
+/** `checkTerrainRivers`, also returning the half-resolution relief for estimates of the write. */
+export function checkTerrainRiversWithRelief(input: TerrainSynthesisInput): {
+  notes: ReliefNote[];
+  relief: CheckedRelief;
+} {
   const { geography, width, height, seed, kind } = input;
   const relief: ReliefSettings = { ...DEFAULT_RELIEF, ...input.relief };
   let landPixels = 0;
@@ -245,7 +263,15 @@ export function checkTerrainRivers(input: TerrainSynthesisInput): ReliefNote[] {
     (peak) => peakHeight(peak, macro.scale),
   ))
     if (note.code === 'MAP_PASS_NOT_LOWER') notes.push(note);
-  return notes;
+  return {
+    notes,
+    relief: {
+      width: macro.width,
+      height: macro.height,
+      heights: hydrology.heights,
+      snowLine: macro.snowLine,
+    },
+  };
 }
 
 /** Build relief, hydrology, normals and fields for a geography model on a map of the given size. */
