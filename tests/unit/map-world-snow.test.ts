@@ -197,13 +197,13 @@ describe('the permanent-snow estimate of the synthesis check', () => {
     referenceSurface: raster,
     ...overrides,
   });
-  type SnowDetails = {
+  interface SnowDetails {
     permanentPixels: number;
     landPixels: number;
     share: number;
     drawnSnowPixels: number;
     estimate?: boolean;
-  };
+  }
   const details = (world: GeneratedWorld, code: string) =>
     world.notes.find((note) => note.code === code)?.details as SnowDetails | undefined;
 
