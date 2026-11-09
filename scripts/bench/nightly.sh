@@ -24,6 +24,9 @@ git -c advice.detachedHead=false checkout --quiet --detach origin/main
 lock_hash=$(git hash-object npm-shrinkwrap.json)
 stamp_file=node_modules/.bench-lock-hash
 if [ ! -f "$stamp_file" ] || [ "$(cat "$stamp_file")" != "$lock_hash" ]; then
+  # npm 12 refuses `npm ci` for a package that ships only npm-shrinkwrap.json, so give it the same
+  # lock under the name it looks for. The copy is untracked, which the clean-tree check ignores.
+  cp -f npm-shrinkwrap.json package-lock.json
   npm ci --no-audit --no-fund
   printf '%s\n' "$lock_hash" > "$stamp_file"
 fi
