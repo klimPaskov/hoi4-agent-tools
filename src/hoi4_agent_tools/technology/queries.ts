@@ -279,6 +279,14 @@ export function explainTechnology(
   technologyId: string,
   signal?: AbortSignal,
 ): unknown {
+  return explainTechnologyReport(graph, technologyId, signal);
+}
+
+function explainTechnologyReport(
+  graph: TechnologyGraphSnapshot,
+  technologyId: string,
+  signal?: AbortSignal,
+) {
   requireTechnology(graph, technologyId);
   const technology = graph.technologies.find(({ id }) => id === technologyId)!;
   const prerequisites = traceTechnology(graph, {
@@ -528,5 +536,86 @@ export function analyzeTechnologyImpact(
           graph.categories.some(({ id }) => id === input.replacementId) ||
           graph.folders.some(({ id }) => id === input.replacementId),
     limitations: graph.analysisBoundary.unsupportedConstructs,
+  };
+}
+
+/** Names listed inline per relation; the full lists are in the linked report. */
+const EXPLAIN_SUMMARY_LIST_LIMIT = 20;
+
+/** What `mode: "explain"` answers inline: the technology, its neighbours and what it unlocks. */
+export interface TechnologyExplainSummary {
+  id: string;
+  path: string;
+  line: number;
+  name?: string;
+  startYear?: string;
+  researchCost?: string;
+  folders: string[];
+  categories: string[];
+  prerequisites: string[];
+  leadsTo: string[];
+  exclusiveWith: string[];
+  unlocks: Array<{ kind: string; targetId: string }>;
+  allPrerequisites: number;
+  allDescendants: number;
+  unlockCount: number;
+  grantedBy: number;
+  issues: number;
+  truncated: boolean;
+}
+
+function limited(values: Iterable<string>): { values: string[]; cut: boolean } {
+  const sorted = [...new Set(values)].sort(compareCodeUnits);
+  return {
+    values: sorted.slice(0, EXPLAIN_SUMMARY_LIST_LIMIT),
+    cut: sorted.length > EXPLAIN_SUMMARY_LIST_LIMIT,
+  };
+}
+
+/**
+ * The inline part of an explanation, so the answer names what the agent asked for without the
+ * linked report: the direct prerequisites, what the technology leads to, its exclusive choices and
+ * unlocks (each at most 20 names), and the totals of the full report.
+ */
+export function technologyExplainSummary(report: unknown): TechnologyExplainSummary | undefined {
+  if (typeof report !== 'object' || report === null || !('technology' in report)) return undefined;
+  const explained = report as ReturnType<typeof explainTechnologyReport>;
+  const { technology } = explained;
+  const prerequisites = limited(explained.directPrerequisites.map(({ from }) => from));
+  const leadsTo = limited(explained.directDescendants.map(({ to }) => to));
+  const exclusiveWith = limited(
+    explained.exclusiveChoices.map(({ from, to }) => (from === technology.id ? to : from)),
+  );
+  const unlocks = [...explained.unlocks]
+    .sort(
+      (left, right) =>
+        compareCodeUnits(left.kind, right.kind) || compareCodeUnits(left.targetId, right.targetId),
+    )
+    .map(({ kind, targetId }) => ({ kind, targetId }));
+  return {
+    id: technology.id,
+    path: technology.source.path,
+    line: technology.source.location.start.line,
+    ...(technology.localisation.name === undefined ? {} : { name: technology.localisation.name }),
+    ...(technology.startYear === undefined ? {} : { startYear: technology.startYear }),
+    ...(technology.researchCost === undefined ? {} : { researchCost: technology.researchCost }),
+    folders: [...technology.folders].sort(compareCodeUnits),
+    categories: [...technology.categories].sort(compareCodeUnits),
+    prerequisites: prerequisites.values,
+    leadsTo: leadsTo.values,
+    exclusiveWith: exclusiveWith.values,
+    unlocks: unlocks.slice(0, EXPLAIN_SUMMARY_LIST_LIMIT),
+    allPrerequisites: explained.transitivePrerequisites.nodes.length - 1,
+    allDescendants: explained.descendants.nodes.length - 1,
+    unlockCount: unlocks.length,
+    grantedBy: explained.externalGrants.length,
+    issues: explained.issues.length,
+    truncated:
+      prerequisites.cut ||
+      leadsTo.cut ||
+      exclusiveWith.cut ||
+      unlocks.length > EXPLAIN_SUMMARY_LIST_LIMIT ||
+      explained.transitivePrerequisites.truncated ||
+      explained.descendants.truncated,
   };
 }
