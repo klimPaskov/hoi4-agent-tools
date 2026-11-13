@@ -167,6 +167,30 @@ describe('lossless Clausewitz source model', () => {
     expect(document.bytes).toEqual(bytes);
   });
 
+  it('reads a value with quotes inside it up to the last quote, as the game does', () => {
+    const lines = [
+      'iceland.23.t:0 "Declares itself "Protector of the North Sea Passage""',
+      'plain:0 "Plain"',
+      'escaped:0 "He said \\"hi\\""',
+      'commented:0 "Value" # note',
+      'unclosed:0 "never closed',
+      'two: "a" "b"',
+    ];
+    const bytes = Buffer.from(`\ufeffl_english:\n${lines.join('\n')}\n`, 'utf8');
+    const document = parseLocalisation(bytes, 'mod:localisation/quotes_l_english.yml');
+    expect(document.entries.map(({ key, value }) => [key, value])).toEqual([
+      ['iceland.23.t', 'Declares itself "Protector of the North Sea Passage"'],
+      ['plain', 'Plain'],
+      ['escaped', 'He said "hi"'],
+      ['commented', 'Value'],
+      ['two', 'a" "b'],
+    ]);
+    // Only the line that never closes its value is malformed.
+    expect(document.diagnostics).toMatchObject([
+      { code: 'LOCALISATION_MALFORMED_LINE', location: { start: { line: 6 } } },
+    ]);
+  });
+
   it('caps malformed localisation diagnostics with the shared truncation blocker', () => {
     const bytes = Buffer.from(`\ufeffl_english:\n${'not localisation\n'.repeat(5_000)}`, 'utf8');
     const document = parseLocalisation(bytes, 'mod:localisation/malformed_l_english.yml');

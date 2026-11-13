@@ -604,7 +604,9 @@ fn language_line(chars: &[char]) -> Option<String> {
     rest_is_trailer(chars, i + 1).then(|| chars[start..i].iter().collect())
 }
 
-/// `^\s*([A-Za-z0-9_.-]+):(?:(\d+)\s+|\s*)"((?:\\.|[^"\\])*)"\s*(?:#.*)?$`, returning the key.
+/// `entryPattern` of `localisation.ts`, then `innerQuotePattern` when it does not match, returning
+/// the key: `^\s*([A-Za-z0-9_.-]+):(?:(\d+)\s+|\s*)"((?:\\.|[^"\\])*)"\s*(?:#.*)?$`, else the same
+/// prefix with `"(.*)"\s*$` (a value with quotes inside it runs to the last quote of the line).
 fn entry_line(chars: &[char]) -> Option<String> {
     let start = skip_space(chars, 0);
     let mut i = start;
@@ -636,18 +638,25 @@ fn entry_line(chars: &[char]) -> Option<String> {
         }
         false
     };
+    // `"(.*)"\s*$`: the last quote of the line closes the value, and `.` stops at a line terminator.
+    let inner_quotes_from = |open: usize| -> bool {
+        if chars.get(open) != Some(&'"') {
+            return false;
+        }
+        let mut end = chars.len();
+        while end > open + 1 && is_js_space(chars[end - 1]) {
+            end -= 1;
+        }
+        end > open + 1 && chars[end - 1] == '"' && !chars[open + 1..end - 1].iter().any(|&c| is_js_line_terminator(c))
+    };
     // `(\d+)\s+` first, then `\s*`.
     let mut j = after_colon;
     while j < chars.len() && chars[j].is_ascii_digit() {
         j += 1;
     }
-    if j > after_colon {
-        let spaces = skip_space(chars, j);
-        if spaces > j && value_from(spaces) {
-            return Some(key);
-        }
-    }
-    value_from(skip_space(chars, after_colon)).then_some(key)
+    let versioned = (j > after_colon).then(|| skip_space(chars, j)).filter(|&spaces| spaces > j);
+    let starts: Vec<usize> = versioned.into_iter().chain(std::iter::once(skip_space(chars, after_colon))).collect();
+    (starts.iter().any(|&open| value_from(open)) || starts.iter().any(|&open| inner_quotes_from(open))).then_some(key)
 }
 
 /// A parsed localisation file: its entries and diagnostics.
@@ -803,11 +812,12 @@ mod tests {
 
     #[test]
     fn localisation_lines_follow_the_typescript_patterns() {
-        let text = "l_english:\n k1:0 \"One\"\n k2: \"Two\" # note\n bad line\n k3:0 \"say \"hi\"\"\n k4:0\"x\"\n\r k5 :0 \"x\"\n k6:12 \"esc \\\" ok\"\n";
+        let text = "l_english:\n k1:0 \"One\"\n k2: \"Two\" # note\n bad line\n k3:0 \"say \"hi\"\"\n k4:0\"x\"\n\r k5 :0 \"x\"\n k6:12 \"esc \\\" ok\"\n k7:0 \"open\n k8:0 \"\"\n";
         let parsed = parse_localisation(text, text.len(), true);
         let keys: Vec<(&str, u32)> = parsed.entries.iter().map(|e| (e.key.as_str(), e.line)).collect();
-        assert_eq!(keys, [("k1", 2), ("k2", 3), ("k6", 9)]);
-        // bad line, k3 (unescaped quote), k4 (version without a space), k5 (space before the colon).
+        // k3 has quotes inside its value, which the game reads up to the last quote of the line.
+        assert_eq!(keys, [("k1", 2), ("k2", 3), ("k3", 5), ("k6", 9), ("k8", 11)]);
+        // bad line, k4 (version without a space), k5 (space before the colon), k7 (never closed).
         assert_eq!(parsed.diagnostics.count, 4);
         let orphan = parse_localisation(" k:0 \"x\"\n", 9, false);
         assert!(orphan.entries.is_empty());

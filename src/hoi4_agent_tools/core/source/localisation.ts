@@ -23,6 +23,12 @@ export interface LocalisationDocument extends DecodedSource {
 
 const languagePattern = /^\s*(l_[a-z_]+):\s*(?:#.*)?$/u;
 const entryPattern = /^\s*([A-Za-z0-9_.-]+):(?:(\d+)\s+|\s*)"((?:\\.|[^"\\])*)"\s*(?:#.*)?$/u;
+/**
+ * A value with quotes inside it, as in `k:0 "He said "hi" now"`. The game reads from the first quote
+ * to the last one on the line: the installed game's own localisation has 400 such lines, and mods
+ * use them freely. Tried only when `entryPattern` does not match.
+ */
+const innerQuotePattern = /^\s*([A-Za-z0-9_.-]+):(?:(\d+)\s+|\s*)"(.*)"\s*$/u;
 
 function decodeLocalisationValue(value: string): string {
   let result = '';
@@ -132,7 +138,7 @@ export function parseLocalisation(bytes: Uint8Array, sourcePath: string): Locali
       lineNumber += 1;
       continue;
     }
-    const match = entryPattern.exec(line);
+    const match = entryPattern.exec(line) ?? innerQuotePattern.exec(line);
     if (match === null) {
       diagnosticCollector.add(() => ({
         code: 'LOCALISATION_MALFORMED_LINE',
