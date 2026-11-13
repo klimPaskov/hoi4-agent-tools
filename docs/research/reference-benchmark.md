@@ -217,6 +217,41 @@ Run the fresh set with:
 npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --fresh
 ```
 
+## Plain-word questions, connector words and player vocabulary (issue 64)
+
+Measured on 2026-11-13 on HOI4 1.19.4.1 with the kit's `hoi4_wiki` pack (66 pages).
+A fresh author wrote 48 questions the way a new modder asks them, from the documentation alone, without seeing the ranking code or any result, and checked each answer line by hand.
+The cases are in `scripts/reference-common-cases.ts`: 23 for tuning (`--common-dev`: 20 answerable questions and exact names, 3 negatives) and 24 kept untouched until the change was final (`--common-blind`: 22 answerable, 2 negatives).
+The author's own list missed one acceptable answer for "temporary bonus" (the `add_timed_idea` example on the idea page), which was added to the tuning half only.
+
+Three changes were kept, each because it helped without losing an answer on any earlier set:
+
+- **Connector words.** `has_war_with`, `is_owned_by` and `num_of_factories` carry a relation in a little word that the content-word model drops. A question that says that word and names every other word of the command name earns a bonus, so "at war with" prefers `has_war_with` over `has_annex_war_goal`.
+- **Exact names.** A console command, a define or a variable with the same name as a trigger or an effect no longer ties it at the top score. The trigger or effect stays first unless the question asks for the other kind.
+- **Player vocabulary.** A small table maps words players use to words scripts use: sea to coastal, temporary to timed, vassal to puppet, spirit to idea, owner to owned, fighting to war, and about twenty more. They add terms at 0.7 of the weight of a word the question itself uses.
+
+| Set (HOI4 1.19.4.1)                            | First before | First after | Within three before | Within three after |
+| ---------------------------------------------- | -----------: | ----------: | ------------------: | -----------------: |
+| Common questions, tuning half (20)             |            9 |          12 |                  15 |                 15 |
+| Common questions, blind half (22, scored once) |           12 |          13 |                  16 |                 16 |
+| Fresh blind set of ADR 0078 (38)               |           17 |          19 |                  23 |                 22 |
+| Held-out (24)                                  |            9 |          11 |                  15 |                 15 |
+| Validation (24)                                |           18 |          19 |                  20 |                 20 |
+| Test (40) and discovery (37)                   |           25 |          25 |           31 and 28 |          31 and 28 |
+
+Exact names went from 3 of 4 to 4 of 4 first on the fresh set and from 1 of 2 to 2 of 2 on the tuning half. The blind half's three exact names stayed first.
+
+Tried and not kept:
+
+- Making "another" a stop word. It moved "give a state to another country" and a diplomatic opinion question out of the top five.
+- British spellings as synonyms (`neighbour`, `colour`), which pushed a correct answer from second to fifth.
+- A minimum share of the question's rare-word weight that an answer must match, to silence negatives such as "roast a turkey". It dropped a correct "access to the sea" answer on the held-out set and left the negatives alone.
+- A table of multi-word phrasings ("access to the sea", "share a border", "free a puppet"). It changed no rank on any set.
+
+Still missing: "check that my country is currently fighting a war" ranks `has_war` outside the top twelve, because commands that repeat several words of a long question outscore the short, exact one. Two unrelated queries ("how to adjust the gears on a bicycle", "how long should I roast a turkey per kilo") still return results, as the nonsense queries of the earlier rounds do. The target of issue 64 (22 of 24 first, all in the top three) is not met: about 60 percent of the blind half is first and 73 percent is in the top three.
+
+Run the new sets with `npx tsx scripts/evaluate-reference-discovery.ts MOD_ROOT GAME_ROOT --common-dev` and `--common-blind`. The blind half has now been scored once, so the next round needs a new one.
+
 ## Compact context budgets
 
 A 2026-09-27 check of the installed 3.5.0 server found that eight GUI results could contain only wiki sections even though the installed GUI documentation was available. The 3.5.1 source qualifies limits of one, two, and eight citations across the same six work surfaces. All eighteen cases retained installed documentation; limits of two or more also retained wiki citations. Required sources excluded by the limit appeared in `omittedSources`, separately from files absent under `missing`. The nine search queries still found all expected answer-bearing sections.

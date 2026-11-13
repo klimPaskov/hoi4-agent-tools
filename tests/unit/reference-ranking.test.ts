@@ -328,9 +328,9 @@ describe('reference ranking with game text and question intent', () => {
 
   it("finds a command by the words of the game's own tooltip", async () => {
     const plain = await workspace(docs);
-    expect(await search(new ReferenceService(), plain, 'state borders the sea')).not.toContain(
-      'is_coastal',
-    );
+    expect(
+      await search(new ReferenceService(), plain, 'landlocked state without access'),
+    ).not.toContain('is_coastal');
     const localised = await workspace({
       ...docs,
       'game/localisation/english/triggers_l_english.yml':
@@ -399,5 +399,60 @@ describe('reference ranking with game text and question intent', () => {
     const second = await service.inventory(target);
     expect(first.sections.map(({ heading }) => heading)).toContain('alpha');
     expect(second.sections.map(({ heading }) => heading)).toEqual(['gamma']);
+  });
+});
+
+describe('reference ranking of plain-word questions', () => {
+  const corpus = [
+    ['Triggers', 'has_war_with', ['Checks if the country is at war with the target country.']],
+    ['Triggers', 'has_annex_war_goal', ['Checks a country has annex war goal on another country.']],
+    ['Triggers', 'has_war_together_with', ['Checks whether two countries fight a war together.']],
+    ['Triggers', 'is_coastal', ['Checks if the state touches the water.']],
+    ['Triggers', 'is_owned_by', ['Checks if the state is owned by the country.']],
+    ['Triggers', 'has_stability', ['Checks the stability of the country.']],
+    ['Dynamic variables', 'has_stability', ['Variable form of the stability check.']],
+    ['console commands documentation', 'has_stability', ['Console form of the stability check.']],
+    ['Effects', 'add_timed_idea', ['Adds an idea that is removed after a number of days.']],
+    ['Effects', 'add_ideas', ['Adds ideas to the country.']],
+    ['Effects', 'set_country_flag', ['Sets a flag on the country.']],
+  ] as const;
+  const entries = corpus.map(([title, heading, lines]) => ({
+    heading: heading as string,
+    title,
+    terms: sectionTerms(title, heading, lines),
+  }));
+  const index = new RankingIndex(entries.map(({ terms }) => terms));
+  const rank = (query: string) => {
+    const plan = index.plan(query);
+    return entries
+      .map(({ heading, title, terms }) => ({
+        label: `${title}:${heading}`,
+        score: index.score(plan, terms, heading),
+      }))
+      .filter((entry): entry is { label: string; score: number } => entry.score !== undefined)
+      .sort((left, right) => right.score - left.score)
+      .map(({ label }) => label);
+  };
+
+  it('lets a little word of a command name decide between commands that share the rest', () => {
+    // "at war with" names `has_war_with`, and the annex war goal entry repeats "country" more.
+    expect(rank('is my country at war with another country')[0]).toBe('Triggers:has_war_with');
+  });
+
+  it('keeps a trigger ahead of a variable or console command of the same exact name', () => {
+    const ranked = rank('has_stability');
+    expect(ranked[0]).toBe('Triggers:has_stability');
+    expect(ranked).toContain('Dynamic variables:has_stability');
+    expect(ranked.indexOf('Dynamic variables:has_stability')).toBeGreaterThan(0);
+    // Asked for by name, the variable form still answers.
+    expect(rank('has_stability variable')[0]).toBe('Dynamic variables:has_stability');
+  });
+
+  it('connects players words to the words scripts use', () => {
+    expect(rank('which states have access to the sea')[0]).toBe('Triggers:is_coastal');
+    expect(rank('add a temporary effect that expires after some days')[0]).toBe(
+      'Effects:add_timed_idea',
+    );
+    expect(rank('give a country a national spirit')[0]).toBe('Effects:add_ideas');
   });
 });
