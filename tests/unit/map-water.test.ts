@@ -59,7 +59,7 @@ describe('water alpha and lake heights', () => {
     let seed = 7;
     const random = () => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
     const reference = (kind: Uint8Array, width: number, height: number): number[] => {
-      const result = Array.from(kind, (value) => (value === 1 ? 0 : 255));
+      const result = Array.from(kind, (value): number => (value === 1 ? 0 : 255));
       let frontier = [...result.keys()].filter((pixel) => result[pixel] === 0);
       for (let step = 1; step < 255 && frontier.length > 0; step += 1) {
         const next: number[] = [];
