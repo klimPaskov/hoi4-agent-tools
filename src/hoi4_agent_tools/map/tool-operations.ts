@@ -37,7 +37,42 @@ import {
   summarizeBorderQuality,
   type BorderQualitySummary,
 } from './border-quality-input.js';
-import { buildMapCatalog, lookupMapCoordinate, searchMapCatalog } from './catalog.js';
+import {
+  buildMapCatalog,
+  lookupMapCoordinate,
+  searchMapCatalog,
+  type MapCatalogSearchResult,
+  type MapCoordinateLookup,
+} from './catalog.js';
+
+/** Matches named inline, so a lookup answers without reading its artifact. */
+const INLINE_MATCH_LIMIT = 20;
+
+function inlineMatches(
+  queryMatches: readonly MapCatalogSearchResult[],
+  coordinateMatches: readonly MapCoordinateLookup[],
+) {
+  return {
+    ...(queryMatches.length === 0
+      ? {}
+      : {
+          matches: queryMatches
+            .slice(0, INLINE_MATCH_LIMIT)
+            .map(({ kind, id, key, displayName }) => ({ kind, id, key, name: displayName })),
+        }),
+    ...(coordinateMatches.length === 0
+      ? {}
+      : {
+          coordinateMatches: coordinateMatches
+            .slice(0, INLINE_MATCH_LIMIT)
+            .map(({ provinceId, stateIds, regionIds }) => ({
+              provinceId,
+              stateIds: stateIds.slice(0, 16),
+              regionIds: regionIds.slice(0, 16),
+            })),
+        }),
+  };
+}
 import { GEOGRAPHY_FEATURE_KINDS } from './geography/model.js';
 import { operationHasGeography, type PreparedGeography } from './geography/preparation.js';
 import { unsupportedGeographyParts } from './relief/index.js';
@@ -920,6 +955,7 @@ export async function inspectMap(
       allocationCount: 0,
       queryMatchCount: queryMatches.length,
       coordinateMatchCount: coordinateMatches.length,
+      ...inlineMatches(queryMatches, coordinateMatches),
       overviewRendered: false,
       provinceGeometryCount: 0,
       provinceGeometryPixelCount: 0,
@@ -1196,6 +1232,7 @@ export async function inspectMap(
     allocationCount: allocationPreviews.length,
     queryMatchCount: queryMatches.length,
     coordinateMatchCount: coordinateMatches.length,
+    ...inlineMatches(queryMatches, coordinateMatches),
     overviewRendered,
     provinceGeometryCount: provinceGeometry?.provinces.length ?? 0,
     provinceGeometryPixelCount: provinceGeometry?.pixelCount ?? 0,

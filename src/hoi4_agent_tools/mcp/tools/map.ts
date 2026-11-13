@@ -137,6 +137,33 @@ const mapWorkspaceInspectDataSchema = z
     provinceGeometryPixelCount: nonNegativeIntegerSchema,
     provinceGeometryRowRunCount: nonNegativeIntegerSchema,
     lookupOnly: z.boolean().optional(),
+    /** The first 20 query matches, best first; the full list is in the linked artifact. */
+    matches: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['province', 'state', 'strategic-region']),
+            id: nonNegativeIntegerSchema,
+            key: z.string(),
+            name: z.string(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
+    /** What each requested coordinate falls in (the first 20). */
+    coordinateMatches: z
+      .array(
+        z
+          .object({
+            provinceId: nonNegativeIntegerSchema.nullable(),
+            stateIds: z.array(nonNegativeIntegerSchema).max(16),
+            regionIds: z.array(nonNegativeIntegerSchema).max(16),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
     unknownProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
     missingGeometryProvinceIds: z.array(nonNegativeIntegerSchema).max(512),
     scriptReferences: z
