@@ -112,6 +112,28 @@ export interface FocusVisualRevision {
   filesScanned: string[];
 }
 
+/**
+ * The focus files an inspect call reads. A call that names a tree but no file reads only the files
+ * that define that tree: importing every focus file of the game to keep one tree took tens of
+ * seconds. A tree the index does not know falls back to every file, so the not-found answer is
+ * unchanged.
+ */
+function filesForInspect(
+  snapshot: ScanSnapshot,
+  active: ScanSnapshot['files'],
+  relativePath: string | undefined,
+  treeId: string | undefined,
+): ScanSnapshot['files'] {
+  if (relativePath !== undefined)
+    return active.filter((file) => file.relativePath === relativePath);
+  if (treeId === undefined) return active;
+  const definingPaths = new Set(
+    snapshot.index.findAll('focus_tree', treeId).map(({ path }) => path),
+  );
+  const defining = active.filter((file) => definingPaths.has(file.displayPath));
+  return defining.length === 0 ? active : defining;
+}
+
 export async function computeFocusVisualRevisions(
   engine: CoreEngine,
   context: Pick<FocusOperationContext, 'principal' | 'signal'>,
@@ -798,8 +820,11 @@ export async function inspectFocus(
     await context.progress(3, 3, 'Continuous focus inspection complete');
     return { result, sourceRevision: snapshot.revision };
   }
-  const selectedFiles = activeFocusFiles(snapshot, workspace.registration.roots.focus).filter(
-    (file) => input.relativePath === undefined || file.relativePath === input.relativePath,
+  const selectedFiles = filesForInspect(
+    snapshot,
+    activeFocusFiles(snapshot, workspace.registration.roots.focus),
+    input.relativePath,
+    input.treeId,
   );
   if (selectedFiles.length === 0)
     throw new ServiceError('FOCUS_SOURCE_NOT_FOUND', 'No active focus source matched the request');

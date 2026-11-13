@@ -400,6 +400,27 @@ export type FocusReferenceCatalog = Partial<
   Record<FocusReferenceKind, ReadonlySet<string> | readonly string[]>
 >;
 
+const referenceSets = new WeakMap<readonly string[], ReadonlySet<string>>();
+
+/**
+ * One catalog kind as a set. A catalog arrives as arrays of every identifier in the game and
+ * the mod, and the importer and the lint ask for it once per focus or per assignment, so the
+ * conversion is cached per array instead of repeated tens of thousands of times per call.
+ */
+export function referenceCatalogSet(
+  values: ReadonlySet<string> | readonly string[] | undefined,
+): ReadonlySet<string> | undefined {
+  if (values === undefined) return undefined;
+  if (values instanceof Set) return values;
+  const array = values as readonly string[];
+  let cached = referenceSets.get(array);
+  if (cached === undefined) {
+    cached = new Set(array);
+    referenceSets.set(array, cached);
+  }
+  return cached;
+}
+
 function withoutTransientFields(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutTransientFields);
   if (value !== null && typeof value === 'object') {
