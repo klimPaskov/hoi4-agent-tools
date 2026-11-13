@@ -239,9 +239,26 @@ function automaticWorkspaceId(modRoot: string): string {
   return `auto_${slug.length === 0 ? 'mod' : slug}`;
 }
 
-/** Build an in-memory configuration when a local agent starts inside a mod. */
-export async function automaticConfiguration(start = process.cwd()): Promise<ServerConfiguration> {
-  const modRoot = await findCurrentModRoot(start);
+/**
+ * Build an in-memory configuration when a local agent starts inside a mod. With
+ * `allowNoMod`, a start folder outside every mod gives a configuration with no workspace
+ * instead of an error, so documentation search still works there.
+ */
+export async function automaticConfiguration(
+  start = process.cwd(),
+  options: { allowNoMod?: boolean } = {},
+): Promise<ServerConfiguration> {
+  let modRoot: string | undefined;
+  try {
+    modRoot = await findCurrentModRoot(start);
+  } catch (error) {
+    if (
+      options.allowNoMod !== true ||
+      !(error instanceof ServiceError) ||
+      error.code !== 'AUTO_MOD_ROOT_NOT_FOUND'
+    )
+      throw error;
+  }
   const gameRoot = await firstExistingDirectory(automaticGameRootCandidates());
   const storage = automaticStorageRoots();
   return serverConfigurationSchema.parse({
@@ -249,13 +266,16 @@ export async function automaticConfiguration(start = process.cwd()): Promise<Ser
     serverStateRoot: storage.serverStateRoot,
     workspaceStorageRoot: storage.workspaceStorageRoot,
     ...(gameRoot === undefined ? {} : { gameRoot }),
-    workspaces: [
-      {
-        id: automaticWorkspaceId(modRoot),
-        name: path.basename(modRoot),
-        root: modRoot,
-      },
-    ],
+    workspaces:
+      modRoot === undefined
+        ? []
+        : [
+            {
+              id: automaticWorkspaceId(modRoot),
+              name: path.basename(modRoot),
+              root: modRoot,
+            },
+          ],
   });
 }
 
@@ -298,7 +318,8 @@ export async function createEngine(
       error.code === 'CONFIG_READ_FAILED' &&
       !(await configurationExists(configPath));
     if (!useAutomaticConfiguration) throw error;
-    configuration = await automaticConfiguration();
+    // Outside a mod there is no workspace, and the documentation tools still answer.
+    configuration = await automaticConfiguration(process.cwd(), { allowNoMod: true });
   }
   // The stdio server lists the core tools unless the client or the file asks for more.
   const profiles =

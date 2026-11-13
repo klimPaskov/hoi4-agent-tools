@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Start the server outside a mod when no configuration file exists (issue 150). It stopped with `AUTO_MOD_ROOT_NOT_FOUND`, so a modder who installed it globally and fetched the docs pack could not search the documentation from their home folder without running `--init`. It now starts with no workspace: documentation search answers, and mod tools answer `WORKSPACE_CONTEXT_NOT_FOUND`.
 - `hoi4.tech_inspect` with `mode: "explain"` names the technology inline: its file and line, start year, research cost, folders and categories, its direct prerequisites, what it leads to, its exclusive choices and its unlocks (20 names each at most, `truncated` when there are more), and the totals of all prerequisites, descendants, unlocks, grants and issues. The answer gave only the whole tree's counts, so an agent had to read the linked report (280 KB for the game) to learn what `infantry_weapons` leads to.
 
 - Accept localisation values with quotes inside them. A line such as `k:0 "He said "hi" now"` was reported as `LOCALISATION_MALFORMED_LINE`, and a file with more than 100 of them was skipped whole, which made `hoi4.mod_index` answer `MOD_INDEXED_PARTIAL` for Old World Blues (five files, over 100 such lines each) and left their keys out of every lookup. The game reads from the first quote to the last one on the line, and its own localisation has 444 such lines, so they are valid. The TypeScript parser and the engine's symbol index now take them; a line that never closes its value is still malformed.
