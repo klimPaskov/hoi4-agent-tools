@@ -56,7 +56,8 @@ describe('CoreEngine scan cache', () => {
       const reconstructed = await engine.scan('cache_test');
       expect(reconstructed).not.toBe(first);
       expect(reconstructed.index.symbols).toEqual(first.index.symbols);
-      expect(engine.indexSegments.statistics()).toMatchObject({ hits: 1, misses: 1 });
+      // The workspace's last index, not the segment cache, supplied the unchanged file's records.
+      expect(engine.indexSegments.statistics()).toMatchObject({ hits: 0, misses: 1 });
 
       const metadataBefore = await stat(sourcePath);
       await writeFile(sourcePath, changed, 'utf8');
@@ -286,6 +287,45 @@ describe('CoreEngine scan cache', () => {
       releases[2]?.();
       await expect(third).resolves.toMatchObject({ workspaceId: 'admission' });
       expect(maximumActive).toBe(2);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('indexes only the edited file after an invalidation, with other patterns', async () => {
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'hoi4-core-reuse-'));
+    try {
+      const workspaceRoot = path.join(temporaryRoot, 'workspace');
+      const focusDirectory = path.join(workspaceRoot, 'common', 'national_focus');
+      await mkdir(focusDirectory, { recursive: true });
+      const tree = (id: string): string => `focus_tree = { id = ${id} country = { factor = 0 } }\n`;
+      await writeFile(path.join(focusDirectory, 'stable.txt'), tree('reuse_stable'), 'utf8');
+      await writeFile(path.join(focusDirectory, 'edited.txt'), tree('reuse_before'), 'utf8');
+      const configuration = serverConfigurationSchema.parse({
+        version: 1,
+        serverStateRoot: path.join(temporaryRoot, 'server-state'),
+        workspaces: [{ id: 'reuse', name: 'Reuse', root: workspaceRoot }],
+      });
+      const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
+      const first = await engine.scan('reuse', { patterns: ['common/**/*.txt'] });
+      expect(
+        first.index
+          .findAll('focus_tree')
+          .map(({ id }) => id)
+          .sort(),
+      ).toEqual(['reuse_before', 'reuse_stable']);
+      // A rewrite invalidates the workspace, and its validation scans with other patterns.
+      await writeFile(path.join(focusDirectory, 'edited.txt'), tree('reuse_after'), 'utf8');
+      engine.invalidate('reuse');
+      const second = await engine.scan('reuse', { patterns: ['common/national_focus/*.txt'] });
+      expect(
+        second.index
+          .findAll('focus_tree')
+          .map(({ id }) => id)
+          .sort(),
+      ).toEqual(['reuse_after', 'reuse_stable']);
+      // Only the edited file was indexed again.
+      expect(engine.indexSegments.statistics().misses).toBe(first.files.length + 1);
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
