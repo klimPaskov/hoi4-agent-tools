@@ -400,7 +400,7 @@ Nothing is lost or duplicated: for any split, merge or move, the sums of manpowe
 
 | Field of a country      | Meaning                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1).                                                                             |
+| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1). A tag no `common/country_tags` file declares is assigned with a warning.    |
 | `seeds`                 | `{ state }`, `{ province }` or a pixel `{ x, y }` of the province map; the first is the capital. A seed in the sea is refused.                         |
 | `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds }`: land the country always or never owns. `regionIds` are strategic regions.                                      |
 | `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                          |
