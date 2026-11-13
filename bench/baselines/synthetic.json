@@ -105,8 +105,8 @@
       "passed": true
     },
     "synthetic.technology.explain": {
-      "inline": false,
-      "passed": false
+      "inline": true,
+      "passed": true
     },
     "synthetic.technology.unknown-id": {
       "inline": true,
