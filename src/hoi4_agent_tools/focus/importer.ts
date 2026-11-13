@@ -24,6 +24,7 @@ import {
   type FocusPrerequisiteGroup,
   type FocusReferenceKind,
   type FocusReferenceCatalog,
+  referenceCatalogSet,
   type FocusReferenceLink,
   type FocusRouteLock,
   type FocusTreePlan,
@@ -173,9 +174,7 @@ export interface FocusImportOptions {
 }
 
 function catalogValues(options: FocusImportOptions, kind: FocusReferenceKind): ReadonlySet<string> {
-  const values = options.references?.[kind];
-  if (values === undefined) return new Set();
-  return values instanceof Set ? values : new Set(values);
+  return referenceCatalogSet(options.references?.[kind]) ?? new Set();
 }
 
 function isFormableDecision(target: string, options: FocusImportOptions): boolean {
