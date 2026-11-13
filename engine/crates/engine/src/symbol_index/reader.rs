@@ -10,8 +10,10 @@
 //! bare block, `color = rgb { ... }` is an assignment of `rgb` followed by a bare block, and an
 //! operator or `}` where a value belongs is taken as the value. A file whose diagnostics reach the
 //! TypeScript per-file ceiling (101 or more), or that hits a size, line, token, entry or nesting
-//! ceiling, is reported as `partial`; the index skips it, as the TypeScript index did. Only the
-//! diagnostics' count and whether a ceiling was hit are kept, not their text.
+//! ceiling, is reported as `partial`; the index skips it, as the TypeScript index did. The
+//! counting reader keeps only the diagnostics' count and ceilings; the detailed one
+//! (`parse_clausewitz_detailed`, `parse_localisation_detailed`) keeps each diagnostic with the
+//! TypeScript message, place and details, for the shared index of ADR 0085.
 
 use std::borrow::Cow;
 

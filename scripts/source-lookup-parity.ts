@@ -132,7 +132,7 @@ try {
         ],
       }),
     );
-    const engine = new CoreEngine(resolver, { persistentAnalysisCache: null });
+    const engine = new CoreEngine(resolver);
     const workspace = resolver.get('parity');
     const entry: Record<string, unknown> = {};
     const scopes: Array<{ name: string; patterns: string[] | undefined; kind?: string }> = [

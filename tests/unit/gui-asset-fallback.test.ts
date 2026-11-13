@@ -66,7 +66,6 @@ describe('GUI asset basename fallback', () => {
         }),
       ),
     );
-    await engine.persistentAnalysisCache;
     const studio = new ScriptedGuiStudio(engine);
     const result = await studio.lint({
       workspaceId: 'fallback',

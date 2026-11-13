@@ -42,7 +42,6 @@ describe('worker startup failure boundaries', () => {
           }),
         ),
       );
-      await engine.persistentAnalysisCache;
       const jobs = await JobService.create(engine.resolver);
       const record = (
         await jobs.submit('test', {
@@ -88,7 +87,6 @@ describe('worker startup failure boundaries', () => {
         }),
       ),
     );
-    await engine.persistentAnalysisCache;
     const jobs = await JobService.create(engine.resolver);
     const record = (
       await jobs.submit('test', {
@@ -126,7 +124,6 @@ describe('worker startup failure boundaries', () => {
         }),
       ),
     );
-    await engine.persistentAnalysisCache;
     const jobs = await JobService.create(engine.resolver);
     const record = (
       await jobs.submit('test', {
@@ -171,7 +168,6 @@ describe('worker startup failure boundaries', () => {
           }),
         ),
       );
-      await engine.persistentAnalysisCache;
       const jobs = await JobService.create(engine.resolver);
       const record = (
         await jobs.submit('test', {
@@ -231,7 +227,6 @@ describe('worker startup failure boundaries', () => {
         }),
       ),
     );
-    await engine.persistentAnalysisCache;
     const jobs = await JobService.create(engine.resolver);
     const host = await JobWorkerHost.create(engine, jobs);
     const submit = async () =>

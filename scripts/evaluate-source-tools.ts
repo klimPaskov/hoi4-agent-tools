@@ -13,7 +13,6 @@ import { scriptValidateRequestSchema } from '../src/hoi4_agent_tools/schemas/scr
 
 const [modRoot, gameRoot] = process.argv.slice(2);
 const gameOnly = process.argv.includes('--game-only');
-const persistentCache = !process.argv.includes('--no-persistent-cache');
 if (modRoot === undefined || gameRoot === undefined)
   throw new Error('Usage: tsx scripts/evaluate-source-tools.ts MOD_ROOT GAME_ROOT');
 const temporary = await mkdtemp(path.join(tmpdir(), 'hoi4-source-evaluation-'));
@@ -43,7 +42,7 @@ try {
       ],
     }),
   );
-  const engine = new CoreEngine(resolver, persistentCache ? {} : { persistentAnalysisCache: null });
+  const engine = new CoreEngine(resolver);
   const input = sourceLookupRequestSchema.parse({
     workspaceId: 'evaluation',
     symbol: 'political.1',
@@ -159,7 +158,6 @@ try {
   assert.deepEqual(repeated, expanded);
   const report = {
     gameOnly,
-    persistentCache,
     timings,
     source: {
       path: definition.path,
@@ -173,7 +171,6 @@ try {
       referencesComplete: expanded.referencesComplete,
       unresolvedReferences: expanded.unresolvedReferenceCount,
     },
-    persistent: await engine.persistentAnalysisCacheStatistics(),
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 } catch (error) {

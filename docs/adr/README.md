@@ -87,3 +87,4 @@ Implementation rationale for contributors. For using the server, start with the 
 77. [Plugins from configured paths](0081-plugins-from-configured-paths.md)
 78. [`hoi4.source_lookup` definitions on the shared engine](0082-source-lookup-on-the-shared-engine.md)
 79. [References and the whole-mod closure on the shared engine](0083-references-and-closure-on-the-shared-engine.md)
+80. [The shared symbol index on the engine](0085-symbol-index-on-the-shared-engine.md)
