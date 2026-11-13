@@ -400,8 +400,7 @@ impl Analysis {
                 // as `localization_key = "Planes"` is often meant that way and is information.
                 let loc_key = r.kind == Kind::LocalisationKey;
                 let literal = loc_key
-                    && (r.name.contains(' ')
-                        || self.workspace.files[p.file].relative.to_ascii_lowercase().starts_with("common/scripted_localisation/"));
+                    && (r.name.contains(' ') || self.workspace.files[p.file].relative.to_ascii_lowercase().starts_with("common/scripted_localisation/"));
                 if literal {
                     tally.unknown += 1;
                 } else {
