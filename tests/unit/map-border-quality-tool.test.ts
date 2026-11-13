@@ -396,7 +396,10 @@ describe('border quality in hoi4.map_inspect', () => {
       }),
       context,
     );
-    interface Quality { scopePixels?: number; layers: { layer: string; borderEdges: number }[] }
+    interface Quality {
+      scopePixels?: number;
+      layers: { layer: string; borderEdges: number }[];
+    }
     const all = (whole.data as { quality: Quality }).quality;
     const scoped = (half.data as { quality: Quality }).quality;
     expect(all.scopePixels).toBeUndefined();
