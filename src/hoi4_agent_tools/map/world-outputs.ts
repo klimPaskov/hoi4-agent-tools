@@ -1,5 +1,10 @@
 import path from 'node:path';
-import { planManagedOutputs, type ManagedOutputPlan } from '../core/managed-outputs.js';
+import {
+  planManagedOutputs,
+  refreshManagedOutputs,
+  type ManagedOutputPlan,
+  type ManagedOutputRefresh,
+} from '../core/managed-outputs.js';
 import type { ScannedFile } from '../core/scanner.js';
 import type { ProposedFileChange } from '../core/transactions.js';
 
@@ -38,6 +43,24 @@ export function reconcileWorldOutputs(
 ): ProposedFileChange[] {
   return planWorldOutputs(sources, proposed, operationId, mapRoot, stateRoots, localisationRoots)
     .changes;
+}
+
+/**
+ * The world inventory brought up to date with the bytes a request leaves behind: every recorded
+ * output the request writes gets its new hash, or with `adoptAll` every recorded output its
+ * current bytes (`record_world_outputs`). Undefined when the workspace has no world inventory.
+ */
+export function refreshWorldOutputs(
+  sources: readonly ScannedFile[],
+  proposed: readonly ProposedFileChange[],
+  adoptAll = false,
+): ManagedOutputRefresh | undefined {
+  return refreshManagedOutputs({
+    manifestPath: WORLD_OUTPUT_MANIFEST,
+    sources,
+    proposed,
+    ...(adoptAll ? { adoptAll: true } : {}),
+  });
 }
 
 export function planWorldOutputs(

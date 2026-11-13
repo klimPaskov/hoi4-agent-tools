@@ -68,7 +68,8 @@ import {
   type CountryTagCatalog,
   WORLD_COUNTRY_TAG_FILE,
 } from './world-context.js';
-import { planWorldOutputs } from './world-outputs.js';
+import { planWorldOutputs, refreshWorldOutputs, WORLD_OUTPUT_MANIFEST } from './world-outputs.js';
+import type { ManagedOutputRefresh } from '../core/managed-outputs.js';
 import { resolvePartitionMode } from './partition.js';
 import {
   applyAssignTerritory,
@@ -571,8 +572,14 @@ export interface RebuildSupplyOperation extends MapOperationBase {
   capitalRailwayLevel?: number;
 }
 
+/** Adopt the current bytes of every output the world inventory records. */
+export interface RecordWorldOutputsOperation extends MapOperationBase {
+  kind: 'record_world_outputs';
+}
+
 export type MapOperation =
   | CreateWorldOperation
+  | RecordWorldOutputsOperation
   | AssignTerritoryOperation
   | RepartitionStatesOperation
   | RemapMapReferencesOperation
@@ -6176,6 +6183,59 @@ function applyRegenerateMapPositions(
     addChange(changes, file.relativePath, file.content, operation.id, 'text/plain');
 }
 
+function worldOutputsRefreshedDiagnostic(refresh: ManagedOutputRefresh): Diagnostic {
+  return {
+    code: 'MAP_WORLD_OUTPUTS_REFRESHED',
+    severity: refresh.keptEdited.length > 0 ? 'warning' : 'info',
+    category: 'map',
+    message:
+      `The world output inventory records the new bytes of ${refresh.refreshed.length} output(s) this request wrote` +
+      (refresh.dropped.length > 0 ? ` and drops ${refresh.dropped.length} it deleted` : '') +
+      (refresh.keptEdited.length > 0
+        ? `; ${refresh.keptEdited.length} output(s) were edited before this request and keep their recorded hash, so the next create_world still refuses them (record_world_outputs adopts them)`
+        : ''),
+    details: {
+      refreshed: refresh.refreshed.length,
+      dropped: refresh.dropped.length,
+      keptEdited: refresh.keptEdited.slice(0, 200),
+      keptEditedCount: refresh.keptEdited.length,
+    },
+  };
+}
+
+/**
+ * `record_world_outputs`: adopt the current bytes of every output the world inventory records, so
+ * the next create_world takes them as the world's own. Recorded files that are gone are dropped.
+ */
+function applyRecordWorldOutputs(
+  base: MapWorkspaceIndex,
+  changes: Map<string, MutableChange>,
+  operation: RecordWorldOutputsOperation,
+): Diagnostic {
+  const refresh = refreshWorldOutputs(base.sourceFiles, proposedChanges(changes), true);
+  if (refresh === undefined)
+    throw new ServiceError(
+      'MAP_WORLD_OUTPUTS_MISSING',
+      `The workspace has no world output inventory (${WORLD_OUTPUT_MANIFEST}) to record; only a mod written by create_world has one`,
+    );
+  if (refresh.content !== undefined)
+    addChange(changes, WORLD_OUTPUT_MANIFEST, refresh.content, operation.id, 'application/json');
+  return {
+    code: 'MAP_WORLD_OUTPUTS_RECORDED',
+    severity: 'info',
+    category: 'map',
+    operationId: operation.id,
+    message: `The world output inventory now records the current bytes of its outputs: ${refresh.refreshed.length} refreshed, ${refresh.unchanged.length} unchanged, ${refresh.dropped.length} dropped because the file is gone`,
+    details: {
+      refreshed: refresh.refreshed.length,
+      unchanged: refresh.unchanged.length,
+      dropped: refresh.dropped.length,
+      refreshedPaths: refresh.refreshed.slice(0, 200),
+      droppedPaths: refresh.dropped.slice(0, 200),
+    },
+  };
+}
+
 function applyRebuildSupply(
   base: MapWorkspaceIndex,
   changes: Map<string, MutableChange>,
@@ -6417,6 +6477,8 @@ function* planMapOperationSteps(
       else if (operation.kind === 'regenerate_map_positions')
         applyRegenerateMapPositions(base, changes, operation);
       else if (operation.kind === 'rebuild_supply') applyRebuildSupply(base, changes, operation);
+      else if (operation.kind === 'record_world_outputs')
+        diagnostics.push(applyRecordWorldOutputs(base, changes, operation));
       else handleSimpleOperation(base, changes, operation as SimpleMapOperation);
       diagnostics.push(...(diagnosticsByPlan.get(changes) ?? []));
       diagnosticsByPlan.delete(changes);
@@ -6454,6 +6516,17 @@ function* planMapOperationSteps(
       });
     }
   }
+  // The tool's own later edits of world outputs must never read as hand edits at the next
+  // create_world, in this request or a later one.
+  const refresh = refreshWorldOutputs(base.sourceFiles, proposedChanges(changes));
+  if (refresh?.content !== undefined) {
+    const [first, ...rest] = refresh.operationIds;
+    addChange(changes, WORLD_OUTPUT_MANIFEST, refresh.content, first!, 'application/json');
+    for (const id of rest)
+      changes.get(normalizeRelative(WORLD_OUTPUT_MANIFEST))!.operationIds.add(id);
+    diagnostics.push(worldOutputsRefreshedDiagnostic(refresh));
+  } else if (refresh !== undefined && refresh.keptEdited.length > 0)
+    diagnostics.push(worldOutputsRefreshedDiagnostic(refresh));
   const finalized = proposedChanges(changes);
   yield* cancellationCheckpoint(signal);
   const finalIndex = indexWithProposedChanges(

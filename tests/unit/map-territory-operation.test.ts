@@ -3,6 +3,7 @@ import { sha256Bytes } from '../../src/hoi4_agent_tools/core/canonical.js';
 import type { MapWorkspaceIndex } from '../../src/hoi4_agent_tools/map/model.js';
 import type { MapOperationPlan } from '../../src/hoi4_agent_tools/map/operations.js';
 import { validateMap } from '../../src/hoi4_agent_tools/map/validation.js';
+import { WORLD_OUTPUT_MANIFEST } from '../../src/hoi4_agent_tools/map/world-outputs.js';
 import { mapOperationSchema } from '../../src/hoi4_agent_tools/schemas/map.js';
 import {
   generatedWorld,
@@ -71,9 +72,14 @@ describe('assign_territory by state', () => {
       ({ severity }) => severity === 'error' || severity === 'blocker',
     );
     expect(errors).toEqual([]);
+    // The states, and the world output record with their new hashes (4.16.0).
     expect(
-      result.changes.every(({ relativePath }) => relativePath.startsWith('history/states/')),
+      result.changes.every(
+        ({ relativePath }) =>
+          relativePath.startsWith('history/states/') || relativePath === WORLD_OUTPUT_MANIFEST,
+      ),
     ).toBe(true);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('MAP_WORLD_OUTPUTS_REFRESHED');
     // The seeds belong to their countries.
     for (const [position, state] of seeds.entries())
       expect(final.statesById.get(state)?.owner).toBe(TAGS[position]);

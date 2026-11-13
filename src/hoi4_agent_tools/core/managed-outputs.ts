@@ -63,45 +63,15 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
       .map((f) => [f.relativePath.replaceAll('\\', '/').toLowerCase(), f]),
   );
   const manifest = sources.get(input.manifestPath.toLowerCase());
-  const previous =
-    manifest === undefined
-      ? []
-      : (() => {
-          if (manifest.bytes.length > 2_000_000)
-            throw new ServiceError(
-              'MANAGED_OUTPUT_MANIFEST_INVALID',
-              'Generated-output inventory exceeds its byte limit',
-            );
-          try {
-            return manifestSchema.parse(JSON.parse(manifest.bytes.toString('utf8'))).files;
-          } catch {
-            throw new ServiceError(
-              'MANAGED_OUTPUT_MANIFEST_INVALID',
-              'Generated-output inventory is invalid',
-            );
-          }
-        })();
+  const previous = manifest === undefined ? [] : parseManifest(manifest.bytes);
   const outputs = input.proposed.filter(
     (f) => f.content !== null && input.permitsPath(f.relativePath),
   );
   const next = new Set(outputs.map((f) => f.relativePath.toLowerCase()));
   const released = new Set<string>();
   const ignored = new Set<string>();
-  const seen = new Set<string>();
   for (const file of previous) {
     const key = file.relativePath.toLowerCase();
-    // A path that could leave the workspace, or a duplicate, makes the whole inventory untrustworthy.
-    if (
-      file.relativePath.includes('\\') ||
-      file.relativePath.split('/').some((s) => !s || s === '.' || s === '..') ||
-      /^[a-z]:/iu.test(file.relativePath) ||
-      seen.has(key)
-    )
-      throw new ServiceError(
-        'MANAGED_OUTPUT_MANIFEST_INVALID',
-        'Generated-output inventory contains an unsupported or duplicate path',
-      );
-    seen.add(key);
     // A safe path this inventory does not manage is left alone: not compared, not deleted.
     if (!input.permitsPath(file.relativePath)) {
       ignored.add(file.relativePath);
@@ -135,13 +105,8 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
     ...deletions,
     {
       relativePath: input.manifestPath,
-      content: Buffer.from(
-        canonicalJson({
-          version: 1,
-          files: outputs
-            .map((f) => ({ relativePath: f.relativePath, sha256: sha256Bytes(f.content!) }))
-            .sort((a, b) => compareCodeUnits(a.relativePath, b.relativePath)),
-        }) + '\n',
+      content: manifestBytes(
+        outputs.map((f) => ({ relativePath: f.relativePath, sha256: sha256Bytes(f.content!) })),
       ),
       operationIds: [input.operationId],
       mediaType: 'application/json',
@@ -155,5 +120,152 @@ export function planManagedOutputs(input: ManagedOutputInput): ManagedOutputPlan
       previous.filter((f) => released.has(f.relativePath.toLowerCase())).map((f) => f.relativePath),
     ),
     ignored: sorted(ignored),
+  };
+}
+
+interface ManifestEntry {
+  relativePath: string;
+  sha256: string;
+}
+
+/**
+ * Parse a recorded inventory. An oversized or malformed one, a path that could leave the
+ * workspace, or a duplicate makes the whole inventory untrustworthy.
+ */
+function parseManifest(bytes: Uint8Array): ManifestEntry[] {
+  if (bytes.length > 2_000_000)
+    throw new ServiceError(
+      'MANAGED_OUTPUT_MANIFEST_INVALID',
+      'Generated-output inventory exceeds its byte limit',
+    );
+  let files: ManifestEntry[];
+  try {
+    files = manifestSchema.parse(JSON.parse(Buffer.from(bytes).toString('utf8'))).files;
+  } catch {
+    throw new ServiceError(
+      'MANAGED_OUTPUT_MANIFEST_INVALID',
+      'Generated-output inventory is invalid',
+    );
+  }
+  const seen = new Set<string>();
+  for (const file of files) {
+    const key = file.relativePath.toLowerCase();
+    if (
+      file.relativePath.includes('\\') ||
+      file.relativePath.split('/').some((s) => !s || s === '.' || s === '..') ||
+      /^[a-z]:/iu.test(file.relativePath) ||
+      seen.has(key)
+    )
+      throw new ServiceError(
+        'MANAGED_OUTPUT_MANIFEST_INVALID',
+        'Generated-output inventory contains an unsupported or duplicate path',
+      );
+    seen.add(key);
+  }
+  return files;
+}
+
+function manifestBytes(files: readonly ManifestEntry[]): Buffer {
+  return Buffer.from(
+    canonicalJson({
+      version: 1,
+      files: [...files].sort((a, b) => compareCodeUnits(a.relativePath, b.relativePath)),
+    }) + '\n',
+  );
+}
+
+export interface ManagedOutputRefreshInput {
+  manifestPath: string;
+  sources: readonly ScannedFile[];
+  /** Every change of the request, after its last operation. */
+  proposed: readonly ProposedFileChange[];
+  /**
+   * Adopt the current bytes of every recorded output, edited or not (`record_world_outputs`).
+   * Without it only outputs this request writes are refreshed, and only where the file on disk
+   * still matches its recorded hash or the inventory itself is written by this request, so an
+   * earlier hand edit stays protected.
+   */
+  adoptAll?: boolean;
+}
+
+export interface ManagedOutputRefresh {
+  /** The new inventory, or undefined when no recorded hash changes. */
+  content: Buffer | undefined;
+  /** Recorded outputs whose hash now matches their new bytes, sorted. */
+  refreshed: string[];
+  /** Recorded outputs removed from the inventory because the file is gone, sorted. */
+  dropped: string[];
+  /** Recorded outputs this request writes over an earlier edit, left with their old hash, sorted. */
+  keptEdited: string[];
+  /** Recorded outputs whose hash already matched, sorted. */
+  unchanged: string[];
+  /** The operations that wrote the refreshed or dropped outputs, sorted. */
+  operationIds: string[];
+}
+
+/**
+ * Bring the recorded hashes of an inventory up to date with the bytes a request leaves behind, so
+ * the tool's own later edits (update_states, move_state_provinces and the rest) never read as hand
+ * edits. Returns undefined when the workspace has no inventory or this request deletes it.
+ */
+export function refreshManagedOutputs(
+  input: ManagedOutputRefreshInput,
+): ManagedOutputRefresh | undefined {
+  const key = (relativePath: string) => relativePath.replaceAll('\\', '/').toLowerCase();
+  const proposed = new Map(input.proposed.map((change) => [key(change.relativePath), change]));
+  const sources = new Map(
+    input.sources.filter((f) => f.rootKind === 'mod').map((f) => [key(f.relativePath), f]),
+  );
+  const manifestKey = key(input.manifestPath);
+  const written = proposed.get(manifestKey);
+  if (written?.content === null) return undefined;
+  const bytes = written?.content ?? sources.get(manifestKey)?.bytes;
+  if (bytes === undefined) return undefined;
+  const writtenHere = written !== undefined;
+  const refreshed: string[] = [];
+  const dropped: string[] = [];
+  const keptEdited: string[] = [];
+  const unchanged: string[] = [];
+  const operationIds = new Set<string>();
+  const next: ManifestEntry[] = [];
+  for (const entry of parseManifest(bytes)) {
+    const change = proposed.get(key(entry.relativePath));
+    const source = sources.get(key(entry.relativePath));
+    let current: Uint8Array | null;
+    if (change !== undefined) {
+      const trusted =
+        writtenHere ||
+        input.adoptAll === true ||
+        source === undefined ||
+        sha256Bytes(source.bytes) === entry.sha256;
+      if (!trusted) {
+        keptEdited.push(entry.relativePath);
+        next.push(entry);
+        continue;
+      }
+      current = change.content;
+      for (const id of change.operationIds) operationIds.add(id);
+    } else if (input.adoptAll === true) current = source === undefined ? null : source.bytes;
+    else {
+      next.push(entry);
+      continue;
+    }
+    if (current === null) {
+      dropped.push(entry.relativePath);
+      continue;
+    }
+    const sha256 = sha256Bytes(current);
+    if (sha256 === entry.sha256) unchanged.push(entry.relativePath);
+    else refreshed.push(entry.relativePath);
+    next.push({ relativePath: entry.relativePath, sha256 });
+  }
+  const changed = refreshed.length > 0 || dropped.length > 0;
+  return {
+    content: changed ? manifestBytes(next) : undefined,
+    refreshed: refreshed.sort(compareCodeUnits),
+    dropped: dropped.sort(compareCodeUnits),
+    keptEdited: keptEdited.sort(compareCodeUnits),
+    unchanged: unchanged.sort(compareCodeUnits),
+    operationIds: [...operationIds].sort(compareCodeUnits),
   };
 }
