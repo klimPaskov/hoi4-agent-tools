@@ -82,6 +82,30 @@ const analysisDataSchema = z
     graphHash: sha256Schema,
     counts: countsSchema,
     helperExpansion: helperExpansionSummarySchema.optional(),
+    /** Mode explain: the technology, its direct neighbours and unlocks (20 names each at most). */
+    technology: z
+      .object({
+        id: z.string(),
+        path: z.string(),
+        line: z.number().int().min(0),
+        name: z.string().optional(),
+        startYear: z.string().optional(),
+        researchCost: z.string().optional(),
+        folders: z.array(z.string()),
+        categories: z.array(z.string()),
+        prerequisites: z.array(z.string()).max(20),
+        leadsTo: z.array(z.string()).max(20),
+        exclusiveWith: z.array(z.string()).max(20),
+        unlocks: z.array(z.object({ kind: z.string(), targetId: z.string() }).strict()).max(20),
+        allPrerequisites: nonNegativeIntegerSchema,
+        allDescendants: nonNegativeIntegerSchema,
+        unlockCount: nonNegativeIntegerSchema,
+        grantedBy: nonNegativeIntegerSchema,
+        issues: nonNegativeIntegerSchema,
+        truncated: z.boolean(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -140,7 +164,7 @@ export const technologyTaskTools = [
     name: 'hoi4.tech_inspect',
     title: 'Inspect technology trees',
     description:
-      'Explain technology and doctrine paths, unlocks, bonuses and dependencies. Find layout or reference problems and compare revisions with mode compare. Example: {"mode":"explain","technologyId":"my_tech"}. Returns counts and the main findings inline; the full report is a linked resource.',
+      'Explain technology and doctrine paths, unlocks, bonuses and dependencies. Find layout or reference problems and compare revisions with mode compare. Example: {"mode":"explain","technologyId":"my_tech"}. Returns counts inline, and for explain the prerequisites, what it leads to and its unlocks; the full report is a linked resource.',
     inputSchema: inspectInputSchema,
     outputSchema: analysisOutputSchema,
     annotations: readOnlyTechnologyTool,
