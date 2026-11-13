@@ -7,7 +7,10 @@ import { CoreEngine } from '../../src/hoi4_agent_tools/core/engine.js';
 import { toolResult } from '../../src/hoi4_agent_tools/core/operation-result.js';
 import { WorkspaceResolver } from '../../src/hoi4_agent_tools/core/workspace.js';
 import { createBmp, type RgbColor } from '../../src/hoi4_agent_tools/map/bmp.js';
-import { naturalLandsFromIndex } from '../../src/hoi4_agent_tools/map/natural-lands.js';
+import {
+  naturalLandsFromIndex,
+  naturalLandsInputFromIndex,
+} from '../../src/hoi4_agent_tools/map/natural-lands.js';
 import { planMapOperations, type MapOperation } from '../../src/hoi4_agent_tools/map/operations.js';
 import { AgentNudger } from '../../src/hoi4_agent_tools/map/service.js';
 import { inspectMap } from '../../src/hoi4_agent_tools/map/tool-operations.js';
@@ -39,7 +42,7 @@ function provinceAt(column: number, row: number): number {
 }
 const colorOf = (id: number): RgbColor => ({ r: id * 9, g: 20, b: 30 });
 
-async function workspace(options: { provinces?: boolean } = {}) {
+async function workspace(options: { provinces?: boolean; impassable?: boolean } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'hoi4-natural-lands-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const mod = path.join(root, 'mod');
@@ -49,7 +52,14 @@ async function workspace(options: { provinces?: boolean } = {}) {
     writeFile(path.join(mod, relative), content);
   await write(
     'map/default.map',
-    'definitions = "definition.csv"\nprovinces = "provinces.bmp"\nheightmap = "heightmap.bmp"\nrivers = "rivers.bmp"\n',
+    'definitions = "definition.csv"\nprovinces = "provinces.bmp"\nheightmap = "heightmap.bmp"\nrivers = "rivers.bmp"\nadjacencies = "adjacencies.csv"\n',
+  );
+  // With impassable: a wall row between provinces 1 and 2, on the same side of the river.
+  await write(
+    'map/adjacencies.csv',
+    `From;To;Type;Through;start_x;start_y;stop_x;stop_y;adjacency_rule_name;Comment\n${
+      options.impassable === true ? '1;2;impassable;-1;-1;-1;-1;-1;;wall\n' : ''
+    }-1;-1;;-1;-1;-1;-1;-1;;\n`,
   );
   const definitions = ['0;0;0;0;sea;false;ocean;0'];
   for (let id = 1; id <= 24; id += 1) {
@@ -106,7 +116,7 @@ async function workspace(options: { provinces?: boolean } = {}) {
   // The states run across the river: the north half and the south half.
   await write(
     'history/states/2.txt',
-    `state = { id = 2 name = "STATE_2" state_category = rural provinces = { ${Array.from({ length: 12 }, (_, i) => i + 13).join(' ')} } history = { owner = BBB } }\n`,
+    `state = { id = 2 name = "STATE_2" state_category = rural provinces = { ${Array.from({ length: 12 }, (_, i) => i + 13).join(' ')} } ${options.impassable === true ? 'impassable = yes ' : ''}history = { owner = BBB } }\n`,
   );
   await write(
     'map/strategicregions/1.txt',
@@ -188,7 +198,7 @@ describe('natural lands in hoi4.map_inspect', () => {
     expect(stored.options.minBasinProvinces).toBe(50);
     expect(stored.lands[0]!.provinces).toEqual([1, 2, 5, 6, 9, 10, 13, 14, 17, 18, 21, 22]);
     expect(stored.lands[0]!.lines).toEqual([
-      { land: 'L3', length: 60, river: 60, crest: 0, terrain: 0, divide: 0 },
+      { land: 'L3', length: 60, river: 60, crest: 0, terrain: 0, impassable: 0, divide: 0 },
     ]);
   });
 
@@ -319,5 +329,21 @@ describe('natural lands in hoi4.map_inspect', () => {
         }).success,
         JSON.stringify(bad),
       ).toBe(false);
+  });
+
+  it('reads impassable adjacencies and impassable states as hard lines', async () => {
+    const { nudger } = await workspace({ impassable: true });
+    const snapshot = await nudger.scan('test', undefined, undefined, false, false, true);
+    const { input } = naturalLandsInputFromIndex(snapshot.index);
+    expect(input.impassablePairs).toEqual([[1, 2]]);
+    expect(input.impassableProvinces).toEqual(Array.from({ length: 12 }, (_, i) => i + 13));
+    const { result } = await naturalLandsFromIndex(snapshot.index, { minBasinProvinces: 50 });
+    for (const land of result.lands) {
+      expect(land.provinces.includes(1) && land.provinces.includes(2)).toBe(false);
+      // The impassable state (provinces 13 to 24) keeps to itself.
+      expect(new Set(land.provinces.map((province) => province >= 13)).size).toBe(1);
+    }
+    const first = result.lands.find(({ provinces }) => provinces.includes(1))!;
+    expect(first.lines.some(({ impassable }) => impassable > 0)).toBe(true);
   });
 });

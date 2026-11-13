@@ -108,7 +108,7 @@ describe('natural lands', () => {
     expect(landOf(result, provinceAt(2, 3)).id).toBe('L1');
     expect(landOf(result, provinceAt(3, 3)).id).toBe('L3');
     expect(result.lands[0]!.lines).toEqual([
-      { land: 'L3', length: 60, river: 60, crest: 0, terrain: 0, divide: 0 },
+      { land: 'L3', length: 60, river: 60, crest: 0, terrain: 0, impassable: 0, divide: 0 },
     ]);
     expect(result.inputs).toEqual({ heights: false, rivers: true });
 
@@ -175,7 +175,7 @@ describe('natural lands', () => {
     expect(forest.provinces).toHaveLength(9);
     // Three cells of ten pixels on each of four sides.
     expect(forest.lines).toEqual([
-      { land: 'L1', length: 120, river: 0, crest: 0, terrain: 120, divide: 0 },
+      { land: 'L1', length: 120, river: 0, crest: 0, terrain: 120, impassable: 0, divide: 0 },
     ]);
     // A mod's own terrain category can be classed as forest too.
     const custom = grid({
@@ -248,6 +248,7 @@ describe('natural lands', () => {
         river: 0,
         crest: 0,
         terrain: 0,
+        impassable: 0,
         divide: 60,
       },
     ]);
@@ -301,6 +302,57 @@ describe('natural lands', () => {
           river: line.river,
         });
       }
+  });
+
+  it('never puts the two sides of an impassable border in one land', async () => {
+    // Two columns of three small plain provinces, sea either side: below the minimum they would
+    // all merge into one land.
+    const { input, provinceAt } = grid({ columns: 4, rows: 3, seaColumns: [0, 3] });
+    expect((await lands(input)).lands).toHaveLength(1);
+    const left = [0, 1, 2].map((row) => provinceAt(1, row));
+    const right = [0, 1, 2].map((row) => provinceAt(2, row));
+
+    // One impassable row: the land around its end is split between its two sides.
+    const one = await lands({ ...input, impassablePairs: [[provinceAt(2, 0), provinceAt(1, 0)]] });
+    expect(one.lands.map(({ provinces }) => provinces)).toEqual([left, right]);
+    expect(one.lands[0]!.lines).toEqual([
+      { land: 'L2', length: 30, river: 0, crest: 0, terrain: 0, impassable: 10, divide: 20 },
+    ]);
+    // Undersized, but they never merge across it.
+    expect(one.undersized).toEqual(['L1', 'L2']);
+
+    // A wall of impassable rows along the whole border.
+    const wall = await lands({
+      ...input,
+      impassablePairs: [0, 1, 2].map((row) => [provinceAt(1, row), provinceAt(2, row)] as const),
+    });
+    expect(wall.lands.map(({ provinces }) => provinces)).toEqual([left, right]);
+    expect(wall.lands[1]!.lines).toEqual([
+      { land: 'L1', length: 30, river: 0, crest: 0, terrain: 0, impassable: 30, divide: 0 },
+    ]);
+
+    // Impassable land keeps to itself, but a border inside it is not a line.
+    const three = grid({ columns: 5, rows: 2, seaColumns: [0, 4] });
+    const middle = [0, 1].map((row) => three.provinceAt(2, row));
+    const impassable = await lands({ ...three.input, impassableProvinces: middle });
+    expect(impassable.lands.map(({ provinces }) => provinces.length)).toEqual([2, 2, 2]);
+    expect(landOf(impassable, middle[0]!).provinces).toEqual(middle);
+
+    // A wall drawn in the barrier plane (255) on the border between columns 1 and 2.
+    const walls = new Uint8Array(input.width * input.height);
+    for (let y = 0; y < input.height; y += 1) walls[y * input.width + 19] = 255;
+    const drawn = await lands({
+      ...input,
+      walls: borderPlaneFromBytes(input.width, input.height, walls),
+    });
+    expect(drawn.lands.map(({ provinces }) => provinces)).toEqual([left, right]);
+    expect(drawn.lands[0]!.lines[0]!.impassable).toBe(30);
+    // A lower barrier value is no wall.
+    walls.fill(150);
+    expect(
+      (await lands({ ...input, walls: borderPlaneFromBytes(input.width, input.height, walls) }))
+        .lands,
+    ).toHaveLength(1);
   });
 
   it('resolves land ids to provinces and summarises compactly', async () => {

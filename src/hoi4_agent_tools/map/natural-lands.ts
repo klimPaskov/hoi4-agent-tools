@@ -1,5 +1,6 @@
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { ServiceError } from '../core/result.js';
+import { firstScalar } from '../core/source/index.js';
 import { BORDER_PROVINCE_KIND, type BorderPlane } from './border-quality.js';
 import { borderQualityInputFromIndex } from './border-quality-input.js';
 import { NATURAL_LAND_KINDS, NATURAL_TERRAIN_CLASSES } from './limits.js';
@@ -31,7 +32,9 @@ export const NATURAL_TERRAIN_CLASS_DEFAULTS: Readonly<Record<string, NaturalTerr
 /** Highest `rivers.bmp` index that is a river width; higher indices are land and water. */
 const RIVER_WIDTH_MAX_INDEX = 11;
 /** Strength of a line kind when choosing the weakest line to merge a fragment across. */
-const LINE_STRENGTH = { river: 1, crest: 1, terrain: 0.5, divide: 0.2 } as const;
+const LINE_STRENGTH = { impassable: 2, river: 1, crest: 1, terrain: 0.5, divide: 0.2 } as const;
+/** `walls` plane value of a wall. */
+const WALL_VALUE = 255;
 const CLASS_PRIORITY: readonly NaturalTerrainClass[] = [
   'upland',
   'forest',
@@ -83,6 +86,12 @@ export interface NaturalLandsInput {
   provinceTerrain: readonly string[];
   heights?: BorderPlane;
   rivers?: BorderPlane;
+  /** Barrier plane where 255 is a wall; a border on a wall is impassable. */
+  walls?: BorderPlane;
+  /** Province pairs joined by an `impassable` row of `adjacencies.csv`. */
+  impassablePairs?: readonly (readonly [number, number])[];
+  /** Impassable land (the provinces of `impassable = yes` states). */
+  impassableProvinces?: readonly number[];
 }
 
 /** The line between a land and one neighbouring land, as border pixel edges per kind. */
@@ -96,6 +105,8 @@ export interface NaturalLandLine {
   crest: number;
   /** Pixel edges on borders where the terrain class changes. */
   terrain: number;
+  /** Pixel edges on impassable borders: an impassable adjacency, impassable land or a wall. */
+  impassable: number;
   /** Pixel edges on borders with none of these: a drainage divide. */
   divide: number;
 }
@@ -186,6 +197,8 @@ const PAIR_RIVER = 1;
 const PAIR_CREST = 2;
 const PAIR_TERRAIN = 4;
 const PAIR_CUT = 8;
+const PAIR_IMPASSABLE = 16;
+const PAIR_LINES = PAIR_RIVER | PAIR_CREST | PAIR_TERRAIN | PAIR_IMPASSABLE;
 
 /** Province-pair evidence from one pass over the raster. */
 interface PairTable {
@@ -237,6 +250,7 @@ function* scanRaster(
   for (const [name, plane] of [
     ['heights', input.heights],
     ['rivers', input.rivers],
+    ['walls', input.walls],
   ] as const)
     if (plane !== undefined && (plane.width !== width || plane.height !== height))
       throw new ServiceError(
@@ -256,13 +270,19 @@ function* scanRaster(
   let pairLength = new Uint32Array(capacity);
   let pairRiver = new Uint32Array(capacity);
   let pairHeight = new Float64Array(capacity);
+  let pairWall = new Uint32Array(capacity);
   let pairs = 0;
   const slots = new Map<number, number>();
   const major = (value: number): boolean =>
     value >= options.riverMajorIndex && value <= RIVER_WIDTH_MAX_INDEX;
   const heightRows = [new Uint8Array(width), new Uint8Array(width)];
   const riverRows = [new Uint8Array(width), new Uint8Array(width)];
-  const visit = (a: number, b: number, heightA: number, heightB: number, river: boolean): void => {
+  const wallRows = [new Uint8Array(width), new Uint8Array(width)];
+  /** Bit 1: the edge touches a major river pixel; bit 2: a wall pixel. */
+  const marksOf = (riverA: number, riverB: number, wallA: number, wallB: number): number =>
+    (major(riverA) || major(riverB) ? 1 : 0) |
+    (wallA === WALL_VALUE || wallB === WALL_VALUE ? 2 : 0);
+  const visit = (a: number, b: number, heightA: number, heightB: number, marks: number): void => {
     if (a === b) return;
     const kindA = kindOf(a);
     const kindB = kindOf(b);
@@ -286,13 +306,15 @@ function* scanRaster(
           pairLength = grow(pairLength);
           pairRiver = grow(pairRiver);
           pairHeight = grow(pairHeight);
+          pairWall = grow(pairWall);
         }
         pairA[slot] = low;
         pairB[slot] = high;
         slots.set(key, slot);
       }
       pairLength[slot]! += 1;
-      if (river) pairRiver[slot]! += 1;
+      if ((marks & 1) !== 0) pairRiver[slot]! += 1;
+      if ((marks & 2) !== 0) pairWall[slot]! += 1;
       pairHeight[slot]! += (heightA + heightB) / 2;
       return;
     }
@@ -307,6 +329,7 @@ function* scanRaster(
   const readRows = (y: number, slot: number): void => {
     input.heights?.readRow(y, heightRows[slot]!);
     input.rivers?.readRow(y, riverRows[slot]!);
+    input.walls?.readRow(y, wallRows[slot]!);
   };
   readRows(0, 0);
   let here = 0;
@@ -321,6 +344,8 @@ function* scanRaster(
     const heightsNext = heightRows[next]!;
     const riversHere = riverRows[here]!;
     const riversNext = riverRows[next]!;
+    const wallsHere = wallRows[here]!;
+    const wallsNext = wallRows[next]!;
     const rowStart = y * width;
     for (let x = 0; x < width; x += 1) {
       const pixel = rowStart + x;
@@ -338,7 +363,7 @@ function* scanRaster(
           eastId,
           heightsHere[x]!,
           heightsHere[east]!,
-          major(riversHere[x]!) || major(riversHere[east]!),
+          marksOf(riversHere[x]!, riversHere[east]!, wallsHere[x]!, wallsHere[east]!),
         );
       if (y + 1 < height) {
         const southId = provinceIds[pixel + width]!;
@@ -348,7 +373,7 @@ function* scanRaster(
             southId,
             heightsHere[x]!,
             heightsNext[x]!,
-            major(riversHere[x]!) || major(riversNext[x]!),
+            marksOf(riversHere[x]!, riversNext[x]!, wallsHere[x]!, wallsNext[x]!),
           );
       }
     }
@@ -360,6 +385,14 @@ function* scanRaster(
     if (pixels[id]! > 0) meanHeight[id] = heightSum[id]! / pixels[id]!;
     classOf[id] = classOfTerrain(input.provinceTerrain[id] ?? '', options.terrainClasses);
   }
+  const impassableLand = new Uint8Array(count);
+  for (const province of input.impassableProvinces ?? [])
+    if (Number.isInteger(province) && province >= 0 && province < count)
+      impassableLand[province] = 1;
+  const impassableRows = new Set<number>();
+  for (const [from, to] of input.impassablePairs ?? [])
+    if (Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0)
+      impassableRows.add(Math.min(from, to) * 65_536 + Math.max(from, to));
   // Order pairs by (low, high) so every later walk is deterministic.
   const order = Array.from({ length: pairs }, (_, i) => i).sort(
     (x, y) => pairA[x]! - pairA[y]! || pairB[x]! - pairB[y]!,
@@ -386,9 +419,16 @@ function* scanRaster(
     )
       flags |= PAIR_CREST;
     if (classOf[a] !== classOf[b]) flags |= PAIR_TERRAIN;
+    // An impassable row, the edge of impassable land (a border inside it is not), or a wall.
+    if (
+      impassableRows.has(a * 65_536 + b) ||
+      impassableLand[a] !== impassableLand[b] ||
+      (input.walls !== undefined && pairWall[from]! / length >= options.riverShare)
+    )
+      flags |= PAIR_IMPASSABLE;
     const bothUpland = classOf[a] === 'upland' && classOf[b] === 'upland';
     if (
-      (flags & (PAIR_RIVER | PAIR_TERRAIN)) !== 0 ||
+      (flags & (PAIR_RIVER | PAIR_TERRAIN | PAIR_IMPASSABLE)) !== 0 ||
       ((flags & PAIR_CREST) !== 0 && (options.splitRangesAtCrests || !bothUpland))
     )
       flags |= PAIR_CUT;
@@ -479,9 +519,12 @@ interface Shared {
   length: number;
   strength: number;
   pass: number;
+  /** Pixel edges on impassable borders: groups that share any never merge. */
+  impassable: number;
 }
 
 function pairStrength(flags: number): number {
+  if ((flags & PAIR_IMPASSABLE) !== 0) return LINE_STRENGTH.impassable;
   let strength: number = LINE_STRENGTH.divide;
   if ((flags & PAIR_RIVER) !== 0) strength = Math.max(strength, LINE_STRENGTH.river);
   if ((flags & PAIR_CREST) !== 0) strength = Math.max(strength, LINE_STRENGTH.crest);
@@ -514,6 +557,7 @@ class GroupGraph {
         length: pairs.length[i]!,
         strength: pairStrength(pairs.flags[i]!) * pairs.length[i]!,
         pass: pairs.pass[i]!,
+        impassable: (pairs.flags[i]! & PAIR_IMPASSABLE) !== 0 ? pairs.length[i]! : 0,
       };
       GroupGraph.#add(this.adjacent[x]!, y, shared);
       GroupGraph.#add(this.adjacent[y]!, x, shared);
@@ -527,6 +571,7 @@ class GroupGraph {
       entry.length += shared.length;
       entry.strength += shared.strength;
       entry.pass = Math.min(entry.pass, shared.pass);
+      entry.impassable += shared.impassable;
     }
   }
 
@@ -548,7 +593,8 @@ class GroupGraph {
 
   /**
    * Merge every group below `minimum` into the neighbour `better` ranks first, smallest first.
-   * Groups with no eligible neighbour stay as they are.
+   * Groups with no eligible neighbour stay as they are; groups that share an impassable border
+   * are never eligible.
    */
   mergeSmall(
     minimum: number,
@@ -564,7 +610,12 @@ class GroupGraph {
       if (!this.alive[group] || this.members[group]!.length !== size || size >= minimum) continue;
       let best: [number, Shared] | undefined;
       for (const candidate of this.adjacent[group]!) {
-        if (!this.alive[candidate[0]] || !eligible(group, candidate[0])) continue;
+        if (
+          !this.alive[candidate[0]] ||
+          candidate[1].impassable > 0 ||
+          !eligible(group, candidate[0])
+        )
+          continue;
         if (best === undefined || better(candidate, best)) best = candidate;
       }
       if (best === undefined) continue;
@@ -614,6 +665,78 @@ function connectedComponents(
     components.push(component.sort((x, y) => x - y));
   }
   return components;
+}
+
+/**
+ * Split every piece that holds both ends of an impassable border (joined around the end of the
+ * line) between the two ends: each province goes to the end it is fewer steps from within the
+ * piece, the lower end on a tie, until no piece holds both ends of one.
+ */
+function separateImpassable(
+  components: number[][],
+  adjacency: Adjacency,
+  pairs: PairTable,
+  joined: (pair: number) => boolean,
+  componentOf: Int32Array,
+): number[][] {
+  const impassable: number[] = [];
+  for (let i = 0; i < pairs.count; i += 1)
+    if ((pairs.flags[i]! & PAIR_IMPASSABLE) !== 0) impassable.push(i);
+  if (impassable.length === 0) return components;
+  const result: number[][] = [];
+  const work = [...components];
+  let nextId = components.length;
+  const distance = new Int32Array(componentOf.length).fill(-1);
+  const side = new Int32Array(componentOf.length).fill(-1);
+  for (let piece = work.shift(); piece !== undefined; piece = work.shift()) {
+    const id = componentOf[piece[0]!]!;
+    const clash = impassable.find(
+      (pair) => componentOf[pairs.a[pair]!] === id && componentOf[pairs.b[pair]!] === id,
+    );
+    if (clash === undefined) {
+      result.push(piece);
+      continue;
+    }
+    const ends = [pairs.a[clash]!, pairs.b[clash]!];
+    for (const province of piece) {
+      distance[province] = -1;
+      side[province] = -1;
+    }
+    let frontier = ends.map((end, position) => {
+      distance[end] = 0;
+      side[end] = position;
+      return end;
+    });
+    for (let step = 1; frontier.length > 0; step += 1) {
+      const next: number[] = [];
+      // Visit in end order so the lower end wins a tie.
+      for (const province of frontier)
+        for (
+          let slot = adjacency.offsets[province]!;
+          slot < adjacency.offsets[province + 1]!;
+          slot++
+        ) {
+          const other = adjacency.to[slot]!;
+          if (componentOf[other] !== id || distance[other]! >= 0 || !joined(adjacency.pair[slot]!))
+            continue;
+          distance[other] = step;
+          side[other] = side[province]!;
+          next.push(other);
+        }
+      frontier = next;
+    }
+    const parts: number[][] = [[], []];
+    for (const province of piece) parts[side[province]!]!.push(province);
+    const second = nextId;
+    nextId += 1;
+    for (const province of parts[1]!) componentOf[province] = second;
+    work.unshift(parts[0]!, parts[1]!);
+  }
+  // Number the pieces in order again, as the caller indexes them.
+  result.sort((x, y) => x[0]! - y[0]!);
+  for (const [index, piece] of result.entries())
+    for (const province of piece) componentOf[province] = index;
+  return result;
 }
 
 /** Split a basin larger than `maximum` at branch points of its drainage tree. */
@@ -696,13 +819,13 @@ export function* naturalLandsSteps(
 
   // 1. Pieces of one terrain class that no line crosses.
   const componentOf = new Int32Array(count).fill(-1);
-  const components = connectedComponents(
-    landProvinces,
+  const joined = (pair: number): boolean => (pairs.flags[pair]! & PAIR_CUT) === 0;
+  const components = separateImpassable(
+    connectedComponents(landProvinces, adjacency, joined, () => true, componentOf, 0),
     adjacency,
-    (pair) => (pairs.flags[pair]! & PAIR_CUT) === 0,
-    () => true,
+    pairs,
+    joined,
     componentOf,
-    0,
   );
   signal?.throwIfAborted();
   yield;
@@ -830,14 +953,23 @@ export function* naturalLandsSteps(
     ] as const) {
       let line = lines[from]!.get(to);
       if (line === undefined) {
-        line = { land: ids[to]!, length: 0, river: 0, crest: 0, terrain: 0, divide: 0 };
+        line = {
+          land: ids[to]!,
+          length: 0,
+          river: 0,
+          crest: 0,
+          terrain: 0,
+          impassable: 0,
+          divide: 0,
+        };
         lines[from]!.set(to, line);
       }
       line.length += length;
       if ((flags & PAIR_RIVER) !== 0) line.river += length;
       if ((flags & PAIR_CREST) !== 0) line.crest += length;
       if ((flags & PAIR_TERRAIN) !== 0) line.terrain += length;
-      if ((flags & (PAIR_RIVER | PAIR_CREST | PAIR_TERRAIN)) === 0) line.divide += length;
+      if ((flags & PAIR_IMPASSABLE) !== 0) line.impassable += length;
+      if ((flags & PAIR_LINES) === 0) line.divide += length;
     }
   }
   const counts = Object.fromEntries(NATURAL_LAND_KINDS.map((kind) => [kind, 0])) as Record<
@@ -965,6 +1097,12 @@ export function naturalLandsInputFromIndex(index: MapWorkspaceIndex): {
       provinceTerrain,
       ...(input.features?.heights === undefined ? {} : { heights: input.features.heights }),
       ...(input.features?.rivers === undefined ? {} : { rivers: input.features.rivers }),
+      impassablePairs: index.adjacencies
+        .filter(({ type }) => type.toLowerCase() === 'impassable')
+        .map(({ from, to }) => [from, to] as const),
+      impassableProvinces: index.states
+        .filter(({ block }) => firstScalar(block, 'impassable')?.value === 'yes')
+        .flatMap(({ provinces }) => provinces),
     },
     skipped: skipped.filter(({ input: name }) => name === 'heightmap' || name === 'rivers'),
   };
