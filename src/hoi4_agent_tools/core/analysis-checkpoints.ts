@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { z } from 'zod/v4';
-import { canonicalJson, hashCanonical } from './canonical.js';
+import { canonicalJson, hashCanonical, sha256Bytes } from './canonical.js';
 import type { JobExecutionContext } from './job-executor.js';
 import { ServiceError } from './result.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -14,6 +14,7 @@ const envelopeSchema = z
     state: z.json(),
   })
   .strict();
+const saveIdentitySchema = z.object({ key: digest, sourceRevision: digest }).strict();
 
 export interface AnalysisCheckpoints {
   load<T>(key: string, sourceRevision: string, schema: z.ZodType<T>): Promise<T | undefined>;
@@ -77,14 +78,20 @@ export function jobAnalysisCheckpoints(context: JobExecutionContext): AnalysisCh
     },
     async save(key, sourceRevision, state, completed, total) {
       context.signal.throwIfAborted();
-      const envelope = envelopeSchema.parse({ version: 1, key, sourceRevision, state });
+      // The state is the analysis's own in-memory value. Canonical JSON already refuses what
+      // JSON cannot hold, so only the identity fields are checked here: a deep z.json() pass
+      // over a large frontier cost more than the analysis itself (25 s of a 141 s Chaos Redux
+      // event query). `load` still validates the whole envelope it reads back from disk.
+      saveIdentitySchema.parse({ key, sourceRevision });
+      const content = canonicalJson({ version: 1, key, sourceRevision, state });
+      const stateHash = sha256Bytes(content);
       await context.engine.artifacts.withAtomicChunkedWrites(
         workspace,
         [
           {
             name: 'analysis-checkpoint.json',
             mimeType: 'application/json',
-            content: canonicalJson(envelope),
+            content,
             provenance: {
               kind: 'analysis-checkpoint',
               toolVersion: PACKAGE_VERSION,
@@ -100,7 +107,7 @@ export function jobAnalysisCheckpoints(context: JobExecutionContext): AnalysisCh
             sourceRevision,
             resourceUri: resource!.uri,
             cursor: `analysis:${key}`,
-            stateHash: hashCanonical(envelope),
+            stateHash,
             resources: physical.map(({ uri }) => uri),
           };
           // Publish the authenticated pin before releasing artifact admission. A competing
