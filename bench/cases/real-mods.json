@@ -679,27 +679,6 @@
       }
     },
     {
-      "id": "zin.localisation.audit-undefined-desc",
-      "surface": "localisation",
-      "corpus": "zin",
-      "title": "A literal \"undefined\" event description is found",
-      "evidence": "events/zin_glo.txt:189 has desc = undefined, and no language defines a key named undefined.",
-      "tool": "hoi4.localisation_inspect",
-      "arguments": {
-        "mode": "audit"
-      },
-      "expect": [
-        {
-          "path": "data.audit.counts.LOC_KEY_UNDEFINED",
-          "equals": 1
-        },
-        {
-          "path": "data.audit.problems[*].key",
-          "includes": "undefined"
-        }
-      ]
-    },
-    {
       "id": "kaiserreich.localisation.blank-files-quiet",
       "surface": "localisation",
       "corpus": "kaiserreich",

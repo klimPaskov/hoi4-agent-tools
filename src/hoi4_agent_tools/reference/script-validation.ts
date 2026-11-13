@@ -70,6 +70,9 @@ const identifierArguments: Readonly<
   operative_leader_event: { value: 'event', fields: { id: 'event' } },
 };
 
+/** What an unknown id does in game, so a warning still reads as a bug in the modder's file. */
+const UNKNOWN_ID_IN_GAME = '; the game loads the file, but this command does nothing';
+
 export const identifierArgumentCommands: ReadonlySet<string> = new Set(
   Object.keys(identifierArguments),
 );
@@ -454,7 +457,7 @@ export async function validateScript(
         code: 'SCRIPT_ARGUMENT_UNKNOWN_ID',
         // The game loads the file and the command does nothing, as vanilla's own dangling ids show.
         status: identifiers.complete ? 'warning' : 'unresolved',
-        message: `${entry.key.value} names ${target} ${value.slice(0, 256)}, which ${identifiers.complete ? 'no loaded file defines' : 'the indexed files do not define (the index is incomplete)'}`,
+        message: `${entry.key.value} names ${target} ${value.slice(0, 256)}, which ${identifiers.complete ? `no loaded file defines${UNKNOWN_ID_IN_GAME}` : 'the indexed files do not define (the index is incomplete)'}`,
         suggestions,
       });
     }
