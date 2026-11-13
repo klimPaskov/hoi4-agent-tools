@@ -110,6 +110,9 @@ const borderQualitySummarySchema = z
     skippedInputs: z
       .array(z.object({ input: z.string().max(32), reason: z.string().max(256) }).strict())
       .max(8),
+    scopePixels: nonNegativeIntegerSchema
+      .optional()
+      .describe('Pixels inside qualityScope; absent when the whole map was measured.'),
     layers: z.array(borderLayerSummarySchema).max(8),
   })
   .strict();

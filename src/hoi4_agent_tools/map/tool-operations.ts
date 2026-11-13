@@ -969,6 +969,7 @@ export async function inspectMap(
       const measured = await measureIndexBorderNaturalness(
         snapshot.index,
         context.signal === undefined ? {} : { signal: context.signal },
+        input.qualityScope,
       );
       borderQuality = {
         report: measured.report,

@@ -10,7 +10,12 @@ import {
   type BorderTargetCheck,
   type BorderTargets,
 } from './border-quality.js';
-import { borderQualityInputFromIndex } from './border-quality-input.js';
+import {
+  borderQualityInputFromIndex,
+  borderQualityScopeIsEmpty,
+  type BorderQualityScope,
+} from './border-quality-input.js';
+import { canonicalJson } from '../core/canonical.js';
 import type { MapOperationBlocker, MapOperationPlan } from './operations.js';
 import type {
   BorderQualityMode,
@@ -57,6 +62,8 @@ interface Request {
   overrides: BorderTargetsInput | undefined;
   /** The layers that must pass in `enforce`. */
   enforced: readonly string[];
+  /** Where to measure; undefined for the whole map. */
+  scope: BorderQualityScope | undefined;
 }
 
 function targetsFor(layer: string, overrides: BorderTargetsInput | undefined): BorderTargets {
@@ -70,7 +77,7 @@ function targetsFor(layer: string, overrides: BorderTargetsInput | undefined): B
 function requests(plan: MapOperationPlan): Request[] {
   const result: Request[] = [];
   for (const report of plan.territory ?? []) {
-    const { mode, layer, targets } = report.borderQuality;
+    const { mode, layer, targets, scope } = report.borderQuality;
     if (mode === 'off') continue;
     result.push({
       operationId: report.operationId,
@@ -79,6 +86,7 @@ function requests(plan: MapOperationPlan): Request[] {
       layers: layer === 'country' ? ['country', 'state'] : ['state'],
       overrides: targets,
       enforced: [layer],
+      scope: borderQualityScopeIsEmpty(scope) ? undefined : scope,
     });
   }
   const failed = new Set(plan.blockers.map(({ operationId }) => operationId));
@@ -93,6 +101,7 @@ function requests(plan: MapOperationPlan): Request[] {
       layers: ['province', 'state', 'region', 'country'],
       overrides: operation.data.borderTargets as BorderTargetsInput | undefined,
       enforced: ['province', 'state', 'region', 'country'],
+      scope: undefined,
     });
   }
   return result;
@@ -110,18 +119,47 @@ function describeFailures(check: BorderTargetCheck, layer: string): string {
     .join('; ')}`;
 }
 
-/** Measure the final index for the operations that asked for border quality. */
+/**
+ * Measure the final index for the operations that asked for border quality: once for the whole
+ * map and once more for each distinct `borderQualityScope`.
+ */
 export async function evaluateTerritoryQuality(
   plan: MapOperationPlan,
   signal?: AbortSignal,
 ): Promise<TerritoryQuality | undefined> {
   const asked = requests(plan);
   if (asked.length === 0) return undefined;
+  const groups = new Map<string, Request[]>();
+  for (const request of asked) {
+    const key = request.scope === undefined ? '' : canonicalJson(request.scope);
+    groups.set(key, [...(groups.get(key) ?? []), request]);
+  }
+  const results: TerritoryQuality[] = [];
+  for (const key of [...groups.keys()].sort())
+    results.push(await evaluateRequests(plan, groups.get(key)!, signal));
+  const whole = results.find((_, index) => [...groups.keys()].sort()[index] === '');
+  const report = (whole ?? results[0])?.report;
+  return {
+    diagnostics: results.flatMap(({ diagnostics }) => diagnostics),
+    blockers: results.flatMap(({ blockers }) => blockers),
+    operations: results.flatMap(({ operations }) => operations),
+    ...(report === undefined ? {} : { report }),
+    skippedInputs: results[0]?.skippedInputs ?? [],
+  };
+}
+
+/** Measure the final index once, for requests that share one scope. */
+async function evaluateRequests(
+  plan: MapOperationPlan,
+  asked: readonly Request[],
+  signal?: AbortSignal,
+): Promise<TerritoryQuality> {
+  const scope = asked[0]!.scope;
   const wanted = new Set(asked.flatMap(({ layers }) => layers));
   let measured: Awaited<ReturnType<typeof measureBorderNaturalness>>;
   let skipped: { input: string; reason: string }[];
   try {
-    const { input, skipped: missing } = borderQualityInputFromIndex(plan.finalIndex);
+    const { input, skipped: missing } = borderQualityInputFromIndex(plan.finalIndex, scope);
     skipped = missing;
     measured = await measureBorderNaturalness(
       { ...input, layers: input.layers.filter(({ name }) => wanted.has(name)) },
@@ -223,7 +261,7 @@ export async function evaluateTerritoryQuality(
       severity: 'info',
       category: 'map',
       operationId: request.operationId,
-      message: `Border naturalness of the proposed map: ${verdicts
+      message: `Border naturalness of the proposed map${scope === undefined ? '' : ' inside the scope'}: ${verdicts
         .map(
           ({ layer, report, check }) =>
             `${layer} enrichment ${report.barrier.enrichment ?? 'n/a'}, natural share ${report.natural.share ?? 'n/a'}${report.straightness.fraction === null ? '' : `, straight ${report.straightness.fraction}`} (${check.passed ? 'meets' : 'misses'} the targets)`,
@@ -241,6 +279,7 @@ export async function evaluateTerritoryQuality(
           passed: check.passed,
           targets,
         })),
+        ...(scope === undefined ? {} : { scope, scopePixels: measured.report.scopePixels ?? null }),
       },
     });
   }

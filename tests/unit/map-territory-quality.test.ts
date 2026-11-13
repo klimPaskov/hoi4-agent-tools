@@ -48,6 +48,39 @@ describe('border quality of a territory assignment', () => {
     expect(result.artifacts.map(({ name }) => name)).toContain('map-territory-report.json');
   });
 
+  it('measures only inside a borderQualityScope and says so', async () => {
+    // ZIN map lane, 13 November 2026: a redrawn region is judged on its own borders.
+    const whole = await preview([operation({ borderQuality: 'report' })]);
+    const scoped = await preview([
+      operation({ borderQuality: 'report', borderQualityScope: { owners: [TAGS[0]] } }),
+    ]);
+    expect(scoped.plan.blockers).toEqual([]);
+    const measured = scoped.diagnostics.find(({ code }) => code === 'MAP_BORDER_QUALITY_MEASURED')!;
+    expect(measured.message).toContain('inside the scope');
+    expect(measured.details).toMatchObject({ scope: { owners: [TAGS[0]] } });
+    expect((measured.details as { scopePixels: number }).scopePixels).toBeGreaterThan(0);
+    const edges = (result: typeof whole) =>
+      result.plan.territory![0]!.borderQuality.verdicts!.find(({ layer }) => layer === 'country')!;
+    expect(edges(scoped)).not.toEqual(edges(whole));
+  });
+
+  it('reports an empty scope instead of measuring the whole map', async () => {
+    const report = await preview([
+      operation({ borderQuality: 'report', borderQualityScope: { owners: ['QQQ'] } }),
+    ]);
+    expect(report.plan.blockers).toEqual([]);
+    const unavailable = report.diagnostics.find(
+      ({ code }) => code === 'MAP_BORDER_QUALITY_UNAVAILABLE',
+    )!;
+    expect(unavailable.message).toContain('MAP_BORDER_QUALITY_SCOPE_EMPTY');
+    const enforced = await preview([
+      operation({ borderQuality: 'enforce', borderQualityScope: { stateIds: [99_999] } }),
+    ]);
+    expect(enforced.plan.blockers.map(({ code }) => code)).toEqual([
+      'MAP_BORDER_QUALITY_UNAVAILABLE',
+    ]);
+  });
+
   it('measures nothing when the mode is off', async () => {
     const result = await preview([operation({ borderQuality: 'off' })]);
     expect(result.plan.territory![0]!.borderQuality.verdicts).toBeUndefined();

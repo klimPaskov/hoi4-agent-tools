@@ -377,7 +377,56 @@ describe('border quality in hoi4.map_inspect', () => {
     expect(view.artifacts.length).toBeGreaterThan(0);
   });
 
+  it('measures only the borders inside qualityScope', async () => {
+    const { engine, nudger } = await workspace({ border: 'river', terrain: true });
+    const outputSchema = mapTaskTools.find(({ name }) => name === 'hoi4.map_inspect')!.outputSchema;
+    const whole = await inspectMap(
+      engine,
+      nudger,
+      mapInspectRequestSchema.parse({ workspaceId: 'test', quality: true }),
+      context,
+    );
+    const half = await inspectMap(
+      engine,
+      nudger,
+      mapInspectRequestSchema.parse({
+        workspaceId: 'test',
+        quality: true,
+        qualityScope: { box: { x: 0, y: 0, width: SIZE, height: SIZE / 2 } },
+      }),
+      context,
+    );
+    interface Quality { scopePixels?: number; layers: { layer: string; borderEdges: number }[] }
+    const all = (whole.data as { quality: Quality }).quality;
+    const scoped = (half.data as { quality: Quality }).quality;
+    expect(all.scopePixels).toBeUndefined();
+    expect(scoped.scopePixels).toBe((SIZE * SIZE) / 2);
+    const state = (quality: Quality) => quality.layers.find(({ layer }) => layer === 'state')!;
+    expect(state(scoped).borderEdges).toBeLessThan(state(all).borderEdges);
+    expect(state(scoped).borderEdges).toBeGreaterThan(0);
+    const wire = JSON.parse(JSON.stringify(toolResult(half).structuredContent)) as unknown;
+    const parsed = outputSchema.safeParse(wire);
+    expect(parsed.success ? [] : parsed.error.issues).toEqual([]);
+    const empty = await inspectMap(
+      engine,
+      nudger,
+      mapInspectRequestSchema.parse({
+        workspaceId: 'test',
+        quality: true,
+        qualityScope: { owners: ['QQQ'] },
+      }),
+      context,
+    );
+    expect(
+      empty.diagnostics.find(({ code }) => code === 'MAP_BORDER_QUALITY_UNAVAILABLE'),
+    ).toMatchObject({ details: { reason: 'MAP_BORDER_QUALITY_SCOPE_EMPTY' } });
+  });
+
   it('rejects the quality flag where it cannot apply', () => {
+    expect(
+      mapInspectRequestSchema.safeParse({ workspaceId: 'test', qualityScope: { owners: ['AAA'] } })
+        .success,
+    ).toBe(false);
     expect(
       mapInspectRequestSchema.safeParse({ workspaceId: 'test', quality: true, lookupOnly: true })
         .success,

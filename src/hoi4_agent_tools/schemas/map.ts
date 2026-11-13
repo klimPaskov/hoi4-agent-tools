@@ -889,6 +889,27 @@ const borderTargetsSchema = z
   .describe(
     'Override the targets (enrichment 1.6; straightness 0.12 for country borders and 0.25 for state borders).',
   );
+/** Where a border quality measurement looks (owners and stateIds add provinces; box cuts). */
+export const borderQualityScopeSchema = z
+  .object({
+    owners: z.array(tagSchema).max(512).optional(),
+    stateIds: z.array(stateId).max(10_000).optional(),
+    box: z
+      .object({
+        x: z.number().int().min(0).max(16_383),
+        y: z.number().int().min(0).max(16_383),
+        width: z.number().int().min(1).max(16_384),
+        height: z.number().int().min(1).max(16_384),
+      })
+      .strict()
+      .optional()
+      .describe('A pixel box of the province map, origin top-left.'),
+  })
+  .strict()
+  .describe(
+    'Measure only these borders: those of the provinces of the states the owners own or of the stateIds (either adds provinces), cut to the box. A border counts when either side is inside, so a country is measured against its neighbours. MAP_BORDER_QUALITY_SCOPE_EMPTY when nothing is selected.',
+  );
+
 const territoryCountrySchema = z
   .object({
     tag: tagSchema,
@@ -981,6 +1002,11 @@ const territoryOperation = z
     remapReferences: z.enum(['refuse', 'override']).optional(),
     borderQuality: borderQualityModeSchema.default('report'),
     borderTargets: borderTargetsSchema.optional(),
+    borderQualityScope: borderQualityScopeSchema
+      .optional()
+      .describe(
+        'Measure and judge the border quality only here: the owners, stateIds and box of the region being redrawn.',
+      ),
   })
   .strict();
 const repartitionOperation = z
@@ -1000,6 +1026,11 @@ const repartitionOperation = z
     remapReferences: z.enum(['refuse', 'override']).optional(),
     borderQuality: borderQualityModeSchema.default('report'),
     borderTargets: borderTargetsSchema.optional(),
+    borderQualityScope: borderQualityScopeSchema
+      .optional()
+      .describe(
+        'Measure and judge the border quality only here: the owners, stateIds and box of the region being redrawn.',
+      ),
   })
   .strict();
 
