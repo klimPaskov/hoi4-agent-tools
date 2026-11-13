@@ -108,6 +108,8 @@ export interface AssignTerritoryOperation extends MapOperationBase {
   remapReferences?: 'refuse' | 'override';
   borderQuality?: BorderQualityMode;
   borderTargets?: BorderTargetsInput;
+  /** Refuse instead of warning when a tag gets land that no country_tags file declares. */
+  strictTags?: boolean;
 }
 
 export interface RepartitionStatesOperation extends MapOperationBase {
@@ -786,10 +788,19 @@ export function* applyAssignTerritory(
       ...(operation.borderTargets === undefined ? {} : { targets: operation.borderTargets }),
     },
   };
+  const undefinedTags = undefinedTagDiagnostics(index, operation);
+  if (operation.strictTags === true && undefinedTags.length > 0)
+    refuse(
+      'MAP_TERRITORY_TAG_UNDEFINED',
+      `strictTags: no common/country_tags file declares ${undefinedTags
+        .map(({ details }) => String(details?.tag))
+        .join(', ')}; declare the countries first or leave strictTags off`,
+      { tags: undefinedTags.map(({ details }) => details?.tag) },
+    );
   return {
     diagnostics: [
       ...territoryDiagnostics(operation, world, report, result, model),
-      ...undefinedTagDiagnostics(index, operation),
+      ...undefinedTags,
     ],
     report,
   };

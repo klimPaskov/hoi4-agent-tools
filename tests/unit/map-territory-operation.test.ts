@@ -425,6 +425,9 @@ describe('assign_territory with undefined tags', () => {
         tag: ['AAA', 'BBB', 'CCC', 'DDD', 'AAA'][position],
       })).slice(0, 4),
     });
+    const strict = assign({ strictTags: true });
+    expect(strict.blockers.map(({ code }) => code)).toEqual(['MAP_TERRITORY_TAG_UNDEFINED']);
+    expect(strict.changes).toEqual([]);
     expect(declared.diagnostics.some(({ code }) => code === 'MAP_TERRITORY_TAG_UNDEFINED')).toBe(
       false,
     );
