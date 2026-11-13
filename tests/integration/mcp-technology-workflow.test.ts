@@ -63,7 +63,12 @@ describe('MCP Technology Tree Viewer workflow', () => {
       path.join(copiedWorkspace, 'common', 'technologies', 'synthetic_technologies_01.txt'),
       'utf8',
     );
-    const calls: Array<{ name: string; arguments: Record<string, unknown>; code: string }> = [
+    const calls: Array<{
+      name: string;
+      arguments: Record<string, unknown>;
+      code: string;
+      data?: Record<string, unknown>;
+    }> = [
       { name: 'hoi4.tech_inspect', arguments: { mode: 'scan' }, code: 'TECH_INSPECTED' },
       {
         name: 'hoi4.tech_inspect',
@@ -84,6 +89,14 @@ describe('MCP Technology Tree Viewer workflow', () => {
         name: 'hoi4.tech_inspect',
         arguments: { mode: 'explain', technologyId: 'synthetic_tech_0003' },
         code: 'TECH_INSPECTED',
+        // The answer names its neighbours inline (the fixture chain is 0002 -> 0003 -> 0004).
+        data: {
+          technology: {
+            id: 'synthetic_tech_0003',
+            prerequisites: ['synthetic_tech_0002'],
+            leadsTo: ['synthetic_tech_0004'],
+          },
+        },
       },
       {
         name: 'hoi4.tech_inspect',
@@ -142,6 +155,7 @@ describe('MCP Technology Tree Viewer workflow', () => {
       );
       expect(response.status, `${call.name}: ${JSON.stringify(response)}`).toBe('ok');
       expect(response.code, call.name).toBe(call.code);
+      if (call.data !== undefined) expect(response.data, call.name).toMatchObject(call.data);
       expect(response.changedFiles, call.name).toEqual([]);
       expect(response.proposedFiles, call.name).toEqual([]);
       expect(response.artifacts.length, call.name).toBeGreaterThan(0);
