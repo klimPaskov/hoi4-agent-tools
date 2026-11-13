@@ -804,14 +804,11 @@ describe('Agent Nudger map model and operations', () => {
       scannedState(`history/states/${index + 1}-STATE.txt`, index + 1, 0, 'mod'),
     );
     expect(() =>
-      MapWorkspaceIndex.build(
-        files,
-        {
-          map: ['map'],
-          states: ['history/states'],
-          localisation: ['localisation', 'localisation_synced'],
-        },
-      ),
+      MapWorkspaceIndex.build(files, {
+        map: ['map'],
+        states: ['history/states'],
+        localisation: ['localisation', 'localisation_synced'],
+      }),
     ).toThrowError(expect.objectContaining({ code: 'MAP_MODEL_BUDGET_BLOCKED' }));
   });
 
