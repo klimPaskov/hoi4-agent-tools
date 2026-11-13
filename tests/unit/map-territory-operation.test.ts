@@ -408,3 +408,86 @@ describe('assign_territory by state', () => {
     ).toBe(true);
   });
 });
+
+describe('assign_territory culture lines and fixed realms', () => {
+  // ZIN map lane, 13 November 2026 (rev3): peoples' pockets were shared across culture lines, and a
+  // realm whose land was settled still grew into its neighbours' free bands.
+  // Peoples by place: the countries of the same seeds grown with another jitter seed.
+  let peopleOf: Map<number, string> | undefined;
+  const peoples = () => {
+    if (peopleOf === undefined) {
+      const other = assign({ seed: 11, countries: countries(() => ({})) });
+      peopleOf = new Map(other.finalIndex.states.map(({ id, owner }) => [id, owner ?? 'none']));
+    }
+    return peopleOf;
+  };
+  const groups = () =>
+    Object.fromEntries(
+      index.states.flatMap((state) =>
+        state.provinces.map((province) => [String(province), peoples().get(state.id)!] as const),
+      ),
+    );
+  const sameGroupShare = (result: MapOperationPlan) => {
+    let same = 0;
+    let owned = 0;
+    for (const [position, seed] of seeds.entries())
+      for (const state of result.finalIndex.states)
+        if (state.owner === TAGS[position]) {
+          owned += 1;
+          if (peoples().get(state.id) === peoples().get(seed)) same += 1;
+        }
+    return same / owned;
+  };
+
+  it('never crosses a hard culture line and weighs a soft one', () => {
+    const rules = { connectedMainland: false, islandPolicy: 'unowned' };
+    const hard = assign({ groups: groups(), groupHard: true, rules, seed: 5 });
+    expect(hard.blockers).toEqual([]);
+    expect(sameGroupShare(hard)).toBe(1);
+    // A soft line is a cost like a ridge: it moves borders but balancing can still cross it.
+    const changed = (a: MapOperationPlan, b: MapOperationPlan) =>
+      a.finalIndex.states.filter(
+        ({ id, owner }) => b.finalIndex.statesById.get(id)?.owner !== owner,
+      ).length;
+    const free = assign({ rules, seed: 5 });
+    const soft = assign({ groups: groups(), groupPenalty: 100, rules, seed: 5 });
+    expect(changed(free, soft)).toBeGreaterThan(0);
+    expect(sameGroupShare(soft)).toBeGreaterThanOrEqual(sameGroupShare(free));
+  });
+
+  it('keeps a fixed country to exactly its forced land', () => {
+    const own = index.states
+      .filter(({ id }) => id !== seeds[0] && Math.abs(id - seeds[0]!) <= 3)
+      .map(({ id }) => id);
+    const result = assign({
+      countries: countries((position) =>
+        position === 0 ? { forced: { stateIds: own }, fixed: true, weight: 50 } : {},
+      ),
+    });
+    expect(result.blockers).toEqual([]);
+    const held = result.finalIndex.states
+      .filter(({ owner }) => owner === TAGS[0])
+      .map(({ id }) => id)
+      .sort((a, b) => a - b);
+    expect(held).toEqual([seeds[0]!, ...own].sort((a, b) => a - b));
+  });
+
+  it('refuses groups of unknown provinces', () => {
+    const result = assign({ groups: { '999999': 'elves' } });
+    expect(result.blockers.map(({ code }) => code)).toEqual(['MAP_TERRITORY_PROVINCE_UNKNOWN']);
+  });
+});
+
+describe('assign_territory seeds in water', () => {
+  it('names the nearest land province', () => {
+    const sea = index.definitions.find(({ type }) => type === 'sea')!.id;
+    const result = assign({
+      countries: countries((position) => (position === 0 ? { seeds: [{ province: sea }] } : {})),
+    });
+    expect(result.blockers[0]).toMatchObject({ code: 'MAP_TERRITORY_SEED_IN_WATER' });
+    expect(result.blockers[0]!.message).toMatch(/nearest land province is \d+/u);
+    const nearest = (result.blockers[0]!.details as { nearestLandProvince: number })
+      .nearestLandProvince;
+    expect(index.definitionsById.get(nearest)?.type).toBe('land');
+  });
+});
