@@ -235,6 +235,42 @@ A 13.1 million pixel map takes about 1.5 seconds and 100 MB of additional memory
 
 The `border-quality` overlay is added to any base layer (state is the natural choice): state borders are green where they follow a feature and orange where they do not, and the worst artificial run of each layer is drawn two pixels wide (province white, state red, region yellow, country magenta). It works with `tile` and `area`, and scans the river and terrain bitmaps for that render only.
 
+## Natural lands
+
+`hoi4.map_inspect` with `lands: true` cuts the land provinces into natural lands: the pieces the ground suggests, such as river valleys, ranges, forests and coastal basins. It is a full inspection, offline and deterministic, and reads `provinces.bmp`, the definitions (the terrain column of `definition.csv` classes each province) and, when present and the size of the province map, `heightmap.bmp` and `rivers.bmp`. A bitmap that is absent or of another size is skipped and listed in `data.lands.skippedInputs`.
+
+A line runs between two neighbouring land provinces when their border:
+
+- follows a **major river**: at least `riverShare` (0.4) of its pixel edges touch a `rivers.bmp` pixel with a width index from `riverMajorIndex` (6) to 11 on either side;
+- is a **crest**: the mean heightmap value along its pixels, minus the mean of the higher province, is at least `crestExcess` (3.5);
+- separates two **terrain classes**: forest (`forest`, `jungle`), upland (`hills`, `mountain`), marsh, desert, and open ground (every other category, so plains, urban and farmland are one class). `terrainClasses` classes a mod's own categories, for example `{ "elder_wood": "forest" }`.
+
+Provinces of one class that no line separates form a piece. Every piece that is not upland is cut into drainage basins: each province drains to its lowest neighbour in the piece (by mean height), and provinces on a coast or a lake shore are sinks, as is a province with no lower neighbour. Basins smaller than `minBasinProvinces` (default `minProvinces`) merge over their lowest pass, the lowest mean border height they share with another basin of the piece. With `maxBasinProvinces`, a larger basin is split at branch points of its drainage tree: the largest tributary that fits is cut off, then the rest, as long as both parts keep `minBasinProvinces`. Upland pieces are ranges and are not drained; a crest between two upland provinces does not cut a range unless `splitRangesAtCrests` is true. Last, lands smaller than `minProvinces` (6) merge into the neighbour across their weakest line, smallest first. The strength of a line is the length-weighted mean of its borders (river and crest 1, terrain 0.5, divide 0.2); ties go to the longer line, then to the land with the smaller id.
+
+| Field of a land      | Meaning                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                 | `L` and the smallest province id of the land, stable for the same map and options.                                                                                                        |
+| `kind`               | The majority class: `range` (upland), `forest`, `marsh`, `desert`, or open ground as `basin` (with a heightmap) or `plains` (without one).                                                |
+| `provinces`          | Province ids, ascending.                                                                                                                                                                  |
+| `terrain`            | Share of provinces per terrain category.                                                                                                                                                  |
+| `coast`, `lakeShore` | Whether the land touches the sea, and a lake.                                                                                                                                             |
+| `meanHeight`         | Pixel mean of the heightmap, null without one.                                                                                                                                            |
+| `lines`              | Per neighbouring land: the shared `length` in pixel edges and how much of it is `river`, `crest`, `terrain` or `divide` (none of these). A border can count as river and terrain at once. |
+
+```json
+{
+  "workspaceId": "my-mod",
+  "lands": true,
+  "landOptions": { "minProvinces": 6, "minBasinProvinces": 10, "maxBasinProvinces": 40 }
+}
+```
+
+`data.lands` holds the count, the count per kind, the inputs used, the number of lands still below `minProvinces` (islands with no land neighbour) and the first 50 lands (`id`, `kind`, province count, `coast`). The artifact `map-natural-lands.<revision>.json` holds every land with its provinces, terrain shares and lines, and the options used. `MAP_NATURAL_LANDS_UNAVAILABLE` (warning) means the map has no province raster. The schema refuses `landOptions` without `lands`, `lands` with `lookupOnly` or a rendered view, and options out of range (`maxBasinProvinces` must be at least twice `minBasinProvinces`).
+
+`assign_territory` takes the same lands: `landIds` in `forced`, `blocked`, `cores`, `claims` and `unowned`, and `{ "land": "L120" }` as a seed (the province of the land nearest its centre). The operation's `landOptions` cut the lands, so pass the options of the inspection that listed the ids; an id those options do not produce is refused with `MAP_NATURAL_LAND_UNKNOWN`.
+
+Not covered yet: the ranges of a geography model are not read (ranges come from hills and mountain provinces only), an upland province is not moved to the side it drains to, and closed basins (rings) and their spill heights are not reported.
+
 ## Catalog consistency
 
 Validation reads the active `common/terrain/*.txt` categories and `map/continent.txt` (or the continent file `default.map` names) along with the map files.
@@ -398,16 +434,16 @@ Nothing is lost or duplicated: for any split, merge or move, the sums of manpowe
 }
 ```
 
-| Field of a country      | Meaning                                                                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1).                                                                             |
-| `seeds`                 | `{ state }`, `{ province }` or a pixel `{ x, y }` of the province map; the first is the capital. A seed in the sea is refused.                         |
-| `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds }`: land the country always or never owns. `regionIds` are strategic regions.                                      |
-| `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                          |
-| `overlord`, `mergeInto` | A subject is grown inside its overlord's territory. `mergeInto` relabels the finished territory to another listed country and keeps its tag as a core. |
-| `cores`, `claims`       | Extra states the country holds a core on or claims.                                                                                                    |
+| Field of a country      | Meaning                                                                                                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tag`, `weight`         | Three capital letters or digits, and the relative target size (default 1).                                                                                            |
+| `seeds`                 | `{ state }`, `{ province }`, a pixel `{ x, y }` of the province map or a natural land `{ land }`; the first is the capital. A seed in the sea is refused.             |
+| `forced`, `blocked`     | `{ stateIds, provinceIds, regionIds, landIds }`: land the country always or never owns. `regionIds` are strategic regions, `landIds` [natural lands](#natural-lands). |
+| `regions`               | Strategic regions the country prefers to grow in (a step into another country's preferred region costs more).                                                         |
+| `overlord`, `mergeInto` | A subject is grown inside its overlord's territory. `mergeInto` relabels the finished territory to another listed country and keeps its tag as a core.                |
+| `cores`, `claims`       | Extra states the country holds a core on or claims.                                                                                                                   |
 
-Top-level fields: `unit` (`state`, the default, assigns whole states; `province` assigns provinces and regroups the states a border cuts), `scope` (`stateIds`, `regionIds`, `owners`: only these states take part), `unowned` (land nobody owns), `barriers` (`natural` or `none`, which grows on distance alone), `rules.connectedMainland` (default true) and `rules.islandPolicy` (`one-owner`, `nearest` or `unowned` for landmasses without a seed), `smoothing` (`passes` 0 to 20, `maxShareChange`), `shareTolerance` (default 0.15), `seed` (the same seed gives the same borders), `ownership` (`controller`: `owner` or `keep`; `cores`: `keep`, `owner` or `add-owner`; `claims`: `keep` or `clear`; `unowned`: `clear` or `keep`), `stateSize` (province unit: fragments below `min` provinces join a neighbour of the same owner and strategic region), `remapReferences` (`refuse` or `override`, as for `merge_states`), `borderQuality` and `borderTargets`.
+Top-level fields: `unit` (`state`, the default, assigns whole states; `province` assigns provinces and regroups the states a border cuts), `scope` (`stateIds`, `regionIds`, `owners`: only these states take part), `unowned` (land nobody owns), `barriers` (`natural` or `none`, which grows on distance alone), `rules.connectedMainland` (default true) and `rules.islandPolicy` (`one-owner`, `nearest` or `unowned` for landmasses without a seed), `smoothing` (`passes` 0 to 20, `maxShareChange`), `shareTolerance` (default 0.15), `seed` (the same seed gives the same borders), `ownership` (`controller`: `owner` or `keep`; `cores`: `keep`, `owner` or `add-owner`; `claims`: `keep` or `clear`; `unowned`: `clear` or `keep`), `stateSize` (province unit: fragments below `min` provinces join a neighbour of the same owner and strategic region), `remapReferences` (`refuse` or `override`, as for `merge_states`), `borderQuality`, `borderTargets`, and `landOptions` (the thresholds of the [natural lands](#natural-lands) that `landIds` and `{ land }` seeds name).
 
 How it works: a multi-source shortest-path growth from the seeds over the province or state graph, where a step costs the distance between centres times `1 + 6 * barrier` (the barrier is the strength of the rivers, slopes, lake shores and terrain changes along the shared border, measured by the metric of [Border naturalness](#border-naturalness)); country multipliers are corrected until sizes are within the tolerance of their targets; a country cut apart on its capital's landmass is joined by a corridor; and a local search moves boundary atoms when that shortens the artificial border without disconnecting the donor or leaving the size tolerance. Targets follow the weights, corrected for what the land allows (a country alone on an island owns the island).
 

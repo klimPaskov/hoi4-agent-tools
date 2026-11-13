@@ -5,6 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod/v4';
 import type { CoreEngine } from '../../core/engine.js';
 import { mapInspectRequestSchema, mapRewriteRequestSchema } from '../../schemas/map-requests.js';
+import { NATURAL_LAND_KINDS, NATURAL_LANDS_INLINE_LIMIT } from '../../map/natural-lands.js';
 import type { ServerContext } from '../server/base-tools.js';
 import {
   allocationEvidenceSchema,
@@ -113,6 +114,32 @@ const borderQualitySummarySchema = z
     layers: z.array(borderLayerSummarySchema).max(8),
   })
   .strict();
+const naturalLandKindSchema = z.enum(NATURAL_LAND_KINDS);
+const naturalLandsSummarySchema = z
+  .object({
+    count: nonNegativeIntegerSchema,
+    landProvinces: nonNegativeIntegerSchema,
+    counts: z.record(naturalLandKindSchema, nonNegativeIntegerSchema),
+    inputs: z.object({ heights: z.boolean(), rivers: z.boolean() }).strict(),
+    skippedInputs: z
+      .array(z.object({ input: z.string().max(32), reason: z.string().max(256) }).strict())
+      .max(8),
+    undersized: nonNegativeIntegerSchema,
+    lands: z
+      .array(
+        z
+          .object({
+            id: z.string().max(16),
+            kind: naturalLandKindSchema,
+            provinces: nonNegativeIntegerSchema,
+            coast: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(NATURAL_LANDS_INLINE_LIMIT),
+    truncated: z.boolean(),
+  })
+  .strict();
 const mapWorkspaceInspectDataSchema = z
   .object({
     revision: sha256Schema,
@@ -168,6 +195,7 @@ const mapWorkspaceInspectDataSchema = z
       .strict()
       .optional(),
     quality: borderQualitySummarySchema.optional(),
+    lands: naturalLandsSummarySchema.optional(),
   })
   .strict();
 const mapRenderDataSchema = z

@@ -10,6 +10,12 @@ import {
 import { borderQualityInputFromIndex } from './border-quality-input.js';
 import type { MapWorkspaceIndex, StateRecord } from './model.js';
 import {
+  naturalLandsInputFromIndex,
+  naturalLandsSteps,
+  type NaturalLandsOptions,
+  type NaturalLandsResult,
+} from './natural-lands.js';
+import {
   cloneState,
   commitState,
   currentIndex,
@@ -44,13 +50,16 @@ import {
  * edits (and, where a border cuts a state, a regrouping of provinces into states).
  */
 
-export type TerritoryRef = { state: number } | { province: number } | { x: number; y: number };
+export type TerritoryRef =
+  { state: number } | { province: number } | { x: number; y: number } | { land: string };
 
 export interface TerritorySelection {
   stateIds?: number[];
   provinceIds?: number[];
   /** Strategic region ids: every state (or province) whose region is one of these. */
   regionIds?: number[];
+  /** Natural land ids, cut with the operation's `landOptions`. */
+  landIds?: string[];
 }
 
 export type BorderQualityMode = 'off' | 'report' | 'enforce';
@@ -107,6 +116,8 @@ export interface AssignTerritoryOperation extends MapOperationBase {
   remapReferences?: 'refuse' | 'override';
   borderQuality?: BorderQualityMode;
   borderTargets?: BorderTargetsInput;
+  /** Thresholds of the natural lands that `landIds` and `{ land }` seeds name. */
+  landOptions?: Omit<NaturalLandsOptions, 'signal'>;
 }
 
 export interface RepartitionStatesOperation extends MapOperationBase {
@@ -233,6 +244,8 @@ export interface TerritoryWorld {
   table: BorderEdgeTable;
   graph: TerritoryProvinceGraph;
   skipped: { input: string; reason: string }[];
+  /** Natural lands, when the request names any. */
+  lands?: NaturalLandsResult;
 }
 
 function refuse(code: string, message: string, details: Record<string, unknown> = {}): never {
@@ -428,6 +441,32 @@ function resolveRef(
     return resolveProvince(world, model, province, label);
   }
   if ('province' in ref) return resolveProvince(world, model, ref.province, label);
+  if ('land' in ref) {
+    const provinces = landMembers(world, ref.land, label);
+    // The province nearest the land's centre, lowest id on a tie.
+    const { sumX, sumY, size } = world.graph;
+    let totalX = 0;
+    let totalY = 0;
+    let pixels = 0;
+    for (const province of provinces) {
+      totalX += sumX[province]!;
+      totalY += sumY[province]!;
+      pixels += size[province]!;
+    }
+    const centreX = totalX / Math.max(1, pixels);
+    const centreY = totalY / Math.max(1, pixels);
+    let best = provinces[0]!;
+    let bestDistance = Infinity;
+    for (const province of provinces) {
+      const n = Math.max(1, size[province]!);
+      const distance = (sumX[province]! / n - centreX) ** 2 + (sumY[province]! / n - centreY) ** 2;
+      if (distance < bestDistance) {
+        best = province;
+        bestDistance = distance;
+      }
+    }
+    return resolveProvince(world, model, best, `${label} in land ${ref.land}`);
+  }
   const raster = world.index.raster!;
   if (ref.x < 0 || ref.y < 0 || ref.x >= raster.width || ref.y >= raster.height)
     refuse(
@@ -437,6 +476,35 @@ function resolveRef(
     );
   const province = raster.provinceIds[ref.y * raster.width + ref.x]!;
   return resolveProvince(world, model, province, `${label} at (${ref.x}, ${ref.y})`);
+}
+
+/** The provinces of a natural land the request names. */
+function landMembers(world: TerritoryWorld, land: string, label: string): readonly number[] {
+  const found = world.lands?.lands.find(({ id }) => id === land);
+  if (found === undefined)
+    refuse(
+      'MAP_NATURAL_LAND_UNKNOWN',
+      `${label}: natural land ${land} does not exist with these landOptions; list the lands with hoi4.map_inspect lands: true and the same options`,
+      { landId: land },
+    );
+  return found.provinces;
+}
+
+/** Whether the operation names any natural land, so the lands must be cut. */
+function namesLands(operation: AssignTerritoryOperation): boolean {
+  const selections = [
+    operation.unowned,
+    ...operation.countries.flatMap((country) => [
+      country.forced,
+      country.blocked,
+      country.cores,
+      country.claims,
+    ]),
+  ];
+  return (
+    selections.some((selection) => (selection?.landIds?.length ?? 0) > 0) ||
+    operation.countries.some((country) => country.seeds.some((seed) => 'land' in seed))
+  );
 }
 
 function resolveSelection(
@@ -465,6 +533,12 @@ function resolveSelection(
   for (const province of selection.provinceIds ?? []) {
     atoms.add(resolveProvince(world, model, province, label));
   }
+  // A land's provinces outside the scope or without a state are left out, as a state's are.
+  for (const land of selection.landIds ?? [])
+    for (const province of landMembers(world, land, label)) {
+      const atom = model.atoms.atomOfProvince[province]!;
+      if (atom >= 0) atoms.add(atom);
+    }
   if (selection.regionIds !== undefined) {
     const wanted = new Set(selection.regionIds);
     for (const region of wanted)
@@ -632,6 +706,11 @@ export function* applyAssignTerritory(
     refuse('MAP_TERRITORY_STATE_SIZE_INVALID', 'stateSize.max must not be below stateSize.min');
   const index = currentIndex(base, changes);
   const world = yield* buildTerritoryWorld(index, signal);
+  if (namesLands(operation))
+    world.lands = yield* naturalLandsSteps(naturalLandsInputFromIndex(index).input, {
+      ...(operation.landOptions ?? {}),
+      ...(signal === undefined ? {} : { signal }),
+    });
   const model = buildAtomModel(world, unit, operation.scope);
   const atoms = model.atoms;
   const policy = ownershipPolicy(operation.ownership);

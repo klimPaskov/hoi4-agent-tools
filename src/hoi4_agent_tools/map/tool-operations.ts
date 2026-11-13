@@ -38,6 +38,12 @@ import {
   type BorderQualitySummary,
 } from './border-quality-input.js';
 import {
+  naturalLandsFromIndex,
+  summarizeNaturalLands,
+  type NaturalLandsResult,
+  type NaturalLandsSummary,
+} from './natural-lands.js';
+import {
   buildMapCatalog,
   lookupMapCoordinate,
   searchMapCatalog,
@@ -994,7 +1000,7 @@ export async function inspectMap(
     context.principal,
     context.signal,
     input.references,
-    input.quality,
+    input.quality || input.lands,
   );
   const sharedRevision = snapshot.revision;
   let borderQuality: { report: BorderQualityReport; summary: BorderQualitySummary } | undefined;
@@ -1019,6 +1025,37 @@ export async function inspectMap(
         severity: 'warning',
         category: 'map',
         message: `Border naturalness could not be measured: ${error.message}`,
+        details: { reason: error.code, ...error.details },
+      });
+    }
+  }
+  let naturalLands: { result: NaturalLandsResult; summary: NaturalLandsSummary } | undefined;
+  if (input.lands) {
+    await context.progress(1, 3, 'Cutting the land into natural lands');
+    try {
+      const computed = await naturalLandsFromIndex(snapshot.index, {
+        ...(input.landOptions ?? {}),
+        ...(context.signal === undefined ? {} : { signal: context.signal }),
+      });
+      naturalLands = {
+        result: computed.result,
+        summary: summarizeNaturalLands(computed.result, computed.skipped),
+      };
+    } catch (error) {
+      if (
+        !(error instanceof ServiceError) ||
+        !(
+          error.code === 'MAP_NATURAL_LANDS_RASTER_MISSING' ||
+          error.code === 'MAP_NATURAL_LANDS_INPUT_INVALID' ||
+          error.code === 'MAP_BORDER_QUALITY_RASTER_MISSING'
+        )
+      )
+        throw error;
+      qualityDiagnostics.push({
+        code: 'MAP_NATURAL_LANDS_UNAVAILABLE',
+        severity: 'warning',
+        category: 'map',
+        message: `Natural lands could not be computed: ${error.message}`,
         details: { reason: error.code, ...error.details },
       });
     }
@@ -1125,6 +1162,27 @@ export async function inspectMap(
       },
       description:
         'Border naturalness: alignment with rivers, slopes, lake shores and terrain changes, enrichment over chance, straightness and the worst artificial runs for each border layer',
+    });
+  if (naturalLands !== undefined)
+    artifactWrites.push({
+      name: `map-natural-lands.${snapshot.revision.slice(0, 16)}.json`,
+      mimeType: 'application/json',
+      content: `${canonicalJson({
+        revision: snapshot.revision,
+        ...naturalLands.result,
+        skippedInputs: naturalLands.summary.skippedInputs,
+        sourceHashes: sourceEvidence.complete,
+      })}
+`,
+      provenance: {
+        kind: 'map-natural-lands',
+        toolVersion: PACKAGE_VERSION,
+        schemaVersion: 'map-natural-lands.v1',
+        sourceHashes: sourceEvidence.bounded.sourceHashes,
+        metadata: { sharedRevision, sourceHashInventory: sourceEvidence.bounded.inventory },
+      },
+      description:
+        'Natural lands: every land with its kind, provinces, terrain shares, coast, and the river, crest, terrain and divide lengths of its lines to each neighbouring land',
     });
   if (overviewRendered) {
     const overviewLayer = 'state' as const;
@@ -1240,6 +1298,7 @@ export async function inspectMap(
     missingGeometryProvinceIds: provinceGeometry?.missingGeometryProvinceIds ?? [],
     ...(scriptReferences === undefined ? {} : { scriptReferences }),
     ...(borderQuality === undefined ? {} : { quality: borderQuality.summary }),
+    ...(naturalLands === undefined ? {} : { lands: naturalLands.summary }),
   });
   result.code = 'MAP_INSPECTED';
   setInlineFilesScanned(
