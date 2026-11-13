@@ -709,6 +709,12 @@ describe('MCP coding-agent workflows', () => {
         coordinateMatchCount: 1,
         overviewRendered: false,
         lookupOnly: true,
+        // The matches are named inline, not only counted.
+        matches: [
+          expect.objectContaining({ id: expect.any(Number), name: expect.any(String) }),
+          expect.anything(),
+        ],
+        coordinateMatches: [{ provinceId: expect.any(Number) }],
       },
     });
     expect(lookup.artifacts).toHaveLength(1);
