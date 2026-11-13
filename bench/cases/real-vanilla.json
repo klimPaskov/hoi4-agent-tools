@@ -211,7 +211,9 @@
       "tool": "hoi4.probability_inspect",
       "arguments": {
         "path": "common/national_focus/germany.txt",
-        "candidatePool": ["GER_remilitarize_the_rhineland"],
+        "candidatePool": [
+          "GER_remilitarize_the_rhineland"
+        ],
         "scenarioSet": [
           {
             "actor": "GER",
@@ -330,7 +332,9 @@
       "title": "Vanilla event files raise no validation errors",
       "evidence": "Vanilla event files load in 1.19.4.1.",
       "tool": "hoi4.script_validate",
-      "files": ["events/*.txt"],
+      "files": [
+        "events/*.txt"
+      ],
       "limit": 120,
       "arguments": {
         "path": "{path}",
@@ -351,8 +355,12 @@
       "title": "Vanilla decision files raise no validation errors",
       "evidence": "Vanilla decision files load in 1.19.4.1.",
       "tool": "hoi4.script_validate",
-      "files": ["common/decisions/*.txt"],
-      "exclude": ["common/decisions/_documentation.md"],
+      "files": [
+        "common/decisions/*.txt"
+      ],
+      "exclude": [
+        "common/decisions/_documentation.md"
+      ],
       "limit": 80,
       "arguments": {
         "path": "{path}",
@@ -373,7 +381,9 @@
       "title": "Vanilla focus files raise no validation errors",
       "evidence": "Vanilla national focus files load in 1.19.4.1.",
       "tool": "hoi4.script_validate",
-      "files": ["common/national_focus/*.txt"],
+      "files": [
+        "common/national_focus/*.txt"
+      ],
       "limit": 60,
       "arguments": {
         "path": "{path}",
@@ -464,7 +474,9 @@
       "expect": [
         {
           "path": "data.key.definitions[*].language",
-          "equals": ["russian"]
+          "equals": [
+            "russian"
+          ]
         },
         {
           "path": "data.key.missingLanguages",
@@ -802,6 +814,23 @@
         {
           "path": "data.findings[*].status",
           "excludes": "error"
+        }
+      ]
+    },
+    {
+      "id": "vanilla.map.full-inspect",
+      "surface": "map",
+      "corpus": "vanilla",
+      "title": "A full map inspection validates the vanilla map and finds Brandenburg",
+      "evidence": "history/states/64-Brandenburg.txt.",
+      "tool": "hoi4.map_inspect",
+      "arguments": {
+        "query": "Brandenburg"
+      },
+      "expect": [
+        {
+          "path": "**",
+          "includes": 64
         }
       ]
     }
