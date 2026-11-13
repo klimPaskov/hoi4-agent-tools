@@ -179,7 +179,22 @@ export function focusImportOptions(snapshot: ScanSnapshot): FocusImportOptions {
   };
 }
 
+const referenceCatalogs = new WeakMap<ScanSnapshot, FocusReferenceCatalog>();
+
+/**
+ * The identifiers of every decision, event, idea and helper in the game and the mod. A scan lists
+ * tens of thousands, and one call asks for the catalog once per imported file, so it is built once
+ * per scan.
+ */
 export function referenceCatalog(snapshot: ScanSnapshot): FocusReferenceCatalog {
+  const cached = referenceCatalogs.get(snapshot);
+  if (cached !== undefined) return cached;
+  const built = buildReferenceCatalog(snapshot);
+  referenceCatalogs.set(snapshot, built);
+  return built;
+}
+
+function buildReferenceCatalog(snapshot: ScanSnapshot): FocusReferenceCatalog {
   const identifiers = (kind: Parameters<ScanSnapshot['index']['findAll']>[0]): string[] =>
     [
       ...new Set(
