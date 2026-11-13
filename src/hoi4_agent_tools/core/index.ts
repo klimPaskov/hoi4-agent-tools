@@ -436,9 +436,13 @@ export class SymbolIndex {
     }
     const ordered = engineIndexOrder(files);
     if (answers.length !== ordered.length)
-      throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine index-files answered out of shape', {
-        reason: 'invalid_output',
-      });
+      throw new ServiceError(
+        'ENGINE_UNAVAILABLE',
+        'hoi4-engine index-files answered out of shape',
+        {
+          reason: 'invalid_output',
+        },
+      );
     for (const [position, file] of ordered.entries()) {
       const answer = answers[position]!;
       index.files.set(file.displayPath, file);
