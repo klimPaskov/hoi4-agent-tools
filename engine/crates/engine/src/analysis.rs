@@ -395,16 +395,32 @@ impl Analysis {
                     out.push(f);
                     continue;
                 }
-                tally.unresolved += 1;
-                let code = format!("REF_MISSING_{}", r.kind.as_str().to_ascii_uppercase());
-                let mut f = self.finding(
-                    &code,
-                    Severity::Error,
-                    format!("{} `{}` (from `{}`) is not defined in any loaded file", r.kind.as_str().replace('_', " "), r.name, r.via),
-                    p.file,
-                    r.start,
-                    r.end,
-                );
+                // The game shows a localisation key nothing defines as written, so a missing key is
+                // a warning (as in the localisation audit), and a scripted-localisation text such
+                // as `localization_key = "Planes"` is often meant that way and is information.
+                let loc_key = r.kind == Kind::LocalisationKey;
+                let literal = loc_key
+                    && (r.name.contains(' ')
+                        || self.workspace.files[p.file].relative.to_ascii_lowercase().starts_with("common/scripted_localisation/"));
+                if literal {
+                    tally.unknown += 1;
+                } else {
+                    tally.unresolved += 1;
+                }
+                let code = if literal { "LOC_SCRIPTED_TEXT_LITERAL".to_string() } else { format!("REF_MISSING_{}", r.kind.as_str().to_ascii_uppercase()) };
+                let severity = if literal {
+                    Severity::Info
+                } else if loc_key {
+                    Severity::Warning
+                } else {
+                    Severity::Error
+                };
+                let message = if literal {
+                    format!("no language defines `{}`, so the game shows it as written", r.name)
+                } else {
+                    format!("{} `{}` (from `{}`) is not defined in any loaded file", r.kind.as_str().replace('_', " "), r.name, r.via)
+                };
+                let mut f = self.finding(&code, severity, message, p.file, r.start, r.end);
                 f.subject = Some(r.name.clone());
                 f.context = r.context.clone();
                 f.suggestion = self.index.suggest(r.kind, &r.name);
