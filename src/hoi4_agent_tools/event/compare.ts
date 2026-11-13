@@ -107,6 +107,47 @@ function semanticStateAccess(access: EventStateAccess): unknown {
   };
 }
 
+/**
+ * Edges and state accesses share their condition objects: every effect inside an option
+ * carries the option's guards. Hashing each condition once and naming it by its digest keeps
+ * the hash a function of the same semantic content while the bytes hashed stay proportional
+ * to the distinct conditions. On Chaos Redux the inline form hashed about 3 GB per graph.
+ */
+const conditionDigests = new WeakMap<EventCondition, string>();
+
+function conditionDigest(condition: EventCondition): string {
+  let digest = conditionDigests.get(condition);
+  if (digest === undefined) {
+    digest = hashCanonical(semanticCondition(condition));
+    conditionDigests.set(condition, digest);
+  }
+  return digest;
+}
+
+function edgeHash(edge: EventGraphEdge): string {
+  return hashCanonical({
+    ...edge,
+    location: { path: edge.location.path },
+    conditions: edge.conditions.map(conditionDigest),
+    provenance: edge.provenance.map(({ role, location }) => ({
+      role,
+      location: { path: location.path },
+    })),
+    weight:
+      edge.weight === undefined
+        ? undefined
+        : { ...edge.weight, modifiers: edge.weight.modifiers.map(conditionDigest) },
+  });
+}
+
+function stateAccessHash(access: EventStateAccess): string {
+  return hashCanonical({
+    ...access,
+    location: { path: access.location.path },
+    conditions: access.conditions.map(conditionDigest),
+  });
+}
+
 function semanticIssue(issue: EventIssue): unknown {
   return {
     ...issue,
@@ -138,12 +179,12 @@ function semanticCollectionHash<T>(
   domain: string,
   values: readonly T[],
   identity: (value: T) => string,
-  semantic: (value: T) => unknown,
+  hash: (value: T) => string,
   signal?: AbortSignal,
 ): string {
   const records = values.map((value, index) => {
     if ((index & 255) === 0) signal?.throwIfAborted();
-    return { id: identity(value), hash: hashCanonical(semantic(value)) };
+    return { id: identity(value), hash: hash(value) };
   });
   records.sort(
     (left, right) => compareCodeUnits(left.id, right.id) || compareCodeUnits(left.hash, right.hash),
@@ -167,29 +208,41 @@ function semanticCollectionHash<T>(
 function graphHash(graph: EventGraphSnapshot, signal?: AbortSignal): string {
   signal?.throwIfAborted();
   return hashCanonical({
-    schema: 'event-semantic-graph-hash.v2',
-    nodes: semanticCollectionHash('nodes', graph.nodes, ({ id }) => id, semanticNode, signal),
-    edges: semanticCollectionHash('edges', graph.edges, ({ id }) => id, semanticEdge, signal),
+    schema: 'event-semantic-graph-hash.v3',
+    nodes: semanticCollectionHash(
+      'nodes',
+      graph.nodes,
+      ({ id }) => id,
+      (node) => hashCanonical(semanticNode(node)),
+      signal,
+    ),
+    edges: semanticCollectionHash('edges', graph.edges, ({ id }) => id, edgeHash, signal),
     stateAccesses: semanticCollectionHash(
       'state-accesses',
       graph.stateAccesses,
       ({ id }) => id,
-      semanticStateAccess,
+      stateAccessHash,
       signal,
     ),
     stateLinks: semanticCollectionHash(
       'state-links',
       graph.stateLinks,
       ({ id }) => id,
-      (value) => value,
+      (value) => hashCanonical(value),
       signal,
     ),
-    issues: semanticCollectionHash('issues', graph.issues, issueId, semanticIssue, signal),
+    issues: semanticCollectionHash(
+      'issues',
+      graph.issues,
+      issueId,
+      (issue) => hashCanonical(semanticIssue(issue)),
+      signal,
+    ),
     unresolved: semanticCollectionHash(
       'unresolved',
       graph.unresolved,
       ({ id }) => id,
-      semanticUnresolved,
+      (item) => hashCanonical(semanticUnresolved(item)),
       signal,
     ),
   });
@@ -321,10 +374,7 @@ export function compareEventGraphs(
     .filter((id) => {
       check();
       const current = afterEdges.get(id);
-      return (
-        current !== undefined &&
-        hashCanonical(semanticEdge(beforeEdges.get(id)!)) !== hashCanonical(semanticEdge(current))
-      );
+      return current !== undefined && edgeHash(beforeEdges.get(id)!) !== edgeHash(current);
     })
     .sort(compareCodeUnits);
   const addedStateAccessIds = [...afterStateAccesses.keys()]
@@ -345,8 +395,7 @@ export function compareEventGraphs(
       const current = afterStateAccesses.get(id);
       return (
         current !== undefined &&
-        hashCanonical(semanticStateAccess(beforeStateAccesses.get(id)!)) !==
-          hashCanonical(semanticStateAccess(current))
+        stateAccessHash(beforeStateAccesses.get(id)!) !== stateAccessHash(current)
       );
     })
     .sort(compareCodeUnits);
