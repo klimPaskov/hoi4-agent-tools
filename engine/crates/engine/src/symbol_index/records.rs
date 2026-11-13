@@ -14,7 +14,7 @@
 //! collisions and unresolved references) while the parsing and walking happen here.
 
 use rayon::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
@@ -59,105 +59,124 @@ pub struct Request {
     pub files: Vec<FileRequest>,
 }
 
-/// `createSourceLineIndex` and `positionAt` over UTF-16 offsets, reached from byte offsets.
+/// A TypeScript `SourceLocation` without its path and symbol: start line, column and UTF-16
+/// offset, then end line, column and offset. The server adds the path and the symbol.
+pub type Loc = [u32; 6];
+
+/// `createSourceLineIndex` and `positionAt`: positions in UTF-16 code units, reached from byte
+/// offsets through a table of line starts.
 struct Positions<'t> {
     text: &'t str,
-    /// UTF-16 offset of every byte offset, for text that is not ASCII.
-    utf16: Option<Vec<u32>>,
-    /// UTF-16 offset of each line's start.
-    line_starts: Vec<u32>,
+    ascii: bool,
+    /// Byte offset and UTF-16 offset of each line's start.
+    starts: Vec<(u32, u32)>,
     /// UTF-16 length of the text.
-    length: u32,
+    units: u32,
 }
 
 impl<'t> Positions<'t> {
     fn new(text: &'t str) -> Self {
-        let utf16 = (!text.is_ascii()).then(|| {
-            let mut map = Vec::with_capacity(text.len() + 1);
-            let mut unit = 0u32;
-            for c in text.chars() {
-                for _ in 0..c.len_utf8() {
-                    map.push(unit);
+        let ascii = text.is_ascii();
+        let bytes = text.as_bytes();
+        let mut starts = vec![(0u32, 0u32)];
+        let mut unit = 0u32;
+        let mut i = 0usize;
+        while i < bytes.len() {
+            let b = bytes[i];
+            if b == b'\r' {
+                if bytes.get(i + 1) == Some(&b'\n') {
+                    i += 1;
+                    unit += 1;
                 }
+                i += 1;
+                unit += 1;
+                starts.push((i as u32, unit));
+            } else if b == b'\n' {
+                i += 1;
+                unit += 1;
+                starts.push((i as u32, unit));
+            } else if b < 0x80 || ascii {
+                i += 1;
+                unit += 1;
+            } else {
+                let c = text[i..].chars().next().unwrap_or(' ');
+                i += c.len_utf8();
                 unit += c.len_utf16() as u32;
             }
-            map.push(unit);
-            map
-        });
-        let bytes = text.as_bytes();
-        let mut line_starts = vec![0u32];
-        let mut i = 0;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'\r' => {
-                    if bytes.get(i + 1) == Some(&b'\n') {
-                        i += 1;
-                    }
-                    line_starts.push((i + 1) as u32);
-                }
-                b'\n' => line_starts.push((i + 1) as u32),
-                _ => {}
-            }
-            i += 1;
         }
-        let mut positions = Positions { text, utf16, line_starts, length: 0 };
-        positions.length = positions.unit(text.len() as u32);
-        for start in &mut positions.line_starts {
-            *start = match &positions.utf16 {
-                Some(map) => map[*start as usize],
-                None => *start,
-            };
-        }
-        positions
+        Positions { text, ascii, starts, units: unit }
     }
 
+    fn line_of_byte(&self, byte: u32) -> usize {
+        self.starts.partition_point(|&(start, _)| start <= byte).max(1) - 1
+    }
+
+    /// UTF-16 offset of a byte offset (a character boundary).
     fn unit(&self, byte: u32) -> u32 {
-        match &self.utf16 {
-            Some(map) => map[(byte as usize).min(map.len() - 1)],
-            None => byte.min(self.text.len() as u32),
+        let byte = byte.min(self.text.len() as u32);
+        let line = self.line_of_byte(byte);
+        let (start_byte, start_unit) = self.starts[line];
+        start_unit + self.units_between(start_byte, byte)
+    }
+
+    fn units_between(&self, from: u32, to: u32) -> u32 {
+        if self.ascii {
+            return to - from;
         }
-    }
-
-    /// The UTF-16 code unit at a UTF-16 offset, as far as `positionAt` looks at it (an ASCII
-    /// line break or something else).
-    fn is_unit(&self, offset: u32, wanted: u8) -> bool {
-        if offset >= self.length {
-            return false;
+        let slice = &self.text.as_bytes()[from as usize..to as usize];
+        if slice.is_ascii() {
+            return to - from;
         }
-        let byte = match &self.utf16 {
-            Some(map) => match map.binary_search(&offset) {
-                Ok(found) => {
-                    // The first byte of the character that starts at this unit.
-                    let mut first = found;
-                    while first > 0 && map[first - 1] == offset {
-                        first -= 1;
-                    }
-                    first
-                }
-                Err(_) => return false,
-            },
-            None => offset as usize,
-        };
-        self.text.as_bytes().get(byte) == Some(&wanted)
+        self.text[from as usize..to as usize].encode_utf16().count() as u32
     }
 
-    /// `positionAt(lineIndex, offset)` for a UTF-16 offset.
-    fn position(&self, offset: u32) -> Value {
-        let bounded = offset.min(self.length);
-        let line = self.line_starts.partition_point(|&start| start <= bounded).max(1) - 1;
-        if bounded < self.length && bounded > 0 && self.is_unit(bounded, b'\n') && self.is_unit(bounded - 1, b'\r') {
-            return json!({ "line": line + 2, "column": 1, "offset": offset });
+    /// `positionAt` of a byte offset: line, column and UTF-16 offset.
+    fn position(&self, byte: u32) -> [u32; 3] {
+        let bytes = self.text.as_bytes();
+        let byte = byte.min(bytes.len() as u32);
+        let line = self.line_of_byte(byte);
+        let (start_byte, start_unit) = self.starts[line];
+        let column = self.units_between(start_byte, byte);
+        let unit = start_unit + column;
+        let at = byte as usize;
+        if at < bytes.len() && at > 0 && bytes[at] == b'\n' && bytes[at - 1] == b'\r' {
+            return [line as u32 + 2, 1, unit];
         }
-        json!({ "line": line + 1, "column": bounded - self.line_starts[line] + 1, "offset": offset })
+        [line as u32 + 1, column + 1, unit]
     }
 
-    /// `locationFor` (and `nodeLocation` with a symbol) of a span in bytes.
-    fn location(&self, path: &str, start: u32, end: u32, symbol: Option<&str>) -> Value {
-        self.location_units(path, self.unit(start), self.unit(end), symbol)
+    /// `positionAt` of a UTF-16 offset.
+    fn position_of_unit(&self, unit: u32) -> [u32; 3] {
+        let bounded = unit.min(self.units);
+        let line = self.starts.partition_point(|&(_, start)| start <= bounded).max(1) - 1;
+        let (start_byte, start_unit) = self.starts[line];
+        // The byte this unit starts, if it starts a character, for the CR LF rule.
+        let mut byte = start_byte as usize;
+        let mut at = start_unit;
+        for c in self.text[start_byte as usize..].chars() {
+            if at >= bounded {
+                break;
+            }
+            at += c.len_utf16() as u32;
+            byte += c.len_utf8();
+        }
+        let bytes = self.text.as_bytes();
+        if at == bounded && byte < bytes.len() && byte > 0 && bytes[byte] == b'\n' && bytes[byte - 1] == b'\r' {
+            return [line as u32 + 2, 1, unit];
+        }
+        [line as u32 + 1, bounded - start_unit + 1, unit]
     }
 
-    fn location_units(&self, path: &str, start: u32, end: u32, symbol: Option<&str>) -> Value {
-        let mut location = json!({ "path": path, "start": self.position(start), "end": self.position(end) });
+    fn loc(&self, start: u32, end: u32) -> Loc {
+        let [a, b, c] = self.position(start);
+        let [d, e, f] = self.position(end);
+        [a, b, c, d, e, f]
+    }
+
+    /// A full TypeScript `SourceLocation`, for diagnostics.
+    fn location(path: &str, start: [u32; 3], end: [u32; 3], symbol: Option<&str>) -> Value {
+        let position = |p: [u32; 3]| json!({ "line": p[0], "column": p[1], "offset": p[2] });
+        let mut location = json!({ "path": path, "start": position(start), "end": position(end) });
         if let Some(symbol) = symbol {
             location["symbol"] = Value::from(symbol);
         }
@@ -173,15 +192,12 @@ impl<'t> Positions<'t> {
         out.insert("message".into(), diagnostic.message.clone().into());
         if let Some(at) = diagnostic.at {
             let location = match at {
-                At::Bytes(start, end) => self.location(path, start, end, None),
-                At::Utf16(start, end) => self.location_units(path, start, end, None),
-                At::Fixed(line, column, offset) => {
-                    let position = json!({ "line": line, "column": column, "offset": offset });
-                    json!({ "path": path, "start": position, "end": position })
-                }
+                At::Bytes(start, end) => Self::location(path, self.position(start), self.position(end), None),
+                At::Utf16(start, end) => Self::location(path, self.position_of_unit(start), self.position_of_unit(end), None),
+                At::Fixed(line, column, offset) => Self::location(path, [line, column, offset], [line, column, offset], None),
                 At::FixedAtByte(line, column, byte) => {
-                    let position = json!({ "line": line, "column": column, "offset": self.unit(byte) });
-                    json!({ "path": path, "start": position, "end": position })
+                    let offset = self.unit(byte);
+                    Self::location(path, [line, column, offset], [line, column, offset], None)
                 }
             };
             out.insert("location".into(), location);
@@ -193,30 +209,21 @@ impl<'t> Positions<'t> {
     }
 }
 
+/// `[kind, id, location or null, metadata]`.
+type SymbolOut = (&'static str, String, Option<Loc>, Map<String, Value>);
+/// `[kind, from, toKind, to, location]`.
+type ReferenceOut = (std::borrow::Cow<'static, str>, String, &'static str, String, Loc);
+
 /// What indexing one file gives the server.
-#[derive(Default)]
+#[derive(Default, Serialize)]
 struct FileAnswer {
-    /// `[kind, id, location or null, metadata]`.
-    symbols: Vec<Value>,
-    /// `[kind, from, toKind, to, location]`.
-    references: Vec<Value>,
+    symbols: Vec<SymbolOut>,
+    references: Vec<ReferenceOut>,
     diagnostics: Vec<Value>,
     /// The ceiling diagnostics that make the index skip the file.
     skip: Option<Vec<Value>>,
     /// A table or nesting ceiling made the index incomplete.
     incomplete: bool,
-}
-
-impl FileAnswer {
-    fn into_json(self) -> Value {
-        json!({
-            "symbols": self.symbols,
-            "references": self.references,
-            "diagnostics": self.diagnostics,
-            "skip": self.skip,
-            "incomplete": self.incomplete,
-        })
-    }
 }
 
 fn index_diagnostic(code: &str, message: &str, details: Value) -> Value {
@@ -250,8 +257,11 @@ fn table_answer(file: &FileRequest, bytes: &[u8], kind: TableKind) -> FileAnswer
                     }
                 }
                 metadata.insert("line".into(), line.into());
-                symbols.push(json!([SymbolKind::Province.as_str(), parts[0], null, metadata]));
-                symbols.push(json!([SymbolKind::ProvinceColor.as_str(), color, null, { "provinceId": parts[0], "line": line }]));
+                symbols.push((SymbolKind::Province.as_str(), parts[0].to_string(), None, metadata));
+                let mut colour = Map::new();
+                colour.insert("provinceId".into(), parts[0].into());
+                colour.insert("line".into(), line.into());
+                symbols.push((SymbolKind::ProvinceColor.as_str(), color, None, colour));
             }
         }
         TableKind::Adjacencies => {
@@ -266,7 +276,7 @@ fn table_answer(file: &FileRequest, bytes: &[u8], kind: TableKind) -> FileAnswer
                         metadata.insert("through".into(), (*through).into());
                     }
                     metadata.insert("line".into(), line.into());
-                    symbols.push(json!([SymbolKind::Adjacency.as_str(), format!("{}:{}:{}:{line}", parts[0], parts[1], parts[2]), null, metadata]));
+                    symbols.push((SymbolKind::Adjacency.as_str(), format!("{}:{}:{}:{line}", parts[0], parts[1], parts[2]), None, metadata));
                 }
             }
         }
@@ -285,7 +295,10 @@ fn table_answer(file: &FileRequest, bytes: &[u8], kind: TableKind) -> FileAnswer
                 values.push(field);
             }
             if values.len() >= 2 && values.iter().all(|v| digits(v)) {
-                symbols.push(json!([kind.as_str(), format!("{line}:{}", values.join(":")), null, { "values": values, "line": line }]));
+                let mut metadata = Map::new();
+                metadata.insert("values".into(), values.iter().map(|v| Value::from(*v)).collect());
+                metadata.insert("line".into(), line.into());
+                symbols.push((kind.as_str(), format!("{line}:{}", values.join(":")), None, metadata));
             }
         }
     });
@@ -330,13 +343,13 @@ fn index_one(file: &FileRequest, bytes: &[u8]) -> FileAnswer {
             .entries
             .into_iter()
             .map(|entry| {
-                let location = positions.location(display, entry.start, entry.end, None);
-                json!([
-                    SymbolKind::Localisation.as_str(),
-                    format!("{}:{}", entry.language, entry.key),
-                    location,
-                    { "language": entry.language, "key": entry.key, "value": entry.value }
-                ])
+                let location = positions.loc(entry.start, entry.end);
+                let id = format!("{}:{}", entry.language, entry.key);
+                let mut metadata = Map::new();
+                metadata.insert("language".into(), entry.language.into());
+                metadata.insert("key".into(), entry.key.into());
+                metadata.insert("value".into(), entry.value.into());
+                (SymbolKind::Localisation.as_str(), id, Some(location), metadata)
             })
             .collect();
         return answer;
@@ -382,25 +395,21 @@ fn index_one(file: &FileRequest, bytes: &[u8]) -> FileAnswer {
                 "severity": "blocker",
                 "category": "syntax",
                 "message": format!("Source index traversal exceeds the supported nesting limit of {}", super::reader::SOURCE_MAX_NESTING),
-                "location": positions.location(display, start, end, None),
+                "location": Positions::location(display, positions.position(start), positions.position(end), None),
                 "details": { "limit": super::reader::SOURCE_MAX_NESTING },
             }));
         }
     }
     answer.symbols = walked
         .symbols
-        .iter()
-        .zip(&walked.rich)
-        .map(|((kind, id, _, _), rich)| json!([kind.as_str(), id, positions.location(display, rich.start, rich.end, Some(id)), rich.metadata]))
+        .into_iter()
+        .zip(walked.rich)
+        .map(|((kind, id, _, _), rich)| (kind.as_str(), id, Some(positions.loc(rich.start, rich.end)), rich.metadata))
         .collect();
     if file.shadowed {
         answer.diagnostics.clear();
     } else {
-        answer.references = walked
-            .references
-            .iter()
-            .map(|r| json!([r.kind, r.from, r.to_kind.as_str(), r.to, positions.location(display, r.offset, r.end, Some(&r.from))]))
-            .collect();
+        answer.references = walked.references.into_iter().map(|r| (r.kind, r.from, r.to_kind.as_str(), r.to, positions.loc(r.offset, r.end))).collect();
     }
     answer
 }
@@ -416,25 +425,27 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Index the files of a request. `payload` holds the bytes of the files given by `payload`.
-pub fn index_files(request: &Request, payload: &[u8]) -> Result<Value, Refusal> {
+/// Index the files of a request and answer `hoi4-index-files/1` as JSON bytes. `payload` holds
+/// the bytes of the files given by `payload`.
+pub fn index_files(request: &Request, payload: &[u8]) -> Result<Vec<u8>, Refusal> {
     if request.schema != REQUEST_SCHEMA {
         return Err(Refusal { code: "invalid_request", message: format!("schema must be {REQUEST_SCHEMA}") });
     }
-    let answers: Result<Vec<Value>, Refusal> = request
+    let answers: Result<Vec<Vec<u8>>, Refusal> = request
         .files
         .par_iter()
         .map(|file| {
             let owned_bytes;
             let bytes: &[u8] = match (&file.path, file.payload) {
                 (Some(path), None) => {
-                    owned_bytes =
-                        std::fs::read(path).map_err(|e| Refusal { code: "SCAN_READ_FAILED", message: format!("cannot read {}: {e}", file.display_path) })?;
-                    if let Some(expected) = &file.sha256
-                        && hex(&Sha256::digest(&owned_bytes)) != *expected
-                    {
-                        return Err(Refusal { code: "SOURCE_REVISION_STALE", message: format!("{} changed after the scan read it", file.display_path) });
+                    // A file that is gone or no longer holds the bytes the server read (an edit
+                    // since, or a proposed rewrite of it) is answered with `retry`: the server
+                    // sends those files' bytes in a second request.
+                    let Ok(read) = std::fs::read(path) else { return Ok(br#"{"retry":true}"#.to_vec()) };
+                    if file.sha256.as_ref().is_some_and(|expected| hex(&Sha256::digest(&read)) != *expected) {
+                        return Ok(br#"{"retry":true}"#.to_vec());
                     }
+                    owned_bytes = read;
                     &owned_bytes
                 }
                 (None, Some((offset, length))) => payload
@@ -444,14 +455,25 @@ pub fn index_files(request: &Request, payload: &[u8]) -> Result<Value, Refusal> 
                     return Err(Refusal { code: "invalid_request", message: format!("{} needs exactly one of path and payload", file.display_path) });
                 }
             };
-            Ok(index_one(file, bytes).into_json())
+            serde_json::to_vec(&index_one(file, bytes)).map_err(|e| Refusal { code: "internal", message: e.to_string() })
         })
         .collect();
-    Ok(json!({ "schema": RESPONSE_SCHEMA, "files": answers? }))
+    let answers = answers?;
+    let mut out = Vec::with_capacity(answers.iter().map(Vec::len).sum::<usize>() + answers.len() + 64);
+    out.extend_from_slice(format!(r#"{{"schema":"{RESPONSE_SCHEMA}","files":["#).as_bytes());
+    for (i, answer) in answers.iter().enumerate() {
+        if i > 0 {
+            out.push(b',');
+        }
+        out.extend_from_slice(answer);
+    }
+    out.extend_from_slice(b"]}");
+    Ok(out)
 }
 
-/// Answer one framed request (`hoi4-engine index-files` and the `index.files` op of `serve`).
-pub fn respond(request: &Value, payload: &[u8]) -> Result<Value, Value> {
+/// Answer one framed request (`hoi4-engine index-files` and the `index.files` op of `serve`) with
+/// the JSON bytes of `hoi4-index-files/1`.
+pub fn respond(request: &Value, payload: &[u8]) -> Result<Vec<u8>, Value> {
     let mut request = request.clone();
     if let Some(fields) = request.as_object_mut() {
         for framing in ["id", "op", "payload"] {
@@ -480,62 +502,86 @@ mod tests {
         }
     }
 
+    fn answer(file: &FileRequest, text: &[u8]) -> Value {
+        serde_json::to_value(index_one(file, text)).unwrap()
+    }
+
     #[test]
     fn positions_count_utf16_units_and_crlf_as_one_break() {
         let positions = Positions::new("a\r\nü𝄞=x\nz");
-        // The byte after the CR LF is line 2; `𝄞` is two UTF-16 units.
-        assert_eq!(positions.position(3), json!({ "line": 2, "column": 1, "offset": 3 }));
         // Bytes: a, CR, LF, ü (2), 𝄞 (4), then `=` at byte 9, which is unit 6.
+        assert_eq!(positions.position(3), [2, 1, 3]);
         assert_eq!(positions.unit(9), 6);
+        assert_eq!(positions.position(9), [2, 4, 6]);
         // An offset on the LF of a CR LF reports the next line, as `positionAt` does.
-        assert_eq!(positions.position(2), json!({ "line": 2, "column": 1, "offset": 2 }));
-        assert_eq!(positions.position(9), json!({ "line": 3, "column": 1, "offset": 9 }));
+        assert_eq!(positions.position(2), [2, 1, 2]);
+        assert_eq!(positions.position(12), [3, 1, 9]);
+        assert_eq!(positions.position_of_unit(6), [2, 4, 6]);
+        assert_eq!(positions.position_of_unit(2), [2, 1, 2]);
     }
 
     #[test]
     fn a_script_file_gives_located_symbols_metadata_and_references() {
         let text = "focus_tree = {\n\tid = t\n\tfocus = {\n\t\tid = f\n\t\tx = 3\n\t\tprerequisite = { focus = g }\n\t}\n}\n";
-        let answer = index_one(&file("common/national_focus/t.txt"), text.as_bytes()).into_json();
-        let symbols = answer["symbols"].as_array().unwrap();
-        assert_eq!(symbols[0][0], "focus_tree");
-        assert_eq!(symbols[0][2]["start"], json!({ "line": 1, "column": 1, "offset": 0 }));
-        assert_eq!(symbols[0][2]["symbol"], "t");
-        assert_eq!(symbols[1][3], json!({ "x": 3 }));
-        let references = answer["references"].as_array().unwrap();
-        assert_eq!(references[0][0], "focus_prerequisite");
-        assert_eq!(references[0][2], "focus");
-        assert_eq!(references[0][3], "g");
-        assert_eq!(references[0][4]["symbol"], "f");
+        let answer = answer(&file("common/national_focus/t.txt"), text.as_bytes());
+        assert_eq!(answer["symbols"][0][0], "focus_tree");
+        assert_eq!(answer["symbols"][0][2], json!([1, 1, 0, 8, 2, text.len() - 1]));
+        assert_eq!(answer["symbols"][1][3], json!({ "x": 3 }));
+        let reference = &answer["references"][0];
+        assert_eq!(
+            (reference[0].as_str(), reference[1].as_str(), reference[2].as_str(), reference[3].as_str()),
+            (Some("focus_prerequisite"), Some("f"), Some("focus"), Some("g"))
+        );
     }
 
     #[test]
     fn owned_parser_diagnostics_are_reported_and_shadowed_files_drop_them() {
         let text = "a = { b = 1\n";
-        let answer = index_one(&file("common/ideas/a.txt"), text.as_bytes()).into_json();
-        assert_eq!(answer["diagnostics"][0]["code"], "SOURCE_UNCLOSED_BLOCK");
-        assert_eq!(answer["diagnostics"][0]["location"]["start"]["offset"], 4);
+        let found = answer(&file("common/ideas/a.txt"), text.as_bytes());
+        assert_eq!(found["diagnostics"][0]["code"], "SOURCE_UNCLOSED_BLOCK");
+        assert_eq!(found["diagnostics"][0]["location"]["start"]["offset"], 4);
         let mut shadowed = file("common/ideas/a.txt");
         shadowed.shadowed = true;
-        assert_eq!(index_one(&shadowed, text.as_bytes()).into_json()["diagnostics"], json!([]));
+        assert_eq!(answer(&shadowed, text.as_bytes())["diagnostics"], json!([]));
         let mut game = file("common/ideas/a.txt");
         game.owned = false;
-        assert_eq!(index_one(&game, text.as_bytes()).into_json()["diagnostics"], json!([]));
+        assert_eq!(answer(&game, text.as_bytes())["diagnostics"], json!([]));
     }
 
     #[test]
     fn localisation_values_and_tables_carry_their_metadata() {
         let text = "\u{feff}l_english:\n k:0 \"a \\\"b\\\"\\n\"\n";
-        let answer = index_one(&file("localisation/english/a_l_english.yml"), text.as_bytes()).into_json();
-        assert_eq!(answer["symbols"][0][1], "l_english:k");
-        assert_eq!(answer["symbols"][0][3], json!({ "language": "l_english", "key": "k", "value": "a \"b\"\n" }));
-        assert!(answer["symbols"][0][2].get("symbol").is_none());
+        let found = answer(&file("localisation/english/a_l_english.yml"), text.as_bytes());
+        assert_eq!(found["symbols"][0][1], "l_english:k");
+        assert_eq!(found["symbols"][0][3], json!({ "language": "l_english", "key": "k", "value": "a \"b\"\n" }));
         let mut definitions = file("map/definition.csv");
         definitions.definition_file = true;
-        let table = index_one(&definitions, b"1;10;20;30;land;false;plains;1\n").into_json();
+        let table = answer(&definitions, b"1;10;20;30;land;false;plains;1\n");
         assert_eq!(
             table["symbols"][0][3],
             json!({ "color": "10,20,30", "type": "land", "coastal": "false", "terrain": "plains", "continent": "1", "line": 1 })
         );
         assert_eq!(table["symbols"][1], json!(["province_color", "10,20,30", null, { "provinceId": "1", "line": 1 }]));
+    }
+
+    #[test]
+    fn a_request_answers_every_file_in_order_and_retries_changed_ones() {
+        let directory = std::env::temp_dir().join(format!("hoi4-index-files-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let on_disk = directory.join("a.txt");
+        std::fs::write(&on_disk, "ideas = { x = { a = { } } }\n").unwrap();
+        let mut disk = file("common/ideas/a.txt");
+        disk.path = Some(on_disk.to_string_lossy().into_owned());
+        let mut changed = disk.clone();
+        changed.sha256 = Some("0".repeat(64));
+        let mut inline = file("common/ideas/b.txt");
+        inline.payload = Some((0, 5));
+        let request = Request { schema: REQUEST_SCHEMA.into(), files: vec![disk, changed, inline] };
+        let out: Value = serde_json::from_slice(&index_files(&request, b"b = 1").unwrap()).unwrap();
+        std::fs::remove_dir_all(&directory).unwrap();
+        assert_eq!(out["schema"], RESPONSE_SCHEMA);
+        assert_eq!(out["files"][0]["symbols"][0][1], "a");
+        assert_eq!(out["files"][1], json!({ "retry": true }));
+        assert_eq!(out["files"][2]["symbols"], json!([]));
     }
 }

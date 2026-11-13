@@ -1,4 +1,5 @@
 import { compareCodeUnits } from './canonical.js';
+import { ServiceError } from './result.js';
 import path from 'node:path';
 import type { Diagnostic, SourceLocation } from './diagnostics.js';
 import { sortDiagnostics } from './diagnostics.js';
@@ -111,6 +112,35 @@ function firstScalarInsensitiveNode(block: BlockNode, ...keys: string[]): Scalar
       return assignment.value;
   }
   return undefined;
+}
+
+/** One file's records from `hoi4-engine index-files` (ADR 0085). */
+export interface EngineIndexFileAnswer {
+  symbols: Array<[SymbolKind, string, SourceLocation | null, Record<string, unknown>]>;
+  references: Array<[string, string, SymbolKind, string, SourceLocation]>;
+  diagnostics: Diagnostic[];
+  /** The ceiling diagnostics that make the index skip the file. */
+  skip: Diagnostic[] | null;
+  /** A table or nesting ceiling made the index incomplete. */
+  incomplete: boolean;
+}
+
+/** A file the index asks the engine about, with what the engine needs to know of it. */
+export interface EngineIndexFileRequest {
+  file: ScannedFile;
+  /** A `definition.csv` the index selected. */
+  definitionFile: boolean;
+  /** The workspace owns it, so its parser diagnostics are reported. */
+  owned: boolean;
+  /** A higher layer replaces it, so its diagnostics and references are dropped. */
+  shadowed: boolean;
+}
+
+/** The order the index visits files in: by load order, then by display path. */
+export function engineIndexOrder(files: readonly ScannedFile[]): ScannedFile[] {
+  return [...files].sort(
+    (a, b) => a.loadOrder - b.loadOrder || compareCodeUnits(a.displayPath, b.displayPath),
+  );
 }
 
 export interface IndexSkippedSource {
@@ -388,6 +418,64 @@ export class SymbolIndex {
   #referenceLimitReported = false;
   #diagnosticsTruncated = false;
   readonly #indexTableBlocked = new Set<string>();
+
+  /**
+   * The index of `files` from the shared engine's per-file records (`hoi4-engine index-files`,
+   * ADR 0085): the engine parses and walks each file, and this side keeps the bookkeeping across
+   * files exactly as `build` does. `answers` lines up with `engineIndexOrder(files)`.
+   */
+  static fromEngine(
+    files: readonly ScannedFile[],
+    answers: readonly EngineIndexFileAnswer[],
+  ): SymbolIndex {
+    const index = new SymbolIndex();
+    const definitionSelection = selectedDefinitionFiles(files);
+    for (const displayPath of definitionSelection.selected) index.#definitionFiles.add(displayPath);
+    for (const skipped of definitionSelection.skipped) {
+      index.recordSkippedSource(skipped.file, skipped.diagnostics);
+    }
+    const ordered = engineIndexOrder(files);
+    if (answers.length !== ordered.length)
+      throw new ServiceError('ENGINE_UNAVAILABLE', 'hoi4-engine index-files answered out of shape', {
+        reason: 'invalid_output',
+      });
+    for (const [position, file] of ordered.entries()) {
+      const answer = answers[position]!;
+      index.files.set(file.displayPath, file);
+      index.#currentFileShadowed = file.shadowedBy !== undefined;
+      if (answer.skip !== null) {
+        index.recordSkippedSource(file, answer.skip);
+        continue;
+      }
+      index.addDiagnostics(answer.diagnostics);
+      for (const [kind, id, location, metadata] of answer.symbols)
+        index.addSymbol({
+          kind,
+          id,
+          path: file.displayPath,
+          rootKind: file.rootKind,
+          loadOrder: file.loadOrder,
+          ...(location === null ? {} : { location }),
+          metadata,
+        });
+      for (const [kind, from, toKind, to, location] of answer.references)
+        index.addReference({ kind, from, toKind, to, path: file.displayPath, location });
+      if (answer.incomplete) index.#complete = false;
+    }
+    index.finalize();
+    return index;
+  }
+
+  /** The files `fromEngine` sends to the engine, in the index's order, with their options. */
+  static engineRequestFiles(files: readonly ScannedFile[]): EngineIndexFileRequest[] {
+    const definitions = selectedDefinitionFiles(files).selected;
+    return engineIndexOrder(files).map((file) => ({
+      file,
+      definitionFile: definitions.has(file.displayPath),
+      owned: isWorkspaceOwnedSource(file),
+      shadowed: file.shadowedBy !== undefined,
+    }));
+  }
 
   static build(
     files: readonly ScannedFile[],

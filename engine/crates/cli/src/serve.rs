@@ -111,7 +111,8 @@ fn handle(request: &Value, payload: &[u8]) -> Response {
         Some("texture.decode") => texture_decode(request, payload),
         Some("focus.render") => focus_render(request),
         Some("index.files") => match hoi4_engine::symbol_index::records::respond(request, payload) {
-            Ok(result) => Response::ok(result),
+            // The answer can be far larger than a header line may be, so it travels as the payload.
+            Ok(result) => Response { result: Ok(json!({ "format": "json" })), payload: result },
             Err(error) => Response { result: Err(error), payload: Vec::new() },
         },
         Some(other) => Response::error("unknown_op", format!("unknown op {other}")),

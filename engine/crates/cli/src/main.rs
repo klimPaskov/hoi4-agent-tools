@@ -658,7 +658,8 @@ fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) 
 
 /// `index-files`: one frame on stdin (a `hoi4-index-files-request/1` JSON line, then the bytes of
 /// the files that exist only in the server's memory, as its `payload` field counts) and one JSON
-/// line on stdout (`hoi4-index-files/1`), as `serve` answers the `index.files` op.
+/// line on stdout (`{"ok":true,"result":<hoi4-index-files/1>}`), as `serve` answers the
+/// `index.files` op.
 fn cmd_index_files(args: &Args) -> Result<ExitCode, String> {
     args.check_known(&[])?;
     let mut input = Vec::new();
@@ -669,17 +670,20 @@ fn cmd_index_files(args: &Args) -> Result<ExitCode, String> {
     if header["payload"].as_u64().unwrap_or(0) != payload.len() as u64 {
         return Err(format!("the header counts {} payload bytes but {} followed", header["payload"], payload.len()));
     }
-    let (line, code) = match hoi4_engine::symbol_index::records::respond(&header, payload) {
-        Ok(result) => (serde_json::json!({ "ok": true, "result": result }), 0),
+    let mut out = std::io::stdout().lock();
+    match hoi4_engine::symbol_index::records::respond(&header, payload) {
+        Ok(result) => {
+            out.write_all(br#"{"ok":true,"result":"#).and_then(|()| out.write_all(&result)).and_then(|()| out.write_all(b"}\n")).map_err(|e| e.to_string())?;
+            Ok(ExitCode::SUCCESS)
+        }
         Err(error) => {
             eprintln!("hoi4-engine: index-files: {}", error["message"].as_str().unwrap_or("invalid request"));
-            (serde_json::json!({ "ok": false, "error": error }), 1)
+            let mut line = serde_json::to_vec(&serde_json::json!({ "ok": false, "error": error })).map_err(|e| e.to_string())?;
+            line.push(b'\n');
+            out.write_all(&line).map_err(|e| e.to_string())?;
+            Ok(ExitCode::from(1))
         }
-    };
-    let mut out = serde_json::to_vec(&line).map_err(|e| e.to_string())?;
-    out.push(b'\n');
-    std::io::stdout().lock().write_all(&out).map_err(|e| e.to_string())?;
-    Ok(ExitCode::from(code))
+    }
 }
 
 fn main() -> ExitCode {
