@@ -147,14 +147,8 @@ impl Diagnostics {
     /// The retained diagnostics whose code is a ceiling (`sourcePartialLimitDiagnostics`), for a
     /// detailed collector.
     pub fn retained_limits(&self) -> Vec<&SourceDiagnostic> {
-        const CODES: [&str; 6] = [
-            "SOURCE_FILE_SIZE_LIMIT",
-            "SOURCE_LINE_LIMIT",
-            "SOURCE_TOKEN_LIMIT",
-            "SOURCE_ENTRY_LIMIT",
-            "SOURCE_NESTING_LIMIT",
-            "SOURCE_DIAGNOSTICS_TRUNCATED",
-        ];
+        const CODES: [&str; 6] =
+            ["SOURCE_FILE_SIZE_LIMIT", "SOURCE_LINE_LIMIT", "SOURCE_TOKEN_LIMIT", "SOURCE_ENTRY_LIMIT", "SOURCE_NESTING_LIMIT", "SOURCE_DIAGNOSTICS_TRUNCATED"];
         self.retained().iter().filter(|d| CODES.contains(&d.code)).collect()
     }
 
@@ -732,7 +726,12 @@ impl<'a> Parser<'_, 'a> {
         let Some(value_token) = self.next() else {
             let name = key.value.clone();
             self.diagnostics.note_with(|| {
-                SourceDiagnostic::syntax("SOURCE_MISSING_VALUE", "error", format!("Assignment {name} is missing a value"), At::Bytes(operator.start, operator.end))
+                SourceDiagnostic::syntax(
+                    "SOURCE_MISSING_VALUE",
+                    "error",
+                    format!("Assignment {name} is missing a value"),
+                    At::Bytes(operator.start, operator.end),
+                )
             });
             return Some(Entry::Scalar(key));
         };

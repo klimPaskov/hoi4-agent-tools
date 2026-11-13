@@ -42,6 +42,7 @@ USAGE:
     hoi4-engine texture   FILE|DIR... [--format text|json] [--max-pixels N]
     hoi4-engine texture   FILE --output OUT.png [--max-pixels N]
     hoi4-engine focus-render [WORKSPACE] --output OUT.png [--request FILE]
+    hoi4-engine index-files
     hoi4-engine serve
     hoi4-engine --version
 
@@ -655,6 +656,32 @@ fn cmd_json_request(args: &Args, name: &str, respond: fn(&str) -> (String, u8)) 
     Ok(ExitCode::from(code))
 }
 
+/// `index-files`: one frame on stdin (a `hoi4-index-files-request/1` JSON line, then the bytes of
+/// the files that exist only in the server's memory, as its `payload` field counts) and one JSON
+/// line on stdout (`hoi4-index-files/1`), as `serve` answers the `index.files` op.
+fn cmd_index_files(args: &Args) -> Result<ExitCode, String> {
+    args.check_known(&[])?;
+    let mut input = Vec::new();
+    std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut input).map_err(|e| format!("cannot read stdin: {e}"))?;
+    let newline = input.iter().position(|byte| *byte == b'\n').unwrap_or(input.len());
+    let header: serde_json::Value = serde_json::from_slice(&input[..newline]).map_err(|e| format!("invalid index-files header: {e}"))?;
+    let payload = input.get(newline + 1..).unwrap_or(&[]);
+    if header["payload"].as_u64().unwrap_or(0) != payload.len() as u64 {
+        return Err(format!("the header counts {} payload bytes but {} followed", header["payload"], payload.len()));
+    }
+    let (line, code) = match hoi4_engine::symbol_index::records::respond(&header, payload) {
+        Ok(result) => (serde_json::json!({ "ok": true, "result": result }), 0),
+        Err(error) => {
+            eprintln!("hoi4-engine: index-files: {}", error["message"].as_str().unwrap_or("invalid request"));
+            (serde_json::json!({ "ok": false, "error": error }), 1)
+        }
+    };
+    let mut out = serde_json::to_vec(&line).map_err(|e| e.to_string())?;
+    out.push(b'\n');
+    std::io::stdout().lock().write_all(&out).map_err(|e| e.to_string())?;
+    Ok(ExitCode::from(code))
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let args = match Args::parse(raw) {
@@ -688,6 +715,7 @@ fn main() -> ExitCode {
         Some("sprites") => cmd_sprites(&args),
         Some("texture") => cmd_texture(&args),
         Some("focus-render") => cmd_focus_render(&args),
+        Some("index-files") => cmd_index_files(&args),
         Some("serve") => args.check_known(&[]).map(|()| ExitCode::from(serve::run())),
         Some("help") | None => {
             print!("{HELP}");

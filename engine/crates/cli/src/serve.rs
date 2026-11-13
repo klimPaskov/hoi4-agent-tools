@@ -105,9 +105,15 @@ fn focus_render(request: &Value) -> Response {
 
 fn handle(request: &Value, payload: &[u8]) -> Response {
     match request["op"].as_str() {
-        Some("hello") => Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render"] })),
+        Some("hello") => {
+            Response::ok(json!({ "engine": hoi4_engine::VERSION, "protocol": PROTOCOL, "ops": ["hello", "texture.decode", "focus.render", "index.files"] }))
+        }
         Some("texture.decode") => texture_decode(request, payload),
         Some("focus.render") => focus_render(request),
+        Some("index.files") => match hoi4_engine::symbol_index::records::respond(request, payload) {
+            Ok(result) => Response::ok(result),
+            Err(error) => Response { result: Err(error), payload: Vec::new() },
+        },
         Some(other) => Response::error("unknown_op", format!("unknown op {other}")),
         None => Response::error("invalid_request", "the request has no op"),
     }
