@@ -28,10 +28,14 @@ const RECOVERY_TTL_SECONDS = 3_600;
 const RECOVERY_MAX_BYTES = TRANSACTION_MAX_JOURNAL_BYTES;
 const RECOVERY_MAX_RECORDS = 128;
 
-export interface ScanSnapshot {
+/** The files of one scan, without the symbol index (`CoreEngine.scanFiles`). */
+export interface FileScanSnapshot {
   workspaceId: string;
   revision: string;
   files: ScannedFile[];
+}
+
+export interface ScanSnapshot extends FileScanSnapshot {
   index: SymbolIndex;
   complete: boolean;
   skippedSourceCount: number;
@@ -62,7 +66,7 @@ export interface CoreEngineServices {
 }
 
 interface ScanFlight {
-  promise: Promise<ScanSnapshot>;
+  promise: Promise<FileScanSnapshot>;
   controller: AbortController;
   waiters: number;
   settled: boolean;
@@ -156,7 +160,7 @@ export class CoreEngine {
   readonly transactions: TransactionManager;
   readonly indexSegments: IndexSegmentCache;
   readonly persistentAnalysisCache: Promise<PersistentAnalysisCache> | undefined;
-  readonly #scanCache = new Map<string, ScanSnapshot>();
+  readonly #scanCache = new Map<string, FileScanSnapshot>();
   readonly #scanFlights = new Map<string, ScanFlight>();
   readonly #scanGenerations = new Map<string, number>();
   readonly #scanAdmissionQueue: ScanAdmissionRequest[] = [];
@@ -294,6 +298,30 @@ export class CoreEngine {
     principal?: string,
     signal?: AbortSignal,
   ): Promise<ScanSnapshot> {
+    return (await this.#scan(workspaceId, options, principal, signal, true)) as ScanSnapshot;
+  }
+
+  /**
+   * The same scan without the symbol index, for callers that read only the files (the map
+   * model parses its own sources). It shares the admission limit and the cache with `scan`,
+   * under its own cache entries, and skips the index build and the persistent analysis cache.
+   */
+  async scanFiles(
+    workspaceId: string,
+    options: Partial<ScanOptions> = {},
+    principal?: string,
+    signal?: AbortSignal,
+  ): Promise<FileScanSnapshot> {
+    return this.#scan(workspaceId, options, principal, signal, false);
+  }
+
+  async #scan(
+    workspaceId: string,
+    options: Partial<ScanOptions>,
+    principal: string | undefined,
+    signal: AbortSignal | undefined,
+    withIndex: boolean,
+  ): Promise<FileScanSnapshot> {
     signal?.throwIfAborted();
     await this.resolver.refreshDescriptors(workspaceId, principal);
     const workspace = this.resolver.get(workspaceId, principal);
@@ -306,11 +334,12 @@ export class CoreEngine {
       rootKinds: [...(options.rootKinds ?? [])].sort(),
       maxFiles: options.maxFiles ?? this.resolver.config().scanMaxFiles,
       maxBytes: options.maxBytes ?? this.resolver.config().scanMaxBytes,
+      ...(withIndex ? {} : { index: false }),
     })}`;
     let flight = this.#scanFlights.get(requestKey);
     if (flight === undefined) {
       const controller = new AbortController();
-      const promise = (async (): Promise<ScanSnapshot> => {
+      const promise = (async (): Promise<FileScanSnapshot> => {
         return this.withScanAdmission(controller.signal, async () => {
           const files = await this.scanner.scan(workspace, {
             patterns,
@@ -349,6 +378,11 @@ export class CoreEngine {
             this.#scanCache.set(cacheKey, cached);
             return cached;
           }
+          if (!withIndex) {
+            const snapshot = { workspaceId, revision, files } satisfies FileScanSnapshot;
+            this.#retainScan(workspaceId, generation, requestKey, cacheKey, snapshot);
+            return snapshot;
+          }
           const persistentAnalysisCache = await this.persistentAnalysisCache;
           const analysisScope = {
             workspaceIdentity: workspace.workspaceIdentity,
@@ -364,9 +398,10 @@ export class CoreEngine {
           );
           // The previous revision of the same request still holds every unchanged file's
           // records, so only edited files are parsed and indexed again.
-          const previous = [...this.#scanCache]
-            .filter(([key]) => key.startsWith(`${requestKey}:`))
-            .at(-1)?.[1].index;
+          const previous = (
+            [...this.#scanCache].filter(([key]) => key.startsWith(`${requestKey}:`)).at(-1)?.[1] as
+              ScanSnapshot | undefined
+          )?.index;
           const index = await SymbolIndex.buildAsync(
             files,
             controller.signal,
@@ -392,38 +427,7 @@ export class CoreEngine {
             diagnostics: index.diagnostics,
             ...(documentedEffects === undefined ? {} : { documentedEffects }),
           } satisfies ScanSnapshot;
-          if ((this.#scanGenerations.get(workspaceId) ?? 0) === generation) {
-            // Replace this request's earlier revision and drop earlier generations; keep the
-            // most recent other requests of this workspace.
-            for (const key of this.#scanCache.keys()) {
-              if (
-                key.startsWith(`${requestKey}:`) ||
-                (key.startsWith(`${workspaceId}:`) &&
-                  !key.startsWith(`${workspaceId}:${generation}:`))
-              )
-                this.#scanCache.delete(key);
-            }
-            this.#scanCache.set(cacheKey, snapshot);
-            const retained = [...this.#scanCache.keys()].filter((key) =>
-              key.startsWith(`${workspaceId}:`),
-            );
-            for (const key of retained.slice(0, -SCAN_CACHE_ENTRIES_PER_WORKSPACE))
-              this.#scanCache.delete(key);
-            // Snapshots hold every file's bytes; keep all of them within twice one scan's limit.
-            const limit = this.resolver.config().scanMaxBytes * 2;
-            const bytes = (cached: ScanSnapshot) =>
-              cached.files.reduce((sum, { size }) => sum + size, 0);
-            let retainedBytes = [...this.#scanCache.values()].reduce(
-              (sum, cached) => sum + bytes(cached),
-              0,
-            );
-            for (const [key, cached] of this.#scanCache) {
-              if (retainedBytes <= limit) break;
-              if (key === cacheKey) continue;
-              this.#scanCache.delete(key);
-              retainedBytes -= bytes(cached);
-            }
-          }
+          this.#retainScan(workspaceId, generation, requestKey, cacheKey, snapshot);
           return snapshot;
         });
       })();
@@ -446,6 +450,43 @@ export class CoreEngine {
       );
     }
     return this.awaitScanFlight(requestKey, flight, signal);
+  }
+
+  #retainScan(
+    workspaceId: string,
+    generation: number,
+    requestKey: string,
+    cacheKey: string,
+    snapshot: FileScanSnapshot,
+  ): void {
+    if ((this.#scanGenerations.get(workspaceId) ?? 0) !== generation) return;
+    // Replace this request's earlier revision and drop earlier generations; keep the most
+    // recent other requests of this workspace.
+    for (const key of this.#scanCache.keys()) {
+      if (
+        key.startsWith(`${requestKey}:`) ||
+        (key.startsWith(`${workspaceId}:`) && !key.startsWith(`${workspaceId}:${generation}:`))
+      )
+        this.#scanCache.delete(key);
+    }
+    this.#scanCache.set(cacheKey, snapshot);
+    const retained = [...this.#scanCache.keys()].filter((key) => key.startsWith(`${workspaceId}:`));
+    for (const key of retained.slice(0, -SCAN_CACHE_ENTRIES_PER_WORKSPACE))
+      this.#scanCache.delete(key);
+    // Snapshots hold every file's bytes; keep all of them within twice one scan's limit.
+    const limit = this.resolver.config().scanMaxBytes * 2;
+    const bytes = (cached: FileScanSnapshot) =>
+      cached.files.reduce((sum, { size }) => sum + size, 0);
+    let retainedBytes = [...this.#scanCache.values()].reduce(
+      (sum, cached) => sum + bytes(cached),
+      0,
+    );
+    for (const [key, cached] of this.#scanCache) {
+      if (retainedBytes <= limit) break;
+      if (key === cacheKey) continue;
+      this.#scanCache.delete(key);
+      retainedBytes -= bytes(cached);
+    }
   }
 
   invalidate(workspaceId: string): void {
@@ -483,10 +524,10 @@ export class CoreEngine {
     requestKey: string,
     flight: ScanFlight,
     signal?: AbortSignal,
-  ): Promise<ScanSnapshot> {
+  ): Promise<FileScanSnapshot> {
     signal?.throwIfAborted();
     flight.waiters += 1;
-    return new Promise<ScanSnapshot>((resolve, reject) => {
+    return new Promise<FileScanSnapshot>((resolve, reject) => {
       let complete = false;
       const finish = (): void => {
         if (complete) return;

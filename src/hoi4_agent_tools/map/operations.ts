@@ -1632,7 +1632,7 @@ export function indexWithProposedChanges(
     if (change.content !== null)
       files.push(syntheticFile(change.relativePath, Buffer.from(change.content), maximumLoadOrder));
   }
-  return MapWorkspaceIndex.build(files, base.sourceRoots, base.sharedIndex.rebuild(files));
+  return MapWorkspaceIndex.build(files, base.sourceRoots);
 }
 
 export function addChange(
