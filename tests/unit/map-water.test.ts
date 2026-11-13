@@ -54,6 +54,50 @@ describe('water alpha and lake heights', () => {
     const distance = landDistanceField(kind, 9, 3);
     expect([...distance.subarray(0, 9)]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
+
+  it('matches a breadth-first reference, and a lower limit keeps every answer past it', () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
+    const reference = (kind: Uint8Array, width: number, height: number): number[] => {
+      const result = Array.from(kind, (value) => (value === 1 ? 0 : 255));
+      let frontier = [...result.keys()].filter((pixel) => result[pixel] === 0);
+      for (let step = 1; step < 255 && frontier.length > 0; step += 1) {
+        const next: number[] = [];
+        for (const pixel of frontier) {
+          const x = pixel % width;
+          const y = Math.floor(pixel / width);
+          for (const [nx, ny] of [
+            [x - 1, y],
+            [x + 1, y],
+            [x, y - 1],
+            [x, y + 1],
+          ] as const) {
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+            const other = ny * width + nx;
+            if (result[other] !== 255 || kind[other] === 1) continue;
+            result[other] = step;
+            next.push(other);
+          }
+        }
+        frontier = next;
+      }
+      return result;
+    };
+    for (const [width, height, landShare] of [
+      [40, 30, 0.02],
+      [64, 17, 0.2],
+      [33, 33, 0],
+    ] as const) {
+      const kind = Uint8Array.from({ length: width * height }, () =>
+        random() < landShare ? 1 : random() < 0.5 ? 0 : 2,
+      );
+      const full = landDistanceField(kind, width, height);
+      expect([...full]).toEqual(reference(kind, width, height));
+      const near = landDistanceField(kind, width, height, 4);
+      for (let pixel = 0; pixel < kind.length; pixel += 1)
+        expect(near[pixel]! > 3).toBe(full[pixel]! > 3);
+    }
+  });
 });
 
 describe('lake normalisation', () => {

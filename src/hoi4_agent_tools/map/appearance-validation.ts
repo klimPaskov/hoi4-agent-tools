@@ -240,7 +240,12 @@ function* validateHeightmap(
   }
   const { width, height, kind } = raster;
   const hasLake = kind.includes(LAKE);
-  const distance = hasLake ? landDistanceField(kind, width, height) : undefined;
+  // Only "farther than the bank allowance" is asked, so the search stops one step past it: a
+  // pixel it does not reach holds the limit, which is past the allowance as before. The full
+  // field (limit 255) flooded every sea pixel of the map.
+  const distance = hasLake
+    ? landDistanceField(kind, width, height, LAKE_BANK_ALLOWANCE_PX + 1)
+    : undefined;
   let lakePixels = 0;
   let landBelow = 0;
   let seaAbove = 0;
