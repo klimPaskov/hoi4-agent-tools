@@ -5684,6 +5684,15 @@ function closeStateIdHoles(
     });
   }
   const remaining = idHoles(currentIndex(base, changes).states.map(({ id }) => id));
+  // A hole this request makes and cannot close (beside a state id it names) crashes the game at
+  // history setup (SIGSEGV on Linux, 14 November 2026), so the write is refused.
+  const unclosed = remaining.filter((id) => !existing.has(id));
+  if (unclosed.length > 0)
+    throw new ServiceError(
+      'MAP_STATE_ID_GAP',
+      `The write would leave state ids ${unclosed.slice(0, 50).join(', ')}${unclosed.length > 50 ? ', ...' : ''} without a state, which crashes the game; name the next free id instead, or renumber the states into the gap in the same request`,
+      { holes: unclosed.slice(0, 500), holeCount: unclosed.length },
+    );
   if (remaining.length > 0)
     diagnostics.push({
       code: 'MAP_STATE_ID_GAP',

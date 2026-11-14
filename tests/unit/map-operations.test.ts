@@ -2264,7 +2264,8 @@ describe('Agent Nudger map model and operations', () => {
         id: 'explicit-state-id',
         kind: 'create_state',
         sourceStateId: 1,
-        stateId: 10,
+        // The next free id: a higher one would leave holes, which crash the game (issue 182).
+        stateId: 6,
         provinceIds: [4],
         name: 'STATE_10',
         localisation: { method: 'existing', language: 'l_english' },
@@ -2273,7 +2274,7 @@ describe('Agent Nudger map model and operations', () => {
     ]);
     expect(explicit.blockers).toEqual([]);
     expect(explicit.allocations[0]).toMatchObject({
-      allocated: 10,
+      allocated: 6,
       strategy: 'explicit-request-after-full-scan',
     });
     const collision = planMapOperations(sparse, [

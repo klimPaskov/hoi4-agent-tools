@@ -324,7 +324,7 @@ Pass `provinceId`, `definition`, or the full distribution object when an exact o
 
 ## Change IDs
 
-The game needs every state id from 1 to the highest; a missing one crashes it at setup ("Missing State ID"). So a write never leaves a hole of its own: when `merge_states`, `assign_territory` or another operation removes a state below the highest id, the highest states move into the holes in the same write, with their script references, building positions and `STATE_<id>` localisation, and the result lists the moves in `MAP_STATE_IDS_COMPACTED`. A state id the request names (`stateId`, or the `toId` of `renumber_map_entity`) is never moved. Holes the mod already had, and holes beside a named id, are reported as `MAP_STATE_ID_GAP` with the ids; close each with `renumber_map_entity`, the highest state into the hole.
+The game needs every state id from 1 to the highest; a missing one crashes it at setup ("Missing State ID"). So a write never leaves a hole of its own: when `merge_states`, `assign_territory` or another operation removes a state below the highest id, the highest states move into the holes in the same write, with their script references, building positions and `STATE_<id>` localisation, and the result lists the moves in `MAP_STATE_IDS_COMPACTED`. A state id the request names (`stateId`, or the `toId` of `renumber_map_entity`) is never moved, so a named id that would leave holes below it is refused with `MAP_STATE_ID_GAP`: name the next free id instead. Holes the mod already had are reported as a `MAP_STATE_ID_GAP` warning with the ids, and every write still runs, so you can close each with `renumber_map_entity`, the highest state into the hole.
 
 Use `renumber_map_entity` for `province`, `state`, or `strategic-region` IDs:
 

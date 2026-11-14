@@ -122,15 +122,15 @@ describe('state ids stay contiguous after a write', () => {
       expect(hashes.get(file.relativePath), file.relativePath).toBe(file.sha256);
   });
 
-  it('keeps a state id the request asks for by name, and reports the holes beside it', () => {
+  it('refuses a named state id that would leave holes, which crash the game', () => {
+    // Linux run, 14 November 2026: state-id holes crash the game during history setup (SIGSEGV).
     const firstState = index.states.find(({ id }) => id === 1)!;
-    const asked = highest + 5;
-    const result = plan(written, [
-      {
+    const operation = (stateId: number) =>
+      ({
         id: 'explicit',
         kind: 'create_state',
         sourceStateId: 1,
-        stateId: asked,
+        stateId,
         provinceIds: [firstState.provinces[0]!],
         name: 'ASKED',
         localisation: {
@@ -139,12 +139,20 @@ describe('state ids stay contiguous after a write', () => {
           value: 'Asked',
           file: 'localisation/english/world_l_english.yml',
         },
-      },
-    ] as MapOperation[]);
-    expect(stateIds(applied(written, result.changes))).toContain(asked);
-    expect(result.diagnostics.map(({ code }) => code)).not.toContain('MAP_STATE_IDS_COMPACTED');
-    const gap = result.diagnostics.find(({ code }) => code === 'MAP_STATE_ID_GAP')!;
-    expect(gap.details).toMatchObject({ holeCount: 4 });
+      }) as MapOperation;
+    const refused = planMapOperations(MapWorkspaceIndex.build([...written]), [
+      operation(highest + 5),
+    ]);
+    expect(refused.blockers).toEqual([
+      expect.objectContaining({
+        code: 'MAP_STATE_ID_GAP',
+        details: expect.objectContaining({ holeCount: 4 }),
+      }),
+    ]);
+    // A request with a blocker is refused whole: the service writes none of its changes.
+    // The next free id is accepted and kept as named.
+    const accepted = plan(written, [operation(highest + 1)]);
+    expect(stateIds(applied(written, accepted.changes))).toContain(highest + 1);
   });
 
   it('reports a hole the mod already had without moving untouched states', () => {
