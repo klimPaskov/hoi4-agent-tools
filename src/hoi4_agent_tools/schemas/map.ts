@@ -902,12 +902,11 @@ export const borderQualityScopeSchema = z
         height: z.number().int().min(1).max(16_384),
       })
       .strict()
-      .optional()
-      .describe('A pixel box of the province map, origin top-left.'),
+      .optional(),
   })
   .strict()
   .describe(
-    'Measure only these borders: those of the provinces of the states the owners own or of the stateIds (either adds provinces), cut to the box. A border counts when either side is inside, so a country is measured against its neighbours. MAP_BORDER_QUALITY_SCOPE_EMPTY when nothing is selected.',
+    'Owners and stateIds add provinces, box cuts; a border counts when either side is inside.',
   );
 
 const territoryCountrySchema = z

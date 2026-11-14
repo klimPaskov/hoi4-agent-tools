@@ -120,11 +120,7 @@ export const mapInspectRequestSchema = z
       .describe(
         'Also measure how well province, state, region and country borders follow rivers, slopes, lake shores and terrain changes: enrichment over chance, the natural share of border length, straightness, and the worst artificial runs. Reads the height, river and terrain bitmaps; full inspection only.',
       ),
-    qualityScope: borderQualityScopeSchema
-      .optional()
-      .describe(
-        'With quality: measure only the borders of these owners or states, or inside this pixel box, for example one region before and after a redraw.',
-      ),
+    qualityScope: borderQualityScopeSchema.optional().describe('With quality: measure one region.'),
     layer: mapLayerSchema
       .optional()
       .describe('Render this base layer; combine with overlays, tile or area.'),
