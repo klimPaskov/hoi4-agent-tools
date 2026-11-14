@@ -485,8 +485,15 @@ describe('hoi4.focus_render without the engine', () => {
   it('answers ENGINE_UNAVAILABLE for the game view and the full render', async () => {
     // A server keeps its resident engine and its index once they ran, so the tree written with
     // the engine is copied into a fresh server's mod before the engine goes away.
+    // This file starts without an engine, so the tree is written with the real one.
+    if (engineBinary === undefined) return;
     const written = await fixture();
-    await rewrite(written.client, { plan: treePlan(baseFocuses), createIfMissing: true });
+    const withEngine = withEnvironment({ HOI4_ENGINE: engineBinary });
+    try {
+      await rewrite(written.client, { plan: treePlan(baseFocuses), createIfMissing: true });
+    } finally {
+      withEngine();
+    }
     const source = await readFile(written.sourcePath);
     const { client, mod, sourcePath } = await fixture();
     await mkdir(path.dirname(sourcePath), { recursive: true });
