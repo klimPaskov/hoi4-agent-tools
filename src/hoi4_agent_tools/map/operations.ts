@@ -580,7 +580,7 @@ export interface RebuildSupplyOperation extends MapOperationBase {
 /** Adopt the current bytes of every output the world inventory records. */
 export interface RecordWorldOutputsOperation extends MapOperationBase {
   kind: 'record_world_outputs';
-  /** Also add the workspace's files at world output paths that the record lacks. */
+  /** Also add the workspace's files at world output paths that the record lacks; default true. */
   adoptUnrecorded?: boolean;
 }
 
@@ -6235,7 +6235,7 @@ function applyRecordWorldOutputs(
     base.sourceFiles,
     proposedChanges(changes),
     worldOutputRoots(base),
-    { adoptAll: true, ...(operation.adoptUnrecorded === true ? { adoptUnrecorded: true } : {}) },
+    { adoptAll: true, adoptUnrecorded: operation.adoptUnrecorded !== false },
   );
   if (refresh === undefined)
     throw new ServiceError(
@@ -6249,7 +6249,7 @@ function applyRecordWorldOutputs(
     severity: 'info',
     category: 'map',
     operationId: operation.id,
-    message: `The world output inventory now records the current bytes of its outputs: ${refresh.refreshed.length} refreshed, ${refresh.unchanged.length} unchanged, ${refresh.dropped.length} dropped because the file is gone${refresh.unscanned.length > 0 ? `, ${refresh.unscanned.length} kept unread` : ''}${operation.adoptUnrecorded === true ? `, ${refresh.added.length} added that it lacked` : ''}`,
+    message: `The world output inventory now records the current bytes of its outputs: ${refresh.refreshed.length} refreshed, ${refresh.unchanged.length} unchanged, ${refresh.dropped.length} dropped because the file is gone${refresh.unscanned.length > 0 ? `, ${refresh.unscanned.length} kept unread` : ''}${operation.adoptUnrecorded !== false ? `, ${refresh.added.length} added that it lacked` : ''}`,
     details: {
       refreshed: refresh.refreshed.length,
       unchanged: refresh.unchanged.length,

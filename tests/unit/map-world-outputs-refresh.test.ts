@@ -53,6 +53,26 @@ function stale(files: readonly ScannedFile[]): string[] {
     .map(([path]) => path);
 }
 
+/** State files of the mod that the inventory does not list. */
+function unrecordedStates(files: readonly ScannedFile[]): string[] {
+  const listed = recorded(files);
+  return files
+    .map(({ relativePath }) => relativePath)
+    .filter(
+      (relativePath) => relativePath.startsWith('history/states/') && !listed.has(relativePath),
+    )
+    .sort();
+}
+
+/** The id of the state a file defines. */
+function stateIdOf(files: readonly ScannedFile[], relativePath: string): number {
+  const state = MapWorkspaceIndex.build([...files]).states.find(
+    ({ file }) => file.relativePath === relativePath,
+  );
+  if (state === undefined) throw new Error(`no state in ${relativePath}`);
+  return state.id;
+}
+
 const world = {
   id: 'world',
   kind: 'create_world' as const,
@@ -180,7 +200,9 @@ describe('world output inventory after later map operations', () => {
     const stray = source('history/states/9999-Stray.txt', 'state = { id = 9999 }');
     const notes = source('notes/readme.txt', 'authored');
     const before = [...written, stray, notes];
-    const plain = plan(before, [{ id: 'adopt', kind: 'record_world_outputs' }]);
+    const plain = plan(before, [
+      { id: 'adopt', kind: 'record_world_outputs', adoptUnrecorded: false },
+    ]);
     expect(plain.changes).toEqual([]);
     const result = plan(before, [
       { id: 'adopt', kind: 'record_world_outputs', adoptUnrecorded: true },
@@ -236,6 +258,83 @@ describe('world output inventory after later map operations', () => {
     expect(note.details).toMatchObject({ dropped: 0, unscanned: 0 });
     expect(preview.plan.changes).toEqual([]);
   }, 120_000);
+
+  // From #184 (the release owner's fix for the same fault), folded into this PR.
+  it('records the state files a later operation creates', () => {
+    // ZIN K128, 14 November 2026: 124 state files written after create_world were never recorded,
+    // so a copy synced from the inventory loaded without those states and the game crashed.
+    const created: MapOperation = {
+      id: 'carve',
+      kind: 'create_state',
+      sourceStateId: first!.id,
+      provinceIds: [first!.provinces[0]!],
+      name: 'CARVED',
+      localisation: {
+        method: 'upsert',
+        language: 'l_english',
+        value: 'Carved',
+        file: 'localisation/english/world_l_english.yml',
+      },
+    };
+    const result = plan(written, [created]);
+    const after = applied(written, result.changes);
+    const newStates = result.changes
+      .filter(
+        ({ relativePath, content }) =>
+          content !== null && !written.some((f) => f.relativePath === relativePath),
+      )
+      .map(({ relativePath }) => relativePath)
+      .filter((relativePath) => relativePath.startsWith('history/states/'));
+    expect(newStates).toHaveLength(1);
+    expect(recorded(after).has(newStates[0]!)).toBe(true);
+    expect(unrecordedStates(after)).toEqual([]);
+    expect(stale(after)).toEqual([]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_REFRESHED')!;
+    // The new state file and the world localisation file it names its state in are both new.
+    expect(note.details).toMatchObject({
+      added: 2,
+      addedPaths: [newStates[0], 'localisation/english/world_l_english.yml'],
+    });
+    // Merging it away again drops it from the inventory, and the next create_world accepts the mod.
+    const merged = plan(after, [
+      {
+        id: 'merge',
+        kind: 'merge_states',
+        sourceStateIds: [stateIdOf(after, newStates[0]!)],
+        targetStateId: first!.id,
+      },
+    ]);
+    const final = applied(after, merged.changes);
+    expect(recorded(final).has(newStates[0]!)).toBe(false);
+    expect(unrecordedStates(final)).toEqual([]);
+    plan(final, [world]);
+  });
+
+  it('adds every unrecorded world output with record_world_outputs', () => {
+    // A mod written before this fix: a state file exists that the inventory does not list.
+    const missing = second!.file.relativePath;
+    const manifest = written.find(({ relativePath }) => relativePath === WORLD_OUTPUT_MANIFEST)!;
+    const parsed = JSON.parse(manifest.bytes.toString('utf8')) as {
+      version: number;
+      files: Array<{ relativePath: string; sha256: string }>;
+    };
+    parsed.files = parsed.files.filter(({ relativePath }) => relativePath !== missing);
+    const before = written.map((f) =>
+      f.relativePath === WORLD_OUTPUT_MANIFEST
+        ? source(WORLD_OUTPUT_MANIFEST, `${JSON.stringify(parsed)}\n`)
+        : f,
+    );
+    expect(unrecordedStates(before)).toEqual([missing]);
+    const result = plan(before, [{ id: 'adopt', kind: 'record_world_outputs' }]);
+    const note = result.diagnostics.find(({ code }) => code === 'MAP_WORLD_OUTPUTS_RECORDED')!;
+    expect(note.details).toMatchObject({ added: 1, addedPaths: [missing] });
+    expect(note.message).toContain('1 added that it lacked');
+    const after = applied(before, result.changes);
+    expect(unrecordedStates(after)).toEqual([]);
+    // A file outside the world's paths is never adopted.
+    const foreign = [...after, source('common/ideas/mine.txt', 'ideas = { }\n')];
+    expect(plan(foreign, [{ id: 'adopt', kind: 'record_world_outputs' }]).changes).toEqual([]);
+  });
 
   it('refuses record_world_outputs in a mod without a world inventory', () => {
     const result = planMapOperations(MapWorkspaceIndex.build([]), [

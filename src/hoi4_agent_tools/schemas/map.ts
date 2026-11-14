@@ -1395,7 +1395,7 @@ export const mapOperationSchema = z.discriminatedUnion('kind', [
         .boolean()
         .optional()
         .describe(
-          'Also add the files of the mod at world output paths (state files, strategic regions, map files, world localisation) that the record lacks, for example ones earlier operations created.',
+          'Add the files of the mod at world output paths (state files, strategic regions, map files, world localisation) that the record lacks, for example ones earlier operations created. Default true; false only re-hashes the listed entries.',
         ),
     })
     .strict(),
