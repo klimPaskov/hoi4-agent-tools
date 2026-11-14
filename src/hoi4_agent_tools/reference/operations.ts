@@ -93,6 +93,40 @@ const implicitTriggerSources: Readonly<Record<string, string>> = {
   resources: 'resource_count_trigger',
 };
 
+/**
+ * What file checks derive from a whole index: the identifier sets, the scripted effect and
+ * trigger names and the implicit trigger names. Deriving them walks every symbol and parses the
+ * building, ideology and resource files, so a call that checks many files (mod_health checks up to
+ * 400) computes them once per index instead of once per file.
+ */
+interface IndexDerived {
+  ids: Map<IdentifierKind, Set<string>>;
+  effects: Set<string>;
+  triggers: Set<string>;
+  implicitTriggers: Map<string, string>;
+}
+const derivedByIndex = new WeakMap<object, IndexDerived>();
+
+function indexDerived(snapshot: ScanSnapshot): IndexDerived {
+  const cached = derivedByIndex.get(snapshot.index);
+  if (cached !== undefined) return cached;
+  const ids = new Map<IdentifierKind, Set<string>>();
+  const effects = new Set<string>();
+  const triggers = new Set<string>();
+  for (const symbol of snapshot.index.symbols) {
+    if (symbol.kind === 'scripted_effect') effects.add(symbol.id);
+    else if (symbol.kind === 'scripted_trigger') triggers.add(symbol.id);
+    const kind = identifierKinds[symbol.kind];
+    if (kind === undefined) continue;
+    let set = ids.get(kind);
+    if (set === undefined) ids.set(kind, (set = new Set()));
+    set.add(symbol.id);
+  }
+  const derived = { ids, effects, triggers, implicitTriggers: implicitTriggerNames(snapshot) };
+  derivedByIndex.set(snapshot.index, derived);
+  return derived;
+}
+
 /** Building, ideology and resource names from every scanned source layer. */
 function implicitTriggerNames(snapshot: ScanSnapshot): Map<string, string> {
   const names = new Map<string, string>();
@@ -1048,8 +1082,7 @@ export class ReferenceToolService {
     const playerText = playerTextFamily(file.relativePath)
       ? this.playerTextContext(workspaceId, snapshot)
       : undefined;
-    const helpers = (kind: string) =>
-      new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
+    const derived = indexDerived(snapshot);
     return validateScript(
       this.references,
       workspace,
@@ -1059,8 +1092,8 @@ export class ReferenceToolService {
         path: file.displayPath,
         relativePath: file.relativePath,
         bytes: file.bytes,
-        helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
-        implicitTriggers: implicitTriggerNames(snapshot),
+        helpers: { effect: derived.effects, trigger: derived.triggers },
+        implicitTriggers: derived.implicitTriggers,
         ...(playerText === undefined ? {} : { playerText }),
         eventPopups: this.eventPopupContext(workspaceId, snapshot),
         knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
@@ -1200,15 +1233,7 @@ const identifierKinds: Readonly<Record<string, IdentifierKind>> = {
 };
 
 function identifierContext(snapshot: ScanSnapshot): IdentifierContext {
-  const ids = new Map<IdentifierKind, Set<string>>();
-  for (const symbol of snapshot.index.symbols) {
-    const kind = identifierKinds[symbol.kind];
-    if (kind === undefined) continue;
-    let set = ids.get(kind);
-    if (set === undefined) ids.set(kind, (set = new Set()));
-    set.add(symbol.id);
-  }
-  return { ids, complete: snapshot.complete };
+  return { ids: indexDerived(snapshot).ids, complete: snapshot.complete };
 }
 
 function playerTextSource(relativePath: string): boolean {
