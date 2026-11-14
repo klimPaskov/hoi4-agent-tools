@@ -93,6 +93,40 @@ const implicitTriggerSources: Readonly<Record<string, string>> = {
   resources: 'resource_count_trigger',
 };
 
+/**
+ * What file checks derive from a whole index: the identifier sets, the scripted effect and
+ * trigger names and the implicit trigger names. Deriving them walks every symbol and parses the
+ * building, ideology and resource files, so a call that checks many files (mod_health checks up to
+ * 400) computes them once per index instead of once per file.
+ */
+interface IndexDerived {
+  ids: Map<IdentifierKind, Set<string>>;
+  effects: Set<string>;
+  triggers: Set<string>;
+  implicitTriggers: Map<string, string>;
+}
+const derivedByIndex = new WeakMap<object, IndexDerived>();
+
+function indexDerived(snapshot: ScanSnapshot): IndexDerived {
+  const cached = derivedByIndex.get(snapshot.index);
+  if (cached !== undefined) return cached;
+  const ids = new Map<IdentifierKind, Set<string>>();
+  const effects = new Set<string>();
+  const triggers = new Set<string>();
+  for (const symbol of snapshot.index.symbols) {
+    if (symbol.kind === 'scripted_effect') effects.add(symbol.id);
+    else if (symbol.kind === 'scripted_trigger') triggers.add(symbol.id);
+    const kind = identifierKinds[symbol.kind];
+    if (kind === undefined) continue;
+    let set = ids.get(kind);
+    if (set === undefined) ids.set(kind, (set = new Set()));
+    set.add(symbol.id);
+  }
+  const derived = { ids, effects, triggers, implicitTriggers: implicitTriggerNames(snapshot) };
+  derivedByIndex.set(snapshot.index, derived);
+  return derived;
+}
+
 /** Building, ideology and resource names from every scanned source layer. */
 function implicitTriggerNames(snapshot: ScanSnapshot): Map<string, string> {
   const names = new Map<string, string>();
@@ -749,21 +783,30 @@ export class ReferenceToolService {
         };
       }
     };
-    const [errorLog, engineCheck, localisation, assets] = await Promise.all([
-      timed('error_log', () => this.healthErrorLog(workspace, signal)),
+    // Each engine audit loads the game and the mod on its own and uses every core, so they run
+    // one after the other, the quick ones first: four at once took 128 s on a mod with eight
+    // thousand files, where one at a time they take 43 s. The whole-mod check runs beside that
+    // chain, and the script check, which is single threaded on this side, beside both.
+    const early = (async () => {
+      const errorLog = await timed('error_log', () => this.healthErrorLog(workspace, signal));
+      const localisation = await timed('localisation', () => healthLocalisation(workspace, signal));
+      const assets = await timed('assets', () => healthAssets(workspace, signal));
+      return { errorLog, localisation, assets };
+    })();
+    // The files the quick audits name are validated first; the script check scans while they run.
+    const named = early.then(
+      ({ errorLog, localisation, assets }) =>
+        new Set(
+          [...errorLog.findings, ...localisation.findings, ...assets.findings].flatMap(
+            ({ path: file }) => (file === undefined ? [] : [file]),
+          ),
+        ),
+    );
+    const [engineCheck, script, { errorLog, localisation, assets }] = await Promise.all([
       timed('engine_check', () => healthEngineCheck(workspace, signal)),
-      timed('localisation', () => healthLocalisation(workspace, signal)),
-      timed('assets', () => healthAssets(workspace, signal)),
+      timed('script', () => this.healthScript(workspaceId, workspace, named, principal, signal)),
+      early,
     ]);
-    // The files the other audits name are validated first.
-    const named = new Set(
-      [...errorLog.findings, ...engineCheck.findings].flatMap(({ path: file }) =>
-        file === undefined ? [] : [file],
-      ),
-    );
-    const script = await timed('script', () =>
-      this.healthScript(workspaceId, workspace, named, principal, signal),
-    );
     return rankProblems([errorLog, engineCheck, script, localisation, assets], request.limit);
   }
 
@@ -824,7 +867,7 @@ export class ReferenceToolService {
   private async healthScript(
     workspaceId: string,
     workspace: ResolvedWorkspace,
-    named: ReadonlySet<string>,
+    namedLater: Promise<ReadonlySet<string>>,
     principal?: string,
     signal?: AbortSignal,
   ): Promise<Omit<CheckRun, 'check' | 'ms'>> {
@@ -833,6 +876,18 @@ export class ReferenceToolService {
       caseSensitive: false,
       ...(signal === undefined ? {} : { signal }),
     });
+    // One scan serves every file: each call to the engine's scan re-checks every file of the
+    // workspace for changes, which costs about a second on a mod with eight thousand files.
+    const scanned =
+      files.length === 0
+        ? undefined
+        : await this.engine.scan(
+            workspaceId,
+            { patterns: [...fileCheckPatterns] },
+            principal,
+            signal,
+          );
+    const named = await namedLater;
     const modified = new Map<string, number>();
     for (const file of files)
       modified.set(
@@ -845,18 +900,22 @@ export class ReferenceToolService {
         modified.get(right)! - modified.get(left)! ||
         (left < right ? -1 : 1),
     );
+    // The budget counts checking files, not the scan before the first one.
     const deadline = performance.now() + HEALTH_SCRIPT_BUDGET_MS;
     const findings: HealthFinding[] = [];
     let checked = 0;
     for (const file of ordered.slice(0, HEALTH_SCRIPT_MAX_FILES)) {
       if (performance.now() > deadline) break;
       signal?.throwIfAborted();
+      // Let the engine audits running beside this one deliver their output between files.
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const validated = await this.validateScript(
         workspaceId,
         workspace,
         scriptValidateRequestSchema.parse({ path: file, limit: 32 }),
         principal,
         signal,
+        scanned,
       );
       checked += 1;
       for (const finding of validated.findings)
@@ -875,7 +934,7 @@ export class ReferenceToolService {
       ...(checked === files.length
         ? {}
         : {
-            note: `Checked ${checked} of ${files.length} script files within the time budget: files other audits named first, then the newest`,
+            note: `Checked ${checked} of ${files.length} script files, ${performance.now() > deadline ? 'within the time budget' : `the most one call checks (${HEALTH_SCRIPT_MAX_FILES})`}: files other audits named first, then the newest. hoi4.script_validate checks any other file`,
           }),
     };
   }
@@ -992,6 +1051,8 @@ export class ReferenceToolService {
     request: z.infer<typeof scriptValidateRequestSchema>,
     principal?: string,
     signal?: AbortSignal,
+    /** A scan of the file check patterns the caller already holds, for a call that checks many files. */
+    scanned?: ScanSnapshot,
   ) {
     if (request.closure === true) return checkClosure(this.engine, workspaceId, principal, signal);
     // Every file check of the supported families shares one scan, so checking files across
@@ -1035,7 +1096,7 @@ export class ReferenceToolService {
         checked.unresolvedCount;
       return misses(trigger) < misses(effect) ? trigger : effect;
     }
-    let snapshot = await scan([]);
+    let snapshot = scanned ?? (await scan([]));
     let file;
     try {
       file = selectFile(snapshot, request.path);
@@ -1048,8 +1109,7 @@ export class ReferenceToolService {
     const playerText = playerTextFamily(file.relativePath)
       ? this.playerTextContext(workspaceId, snapshot)
       : undefined;
-    const helpers = (kind: string) =>
-      new Set(snapshot.index.symbols.filter((symbol) => symbol.kind === kind).map(({ id }) => id));
+    const derived = indexDerived(snapshot);
     return validateScript(
       this.references,
       workspace,
@@ -1059,8 +1119,8 @@ export class ReferenceToolService {
         path: file.displayPath,
         relativePath: file.relativePath,
         bytes: file.bytes,
-        helpers: { effect: helpers('scripted_effect'), trigger: helpers('scripted_trigger') },
-        implicitTriggers: implicitTriggerNames(snapshot),
+        helpers: { effect: derived.effects, trigger: derived.triggers },
+        implicitTriggers: derived.implicitTriggers,
         ...(playerText === undefined ? {} : { playerText }),
         eventPopups: this.eventPopupContext(workspaceId, snapshot),
         knownMistakes: { eventNamespaces: this.eventNamespaces(workspaceId, snapshot) },
@@ -1200,15 +1260,7 @@ const identifierKinds: Readonly<Record<string, IdentifierKind>> = {
 };
 
 function identifierContext(snapshot: ScanSnapshot): IdentifierContext {
-  const ids = new Map<IdentifierKind, Set<string>>();
-  for (const symbol of snapshot.index.symbols) {
-    const kind = identifierKinds[symbol.kind];
-    if (kind === undefined) continue;
-    let set = ids.get(kind);
-    if (set === undefined) ids.set(kind, (set = new Set()));
-    set.add(symbol.id);
-  }
-  return { ids, complete: snapshot.complete };
+  return { ids: indexDerived(snapshot).ids, complete: snapshot.complete };
 }
 
 function playerTextSource(relativePath: string): boolean {
