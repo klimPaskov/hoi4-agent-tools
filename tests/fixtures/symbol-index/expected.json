@@ -1,0 +1,1863 @@
+{
+  "complete": true,
+  "diagnostics": [
+    {
+      "category": "syntax",
+      "code": "SOURCE_INVALID_VALUE",
+      "location": {
+        "end": {
+          "column": 39,
+          "line": 1,
+          "offset": 38
+        },
+        "path": "mod:common/ideas/broken.txt",
+        "start": {
+          "column": 38,
+          "line": 1,
+          "offset": 37
+        }
+      },
+      "message": "Invalid assignment value \"}\"",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "SOURCE_UNEXPECTED_TOKEN",
+      "location": {
+        "end": {
+          "column": 4,
+          "line": 3,
+          "offset": 46
+        },
+        "path": "mod:common/ideas/broken.txt",
+        "start": {
+          "column": 3,
+          "line": 3,
+          "offset": 45
+        }
+      },
+      "message": "Unexpected token \"=\"",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "SOURCE_UNSUPPORTED_OPERATOR",
+      "location": {
+        "end": {
+          "column": 9,
+          "line": 3,
+          "offset": 51
+        },
+        "path": "mod:common/ideas/broken.txt",
+        "start": {
+          "column": 7,
+          "line": 3,
+          "offset": 49
+        }
+      },
+      "message": "Unsupported Clausewitz operator !=",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "SOURCE_UNTERMINATED_STRING",
+      "location": {
+        "end": {
+          "column": 1,
+          "line": 5,
+          "offset": 68
+        },
+        "path": "mod:common/ideas/broken.txt",
+        "start": {
+          "column": 1,
+          "line": 4,
+          "offset": 54
+        }
+      },
+      "message": "Unterminated quoted string",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "SOURCE_UNSUPPORTED_ESCAPE",
+      "location": {
+        "end": {
+          "column": 40,
+          "line": 1,
+          "offset": 39
+        },
+        "path": "mod:common/ideas/escape.txt",
+        "start": {
+          "column": 38,
+          "line": 1,
+          "offset": 37
+        }
+      },
+      "message": "Clausewitz strings support only \\\\ and \\\" escapes",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_SYMBOL_COLLISION",
+      "location": {
+        "end": {
+          "column": 17,
+          "line": 1,
+          "offset": 16
+        },
+        "path": "mod:common/scripted_effects/dup.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "dup_effect"
+      },
+      "message": "Multiple active definitions for scripted_effect:dup_effect",
+      "related": [
+        {
+          "end": {
+            "column": 17,
+            "line": 2,
+            "offset": 33
+          },
+          "path": "mod:common/scripted_effects/dup.txt",
+          "start": {
+            "column": 1,
+            "line": 2,
+            "offset": 17
+          },
+          "symbol": "dup_effect"
+        }
+      ],
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_prerequisite",
+        "toKind": "technology"
+      },
+      "location": {
+        "end": {
+          "column": 45,
+          "line": 5,
+          "offset": 125
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 28,
+          "line": 5,
+          "offset": 108
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved technology reference: infantry_weapons1",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_exclusive",
+        "toKind": "technology"
+      },
+      "location": {
+        "end": {
+          "column": 16,
+          "line": 6,
+          "offset": 143
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 9,
+          "line": 6,
+          "offset": 136
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved technology reference: a",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_exclusive",
+        "toKind": "technology"
+      },
+      "location": {
+        "end": {
+          "column": 16,
+          "line": 6,
+          "offset": 143
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 9,
+          "line": 6,
+          "offset": 136
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved technology reference: b",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_folder",
+        "toKind": "technology_folder"
+      },
+      "location": {
+        "end": {
+          "column": 36,
+          "line": 7,
+          "offset": 179
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 21,
+          "line": 7,
+          "offset": 164
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved technology_folder reference: infantry_folder",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_category",
+        "toKind": "technology_category"
+      },
+      "location": {
+        "end": {
+          "column": 36,
+          "line": 8,
+          "offset": 217
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 16,
+          "line": 8,
+          "offset": 197
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved technology_category reference: infantry_weapons",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_enable_equipments",
+        "toKind": "equipment"
+      },
+      "location": {
+        "end": {
+          "column": 47,
+          "line": 9,
+          "offset": 264
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 23,
+          "line": 9,
+          "offset": 240
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved equipment reference: infantry_equipment_0",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "infantry_weapons",
+        "referenceKind": "technology_enable_building",
+        "toKind": "building"
+      },
+      "location": {
+        "end": {
+          "column": 46,
+          "line": 10,
+          "offset": 310
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 34,
+          "line": 10,
+          "offset": 298
+        },
+        "symbol": "infantry_weapons"
+      },
+      "message": "Unresolved building reference: arms_factory",
+      "severity": "error"
+    },
+    {
+      "category": "reference",
+      "code": "INDEX_UNRESOLVED_REFERENCE",
+      "details": {
+        "from": "1",
+        "referenceKind": "state_province",
+        "toKind": "province"
+      },
+      "location": {
+        "end": {
+          "column": 56,
+          "line": 1,
+          "offset": 55
+        },
+        "path": "mod:history/states/1-A.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "message": "Unresolved province reference: 3",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "LOCALISATION_MALFORMED_LINE",
+      "location": {
+        "end": {
+          "column": 35,
+          "line": 3,
+          "offset": 67
+        },
+        "path": "mod:localisation/english/a_l_english.yml",
+        "start": {
+          "column": 1,
+          "line": 3,
+          "offset": 33
+        }
+      },
+      "message": "Malformed localisation line",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "LOCALISATION_MALFORMED_LINE",
+      "location": {
+        "end": {
+          "column": 10,
+          "line": 4,
+          "offset": 77
+        },
+        "path": "mod:localisation/english/a_l_english.yml",
+        "start": {
+          "column": 1,
+          "line": 4,
+          "offset": 68
+        }
+      },
+      "message": "Malformed localisation line",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "LOCALISATION_BOM_MISSING",
+      "location": {
+        "end": {
+          "column": 2,
+          "line": 1,
+          "offset": 1
+        },
+        "path": "mod:localisation/english/b_l_english.yml",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        }
+      },
+      "message": "HOI4 localisation files require UTF-8 with BOM encoding",
+      "severity": "error"
+    },
+    {
+      "category": "syntax",
+      "code": "SOURCE_ENCODING_NOT_ROUND_TRIPPABLE",
+      "details": {
+        "byteCount": 1,
+        "byteValues": ["0x81"]
+      },
+      "location": {
+        "end": {
+          "column": 6,
+          "line": 1,
+          "offset": 5
+        },
+        "path": "mod:common/windows.txt",
+        "start": {
+          "column": 5,
+          "line": 1,
+          "offset": 4
+        }
+      },
+      "message": "Source is not valid UTF-8 and contains bytes that Windows-1252 cannot represent; it can be read but any rewrite is refused",
+      "severity": "warning"
+    }
+  ],
+  "files": [
+    "game:common/scripted_effects/game.txt",
+    "game:common/scripted_effects/shadowed.txt",
+    "mod:common/characters/c.txt",
+    "mod:common/decisions/form.txt",
+    "mod:common/ideas/broken.txt",
+    "mod:common/ideas/escape.txt",
+    "mod:common/ideas/ideas.txt",
+    "mod:common/national_focus/tree.txt",
+    "mod:common/script_constants/c.txt",
+    "mod:common/scripted_effects/dup.txt",
+    "mod:common/scripted_effects/shadowed.txt",
+    "mod:common/scripted_guis/g.txt",
+    "mod:common/technologies/infantry.txt",
+    "mod:common/windows.txt",
+    "mod:events/ünïcode.txt",
+    "mod:gfx/a.dds",
+    "mod:history/states/1-A.txt",
+    "mod:interface/a.gfx",
+    "mod:interface/a.gui",
+    "mod:localisation/english/a_l_english.yml",
+    "mod:localisation/english/b_l_english.yml",
+    "mod:map/adjacencies.csv",
+    "mod:map/definition.csv",
+    "mod:map/railways.txt",
+    "mod:map/strategicregions/1.txt",
+    "mod:map/supply_nodes.txt"
+  ],
+  "references": [
+    {
+      "from": "a",
+      "kind": "focus_prerequisite",
+      "location": {
+        "end": {
+          "column": 71,
+          "line": 3,
+          "offset": 98
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 62,
+          "line": 3,
+          "offset": 89
+        },
+        "symbol": "a"
+      },
+      "path": "mod:common/national_focus/tree.txt",
+      "to": "b",
+      "toKind": "focus"
+    },
+    {
+      "from": "a",
+      "kind": "focus_relative_position",
+      "location": {
+        "end": {
+          "column": 98,
+          "line": 3,
+          "offset": 125
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 97,
+          "line": 3,
+          "offset": 124
+        },
+        "symbol": "a"
+      },
+      "path": "mod:common/national_focus/tree.txt",
+      "to": "b",
+      "toKind": "focus"
+    },
+    {
+      "from": "a",
+      "kind": "focus_icon",
+      "location": {
+        "end": {
+          "column": 44,
+          "line": 3,
+          "offset": 71
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 39,
+          "line": 3,
+          "offset": 66
+        },
+        "symbol": "a"
+      },
+      "path": "mod:common/national_focus/tree.txt",
+      "to": "GFX_a",
+      "toKind": "sprite"
+    },
+    {
+      "from": "g",
+      "kind": "scripted_gui_window",
+      "location": {
+        "end": {
+          "column": 69,
+          "line": 1,
+          "offset": 68
+        },
+        "path": "mod:common/scripted_guis/g.txt",
+        "start": {
+          "column": 68,
+          "line": 1,
+          "offset": 67
+        },
+        "symbol": "g"
+      },
+      "path": "mod:common/scripted_guis/g.txt",
+      "to": "w",
+      "toKind": "gui_element"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_prerequisite",
+      "location": {
+        "end": {
+          "column": 45,
+          "line": 5,
+          "offset": 125
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 28,
+          "line": 5,
+          "offset": 108
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "infantry_weapons1",
+      "toKind": "technology"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_exclusive",
+      "location": {
+        "end": {
+          "column": 16,
+          "line": 6,
+          "offset": 143
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 9,
+          "line": 6,
+          "offset": 136
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "a",
+      "toKind": "technology"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_exclusive",
+      "location": {
+        "end": {
+          "column": 16,
+          "line": 6,
+          "offset": 143
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 9,
+          "line": 6,
+          "offset": 136
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "b",
+      "toKind": "technology"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_folder",
+      "location": {
+        "end": {
+          "column": 36,
+          "line": 7,
+          "offset": 179
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 21,
+          "line": 7,
+          "offset": 164
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "infantry_folder",
+      "toKind": "technology_folder"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_category",
+      "location": {
+        "end": {
+          "column": 36,
+          "line": 8,
+          "offset": 217
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 16,
+          "line": 8,
+          "offset": 197
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "infantry_weapons",
+      "toKind": "technology_category"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_enable_equipments",
+      "location": {
+        "end": {
+          "column": 47,
+          "line": 9,
+          "offset": 264
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 23,
+          "line": 9,
+          "offset": 240
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "infantry_equipment_0",
+      "toKind": "equipment"
+    },
+    {
+      "from": "infantry_weapons",
+      "kind": "technology_enable_building",
+      "location": {
+        "end": {
+          "column": 46,
+          "line": 10,
+          "offset": 310
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 34,
+          "line": 10,
+          "offset": 298
+        },
+        "symbol": "infantry_weapons"
+      },
+      "path": "mod:common/technologies/infantry.txt",
+      "to": "arms_factory",
+      "toKind": "building"
+    },
+    {
+      "from": "1",
+      "kind": "state_province",
+      "location": {
+        "end": {
+          "column": 56,
+          "line": 1,
+          "offset": 55
+        },
+        "path": "mod:history/states/1-A.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "path": "mod:history/states/1-A.txt",
+      "to": "1",
+      "toKind": "province"
+    },
+    {
+      "from": "1",
+      "kind": "state_province",
+      "location": {
+        "end": {
+          "column": 56,
+          "line": 1,
+          "offset": 55
+        },
+        "path": "mod:history/states/1-A.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "path": "mod:history/states/1-A.txt",
+      "to": "2",
+      "toKind": "province"
+    },
+    {
+      "from": "1",
+      "kind": "state_province",
+      "location": {
+        "end": {
+          "column": 56,
+          "line": 1,
+          "offset": 55
+        },
+        "path": "mod:history/states/1-A.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "path": "mod:history/states/1-A.txt",
+      "to": "3",
+      "toKind": "province"
+    },
+    {
+      "from": "i",
+      "kind": "gui_sprite",
+      "location": {
+        "end": {
+          "column": 87,
+          "line": 1,
+          "offset": 86
+        },
+        "path": "mod:interface/a.gui",
+        "start": {
+          "column": 82,
+          "line": 1,
+          "offset": 81
+        },
+        "symbol": "i"
+      },
+      "path": "mod:interface/a.gui",
+      "to": "GFX_a",
+      "toKind": "sprite"
+    }
+  ],
+  "skippedPossibleSymbolKinds": [],
+  "skippedSourceCount": 0,
+  "skippedSources": [],
+  "symbols": [
+    {
+      "id": "game_effect",
+      "kind": "scripted_effect",
+      "loadOrder": 0,
+      "location": {
+        "end": {
+          "column": 18,
+          "line": 1,
+          "offset": 17
+        },
+        "path": "game:common/scripted_effects/game.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "game_effect"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "game:common/scripted_effects/game.txt",
+      "rootKind": "game",
+      "sourceShadowed": false
+    },
+    {
+      "id": "broken",
+      "kind": "scripted_effect",
+      "loadOrder": 0,
+      "location": {
+        "end": {
+          "column": 29,
+          "line": 1,
+          "offset": 28
+        },
+        "path": "game:common/scripted_effects/game.txt",
+        "start": {
+          "column": 19,
+          "line": 1,
+          "offset": 18
+        },
+        "symbol": "broken"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "game:common/scripted_effects/game.txt",
+      "rootKind": "game",
+      "sourceShadowed": false
+    },
+    {
+      "id": "shadowed_effect",
+      "kind": "scripted_effect",
+      "loadOrder": 0,
+      "location": {
+        "end": {
+          "column": 22,
+          "line": 1,
+          "offset": 21
+        },
+        "path": "game:common/scripted_effects/shadowed.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "shadowed_effect"
+      },
+      "metadata": {},
+      "overridden": true,
+      "path": "game:common/scripted_effects/shadowed.txt",
+      "rootKind": "game",
+      "sourceShadowed": true
+    },
+    {
+      "id": "bad",
+      "kind": "scripted_effect",
+      "loadOrder": 0,
+      "location": {
+        "end": {
+          "column": 30,
+          "line": 1,
+          "offset": 29
+        },
+        "path": "game:common/scripted_effects/shadowed.txt",
+        "start": {
+          "column": 23,
+          "line": 1,
+          "offset": 22
+        },
+        "symbol": "bad"
+      },
+      "metadata": {},
+      "overridden": true,
+      "path": "game:common/scripted_effects/shadowed.txt",
+      "rootKind": "game",
+      "sourceShadowed": true
+    },
+    {
+      "id": "GER_a",
+      "kind": "leader",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 93,
+          "line": 1,
+          "offset": 92
+        },
+        "path": "mod:common/characters/c.txt",
+        "start": {
+          "column": 16,
+          "line": 1,
+          "offset": 15
+        },
+        "symbol": "GER_a"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/characters/c.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "GER_a_advisor",
+      "kind": "idea",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 64,
+          "line": 1,
+          "offset": 63
+        },
+        "path": "mod:common/characters/c.txt",
+        "start": {
+          "column": 38,
+          "line": 1,
+          "offset": 37
+        },
+        "symbol": "GER_a_advisor"
+      },
+      "metadata": {
+        "advisor": true
+      },
+      "overridden": false,
+      "path": "mod:common/characters/c.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "formable_nations",
+      "kind": "decision_category",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 43,
+          "line": 1,
+          "offset": 42
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "formable_nations"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "take",
+      "kind": "decision",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 41,
+          "line": 1,
+          "offset": 40
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 31,
+          "line": 1,
+          "offset": 30
+        },
+        "symbol": "take"
+      },
+      "metadata": {
+        "category": "formable_nations"
+      },
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "take",
+      "kind": "formable",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 41,
+          "line": 1,
+          "offset": 40
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 31,
+          "line": 1,
+          "offset": 30
+        },
+        "symbol": "take"
+      },
+      "metadata": {
+        "decision": "take"
+      },
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "cat",
+      "kind": "decision_category",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 35,
+          "line": 2,
+          "offset": 77
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 43
+        },
+        "symbol": "cat"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "form_x",
+      "kind": "decision",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 21,
+          "line": 2,
+          "offset": 63
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 9,
+          "line": 2,
+          "offset": 51
+        },
+        "symbol": "form_x"
+      },
+      "metadata": {
+        "category": "cat"
+      },
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "form_x",
+      "kind": "formable",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 21,
+          "line": 2,
+          "offset": 63
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 9,
+          "line": 2,
+          "offset": 51
+        },
+        "symbol": "form_x"
+      },
+      "metadata": {
+        "decision": "form_x"
+      },
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "plain",
+      "kind": "decision",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 33,
+          "line": 2,
+          "offset": 75
+        },
+        "path": "mod:common/decisions/form.txt",
+        "start": {
+          "column": 22,
+          "line": 2,
+          "offset": 64
+        },
+        "symbol": "plain"
+      },
+      "metadata": {
+        "category": "cat"
+      },
+      "overridden": false,
+      "path": "mod:common/decisions/form.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "broken",
+      "kind": "idea",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 41,
+          "line": 1,
+          "offset": 40
+        },
+        "path": "mod:common/ideas/broken.txt",
+        "start": {
+          "column": 23,
+          "line": 1,
+          "offset": 22
+        },
+        "symbol": "broken"
+      },
+      "metadata": {
+        "category": "country"
+      },
+      "overridden": false,
+      "path": "mod:common/ideas/broken.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "e",
+      "kind": "idea",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 44,
+          "line": 1,
+          "offset": 43
+        },
+        "path": "mod:common/ideas/escape.txt",
+        "start": {
+          "column": 23,
+          "line": 1,
+          "offset": 22
+        },
+        "symbol": "e"
+      },
+      "metadata": {
+        "category": "country"
+      },
+      "overridden": false,
+      "path": "mod:common/ideas/escape.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "idea_a",
+      "kind": "idea",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 35,
+          "line": 1,
+          "offset": 34
+        },
+        "path": "mod:common/ideas/ideas.txt",
+        "start": {
+          "column": 23,
+          "line": 1,
+          "offset": 22
+        },
+        "symbol": "idea_a"
+      },
+      "metadata": {
+        "category": "country"
+      },
+      "overridden": false,
+      "path": "mod:common/ideas/ideas.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "tree",
+      "kind": "focus_tree",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 2,
+          "line": 5,
+          "offset": 159
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "tree"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/national_focus/tree.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "a",
+      "kind": "focus",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 100,
+          "line": 3,
+          "offset": 127
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 2,
+          "line": 3,
+          "offset": 29
+        },
+        "symbol": "a"
+      },
+      "metadata": {
+        "x": 1,
+        "y": -2
+      },
+      "overridden": false,
+      "path": "mod:common/national_focus/tree.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "b",
+      "kind": "focus",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 28,
+          "line": 4,
+          "offset": 156
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 2,
+          "line": 4,
+          "offset": 130
+        },
+        "symbol": "b"
+      },
+      "metadata": {
+        "x": 7
+      },
+      "overridden": false,
+      "path": "mod:common/national_focus/tree.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "s",
+      "kind": "focus",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 26,
+          "line": 6,
+          "offset": 186
+        },
+        "path": "mod:common/national_focus/tree.txt",
+        "start": {
+          "column": 1,
+          "line": 6,
+          "offset": 161
+        },
+        "symbol": "s"
+      },
+      "metadata": {
+        "shared": "shared_focus"
+      },
+      "overridden": false,
+      "path": "mod:common/national_focus/tree.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "a",
+      "kind": "script_constant",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 6,
+          "line": 1,
+          "offset": 5
+        },
+        "path": "mod:common/script_constants/c.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "a"
+      },
+      "metadata": {
+        "value": "1"
+      },
+      "overridden": false,
+      "path": "mod:common/script_constants/c.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "group.b",
+      "kind": "script_constant",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 20,
+          "line": 2,
+          "offset": 25
+        },
+        "path": "mod:common/script_constants/c.txt",
+        "start": {
+          "column": 11,
+          "line": 2,
+          "offset": 16
+        },
+        "symbol": "group.b"
+      },
+      "metadata": {
+        "value": "two"
+      },
+      "overridden": false,
+      "path": "mod:common/script_constants/c.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "dup_effect",
+      "kind": "scripted_effect",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 17,
+          "line": 1,
+          "offset": 16
+        },
+        "path": "mod:common/scripted_effects/dup.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "dup_effect"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/scripted_effects/dup.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "dup_effect",
+      "kind": "scripted_effect",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 17,
+          "line": 2,
+          "offset": 33
+        },
+        "path": "mod:common/scripted_effects/dup.txt",
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 17
+        },
+        "symbol": "dup_effect"
+      },
+      "metadata": {},
+      "overridden": true,
+      "path": "mod:common/scripted_effects/dup.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "shadowed_effect",
+      "kind": "scripted_effect",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 22,
+          "line": 1,
+          "offset": 21
+        },
+        "path": "mod:common/scripted_effects/shadowed.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "shadowed_effect"
+      },
+      "metadata": {},
+      "overridden": false,
+      "path": "mod:common/scripted_effects/shadowed.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "g",
+      "kind": "scripted_gui",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 71,
+          "line": 1,
+          "offset": 70
+        },
+        "path": "mod:common/scripted_guis/g.txt",
+        "start": {
+          "column": 18,
+          "line": 1,
+          "offset": 17
+        },
+        "symbol": "g"
+      },
+      "metadata": {
+        "context": "player_context",
+        "window": "w"
+      },
+      "overridden": false,
+      "path": "mod:common/scripted_guis/g.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "infantry_weapons",
+      "kind": "technology",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 3,
+          "line": 12,
+          "offset": 332
+        },
+        "path": "mod:common/technologies/infantry.txt",
+        "start": {
+          "column": 2,
+          "line": 2,
+          "offset": 18
+        },
+        "symbol": "infantry_weapons"
+      },
+      "metadata": {
+        "doctrine": true,
+        "icon": "GFX_infantry_weapons_medium",
+        "researchCost": "1.5",
+        "startYear": "1918"
+      },
+      "overridden": false,
+      "path": "mod:common/technologies/infantry.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "u.1",
+      "kind": "event",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 2,
+          "line": 5,
+          "offset": 81
+        },
+        "path": "mod:events/ünïcode.txt",
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 18
+        },
+        "symbol": "u.1"
+      },
+      "metadata": {
+        "eventType": "country_event"
+      },
+      "overridden": false,
+      "path": "mod:events/ünïcode.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "u.2",
+      "kind": "event",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 26,
+          "line": 6,
+          "offset": 107
+        },
+        "path": "mod:events/ünïcode.txt",
+        "start": {
+          "column": 1,
+          "line": 6,
+          "offset": 82
+        },
+        "symbol": "u.2"
+      },
+      "metadata": {
+        "eventType": "news_event"
+      },
+      "overridden": false,
+      "path": "mod:events/ünïcode.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1",
+      "kind": "state",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 56,
+          "line": 1,
+          "offset": 55
+        },
+        "path": "mod:history/states/1-A.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "metadata": {
+        "name": "STATE_1",
+        "provinces": ["1", "2", "3"]
+      },
+      "overridden": false,
+      "path": "mod:history/states/1-A.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "GFX_a",
+      "kind": "sprite",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 87,
+          "line": 1,
+          "offset": 86
+        },
+        "path": "mod:interface/a.gfx",
+        "start": {
+          "column": 17,
+          "line": 1,
+          "offset": 16
+        },
+        "symbol": "GFX_a"
+      },
+      "metadata": {
+        "frames": 3,
+        "spriteType": "SpriteType",
+        "texture": "gfx/a.dds"
+      },
+      "overridden": false,
+      "path": "mod:interface/a.gfx",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "gfx/a.dds",
+      "kind": "texture",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 70,
+          "line": 1,
+          "offset": 69
+        },
+        "path": "mod:interface/a.gfx",
+        "start": {
+          "column": 59,
+          "line": 1,
+          "offset": 58
+        },
+        "symbol": "gfx/a.dds"
+      },
+      "metadata": {
+        "sprite": "GFX_a"
+      },
+      "overridden": false,
+      "path": "mod:interface/a.gfx",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "w",
+      "kind": "gui_element",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 91,
+          "line": 1,
+          "offset": 90
+        },
+        "path": "mod:interface/a.gui",
+        "start": {
+          "column": 14,
+          "line": 1,
+          "offset": 13
+        },
+        "symbol": "w"
+      },
+      "metadata": {
+        "ancestors": ["guiTypes"],
+        "elementType": "containerWindowType"
+      },
+      "overridden": false,
+      "path": "mod:interface/a.gui",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "i",
+      "kind": "gui_element",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 89,
+          "line": 1,
+          "offset": 88
+        },
+        "path": "mod:interface/a.gui",
+        "start": {
+          "column": 47,
+          "line": 1,
+          "offset": 46
+        },
+        "symbol": "i"
+      },
+      "metadata": {
+        "ancestors": ["guiTypes", "containerWindowType"],
+        "elementType": "iconType"
+      },
+      "overridden": false,
+      "path": "mod:interface/a.gui",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "l_english:k",
+      "kind": "localisation",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 22,
+          "line": 2,
+          "offset": 32
+        },
+        "path": "mod:localisation/english/a_l_english.yml",
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 11
+        }
+      },
+      "metadata": {
+        "key": "k",
+        "language": "l_english",
+        "value": "Value \"q\" \n"
+      },
+      "overridden": false,
+      "path": "mod:localisation/english/a_l_english.yml",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "l_english:k3",
+      "kind": "localisation",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 15,
+          "line": 2,
+          "offset": 25
+        },
+        "path": "mod:localisation/english/b_l_english.yml",
+        "start": {
+          "column": 1,
+          "line": 2,
+          "offset": 11
+        }
+      },
+      "metadata": {
+        "key": "k3",
+        "language": "l_english",
+        "value": "no bom"
+      },
+      "overridden": false,
+      "path": "mod:localisation/english/b_l_english.yml",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1:2:sea:2",
+      "kind": "adjacency",
+      "loadOrder": 10,
+      "metadata": {
+        "from": "1",
+        "line": 2,
+        "through": "3",
+        "to": "2",
+        "type": "sea"
+      },
+      "overridden": false,
+      "path": "mod:map/adjacencies.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1:3:impassable:3",
+      "kind": "adjacency",
+      "loadOrder": 10,
+      "metadata": {
+        "from": "1",
+        "line": 3,
+        "to": "3",
+        "type": "impassable"
+      },
+      "overridden": false,
+      "path": "mod:map/adjacencies.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "0",
+      "kind": "province",
+      "loadOrder": 10,
+      "metadata": {
+        "coastal": "false",
+        "color": "0,0,0",
+        "continent": "0",
+        "line": 1,
+        "terrain": "unknown",
+        "type": "land"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "0,0,0",
+      "kind": "province_color",
+      "loadOrder": 10,
+      "metadata": {
+        "line": 1,
+        "provinceId": "0"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1",
+      "kind": "province",
+      "loadOrder": 10,
+      "metadata": {
+        "coastal": "true",
+        "color": "10,20,30",
+        "continent": "1",
+        "line": 2,
+        "terrain": "plains",
+        "type": "land"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "10,20,30",
+      "kind": "province_color",
+      "loadOrder": 10,
+      "metadata": {
+        "line": 2,
+        "provinceId": "1"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "2",
+      "kind": "province",
+      "loadOrder": 10,
+      "metadata": {
+        "color": "1,2,3",
+        "line": 3,
+        "type": "sea"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1,2,3",
+      "kind": "province_color",
+      "loadOrder": 10,
+      "metadata": {
+        "line": 3,
+        "provinceId": "2"
+      },
+      "overridden": false,
+      "path": "mod:map/definition.csv",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1:1:2:3",
+      "kind": "railway",
+      "loadOrder": 10,
+      "metadata": {
+        "line": 1,
+        "values": ["1", "2", "3"]
+      },
+      "overridden": false,
+      "path": "mod:map/railways.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1",
+      "kind": "strategic_region",
+      "loadOrder": 10,
+      "location": {
+        "end": {
+          "column": 59,
+          "line": 1,
+          "offset": 58
+        },
+        "path": "mod:map/strategicregions/1.txt",
+        "start": {
+          "column": 1,
+          "line": 1,
+          "offset": 0
+        },
+        "symbol": "1"
+      },
+      "metadata": {
+        "name": "R",
+        "provinces": ["1", "2"]
+      },
+      "overridden": false,
+      "path": "mod:map/strategicregions/1.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    },
+    {
+      "id": "1:1:2",
+      "kind": "supply_node",
+      "loadOrder": 10,
+      "metadata": {
+        "line": 1,
+        "values": ["1", "2"]
+      },
+      "overridden": false,
+      "path": "mod:map/supply_nodes.txt",
+      "rootKind": "mod",
+      "sourceShadowed": false
+    }
+  ]
+}

@@ -20,9 +20,16 @@ afterEach(async () => {
 
 /**
  * A stand-in for `hoi4-engine check`: it reports one invented effect in the file the test
- * writes, as the real engine reports `REF_UNKNOWN_EFFECT`, and refuses any other command.
+ * writes, as the real engine reports `REF_UNKNOWN_EFFECT`. Any other command (the shared index
+ * of ADR 0085) goes to the real engine the test setup found, or is refused without one.
  */
 const FAKE_CHECK = `import process from 'node:process';
+import { spawn } from 'node:child_process';
+const real = ${JSON.stringify(savedEngine ?? null)};
+if (process.argv[2] !== 'check' && real !== null) {
+  const child = spawn(real, process.argv.slice(2), { stdio: 'inherit', windowsHide: true });
+  child.on('exit', (code) => process.exit(code ?? 1));
+} else {
 process.stdin.resume();
 process.stdin.on('end', () => {
   if (process.argv[2] !== 'check' || !process.argv.includes('--mod')) process.exit(64);
@@ -46,6 +53,7 @@ process.stdin.on('end', () => {
     }],
   }));
 });
+}
 `;
 
 async function connect(engine: 'fake' | 'none') {

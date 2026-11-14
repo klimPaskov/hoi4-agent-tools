@@ -49,7 +49,6 @@ async function setup(limits: { jobDeadlineSeconds: number; jobCancelGraceSeconds
       }),
     ),
   );
-  await engine.persistentAnalysisCache;
   const jobs = await JobService.create(engine.resolver);
   const record = (
     await jobs.submit('test', {

@@ -106,7 +106,7 @@ try {
         ],
       }),
     );
-    const nudger = new AgentNudger(new CoreEngine(resolver, { persistentAnalysisCache: null }));
+    const nudger = new AgentNudger(new CoreEngine(resolver));
     let index;
     try {
       ({ index } = await nudger.scan('parity'));

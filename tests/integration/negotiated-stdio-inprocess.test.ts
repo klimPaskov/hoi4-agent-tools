@@ -35,7 +35,6 @@ async function fixture(): Promise<CoreEngine> {
     workspaces: [{ id: 'fixture', name: 'Fixture', root: workspace }],
   });
   const engine = new CoreEngine(await WorkspaceResolver.create(configuration));
-  await engine.persistentAnalysisCache;
   return engine;
 }
 

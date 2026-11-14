@@ -162,6 +162,7 @@ impl Walker<'_> {
                     to: value.to_string(),
                     line: at.0,
                     offset: at.1,
+                    end: at.1,
                     ordinal: ordinal as u32,
                 },
             ));

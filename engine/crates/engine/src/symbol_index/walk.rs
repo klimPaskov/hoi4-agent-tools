@@ -6,7 +6,7 @@
 //! scalar-valued assignments: an advisor's `idea_token` and the entries of `common/script_constants`.
 
 use super::SymbolKind as K;
-use super::reader::{Block, SOURCE_MAX_NESTING, Value};
+use super::reader::{Block, SOURCE_MAX_NESTING, Scalar, Value};
 
 /// A definition: kind, id, first line, last line.
 pub type Found = (K, String, u32, u32);
@@ -23,6 +23,8 @@ pub struct Reference {
     pub line: u32,
     /// Start offset of that node, so two references of one line stay apart.
     pub offset: u32,
+    /// End offset of that node (the TypeScript location's end); the semantic scan sets the start.
+    pub end: u32,
     /// Position among all references of the file, to apply the index's ceiling in file order.
     pub ordinal: u32,
 }
@@ -39,9 +41,22 @@ pub enum Collect<'p> {
     Count,
 }
 
+/// What a rich walk ([`walk_rich`]) adds to each definition: the span of the node its TypeScript
+/// location names, in bytes of the decoded text, and the TypeScript record's `metadata`.
+#[derive(Clone, Debug)]
+pub struct Rich {
+    pub start: u32,
+    pub end: u32,
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
 pub struct Walked {
     pub symbols: Vec<Found>,
+    /// One entry per symbol, in the same order, from a rich walk; empty otherwise.
+    pub rich: Vec<Rich>,
     pub nesting_blocked: bool,
+    /// The first block past the nesting ceiling (`SOURCE_INDEX_NESTING_LIMIT`), in bytes.
+    pub nesting_block: Option<(u32, u32)>,
     /// References to the requested target, in the order the TypeScript walk recorded them.
     pub references: Vec<Reference>,
     /// Every reference the file recorded, whatever it points at.
@@ -104,32 +119,63 @@ fn contains_insensitive(haystack: &str, needle: &str) -> bool {
     haystack.to_lowercase().contains(needle)
 }
 
+type Metadata = serde_json::Map<String, serde_json::Value>;
+
+/// `numeric` of the TypeScript index: a whole number written as one, if it is a safe integer.
+fn numeric(value: Option<&str>) -> Option<serde_json::Value> {
+    let value = value?;
+    let digits = value.strip_prefix('-').unwrap_or(value);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let parsed: f64 = value.parse().ok()?;
+    (parsed.abs() <= 9_007_199_254_740_991.0).then(|| serde_json::Value::from(parsed as i64))
+}
+
+/// A metadata object; `None` values are left out, as `undefined` members vanish from JSON.
+fn meta<const N: usize>(entries: [(&str, Option<serde_json::Value>); N]) -> Metadata {
+    entries.into_iter().filter_map(|(key, value)| value.map(|value| (key.to_string(), value))).collect()
+}
+
+fn text(value: Option<&Scalar<'_>>) -> Option<serde_json::Value> {
+    value.map(|s| serde_json::Value::from(s.value.as_ref()))
+}
+
 struct Walker<'p> {
     path: &'p str,
     gfx: bool,
     symbols: Vec<Found>,
+    /// The rich half of each symbol, for a rich walk.
+    rich: Option<Vec<Rich>>,
     /// Which references to keep; all of them are counted unless this is `Nothing`.
     collect: Collect<'p>,
     references: Vec<Reference>,
     reference_total: usize,
     nesting_blocked: bool,
+    /// The first block past the nesting ceiling, as a span in bytes.
+    nesting_block: Option<(u32, u32)>,
     /// First and last line of the assignment being visited, so a definition recorded on its first
     /// line spans the whole assignment (`nodeLocation` of the assignment in the TypeScript index).
     current: (u32, u32),
 }
 
 impl Walker<'_> {
-    fn add(&mut self, kind: K, id: &str, line: u32) {
+    /// `addSymbol`: `span` is the node its location names and `metadata` its record's metadata,
+    /// built only for a rich walk.
+    fn add(&mut self, kind: K, id: &str, line: u32, span: (u32, u32), metadata: impl FnOnce() -> Metadata) {
         let end = if line == self.current.0 { self.current.1 } else { line };
         self.symbols.push((kind, id.to_string(), line, end));
+        if let Some(rich) = &mut self.rich {
+            rich.push(Rich { start: span.0, end: span.1, metadata: metadata() });
+        }
     }
 
     fn starts(&self, prefix: &str) -> bool {
         self.path.starts_with(prefix)
     }
 
-    /// `addReference`.
-    fn reference(&mut self, kind: &'static str, from: &str, to_kind: K, to: &str, line: u32, offset: u32) {
+    /// `addReference`; `node` is the start and end of the node its location names.
+    fn reference(&mut self, kind: &'static str, from: &str, to_kind: K, to: &str, line: u32, node: (u32, u32)) {
         let keep = match self.collect {
             Collect::Nothing => return,
             Collect::Symbol(target) => to == target,
@@ -145,7 +191,8 @@ impl Walker<'_> {
                 to_kind,
                 to: to.to_string(),
                 line,
-                offset,
+                offset: node.0,
+                end: node.1,
                 ordinal,
             });
         }
@@ -159,27 +206,27 @@ impl Walker<'_> {
         }
         for path_block in child.child_blocks("path") {
             if let Some(target) = path_block.first_scalar("leads_to_tech") {
-                self.reference("technology_prerequisite", key, K::Technology, &target.value, target.line, target.start);
+                self.reference("technology_prerequisite", key, K::Technology, &target.value, target.line, (target.start, target.end));
             }
         }
         for xor in child.child_blocks("xor") {
             for target in xor.scalars() {
-                self.reference("technology_exclusive", key, K::Technology, &target.value, xor.start_line, xor.start);
+                self.reference("technology_exclusive", key, K::Technology, &target.value, xor.start_line, (xor.start, xor.end));
             }
         }
         for folder in child.child_blocks("folder") {
             if let Some(target) = folder.first_scalar("name") {
-                self.reference("technology_folder", key, K::TechnologyFolder, &target.value, target.line, target.start);
+                self.reference("technology_folder", key, K::TechnologyFolder, &target.value, target.line, (target.start, target.end));
             }
         }
         for categories in child.child_blocks("categories") {
             for target in categories.scalars() {
-                self.reference("technology_category", key, K::TechnologyCategory, &target.value, categories.start_line, categories.start);
+                self.reference("technology_category", key, K::TechnologyCategory, &target.value, categories.start_line, (categories.start, categories.end));
             }
         }
         for tags in child.child_blocks("tags") {
             for target in tags.scalars() {
-                self.reference("technology_tag", key, K::TechnologyTag, &target.value, tags.start_line, tags.start);
+                self.reference("technology_tag", key, K::TechnologyTag, &target.value, tags.start_line, (tags.start, tags.end));
             }
         }
         for (field, kind, to_kind) in [
@@ -189,13 +236,13 @@ impl Walker<'_> {
         ] {
             for unlock in child.child_blocks(field) {
                 for target in unlock.scalars() {
-                    self.reference(kind, key, to_kind, &target.value, unlock.start_line, unlock.start);
+                    self.reference(kind, key, to_kind, &target.value, unlock.start_line, (unlock.start, unlock.end));
                 }
             }
         }
         for building in child.child_blocks("enable_building") {
             if let Some(target) = building.first_scalar("building") {
-                self.reference("technology_enable_building", key, K::Building, &target.value, target.line, target.start);
+                self.reference("technology_enable_building", key, K::Building, &target.value, target.line, (target.start, target.end));
             }
         }
     }
@@ -209,22 +256,23 @@ impl Walker<'_> {
             for block in child.child_blocks(field) {
                 for target in block.assignments().filter(|a| a.key.value == "focus") {
                     if let Value::Scalar(value) = &target.value {
-                        self.reference(kind, id, K::Focus, &value.value, target.key.line, target.key.start);
+                        self.reference(kind, id, K::Focus, &value.value, target.key.line, (target.key.start, target.end()));
                     }
                 }
             }
         }
         if let Some(relative) = child.first_scalar("relative_position_id") {
-            self.reference("focus_relative_position", id, K::Focus, &relative.value, relative.line, relative.start);
+            self.reference("focus_relative_position", id, K::Focus, &relative.value, relative.line, (relative.start, relative.end));
         }
         if let Some(icon) = child.first_scalar("icon") {
-            self.reference("focus_icon", id, K::Sprite, &icon.value, icon.line, icon.start);
+            self.reference("focus_icon", id, K::Sprite, &icon.value, icon.line, (icon.start, icon.end));
         }
     }
 
     fn walk<'b>(&mut self, block: &'b Block<'_>, ancestors: &mut Vec<&'b str>) {
         if ancestors.len() > SOURCE_MAX_NESTING {
             self.nesting_blocked = true;
+            self.nesting_block.get_or_insert((block.start, block.end));
             return;
         }
         let parent = ancestors.last().copied();
@@ -238,14 +286,18 @@ impl Walker<'_> {
                 Value::Block(_) => line,
             };
             self.current = (line, end_line.max(line));
+            let span = (assignment.key.start, assignment.end());
             let child = match &assignment.value {
                 Value::Scalar(value) => {
                     if key == "idea_token" && self.starts("common/characters/") && parent == Some("advisor") {
-                        self.add(K::Idea, &value.value, line);
+                        self.add(K::Idea, &value.value, line, span, || meta([("advisor", Some(true.into()))]));
                     }
                     if self.starts("common/script_constants/") && key != "schema" && !ancestors.contains(&"schema") {
                         let id = if ancestors.is_empty() { key.to_string() } else { format!("{}.{key}", ancestors.join(".")) };
                         self.symbols.push((K::ScriptConstant, id, line, end_line.max(line)));
+                        if let Some(rich) = &mut self.rich {
+                            rich.push(Rich { start: span.0, end: span.1, metadata: meta([("value", Some(value.value.as_ref().into()))]) });
+                        }
                     }
                     continue;
                 }
@@ -253,115 +305,149 @@ impl Walker<'_> {
             };
             let id = child.first_scalar("id").map(|s| s.value.as_ref());
             if key == "focus_tree" && id.is_some() {
-                self.add(K::FocusTree, id.unwrap_or_default(), line);
+                self.add(K::FocusTree, id.unwrap_or_default(), line, span, Metadata::new);
             } else if key == "continuous_focus_palette" && id.is_some() {
-                self.add(K::ContinuousFocusPalette, id.unwrap_or_default(), line);
+                self.add(K::ContinuousFocusPalette, id.unwrap_or_default(), line, span, Metadata::new);
             } else if self.starts("common/technologies/") && depth == 1 && parent == Some("technologies") && !key.starts_with('@') {
-                self.add(K::Technology, key, line);
+                self.add(K::Technology, key, line, span, || {
+                    meta([
+                        ("startYear", text(child.first_scalar("start_year"))),
+                        ("researchCost", text(child.first_scalar("research_cost"))),
+                        ("doctrine", Some(child.first_scalar("doctrine").is_some_and(|s| s.value == "yes").into())),
+                        ("icon", Some(format!("GFX_{key}_medium").into())),
+                    ])
+                });
                 self.technology_references(key, child);
             } else if self.starts("common/technology_tags/") && key == "technology_categories" {
                 for category in child.scalars() {
-                    self.add(K::TechnologyCategory, &category.value, category.line);
+                    self.add(K::TechnologyCategory, &category.value, category.line, (category.start, category.end), Metadata::new);
                 }
             } else if self.starts("common/technology_tags/") && key == "technology_tags" {
                 for tag in child.scalars() {
-                    self.add(K::TechnologyTag, &tag.value, tag.line);
+                    self.add(K::TechnologyTag, &tag.value, tag.line, (tag.start, tag.end), Metadata::new);
                 }
             } else if self.starts("common/technology_tags/") && parent == Some("technology_folders") {
-                self.add(K::TechnologyFolder, key, line);
+                self.add(K::TechnologyFolder, key, line, span, || {
+                    meta([
+                        ("doctrine", Some(child.first_scalar("doctrine").is_some_and(|s| s.value == "yes").into())),
+                        ("ledger", text(child.first_scalar("ledger"))),
+                    ])
+                });
             } else if self.starts("common/units/equipment/modules/") && parent == Some("equipment_modules") && key != "limit" {
-                self.add(K::EquipmentModule, key, line);
+                self.add(K::EquipmentModule, key, line, span, Metadata::new);
             } else if self.starts("common/units/equipment/")
                 && !self.starts("common/units/equipment/modules/")
                 && parent == Some("equipments")
                 && key != "limit"
             {
-                self.add(K::Equipment, key, line);
+                self.add(K::Equipment, key, line, span, Metadata::new);
             } else if self.starts("common/units/") && !self.starts("common/units/equipment/") && parent == Some("sub_units") {
-                self.add(K::SubUnit, key, line);
+                self.add(K::SubUnit, key, line, span, Metadata::new);
             } else if self.starts("common/buildings/") && parent == Some("buildings") {
-                self.add(K::Building, key, line);
+                self.add(K::Building, key, line, span, Metadata::new);
             } else if self.starts("common/abilities/") && parent == Some("ability") {
-                self.add(K::Ability, key, line);
+                self.add(K::Ability, key, line, span, Metadata::new);
             } else if (self.path == "common/combat_tactics.txt" || self.starts("common/combat_tactics/")) && parent == Some("combat_tactics") {
-                self.add(K::CombatTactic, key, line);
+                self.add(K::CombatTactic, key, line, span, Metadata::new);
             } else if self.starts("common/doctrines/folders/") && depth == 0 {
-                self.add(K::DoctrineFolder, key, line);
+                self.add(K::DoctrineFolder, key, line, span, Metadata::new);
             } else if self.starts("common/doctrines/grand_doctrines/") && depth == 0 {
-                self.add(K::GrandDoctrine, key, line);
+                self.add(K::GrandDoctrine, key, line, span, || meta([("folder", text(child.first_scalar("folder")))]));
             } else if self.starts("common/doctrines/tracks/") && depth == 0 {
-                self.add(K::DoctrineTrack, key, line);
+                self.add(K::DoctrineTrack, key, line, span, Metadata::new);
             } else if self.starts("common/doctrines/subdoctrines/") && depth == 0 {
-                self.add(K::Subdoctrine, key, line);
+                self.add(K::Subdoctrine, key, line, span, Metadata::new);
             } else if key == "focus" && id.is_some() && parent == Some("continuous_focus_palette") {
-                self.add(K::ContinuousFocus, id.unwrap_or_default(), line);
+                let id = id.unwrap_or_default();
+                self.add(K::ContinuousFocus, id, line, span, Metadata::new);
                 if let Some(icon) = child.first_scalar("icon") {
-                    self.reference("continuous_focus_icon", id.unwrap_or_default(), K::Sprite, &icon.value, icon.line, icon.start);
+                    self.reference("continuous_focus_icon", id, K::Sprite, &icon.value, icon.line, (icon.start, icon.end));
                 }
             } else if id.is_some() && (((key == "shared_focus" || key == "joint_focus") && depth == 0) || (key == "focus" && parent == Some("focus_tree"))) {
+                let id = id.unwrap_or_default();
                 // Shared and joint focuses sit outside any tree; trees add them by id.
-                self.add(K::Focus, id.unwrap_or_default(), line);
-                // Only a focus of a tree names prerequisites; shared and joint ones record none.
                 if key == "focus" {
-                    self.focus_references(id.unwrap_or_default(), child);
+                    self.add(K::Focus, id, line, span, || {
+                        meta([
+                            ("x", numeric(child.first_scalar("x").map(|s| s.value.as_ref()))),
+                            ("y", numeric(child.first_scalar("y").map(|s| s.value.as_ref()))),
+                        ])
+                    });
+                    // Only a focus of a tree names prerequisites; shared and joint ones record none.
+                    self.focus_references(id, child);
+                } else {
+                    self.add(K::Focus, id, line, span, || meta([("shared", Some(key.into()))]));
                 }
             } else if self.starts("events/") && depth == 0 && EVENT_BLOCK_KEYS.contains(&key) && id.is_some() {
-                self.add(K::Event, id.unwrap_or_default(), line);
+                self.add(K::Event, id.unwrap_or_default(), line, span, || meta([("eventType", Some(key.into()))]));
             } else if self.starts("common/scripted_effects/") && depth == 0 {
-                self.add(K::ScriptedEffect, key, line);
+                self.add(K::ScriptedEffect, key, line, span, Metadata::new);
             } else if self.starts("common/scripted_triggers/") && depth == 0 {
-                self.add(K::ScriptedTrigger, key, line);
+                self.add(K::ScriptedTrigger, key, line, span, Metadata::new);
             } else if self.starts("common/mtth/") && depth == 0 {
-                self.add(K::MtthVariable, key, line);
+                self.add(K::MtthVariable, key, line, span, Metadata::new);
             } else if self.starts("common/ai_strategy/") && depth == 0 {
-                self.add(K::AiStrategy, key, line);
+                self.add(K::AiStrategy, key, line, span, Metadata::new);
             } else if self.starts("common/ai_strategy_plans/") && depth == 0 {
-                self.add(K::AiStrategyPlan, key, line);
+                self.add(K::AiStrategyPlan, key, line, span, Metadata::new);
             } else if self.starts("common/decisions/") && depth == 0 {
-                self.add(K::DecisionCategory, key, line);
+                self.add(K::DecisionCategory, key, line, span, Metadata::new);
             } else if self.starts("common/decisions/") && !self.starts("common/decisions/categories/") && depth == 1 && !DECISION_CATEGORY_FIELDS.contains(&key)
             {
-                self.add(K::Decision, key, line);
                 let category = ancestors.first().copied().unwrap_or("");
+                self.add(K::Decision, key, line, span, || meta([("category", Some(category.into()))]));
                 let context = format!("{}:{category}", self.path);
                 if contains_insensitive(&context, "formable") || contains_insensitive(&context, "form_country") || key.to_lowercase().starts_with("form_") {
-                    self.add(K::Formable, key, line);
+                    self.add(K::Formable, key, line, span, || meta([("decision", Some(key.into()))]));
                 }
             } else if self.starts("common/ideas/") && depth == 2 && ancestors[0] == "ideas" {
-                self.add(K::Idea, key, line);
+                let category = ancestors[1];
+                self.add(K::Idea, key, line, span, || meta([("category", Some(category.into()))]));
             } else if self.starts("common/characters/") && depth == 1 && ancestors[0] == "characters" {
-                self.add(K::Leader, key, line);
+                self.add(K::Leader, key, line, span, Metadata::new);
             } else if self.gfx
                 && SPRITE_DEFINITION_KEYS.contains(&key.to_lowercase().as_str())
                 && let Some(name) = child.first_scalar_insensitive(&["name"])
             {
-                self.add(K::Sprite, &name.value, line);
-                if let Some(texture) = child.first_scalar_insensitive(&["texturefile"]) {
-                    self.add(K::Texture, &texture.value, texture.line);
+                let texture = child.first_scalar_insensitive(&["texturefile"]);
+                self.add(K::Sprite, &name.value, line, span, || {
+                    meta([
+                        ("spriteType", Some(key.into())),
+                        ("texture", text(texture)),
+                        ("frames", numeric(child.first_scalar_insensitive(&["noofframes"]).map(|s| s.value.as_ref()))),
+                    ])
+                });
+                if let Some(texture) = texture {
+                    self.add(K::Texture, &texture.value, texture.line, (texture.start, texture.end), || meta([("sprite", Some(name.value.as_ref().into()))]));
                 }
             } else if GUI_ELEMENT_KEYS.contains(&key)
                 && let Some(name) = child.first_scalar("name")
             {
-                self.add(K::GuiElement, &name.value, line);
+                self.add(K::GuiElement, &name.value, line, span, || {
+                    meta([("elementType", Some(key.into())), ("ancestors", Some(ancestors.iter().map(|a| serde_json::Value::from(*a)).collect()))])
+                });
                 if let Some(sprite) = child.first_scalar("spriteType") {
-                    self.reference("gui_sprite", &name.value, K::Sprite, &sprite.value, sprite.line, sprite.start);
+                    self.reference("gui_sprite", &name.value, K::Sprite, &sprite.value, sprite.line, (sprite.start, sprite.end));
                 }
             } else if parent == Some("scripted_gui") {
-                self.add(K::ScriptedGui, key, line);
+                self.add(K::ScriptedGui, key, line, span, || {
+                    meta([("context", text(child.first_scalar("context_type"))), ("window", text(child.first_scalar("window_name")))])
+                });
                 if let Some(window) = child.first_scalar("window_name") {
-                    self.reference("scripted_gui_window", key, K::GuiElement, &window.value, window.line, window.start);
+                    self.reference("scripted_gui_window", key, K::GuiElement, &window.value, window.line, (window.start, window.end));
                 }
             } else if key == "state" && id.is_some() {
-                self.add(K::State, id.unwrap_or_default(), line);
+                let id = id.unwrap_or_default();
+                self.add(K::State, id, line, span, || provinces_and_name(child));
                 if !matches!(self.collect, Collect::Nothing) {
                     for provinces in child.child_blocks("provinces") {
                         for province in provinces.scalars() {
-                            self.reference("state_province", id.unwrap_or_default(), K::Province, &province.value, line, assignment.key.start);
+                            self.reference("state_province", id, K::Province, &province.value, line, span);
                         }
                     }
                 }
             } else if (key == "strategic_region" || key == "strategic_region_template") && id.is_some() {
-                self.add(K::StrategicRegion, id.unwrap_or_default(), line);
+                self.add(K::StrategicRegion, id.unwrap_or_default(), line, span, || provinces_and_name(child));
             }
             ancestors.push(key);
             self.walk(child, ancestors);
@@ -370,22 +456,47 @@ impl Walker<'_> {
     }
 }
 
+/// The metadata of a state or a strategic region: every scalar of its `provinces` blocks and its
+/// `name`.
+fn provinces_and_name(child: &Block<'_>) -> Metadata {
+    let provinces: Vec<serde_json::Value> = child.child_blocks("provinces").flat_map(|b| b.scalars()).map(|s| s.value.as_ref().into()).collect();
+    meta([("provinces", Some(provinces.into())), ("name", text(child.first_scalar("name")))])
+}
+
 /// The definitions of one parsed file. `path` is its relative path in lower case.
 ///
 /// With a `collect` mode other than `Nothing`, references are counted, and kept as it says.
 pub fn walk<'p>(root: &Block<'_>, path: &'p str, collect: Collect<'p>) -> Walked {
+    walk_with(root, path, collect, false)
+}
+
+/// [`walk`] that also records each definition's node span and metadata ([`Walked::rich`]).
+pub fn walk_rich<'p>(root: &Block<'_>, path: &'p str, collect: Collect<'p>) -> Walked {
+    walk_with(root, path, collect, true)
+}
+
+fn walk_with<'p>(root: &Block<'_>, path: &'p str, collect: Collect<'p>, rich: bool) -> Walked {
     let mut walker = Walker {
         path,
         gfx: path.ends_with(".gfx"),
         symbols: Vec::new(),
+        rich: rich.then(Vec::new),
         collect,
         references: Vec::new(),
         reference_total: 0,
         nesting_blocked: false,
+        nesting_block: None,
         current: (0, 0),
     };
     walker.walk(root, &mut Vec::new());
-    Walked { symbols: walker.symbols, nesting_blocked: walker.nesting_blocked, references: walker.references, reference_total: walker.reference_total }
+    Walked {
+        symbols: walker.symbols,
+        rich: walker.rich.unwrap_or_default(),
+        nesting_blocked: walker.nesting_blocked,
+        nesting_block: walker.nesting_block,
+        references: walker.references,
+        reference_total: walker.reference_total,
+    }
 }
 
 #[cfg(test)]

@@ -10,8 +10,10 @@
 //! bare block, `color = rgb { ... }` is an assignment of `rgb` followed by a bare block, and an
 //! operator or `}` where a value belongs is taken as the value. A file whose diagnostics reach the
 //! TypeScript per-file ceiling (101 or more), or that hits a size, line, token, entry or nesting
-//! ceiling, is reported as `partial`; the index skips it, as the TypeScript index did. Only the
-//! diagnostics' count and whether a ceiling was hit are kept, not their text.
+//! ceiling, is reported as `partial`; the index skips it, as the TypeScript index did. The
+//! counting reader keeps only the diagnostics' count and ceilings; the detailed one
+//! (`parse_clausewitz_detailed`, `parse_localisation_detailed`) keeps each diagnostic with the
+//! TypeScript message, place and details, for the shared index of ADR 0085.
 
 use std::borrow::Cow;
 
@@ -46,17 +48,59 @@ impl Limit {
     }
 }
 
+/// Where a source diagnostic points: a span of the decoded text in bytes or in UTF-16 code units
+/// (the TypeScript offsets), or a fixed position the TypeScript reader writes as it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum At {
+    Bytes(u32, u32),
+    Utf16(u32, u32),
+    /// Line, column and UTF-16 offset, the same for start and end.
+    Fixed(u32, u32, u32),
+    /// Line and column with the UTF-16 offset of a byte position.
+    FixedAtByte(u32, u32, u32),
+}
+
+/// One diagnostic of the TypeScript source reader, kept when [`Diagnostics::detailed`] asks.
+#[derive(Clone, Debug)]
+pub struct SourceDiagnostic {
+    pub code: &'static str,
+    pub severity: &'static str,
+    pub message: String,
+    pub at: Option<At>,
+    pub details: Option<serde_json::Value>,
+}
+
+impl SourceDiagnostic {
+    pub fn syntax(code: &'static str, severity: &'static str, message: impl Into<String>, at: At) -> Self {
+        SourceDiagnostic { code, severity, message: message.into(), at: Some(at), details: None }
+    }
+
+    fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.details = Some(details);
+        self
+    }
+}
+
 /// `SourceDiagnosticCollector`: counts diagnostics and remembers the ceilings that make a source
 /// partial. The 101st diagnostic replaces the 100th with `SOURCE_DIAGNOSTICS_TRUNCATED`.
+///
+/// A detailed collector also keeps each diagnostic as the TypeScript collector does, and then
+/// takes its ceilings from the retained list, as `sourcePartialLimitDiagnostics` does.
 #[derive(Default, Debug)]
 pub struct Diagnostics {
     count: usize,
     truncated: bool,
     limits: Vec<Limit>,
+    detail: Option<Vec<SourceDiagnostic>>,
 }
 
 impl Diagnostics {
-    fn add(&mut self, limit: Option<Limit>) {
+    /// A collector that keeps every retained diagnostic.
+    pub fn detailed() -> Self {
+        Diagnostics { detail: Some(Vec::new()), ..Diagnostics::default() }
+    }
+
+    fn add_with(&mut self, limit: Option<Limit>, make: impl FnOnce() -> Option<SourceDiagnostic>) {
         if self.truncated {
             return;
         }
@@ -65,20 +109,49 @@ impl Diagnostics {
             if let Some(limit) = limit {
                 self.limits.push(limit);
             }
+            if let Some(detail) = &mut self.detail
+                && let Some(diagnostic) = make()
+            {
+                detail.push(diagnostic);
+            }
             return;
         }
         // The last retained diagnostic is replaced; a ceiling it held is still a ceiling, and the
         // truncation marker is one too.
         self.truncated = true;
         self.limits.push(Limit::DiagnosticsTruncated);
+        if let Some(detail) = &mut self.detail
+            && let Some(last) = detail.last_mut()
+        {
+            *last = SourceDiagnostic {
+                code: "SOURCE_DIAGNOSTICS_TRUNCATED",
+                severity: "blocker",
+                message: format!("Source diagnostics exceeded the per-file limit of {SOURCE_DIAGNOSTIC_LIMIT}; remaining diagnostics were omitted"),
+                at: last.at,
+                details: Some(serde_json::json!({ "limit": SOURCE_DIAGNOSTIC_LIMIT, "retained": SOURCE_DIAGNOSTIC_LIMIT - 1 })),
+            };
+        }
     }
 
-    fn note(&mut self) {
-        self.add(None);
+    fn note_with(&mut self, make: impl FnOnce() -> SourceDiagnostic) {
+        self.add_with(None, || Some(make()));
     }
 
-    fn limit(&mut self, limit: Limit) {
-        self.add(Some(limit));
+    fn limit_with(&mut self, limit: Limit, make: impl FnOnce() -> SourceDiagnostic) {
+        self.add_with(Some(limit), || Some(make()));
+    }
+
+    /// The retained diagnostics of a detailed collector, in the order they were reported.
+    pub fn retained(&self) -> &[SourceDiagnostic] {
+        self.detail.as_deref().unwrap_or(&[])
+    }
+
+    /// The retained diagnostics whose code is a ceiling (`sourcePartialLimitDiagnostics`), for a
+    /// detailed collector.
+    pub fn retained_limits(&self) -> Vec<&SourceDiagnostic> {
+        const CODES: [&str; 6] =
+            ["SOURCE_FILE_SIZE_LIMIT", "SOURCE_LINE_LIMIT", "SOURCE_TOKEN_LIMIT", "SOURCE_ENTRY_LIMIT", "SOURCE_NESTING_LIMIT", "SOURCE_DIAGNOSTICS_TRUNCATED"];
+        self.retained().iter().filter(|d| CODES.contains(&d.code)).collect()
     }
 
     /// The ceiling codes that make the source partial, sorted and without repeats.
@@ -140,7 +213,9 @@ pub fn is_js_line_terminator(c: char) -> bool {
 }
 
 /// Line breaks as `createSourceLineIndex` counts them: `\r\n`, `\r` and `\n`.
-fn line_limit_exceeded(text: &str) -> bool {
+/// The byte offset just past the break that reaches the line ceiling (`lineLimitExceededAt`), if
+/// one does.
+fn line_limit_at(text: &str) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut breaks = 0usize;
     let mut i = 0;
@@ -156,11 +231,59 @@ fn line_limit_exceeded(text: &str) -> bool {
             _ => {}
         }
         if breaks >= SOURCE_LINE_LIMIT {
-            return true;
+            return Some(i + 1);
         }
         i += 1;
     }
-    false
+    None
+}
+
+/// Bytes of a Windows-1252 file that decode to U+FFFD (`findWindows1252Loss`): their count, the
+/// first one's offset and their distinct values.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EncodingLoss {
+    pub count: usize,
+    pub first_offset: usize,
+    pub values: Vec<u8>,
+}
+
+pub fn windows_1252_loss(bytes: &[u8]) -> Option<EncodingLoss> {
+    let mut loss: Option<EncodingLoss> = None;
+    for (offset, &byte) in bytes.iter().enumerate() {
+        if !matches!(byte, 0x81 | 0x8D | 0x8F | 0x90 | 0x9D) {
+            continue;
+        }
+        let entry = loss.get_or_insert_with(|| EncodingLoss { count: 0, first_offset: offset, values: Vec::new() });
+        entry.count += 1;
+        if !entry.values.contains(&byte) {
+            entry.values.push(byte);
+        }
+    }
+    if let Some(entry) = &mut loss {
+        entry.values.sort_unstable();
+    }
+    loss
+}
+
+fn line_limit_diagnostic(kind: &str, text: &str, at: usize) -> SourceDiagnostic {
+    let line = SOURCE_LINE_LIMIT as u32 + 1;
+    SourceDiagnostic::syntax(
+        "SOURCE_LINE_LIMIT",
+        "blocker",
+        format!("{kind} line count exceeds the supported limit of {SOURCE_LINE_LIMIT}"),
+        At::FixedAtByte(line, 1, at.min(text.len()) as u32),
+    )
+    .with_details(serde_json::json!({ "limit": SOURCE_LINE_LIMIT }))
+}
+
+fn file_size_diagnostic(kind: &str) -> SourceDiagnostic {
+    SourceDiagnostic::syntax(
+        "SOURCE_FILE_SIZE_LIMIT",
+        "blocker",
+        format!("{kind} exceeds the supported {SOURCE_MAX_BYTES}-byte parsing limit"),
+        At::Fixed(1, 1, 0),
+    )
+    .with_details(serde_json::json!({ "limit": SOURCE_MAX_BYTES }))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -189,6 +312,8 @@ pub struct Scalar<'a> {
     /// Byte offset of the token in the decoded text: the TypeScript node's `start`, which tells two
     /// nodes of one line apart.
     pub start: u32,
+    /// Byte offset just past the token.
+    pub end: u32,
     pub quoted: bool,
 }
 
@@ -201,6 +326,19 @@ pub struct Block<'a> {
     /// 1-based line of the closing brace; of the last token when the block is never closed; 0 for a
     /// block cut off by the nesting ceiling.
     pub end_line: u32,
+    /// Byte offset just past the closing brace, or the text's end when there is none (the
+    /// TypeScript node's `end`).
+    pub end: u32,
+}
+
+impl Assignment<'_> {
+    /// The TypeScript assignment node's `end`: its value's.
+    pub fn end(&self) -> u32 {
+        match &self.value {
+            Value::Scalar(s) => s.end,
+            Value::Block(b) => b.end,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -317,7 +455,16 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
     };
     while i < len {
         if count >= SOURCE_TOKEN_LIMIT {
-            diagnostics.limit(Limit::Token);
+            let width = if bytes[i] < 0x80 { 1 } else { char_at(text, i).len_utf8() };
+            diagnostics.limit_with(Limit::Token, || {
+                SourceDiagnostic::syntax(
+                    "SOURCE_TOKEN_LIMIT",
+                    "blocker",
+                    format!("Source token count exceeds the supported limit of {SOURCE_TOKEN_LIMIT}"),
+                    At::Bytes(i as u32, (i + width) as u32),
+                )
+                .with_details(serde_json::json!({ "limit": SOURCE_TOKEN_LIMIT }))
+            });
             break;
         }
         count += 1;
@@ -347,12 +494,21 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
             let mut terminated = false;
             while i < len {
                 if bytes[i] == b'\\' {
+                    let escape_start = i as u32;
                     advance(&mut i, &mut line);
                     if i < len {
                         let escaped = bytes[i];
                         advance(&mut i, &mut line);
                         if escaped != b'\\' && escaped != b'"' {
-                            diagnostics.note();
+                            let end = i as u32;
+                            diagnostics.note_with(|| {
+                                SourceDiagnostic::syntax(
+                                    "SOURCE_UNSUPPORTED_ESCAPE",
+                                    "error",
+                                    "Clausewitz strings support only \\\\ and \\\" escapes",
+                                    At::Bytes(escape_start, end),
+                                )
+                            });
                         }
                     }
                     continue;
@@ -365,17 +521,27 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
                 advance(&mut i, &mut line);
             }
             tokens.push(token(if terminated { TokenKind::String } else { TokenKind::Invalid }, i));
+            let span = At::Bytes(start as u32, i as u32);
             if !terminated {
-                diagnostics.note();
+                diagnostics.note_with(|| SourceDiagnostic::syntax("SOURCE_UNTERMINATED_STRING", "error", "Unterminated quoted string", span));
             }
             if terminated {
                 let raw = &text[start..i];
                 if raw.contains(['\r', '\n']) {
-                    diagnostics.note();
+                    diagnostics.note_with(|| {
+                        SourceDiagnostic::syntax("SOURCE_STRING_NEWLINE", "error", "Clausewitz quoted strings cannot contain a literal newline", span)
+                    });
                 }
                 let inner = &raw[1..raw.len() - 1];
                 if inner.len() > 255 && inner.encode_utf16().count() > 255 {
-                    diagnostics.note();
+                    diagnostics.note_with(|| {
+                        SourceDiagnostic::syntax(
+                            "SOURCE_STRING_TOO_LONG",
+                            "warning",
+                            "Clausewitz quoted strings longer than 255 characters are not portable",
+                            span,
+                        )
+                    });
                 }
             }
             continue;
@@ -386,8 +552,16 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
                 advance(&mut i, &mut line);
             }
             tokens.push(token(TokenKind::Operator, i));
-            if !matches!(&text[start..i], "=" | "<" | ">" | "?=") {
-                diagnostics.note();
+            let operator = &text[start..i];
+            if !matches!(operator, "=" | "<" | ">" | "?=") {
+                diagnostics.note_with(|| {
+                    SourceDiagnostic::syntax(
+                        "SOURCE_UNSUPPORTED_OPERATOR",
+                        "error",
+                        format!("Unsupported Clausewitz operator {operator}"),
+                        At::Bytes(start as u32, i as u32),
+                    )
+                });
             }
             continue;
         }
@@ -401,7 +575,15 @@ fn lex(text: &str, diagnostics: &mut Diagnostics) -> Vec<Token> {
         if i == start {
             advance(&mut i, &mut line);
             tokens.push(token(TokenKind::Invalid, i));
-            diagnostics.note();
+            let character = &text[start..i];
+            diagnostics.note_with(|| {
+                SourceDiagnostic::syntax(
+                    "SOURCE_INVALID_CHARACTER",
+                    "error",
+                    format!("Invalid character {}", js_string(character)),
+                    At::Bytes(start as u32, i as u32),
+                )
+            });
         } else {
             tokens.push(token(TokenKind::Atom, i));
         }
@@ -456,24 +638,31 @@ impl<'a> Parser<'_, 'a> {
     }
 
     fn scalar(&self, token: &Token) -> Scalar<'a> {
-        Scalar { value: scalar_value(self.text, token), line: token.line, start: token.start, quoted: token.kind == TokenKind::String }
+        Scalar { value: scalar_value(self.text, token), line: token.line, start: token.start, end: token.end, quoted: token.kind == TokenKind::String }
     }
 
+    fn token_text(&self, token: &Token) -> &'a str {
+        &self.text[token.start as usize..token.end as usize]
+    }
+
+    /// `at` is the opening brace's offset and line; a brace is one byte.
     fn block(&mut self, open: bool, depth: usize, at: (u32, u32)) -> Block<'a> {
         if open && depth > SOURCE_MAX_NESTING {
             return self.over_limit_block(at);
         }
         let mut entries = Vec::new();
-        let mut closed = false;
+        let mut closed = None;
         let mut end_line = 0;
         while let Some(token) = self.peek() {
             if token.kind == TokenKind::RightBrace {
                 self.index += 1;
                 if !open {
-                    self.diagnostics.note();
+                    self.diagnostics.note_with(|| {
+                        SourceDiagnostic::syntax("SOURCE_UNEXPECTED_RIGHT_BRACE", "error", "Unexpected closing brace", At::Bytes(token.start, token.end))
+                    });
                     continue;
                 }
-                closed = true;
+                closed = Some(token.end);
                 end_line = token.line;
                 break;
             }
@@ -481,34 +670,42 @@ impl<'a> Parser<'_, 'a> {
                 entries.push(entry);
             }
         }
-        if open && !closed {
-            self.diagnostics.note();
+        if open && closed.is_none() {
+            self.diagnostics.note_with(|| unclosed(at.0));
             end_line = self.tokens.last().map_or(0, |token| token.line);
         }
-        Block { entries, start: at.0, start_line: at.1, end_line }
+        Block { entries, start: at.0, start_line: at.1, end_line, end: closed.unwrap_or(self.text.len() as u32) }
     }
 
     fn over_limit_block(&mut self, at: (u32, u32)) -> Block<'a> {
-        self.diagnostics.limit(Limit::Nesting);
+        self.diagnostics.limit_with(Limit::Nesting, || {
+            SourceDiagnostic::syntax(
+                "SOURCE_NESTING_LIMIT",
+                "blocker",
+                format!("Clausewitz block nesting exceeds the supported limit of {SOURCE_MAX_NESTING}"),
+                At::Bytes(at.0, at.0 + 1),
+            )
+            .with_details(serde_json::json!({ "limit": SOURCE_MAX_NESTING }))
+        });
         let mut nesting = 1usize;
-        let mut closed = false;
+        let mut closed = None;
         while let Some(token) = self.next() {
             match token.kind {
                 TokenKind::LeftBrace => nesting += 1,
                 TokenKind::RightBrace => {
                     nesting -= 1;
                     if nesting == 0 {
-                        closed = true;
+                        closed = Some(token.end);
                         break;
                     }
                 }
                 _ => {}
             }
         }
-        if !closed {
-            self.diagnostics.note();
+        if closed.is_none() {
+            self.diagnostics.note_with(|| unclosed(at.0));
         }
-        Block { start: at.0, start_line: at.1, ..Block::default() }
+        Block { start: at.0, start_line: at.1, end: closed.unwrap_or(self.text.len() as u32), ..Block::default() }
     }
 
     fn entry(&mut self, depth: usize) -> Option<Entry<'a>> {
@@ -517,49 +714,95 @@ impl<'a> Parser<'_, 'a> {
             return Some(Entry::Block(self.block(true, depth + 1, (token.start, token.line))));
         }
         if !matches!(token.kind, TokenKind::Atom | TokenKind::String | TokenKind::Invalid) {
-            self.diagnostics.note();
+            let text = self.token_text(&token);
+            self.diagnostics.note_with(|| {
+                SourceDiagnostic::syntax("SOURCE_UNEXPECTED_TOKEN", "error", format!("Unexpected token {}", js_string(text)), At::Bytes(token.start, token.end))
+            });
             return None;
         }
         let key = self.scalar(&token);
-        if self.peek().map(|t| t.kind) != Some(TokenKind::Operator) {
+        let Some(operator) = self.peek().filter(|t| t.kind == TokenKind::Operator) else {
             return Some(Entry::Scalar(key));
-        }
+        };
         self.index += 1;
         let Some(value_token) = self.next() else {
-            self.diagnostics.note();
+            let name = key.value.clone();
+            self.diagnostics.note_with(|| {
+                SourceDiagnostic::syntax(
+                    "SOURCE_MISSING_VALUE",
+                    "error",
+                    format!("Assignment {name} is missing a value"),
+                    At::Bytes(operator.start, operator.end),
+                )
+            });
             return Some(Entry::Scalar(key));
         };
         let value = match value_token.kind {
             TokenKind::LeftBrace => Value::Block(self.block(true, depth + 1, (value_token.start, value_token.line))),
             TokenKind::Atom | TokenKind::String | TokenKind::Invalid => Value::Scalar(self.scalar(&value_token)),
             TokenKind::Operator | TokenKind::RightBrace => {
-                self.diagnostics.note();
-                Value::Scalar(Scalar {
-                    value: Cow::Borrowed(&self.text[value_token.start as usize..value_token.end as usize]),
-                    line: value_token.line,
-                    start: value_token.start,
-                    quoted: false,
-                })
+                let text = self.token_text(&value_token);
+                self.diagnostics.note_with(|| {
+                    SourceDiagnostic::syntax(
+                        "SOURCE_INVALID_VALUE",
+                        "error",
+                        format!("Invalid assignment value {}", js_string(text)),
+                        At::Bytes(value_token.start, value_token.end),
+                    )
+                });
+                Value::Scalar(Scalar { value: Cow::Borrowed(text), line: value_token.line, start: value_token.start, end: value_token.end, quoted: false })
             }
         };
         Some(Entry::Assignment(Assignment { key, value }))
     }
 }
 
+fn unclosed(open: u32) -> SourceDiagnostic {
+    SourceDiagnostic::syntax("SOURCE_UNCLOSED_BLOCK", "error", "Block is missing a closing brace", At::Bytes(open, open + 1))
+}
+
+/// `JSON.stringify` of a string.
+fn js_string(text: &str) -> String {
+    serde_json::to_string(text).unwrap_or_default()
+}
+
 /// `parseClausewitz` over already decoded text. `byte_len` is the size of the file's bytes and
 /// `lossy` comes from [`decode`].
 pub fn parse_clausewitz(text: &str, byte_len: usize, lossy: bool) -> Document<'_> {
-    let mut diagnostics = Diagnostics::default();
+    let loss = lossy.then(|| EncodingLoss { count: 0, first_offset: 0, values: Vec::new() });
+    parse_with(text, byte_len, Diagnostics::default(), loss.as_ref())
+}
+
+/// `parseClausewitz` keeping every retained diagnostic with its message and place. `loss` is
+/// [`windows_1252_loss`] of a file read as Windows-1252.
+pub fn parse_clausewitz_detailed<'a>(text: &'a str, byte_len: usize, loss: Option<&EncodingLoss>) -> Document<'a> {
+    parse_with(text, byte_len, Diagnostics::detailed(), loss)
+}
+
+fn parse_with<'a>(text: &'a str, byte_len: usize, mut diagnostics: Diagnostics, loss: Option<&EncodingLoss>) -> Document<'a> {
+    let root_at_end = || Block { end: text.len() as u32, start_line: 1, ..Block::default() };
     if byte_len > SOURCE_MAX_BYTES {
-        diagnostics.limit(Limit::FileSize);
-        return Document { root: Block::default(), diagnostics };
+        diagnostics.limit_with(Limit::FileSize, || file_size_diagnostic("Clausewitz source"));
+        return Document { root: root_at_end(), diagnostics };
     }
-    if line_limit_exceeded(text) {
-        diagnostics.limit(Limit::Line);
-        return Document { root: Block::default(), diagnostics };
+    if let Some(at) = line_limit_at(text) {
+        diagnostics.limit_with(Limit::Line, || line_limit_diagnostic("Clausewitz source", text, at));
+        return Document { root: root_at_end(), diagnostics };
     }
-    if lossy {
-        diagnostics.note();
+    if let Some(loss) = loss {
+        diagnostics.note_with(|| {
+            let first = loss.first_offset as u32;
+            SourceDiagnostic::syntax(
+                "SOURCE_ENCODING_NOT_ROUND_TRIPPABLE",
+                "warning",
+                "Source is not valid UTF-8 and contains bytes that Windows-1252 cannot represent; it can be read but any rewrite is refused",
+                At::Utf16(first, first + 1),
+            )
+            .with_details(serde_json::json!({
+                "byteCount": loss.count,
+                "byteValues": loss.values.iter().map(|value| format!("0x{value:X}")).collect::<Vec<_>>(),
+            }))
+        });
     }
     let tokens = lex(text, &mut diagnostics);
     let mut parser = Parser { tokens: &tokens, text, index: 0, diagnostics: &mut diagnostics };
@@ -573,6 +816,11 @@ pub struct LocalisationEntry {
     pub language: String,
     pub key: String,
     pub line: u32,
+    /// The value as `decodeLocalisationValue` gives it.
+    pub value: String,
+    /// Byte offsets of the line in the decoded text, without its line break.
+    pub start: u32,
+    pub end: u32,
 }
 
 fn skip_space(chars: &[char], mut i: usize) -> usize {
@@ -607,7 +855,8 @@ fn language_line(chars: &[char]) -> Option<String> {
 /// `entryPattern` of `localisation.ts`, then `innerQuotePattern` when it does not match, returning
 /// the key: `^\s*([A-Za-z0-9_.-]+):(?:(\d+)\s+|\s*)"((?:\\.|[^"\\])*)"\s*(?:#.*)?$`, else the same
 /// prefix with `"(.*)"\s*$` (a value with quotes inside it runs to the last quote of the line).
-fn entry_line(chars: &[char]) -> Option<String> {
+/// The value is returned as `decodeLocalisationValue` gives it.
+fn entry_line_value(chars: &[char]) -> Option<(String, String)> {
     let start = skip_space(chars, 0);
     let mut i = start;
     while i < chars.len() && (chars[i].is_ascii_alphanumeric() || matches!(chars[i], '_' | '.' | '-')) {
@@ -619,35 +868,36 @@ fn entry_line(chars: &[char]) -> Option<String> {
     let key: String = chars[start..i].iter().collect();
     let after_colon = i + 1;
     // The value: from an opening quote to the first quote no backslash escapes, then a trailer.
-    let value_from = |open: usize| -> bool {
+    // Each returns the index of the closing quote.
+    let value_from = |open: usize| -> Option<usize> {
         if chars.get(open) != Some(&'"') {
-            return false;
+            return None;
         }
         let mut j = open + 1;
         while j < chars.len() {
             match chars[j] {
-                '"' => return rest_is_trailer(chars, j + 1),
+                '"' => return rest_is_trailer(chars, j + 1).then_some(j),
                 '\\' => {
                     if j + 1 >= chars.len() || is_js_line_terminator(chars[j + 1]) {
-                        return false;
+                        return None;
                     }
                     j += 2;
                 }
                 _ => j += 1,
             }
         }
-        false
+        None
     };
     // `"(.*)"\s*$`: the last quote of the line closes the value, and `.` stops at a line terminator.
-    let inner_quotes_from = |open: usize| -> bool {
+    let inner_quotes_from = |open: usize| -> Option<usize> {
         if chars.get(open) != Some(&'"') {
-            return false;
+            return None;
         }
         let mut end = chars.len();
         while end > open + 1 && is_js_space(chars[end - 1]) {
             end -= 1;
         }
-        end > open + 1 && chars[end - 1] == '"' && !chars[open + 1..end - 1].iter().any(|&c| is_js_line_terminator(c))
+        (end > open + 1 && chars[end - 1] == '"' && !chars[open + 1..end - 1].iter().any(|&c| is_js_line_terminator(c))).then_some(end - 1)
     };
     // `(\d+)\s+` first, then `\s*`.
     let mut j = after_colon;
@@ -656,7 +906,36 @@ fn entry_line(chars: &[char]) -> Option<String> {
     }
     let versioned = (j > after_colon).then(|| skip_space(chars, j)).filter(|&spaces| spaces > j);
     let starts: Vec<usize> = versioned.into_iter().chain(std::iter::once(skip_space(chars, after_colon))).collect();
-    (starts.iter().any(|&open| value_from(open)) || starts.iter().any(|&open| inner_quotes_from(open))).then_some(key)
+    let (open, close) = starts
+        .iter()
+        .find_map(|&open| value_from(open).map(|close| (open, close)))
+        .or_else(|| starts.iter().find_map(|&open| inner_quotes_from(open).map(|close| (open, close))))?;
+    Some((key, decode_localisation_value(&chars[open + 1..close])))
+}
+
+/// `decodeLocalisationValue`: `\n` becomes a line break, `\"` and `\\` lose their backslash, and
+/// any other escape is kept as written.
+fn decode_localisation_value(value: &[char]) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut i = 0;
+    while i < value.len() {
+        let c = value[i];
+        if c != '\\' || i + 1 >= value.len() {
+            result.push(c);
+            i += 1;
+            continue;
+        }
+        match value[i + 1] {
+            'n' => result.push('\n'),
+            escaped @ ('"' | '\\') => result.push(escaped),
+            escaped => {
+                result.push('\\');
+                result.push(escaped);
+            }
+        }
+        i += 2;
+    }
+    result
 }
 
 /// A parsed localisation file: its entries and diagnostics.
@@ -668,26 +947,39 @@ pub struct Localisation {
 /// `parseLocalisation` over already decoded text. `bom` is true when the file starts with a UTF-8
 /// byte order mark.
 pub fn parse_localisation(text: &str, byte_len: usize, bom: bool) -> Localisation {
-    let mut diagnostics = Diagnostics::default();
+    parse_localisation_with(text, byte_len, bom, Diagnostics::default())
+}
+
+/// `parseLocalisation` keeping every retained diagnostic with its message and place.
+pub fn parse_localisation_detailed(text: &str, byte_len: usize, bom: bool) -> Localisation {
+    parse_localisation_with(text, byte_len, bom, Diagnostics::detailed())
+}
+
+fn parse_localisation_with(text: &str, byte_len: usize, bom: bool, mut diagnostics: Diagnostics) -> Localisation {
     let mut entries = Vec::new();
     if byte_len > SOURCE_MAX_BYTES {
-        diagnostics.limit(Limit::FileSize);
+        diagnostics.limit_with(Limit::FileSize, || file_size_diagnostic("Localisation source"));
         return Localisation { entries, diagnostics };
     }
-    if line_limit_exceeded(text) {
-        diagnostics.limit(Limit::Line);
+    if let Some(at) = line_limit_at(text) {
+        diagnostics.limit_with(Limit::Line, || line_limit_diagnostic("Localisation source", text, at));
         return Localisation { entries, diagnostics };
     }
     if !bom {
-        diagnostics.note();
+        let first = text.chars().next().map_or(0, char::len_utf8) as u32;
+        diagnostics.note_with(|| {
+            SourceDiagnostic::syntax("LOCALISATION_BOM_MISSING", "error", "HOI4 localisation files require UTF-8 with BOM encoding", At::Bytes(0, first))
+        });
     }
     let mut language = String::new();
     let mut line_number = 1u32;
     let mut chars: Vec<char> = Vec::new();
     let mut rest = text;
     while !rest.is_empty() {
+        let line_start = (text.len() - rest.len()) as u32;
         let end = rest.find(['\r', '\n']).unwrap_or(rest.len());
         let line = &rest[..end];
+        let span = At::Bytes(line_start, line_start + end as u32);
         let mut next = end;
         if rest[next..].starts_with('\r') {
             next += 1;
@@ -700,15 +992,32 @@ pub fn parse_localisation(text: &str, byte_len: usize, bom: bool) -> Localisatio
         if let Some(found) = language_line(&chars) {
             language = found;
         } else if !rest_is_trailer(&chars, 0) {
-            match entry_line(&chars) {
-                None => diagnostics.note(),
-                Some(_) if language.is_empty() => diagnostics.note(),
-                Some(key) => {
+            match entry_line_value(&chars) {
+                None => diagnostics.note_with(|| SourceDiagnostic::syntax("LOCALISATION_MALFORMED_LINE", "error", "Malformed localisation line", span)),
+                Some(_) if language.is_empty() => diagnostics.note_with(|| {
+                    SourceDiagnostic::syntax("LOCALISATION_LANGUAGE_MISSING", "error", "Localisation entry appears before a language declaration", span)
+                }),
+                Some((key, value)) => {
                     if entries.len() >= SOURCE_ENTRY_LIMIT {
-                        diagnostics.limit(Limit::Entry);
+                        diagnostics.limit_with(Limit::Entry, || {
+                            SourceDiagnostic::syntax(
+                                "SOURCE_ENTRY_LIMIT",
+                                "blocker",
+                                format!("Localisation entries exceed the supported limit of {SOURCE_ENTRY_LIMIT}"),
+                                span,
+                            )
+                            .with_details(serde_json::json!({ "limit": SOURCE_ENTRY_LIMIT }))
+                        });
                         break;
                     }
-                    entries.push(LocalisationEntry { language: language.clone(), key, line: line_number });
+                    entries.push(LocalisationEntry {
+                        language: language.clone(),
+                        key,
+                        line: line_number,
+                        value,
+                        start: line_start,
+                        end: line_start + end as u32,
+                    });
                 }
             }
         }

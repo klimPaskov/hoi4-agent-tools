@@ -57,7 +57,6 @@ async function fixture() {
     }),
   );
   const engine = new CoreEngine(resolver);
-  await engine.persistentAnalysisCache;
   return { mod, engine };
 }
 

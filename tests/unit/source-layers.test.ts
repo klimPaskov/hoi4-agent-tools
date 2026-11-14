@@ -88,7 +88,6 @@ async function fixture(
   );
   const engine = new CoreEngine(resolver);
   // The persistent analysis cache initializes in server state; finish before cleanup.
-  await engine.persistentAnalysisCache;
   return { root, game, mod, resolver, engine };
 }
 
